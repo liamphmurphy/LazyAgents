@@ -1,0 +1,149 @@
+@import "tailwindcss";
+/* Copied verbatim from lazyagents-design/tokens.css. Edit the design copy first. */
+@import "../styles/tokens.css";
+
+/* next/font self-hosts Inter and JetBrains Mono under hashed family names,
+   so point the token font stacks at the variables it sets on <html>. */
+:root {
+  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/*
+ * Tokens → Tailwind. Only design tokens exist as utilities: the default
+ * palette is cleared so off-system colors can't creep in.
+ * Text colors are `fg-*` to avoid `text-text`: text-fg, text-fg-tertiary, …
+ */
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-bg: var(--bg);
+  --color-sidebar: var(--bg-sidebar);
+  --color-panel: var(--bg-panel);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-row: var(--border-row);
+  --color-border-strong: var(--border-strong);
+  --color-track: var(--track);
+
+  --color-fg: var(--text);
+  --color-fg-2: var(--text-2);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-tertiary: var(--text-tertiary);
+  --color-on-accent: var(--text-on-accent);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-state-backlog: var(--state-backlog);
+  --color-state-todo: var(--state-todo);
+  --color-state-progress: var(--state-progress);
+  --color-state-review: var(--state-review);
+  --color-state-done: var(--state-done);
+  --color-state-human: var(--state-human);
+  --color-state-blocked: var(--state-blocked);
+  --color-priority-urgent: var(--priority-urgent);
+
+  --color-pill-human-bg: var(--pill-human-bg);
+  --color-pill-human-fg: var(--pill-human-fg);
+  --color-pill-blocked-bg: var(--pill-blocked-bg);
+  --color-pill-blocked-fg: var(--pill-blocked-fg);
+  --color-pill-review-bg: var(--pill-review-bg);
+  --color-pill-review-fg: var(--pill-review-fg);
+  --color-pill-done-bg: var(--pill-done-bg);
+  --color-pill-done-fg: var(--pill-done-fg);
+  --color-pill-neutral-bg: var(--pill-neutral-bg);
+  --color-pill-neutral-fg: var(--pill-neutral-fg);
+
+  --color-human-avatar: var(--human-avatar-bg);
+
+  /* Component tokens (tokens.css v0.2) */
+  --color-row-hover: var(--row-hover);
+  --color-border-hover: var(--border-hover);
+  --color-border-float: var(--border-float);
+  --color-kbd-border: var(--kbd-border);
+  --color-btn-secondary: var(--btn-secondary-bg);
+  --color-btn-secondary-border: var(--btn-secondary-border);
+  --color-btn-outline: var(--btn-outline-bg);
+  --color-approve-fg: var(--approve-fg);
+  --color-segment-on: var(--segment-on);
+  --color-command-on: var(--command-on);
+  --color-search: var(--search-bg);
+  --color-priority-unlit: var(--priority-unlit);
+  --color-unassigned: var(--unassigned);
+  --color-scrim: var(--scrim);
+
+  --color-doc-prd: var(--doc-prd);
+  --color-doc-prd-bg: var(--doc-prd-bg);
+  --color-doc-spec: var(--doc-spec);
+  --color-doc-spec-bg: var(--doc-spec-bg);
+  --color-doc-adr: var(--doc-adr);
+  --color-doc-adr-bg: var(--doc-adr-bg);
+  --color-doc-report: var(--doc-report);
+  --color-doc-report-bg: var(--doc-report-bg);
+  --color-doc-design: var(--doc-design);
+  --color-doc-design-bg: var(--doc-design-bg);
+
+  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Same values as tokens.css; Tailwind's defaults are replaced. */
+  --radius-*: initial;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-full: 999px;
+
+  --shadow-float: var(--shadow-float);
+}
+
+/* Type scale as utilities: each sets the full font shorthand from tokens. */
+@utility type-display { font: var(--text-display); letter-spacing: var(--tracking-display); }
+@utility type-title   { font: var(--text-title); letter-spacing: var(--tracking-title); }
+@utility type-heading { font: var(--text-heading); }
+@utility type-body    { font: var(--text-body); }
+@utility type-reading { font: var(--text-reading); }
+@utility type-small   { font: var(--text-small); }
+@utility type-micro   { font: var(--text-micro); letter-spacing: 0.06em; text-transform: uppercase; }
+@utility type-mono    { font: var(--text-mono); }
+
+/* Inline code inside prose and descriptions (DESIGN.md §2 Typography). */
+@layer components {
+  .prose-code code,
+  code.inline {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--selected);
+    border: 1px solid var(--border-strong);
+    color: var(--text-2);
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@utility animate-skeleton {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+/* Focus is always the accent ring (DESIGN.md §1). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

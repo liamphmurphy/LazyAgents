@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>LazyAgents — PAY-214 ticket detail</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"><style>
+body{margin:0;background:#0B0B0D}
+*{box-sizing:border-box}
+a{color:inherit;text-decoration:none}
+a:hover{color:#FFFFFF}
+button{font:inherit;color:inherit;cursor:pointer}
+.nav{display:flex;align-items:center;gap:10px;height:30px;padding:0 8px;border-radius:6px;color:#A1A1AA;font-size:13px;font-weight:500}
+.nav:hover{background:#17171B;color:#EDEDEF}
+.nav.on{background:#1B1B21;color:#EDEDEF}
+.row:hover{background:#131317}
+.ghost:hover{background:#17171B}
+.prop:hover{background:#15151A}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;padding:1px 5px;border-radius:4px;background:#1B1B21;border:1px solid #26262C;color:#D4D4DA}
+</style></head>
+<body>
+
+
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #0B0B0D; color: #EDEDEF; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.45; font-feature-settings: 'cv11','ss01','ss03'; -webkit-font-smoothing: antialiased">
+
+<aside style="flex: 1 1 232px; display: flex; flex-direction: column; gap: 20px; padding: 12px 10px 14px; background: #0E0E11; border-right: 1px solid #1C1C21">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+    <button class="ghost" style="display: flex; align-items: center; gap: 9px; padding: 5px 6px; background: transparent; border: 0; border-radius: 7px">
+      <span style="width: 22px; height: 22px; border-radius: 6px; background: #8B8FFF; display: grid; place-items: center"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3v10h7" stroke="#0B0B0D" stroke-width="2.2" stroke-linecap="round"></path></svg></span>
+      <span style="font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em">Northwind Labs</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#8B8B94" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"></path></svg>
+    </button>
+    <button class="ghost" aria-label="New ticket" style="width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #24242A; background: #141418; border-radius: 7px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#C9C9CF" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"></path></svg></button>
+  </div>
+  <button class="ghost" style="display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border: 1px solid #1F1F25; background: #121216; border-radius: 7px; color: #8B8B94; font-size: 13px; text-align: left">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3 3"></path></svg>
+    <span style="flex: 1; white-space: nowrap">Search…</span>
+    <span class="mono" style="font-size: 11px; padding: 1px 5px; border: 1px solid #2A2A30; border-radius: 4px; color: #A1A1AA">⌘K</span>
+  </button>
+  <nav aria-label="Primary" style="display: flex; flex-direction: column; gap: 1px">
+    <a class="nav" href="dashboard.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.2"></rect><rect x="9" y="2.5" width="4.5" height="4.5" rx="1.2"></rect><rect x="2.5" y="9" width="4.5" height="4.5" rx="1.2"></rect><rect x="9" y="9" width="4.5" height="4.5" rx="1.2"></rect></svg>Dashboard</a>
+    <a class="nav" href="inbox.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 9.5h3l1 1.8h3l1-1.8h3"></path><path d="M2.5 9.5 4.2 3.8c.1-.5.6-.8 1.1-.8h5.4c.5 0 1 .3 1.1.8l1.7 5.7V12a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"></path></svg><span style="flex: 1">Inbox</span><span style="font-size: 11px; font-weight: 600; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #8B8FFF; color: #0B0B0D; display: grid; place-items: center">4</span></a>
+    <a class="nav on" href="tickets.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"></circle><path d="m5.8 8 1.5 1.5 3-3"></path></svg>Tickets</a>
+    <a class="nav" href="epics.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 13.5 5.3 8 8.1 2.5 5.3z"></path><path d="m2.5 8.2 5.5 2.8 5.5-2.8"></path><path d="m2.5 11 5.5 2.8 5.5-2.8"></path></svg>Epics</a>
+    <a class="nav" href="agents.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="5" width="11" height="8" rx="2.2"></rect><path d="M8 2.5V5"></path><path d="M6 8.6v.8M10 8.6v.8"></path></svg><span style="flex: 1">Agents</span><span style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #8B8B94"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4CB782"></span>5</span></a>
+    <a class="nav" href="artifacts.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h5l3 3v8H4z"></path><path d="M9 2.5v3h3"></path></svg>Artifacts</a>
+  </nav>
+  <div style="display: flex; flex-direction: column; gap: 1px">
+    <div style="padding: 0 8px 6px; font-size: 12px; font-weight: 500; color: #8B8B94">Projects</div>
+    <a class="nav on" href="tickets.html"><span style="width: 10px; height: 10px; border-radius: 3px; background: #8B8FFF; margin: 0 3px"></span>Payments Platform</a>
+    <a class="nav" href="tickets.html"><span style="width: 10px; height: 10px; border-radius: 3px; background: #F0BF4C; margin: 0 3px"></span>Mobile App v3</a>
+    <a class="nav" href="tickets.html"><span style="width: 10px; height: 10px; border-radius: 3px; background: #3FC1B0; margin: 0 3px"></span>Developer Docs</a>
+    <a class="nav" href="tickets.html"><span style="width: 10px; height: 10px; border-radius: 3px; background: #F27A8A; margin: 0 3px"></span>Billing Migration</a>
+  </div>
+  <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 4px 6px">
+    <span style="width: 26px; height: 26px; border-radius: 50%; background: #2B2B33; display: grid; place-items: center; font-size: 11px; font-weight: 600">MC</span>
+    <span style="flex: 1; display: flex; flex-direction: column; line-height: 1.25"><span style="font-weight: 500">Maya Chen</span><span style="font-size: 11.5px; color: #8B8B94">Eng lead</span></span>
+  </div>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+  <header style="min-height: 52px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 24px; border-bottom: 1px solid #1C1C21">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8B8B94; flex-wrap: wrap">
+      <a href="tickets.html" style="display: flex; align-items: center; gap: 8px; color: #C9C9CF"><span style="width: 10px; height: 10px; border-radius: 3px; background: #8B8FFF"></span>Payments Platform</a><span>/</span>
+      <a href="epics.html" style="color: #C9C9CF">Ledger v2</a><span>/</span>
+      <span class="mono" style="color: #EDEDEF; font-size: 12.5px">PAY-214</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 4px; color: #A1A1AA">
+      <span class="mono" style="font-size: 12px; margin-right: 6px">1 / 15</span>
+      <button class="ghost" aria-label="Previous ticket" style="width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid #26262C; background: transparent; border-radius: 6px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 9.5 3.5-3.5 3.5 3.5"></path></svg></button>
+      <button class="ghost" aria-label="Next ticket" style="width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid #26262C; background: transparent; border-radius: 6px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"></path></svg></button>
+      <button class="ghost" aria-label="Copy link" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 6px; margin-left: 6px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M7 9a2.5 2.5 0 0 0 3.5 0l2-2A2.5 2.5 0 0 0 9 3.5l-.7.7"></path><path d="M9 7a2.5 2.5 0 0 0-3.5 0l-2 2A2.5 2.5 0 0 0 7 12.5l.7-.7"></path></svg></button>
+      <button class="ghost" aria-label="More actions" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 6px"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.2"></circle><circle cx="8" cy="8" r="1.2"></circle><circle cx="12.5" cy="8" r="1.2"></circle></svg></button>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap">
+    <div style="flex: 999 1 520px; min-width: 0; border-right: 1px solid #1C1C21">
+      <div style="max-width: 780px; margin: 0 auto; padding: 28px 40px 48px; display: flex; flex-direction: column; gap: 28px">
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid #F59E5B40; border-radius: 12px; background: #F59E5B0F">
+          <span style="width: 32px; height: 32px; border-radius: 9px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-weight: 600; flex: none">A</span>
+          <div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px">
+            <span style="font-weight: 600; color: #F7B07A">Atlas is waiting for your approval</span>
+            <span style="font-size: 12.5px; color: #C9C9CF">Run <code>0042_partition_ledger_entries</code> against staging · 18.2M rows · est. 4 min, no table lock</span>
+          </div>
+          <div style="display: flex; gap: 6px">
+            <button class="ghost" style="height: 30px; padding: 0 11px; border: 1px solid #3A3328; background: transparent; border-radius: 7px; font-size: 12.5px; color: #E6D2BF">Deny</button>
+            <button class="ghost" style="height: 30px; padding: 0 11px; border: 1px solid #3A3328; background: transparent; border-radius: 7px; font-size: 12.5px; color: #E6D2BF">View plan</button>
+            <button style="height: 30px; padding: 0 12px; border: 0; background: #F59E5B; color: #1A1206; border-radius: 7px; font-size: 12.5px; font-weight: 600">Approve &amp; continue</button>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px">
+          <h1 style="margin: 0; font-size: 26px; line-height: 1.25; font-weight: 600; letter-spacing: -0.022em">Migrate ledger_entries to a partitioned table</h1>
+          <div style="display: flex; flex-direction: column; gap: 12px; font-size: 14px; line-height: 1.65; color: #C9C9CF">
+            <p style="margin: 0"><code>ledger_entries</code> has grown to 18M rows and month-end reconciliation queries now exceed 9s at p95. Partition the table by <code>posted_at</code> month so reconciliation can prune to a single partition, per the Ledger v2 PRD §4.2.</p>
+            <h3 style="margin: 8px 0 0; font-size: 13px; font-weight: 600; color: #EDEDEF">Acceptance criteria</h3>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin: 5px 0 0; accent-color: #4CB782"><span style="color: #8B8B94; text-decoration: line-through">Monthly range partitions created for 2019-01 through 2027-12</span></label>
+              <label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin: 5px 0 0; accent-color: #4CB782"><span style="color: #8B8B94; text-decoration: line-through">Writes dual-routed during backfill with zero dropped rows</span></label>
+              <label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="" style="margin: 5px 0 0; accent-color: #4CB782"><span style="color: #8B8B94; text-decoration: line-through">Reconciliation query p95 under 800ms on staging snapshot</span></label>
+              <label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" style="margin: 5px 0 0"><span>Migration applied to staging with no lock longer than 200ms</span></label>
+              <label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" style="margin: 5px 0 0"><span>Legacy index retained for 72h as a rollback window</span></label>
+            </div>
+          </div>
+        </div>
+
+        <section style="display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; justify-content: space-between"><h2 style="margin: 0; font-size: 13px; font-weight: 600">Context artifacts</h2><button class="ghost" style="height: 26px; padding: 0 8px; border: 0; background: transparent; border-radius: 6px; font-size: 12.5px; color: #A1A1AA; display: flex; align-items: center; gap: 5px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg>Attach</button></div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px">
+            
+              <a href="artifacts.html" class="row" style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid #1F1F25; border-radius: 10px; background: #111114">
+                <span style="display: flex; align-items: center; justify-content: space-between"><span style="font-size: 10px; font-weight: 600; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 4px; background: #8B8FFF1F; color: #A3A6FF">PRD</span><span style="font-size: 11.5px; color: #8B8B94">v3</span></span>
+                <span style="font-weight: 500; color: #EDEDEF; line-height: 1.35">Ledger v2 — Product requirements</span>
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #8B8B94"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg>Read by Atlas</span>
+              </a>
+            
+              <a href="artifacts.html" class="row" style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid #1F1F25; border-radius: 10px; background: #111114">
+                <span style="display: flex; align-items: center; justify-content: space-between"><span style="font-size: 10px; font-weight: 600; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 4px; background: #4EA7FC1F; color: #7CBEFD">SPEC</span><span style="font-size: 11.5px; color: #8B8B94">v1.2</span></span>
+                <span style="font-weight: 500; color: #EDEDEF; line-height: 1.35">Ledger partitioning — Tech spec</span>
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #8B8B94"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg>Read by Atlas</span>
+              </a>
+            
+              <a href="artifacts.html" class="row" style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid #1F1F25; border-radius: 10px; background: #111114">
+                <span style="display: flex; align-items: center; justify-content: space-between"><span style="font-size: 10px; font-weight: 600; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 4px; background: #F0BF4C1F; color: #F0BF4C">ADR</span><span style="font-size: 11.5px; color: #8B8B94">012</span></span>
+                <span style="font-weight: 500; color: #EDEDEF; line-height: 1.35">Postgres declarative partitioning</span>
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #8B8B94"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg>Read by Atlas</span>
+              </a>
+            
+              <a href="artifacts.html" class="row" style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid #1F1F25; border-radius: 10px; background: #111114">
+                <span style="display: flex; align-items: center; justify-content: space-between"><span style="font-size: 10px; font-weight: 600; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 4px; background: #6FCF7F1F; color: #6FCF7F">REPORT</span><span style="font-size: 11.5px; color: #8B8B94">new</span></span>
+                <span style="font-weight: 500; color: #EDEDEF; line-height: 1.35">Migration dry-run report</span>
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #6FCF7F"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg>Generated by Atlas</span>
+              </a>
+            
+          </div>
+        </section>
+
+        <section style="display: flex; flex-direction: column; gap: 4px">
+          <h2 style="margin: 0 0 8px; font-size: 13px; font-weight: 600">Activity</h2>
+          <div style="position: relative; display: flex; flex-direction: column; gap: 18px; padding-left: 0">
+            <span aria-hidden="true" style="position: absolute; left: 11px; top: 8px; bottom: 8px; width: 1px; background: #22222A"></span>
+
+            <div style="position: relative; display: flex; gap: 14px; align-items: flex-start">
+              <span style="width: 23px; height: 23px; border-radius: 50%; background: #2B2B33; border: 3px solid #0B0B0D; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none; box-sizing: content-box; margin: -3px">MC</span>
+              <span style="font-size: 13px; color: #A1A1AA; padding-top: 2px"><b style="color: #EDEDEF; font-weight: 500">Maya Chen</b> created the ticket and attached <b style="color: #EDEDEF; font-weight: 500">Ledger v2 PRD</b>, <b style="color: #EDEDEF; font-weight: 500">Partitioning tech spec</b> · Oct 30</span>
+            </div>
+            <div style="position: relative; display: flex; gap: 14px; align-items: flex-start">
+              <span style="width: 23px; height: 23px; border-radius: 50%; background: #2B2B33; border: 3px solid #0B0B0D; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none; box-sizing: content-box; margin: -3px">MC</span>
+              <span style="font-size: 13px; color: #A1A1AA; padding-top: 2px"><b style="color: #EDEDEF; font-weight: 500">Maya Chen</b> assigned to <b style="color: #A3A6FF; font-weight: 500">Atlas</b> with approval required for <code>db:migrate</code> · Oct 30</span>
+            </div>
+            <div style="position: relative; display: flex; gap: 14px; align-items: flex-start">
+              <span style="width: 23px; height: 23px; border-radius: 7px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-size: 10px; font-weight: 600; flex: none">A</span>
+              <span style="font-size: 13px; color: #A1A1AA; padding-top: 2px"><b style="color: #EDEDEF; font-weight: 500">Atlas</b> read 3 artifacts and created branch <code>atlas/pay-214-partition-ledger</code> · Oct 31, 09:12</span>
+            </div>
+
+            <div style="position: relative; display: flex; gap: 14px; align-items: flex-start">
+              <span style="width: 23px; height: 23px; border-radius: 7px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-size: 10px; font-weight: 600; flex: none">A</span>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+                <span style="font-size: 13px; color: #A1A1AA; padding-top: 2px"><b style="color: #EDEDEF; font-weight: 500">Atlas</b> posted an execution plan · Oct 31, 09:20</span>
+                <div style="border: 1px solid #1F1F25; border-radius: 10px; background: #111114; padding: 12px 14px; display: flex; flex-direction: column; gap: 7px">
+                  
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px">
+                      <span style="width: 16px; height: 16px; border-radius: 50%; flex: none; display: grid; place-items: center; background: #4CB782"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="#0B0B0D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg></span>
+                      <span class="mono" style="font-size: 11.5px; color: #8B8B94; width: 18px">1</span>
+                      <span style="color: #D4D4DA">Create partitioned parent table and monthly partitions</span>
+                    </div>
+                  
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px">
+                      <span style="width: 16px; height: 16px; border-radius: 50%; flex: none; display: grid; place-items: center; background: #4CB782"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="#0B0B0D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg></span>
+                      <span class="mono" style="font-size: 11.5px; color: #8B8B94; width: 18px">2</span>
+                      <span style="color: #D4D4DA">Add dual-write trigger on ledger_entries</span>
+                    </div>
+                  
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px">
+                      <span style="width: 16px; height: 16px; border-radius: 50%; flex: none; display: grid; place-items: center; background: #4CB782"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="#0B0B0D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg></span>
+                      <span class="mono" style="font-size: 11.5px; color: #8B8B94; width: 18px">3</span>
+                      <span style="color: #D4D4DA">Backfill in 50k-row batches with checksum verification</span>
+                    </div>
+                  
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px">
+                      <span style="width: 16px; height: 16px; border-radius: 50%; flex: none; display: grid; place-items: center; background: #4CB782"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="#0B0B0D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg></span>
+                      <span class="mono" style="font-size: 11.5px; color: #8B8B94; width: 18px">4</span>
+                      <span style="color: #D4D4DA">Benchmark reconciliation queries on staging snapshot</span>
+                    </div>
+                  
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px">
+                      <span style="width: 16px; height: 16px; border-radius: 50%; flex: none; display: grid; place-items: center; background: #4CB782"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="#0B0B0D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg></span>
+                      <span class="mono" style="font-size: 11.5px; color: #8B8B94; width: 18px">5</span>
+                      <span style="color: #D4D4DA">Generate dry-run report and attach to ticket</span>
+                    </div>
+                  
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px">
+                      <span style="width: 16px; height: 16px; border-radius: 50%; flex: none; display: grid; place-items: center; border: 1.5px solid #F59E5B; background: conic-gradient(#F59E5B 0 50%, transparent 0); box-shadow: inset 0 0 0 2px #111114"></span>
+                      <span class="mono" style="font-size: 11.5px; color: #8B8B94; width: 18px">6</span>
+                      <span style="color: #D4D4DA">Apply migration to staging (requires approval)</span>
+                    </div>
+                  
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px">
+                      <span style="width: 16px; height: 16px; border-radius: 50%; flex: none; display: grid; place-items: center; border: 1.5px solid #44444C"></span>
+                      <span class="mono" style="font-size: 11.5px; color: #8B8B94; width: 18px">7</span>
+                      <span style="color: #8B8B94">Swap table names inside a single transaction</span>
+                    </div>
+                  
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px">
+                      <span style="width: 16px; height: 16px; border-radius: 50%; flex: none; display: grid; place-items: center; border: 1.5px solid #44444C"></span>
+                      <span class="mono" style="font-size: 11.5px; color: #8B8B94; width: 18px">8</span>
+                      <span style="color: #8B8B94">Retain legacy index for 72h, then open cleanup ticket</span>
+                    </div>
+                  
+                </div>
+              </div>
+            </div>
+
+            <div style="position: relative; display: flex; gap: 14px; align-items: flex-start">
+              <span style="width: 23px; height: 23px; border-radius: 7px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-size: 10px; font-weight: 600; flex: none">A</span>
+              <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 2px; font-size: 13px; color: #A1A1AA">
+                <span><b style="color: #EDEDEF; font-weight: 500">Atlas</b> ran the test suite</span>
+                <span class="mono" style="font-size: 11.5px; padding: 2px 8px; border-radius: 5px; background: #4CB7821F; color: #6FCF97">312 passed</span>
+                <span class="mono" style="font-size: 11.5px; padding: 2px 8px; border-radius: 5px; background: #1B1B21; color: #A1A1AA">0 failed · 4m 12s</span>
+                <span>· 10:48</span>
+              </div>
+            </div>
+
+            <div style="position: relative; display: flex; gap: 14px; align-items: flex-start">
+              <span style="width: 23px; height: 23px; border-radius: 50%; background: #3A2F4A; border: 3px solid #0B0B0D; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none; box-sizing: content-box; margin: -3px">DP</span>
+              <div style="flex: 1; min-width: 0; border: 1px solid #1F1F25; border-radius: 10px; background: #111114; overflow: hidden">
+                <div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px">
+                  <span style="font-size: 12.5px; color: #8B8B94"><b style="color: #EDEDEF; font-weight: 500">Dev Patel</b> · 11:02</span>
+                  <span style="font-size: 13.5px; line-height: 1.55; color: #D4D4DA">Keep the old index around until the backfill verification finishes — ops wants a rollback window before we drop anything.</span>
+                </div>
+                <div style="padding: 12px 14px; border-top: 1px solid #1C1C21; background: #0F0F12; display: flex; gap: 10px">
+                  <span style="width: 20px; height: 20px; border-radius: 6px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-size: 10px; font-weight: 600; flex: none">A</span>
+                  <span style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12.5px; color: #8B8B94"><b style="color: #EDEDEF; font-weight: 500">Atlas</b> · 11:03</span><span style="font-size: 13.5px; line-height: 1.55; color: #D4D4DA">Understood. Step 8 now retains <code>ledger_entries_legacy_idx</code> for 72h. I opened PAY-224 for the rollback runbook.</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div style="position: relative; display: flex; gap: 14px; align-items: flex-start">
+              <span style="width: 23px; height: 23px; border-radius: 7px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-size: 10px; font-weight: 600; flex: none">A</span>
+              <span style="font-size: 13px; color: #A1A1AA; padding-top: 2px"><b style="color: #EDEDEF; font-weight: 500">Atlas</b> generated <a href="artifacts.html" style="color: #6FCF7F; font-weight: 500">Migration dry-run report</a> · 14m ago</span>
+            </div>
+            <div style="position: relative; display: flex; gap: 14px; align-items: flex-start">
+              <span style="width: 23px; height: 23px; border-radius: 50%; background: #F59E5B; display: grid; place-items: center; flex: none"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#1A1206" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 4v5M8 11.5v.5"></path></svg></span>
+              <span style="font-size: 13px; color: #A1A1AA; padding-top: 2px"><b style="color: #EDEDEF; font-weight: 500">Atlas</b> paused and requested approval from <b style="color: #EDEDEF; font-weight: 500">Maya Chen</b> · 12m ago</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 18px; border: 1px solid #26262C; border-radius: 12px; background: #111114">
+            <label for="comment" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Comment</label>
+            <textarea id="comment" placeholder="Leave a comment, or instruct Atlas with @atlas…" style="display: block; width: 100%; min-height: 72px; resize: none; border: 0; background: transparent; padding: 14px; color: #EDEDEF; font: inherit; font-size: 13.5px; outline: none"></textarea>
+            <div style="display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-top: 1px solid #1C1C21">
+              <button class="ghost" aria-label="Attach artifact" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 6px; color: #8B8B94"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h5l3 3v8H4z"></path><path d="M9 2.5v3h3"></path></svg></button>
+              <button class="ghost" aria-label="Mention" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 6px; color: #8B8B94; font-size: 14px">@</button>
+              <span style="margin-left: auto; font-size: 11.5px; color: #8B8B94; margin-right: 8px">Comments mentioning @atlas resume the run</span>
+              <button style="height: 28px; padding: 0 12px; border: 0; background: #8B8FFF; color: #0B0B0D; border-radius: 6px; font-size: 12.5px; font-weight: 600">Comment</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <aside aria-label="Ticket properties" style="flex: 1 1 300px; min-width: 0; padding: 20px 16px 32px; display: flex; flex-direction: column; gap: 22px; background: #0D0D10">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        
+          <div class="prop" style="display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 7px">
+            <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94">Status</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #EDEDEF"><span style="width: 14px; height: 14px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; border: 1.5px solid #F0BF4C; background: conic-gradient(#F0BF4C 0 50%, transparent 0); box-shadow: inset 0 0 0 2px #0D0D10"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">In Progress</span></span>
+          </div>
+        
+          <div class="prop" style="display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 7px">
+            <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94">Priority</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #EDEDEF"><span style="width: 16px; height: 16px; border-radius: 4px; flex: none; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; background: #F2994A; color: #0B0B0D; font-size: 11px; font-weight: 700">!</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Urgent</span></span>
+          </div>
+        
+          <div class="prop" style="display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 7px">
+            <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94">Agent</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #EDEDEF"><span style="width: 20px; height: 20px; border-radius: 6px; flex: none; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; background: #8B8FFF26; color: #A3A6FF">A</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Atlas</span></span>
+          </div>
+        
+          <div class="prop" style="display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 7px">
+            <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94">Reviewer</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #EDEDEF"><span style="width: 20px; height: 20px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; background: #2B2B33; color: #EDEDEF">MC</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Maya Chen</span></span>
+          </div>
+        
+          <div class="prop" style="display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 7px">
+            <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94">Epic</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #EDEDEF"><span style="width: 14px; height: 14px; border-radius: 4px; flex: none; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; background: #8B8FFF33; border: 1px solid #8B8FFF"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Ledger v2 · 62%</span></span>
+          </div>
+        
+          <div class="prop" style="display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 7px">
+            <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94">Project</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #EDEDEF"><span style="width: 10px; height: 10px; border-radius: 3px; flex: none; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; background: #8B8FFF; margin: 0 2px"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Payments Platform</span></span>
+          </div>
+        
+          <div class="prop" style="display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 7px">
+            <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94">Estimate</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #EDEDEF"><span style="width: 14px; height: 14px; border-radius: 4px; flex: none; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; border: 1.5px solid #44444C"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">L · ~6h agent time</span></span>
+          </div>
+        
+          <div class="prop" style="display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 7px">
+            <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94">Due</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #EDEDEF"><span style="width: 14px; height: 14px; border-radius: 4px; flex: none; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; border: 1.5px solid #44444C"></span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Wed, Nov 4</span></span>
+          </div>
+        
+        <div class="prop" style="display: flex; align-items: flex-start; gap: 10px; padding: 7px 8px; border-radius: 7px">
+          <span style="width: 88px; flex: none; font-size: 12.5px; color: #8B8B94; padding-top: 2px">Labels</span>
+          <span style="display: flex; flex-wrap: wrap; gap: 5px"><span style="height: 22px; padding: 0 8px; border: 1px solid #26262C; border-radius: 11px; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #A1A1AA"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8B8FFF"></span>migration</span><span style="height: 22px; padding: 0 8px; border: 1px solid #26262C; border-radius: 11px; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #A1A1AA"><span style="width: 6px; height: 6px; border-radius: 50%; background: #5EA8FF"></span>db</span></span>
+        </div>
+      </div>
+
+      <div style="border: 1px solid #1F1F25; border-radius: 12px; background: #111114; padding: 14px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span style="width: 32px; height: 32px; border-radius: 9px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-weight: 600">A</span>
+          <span style="flex: 1; display: flex; flex-direction: column; line-height: 1.3"><span style="font-weight: 600">Atlas</span><span class="mono" style="font-size: 11.5px; color: #8B8B94">opus-5.5 · backend</span></span>
+          <span style="font-size: 11.5px; font-weight: 500; padding: 2px 8px; border-radius: 10px; background: #F59E5B1F; color: #F7B07A">Waiting</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+          <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11.5px; color: #8B8B94">Run time</span><span class="mono" style="font-size: 13px">1h 42m</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11.5px; color: #8B8B94">Tool calls</span><span class="mono" style="font-size: 13px">186</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11.5px; color: #8B8B94">Tokens</span><span class="mono" style="font-size: 13px">2.1M</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11.5px; color: #8B8B94">Spend</span><span class="mono" style="font-size: 13px">$4.18</span></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid #1C1C21">
+          <span style="font-size: 11.5px; color: #8B8B94">Permissions</span>
+          <span style="display: flex; flex-wrap: wrap; gap: 5px">
+            <span class="mono" style="font-size: 11px; padding: 2px 7px; border-radius: 5px; background: #1B1B21; color: #C9C9CF">repo:write</span>
+            <span class="mono" style="font-size: 11px; padding: 2px 7px; border-radius: 5px; background: #1B1B21; color: #C9C9CF">tests:run</span>
+            <span class="mono" style="font-size: 11px; padding: 2px 7px; border-radius: 5px; background: #F59E5B1F; color: #F7B07A">db:migrate · approval</span>
+          </span>
+        </div>
+        <div style="display: flex; gap: 6px">
+          <button class="ghost" style="flex: 1; height: 30px; border: 1px solid #26262C; background: transparent; border-radius: 7px; font-size: 12.5px; color: #C9C9CF">View run log</button>
+          <button class="ghost" style="flex: 1; height: 30px; border: 1px solid #26262C; background: transparent; border-radius: 7px; font-size: 12.5px; color: #C9C9CF">Pause agent</button>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font-size: 12px; font-weight: 500; color: #8B8B94; padding: 0 8px">Code</span>
+        <div class="prop" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 7px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#A1A1AA" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.5"></circle><circle cx="4.5" cy="12.5" r="1.5"></circle><circle cx="11.5" cy="5.5" r="1.5"></circle><path d="M4.5 5v6M11.5 7c0 2.5-2 3-7 4"></path></svg><span class="mono" style="font-size: 12px; color: #C9C9CF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">atlas/pay-214-partition-ledger</span></div>
+        <div class="prop" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 7px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#A1A1AA" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.5"></circle><circle cx="4.5" cy="12.5" r="1.5"></circle><circle cx="11.5" cy="12.5" r="1.5"></circle><path d="M4.5 5v6M11.5 11V6.5a2 2 0 0 0-2-2H7.5"></path></svg><span style="font-size: 12.5px; color: #C9C9CF">#491 · Draft</span><span class="mono" style="margin-left: auto; font-size: 11.5px"><span style="color: #6FCF97">+842</span> <span style="color: #F48A87">−117</span></span></div>
+      </div>
+    </aside>
+  </div>
+</main>
+</div>
+
+
+
+
+</body></html>

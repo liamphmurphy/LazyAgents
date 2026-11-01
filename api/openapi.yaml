@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: LazyAgents API
+  version: 0.1.0
+  description: |
+    REST contract for the LazyAgents UI and agents. This file is the source of
+    truth: `make gen` regenerates the Go server interfaces and the TypeScript client.
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness and dependency status
+      tags: [system]
+      responses:
+        "200":
+          description: All dependencies reachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: One or more dependencies are unreachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, version, checks]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/HealthCheck"
+    HealthCheck:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        error: { type: string }
+        latency_ms: { type: integer }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }

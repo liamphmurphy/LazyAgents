@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>LazyAgents — Foundations</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"><style>
+body{margin:0;background:#0B0B0D}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+</style></head>
+<body>
+
+
+<div style="width: 1440px; height: 1180px; padding: 56px 64px; background: #0B0B0D; color: #EDEDEF; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.45; font-feature-settings: 'cv11','ss01','ss03'; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; gap: 40px">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+    <div style="display: flex; align-items: center; gap: 16px">
+      <span style="width: 52px; height: 52px; border-radius: 14px; background: #8B8FFF; display: grid; place-items: center"><svg width="26" height="26" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3v10h7" stroke="#0B0B0D" stroke-width="2.2" stroke-linecap="round"></path></svg></span>
+      <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 32px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1">LazyAgents Foundations</span><span style="font-size: 14px; color: #A1A1AA">The design language for supervising autonomous coding agents</span></div>
+    </div>
+    <span class="mono" style="font-size: 12px; color: #8B8B94">v0.1 · Nov 2026</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+    <section style="padding: 24px; border: 1px solid #1F1F25; border-radius: 14px; background: #111114; display: flex; flex-direction: column; gap: 16px">
+      <h2 style="margin: 0; font-size: 14px; font-weight: 600">Surfaces · dark (primary)</h2>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #0B0B0D; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Ground</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#0B0B0D</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #0E0E11; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Sidebar</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#0E0E11</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #111114; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Surface</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#111114</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #16161B; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Raised</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#16161B</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #1F1F25; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Border</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#1F1F25</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #EDEDEF; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Text</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#EDEDEF</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #A1A1AA; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Secondary</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#A1A1AA</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #8B8B94; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Tertiary</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#8B8B94</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #17171B; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Hover</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#17171B</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #8B8FFF; border: 1px solid #2A2A31"></span>
+            <span style="font-size: 12px; font-weight: 500">Accent</span>
+            <span class="mono" style="font-size: 11px; color: #8B8B94">#8B8FFF</span>
+          </div>
+        
+      </div>
+    </section>
+    <section style="padding: 24px; border: 1px solid #E6E6EA; border-radius: 14px; background: #FFFFFF; color: #17171A; display: flex; flex-direction: column; gap: 16px">
+      <h2 style="margin: 0; font-size: 14px; font-weight: 600">Surfaces · light</h2>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #FFFFFF; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Ground</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#FFFFFF</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #F7F7F8; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Sidebar</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#F7F7F8</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #FFFFFF; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Surface</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#FFFFFF</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #FBFBFC; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Raised</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#FBFBFC</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #E6E6EA; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Border</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#E6E6EA</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #17171A; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Text</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#17171A</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #55555F; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Secondary</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#55555F</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #6B6B75; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Tertiary</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#6B6B75</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #F2F2F4; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Hover</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#F2F2F4</span>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="height: 52px; border-radius: 9px; background: #5558E3; border: 1px solid #E0E0E5"></span>
+            <span style="font-size: 12px; font-weight: 500">Accent</span>
+            <span class="mono" style="font-size: 11px; color: #62626C">#5558E3</span>
+          </div>
+        
+      </div>
+    </section>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 24px">
+    <section style="padding: 24px; border: 1px solid #1F1F25; border-radius: 14px; background: #111114; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 14px; font-weight: 600">Type · Inter &amp; JetBrains Mono</h2>
+      <div style="display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><span style="font-size: 26px; font-weight: 600; letter-spacing: -0.022em; line-height: 1.2">Good morning, Maya</span><span class="mono" style="font-size: 11px; color: #8B8B94">26 / 600</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><span style="font-size: 19px; font-weight: 600; letter-spacing: -0.015em">Ledger v2</span><span class="mono" style="font-size: 11px; color: #8B8B94">19 / 600</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><span style="font-size: 14px; font-weight: 600">Needs your attention</span><span class="mono" style="font-size: 11px; color: #8B8B94">14 / 600</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><span style="font-size: 13px; color: #C9C9CF">Partition the table by posted_at month.</span><span class="mono" style="font-size: 11px; color: #8B8B94">13 / 400</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><span style="font-size: 12px; color: #A1A1AA">Atlas · 12 min ago</span><span class="mono" style="font-size: 11px; color: #8B8B94">12 / 400</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><span class="mono" style="font-size: 12px; color: #C9C9CF">PAY-214 · opus-5.5</span><span class="mono" style="font-size: 11px; color: #8B8B94">Mono 12</span></div>
+      </div>
+    </section>
+
+    <section style="padding: 24px; border: 1px solid #1F1F25; border-radius: 14px; background: #111114; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 14px; font-weight: 600">Workflow states</h2>
+      <div style="display: flex; flex-direction: column; gap: 11px">
+        
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 14px; height: 14px; border-radius: 50%; flex: none; border: 1.5px dashed #6B6B73"></span>
+            <span style="flex: 1; font-size: 13px">Backlog</span>
+            <span style="font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: #26262C; color: #A1A1AA">Backlog</span>
+            <span class="mono" style="width: 64px; text-align: right; font-size: 11px; color: #8B8B94">#6B6B73</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 14px; height: 14px; border-radius: 50%; flex: none; border: 1.5px solid #A1A1AA"></span>
+            <span style="flex: 1; font-size: 13px">Todo</span>
+            <span style="font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: #26262C; color: #C9C9CF">Todo</span>
+            <span class="mono" style="width: 64px; text-align: right; font-size: 11px; color: #8B8B94">#A1A1AA</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 14px; height: 14px; border-radius: 50%; flex: none; border: 1.5px solid #F0BF4C; background: conic-gradient(#F0BF4C 0 50%, transparent 0); box-shadow: inset 0 0 0 2px #111114"></span>
+            <span style="flex: 1; font-size: 13px">In progress</span>
+            <span style="font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: #4CB7821F; color: #6FCF97">Running</span>
+            <span class="mono" style="width: 64px; text-align: right; font-size: 11px; color: #8B8B94">#F0BF4C</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 14px; height: 14px; border-radius: 50%; flex: none; border: 1.5px solid #4EA7FC; background: conic-gradient(#4EA7FC 0 75%, transparent 0); box-shadow: inset 0 0 0 2px #111114"></span>
+            <span style="flex: 1; font-size: 13px">In review</span>
+            <span style="font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: #4EA7FC1F; color: #7CBEFD">PR ready</span>
+            <span class="mono" style="width: 64px; text-align: right; font-size: 11px; color: #8B8B94">#4EA7FC</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 14px; height: 14px; border-radius: 50%; flex: none; background: #4CB782"></span>
+            <span style="flex: 1; font-size: 13px">Done</span>
+            <span style="font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: #4CB7821F; color: #6FCF97">Merged</span>
+            <span class="mono" style="width: 64px; text-align: right; font-size: 11px; color: #8B8B94">#4CB782</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 14px; height: 14px; border-radius: 50%; flex: none; background: #F59E5B"></span>
+            <span style="flex: 1; font-size: 13px">Needs human</span>
+            <span style="font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: #F59E5B1F; color: #F7B07A">Waiting</span>
+            <span class="mono" style="width: 64px; text-align: right; font-size: 11px; color: #8B8B94">#F59E5B</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 14px; height: 14px; border-radius: 50%; flex: none; background: #EF6461"></span>
+            <span style="flex: 1; font-size: 13px">Blocked</span>
+            <span style="font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: #EF64611F; color: #F48A87">Blocked</span>
+            <span class="mono" style="width: 64px; text-align: right; font-size: 11px; color: #8B8B94">#EF6461</span>
+          </div>
+        
+      </div>
+    </section>
+
+    <section style="padding: 24px; border: 1px solid #1F1F25; border-radius: 14px; background: #111114; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 14px; font-weight: 600">Priority &amp; identity</h2>
+      <div style="display: flex; align-items: center; gap: 18px">
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: #A1A1AA"><span style="width: 16px; height: 16px; border-radius: 4px; background: #F2994A; color: #0B0B0D; display: grid; place-items: center; font-size: 11px; font-weight: 700">!</span>Urgent</span>
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: #A1A1AA"><span style="width: 16px; height: 16px; display: flex; align-items: flex-end; justify-content: center; gap: 2px"><span style="width: 3px; height: 6px; border-radius: 1px; background: #C9C9CF"></span><span style="width: 3px; height: 9px; border-radius: 1px; background: #C9C9CF"></span><span style="width: 3px; height: 12px; border-radius: 1px; background: #C9C9CF"></span></span>High</span>
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: #A1A1AA"><span style="width: 16px; height: 16px; display: flex; align-items: flex-end; justify-content: center; gap: 2px"><span style="width: 3px; height: 6px; border-radius: 1px; background: #C9C9CF"></span><span style="width: 3px; height: 9px; border-radius: 1px; background: #C9C9CF"></span><span style="width: 3px; height: 12px; border-radius: 1px; background: #34343C"></span></span>Medium</span>
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: #A1A1AA"><span style="width: 16px; height: 16px; display: flex; align-items: flex-end; justify-content: center; gap: 2px"><span style="width: 3px; height: 6px; border-radius: 1px; background: #C9C9CF"></span><span style="width: 3px; height: 9px; border-radius: 1px; background: #34343C"></span><span style="width: 3px; height: 12px; border-radius: 1px; background: #34343C"></span></span>Low</span>
+      </div>
+      <div style="height: 1px; background: #1C1C21"></div>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="display: flex; align-items: center; gap: 10px"><span style="display: flex; gap: 4px"><span style="width: 24px; height: 24px; border-radius: 7px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-size: 10.5px; font-weight: 600">A</span><span style="width: 24px; height: 24px; border-radius: 7px; background: #3FC1B024; color: #3FC1B0; display: grid; place-items: center; font-size: 10.5px; font-weight: 600">Q</span><span style="width: 24px; height: 24px; border-radius: 7px; background: #F27A8A24; color: #F48A98; display: grid; place-items: center; font-size: 10.5px; font-weight: 600">S</span><span style="width: 24px; height: 24px; border-radius: 7px; background: #5EA8FF24; color: #5EA8FF; display: grid; place-items: center; font-size: 10.5px; font-weight: 600">J</span><span style="width: 24px; height: 24px; border-radius: 7px; background: #F0BF4C24; color: #F0BF4C; display: grid; place-items: center; font-size: 10.5px; font-weight: 600">N</span><span style="width: 24px; height: 24px; border-radius: 7px; background: #6FCF7F24; color: #6FCF7F; display: grid; place-items: center; font-size: 10.5px; font-weight: 600">R</span><span style="width: 24px; height: 24px; border-radius: 7px; background: #E8925A24; color: #E8925A; display: grid; place-items: center; font-size: 10.5px; font-weight: 600">P</span><span style="width: 24px; height: 24px; border-radius: 7px; background: #B98BF524; color: #B98BF5; display: grid; place-items: center; font-size: 10.5px; font-weight: 600">E</span></span></span>
+        <span style="font-size: 12.5px; color: #A1A1AA; line-height: 1.5"><b style="color: #EDEDEF; font-weight: 500">Agents are rounded squares</b>, each with a fixed hue. <b style="color: #EDEDEF; font-weight: 500">People are circles</b> in neutral grey, so you can tell at a glance who did the work.</span>
+        <span style="display: flex; gap: 6px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #2B2B33; display: grid; place-items: center; font-size: 9.5px; font-weight: 600">MC</span><span style="width: 24px; height: 24px; border-radius: 50%; background: #3A2F4A; display: grid; place-items: center; font-size: 9.5px; font-weight: 600">DP</span><span style="width: 24px; height: 24px; border-radius: 50%; background: #2F3A44; display: grid; place-items: center; font-size: 9.5px; font-weight: 600">LS</span></span>
+      </div>
+    </section>
+  </div>
+
+  <section style="padding: 24px; border: 1px solid #1F1F25; border-radius: 14px; background: #111114; display: flex; flex-direction: column; gap: 18px">
+    <h2 style="margin: 0; font-size: 14px; font-weight: 600">Components</h2>
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 32px">
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 11.5px; color: #8B8B94">Buttons · 30px</span>
+        <div style="display: flex; gap: 8px; align-items: center">
+          <button style="height: 30px; padding: 0 12px; border: 0; background: #8B8FFF; color: #0B0B0D; border-radius: 7px; font-size: 13px; font-weight: 600">New ticket</button>
+          <button style="height: 30px; padding: 0 12px; border: 1px solid #3A3A44; background: #1E1E24; border-radius: 7px; font-size: 13px; font-weight: 500">Assign agent</button>
+          <button style="height: 30px; padding: 0 12px; border: 1px solid #26262C; background: transparent; border-radius: 7px; font-size: 13px; color: #C9C9CF">Cancel</button>
+          <button style="height: 30px; padding: 0 12px; border: 0; background: #F59E5B; color: #1A1206; border-radius: 7px; font-size: 13px; font-weight: 600">Approve &amp; continue</button>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 11.5px; color: #8B8B94">Labels &amp; flags</span>
+        <div style="display: flex; gap: 6px; align-items: center">
+          <span style="height: 22px; padding: 0 8px; border: 1px solid #26262C; border-radius: 11px; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #A1A1AA"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8B8FFF"></span>migration</span>
+          <span style="font-size: 11.5px; font-weight: 500; padding: 1px 7px; border-radius: 5px; background: #F59E5B1F; color: #F7B07A">Needs approval</span>
+          <span style="font-size: 11.5px; font-weight: 500; padding: 1px 7px; border-radius: 5px; background: #4EA7FC1F; color: #7CBEFD">PR #482</span>
+          <span class="mono" style="font-size: 11px; padding: 2px 7px; border-radius: 5px; background: #1B1B21; color: #C9C9CF">repo:write</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 11.5px; color: #8B8B94">Segmented control</span>
+        <div style="display: flex; padding: 2px; border: 1px solid #1F1F25; border-radius: 8px; background: #0D0D10">
+          <span style="height: 26px; padding: 0 10px; border-radius: 6px; display: flex; align-items: center; color: #A1A1AA; font-size: 12.5px">24h</span>
+          <span style="height: 26px; padding: 0 10px; border-radius: 6px; display: flex; align-items: center; background: #1F1F25; font-size: 12.5px; font-weight: 500">7 days</span>
+          <span style="height: 26px; padding: 0 10px; border-radius: 6px; display: flex; align-items: center; color: #A1A1AA; font-size: 12.5px">30 days</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 11.5px; color: #8B8B94">Progress</span>
+        <div style="width: 200px; display: flex; flex-direction: column; gap: 8px">
+          <span style="height: 4px; border-radius: 2px; background: #22222A; overflow: hidden"><span style="display: block; height: 100%; width: 62%; background: #8B8FFF"></span></span>
+          <span style="display: flex; height: 6px; border-radius: 3px; overflow: hidden; gap: 2px"><span style="flex: 12; background: #4CB782"></span><span style="flex: 1; background: #4EA7FC"></span><span style="flex: 4; background: #F0BF4C"></span><span style="flex: 2; background: #3A3A42"></span></span>
+        </div>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding-top: 18px; border-top: 1px solid #1C1C21">
+      <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; font-weight: 600">Color means state</span><span style="font-size: 12.5px; color: #A1A1AA; line-height: 1.5">Amber always asks for a human. Red always means blocked. The accent is kept for primary actions and focus.</span></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; font-weight: 600">Mono for machine output</span><span style="font-size: 12.5px; color: #A1A1AA; line-height: 1.5">Ticket IDs, branches, models, counts and permissions are set in JetBrains Mono, so they read as exact values.</span></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; font-weight: 600">Borders over shadows</span><span style="font-size: 12.5px; color: #A1A1AA; line-height: 1.5">Surfaces sit on 1px borders 4–6% brighter than the ground. Shadows are kept for floating menus and command bars.</span></div>
+    </div>
+  </section>
+</div>
+
+
+
+
+</body></html>

@@ -1,0 +1,33 @@
+# Infra only, for hot-reload development: `make dev`
+# Ports are published on localhost so the API and Next run on the host.
+name: lazyagents-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: lazyagents
+      POSTGRES_PASSWORD: lazyagents
+      POSTGRES_DB: lazyagents
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lazyagents -d lazyagents"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip=127.0.0.1 -ip.bind=0.0.0.0
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - seaweed:/data
+      - ./deploy/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+
+volumes:
+  pgdata:
+  seaweed:

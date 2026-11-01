@@ -1,0 +1,74 @@
+# Full stack: `docker compose up --build` → http://localhost:8080
+name: lazyagents
+
+x-api-env: &api-env
+  DATABASE_URL: postgres://lazyagents:${POSTGRES_PASSWORD:-lazyagents}@postgres:5432/lazyagents?sslmode=disable
+  S3_ENDPOINT: http://seaweedfs:8333
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-lazyagents}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-lazyagents-secret}
+  SECRETS_KEY: ${SECRETS_KEY:-}
+  SEED: ${SEED:-true}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: lazyagents
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lazyagents}
+      POSTGRES_DB: lazyagents
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lazyagents -d lazyagents"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip=seaweedfs -ip.bind=0.0.0.0
+    volumes:
+      - seaweed:/data
+      - ./deploy/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: ./server
+    environment: *api-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      seaweedfs: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "lazyagents", "healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  web:
+    build:
+      context: ./web
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    depends_on:
+      api: { condition: service_healthy }
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "${LAZYAGENTS_PORT:-8080}:8080"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    depends_on:
+      - api
+      - web
+
+volumes:
+  pgdata:
+  seaweed:
+  caddy:

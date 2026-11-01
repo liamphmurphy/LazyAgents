@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>LazyAgents — Artifacts</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"><style>
+body{margin:0;background:#0B0B0D}
+*{box-sizing:border-box}
+a{color:inherit;text-decoration:none}
+a:hover{color:#FFFFFF}
+button{font:inherit;color:inherit;cursor:pointer}
+input::placeholder{color:#8B8B94}
+.nav{display:flex;align-items:center;gap:10px;height:30px;padding:0 8px;border-radius:6px;color:#A1A1AA;font-size:13px;font-weight:500}
+.nav:hover{background:#17171B;color:#EDEDEF}
+.nav.on{background:#1B1B21;color:#EDEDEF}
+.row:hover{background:#131317}
+.ghost:hover{background:#17171B}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+</style></head>
+<body>
+
+
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #0B0B0D; color: #EDEDEF; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.45; font-feature-settings: 'cv11','ss01','ss03'; -webkit-font-smoothing: antialiased">
+
+<aside style="flex: 1 1 232px; display: flex; flex-direction: column; gap: 20px; padding: 12px 10px 14px; background: #0E0E11; border-right: 1px solid #1C1C21">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+    <button class="ghost" style="display: flex; align-items: center; gap: 9px; padding: 5px 6px; background: transparent; border: 0; border-radius: 7px">
+      <span style="width: 22px; height: 22px; border-radius: 6px; background: #8B8FFF; display: grid; place-items: center"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3v10h7" stroke="#0B0B0D" stroke-width="2.2" stroke-linecap="round"></path></svg></span>
+      <span style="font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em">Northwind Labs</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#8B8B94" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"></path></svg>
+    </button>
+    <button class="ghost" aria-label="New ticket" style="width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #24242A; background: #141418; border-radius: 7px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#C9C9CF" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"></path></svg></button>
+  </div>
+  <button class="ghost" style="display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border: 1px solid #1F1F25; background: #121216; border-radius: 7px; color: #8B8B94; font-size: 13px; text-align: left">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3 3"></path></svg>
+    <span style="flex: 1; white-space: nowrap">Search…</span>
+    <span class="mono" style="font-size: 11px; padding: 1px 5px; border: 1px solid #2A2A30; border-radius: 4px; color: #A1A1AA">⌘K</span>
+  </button>
+  <nav aria-label="Primary" style="display: flex; flex-direction: column; gap: 1px">
+    <a class="nav" href="dashboard.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.2"></rect><rect x="9" y="2.5" width="4.5" height="4.5" rx="1.2"></rect><rect x="2.5" y="9" width="4.5" height="4.5" rx="1.2"></rect><rect x="9" y="9" width="4.5" height="4.5" rx="1.2"></rect></svg>Dashboard</a>
+    <a class="nav" href="inbox.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 9.5h3l1 1.8h3l1-1.8h3"></path><path d="M2.5 9.5 4.2 3.8c.1-.5.6-.8 1.1-.8h5.4c.5 0 1 .3 1.1.8l1.7 5.7V12a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"></path></svg><span style="flex: 1">Inbox</span><span style="font-size: 11px; font-weight: 600; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #8B8FFF; color: #0B0B0D; display: grid; place-items: center">4</span></a>
+    <a class="nav" href="tickets.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"></circle><path d="m5.8 8 1.5 1.5 3-3"></path></svg>Tickets</a>
+    <a class="nav" href="epics.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 13.5 5.3 8 8.1 2.5 5.3z"></path><path d="m2.5 8.2 5.5 2.8 5.5-2.8"></path><path d="m2.5 11 5.5 2.8 5.5-2.8"></path></svg>Epics</a>
+    <a class="nav" href="agents.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="5" width="11" height="8" rx="2.2"></rect><path d="M8 2.5V5"></path><path d="M6 8.6v.8M10 8.6v.8"></path></svg><span style="flex: 1">Agents</span><span style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #8B8B94"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4CB782"></span>5</span></a>
+    <a class="nav on" href="artifacts.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h5l3 3v8H4z"></path><path d="M9 2.5v3h3"></path></svg>Artifacts</a>
+  </nav>
+  <div style="display: flex; flex-direction: column; gap: 1px">
+    <div style="padding: 0 8px 6px; font-size: 12px; font-weight: 500; color: #8B8B94">Projects</div>
+    <a class="nav" href="tickets.html"><span style="width: 10px; height: 10px; border-radius: 3px; background: #8B8FFF; margin: 0 3px"></span>Payments Platform</a>
+    <a class="nav" href="tickets.html"><span style="width: 10px; height: 10px; border-radius: 3px; background: #F0BF4C; margin: 0 3px"></span>Mobile App v3</a>
+    <a class="nav" href="tickets.html"><span style="width: 10px; height: 10px; border-radius: 3px; background: #3FC1B0; margin: 0 3px"></span>Developer Docs</a>
+    <a class="nav" href="tickets.html"><span style="width: 10px; height: 10px; border-radius: 3px; background: #F27A8A; margin: 0 3px"></span>Billing Migration</a>
+  </div>
+  <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 4px 6px">
+    <span style="width: 26px; height: 26px; border-radius: 50%; background: #2B2B33; display: grid; place-items: center; font-size: 11px; font-weight: 600">MC</span>
+    <span style="flex: 1; display: flex; flex-direction: column; line-height: 1.25"><span style="font-weight: 500">Maya Chen</span><span style="font-size: 11.5px; color: #8B8B94">Eng lead</span></span>
+  </div>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+  <header style="min-height: 52px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 24px; border-bottom: 1px solid #1C1C21">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8B8B94"><span>Northwind Labs</span><span>/</span><span style="color: #EDEDEF; font-weight: 500">Artifacts</span></div>
+    <button style="height: 30px; padding: 0 12px; border: 0; background: #8B8FFF; color: #0B0B0D; border-radius: 7px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 11V3M4.5 6.5 8 3l3.5 3.5M3 13h10"></path></svg>Upload</button>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap">
+    <div style="flex: 999 1 560px; min-width: 0; padding: 28px 28px 40px; display: flex; flex-direction: column; gap: 18px; border-right: 1px solid #1C1C21">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <h1 style="margin: 0; font-size: 26px; line-height: 1.2; font-weight: 600; letter-spacing: -0.022em">Artifacts</h1>
+        <p style="margin: 0; font-size: 14px; color: #A1A1AA">Context agents read before they work, and the reports they leave behind.</p>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+        <label style="flex: 1 1 240px; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid #26262C; border-radius: 8px; background: #111114; color: #8B8B94">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3 3"></path></svg>
+          <input type="search" aria-label="Search artifacts" placeholder="Search titles and contents" style="flex: 1; min-width: 0; border: 0; background: transparent; color: #EDEDEF; font: inherit; outline: none">
+        </label>
+        <div role="tablist" aria-label="Artifact type" style="display: flex; flex-wrap: wrap; gap: 4px">
+          
+            <button role="tab" aria-selected="true" style="height: 30px; padding: 0 10px; border: 1px solid #2A2A31; background: #1B1B21; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: #EDEDEF; display: flex; align-items: center; gap: 6px">All<span class="mono" style="font-size: 11px; color: #8B8B94">48</span></button>
+          
+            <button role="tab" aria-selected="false" style="height: 30px; padding: 0 10px; border: 1px solid transparent; background: transparent; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: #A1A1AA; display: flex; align-items: center; gap: 6px">PRDs<span class="mono" style="font-size: 11px; color: #8B8B94">9</span></button>
+          
+            <button role="tab" aria-selected="false" style="height: 30px; padding: 0 10px; border: 1px solid transparent; background: transparent; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: #A1A1AA; display: flex; align-items: center; gap: 6px">Specs<span class="mono" style="font-size: 11px; color: #8B8B94">14</span></button>
+          
+            <button role="tab" aria-selected="false" style="height: 30px; padding: 0 10px; border: 1px solid transparent; background: transparent; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: #A1A1AA; display: flex; align-items: center; gap: 6px">ADRs<span class="mono" style="font-size: 11px; color: #8B8B94">7</span></button>
+          
+            <button role="tab" aria-selected="false" style="height: 30px; padding: 0 10px; border: 1px solid transparent; background: transparent; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: #A1A1AA; display: flex; align-items: center; gap: 6px">Agent reports<span class="mono" style="font-size: 11px; color: #8B8B94">15</span></button>
+          
+            <button role="tab" aria-selected="false" style="height: 30px; padding: 0 10px; border: 1px solid transparent; background: transparent; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: #A1A1AA; display: flex; align-items: center; gap: 6px">Designs<span class="mono" style="font-size: 11px; color: #8B8B94">3</span></button>
+          
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px dashed #2E2E36; border-radius: 12px; background: #0F0F12">
+        <span style="width: 34px; height: 34px; border-radius: 9px; background: #1B1B21; display: grid; place-items: center; color: #A1A1AA; flex: none"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 11V3M4.5 6.5 8 3l3.5 3.5M3 13h10"></path></svg></span>
+        <span style="display: flex; flex-direction: column; gap: 1px"><span style="font-weight: 500">Drop PRDs, specs or ADRs here</span><span style="font-size: 12px; color: #8B8B94">Markdown, PDF or Google Docs. LazyAgents chunks and indexes them so agents can cite sections.</span></span>
+      </div>
+
+      <div style="border: 1px solid #1F1F25; border-radius: 12px; background: #111114; overflow: hidden">
+        <div style="overflow-x: auto">
+          <div style="min-width: 700px">
+            <div style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; padding: 9px 16px; font-size: 12px; color: #8B8B94; border-bottom: 1px solid #1C1C21"><span>Name</span><span>Author</span><span>Project</span><span>Tickets</span><span style="text-align: right">Updated</span></div>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: #8B8FFF12">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #8B8FFF1F; color: #A3A6FF">PRD</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Ledger v2 — Product requirements</span><span style="font-size: 11.5px; color: #8B8B94">v3 · 14 pages</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 50%; background: #2B2B33; color: #EDEDEF; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">MC</span>Maya Chen</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #8B8FFF"></span>Payments Platform</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">19</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">2h ago</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #6FCF7F1F; color: #6FCF7F">REPORT</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Migration dry-run report — PAY-214</span><span style="font-size: 11.5px; color: #8B8B94">Generated · 6 pages</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 6px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">A</span>Atlas</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #8B8FFF"></span>Payments Platform</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">1</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">14m ago</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #4EA7FC1F; color: #7CBEFD">SPEC</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Ledger partitioning — Technical spec</span><span style="font-size: 11.5px; color: #8B8B94">v1.2 · 9 pages</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 50%; background: #3A2F4A; color: #EDEDEF; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">DP</span>Dev Patel</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #8B8FFF"></span>Payments Platform</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">6</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">Yesterday</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #F0BF4C1F; color: #F0BF4C">ADR</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ADR-012 · Postgres declarative partitioning</span><span style="font-size: 11.5px; color: #8B8B94">Accepted</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 50%; background: #3A2F4A; color: #EDEDEF; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">DP</span>Dev Patel</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #8B8FFF"></span>Payments Platform</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">3</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">Oct 28</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #4EA7FC1F; color: #7CBEFD">SPEC</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Offline sync — Technical spec</span><span style="font-size: 11.5px; color: #8B8B94">v1.4 · 12 pages</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 50%; background: #2F3A44; color: #EDEDEF; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">LS</span>Lena Sato</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #F0BF4C"></span>Mobile App v3</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">22</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">Fri</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #6FCF7F1F; color: #6FCF7F">REPORT</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Spec conflict analysis — rate limits</span><span style="font-size: 11.5px; color: #8B8B94">Generated · 2 pages</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 6px; background: #F27A8A24; color: #F48A98; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">S</span>Sentry</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #3FC1B0"></span>Developer Docs</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">2</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">3h ago</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #8B8FFF1F; color: #A3A6FF">PRD</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Refunds API — Product requirements</span><span style="font-size: 11.5px; color: #8B8B94">v2 · 8 pages</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 50%; background: #2B2B33; color: #EDEDEF; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">MC</span>Maya Chen</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #8B8FFF"></span>Payments Platform</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">11</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">Oct 26</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #F27A8A1F; color: #F48A98">DESIGN</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Session refresh flow — screens</span><span style="font-size: 11.5px; color: #8B8B94">Figma export · 7 frames</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 50%; background: #2F3A44; color: #EDEDEF; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">LS</span>Lena Sato</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #F0BF4C"></span>Mobile App v3</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">4</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">Oct 24</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #6FCF7F1F; color: #6FCF7F">REPORT</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Weekly test-coverage summary</span><span style="font-size: 11.5px; color: #8B8B94">Generated · 3 pages</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 6px; background: #3FC1B024; color: #3FC1B0; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">Q</span>Quill</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #8B8FFF"></span>Payments Platform</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">—</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">Oct 31</span>
+              </a>
+            
+              <a class="row" href="artifacts.html" style="display: grid; grid-template-columns: 3fr 1.2fr 1.3fr 0.8fr 0.9fr; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #16161A; background: transparent">
+                <span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                  <span style="width: 44px; flex: none; text-align: center; font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 0; border-radius: 4px; background: #4EA7FC1F; color: #7CBEFD">SPEC</span>
+                  <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 500; color: #EDEDEF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Stripe cutover — Dual-run plan</span><span style="font-size: 11.5px; color: #8B8B94">v0.9 draft · 5 pages</span></span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #C9C9CF"><span style="width: 20px; height: 20px; border-radius: 50%; background: #2B2B33; color: #EDEDEF; display: grid; place-items: center; font-size: 9px; font-weight: 600; flex: none">MC</span>Maya Chen</span>
+                <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #A1A1AA"><span style="width: 8px; height: 8px; border-radius: 2px; background: #F27A8A"></span>Billing Migration</span>
+                <span class="mono" style="font-size: 12px; color: #A1A1AA">14</span>
+                <span style="font-size: 12px; color: #8B8B94; text-align: right">Oct 22</span>
+              </a>
+            
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside aria-label="Artifact preview" style="flex: 1 1 340px; min-width: 0; padding: 24px 20px 40px; display: flex; flex-direction: column; gap: 22px; background: #0D0D10">
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.06em; padding: 3px 7px; border-radius: 4px; background: #8B8FFF1F; color: #A3A6FF">PRD</span>
+        <div style="display: flex; gap: 4px">
+          <button class="ghost" aria-label="Open full screen" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 6px; color: #A1A1AA"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9"></path></svg></button>
+          <button class="ghost" aria-label="Close preview" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 6px; color: #A1A1AA"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"></path></svg></button>
+        </div>
+      </div>
+
+      <div aria-hidden="true" style="height: 200px; border: 1px solid #22222A; border-radius: 10px; background: #141418; padding: 18px 20px; display: flex; flex-direction: column; gap: 9px; overflow: hidden">
+        <span style="width: 58%; height: 10px; border-radius: 3px; background: #3A3A44"></span>
+        <span style="width: 32%; height: 6px; border-radius: 3px; background: #26262E"></span>
+        <span style="height: 6px"></span>
+        <span style="width: 38%; height: 7px; border-radius: 3px; background: #8B8FFF55"></span>
+        <span style="width: 92%; height: 5px; border-radius: 3px; background: #24242C"></span>
+        <span style="width: 86%; height: 5px; border-radius: 3px; background: #24242C"></span>
+        <span style="width: 70%; height: 5px; border-radius: 3px; background: #24242C"></span>
+        <span style="height: 4px"></span>
+        <span style="width: 44%; height: 7px; border-radius: 3px; background: #8B8FFF55"></span>
+        <span style="width: 90%; height: 5px; border-radius: 3px; background: #24242C"></span>
+        <span style="width: 78%; height: 5px; border-radius: 3px; background: #24242C"></span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.015em">Ledger v2 — Product requirements</h2>
+        <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #A1A1AA">Goals, constraints and success metrics for the multi-currency ledger rebuild. Source of truth for the Ledger v2 epic.</p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; font-size: 12.5px">
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11.5px; color: #8B8B94">Owner</span><span>Maya Chen</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11.5px; color: #8B8B94">Version</span><span class="mono">v3 · 2h ago</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11.5px; color: #8B8B94">Length</span><span>14 pages · 9 sections</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11.5px; color: #8B8B94">Epic</span><a href="epics.html" style="color: #A3A6FF">Ledger v2</a></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font-size: 12px; font-weight: 500; color: #8B8B94">Outline</span>
+        
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px"><span class="mono" style="width: 26px; color: #8B8B94; font-size: 11.5px">§1</span><span style="flex: 1; color: #C9C9CF">Problem &amp; goals</span><span class="mono" style="font-size: 11px; color: #8B8B94">12</span></div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px"><span class="mono" style="width: 26px; color: #8B8B94; font-size: 11.5px">§2</span><span style="flex: 1; color: #C9C9CF">Users and merchant impact</span><span class="mono" style="font-size: 11px; color: #8B8B94">3</span></div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px"><span class="mono" style="width: 26px; color: #8B8B94; font-size: 11.5px">§3</span><span style="flex: 1; color: #C9C9CF">Money precision requirements</span><span class="mono" style="font-size: 11px; color: #8B8B94">27</span></div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px"><span class="mono" style="width: 26px; color: #8B8B94; font-size: 11.5px">§4</span><span style="flex: 1; color: #C9C9CF">Reconciliation performance</span><span class="mono" style="font-size: 11px; color: #8B8B94">31</span></div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px"><span class="mono" style="width: 26px; color: #8B8B94; font-size: 11.5px">§5</span><span style="flex: 1; color: #C9C9CF">Rollout and rollback</span><span class="mono" style="font-size: 11px; color: #8B8B94">18</span></div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px"><span class="mono" style="width: 26px; color: #8B8B94; font-size: 11.5px">§6</span><span style="flex: 1; color: #C9C9CF">Out of scope</span><span class="mono" style="font-size: 11px; color: #8B8B94">4</span></div>
+        
+        <span style="font-size: 11.5px; color: #8B8B94">Right column: times agents cited each section</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font-size: 12px; font-weight: 500; color: #8B8B94">Read by</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <span style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px 0 4px; border: 1px solid #22222A; border-radius: 13px; font-size: 12px"><span style="width: 18px; height: 18px; border-radius: 5px; background: #8B8FFF26; color: #A3A6FF; display: grid; place-items: center; font-size: 9px; font-weight: 600">A</span>Atlas</span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px 0 4px; border: 1px solid #22222A; border-radius: 13px; font-size: 12px"><span style="width: 18px; height: 18px; border-radius: 5px; background: #6FCF7F24; color: #6FCF7F; display: grid; place-items: center; font-size: 9px; font-weight: 600">R</span>Relay</span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px 0 4px; border: 1px solid #22222A; border-radius: 13px; font-size: 12px"><span style="width: 18px; height: 18px; border-radius: 5px; background: #E8925A24; color: #E8925A; display: grid; place-items: center; font-size: 9px; font-weight: 600">P</span>Pike</span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px 0 4px; border: 1px solid #22222A; border-radius: 13px; font-size: 12px"><span style="width: 18px; height: 18px; border-radius: 5px; background: #F27A8A24; color: #F48A98; display: grid; place-items: center; font-size: 9px; font-weight: 600">S</span>Sentry</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px">
+        <button class="ghost" style="flex: 1; height: 32px; border: 1px solid #26262C; background: transparent; border-radius: 7px; font-size: 12.5px; color: #C9C9CF">New version</button>
+        <button style="flex: 1; height: 32px; border: 1px solid #3A3A44; background: #1E1E24; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: #EDEDEF">Generate tickets</button>
+      </div>
+    </aside>
+  </div>
+</main>
+</div>
+
+
+
+
+</body></html>

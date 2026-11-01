@@ -1,0 +1,13 @@
+# Hot reload for `make dev` when air is installed.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/lazyagents ./cmd/lazyagents"
+  entrypoint = ["./tmp/lazyagents", "serve"]
+  include_ext = ["go", "sql"]
+  exclude_dir = ["tmp"]
+  delay = 300
+
+[log]
+  main_only = true

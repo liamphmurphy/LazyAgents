@@ -1,0 +1,242 @@
+/*
+ * LazyAgents design tokens
+ * Dark is the default theme. Light applies via [data-theme="light"] on <html>,
+ * or automatically from the OS setting unless [data-theme="dark"] is set.
+ *
+ * Fonts (load once, e.g. in <head>):
+ * <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+ */
+
+:root {
+  /* ---------- Typography ---------- */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-features: "cv11", "ss01", "ss03";
+
+  --text-display: 600 26px/1.2 var(--font-sans);   /* page title, letter-spacing: -0.022em */
+  --text-title:   600 19px/1.3 var(--font-sans);   /* epic / section hero, letter-spacing: -0.015em */
+  --text-heading: 600 14px/1.45 var(--font-sans);  /* card headings */
+  --text-body:    400 13px/1.45 var(--font-sans);  /* default UI text */
+  --text-reading: 400 14px/1.65 var(--font-sans);  /* ticket descriptions, long-form */
+  --text-small:   400 12px/1.45 var(--font-sans);  /* meta, table headers */
+  --text-micro:   600 10px/1.2 var(--font-sans);   /* doc-type tags, letter-spacing: 0.06em */
+  --text-mono:    400 12px/1.45 var(--font-mono);  /* IDs, branches, models, numbers */
+
+  --tracking-display: -0.022em;
+  --tracking-title: -0.015em;
+
+  /* ---------- Spacing (4px base) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---------- Radius ---------- */
+  --radius-xs: 4px;   /* tags, kbd, code */
+  --radius-sm: 6px;   /* nav items, small buttons, agent avatar 20px */
+  --radius-md: 7px;   /* buttons, inputs */
+  --radius-lg: 10px;  /* inner cards, doc cards */
+  --radius-xl: 12px;  /* cards, panels */
+  --radius-2xl: 14px; /* featured cards */
+  --radius-pill: 999px;
+
+  /* ---------- Sizing ---------- */
+  --sidebar-width: 232px;
+  --header-height: 52px;
+  --row-height: 44px;        /* ticket list rows */
+  --group-row-height: 38px;  /* list group headers */
+  --control-height: 30px;    /* buttons */
+  --control-height-sm: 26px; /* filter chips, segmented items */
+  --content-max: 1180px;
+  --reading-max: 780px;
+
+  /* ---------- Elevation (floating UI only) ---------- */
+  --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.5);
+
+  /* ---------- Color: dark (default) ---------- */
+  --bg: #0B0B0D;            /* app ground */
+  --bg-sidebar: #0E0E11;
+  --bg-panel: #0D0D10;      /* right-hand detail panels */
+  --surface: #111114;       /* cards */
+  --surface-raised: #16161B;/* popovers, command bar */
+  --surface-sunken: #0F0F12;/* list group headers, nested blocks */
+  --hover: #17171B;
+  --selected: #1B1B21;
+  --border: #1F1F25;        /* card borders */
+  --border-subtle: #1C1C21; /* dividers inside cards, header rules */
+  --border-row: #16161A;    /* list row separators */
+  --border-strong: #26262C; /* buttons, chips, inputs */
+  --track: #22222A;         /* progress track */
+
+  --text: #EDEDEF;
+  --text-2: #C9C9CF;        /* body copy inside content */
+  --text-secondary: #A1A1AA;
+  --text-tertiary: #8B8B94; /* minimum for small text: 4.5:1 on --bg */
+  --text-on-accent: #0B0B0D;
+
+  --accent: #8B8FFF;
+  --accent-soft: #8B8FFF26;
+
+  /* Workflow states (glyph colors) */
+  --state-backlog: #6B6B73;
+  --state-todo: #A1A1AA;
+  --state-progress: #F0BF4C;
+  --state-review: #4EA7FC;
+  --state-done: #4CB782;
+  --state-human: #F59E5B;   /* waiting on a person: approval, review */
+  --state-blocked: #EF6461;
+  --priority-urgent: #F2994A;
+
+  /* Tinted pills: background + readable foreground */
+  --pill-human-bg: #F59E5B1F;   --pill-human-fg: #F7B07A;
+  --pill-blocked-bg: #EF64611F; --pill-blocked-fg: #F48A87;
+  --pill-review-bg: #4EA7FC1F;  --pill-review-fg: #7CBEFD;
+  --pill-done-bg: #4CB7821F;    --pill-done-fg: #6FCF97;
+  --pill-neutral-bg: #26262C;   --pill-neutral-fg: #A1A1AA;
+
+  /* Agent identity hues: fg on a ~15% tint of the same hue */
+  --agent-atlas: #A3A6FF;  --agent-atlas-bg: #8B8FFF26;
+  --agent-quill: #3FC1B0;  --agent-quill-bg: #3FC1B024;
+  --agent-sentry: #F48A98; --agent-sentry-bg: #F27A8A24;
+  --agent-juno: #5EA8FF;   --agent-juno-bg: #5EA8FF24;
+  --agent-nova: #F0BF4C;   --agent-nova-bg: #F0BF4C24;
+  --agent-relay: #6FCF7F;  --agent-relay-bg: #6FCF7F24;
+  --agent-pike: #E8925A;   --agent-pike-bg: #E8925A24;
+  --agent-echo: #B98BF5;   --agent-echo-bg: #B98BF524;
+
+  /* Human avatars: neutral circles */
+  --human-avatar-bg: #2B2B33;
+
+  /* Artifact type tags */
+  --doc-prd: #A3A6FF;    --doc-prd-bg: #8B8FFF1F;
+  --doc-spec: #7CBEFD;   --doc-spec-bg: #4EA7FC1F;
+  --doc-adr: #F0BF4C;    --doc-adr-bg: #F0BF4C1F;
+  --doc-report: #6FCF7F; --doc-report-bg: #6FCF7F1F;
+  --doc-design: #F48A98; --doc-design-bg: #F27A8A1F;
+
+  /* Component tokens (v0.2): values the mockups hard-coded, named so both themes work */
+  --row-hover: #131317;          /* list and card rows */
+  --border-hover: #2C2C34;       /* card border on hover */
+  --border-float: #2A2A31;       /* dialogs, selected tabs */
+  --kbd-border: #2A2A30;
+  --btn-secondary-bg: #1E1E24;
+  --btn-secondary-border: #3A3A44;
+  --btn-outline-bg: #141418;
+  --approve-fg: #1A1206;         /* text on --state-human buttons */
+  --segment-on: #1F1F25;
+  --command-on: #1F1F26;         /* selected command-menu item */
+  --search-bg: #121216;
+  --priority-unlit: #34343C;
+  --unassigned: #44444C;         /* dashed empty-assignee ring */
+  --scrim: rgba(5, 5, 7, 0.62);
+
+  color-scheme: dark;
+}
+
+/* ---------- Color: light ---------- */
+:root[data-theme="light"] {
+  --bg: #FFFFFF;
+  --bg-sidebar: #F7F7F8;
+  --bg-panel: #FBFBFC;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-sunken: #F9F9FA;
+  --hover: #F2F2F4;
+  --selected: #E9E9EE;
+  --border: #E6E6EA;
+  --border-subtle: #ECECEF;
+  --border-row: #F0F0F2;
+  --border-strong: #E0E0E5;
+  --track: #ECECF0;
+
+  --text: #17171A;
+  --text-2: #3A3A42;
+  --text-secondary: #55555F;
+  --text-tertiary: #6B6B75;
+  --text-on-accent: #FFFFFF;
+
+  --accent: #5558E3;
+  --accent-soft: #5558E31F;
+
+  --state-backlog: #A8A8B0;
+  --state-todo: #8A8A93;
+  --state-progress: #D49A0A;
+  --state-review: #2F7FE0;
+  --state-done: #2E9E68;
+  --state-human: #E5832F;
+  --state-blocked: #D9424B;
+  --priority-urgent: #EB7A1E;
+
+  --pill-human-bg: #F59E5B26;   --pill-human-fg: #9A4A0E;
+  --pill-blocked-bg: #D9424B1A; --pill-blocked-fg: #A82A33;
+  --pill-review-bg: #2F7FE01A;  --pill-review-fg: #1D5FB0;
+  --pill-done-bg: #2E9E681A;    --pill-done-fg: #1E7048;
+  --pill-neutral-bg: #F0F0F2;   --pill-neutral-fg: #55555F;
+
+  --agent-atlas: #4547C9;  --agent-atlas-bg: #5558E31F;
+  --agent-quill: #0B7A6E;  --agent-quill-bg: #0F8A7C1A;
+  --agent-sentry: #B42F48; --agent-sentry-bg: #C2364F17;
+  --agent-juno: #1D5FB0;   --agent-juno-bg: #2F7FE01A;
+  --agent-nova: #8A6100;   --agent-nova-bg: #D49A0A1F;
+  --agent-relay: #277538;  --agent-relay-bg: #2E85401A;
+  --agent-pike: #A44A18;   --agent-pike-bg: #B5541F17;
+  --agent-echo: #6C3BB8;   --agent-echo-bg: #7A45C917;
+
+  --human-avatar-bg: #E3E3E8;
+
+  --doc-prd: #4547C9;    --doc-prd-bg: #5558E31A;
+  --doc-spec: #1D5FB0;   --doc-spec-bg: #2F7FE01A;
+  --doc-adr: #8A6100;    --doc-adr-bg: #D49A0A1F;
+  --doc-report: #1E7048; --doc-report-bg: #2E9E681A;
+  --doc-design: #B42F48; --doc-design-bg: #C2364F17;
+
+  --row-hover: #F7F7F9; --border-hover: #D4D4DA; --border-float: #E0E0E5; --kbd-border: #E0E0E5;
+  --btn-secondary-bg: #FFFFFF; --btn-secondary-border: #D4D4DA; --btn-outline-bg: #FFFFFF; --approve-fg: #1A1206;
+  --segment-on: #E9E9EE; --command-on: #E9E9EE; --search-bg: #FFFFFF; --priority-unlit: #D4D4DA; --unassigned: #B8B8C0;
+  --scrim: rgba(23, 23, 26, 0.32);
+  --shadow-float: 0 12px 32px rgba(23, 23, 26, 0.12), 0 0 0 1px rgba(23, 23, 26, 0.04);
+
+  color-scheme: light;
+}
+
+/* Follow the OS when no explicit theme is set */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #FFFFFF; --bg-sidebar: #F7F7F8; --bg-panel: #FBFBFC; --surface: #FFFFFF; --surface-raised: #FFFFFF; --surface-sunken: #F9F9FA;
+    --hover: #F2F2F4; --selected: #E9E9EE; --border: #E6E6EA; --border-subtle: #ECECEF; --border-row: #F0F0F2; --border-strong: #E0E0E5; --track: #ECECF0;
+    --text: #17171A; --text-2: #3A3A42; --text-secondary: #55555F; --text-tertiary: #6B6B75; --text-on-accent: #FFFFFF;
+    --accent: #5558E3; --accent-soft: #5558E31F;
+    --state-backlog: #A8A8B0; --state-todo: #8A8A93; --state-progress: #D49A0A; --state-review: #2F7FE0; --state-done: #2E9E68; --state-human: #E5832F; --state-blocked: #D9424B; --priority-urgent: #EB7A1E;
+    --pill-human-bg: #F59E5B26; --pill-human-fg: #9A4A0E; --pill-blocked-bg: #D9424B1A; --pill-blocked-fg: #A82A33;
+    --pill-review-bg: #2F7FE01A; --pill-review-fg: #1D5FB0; --pill-done-bg: #2E9E681A; --pill-done-fg: #1E7048;
+    --pill-neutral-bg: #F0F0F2; --pill-neutral-fg: #55555F;
+    --agent-atlas: #4547C9; --agent-atlas-bg: #5558E31F; --agent-quill: #0B7A6E; --agent-quill-bg: #0F8A7C1A;
+    --agent-sentry: #B42F48; --agent-sentry-bg: #C2364F17; --agent-juno: #1D5FB0; --agent-juno-bg: #2F7FE01A;
+    --agent-nova: #8A6100; --agent-nova-bg: #D49A0A1F; --agent-relay: #277538; --agent-relay-bg: #2E85401A;
+    --agent-pike: #A44A18; --agent-pike-bg: #B5541F17; --agent-echo: #6C3BB8; --agent-echo-bg: #7A45C917;
+    --human-avatar-bg: #E3E3E8;
+    --doc-prd: #4547C9; --doc-prd-bg: #5558E31A; --doc-spec: #1D5FB0; --doc-spec-bg: #2F7FE01A; --doc-adr: #8A6100; --doc-adr-bg: #D49A0A1F;
+    --doc-report: #1E7048; --doc-report-bg: #2E9E681A; --doc-design: #B42F48; --doc-design-bg: #C2364F17;
+    --shadow-float: 0 12px 32px rgba(23, 23, 26, 0.12), 0 0 0 1px rgba(23, 23, 26, 0.04);
+    --row-hover: #F7F7F9; --border-hover: #D4D4DA; --border-float: #E0E0E5; --kbd-border: #E0E0E5;
+    --btn-secondary-bg: #FFFFFF; --btn-secondary-border: #D4D4DA; --btn-outline-bg: #FFFFFF; --approve-fg: #1A1206;
+    --segment-on: #E9E9EE; --command-on: #E9E9EE; --search-bg: #FFFFFF; --priority-unlit: #D4D4DA; --unassigned: #B8B8C0;
+    --scrim: rgba(23, 23, 26, 0.32);
+    color-scheme: light;
+  }
+}
+
+/* ---------- Base ---------- */
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font: var(--text-body);
+  font-feature-settings: var(--font-features);
+  -webkit-font-smoothing: antialiased;
+}
