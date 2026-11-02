@@ -146,7 +146,9 @@ Actors are polymorphic: we use `actor_type` (`user|agent`) plus `actor_id` colum
 
 ### 5.1 REST (humans and UI) at `/api/v1`
 Resource CRUD for projects, epics, tickets, labels, agents, artifacts and comments, plus:
-- `GET /tickets?view=active|backlog|agent_owned|needs_human&status=…&group_by=status`
+- `GET /tickets?view=active|backlog|agent_owned|needs_human&status=…&ready=true` (ready = assigned, unfinished, no live run, active project and all blockers Done)
+- `GET/POST /projects`, `PUT /projects/{key}` (revision-checked config/archive; key is immutable)
+- `PUT /tickets/{key}/dependencies` (revision-checked blocker replacement; acyclic, workspace-scoped)
 - `POST /tickets/bulk` (status, priority, assign agent, attach artifact)
 - `POST /tickets/{key}/dispatch` (a human approves the ticket for its assigned agent, see §6.6)
 - `POST /approvals/{id}/approve|deny` (any human in v1, with no per-scope approver roles)
@@ -154,7 +156,7 @@ Resource CRUD for projects, epics, tickets, labels, agents, artifacts and commen
 - `GET /dashboard?range=24h|7d|30d` (KPIs, attention list, project table, live agents, flow)
 - `GET /search?q=` (⌘K across tickets, epics, artifacts and agents)
 - `POST /artifacts` (markdown body or multipart upload), `POST /artifacts/{id}/versions`, `GET /artifacts/{id}/versions/{v}/content`
-- `POST /artifacts/{id}/generate-tickets` (Phase 8: an agent drafts tickets from a PRD)
+- `GET/POST /planning-sessions`, `GET/PATCH /planning-sessions/{id}` (Phase 8: approve a standalone planner, then review/accept/dismiss its drafts; artifact and epic actions prefill the form)
 
 ### 5.2 Agent API: MCP at `/mcp` (mirrored in REST at `/api/v1/agent/*`)
 Requests authenticate with a per-agent bearer token. Every tool is checked against the agent's permission scopes.
@@ -396,11 +398,12 @@ Each phase ends with something you can demo.
 - Agents: status filters, cards with current assignment, stats, enforcement levels for each scope, queue, plus an agent configuration editor (extending the design system, since it isn't designed yet)
 - *Exit:* every designed screen is live on real data
 
-**Phase 8: Later / stretch**
+**Phase 8: Planning workflow implemented; remaining stretch deferred**
 - More harnesses (Gemini CLI, a Claude Agent SDK native adapter) and a remote or rootless runner backend
-- "Generate tickets" from a PRD
+- ✅ "Plan with an agent" from a goal/epic and "Generate tickets" from a markdown PRD/SPEC. Standalone restricted planning runs produce editable drafts; human acceptance atomically creates tickets with criteria, assignments and source context. Dispatch remains a separate human approval. Ticket dependencies and project/repository management are now implemented in the authorized follow-up below. Automatic dispatch waves and spend estimates remain deferred. See CONTINUE.md for contracts, restrictions and verification.
 - GitHub App integration: short-lived tokens limited to one repo instead of the PAT, PRs authored by the bot, and webhooks for PR state and diff stats instead of agent self-reporting
-- OIDC login, multiple workspaces, settings, empty and loading states (listed as "not designed yet")
+- ✅ Project/repository settings: create/edit/archive/restore with stable keys, GitHub URL/base-branch validation and approved repository snapshots. Ticket dependencies include cycle checks, planning suggestions, ready filtering and server-side dispatch enforcement (blockers must be Done).
+- OIDC login, multiple workspaces, remaining settings, empty and loading states (listed as "not designed yet")
 - 📌 **Notifications (pinned):** approvals and dispatch requests stall work, so they'll eventually need to reach people outside the app (Slack, email or desktop push). We'll design this once the core loop works. Until then, the Inbox and the sidebar badge are the only signal.
 - Spend caps per workspace or project, approver roles per scope, multiple agents per ticket (handoffs or reviewer agents), projects that span several repos, other Git hosts
 

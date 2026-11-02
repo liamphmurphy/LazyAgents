@@ -43,7 +43,15 @@ func (s *Server) agentOverviews(ctx context.Context, ws uuid.UUID) (api.AgentOve
 		return out, err
 	}
 	out.StatsAsOf = snap.GeneratedAt
+	liveStatuses, err := s.liveAgentStatuses(ctx, ws)
+	if err != nil {
+		return out, err
+	}
 	roster, err := s.Q.ListAgents(ctx, ws)
+	if err != nil {
+		return out, err
+	}
+	planning, err := s.Q.ActivePlanningWork(ctx, ws)
 	if err != nil {
 		return out, err
 	}
@@ -64,13 +72,21 @@ func (s *Server) agentOverviews(ctx context.Context, ws uuid.UUID) (api.AgentOve
 		if err != nil {
 			return out, err
 		}
-		o := api.AgentOverview{Agent: toAgent(a), MaxConcurrency: spec.MaxConcurrency, Harness: spec.Harness, Assignments: []api.AgentWork{}, Queue: []api.WorkTicket{}, Scopes: []api.AgentScopeSummary{}, Stats: stats}
-		for _, w := range work {
-			if w.AgentID == a.ID {
-				o.Assignments = append(o.Assignments, api.AgentWork{RunId: w.ID, Ticket: workTicket(w.TicketID, w.Key, w.Title, w.Status, w.Priority), State: w.State, Harness: w.Harness, Model: w.Model, StartedAt: w.StartedAt, Step: w.Step, StepPosition: int(w.StepPosition), StepsDone: int(w.StepsDone), StepsTotal: int(w.StepsTotal)})
+		o := api.AgentOverview{Agent: toAgent(a), MaxConcurrency: spec.MaxConcurrency, Harness: spec.Harness, PlanningRuns: []api.PlanningWork{}, Assignments: []api.AgentWork{}, Queue: []api.WorkTicket{}, Scopes: []api.AgentScopeSummary{}, Stats: stats}
+		for _, p := range planning {
+			if p.AgentID == a.ID {
+				o.PlanningRuns = append(o.PlanningRuns, api.PlanningWork{Id: p.ID, RunId: p.RunID, Goal: p.Goal, State: p.State, Harness: p.Harness, Model: p.Model})
 			}
 		}
-		o.Agent.Status = agentStatus(o.Assignments)
+		for _, w := range work {
+			if w.AgentID == a.ID {
+				o.Assignments = append(o.Assignments, api.AgentWork{RunId: w.ID, Ticket: workTicket(*w.TicketID, w.Key, w.Title, w.Status, w.Priority), State: w.State, Harness: w.Harness, Model: w.Model, StartedAt: w.StartedAt, Step: w.Step, StepPosition: int(w.StepPosition), StepsDone: int(w.StepsDone), StepsTotal: int(w.StepsTotal)})
+			}
+		}
+		o.Agent.Status = api.AgentStatusIdle
+		if st, ok := liveStatuses[a.ID]; ok {
+			o.Agent.Status = st
+		}
 		for _, t := range queue {
 			if t.AssigneeAgentID != nil && *t.AssigneeAgentID == a.ID {
 				o.Queue = append(o.Queue, workTicket(t.ID, t.Key, t.Title, t.Status, t.Priority))
@@ -132,6 +148,15 @@ func (s *Server) overview(ctx context.Context, ws uuid.UUID) (overview, error) {
 	if err != nil {
 		return out, err
 	}
+	activeProjects := map[uuid.UUID]bool{}
+	filtered := projects[:0]
+	for _, p := range projects {
+		if !p.Archived {
+			filtered = append(filtered, p)
+			activeProjects[p.ID] = true
+		}
+	}
+	projects = filtered
 	epics, err := s.Q.ListEpics(ctx, ws)
 	if err != nil {
 		return out, err
@@ -187,6 +212,9 @@ func (s *Server) overview(ctx context.Context, ws uuid.UUID) (overview, error) {
 		out.projects = append(out.projects, o)
 	}
 	for _, e := range epics {
+		if !activeProjects[e.ProjectID] {
+			continue
+		}
 		o := api.EpicOverview{Epic: api.Epic{Id: e.ID, ProjectId: e.ProjectID, Name: e.Name, Health: api.EpicHealth(e.Health)}, Objective: e.Objective, StartDate: toDate(e.StartDate), TargetDate: toDate(e.TargetDate), Agents: []api.AgentRef{}, Tickets: []api.WorkTicket{}}
 		for _, p := range projects {
 			if p.ID == e.ProjectID {
@@ -291,7 +319,7 @@ func (s *Server) GetDashboard(ctx context.Context, req api.GetDashboardRequestOb
 
 // Used by bootstrap so seeded status labels cannot masquerade as live work.
 func (s *Server) liveAgentStatuses(ctx context.Context, ws uuid.UUID) (map[uuid.UUID]api.AgentStatus, error) {
-	rows, err := s.Q.OverviewRuns(ctx, ws)
+	rows, err := s.Q.LiveAgentRunStates(ctx, ws)
 	if err != nil {
 		return nil, err
 	}

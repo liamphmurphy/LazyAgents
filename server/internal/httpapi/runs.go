@@ -21,9 +21,12 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 	if err != nil {
 		return api.Run{}, err
 	}
-	t, err := s.Q.GetTicketByID(ctx, r.TicketID)
-	if err != nil {
-		return api.Run{}, err
+	var t store.Ticket
+	if r.TicketID != nil {
+		t, err = s.Q.GetTicketByID(ctx, *r.TicketID)
+		if err != nil {
+			return api.Run{}, err
+		}
 	}
 	out := api.Run{
 		Id: r.ID, TicketKey: t.Key, Agent: *toAgentRef(a), Mode: api.RunMode(r.Mode), State: api.RunState(r.State),
@@ -31,6 +34,13 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		ToolCalls: int(r.ToolCalls), InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 		CostUsd: float32(r.CostUsdMicros) / 1e6, CostSource: r.CostSource,
 		Plan: []api.PlanStep{}, Scopes: []string{}, ApprovalScopes: []string{},
+	}
+	if r.TicketID == nil {
+		p, err := s.Q.PlanningSessionForRun(ctx, r.ID)
+		if err != nil {
+			return out, err
+		}
+		out.PlanningId = &p.ID
 	}
 	if r.WaitReason != nil {
 		w := api.RunWaitReason(*r.WaitReason)
@@ -100,7 +110,7 @@ func (s *Server) toApproval(ctx context.Context, ap store.ApprovalRequest, dir a
 // runParts fills a ticket's latest run and pending approvals.
 func (s *Server) runParts(ctx context.Context, ws uuid.UUID, t store.Ticket, out *api.Ticket) error {
 	out.Approvals = []api.Approval{}
-	r, err := s.Q.LatestRunForTicket(ctx, t.ID)
+	r, err := s.Q.LatestRunForTicket(ctx, &t.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	} else if err != nil {

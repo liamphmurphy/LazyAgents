@@ -243,6 +243,24 @@ type PlanStep struct {
 	State    string
 }
 
+type PlanningSession struct {
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	ProjectID       uuid.UUID
+	EpicID          *uuid.UUID
+	ArtifactID      *uuid.UUID
+	SourceVersionID *uuid.UUID
+	Goal            string
+	RunID           uuid.UUID
+	State           string
+	Proposals       json.RawMessage
+	TicketKeys      []string
+	Revision        int32
+	CreatedBy       uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type Project struct {
 	ID            uuid.UUID
 	WorkspaceID   uuid.UUID
@@ -254,12 +272,14 @@ type Project struct {
 	DefaultBranch string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	Archived      bool
+	Revision      int32
 }
 
 type Run struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID
-	TicketID            uuid.UUID
+	TicketID            *uuid.UUID
 	AgentID             uuid.UUID
 	Mode                string
 	State               string
@@ -335,33 +355,34 @@ type Secret struct {
 }
 
 type Ticket struct {
-	ID               uuid.UUID
-	WorkspaceID      uuid.UUID
-	ProjectID        uuid.UUID
-	Number           int32
-	Key              string
-	Title            string
-	DescriptionMd    string
-	Status           string
-	Priority         string
-	EpicID           *uuid.UUID
-	AssigneeAgentID  *uuid.UUID
-	ReviewerUserID   *uuid.UUID
-	CreatedByUserID  *uuid.UUID
-	Estimate         *string
-	DueDate          *time.Time
-	Branch           *string
-	PrNumber         *int32
-	PrUrl            *string
-	PrState          *string
-	PrAdditions      *int32
-	PrDeletions      *int32
-	SortOrder        float64
-	Search           interface{}
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	PrSyncedAt       *time.Time
-	PrClosedUnmerged bool
+	ID                 uuid.UUID
+	WorkspaceID        uuid.UUID
+	ProjectID          uuid.UUID
+	Number             int32
+	Key                string
+	Title              string
+	DescriptionMd      string
+	Status             string
+	Priority           string
+	EpicID             *uuid.UUID
+	AssigneeAgentID    *uuid.UUID
+	ReviewerUserID     *uuid.UUID
+	CreatedByUserID    *uuid.UUID
+	Estimate           *string
+	DueDate            *time.Time
+	Branch             *string
+	PrNumber           *int32
+	PrUrl              *string
+	PrState            *string
+	PrAdditions        *int32
+	PrDeletions        *int32
+	SortOrder          float64
+	Search             interface{}
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	PrSyncedAt         *time.Time
+	PrClosedUnmerged   bool
+	DependencyRevision int32
 }
 
 type TicketArtifact struct {
@@ -369,6 +390,12 @@ type TicketArtifact struct {
 	ArtifactID uuid.UUID
 	Relation   string
 	CreatedAt  time.Time
+}
+
+type TicketDependency struct {
+	TicketID  uuid.UUID
+	BlockerID uuid.UUID
+	CreatedAt time.Time
 }
 
 type TicketLabel struct {

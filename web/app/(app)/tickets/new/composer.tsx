@@ -7,7 +7,7 @@ import type { Priority, TicketStatus } from "@/lib/api/client";
 import { useBootstrap, useCreateTicket } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { dueDate } from "@/lib/format";
-import { Button, IconButton } from "@/components/ui/button";
+import { Button, ButtonLink, IconButton } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { AgentAvatar, HumanAvatar } from "@/components/domain/avatars";
@@ -34,9 +34,9 @@ export function Composer() {
   const boot = useBootstrap();
   const create = useCreateTicket();
 
-  const projects = boot.data?.projects ?? [];
+  const projects = boot.data?.projects.filter(p => !p.archived) ?? [];
   const [projectKey, setProjectKey] = useState<string | null>(params.get("project"));
-  const project = projects.find((p) => p.key === projectKey) ?? projects[0];
+  const project = projectKey ? projects.find((p) => p.key === projectKey) : projects[0];
   const [title, setTitle] = useState(params.get("title") ?? "");
   const [description, setDescription] = useState("");
   const [criteria, setCriteria] = useState<string[]>([]);
@@ -137,6 +137,7 @@ export function Composer() {
           </div>
 
           <div className="flex flex-col gap-4 overflow-y-auto px-[18px] pb-4 pt-3">
+            {boot.data && !project && <div className="space-y-2 text-sm text-fg-secondary"><p>Choose an active project before creating a ticket.</p><ButtonLink href="/settings/projects" variant="outline">Manage projects</ButtonLink></div>}
             <label htmlFor="nt-title" className="sr-only">
               Title
             </label>

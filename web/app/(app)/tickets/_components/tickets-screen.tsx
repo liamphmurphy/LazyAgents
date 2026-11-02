@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { cx } from "@/lib/cx";
 import type { TicketStatus, TicketSummary } from "@/lib/api/client";
 import { useBootstrap, useTickets, type TicketView } from "@/lib/api/hooks";
 import { ButtonLink } from "@/components/ui/button";
@@ -53,10 +54,11 @@ export function TicketsScreen() {
   const assignee = params.get("assignee") ?? undefined;
   const q = params.get("q") ?? "";
   const epic = params.get("epic") ?? undefined;
+  const ready = params.get("ready") === "true";
   const [search, setSearch] = useState(q);
 
   const boot = useBootstrap();
-  const list = useTickets({ project, view, assignee, epic, q: q || undefined });
+  const list = useTickets({ ready, project, view, assignee, epic, q: q || undefined });
 
   // Debounced search → URL, so views are shareable.
   useEffect(() => {
@@ -126,14 +128,14 @@ export function TicketsScreen() {
       <TopBar
         crumbs={crumbs}
         actions={
-          <ButtonLink href={`/tickets/new${project ? `?project=${project}` : ""}`} variant="primary" icon="plus" hint="C">
-            New ticket
-          </ButtonLink>
+          proj?.archived ? <ButtonLink href="/settings/projects" variant="outline">Manage project</ButtonLink> : <ButtonLink href={`/tickets/new${project ? `?project=${project}` : ""}`} variant="primary" icon="plus" hint="C">New ticket</ButtonLink>
         }
       />
+      {proj?.archived && <div className="px-6 py-3"><Banner tone="human" title="Archived project">Tickets and history remain available. Restore the project in Settings to start new work.</Banner></div>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-6 py-2.5">
         <Tabs label="Views" value={view} items={VIEWS.map((v) => ({ ...v, href: href(v.key) }))} />
         <div className="flex flex-wrap items-center gap-2">
+          <button type="button" aria-pressed={ready} className={cx("h-[26px] rounded-sm border border-border-strong px-2 text-xs hover:bg-hover", ready && "bg-selected text-accent")} onClick={() => {const next=new URLSearchParams(params);if(ready)next.delete("ready");else{next.set("ready","true");next.set("view","all")};router.replace(`/tickets?${next}`);}}>Ready to dispatch</button>
           {epic && <FilterChip label="Epic" value={`${boot.data?.epics.find(e => e.id === epic)?.name ?? "Selected epic"} ×`} onClick={() => setParam("epic", null)} title="Clear epic filter"/>}
           <label className="flex h-[26px] items-center gap-1.5 rounded-sm border border-border-strong px-2 text-xs text-fg-tertiary focus-within:border-accent">
             <Icon name="search" size={12} />

@@ -21,6 +21,7 @@ type NewTicket = Schemas["NewTicket"];
 
 export type TicketView = "active" | "backlog" | "agent_owned" | "needs_human" | "all";
 export type TicketFilters = {
+  ready?: boolean;
   epic?: string;
   project?: string;
   view?: TicketView;

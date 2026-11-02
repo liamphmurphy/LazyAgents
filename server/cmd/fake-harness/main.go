@@ -227,6 +227,13 @@ func main() {
 		return out
 	}
 	ticket := os.Getenv("LAZYAGENTS_TICKET")
+	if os.Getenv("FAKE_HARNESS_MODE") == "planning" {
+		who := call("whoami", map[string]any{})
+		call("get_ticket", map[string]any{"ticket": "PAY-214"})
+		call("propose_tickets", map[string]any{"tickets": []any{map[string]any{"title": "Planned implementation", "description": "An editable draft from the fake harness", "criteria": []string{"Works safely"}, "agent_id": who["id"]}}})
+		result(false, "Draft submitted.")
+		return
+	}
 
 	if resume != "" && os.Getenv("FAKE_HARNESS_RESUME") == "idle" {
 		text("Still looking around.")

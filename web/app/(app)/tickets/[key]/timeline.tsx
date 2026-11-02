@@ -149,6 +149,8 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
           removed a criterion: <span className="text-fg-2 line-through">{str(p.text)}</span>
         </>
       );
+    case "dependencies_changed":
+      return <>updated dependencies: {Array.isArray(p.blocked_by) && p.blocked_by.length ? p.blocked_by.join(", ") : "no blockers"}</>;
     case "artifact_attached":
       return (
         <>

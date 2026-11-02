@@ -1,19 +1,27 @@
 -- name: ListInbox :many
 WITH items AS (
+ SELECT ('planning:'||pl.id)::text AS id,'planning'::text AS kind,pl.goal AS title,
+ CASE WHEN pl.state='review' THEN 'Draft tickets are ready for your review' ELSE coalesce(r.outcome,'Planning run needs attention') END::text AS summary,
+ ('/plans?id='||pl.id)::text AS href,p.key AS project,''::text AS ticket_key,greatest(pl.updated_at,r.updated_at)::timestamptz AS created_at,
+ (pl.state IN ('accepted','dismissed')) AS resolved
+ FROM planning_sessions pl JOIN runs r ON r.id=pl.run_id JOIN projects p ON p.id=pl.project_id
+ WHERE pl.workspace_id=sqlc.arg(workspace_id) AND (pl.state<>'planning' OR r.state IN ('failed','cancelled','blocked'))
+ UNION ALL
  SELECT ('approval:'||a.id)::text AS id, 'approval'::text AS kind, t.title, a.action_summary AS summary,
  ('/tickets/'||t.key)::text AS href, p.key AS project, t.key AS ticket_key, a.created_at,
  a.state <> 'pending' AS resolved
  FROM approval_requests a JOIN tickets t ON t.id=a.ticket_id JOIN projects p ON p.id=t.project_id
  WHERE a.workspace_id=sqlc.arg(workspace_id)
  UNION ALL
- SELECT 'dispatch:'||t.id,'dispatch',t.title,ag.name||' is waiting for dispatch','/tickets/'||t.key,p.key,t.key,t.updated_at,false
+ SELECT 'dispatch:'||t.id,'dispatch',t.title,ag.name||' is waiting for dispatch','/tickets/'||t.key,p.key,t.key,greatest(t.updated_at,(SELECT max(b.updated_at) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id))::timestamptz,false
  FROM tickets t JOIN projects p ON p.id=t.project_id JOIN agents ag ON ag.id=t.assignee_agent_id
- WHERE t.workspace_id=sqlc.arg(workspace_id) AND t.status <> 'done'
+ WHERE t.workspace_id=sqlc.arg(workspace_id) AND NOT p.archived AND t.status <> 'done'
+ AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
  UNION ALL
  SELECT 'review:'||t.id,'review',t.title,'Ready for your review','/tickets/'||t.key,p.key,t.key,t.updated_at,false
  FROM tickets t JOIN projects p ON p.id=t.project_id
- WHERE t.workspace_id=sqlc.arg(workspace_id) AND t.status='in_review' AND t.reviewer_user_id=sqlc.arg(user_id)
+ WHERE t.workspace_id=sqlc.arg(workspace_id) AND NOT p.archived AND t.status='in_review' AND t.reviewer_user_id=sqlc.arg(user_id)
  UNION ALL
  SELECT 'blocked:'||r.id,'blocked',t.title,coalesce(r.outcome,'Run needs a person'),'/runs/'||r.id,p.key,t.key,r.updated_at,false
  FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN projects p ON p.id=t.project_id

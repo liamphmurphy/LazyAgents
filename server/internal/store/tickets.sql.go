@@ -30,8 +30,8 @@ func (q *Queries) AddTicketLabels(ctx context.Context, arg AddTicketLabelsParams
 }
 
 const agentQueue = `-- name: AgentQueue :many
-SELECT t.key, t.title, t.status, t.priority FROM tickets t
-WHERE t.assignee_agent_id = $1 AND t.status <> 'done'
+SELECT t.key, t.title, t.status, t.priority FROM tickets t JOIN projects p ON p.id=t.project_id
+WHERE NOT p.archived AND t.assignee_agent_id = $1 AND t.status <> 'done'
 ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
   CASE t.status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 ELSE 3 END, t.created_at
 LIMIT 20
@@ -150,7 +150,7 @@ INSERT INTO tickets (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
   (SELECT coalesce(max(sort_order), 0) + 1 FROM tickets WHERE project_id = $2)
-) RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged
+) RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision
 `
 
 type CreateTicketParams struct {
@@ -216,6 +216,7 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Tic
 		&i.UpdatedAt,
 		&i.PrSyncedAt,
 		&i.PrClosedUnmerged,
+		&i.DependencyRevision,
 	)
 	return i, err
 }
@@ -281,7 +282,7 @@ func (q *Queries) GetCriterion(ctx context.Context, arg GetCriterionParams) (Cri
 }
 
 const getTicketByID = `-- name: GetTicketByID :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged FROM tickets WHERE id = $1
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision FROM tickets WHERE id = $1
 `
 
 func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, error) {
@@ -315,12 +316,13 @@ func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, erro
 		&i.UpdatedAt,
 		&i.PrSyncedAt,
 		&i.PrClosedUnmerged,
+		&i.DependencyRevision,
 	)
 	return i, err
 }
 
 const getTicketByKey = `-- name: GetTicketByKey :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged FROM tickets WHERE workspace_id = $1 AND key = $2
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision FROM tickets WHERE workspace_id = $1 AND key = $2
 `
 
 type GetTicketByKeyParams struct {
@@ -359,6 +361,7 @@ func (q *Queries) GetTicketByKey(ctx context.Context, arg GetTicketByKeyParams) 
 		&i.UpdatedAt,
 		&i.PrSyncedAt,
 		&i.PrClosedUnmerged,
+		&i.DependencyRevision,
 	)
 	return i, err
 }
@@ -611,6 +614,7 @@ const listTickets = `-- name: ListTickets :many
 SELECT
   t.id, t.key, t.number, t.title, t.status, t.priority, t.due_date, t.estimate,
   t.pr_number, t.pr_state, t.sort_order, t.created_at, t.updated_at,
+  (SELECT count(*) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')::int AS unmet_dependencies,
   p.key AS project_key, p.color AS project_color,
   e.id AS epic_id, e.name AS epic_name,
   a.id AS agent_id, a.name AS agent_name, a.handle AS agent_handle, a.color_index AS agent_color_index,
@@ -621,18 +625,24 @@ JOIN projects p ON p.id = t.project_id
 LEFT JOIN epics e ON e.id = t.epic_id
 LEFT JOIN agents a ON a.id = t.assignee_agent_id
 WHERE t.workspace_id = $1
-  AND (NOT $2::bool OR t.status='in_review' OR EXISTS (SELECT 1 FROM approval_requests ap WHERE ap.ticket_id=t.id AND ap.state='pending'))
-  AND ($3::uuid IS NULL OR t.epic_id=$3)
-  AND ($4::uuid IS NULL OR t.project_id = $4)
-  AND ($5::text[] IS NULL OR t.status = ANY ($5::text[]))
-  AND ($6::uuid IS NULL OR t.assignee_agent_id = $6)
-  AND (NOT $7::bool OR t.assignee_agent_id IS NOT NULL)
-  AND ($8::uuid IS NULL OR EXISTS (
-        SELECT 1 FROM ticket_labels tl WHERE tl.ticket_id = t.id AND tl.label_id = $8))
-  AND ($9::text IS NULL
-       OR t.search @@ websearch_to_tsquery('english', $9)
-       OR t.key ILIKE $9 || '%'
-       OR t.title ILIKE '%' || $9 || '%')
+  AND (NOT p.archived OR $2::uuid IS NOT NULL)
+  AND (NOT $3::boolean OR (
+    NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
+    AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
+    AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
+  ))
+  AND (NOT $4::bool OR t.status='in_review' OR EXISTS (SELECT 1 FROM approval_requests ap WHERE ap.ticket_id=t.id AND ap.state='pending'))
+  AND ($5::uuid IS NULL OR t.epic_id=$5)
+  AND ($2::uuid IS NULL OR t.project_id = $2)
+  AND ($6::text[] IS NULL OR t.status = ANY ($6::text[]))
+  AND ($7::uuid IS NULL OR t.assignee_agent_id = $7)
+  AND (NOT $8::bool OR t.assignee_agent_id IS NOT NULL)
+  AND ($9::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM ticket_labels tl WHERE tl.ticket_id = t.id AND tl.label_id = $9))
+  AND ($10::text IS NULL
+       OR t.search @@ websearch_to_tsquery('english', $10)
+       OR t.key ILIKE $10 || '%'
+       OR t.title ILIKE '%' || $10 || '%')
 ORDER BY
   CASE t.status WHEN 'in_progress' THEN 0 WHEN 'in_review' THEN 1 WHEN 'todo' THEN 2 WHEN 'backlog' THEN 3 ELSE 4 END,
   CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
@@ -642,9 +652,10 @@ LIMIT 500
 
 type ListTicketsParams struct {
 	WorkspaceID     uuid.UUID
+	ProjectID       *uuid.UUID
+	Ready           bool
 	NeedsHuman      bool
 	EpicID          *uuid.UUID
-	ProjectID       *uuid.UUID
 	Statuses        []string
 	AssigneeAgentID *uuid.UUID
 	OnlyAgentOwned  bool
@@ -653,37 +664,39 @@ type ListTicketsParams struct {
 }
 
 type ListTicketsRow struct {
-	ID              uuid.UUID
-	Key             string
-	Number          int32
-	Title           string
-	Status          string
-	Priority        string
-	DueDate         *time.Time
-	Estimate        *string
-	PrNumber        *int32
-	PrState         *string
-	SortOrder       float64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	ProjectKey      string
-	ProjectColor    string
-	EpicID          *uuid.UUID
-	EpicName        *string
-	AgentID         *uuid.UUID
-	AgentName       *string
-	AgentHandle     *string
-	AgentColorIndex *int32
-	CriteriaTotal   int32
-	CriteriaDone    int32
+	ID                uuid.UUID
+	Key               string
+	Number            int32
+	Title             string
+	Status            string
+	Priority          string
+	DueDate           *time.Time
+	Estimate          *string
+	PrNumber          *int32
+	PrState           *string
+	SortOrder         float64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	UnmetDependencies int32
+	ProjectKey        string
+	ProjectColor      string
+	EpicID            *uuid.UUID
+	EpicName          *string
+	AgentID           *uuid.UUID
+	AgentName         *string
+	AgentHandle       *string
+	AgentColorIndex   *int32
+	CriteriaTotal     int32
+	CriteriaDone      int32
 }
 
 func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]ListTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listTickets,
 		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.Ready,
 		arg.NeedsHuman,
 		arg.EpicID,
-		arg.ProjectID,
 		arg.Statuses,
 		arg.AssigneeAgentID,
 		arg.OnlyAgentOwned,
@@ -711,6 +724,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UnmetDependencies,
 			&i.ProjectKey,
 			&i.ProjectColor,
 			&i.EpicID,
@@ -733,7 +747,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 }
 
 const lockTicketByKey = `-- name: LockTicketByKey :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE
 `
 
 type LockTicketByKeyParams struct {
@@ -772,6 +786,7 @@ func (q *Queries) LockTicketByKey(ctx context.Context, arg LockTicketByKeyParams
 		&i.UpdatedAt,
 		&i.PrSyncedAt,
 		&i.PrClosedUnmerged,
+		&i.DependencyRevision,
 	)
 	return i, err
 }
@@ -836,7 +851,7 @@ UPDATE tickets SET
   title = $2, description_md = $3, status = $4, priority = $5, epic_id = $6,
   assignee_agent_id = $7, reviewer_user_id = $8, estimate = $9, due_date = $10
 WHERE id = $1
-RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged
+RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision
 `
 
 type UpdateTicketParams struct {
@@ -895,6 +910,7 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Tic
 		&i.UpdatedAt,
 		&i.PrSyncedAt,
 		&i.PrClosedUnmerged,
+		&i.DependencyRevision,
 	)
 	return i, err
 }

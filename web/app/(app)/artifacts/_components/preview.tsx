@@ -7,7 +7,7 @@ import { useArtifact } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { fileKind, formatBytes } from "@/lib/files";
 import { shortAgo } from "@/lib/format";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
@@ -164,9 +164,9 @@ export function ArtifactPreview({ id, onClose }: { id: string; onClose: () => vo
         <Button variant="outline" className="justify-center" onClick={() => setVersioning(true)}>
           New version
         </Button>
-        <Button variant="secondary" className="justify-center" disabled title="Agents drafting tickets from a PRD arrives in Phase 8">
+        {(a.type === "prd" || a.type === "spec") && a.project && <ButtonLink variant="secondary" href={`/plans?artifact=${a.id}&project=${a.project.key}`}>
           Generate tickets
-        </Button>
+        </ButtonLink>}
       </div>
       {versioning && <NewVersionDialog artifact={a} open onOpenChange={setVersioning} />}
     </div>

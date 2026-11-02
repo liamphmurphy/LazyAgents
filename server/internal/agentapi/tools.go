@@ -49,6 +49,7 @@ type TicketArg struct {
 type Empty struct{}
 
 type WhoamiOut struct {
+	ID           string         `json:"id"`
 	Name         string         `json:"name"`
 	Handle       string         `json:"handle"`
 	Role         string         `json:"role"`
@@ -72,10 +73,22 @@ func whoami(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) 
 	if err != nil {
 		return nil, err
 	}
-	out := WhoamiOut{Name: c.Agent.Name, Handle: c.Agent.Handle, Role: c.Agent.Role, Model: spec.Model,
+	out := WhoamiOut{ID: c.Agent.ID.String(), Name: c.Agent.Name, Handle: c.Agent.Handle, Role: c.Agent.Role, Model: spec.Model,
 		Instructions: spec.Instructions, Scopes: map[string]any{}, Session: c.Kind, LiveRuns: []string{}, Queue: []QueueItem{}}
 	for s, m := range spec.Scopes {
 		out.Scopes[s] = m
+	}
+	if c.RunID != nil {
+		if run, err := d.Q.GetRun(ctx, store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID}); err == nil {
+			if resolved, err := runs.Spec(run); err == nil {
+				out.Model = resolved.Model
+				out.Instructions = resolved.Instructions
+				out.Scopes = map[string]any{}
+				for _, sc := range resolved.Scopes {
+					out.Scopes[sc.Scope] = sc.Mode
+				}
+			}
+		}
 	}
 	live, err := d.Q.ActiveRunsForAgent(ctx, c.Agent.ID)
 	if err != nil {
@@ -111,7 +124,7 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 	// Wiki memory this run starts with (PLAN.md §12.3); delivered pages
 	// count as one read each.
 	memory := []wiki.ContextPage{}
-	if t, err := d.Q.GetTicketByID(ctx, run.TicketID); err == nil {
+	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil {
 		if memory, err = wiki.RunContext(ctx, d.Q, c.Agent, t, spec.Memory); err != nil {
 			return nil, err
 		}
@@ -158,6 +171,10 @@ func getTicket(ctx context.Context, d Deps, c agents.Caller, in GetTicketIn) (an
 		}
 		arts[i] = m
 	}
+	deps, err := d.Q.TicketDependencies(ctx, t.ID)
+	if err != nil {
+		return nil, err
+	}
 	comments, err := d.Q.ListTicketComments(ctx, t.ID)
 	if err != nil {
 		return nil, err
@@ -169,7 +186,13 @@ func getTicket(ctx context.Context, d Deps, c agents.Caller, in GetTicketIn) (an
 	}
 	out := map[string]any{
 		"key": t.Key, "title": t.Title, "description": t.DescriptionMd, "status": t.Status, "priority": t.Priority,
-		"criteria": criteria, "artifacts": arts, "comments": cs, "assigned_to_you": t.AssigneeAgentID != nil && *t.AssigneeAgentID == c.Agent.ID,
+		"blocked_by": func() []map[string]any {
+			out := []map[string]any{}
+			for _, d := range deps {
+				out = append(out, map[string]any{"key": d.Key, "title": d.Title, "status": d.Status})
+			}
+			return out
+		}(), "criteria": criteria, "artifacts": arts, "comments": cs, "assigned_to_you": t.AssigneeAgentID != nil && *t.AssigneeAgentID == c.Agent.ID,
 	}
 	if t.Branch != nil {
 		out["branch"] = *t.Branch
@@ -229,7 +252,7 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 		body = sec
 	}
 	// Reads are attributed to the run when there is one, for citation counts.
-	var runID *uuid.UUID
+	runID := c.RunID
 	if run, _, err := d.Runs.Active(ctx, d.Q, c, in.Ticket); err == nil {
 		runID = &run.ID
 	}
@@ -532,11 +555,44 @@ func ok(extra map[string]any) map[string]any {
 }
 
 // Tools is the whole Agent API.
+type TicketProposalIn struct {
+	Ref         string   `json:"ref,omitempty" jsonschema:"Unique stable proposal reference, such as schema or api"`
+	DependsOn   []string `json:"depends_on,omitempty" jsonschema:"Other proposal refs that must finish first"`
+	BlockedBy   []string `json:"blocked_by,omitempty" jsonschema:"Existing ticket keys that must be Done first"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Criteria    []string `json:"criteria"`
+	AgentID     string   `json:"agent_id,omitempty" jsonschema:"Optional suggested agent UUID; omit for unassigned"`
+}
+
+type ProposeTicketsIn struct {
+	Tickets []TicketProposalIn `json:"tickets" jsonschema:"Draft tickets for a person to edit and accept"`
+}
+
 var Tools = []Tool{
+	define("propose_tickets", "Submit draft tickets for human review and finish this planning run. Creates no tickets.", func(ctx context.Context, d Deps, c agents.Caller, in ProposeTicketsIn) (any, error) {
+		items := make([]runs.Proposal, 0, len(in.Tickets))
+		for _, item := range in.Tickets {
+			p := runs.Proposal{Ref: item.Ref, DependsOn: item.DependsOn, BlockedBy: item.BlockedBy, Title: item.Title, Description: item.Description, Criteria: item.Criteria}
+			if item.AgentID != "" {
+				id, err := parseUUID("agent_id", item.AgentID)
+				if err != nil {
+					return nil, err
+				}
+				p.AgentID = &id
+			}
+			items = append(items, p)
+		}
+		p, err := d.Runs.ProposeTickets(ctx, c, items)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"planning_id": p.ID, "state": p.State}, nil
+	}),
 	define("whoami", "Your identity, instructions, scopes, live runs and the tickets assigned to you.", whoami),
-	define("next_ticket", "The tickets assigned to you that aren't done, most urgent first. Claim one with claim_ticket.",
+	define("next_ticket", "Assigned tickets ready to claim: blockers Done, project active and no live run. Most urgent first.",
 		func(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
-			q, err := d.Q.AgentQueue(ctx, &c.Agent.ID)
+			q, err := d.Q.ListTickets(ctx, store.ListTicketsParams{WorkspaceID: c.Agent.WorkspaceID, AssigneeAgentID: &c.Agent.ID, Ready: true})
 			if err != nil {
 				return nil, err
 			}

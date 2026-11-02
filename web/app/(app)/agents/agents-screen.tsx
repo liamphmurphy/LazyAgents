@@ -27,6 +27,7 @@ import { cx } from "@/lib/cx";
 import {
   AgentStatus,
   Assignment,
+  PlanningAssignment,
   merged,
   money,
   seconds,
@@ -61,11 +62,12 @@ export function AgentCard({ overview: o }: { overview: AgentOverview }) {
         <AgentStatus status={a.status} />
       </div>
       <div className="space-y-2">
+        {o.planning_runs.map(work => <PlanningAssignment key={work.id} work={work} />)}
         {o.assignments.length ? (
           o.assignments
             .slice(0, 2)
             .map((work) => <Assignment key={work.run_id} work={work} />)
-        ) : (
+        ) : o.planning_runs.length ? null : (
           <div className="rounded-lg border border-dashed border-border-strong p-3">
             <p className="mb-2 text-[13px] text-fg-secondary">
               {o.queue_count

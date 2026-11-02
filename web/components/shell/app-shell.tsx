@@ -81,7 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             inboxCount={data.counts.inbox}
             liveAgents={data.counts.live_agents}
             wikiSuggestions={data.counts.wiki_suggestions}
-            projects={data.projects}
+            projects={data.projects.filter(p => !p.archived)}
             user={{
               name: data.me.name,
               initials: data.me.initials,

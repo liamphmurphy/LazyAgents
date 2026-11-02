@@ -10,6 +10,7 @@ import { Markdown } from "@/components/domain/markdown";
 import { TopBar } from "@/components/shell/topbar";
 import { BacklinksPanel } from "@/components/domain/backlinks";
 import { ContextArtifacts } from "./context-artifacts";
+import { Dependencies } from "./dependencies";
 import { Criteria } from "./criteria";
 import { CodeSection, Properties } from "./properties";
 import { ApprovalBanner, DispatchBanner, needsDispatch, RunCard } from "./run-parts";
@@ -207,12 +208,14 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               {t.approvals.map((ap) => (
                 <ApprovalBanner key={ap.id} t={t} ap={ap} />
               ))}
+              {t.project.archived && <Banner tone="human" title="This project is archived" actions={<ButtonLink href="/settings/projects" variant="outline">Manage projects</ButtonLink>}>History is preserved. Restore the project before starting new work.</Banner>}
               {needsDispatch(t) && <DispatchBanner t={t} />}
               <div className="flex flex-col gap-3">
                 <TitleEditor t={t} />
                 <Description t={t} />
               </div>
               <Criteria t={t} />
+              <Dependencies ticket={t} />
               <ContextArtifacts t={t} />
               <section className="flex flex-col gap-4">
                 <h2 className="type-heading">Activity</h2>

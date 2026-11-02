@@ -196,8 +196,16 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 	if c.run, err = q.LockRunNoWait(ctx, runID); err != nil {
 		return c, err
 	}
-	if c.ticket, err = q.GetTicketByID(ctx, c.run.TicketID); err != nil {
-		return c, err
+	if c.run.TicketID != nil {
+		if c.ticket, err = q.GetTicketByID(ctx, *c.run.TicketID); err != nil {
+			return c, err
+		}
+	} else {
+		plan, err := q.PlanningSessionForRun(ctx, c.run.ID)
+		if err != nil {
+			return c, err
+		}
+		c.ticket = store.Ticket{WorkspaceID: plan.WorkspaceID, ProjectID: plan.ProjectID, EpicID: plan.EpicID, Key: "PLAN-" + plan.ID.String()[:8], Title: plan.Goal}
 	}
 	if c.agent, err = q.GetAgent(ctx, store.GetAgentParams{ID: c.run.AgentID, WorkspaceID: c.run.WorkspaceID}); err != nil {
 		return c, err
@@ -206,6 +214,10 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 		return c, err
 	}
 	c.spec, err = runs.Spec(c.run)
+	if c.spec.Repository != nil {
+		c.project.RepoUrl = c.spec.Repository.URL
+		c.project.DefaultBranch = c.spec.Repository.DefaultBranch
+	}
 	return c, err
 }
 
@@ -241,7 +253,7 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 		if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: run.ID, Type: "lifecycle", Payload: b}); err != nil {
 			return err
 		}
-		if err := tracker.Record(ctx, q, c.run.WorkspaceID, c.ticket.ID, c.ticket.EpicID, r.system(), verb,
+		if err := runnerRecord(ctx, q, c.run.WorkspaceID, c.ticket.ID, c.ticket.EpicID, r.system(), verb,
 			map[string]any{"run_id": run.ID, "reason": outcome}, nil); err != nil {
 			return err
 		}
@@ -287,6 +299,17 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		log.Warn("run failed to start", "reason", msg)
 		r.end(ctx, c, "failed", msg, runs.VerbRunFailed)
 	}
+	if c.run.TicketID != nil {
+		blockers, err := tracker.DispatchBlockers(ctx, r.q(), c.ticket)
+		if err != nil {
+			fail("Could not check dependencies: " + err.Error())
+			return
+		}
+		if len(blockers) > 0 {
+			fail(strings.Join(blockers, "; "))
+			return
+		}
+	}
 	plan, err := PlanSecrets(ctx, r.q(), run.WorkspaceID, &c.project.ID, c.spec)
 	if err != nil {
 		fail("Couldn't read secrets: " + err.Error())
@@ -317,10 +340,14 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		branch = *c.ticket.Branch
 	}
 	repo := ""
-	if c.project.RepoUrl != nil {
+	if c.run.TicketID != nil && c.project.RepoUrl != nil {
 		repo = *c.project.RepoUrl
 	}
-	script := SetupScript(repo, branch, c.agent.Name+" (LazyAgents)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
+	base := ""
+	if c.run.TicketID != nil {
+		base = c.project.DefaultBranch
+	}
+	script := SetupScriptForBranch(repo, base, branch, c.agent.Name+" (LazyAgents)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
 	r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "starting", "runner": r.Cfg.ID, "backend": r.Backend.Name(), "branch": branch})
 	proc, err := r.Backend.Start(ctx, run.ID.String(), ExecSpec{
 		Name: "lazyagents-setup-" + run.ID.String(), Argv: []string{"sh", "-c", script}, Env: env,
@@ -377,7 +404,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: run.ID, Type: "lifecycle", Payload: b}); err != nil {
 			return err
 		}
-		if err := tracker.Record(ctx, q, run.WorkspaceID, c.ticket.ID, c.ticket.EpicID, tracker.AgentActor(c.agent.ID), runs.VerbRunStarted,
+		if err := runnerRecord(ctx, q, run.WorkspaceID, c.ticket.ID, c.ticket.EpicID, tracker.AgentActor(c.agent.ID), runs.VerbRunStarted,
 			map[string]any{"run_id": run.ID, "mode": "managed", "harness": c.spec.Harness}, nil); err != nil {
 			return err
 		}
@@ -501,6 +528,16 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if err != nil {
 		log.Warn("context files", "err", err)
 	}
+	if c.run.TicketID == nil {
+		source, err := PlanningContextFile(ctx, q, c.run)
+		if err != nil {
+			r.end(ctx, c, "failed", "Could not load planning source: "+err.Error(), runs.VerbRunFailed)
+			return
+		}
+		if source != nil {
+			ctxFiles = append(ctxFiles, *source)
+		}
+	}
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}
 	for i, f := range ctxFiles {
@@ -522,6 +559,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		files[k] = v
 	}
 	files[".lazyagents/agents-section.md"] = harness.AgentsMD("", c.spec, paths, c.ticket.Key)
+	if c.run.TicketID == nil {
+		files[".lazyagents/agents-section.md"] = []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n"))
+	}
 	for k, v := range inv.Env {
 		env[k] = v
 	}
@@ -550,6 +590,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		now := time.Now()
 		for _, f := range ctxFiles {
 			if a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: c.run.WorkspaceID}); err == nil {
+				if f.VersionID != nil {
+					a.CurrentVersionID = f.VersionID
+				}
 				_ = artifacts.RecordRead(ctx, q, a, c.agent.ID, &c.run.ID, "", &now)
 			}
 		}
@@ -735,12 +778,21 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 			if err := q.SetIdleTurns(ctx, store.SetIdleTurnsParams{ID: runID, IdleTurns: c.run.IdleTurns + 1}); err != nil {
 				return err
 			}
-			_, err := q.StartTurn(ctx, store.StartTurnParams{RunID: runID, Trigger: "resume", InputMessage: IdleNudge})
+			_, err := q.StartTurn(ctx, store.StartTurnParams{RunID: runID, Trigger: "resume", InputMessage: func() string {
+				if c.run.TicketID == nil {
+					return "You stopped without submitting a draft. Finish this planning run with propose_tickets; do not use complete_run or claim_ticket."
+				}
+				return IdleNudge
+			}()})
 			return err
 		})
 		if err != nil {
 			r.Log.Error("nudge", "run", runID, "err", err)
 		}
+		return
+	}
+	if c.run.TicketID == nil {
+		r.end(ctx, c, "failed", "The planner stopped without submitting proposals. Start a new plan to retry.", runs.VerbRunFailed)
 		return
 	}
 	// Second idle turn: hand it to a person; an @mention resumes it.
@@ -754,7 +806,7 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 		if err := q.SetIdleTurns(ctx, store.SetIdleTurnsParams{ID: runID, IdleTurns: 0}); err != nil {
 			return err
 		}
-		if err := tracker.Record(ctx, q, c.run.WorkspaceID, c.ticket.ID, c.ticket.EpicID, r.system(), runs.VerbWaitingForHuman,
+		if err := runnerRecord(ctx, q, c.run.WorkspaceID, c.ticket.ID, c.ticket.EpicID, r.system(), runs.VerbWaitingForHuman,
 			map[string]any{"run_id": runID, "reason": reason, "last_message": lastLines(res.Final, 8)}, nil); err != nil {
 			return err
 		}
@@ -763,4 +815,11 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	if err != nil {
 		r.Log.Error("hand to person", "run", runID, "err", err)
 	}
+}
+
+func runnerRecord(ctx context.Context, q *store.Queries, ws, ticket uuid.UUID, epic *uuid.UUID, actor tracker.Actor, verb string, payload map[string]any, at *time.Time) error {
+	if ticket == uuid.Nil {
+		return nil
+	}
+	return tracker.Record(ctx, q, ws, ticket, epic, actor, verb, payload, at)
 }

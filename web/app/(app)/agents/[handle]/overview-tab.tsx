@@ -9,6 +9,7 @@ import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { KpiTile } from "@/components/domain/data";
 import {
   Assignment,
+  PlanningAssignment,
   merged,
   money,
   seconds,
@@ -54,6 +55,7 @@ export function OverviewTab({ handle }: { handle: string }) {
           context="runs started in window"
         />
       </div>
+      {data.planning_runs.length > 0 && <Card title="Planning runs"><div className="space-y-3">{data.planning_runs.map(p => <PlanningAssignment key={p.id} work={p} />)}</div></Card>}
       <Card title="Current assignments">
         {data.assignments.length ? (
           <div className="space-y-3">
@@ -126,7 +128,8 @@ export function RunsTab({ handle }: { handle: string }) {
       </div>
     );
   return (
-    <Card title="Run history" bodyClassName="p-0">
+    <Card title="Ticket run history" bodyClassName="p-0">
+      <p className="px-4 py-3 text-xs text-fg-tertiary">Planning history is available in <Link href="/plans" className="text-accent">Plans</Link>.</p>
       {query.data.runs.length ? (
         <div className="divide-y divide-border-subtle">
           {query.data.runs.map((r) => (

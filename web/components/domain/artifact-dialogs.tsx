@@ -188,7 +188,7 @@ export function UploadDialog({
   const [mode, setMode] = useState<"file" | "write">("file");
   const [files, setFiles] = useState<File[]>(initialFiles);
   const [body, setBody] = useState("");
-  const projects = boot.data?.projects ?? [];
+  const projects = boot.data?.projects.filter(p => !p.archived) ?? [];
   const [projectKey, setProjectKey] = useState(defaultProject ?? projects[0]?.key ?? "");
   const project = projects.find((p) => p.key === projectKey) ?? projects[0];
   const [type, setType] = useState<ArtifactType>(initialFiles[0] ? guessType(initialFiles[0].name, initialFiles[0].type) : "spec");

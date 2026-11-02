@@ -26,18 +26,19 @@ export function DispatchBanner({ t }: { t: Ticket }) {
   const [open, setOpen] = useState(false);
   if (!t.assignee) return null;
   const again = t.run && ENDED.includes(t.run.state);
+  const blockers=t.blocked_by.filter(d => d.status !== "done");
   return (
     <>
       <Banner
         lead={<AgentAvatar name={t.assignee.name} colorIndex={t.assignee.color_index} size="md" />}
-        title={`${t.assignee.name} is assigned and waiting for dispatch`}
+        title={blockers.length ? `Blocked by ${blockers.map(d => d.key).join(", ")}` : `${t.assignee.name} is assigned and waiting for dispatch`}
         actions={
-          <Button variant="approve" onClick={() => setOpen(true)}>
+          <Button variant="approve" disabled={t.project.archived || blockers.length > 0} onClick={() => setOpen(true)}>
             Review &amp; dispatch…
           </Button>
         }
       >
-        {again
+        {blockers.length ? "Complete the blocker tickets before dispatching this work." : again
           ? `The last run ${t.run!.state}. Dispatch again to start a new run.`
           : "Assigning doesn't start work. Review what the run will get, then dispatch it."}
       </Banner>

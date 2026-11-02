@@ -344,7 +344,7 @@ export function RunLogScreen({ id }: { id: string }) {
   return (
     <>
       <TopBar
-        crumbs={[{ label: run.ticket_key, href: `/tickets/${run.ticket_key}`, mono: true }, { label: "Run log" }]}
+        crumbs={[{ label: run.planning_id ? "Plan" : run.ticket_key, href: run.planning_id ? `/plans?id=${run.planning_id}` : `/tickets/${run.ticket_key}`, mono: true }, { label: "Run log" }]}
         actions={
           <>
             {lastLog && (

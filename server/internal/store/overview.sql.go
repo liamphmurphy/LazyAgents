@@ -181,6 +181,35 @@ func (q *Queries) GetMetricSnapshot(ctx context.Context, arg GetMetricSnapshotPa
 	return i, err
 }
 
+const liveAgentRunStates = `-- name: LiveAgentRunStates :many
+SELECT agent_id,state FROM runs WHERE workspace_id=$1 AND state NOT IN ('completed','failed','cancelled')
+`
+
+type LiveAgentRunStatesRow struct {
+	AgentID uuid.UUID
+	State   string
+}
+
+func (q *Queries) LiveAgentRunStates(ctx context.Context, workspaceID uuid.UUID) ([]LiveAgentRunStatesRow, error) {
+	rows, err := q.db.Query(ctx, liveAgentRunStates, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LiveAgentRunStatesRow{}
+	for rows.Next() {
+		var i LiveAgentRunStatesRow
+		if err := rows.Scan(&i.AgentID, &i.State); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const metricWorkspaces = `-- name: MetricWorkspaces :many
 SELECT id FROM workspaces
 `
@@ -211,7 +240,7 @@ WITH ranked AS (
  count(*) OVER (PARTITION BY t.assignee_agent_id)::int AS queue_count,
  row_number() OVER (PARTITION BY t.assignee_agent_id ORDER BY
  CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,t.sort_order,t.key) AS pos
- FROM tickets t WHERE t.workspace_id=$1 AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
+ FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.workspace_id=$1 AND NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
  AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
 ) SELECT id,key,title,status,priority,assignee_agent_id,queue_count FROM ranked WHERE pos<=10 ORDER BY assignee_agent_id,pos
 `
@@ -358,7 +387,7 @@ ORDER BY CASE r.state WHEN 'blocked' THEN 0 WHEN 'waiting' THEN 1 WHEN 'running'
 type OverviewRunsRow struct {
 	ID           uuid.UUID
 	AgentID      uuid.UUID
-	TicketID     uuid.UUID
+	TicketID     *uuid.UUID
 	State        string
 	Harness      string
 	Model        string
@@ -411,7 +440,7 @@ func (q *Queries) OverviewRuns(ctx context.Context, workspaceID uuid.UUID) ([]Ov
 
 const overviewTicketCounts = `-- name: OverviewTicketCounts :many
 SELECT t.project_id,t.epic_id,t.status,count(*)::int AS count
-FROM tickets t WHERE t.workspace_id=$1 GROUP BY t.project_id,t.epic_id,t.status
+FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.workspace_id=$1 AND NOT p.archived GROUP BY t.project_id,t.epic_id,t.status
 `
 
 type OverviewTicketCountsRow struct {
@@ -486,8 +515,8 @@ func (q *Queries) PRMetrics(ctx context.Context, arg PRMetricsParams) ([]PRMetri
 }
 
 const reviewOverDay = `-- name: ReviewOverDay :one
-SELECT count(*)::int FROM tickets t
-WHERE t.workspace_id=$1 AND t.status='in_review'
+SELECT count(*)::int FROM tickets t JOIN projects p ON p.id=t.project_id
+WHERE t.workspace_id=$1 AND NOT p.archived AND t.status='in_review'
 AND coalesce((SELECT max(e.created_at) FROM activity_events e WHERE e.ticket_id=t.id AND e.verb='status_changed' AND e.payload->>'to'='in_review'),t.created_at)<now()-interval '1 day'
 `
 

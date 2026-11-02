@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/links"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
@@ -146,6 +147,17 @@ func (r refs) labels(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]store.
 
 // Create allocates the next number in the project and records "created".
 func (s *Service) Create(ctx context.Context, ws uuid.UUID, actor Actor, in NewTicket) (store.Ticket, error) {
+	var out store.Ticket
+	err := s.tx(ctx, func(q *store.Queries) error {
+		var err error
+		out, err = CreateInTx(ctx, q, ws, actor, in)
+		return err
+	})
+	return out, err
+}
+
+// CreateInTx creates a ticket inside a caller's transaction, including validation and activity.
+func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor, in NewTicket) (store.Ticket, error) {
 	title, err := validTitle(in.Title)
 	if err != nil {
 		return store.Ticket{}, err
@@ -164,13 +176,16 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, actor Actor, in NewT
 	}
 
 	var t store.Ticket
-	err = s.tx(ctx, func(q *store.Queries) error {
+	err = func(q *store.Queries) error {
 		r := refs{q, ws}
-		p, err := q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: ws, Key: in.ProjectKey})
+		p, err := q.LockProjectByKey(ctx, store.LockProjectByKeyParams{WorkspaceID: ws, Key: in.ProjectKey})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return invalid("project_key", "unknown project")
 		} else if err != nil {
 			return err
+		}
+		if p.Archived {
+			return apperr.Conflict("restore the archived project before creating tickets")
 		}
 		if in.EpicID != nil {
 			if _, err := r.epic(ctx, in.EpicID, p.ID); err != nil {
@@ -236,7 +251,7 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, actor Actor, in NewT
 			}
 		}
 		return nil
-	})
+	}(q)
 	return t, err
 }
 
@@ -493,6 +508,11 @@ func setLabels(ctx context.Context, q *store.Queries, r refs, ticketID uuid.UUID
 // AttachArtifact links an artifact to a ticket. Attaching twice is a no-op.
 func (s *Service) AttachArtifact(ctx context.Context, ws uuid.UUID, actor Actor, key string, artifactID uuid.UUID, relation string) error {
 	return s.tx(ctx, func(q *store.Queries) error { return attachArtifact(ctx, q, ws, actor, key, artifactID, relation) })
+}
+
+// AttachArtifactInTx attaches context and writes its complete activity payload in the caller's transaction.
+func AttachArtifactInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor, key string, artifactID uuid.UUID, relation string) error {
+	return attachArtifact(ctx, q, ws, actor, key, artifactID, relation)
 }
 
 func attachArtifact(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor, key string, artifactID uuid.UUID, relation string) error {

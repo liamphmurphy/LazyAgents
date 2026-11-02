@@ -92,7 +92,7 @@ func TestPhaseSevenOverviews(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: user.WorkspaceID, TicketID: ticket.ID, AgentID: atlas.ID, Mode: "managed", State: "queued", ResolvedSpec: json.RawMessage(`{}`), Harness: "codex", Model: "project-model"})
+	run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: user.WorkspaceID, TicketID: &ticket.ID, AgentID: atlas.ID, Mode: "managed", State: "queued", ResolvedSpec: json.RawMessage(`{}`), Harness: "codex", Model: "project-model"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,6 +29,7 @@ const tabs = [
   "review",
   "blocked",
   "suggestion",
+  "planning",
 ] as const;
 const names: Record<string, string> = {
   all: "All",
@@ -38,6 +39,7 @@ const names: Record<string, string> = {
   review: "Reviews",
   blocked: "Blocked",
   suggestion: "Wiki edits",
+  planning: "Plans",
 };
 
 function Detail({ item }: { item: Item }) {
@@ -75,7 +77,7 @@ function Detail({ item }: { item: Item }) {
         </p>
       )}
       <ButtonLink href={item.href} variant="outline">
-        {item.kind === "suggestion"
+        {item.kind === "planning" ? "Review plan" : item.kind === "suggestion"
           ? "Review wiki edit"
           : item.kind === "blocked"
             ? "Open run"

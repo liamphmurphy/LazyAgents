@@ -23,6 +23,7 @@ const NAV: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/", label: "Dashboard", icon: "dashboard" },
   { href: "/inbox", label: "Inbox", icon: "inbox" },
   { href: "/tickets", label: "Tickets", icon: "tickets" },
+  { href: "/plans", label: "Plans", icon: "epics" },
   { href: "/epics", label: "Epics", icon: "epics" },
   { href: "/agents", label: "Agents", icon: "agents" },
   { href: "/artifacts", label: "Artifacts", icon: "artifacts" },
@@ -112,6 +113,7 @@ export function Sidebar({ workspace, inboxCount, liveAgents, wikiSuggestions = 0
       <div className="flex flex-col gap-px">
         <div className="flex items-center justify-between px-2 pb-1.5">
           <span className="text-xs font-medium text-fg-tertiary">Projects</span>
+          <Link href="/settings/projects" className="text-xs text-fg-tertiary hover:text-fg" aria-label="Manage projects">Manage</Link>
         </div>
         {projects.map((p) => (
           <NavLink key={p.key} href={`/tickets?project=${p.key}`} active={activeProject === p.key}>

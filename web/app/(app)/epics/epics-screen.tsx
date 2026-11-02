@@ -173,6 +173,7 @@ function Featured({ epic: e }: { epic: EpicOverview }) {
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <h2 className="type-title">{e.epic.name}</h2>
+                <ButtonLink variant="outline" href={`/plans?epic=${e.epic.id}&project=${e.project.key}${e.source ? `&artifact=${e.source.id}` : ""}`}>Plan with an agent</ButtonLink>
                 <HealthPill health={e.epic.health} />
               </div>
               <p className="text-xs text-fg-tertiary">

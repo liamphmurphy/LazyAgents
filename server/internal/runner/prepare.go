@@ -39,6 +39,11 @@ func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''
 // out of git, and run the project's setup commands. The working directory
 // is the workspace; GH_TOKEN, when present, authenticates git and gh.
 func SetupScript(repoURL, branch, authorName, authorEmail string, setup []string) string {
+	return SetupScriptForBranch(repoURL, "", branch, authorName, authorEmail, setup)
+}
+
+// SetupScriptForBranch clones the approved base branch rather than the remote's HEAD.
+func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail string, setup []string) string {
 	var b strings.Builder
 	b.WriteString("set -eu\n")
 	// Everything is repo-local: on the local backend this is the user's own
@@ -47,7 +52,11 @@ func SetupScript(repoURL, branch, authorName, authorEmail string, setup []string
 	b.WriteString("if [ ! -d .git ]; then\n")
 	if repoURL != "" {
 		b.WriteString("  echo '→ cloning " + strings.ReplaceAll(repoURL, "'", "") + "'\n")
-		b.WriteString(`  if [ -n "${GH_TOKEN:-}" ]; then git -c credential.helper= -c "credential.helper=$helper" clone --quiet ` + shellQuote(repoURL) + " .; else git clone --quiet " + shellQuote(repoURL) + " .; fi\n")
+		cloneBranch := ""
+		if baseBranch != "" {
+			cloneBranch = "--branch " + shellQuote(baseBranch) + " -- "
+		}
+		b.WriteString(`  if [ -n "${GH_TOKEN:-}" ]; then git -c credential.helper= -c "credential.helper=$helper" clone --quiet ` + cloneBranch + shellQuote(repoURL) + " .; else git clone --quiet " + cloneBranch + shellQuote(repoURL) + " .; fi\n")
 	} else {
 		b.WriteString("  echo '→ no repository configured for this project: starting an empty one'\n")
 		b.WriteString("  git init --quiet -b main .\n")
@@ -92,6 +101,7 @@ type ContextFile struct {
 	Path       string
 	Body       []byte
 	ArtifactID uuid.UUID
+	VersionID  *uuid.UUID // pinned planning source, rather than the current version
 }
 
 // ContextFiles are the ticket's markdown artifacts plus the wiki memory the
@@ -230,4 +240,24 @@ func SecretEnv(ctx context.Context, rv Revealer, ws uuid.UUID, project *uuid.UUI
 		}
 	}
 	return env, nil
+}
+
+// PlanningContextFile delivers exactly the source version approved at start,
+// even if a new version is published while the run is queued.
+func PlanningContextFile(ctx context.Context, q *store.Queries, run store.Run) (*ContextFile, error) {
+	p, err := q.PlanningSessionForRun(ctx, run.ID)
+	if err != nil {
+		return nil, err
+	}
+	if p.ArtifactID == nil || p.SourceVersionID == nil {
+		return nil, nil
+	}
+	v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *p.SourceVersionID, ArtifactID: *p.ArtifactID, WorkspaceID: run.WorkspaceID})
+	if err != nil {
+		return nil, err
+	}
+	if v.BodyMd == nil {
+		return nil, apperr.Invalid("source", "planning source is not markdown")
+	}
+	return &ContextFile{Path: ".lazyagents/planning-source.md", Body: []byte(*v.BodyMd), ArtifactID: *p.ArtifactID, VersionID: p.SourceVersionID}, nil
 }

@@ -10,7 +10,6 @@ import { cx } from "@/lib/cx";
 import { fileKind, formatBytes } from "@/lib/files";
 import { absoluteTime, timelineTime } from "@/lib/format";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
 import { artifactTitle } from "@/components/domain/artifacts";
@@ -273,10 +272,7 @@ export function ArtifactScreen({ id }: { id: string }) {
                 })}
               </ol>
             </section>
-            <p className="flex items-center gap-1.5 text-xs text-fg-tertiary">
-              <Icon name="sliders" size={12} />
-              Generate tickets from this document arrives in Phase 8.
-            </p>
+            {(a.type === "prd" || a.type === "spec") && a.project && <ButtonLink variant="secondary" href={`/plans?artifact=${a.id}&project=${a.project.key}`}>Generate tickets</ButtonLink>}
           </aside>
         </div>
       )}

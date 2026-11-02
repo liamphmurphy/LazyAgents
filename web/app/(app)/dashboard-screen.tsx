@@ -19,6 +19,7 @@ import {
   AgentStack,
   AgentStatus,
   Assignment,
+  PlanningAssignment,
   seconds,
   WorkflowBar,
 } from "@/components/domain/overview";
@@ -36,6 +37,7 @@ function AttentionRow({ item }: { item: Schemas["InboxItem"] }) {
     review: "Review",
     blocked: "Blocked",
     mention: "Mention",
+    planning: "Review plan",
     suggestion: "Wiki edit",
   };
   return (
@@ -378,6 +380,7 @@ export function DashboardScreen() {
                                 </Link>
                                 <AgentStatus status={a.agent.status} />
                               </div>
+                              {a.planning_runs.map(p => <PlanningAssignment key={p.id} work={p} />)}
                               {a.assignments
                                 .filter((w) => w.state !== "queued")
                                 .slice(0, 2)

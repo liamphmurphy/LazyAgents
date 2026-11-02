@@ -1,6 +1,6 @@
 -- name: OverviewTicketCounts :many
 SELECT t.project_id,t.epic_id,t.status,count(*)::int AS count
-FROM tickets t WHERE t.workspace_id=$1 GROUP BY t.project_id,t.epic_id,t.status;
+FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.workspace_id=$1 AND NOT p.archived GROUP BY t.project_id,t.epic_id,t.status;
 
 -- name: OverviewAgentTickets :many
 -- Counts cover the full queue; only the ten highest-priority previews travel.
@@ -9,7 +9,7 @@ WITH ranked AS (
  count(*) OVER (PARTITION BY t.assignee_agent_id)::int AS queue_count,
  row_number() OVER (PARTITION BY t.assignee_agent_id ORDER BY
  CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,t.sort_order,t.key) AS pos
- FROM tickets t WHERE t.workspace_id=$1 AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
+ FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.workspace_id=$1 AND NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
  AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
 ) SELECT id,key,title,status,priority,assignee_agent_id,queue_count FROM ranked WHERE pos<=10 ORDER BY assignee_agent_id,pos;
 
@@ -34,8 +34,8 @@ ORDER BY updated_at DESC,id;
 
 -- name: ReviewOverDay :one
 -- Measure the current review spell, not the last unrelated ticket edit.
-SELECT count(*)::int FROM tickets t
-WHERE t.workspace_id=$1 AND t.status='in_review'
+SELECT count(*)::int FROM tickets t JOIN projects p ON p.id=t.project_id
+WHERE t.workspace_id=$1 AND NOT p.archived AND t.status='in_review'
 AND coalesce((SELECT max(e.created_at) FROM activity_events e WHERE e.ticket_id=t.id AND e.verb='status_changed' AND e.payload->>'to'='in_review'),t.created_at)<now()-interval '1 day';
 
 -- name: EpicAgentTime :many
@@ -83,3 +83,6 @@ SELECT r.id,r.state,r.harness,r.model,r.started_at,r.ended_at,r.cost_usd_micros,
  (r.input_tokens+r.output_tokens)::bigint AS tokens,t.id AS ticket_id,t.key,t.title,t.status,t.priority
 FROM runs r JOIN tickets t ON t.id=r.ticket_id
 WHERE r.workspace_id=$1 AND r.agent_id=$2 ORDER BY r.started_at DESC,r.id DESC LIMIT 51 OFFSET sqlc.arg(skip)::int;
+
+-- name: LiveAgentRunStates :many
+SELECT agent_id,state FROM runs WHERE workspace_id=$1 AND state NOT IN ('completed','failed','cancelled');

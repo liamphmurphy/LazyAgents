@@ -4,15 +4,16 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const prefixes: Record<string, string[]> = {
+  planning: ["planning", "inbox", "bootstrap"],
   metrics: ["dashboard", "agent-overviews"],
-  ticket: ["tickets", "inbox", "bootstrap", "knowledge", "search"],
+  ticket: ["planning", "tickets", "inbox", "bootstrap", "knowledge", "search"],
   activity: ["tickets", "inbox", "bootstrap"],
   approval: ["tickets", "runs", "inbox", "bootstrap"],
-  run: ["runs", "tickets", "agents", "inbox", "bootstrap", "runner", "search"],
+  run: ["planning", "runs", "tickets", "agents", "inbox", "bootstrap", "runner", "search"],
   agent: ["agents", "bootstrap", "search"],
   artifact: ["artifacts", "wiki", "knowledge", "inbox", "bootstrap", "search"],
   knowledge: ["knowledge", "wiki"],
-  project: ["bootstrap", "tickets", "inbox", "search"],
+  project: ["projects", "planning", "bootstrap", "tickets", "inbox", "search"],
   inbox: ["inbox", "bootstrap"],
 };
 

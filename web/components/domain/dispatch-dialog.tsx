@@ -88,6 +88,7 @@ function SinglePreview({ p }: { p: Preview }) {
             <span className="text-fg-tertiary">None set for this project: the run starts from an empty repository</span>
           )}
         </Row>
+        {p.repo_url && p.base_branch && <Row label="Base branch"><MonoChip>{p.base_branch}</MonoChip></Row>}
         <Row label="Branch">
           <span className="flex items-center gap-1.5 font-mono text-[12.5px]">
             <Icon name="branch" size={13} />

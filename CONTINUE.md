@@ -2,7 +2,7 @@
 
 Read `PLAN.md` first for architecture and phases, then `lazyagents-design/DESIGN.md`, which is the visual source of truth.
 
-Phases 0–5 are committed on `main` (latest: `6279a97 add agent harness and execution`). Phases 6 and 7 are implemented in the working tree. The user explicitly waived Phase 6 browser QA and authorized Phase 7 on 2026-11-02. Ask the user before committing.
+Phases 0–7 are committed on `main` (latest: `cb8c419 dashboards, epics, kpis`). The approved Phase 8 planning workflow and the project/dependency follow-up are implemented in the working tree. The user waived browser QA for this work. Ask the user before committing.
 
 > ⚠️ **Never exec a real harness CLI by accident.** This laptop has logged-in `claude` and `codex` in `~/.local/bin` and `~/.nix-profile/bin`. A runner test once ran the real `claude` (5 Opus sessions on the user's account) because binary substitution missed the `sh -c` wrapper. Runner tests now use `Local{OnlyBins: true}` and a PATH with only the fake harness and a `git` symlink, and fail if a real CLI is reachable. Keep both guards. Ask the user before any real-key run.
 
@@ -19,7 +19,7 @@ Phases 0–5 are committed on `main` (latest: `6279a97 add agent harness and exe
 | 5 Runner and harness adapters | ✅ Done (see "Phase 5: what shipped") |
 | 6 Realtime and attention surfaces | Implemented; integration exit passes; browser QA waived by user |
 | 7 Dashboard, Epics, Agents | Implemented; API, metrics, queue, build and regression checks pass |
-| 8 | **Next**; select a stretch item with the user; planning proposal still requires discussion |
+| 8 Planning workflow | Implemented, including the project/dependency follow-up; remaining stretch items are deferred. See "Phase 8: planning workflow" below. |
 
 ## What exists
 
@@ -149,7 +149,7 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
 - **Tests:** `internal/artifacts` covers outline/slug/summary, ADR numbering, citations across versions, files vs markdown, blob cleanup on failure, validation, and attach/bulk/detach. `internal/blob` round-trips against real S3 when `TEST_S3_ENDPOINT` is set.
 
 **Web**
-- **`/artifacts`:** search, type tabs with counts, a drop zone, the table, and a preview panel (thumbnail or real image, meta, outline with citations, Read by, tickets, New version; Generate tickets is disabled until Phase 8).
+- **`/artifacts`:** search, type tabs with counts, a drop zone, the table, and a preview panel (thumbnail or real image, meta, outline with citations, Read by, tickets, New version; Generate tickets opens the Phase 8 planning flow for PRDs and SPECs).
 - **`/artifacts/[id]`:** the full document with heading anchors, PDF/image preview, the outline, readers, tickets, and version history (older versions viewable read-only), plus inline summary editing and download.
 - **Dialogs** (`components/domain/artifact-dialogs.tsx`):
   - Upload: several files make several artifacts, or write markdown directly.
@@ -163,7 +163,7 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
 - Changing an artifact's project.
 - Choosing a version label on upload.
 - Embedding a PDF's own outline.
-- "Generate tickets" (Phase 8).
+- "Generate tickets" shipped in Phase 8 below.
 - Wiki links (Phase 4.5).
 
 ## Phase 4 progress
@@ -457,9 +457,9 @@ The same flow ran in the browser (Playwright: banner, dialog, run log, approve; 
 - Settings → Runner page.
 - Dashboard and sidebar runner-capacity displays are implemented in Phase 7.
 
-## Proposed: plan and start agent work from the UI (not started)
+## Original proposal: plan and start agent work from the UI
 
-Raised by the user on 2026-11-02, with no work done yet. Discuss it before building. It probably fits after Phase 6 (it needs the Inbox and SSE) and pulls in Phase 8's "Generate tickets from a PRD".
+Raised by the user on 2026-11-02. The user subsequently approved a focused first version: any existing agent in restricted planning mode, separate editable drafts, human acceptance, and manual dispatch. See the implementation below; the larger sketch here is historical.
 
 **The gap today:** work starts one ticket at a time: a person writes a ticket, assigns an agent, then dispatches. Nothing helps turn a goal ("ship Ledger v2 reconciliation") into tickets, and the only way to have an agent plan is an unmanaged session in a terminal.
 
@@ -572,5 +572,65 @@ Raised by the user on 2026-11-02, with no work done yet. Discuss it before build
 
 **State for the next session**
 - Full API/web/Caddy/Postgres/S3 stack remains running at `http://localhost:8080`; dev infra is also running. Agent runner is off. An unrelated existing host server on :13000 was left alone.
-- Phase 6 and 7 changes are uncommitted; do not commit without the user's instruction.
-- Phase 8 is next. The proposed planning workflow above is unstarted and still requires discussion. Epic/project creation and editing interfaces, settings expansions, external notifications and other stretch work are not silently included in this phase.
+- Phases 6 and 7 were subsequently committed in `cb8c419`; Phase 8 changes remain uncommitted.
+- The user approved the Phase 8 planning workflow; see below. Project management was subsequently authorized below. Epic creation/editing, other settings expansions, external notifications and other stretch work remain outside this scope.
+
+
+## Phase 8: planning workflow (2026-11-02)
+
+**Approved scope**
+- Start from a blank goal, an epic, or a markdown PRD/SPEC, using any existing agent's resolved harness/model and run guards.
+- A person approves starting the planning run. Proposals are editable drafts; accepting creates tickets. Dispatch stays manual through the existing dispatch dialog.
+- Dependencies and project/repository management were subsequently authorized and implemented below. Automatic dispatch waves, estimates/spend caps, additional harnesses, GitHub Apps, login and other stretch work remain deferred.
+
+**Server / runner**
+- Migration `00013_planning.sql`: `planning_sessions` stores the goal, project/epic/source, pinned source version, run, proposals, revision and accepted ticket keys. `runs.ticket_id` is nullable so planners do not create coordination tickets or pollute tracker statistics.
+- `/planning-sessions`: list/start; `/planning-sessions/{id}`: get/review (`save`, `accept`, `dismiss`). OpenAPI, Go and TS clients and sqlc queries are regenerated.
+- Planning snapshots replace execution instructions with a planner prompt, remove project setup and external MCP servers, deny credential scopes, force Codex's read-only sandbox and Claude Code's plan mode, and deny Claude Edit/Write/Bash/Agent tools. The runner starts an empty workspace without cloning. Only the selected harness key is injected; no Git or application secrets are delivered.
+- The shared Agent API tool wrapper allows planners only `whoami`, `get_ticket`, `read_artifact`, `search_knowledge`, `read_page`, `get_backlinks` and `propose_tickets`. This applies to MCP and REST; future tools are denied by default. `propose_tickets` requires the caller's own running managed planning token and atomically submits the draft and completes its run. Suggested agent IDs use strings at the MCP boundary (UUID arrays would infer the wrong schema).
+- The source is pinned when planning starts, delivered as `.lazyagents/planning-source.md`, and attributed as a read of that version. Wiki memory is delivered too. Epic prompts include existing ticket keys/statuses so the planner can inspect related work.
+- Acceptance locks the draft, checks its revision and creates all selected tickets, criteria, assignments, epic links, source context and activity in one transaction. Duplicate/stale acceptance returns 409; any failure rolls everything back. Accepted tickets start in Backlog and are never auto-dispatched.
+- Shared run logs/control, runner concurrency, usage/cost, cancellation, token revocation and cleanup work for standalone planners. One planning-specific nudge is allowed for an idle planner; a second idle turn fails with a retry explanation.
+
+**Web**
+- `/plans`: recent sessions, approval form, live run state/log link, pinned source download, editable proposal titles/descriptions/criteria/assignments, drop/add, save, dismiss and accept. Merge by combining text/criteria and dropping the redundant proposal. Conflicting remote edits preserve the current local draft and ask for reload.
+- Accepted tickets link to their detail pages; assigned tickets can open the existing bulk Review & dispatch dialog.
+- Epics and PRD/SPEC artifact previews/details link into the approval form. Draft review and failed/cancelled planning work appear in Inbox/Dashboard attention. SSE invalidates planning queries; polling remains a fallback.
+- Active planners appear on agent cards, agent Overview and the Dashboard. Status/counts include standalone planning runs; ticket-run history stays separate and links to Plans for planning history.
+
+**Verification / environment**
+- Browser QA was explicitly waived. No real harness CLI or real provider key was used. Both fake-harness safety guards remain intact.
+- Full Postgres-backed Go regression suite passed; race checks passed for HTTP API, run services and runner. Planning tests cover REST/MCP mutation denial, both fake harness adapters, skipped repo/setup, withheld credentials, source pinning, no tickets before acceptance, stale/concurrent acceptance, rollback after a forced failure on the second ticket, source/criteria preservation, dismissal, workspace isolation, cancellation and token/workspace cleanup.
+- Typecheck, ESLint, go vet and diff checks passed. Production API/web Docker builds passed. Host Turbopack still hits its known helper port-binding restriction; the Docker build is the verified production build.
+- No commit was made. Do not start a real-key run or the runner without the user's instruction.
+- Local preview refreshed at `http://localhost:8080/plans`; API/web are healthy and migration 00013 is applied. Through Caddy, health, planning list, Inbox, agent overviews, Dashboard, Plans HTML and Epics HTML returned 200. The planning list is empty because only throwaway test databases ran fake planners. Runner remains off; dev infra and the unrelated :13000 server were left alone.
+
+
+## Follow-up: project management and ticket dependencies (2026-11-02)
+
+The user explicitly authorized the first two recommended additions: project/repository management and ticket dependencies, including dependency suggestions in planning. Dispatch remains human-approved. Browser QA remains waived.
+
+**Projects**
+- `/settings/projects` (linked from Settings and the sidebar's Manage action): create/edit name, color, HTTPS GitHub repository and default branch; archive and restore. Keys are normalized to 2–10 uppercase letters/digits and remain immutable so ticket IDs do not change.
+- `GET/POST /projects`, `PUT /projects/{key}`; updates require the current `revision`, returning 409 for stale edits. Editors preserve their local baseline revision across live refreshes.
+- Migration `00014_projects_dependencies.sql` adds `projects.archived/revision`. Archiving preserves tickets/artifacts/history, hides the project from the active sidebar, default ticket lists, workflow rollups, agent queues and epic overview, and blocks new tickets, artifacts, planning and execution. Explicit project ticket filters and direct detail links retain history. Restore is reversible.
+- Active/queued/waiting/paused execution or planning runs must finish or be cancelled before archiving. Project-row locks serialize archiving with new ticket/run creation.
+- New dispatched runs snapshot repository URL (including no repository) and default branch in `resolved_spec.repository`. Settings updates first capture the current repository for legacy active ticket runs lacking this metadata. The runner uses the frozen repository and clones the approved branch; the dispatch preview shows the base branch. This prevents later settings edits from changing queued work.
+
+**Dependencies**
+- `ticket_dependencies` stores directed blocker relationships; ticket `dependency_revision` protects edits. `PUT /tickets/{key}/dependencies` replaces blockers with workspace validation, deduplication, self/cycle rejection, transactional activity and SSE invalidation.
+- Graph edits and planning acceptance serialize via a per-workspace advisory lock, so concurrent inverse edges cannot create a cycle. Dependencies cannot be changed while the dependent has an active/queued run.
+- A blocker must be **Done** (In Review is insufficient). Reopening restores the block. Dispatch previews, atomic bulk dispatch, unmanaged claims and the runner's final queued-start check all enforce readiness. If a prerequisite reopens while work is queued, the run fails before launching a harness. Already running work is not automatically cancelled.
+- Ticket detail shows editable Blocked by and reverse Blocks lists with statuses; list rows flag unmet blockers. `GET /tickets?view=all&ready=true` and the Ready to dispatch filter show assigned, unfinished, undispatched work with no unmet dependencies. The Agent API's `next_ticket` also returns ready work.
+- Inbox dispatch attention excludes blocked/archived work and becomes unread again when prerequisites finish. Dependency changes and completions refresh planning readiness through SSE.
+
+**Planning**
+- Proposals support stable `ref` identifiers, `depends_on` proposal references, and `blocked_by` existing ticket keys in MCP/REST/UI. References remain correct when proposals are reordered. Removing a referenced proposal requires removing its dependencies first; server validation rejects dangling references and cycles.
+- Acceptance creates all tickets first, then resolves and persists all dependency edges inside the same transaction. No partial ticket/graph changes can commit.
+- Accepted plans expose current `ready_keys`; bulk Review & dispatch includes only that ready subset. Later waves become available when blockers reach Done, with no automatic dispatch.
+
+**Verification**
+- Full Postgres-backed Go regressions, race checks for HTTP API/runner/tracker/run services, go vet, TypeScript, ESLint and generated-binding consistency checks pass. Production API/web Docker builds pass.
+- New integration tests cover project validation/uniqueness/stale revisions, archive/restore/history, execution and planning archive guards, workspace isolation, dependency and proposal cycles (including concurrent inverse edits), duplicate blockers, ready filtering/Inbox unread state, atomic bulk rejection, unmanaged-claim enforcement, stable proposal refs, next-wave readiness without auto-dispatch, and legacy/new repository snapshots. Guarded runner tests verify reopened queued blockers launch no harness and a local Git checkout uses the approved repository/base branch despite later settings changes.
+- No real harness or provider key was used. No commit was made. Agent runner remains off. Browser QA was skipped as requested.
+- Local preview refreshed with migration 00014 applied: `http://localhost:8080/settings/projects` and `http://localhost:8080/tickets?view=all&ready=true`. API/web are healthy. Caddy returned 200 for project list, ready tickets, ticket dependency fields, dispatch preview, planning list, Dashboard and the new HTML routes. The persistent demo still has its original four projects; all mutation/runner checks used throwaway databases. Only API/Caddy/Postgres/S3/web are running; runner remains off.

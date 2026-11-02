@@ -15,7 +15,7 @@ SELECT * FROM runs WHERE ticket_id = $1 AND state NOT IN ('completed', 'failed',
 SELECT * FROM runs WHERE ticket_id = $1 ORDER BY started_at DESC LIMIT 1;
 
 -- name: ActiveRunsForAgent :many
-SELECT r.*, t.key AS ticket_key FROM runs r JOIN tickets t ON t.id = r.ticket_id
+SELECT r.*, coalesce(t.key, 'Planning')::text AS ticket_key FROM runs r LEFT JOIN tickets t ON t.id = r.ticket_id
 WHERE r.agent_id = $1 AND r.state NOT IN ('completed', 'failed', 'cancelled')
 ORDER BY r.started_at;
 

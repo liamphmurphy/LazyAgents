@@ -142,7 +142,7 @@ func (q *Queries) CreateLabel(ctx context.Context, arg CreateLabelParams) (Label
 
 const createProject = `-- name: CreateProject :one
 INSERT INTO projects (workspace_id, key, name, color, repo_url)
-VALUES ($1, $2, $3, $4, $5) RETURNING id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at
+VALUES ($1, $2, $3, $4, $5) RETURNING id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision
 `
 
 type CreateProjectParams struct {
@@ -173,6 +173,8 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.DefaultBranch,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Archived,
+		&i.Revision,
 	)
 	return i, err
 }
@@ -237,7 +239,7 @@ func (q *Queries) GetEpic(ctx context.Context, arg GetEpicParams) (Epic, error) 
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at FROM projects WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision FROM projects WHERE id = $1 AND workspace_id = $2
 `
 
 type GetProjectParams struct {
@@ -259,12 +261,14 @@ func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (Project
 		&i.DefaultBranch,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Archived,
+		&i.Revision,
 	)
 	return i, err
 }
 
 const getProjectByKey = `-- name: GetProjectByKey :one
-SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at FROM projects WHERE workspace_id = $1 AND key = $2
+SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision FROM projects WHERE workspace_id = $1 AND key = $2
 `
 
 type GetProjectByKeyParams struct {
@@ -286,6 +290,8 @@ func (q *Queries) GetProjectByKey(ctx context.Context, arg GetProjectByKeyParams
 		&i.DefaultBranch,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Archived,
+		&i.Revision,
 	)
 	return i, err
 }
@@ -424,7 +430,7 @@ func (q *Queries) ListLabels(ctx context.Context, workspaceID uuid.UUID) ([]Labe
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at FROM projects WHERE workspace_id = $1 ORDER BY created_at
+SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision FROM projects WHERE workspace_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListProjects(ctx context.Context, workspaceID uuid.UUID) ([]Project, error) {
@@ -447,6 +453,8 @@ func (q *Queries) ListProjects(ctx context.Context, workspaceID uuid.UUID) ([]Pr
 			&i.DefaultBranch,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Archived,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}

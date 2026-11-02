@@ -17,7 +17,7 @@ const activeRunForTicket = `-- name: ActiveRunForTicket :one
 SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns FROM runs WHERE ticket_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled')
 `
 
-func (q *Queries) ActiveRunForTicket(ctx context.Context, ticketID uuid.UUID) (Run, error) {
+func (q *Queries) ActiveRunForTicket(ctx context.Context, ticketID *uuid.UUID) (Run, error) {
 	row := q.db.QueryRow(ctx, activeRunForTicket, ticketID)
 	var i Run
 	err := row.Scan(
@@ -52,7 +52,7 @@ func (q *Queries) ActiveRunForTicket(ctx context.Context, ticketID uuid.UUID) (R
 }
 
 const activeRunsForAgent = `-- name: ActiveRunsForAgent :many
-SELECT r.id, r.workspace_id, r.ticket_id, r.agent_id, r.mode, r.state, r.wait_reason, r.resolved_spec, r.definition_version_id, r.harness, r.model, r.harness_session_id, r.outcome, r.tool_calls, r.input_tokens, r.output_tokens, r.cost_usd_micros, r.cost_source, r.started_at, r.ended_at, r.created_at, r.updated_at, r.dispatched_by_user_id, r.runner_id, r.workspace_volume, r.idle_turns, t.key AS ticket_key FROM runs r JOIN tickets t ON t.id = r.ticket_id
+SELECT r.id, r.workspace_id, r.ticket_id, r.agent_id, r.mode, r.state, r.wait_reason, r.resolved_spec, r.definition_version_id, r.harness, r.model, r.harness_session_id, r.outcome, r.tool_calls, r.input_tokens, r.output_tokens, r.cost_usd_micros, r.cost_source, r.started_at, r.ended_at, r.created_at, r.updated_at, r.dispatched_by_user_id, r.runner_id, r.workspace_volume, r.idle_turns, coalesce(t.key, 'Planning')::text AS ticket_key FROM runs r LEFT JOIN tickets t ON t.id = r.ticket_id
 WHERE r.agent_id = $1 AND r.state NOT IN ('completed', 'failed', 'cancelled')
 ORDER BY r.started_at
 `
@@ -60,7 +60,7 @@ ORDER BY r.started_at
 type ActiveRunsForAgentRow struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID
-	TicketID            uuid.UUID
+	TicketID            *uuid.UUID
 	AgentID             uuid.UUID
 	Mode                string
 	State               string
@@ -323,7 +323,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, workspace_id, ticket_i
 
 type CreateRunParams struct {
 	WorkspaceID         uuid.UUID
-	TicketID            uuid.UUID
+	TicketID            *uuid.UUID
 	AgentID             uuid.UUID
 	Mode                string
 	State               string
@@ -621,7 +621,7 @@ const latestRunForTicket = `-- name: LatestRunForTicket :one
 SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns FROM runs WHERE ticket_id = $1 ORDER BY started_at DESC LIMIT 1
 `
 
-func (q *Queries) LatestRunForTicket(ctx context.Context, ticketID uuid.UUID) (Run, error) {
+func (q *Queries) LatestRunForTicket(ctx context.Context, ticketID *uuid.UUID) (Run, error) {
 	row := q.db.QueryRow(ctx, latestRunForTicket, ticketID)
 	var i Run
 	err := row.Scan(

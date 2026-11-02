@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +25,24 @@ func brokerFor(scope string) (broker.Action, bool) { return broker.For(scope) }
 
 // define binds a typed tool function to both transports.
 func define[In any](name, desc string, fn func(context.Context, Deps, agents.Caller, In) (any, error)) Tool {
+	original := fn
+	fn = func(ctx context.Context, d Deps, c agents.Caller, in In) (any, error) {
+		if c.RunID != nil {
+			run, err := d.Q.GetRun(ctx, store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID})
+			if err != nil {
+				return nil, err
+			}
+			if run.TicketID == nil {
+				if !slices.Contains([]string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}, name) {
+					return nil, apperr.Conflict("planning runs can read context and propose tickets only")
+				}
+				if run.State != "running" {
+					return nil, apperr.Conflict("planning run is %s", run.State)
+				}
+			}
+		}
+		return original(ctx, d, c, in)
+	}
 	return Tool{
 		Name:        name,
 		Description: desc,
@@ -89,7 +109,8 @@ func verifier(d Deps) auth.TokenVerifier {
 }
 
 const instructions = `You are working through LazyAgents, the tracker your team uses to supervise agents.
-Start with whoami, then claim_ticket and get_ticket. Read attached artifacts with read_artifact before
+For planning runs, follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.
+For ticket execution, start with whoami, then claim_ticket and get_ticket. Read attached artifacts with read_artifact before
 planning, then post_plan before editing anything and keep steps current with update_step.
 Scopes marked requires_approval need request_approval first; brokered ones (like db:migrate) run via
 run_gated after approval. When you need a person, comment and call await_human. Finish with complete_run.`

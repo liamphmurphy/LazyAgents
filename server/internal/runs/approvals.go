@@ -339,9 +339,12 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 		if err != nil || run.WorkspaceID != ws {
 			return apperr.ErrNotFound
 		}
-		t, err := q.GetTicketByID(ctx, run.TicketID)
-		if err != nil {
-			return err
+		var t store.Ticket
+		if run.TicketID != nil {
+			t, err = q.GetTicketByID(ctx, *run.TicketID)
+			if err != nil {
+				return err
+			}
 		}
 		actor := tracker.UserActor(userID)
 		switch action {
@@ -354,7 +357,7 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 				return err
 			}
 			_ = q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](130)})
-			if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunPaused, map[string]any{"run_id": run.ID}, nil); err != nil {
+			if err := runRecord(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunPaused, map[string]any{"run_id": run.ID}, nil); err != nil {
 				return err
 			}
 			return RecomputeAgentStatus(ctx, q, run.AgentID)
@@ -362,7 +365,7 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			if run.State != "paused" {
 				return apperr.Conflict("only a paused run can be resumed")
 			}
-			if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunResumed, map[string]any{"run_id": run.ID}, nil); err != nil {
+			if err := runRecord(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunResumed, map[string]any{"run_id": run.ID}, nil); err != nil {
 				return err
 			}
 			if err := resume(ctx, q, run, "resume", "You were paused; continue."); err != nil {
@@ -384,7 +387,7 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "cancelled"}); err != nil {
 				return err
 			}
-			if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunCancelled, map[string]any{"run_id": run.ID}, nil); err != nil {
+			if err := runRecord(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunCancelled, map[string]any{"run_id": run.ID}, nil); err != nil {
 				return err
 			}
 			return RecomputeAgentStatus(ctx, q, run.AgentID)
@@ -402,7 +405,7 @@ func (s *Service) OnHumanComment(ctx context.Context, ws uuid.UUID, ticketKey, b
 		if err != nil {
 			return err
 		}
-		run, err := q.ActiveRunForTicket(ctx, t.ID)
+		run, err := q.ActiveRunForTicket(ctx, &t.ID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		} else if err != nil {

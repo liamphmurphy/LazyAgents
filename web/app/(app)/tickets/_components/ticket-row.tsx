@@ -49,6 +49,7 @@ export function TicketRow({
         <Link href={`/tickets/${t.key}`} className="truncate font-medium text-fg after:absolute after:inset-0 hover:text-fg">
           {t.title}
         </Link>
+        {t.status !== "done" && t.unmet_dependencies > 0 && <Flag tone="human">Blocked · {t.unmet_dependencies}</Flag>}
         {t.pr && t.status === "in_review" && <Flag tone="review">PR #{t.pr.number}</Flag>}
         {t.assignee && t.status === "todo" && <Flag tone="neutral">Assigned</Flag>}
       </span>

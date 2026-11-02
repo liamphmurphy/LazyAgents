@@ -165,3 +165,11 @@ export function Assignment({
     </Link>
   );
 }
+
+export function PlanningAssignment({ work }: { work: Schemas["PlanningWork"] }) {
+  return <Link href={`/plans?id=${work.id}`} className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken p-3 hover:border-border-hover">
+    <span className="flex justify-between gap-2 text-xs text-fg-tertiary"><span>Planning</span><span>{work.state}</span></span>
+    <span className="line-clamp-2 text-[13px] text-fg-2">{work.goal}</span>
+    <span className="font-mono text-[10.5px] text-fg-tertiary">{work.harness} · {work.model}</span>
+  </Link>;
+}

@@ -21,7 +21,14 @@ type ResolvedScope struct {
 }
 
 // Resolved is the fully merged definition a run snapshots (§6.4).
+// Repository freezes project configuration at approval, including an empty repository URL.
+type Repository struct {
+	URL           *string `json:"url"`
+	DefaultBranch string  `json:"default_branch"`
+}
+
 type Resolved struct {
+	Repository     *Repository                  `json:"repository,omitempty"`
 	Harness        string                       `json:"harness"`
 	Model          string                       `json:"model"`
 	Instructions   string                       `json:"instructions"`

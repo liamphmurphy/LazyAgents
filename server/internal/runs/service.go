@@ -116,7 +116,7 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		if t.AssigneeAgentID == nil || *t.AssigneeAgentID != c.Agent.ID {
 			return apperr.Conflict("%s isn't assigned to @%s. A person assigns tickets; ask for it in a comment.", t.Key, c.Agent.Handle)
 		}
-		if live, err := q.ActiveRunForTicket(ctx, t.ID); err == nil {
+		if live, err := q.ActiveRunForTicket(ctx, &t.ID); err == nil {
 			if live.AgentID != c.Agent.ID {
 				return apperr.Conflict("%s already has a run by another agent", t.Key)
 			}
@@ -134,21 +134,29 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		if t.Status == "done" {
 			return apperr.Conflict("%s is done", t.Key)
 		}
-		p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: ws})
+		p, err := q.LockProject(ctx, store.LockProjectParams{ID: t.ProjectID, WorkspaceID: ws})
 		if err != nil {
 			return err
+		}
+		blockers, err := tracker.DispatchBlockers(ctx, q, t)
+		if err != nil {
+			return err
+		}
+		if len(blockers) > 0 {
+			return apperr.Conflict("%s", strings.Join(blockers, "; "))
 		}
 		resolved, err := agents.Resolve(ctx, q, ws, c.Agent, p.Key)
 		if err != nil {
 			return err
 		}
+		resolved.Repository = &agentdef.Repository{URL: p.RepoUrl, DefaultBranch: p.DefaultBranch}
 		raw, _ := json.Marshal(resolved)
 		mode := "managed"
 		if c.Kind == "unmanaged" {
 			mode = "unmanaged"
 		}
 		run, err = q.CreateRun(ctx, store.CreateRunParams{
-			WorkspaceID: ws, TicketID: t.ID, AgentID: c.Agent.ID, Mode: mode, State: "running",
+			WorkspaceID: ws, TicketID: &t.ID, AgentID: c.Agent.ID, Mode: mode, State: "running",
 			ResolvedSpec: raw, DefinitionVersionID: c.Agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model,
 		})
 		if err != nil {
@@ -194,7 +202,7 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			if t.Status == "done" {
 				return apperr.Conflict("%s is done", t.Key)
 			}
-			if live, err := q.ActiveRunForTicket(ctx, t.ID); err == nil {
+			if live, err := q.ActiveRunForTicket(ctx, &t.ID); err == nil {
 				return apperr.Conflict("%s already has a %s run", t.Key, live.State)
 			} else if !errors.Is(err, pgx.ErrNoRows) {
 				return err
@@ -203,17 +211,25 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			if err != nil {
 				return err
 			}
-			p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: ws})
+			p, err := q.LockProject(ctx, store.LockProjectParams{ID: t.ProjectID, WorkspaceID: ws})
 			if err != nil {
 				return err
+			}
+			blockers, err := tracker.DispatchBlockers(ctx, q, t)
+			if err != nil {
+				return err
+			}
+			if len(blockers) > 0 {
+				return apperr.Conflict("%s: %s", t.Key, strings.Join(blockers, "; "))
 			}
 			resolved, err := agents.Resolve(ctx, q, ws, agent, p.Key)
 			if err != nil {
 				return err
 			}
+			resolved.Repository = &agentdef.Repository{URL: p.RepoUrl, DefaultBranch: p.DefaultBranch}
 			raw, _ := json.Marshal(resolved)
 			run, err := q.CreateRun(ctx, store.CreateRunParams{
-				WorkspaceID: ws, TicketID: t.ID, AgentID: agent.ID, Mode: "managed", State: "queued",
+				WorkspaceID: ws, TicketID: &t.ID, AgentID: agent.ID, Mode: "managed", State: "queued",
 				ResolvedSpec: raw, DefinitionVersionID: agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model,
 			})
 			if err != nil {
@@ -265,7 +281,7 @@ func (s *Service) Active(ctx context.Context, q *store.Queries, c Caller, ticket
 		if err != nil {
 			return run, t, apperr.Invalid("ticket", "no ticket %s", ticketKey)
 		}
-		run, err = q.ActiveRunForTicket(ctx, t.ID)
+		run, err = q.ActiveRunForTicket(ctx, &t.ID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return run, t, apperr.Conflict("no live run on %s: call claim_ticket first", t.Key)
 		}
@@ -293,7 +309,10 @@ func (s *Service) Active(ctx context.Context, q *store.Queries, c Caller, ticket
 	if run.AgentID != c.Agent.ID {
 		return run, store.Ticket{}, apperr.ErrNotFound
 	}
-	t, err := q.GetTicketByID(ctx, run.TicketID)
+	if run.TicketID == nil {
+		return run, store.Ticket{}, apperr.Conflict("planning runs use propose_tickets")
+	}
+	t, err := q.GetTicketByID(ctx, *run.TicketID)
 	return run, t, err
 }
 

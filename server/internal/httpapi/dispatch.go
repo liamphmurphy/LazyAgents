@@ -56,10 +56,15 @@ func (s *Server) GetDispatchPreview(ctx context.Context, req api.GetDispatchPrev
 	if out.Runner, err = s.runnerStatus(ctx); err != nil {
 		return nil, err
 	}
+	blockers, err := tracker.DispatchBlockers(ctx, s.Q, t)
+	if err != nil {
+		return nil, err
+	}
+	out.Blockers = append(out.Blockers, blockers...)
 	if t.Status == "done" {
 		out.Blockers = append(out.Blockers, t.Key+" is done")
 	}
-	if live, err := s.Q.ActiveRunForTicket(ctx, t.ID); err == nil {
+	if live, err := s.Q.ActiveRunForTicket(ctx, &t.ID); err == nil {
 		out.Blockers = append(out.Blockers, fmt.Sprintf("%s already has a %s run", t.Key, live.State))
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
@@ -78,6 +83,7 @@ func (s *Server) GetDispatchPreview(ctx context.Context, req api.GetDispatchPrev
 		return nil, err
 	}
 	out.RepoUrl = p.RepoUrl
+	out.BaseBranch = &p.DefaultBranch
 	if agent.CurrentDefinitionVersionID != nil {
 		if v, err := s.Q.GetDefinitionVersion(ctx, *agent.CurrentDefinitionVersionID); err == nil {
 			n := int(v.Version)

@@ -173,6 +173,7 @@ paths:
           in: query
           description: Restrict to one status (applied within the view)
           schema: { $ref: "#/components/schemas/TicketStatus" }
+        - { name: ready, in: query, description: Assigned tickets ready for manual dispatch, schema: { type: boolean } }
         - name: assignee
           in: query
           description: Agent handle
@@ -1189,6 +1190,130 @@ paths:
                   hits: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
         default: { $ref: "#/components/responses/Error" }
 
+  /planning-sessions:
+    get:
+      operationId: listPlanningSessions
+      responses:
+        '200':
+          description: Recent planning sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PlanningSession' }
+    post:
+      operationId: startPlanning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanningInput' }
+      responses:
+        '201':
+          description: Approved planning run queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanningSession' }
+  /planning-sessions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getPlanningSession
+      responses:
+        '200':
+          description: Planning session and draft proposals
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanningSession' }
+    patch:
+      operationId: reviewPlanning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision, action, proposals]
+              properties:
+                revision: { type: integer }
+                action: { type: string, enum: [save, accept, dismiss] }
+                proposals:
+                  type: array
+                  items: { $ref: '#/components/schemas/TicketProposal' }
+      responses:
+        '200':
+          description: Draft saved, accepted or dismissed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanningSession' }
+
+  /projects:
+    get:
+      operationId: listProjects
+      responses:
+        '200':
+          description: Active and archived workspace projects
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Project' } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewProject' }
+      responses:
+        '201':
+          description: Created project
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        default: { $ref: '#/components/responses/Error' }
+  /projects/{key}:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: updateProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectUpdate' }
+      responses:
+        '200':
+          description: Updated project (key is immutable)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        default: { $ref: '#/components/responses/Error' }
+  /tickets/{key}/dependencies:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setTicketDependencies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision, blocked_by]
+              properties:
+                revision: { type: integer }
+                blocked_by: { type: array, maxItems: 50, items: { type: string } }
+      responses:
+        '200':
+          description: Updated ticket with dependency relationships
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ticket' }
+        default: { $ref: '#/components/responses/Error' }
+
 components:
   parameters:
     NodeKind:
@@ -1270,12 +1395,16 @@ components:
         avatar_color: { type: string }
     Project:
       type: object
-      required: [id, key, name, color]
+      required: [id, key, name, color, default_branch, archived, revision]
       properties:
         id: { type: string, format: uuid }
         key: { type: string }
         name: { type: string }
         color: { type: string }
+        repo_url: { type: string }
+        default_branch: { type: string }
+        archived: { type: boolean }
+        revision: { type: integer }
     Agent:
       type: object
       required: [id, name, handle, color_index, role, specialty, model, status]
@@ -1364,7 +1493,7 @@ components:
 
     TicketSummary:
       type: object
-      required: [id, key, project_key, title, status, priority, labels, criteria_total, criteria_done, updated_at]
+      required: [id, key, project_key, title, status, priority, labels, criteria_total, criteria_done, unmet_dependencies, updated_at]
       properties:
         id: { type: string, format: uuid }
         key: { type: string }
@@ -1377,6 +1506,7 @@ components:
         labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
         due_date: { type: string, format: date }
         pr: { $ref: "#/components/schemas/PullRequest" }
+        unmet_dependencies: { type: integer }
         criteria_total: { type: integer }
         criteria_done: { type: integer }
         updated_at: { type: string, format: date-time }
@@ -1389,13 +1519,16 @@ components:
           items: { $ref: "#/components/schemas/TicketSummary" }
     Ticket:
       type: object
-      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, created_at, updated_at]
+      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, blocked_by, blocks, dependency_revision, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         key: { type: string }
         project: { $ref: "#/components/schemas/Project" }
         title: { type: string }
         description_md: { type: string }
+        dependency_revision: { type: integer }
+        blocked_by: { type: array, items: { $ref: '#/components/schemas/TicketDependency' } }
+        blocks: { type: array, items: { $ref: '#/components/schemas/TicketDependency' } }
         status: { $ref: "#/components/schemas/TicketStatus" }
         priority: { $ref: "#/components/schemas/Priority" }
         epic: { $ref: "#/components/schemas/EpicRef" }
@@ -1792,7 +1925,8 @@ components:
       required: [id, ticket_key, agent, mode, state, harness, model, started_at, tool_calls, input_tokens, output_tokens, cost_usd, plan, approval_scopes, scopes]
       properties:
         id: { type: string, format: uuid }
-        ticket_key: { type: string }
+        ticket_key: { type: string, description: Empty for standalone planning runs }
+        planning_id: { type: string, format: uuid }
         agent: { $ref: "#/components/schemas/AgentRef" }
         mode: { type: string, enum: [managed, unmanaged] }
         state: { type: string, enum: [queued, starting, running, waiting, paused, blocked, completed, failed, cancelled] }
@@ -2093,6 +2227,7 @@ components:
         definition_version: { type: integer }
         has_override: { type: boolean }
         resolved: { $ref: "#/components/schemas/ResolvedDefinition" }
+        base_branch: { type: string }
         repo_url: { type: string }
         branch: { type: string }
         setup: { type: array, items: { type: string } }
@@ -2116,7 +2251,7 @@ components:
       required: [id, kind, title, summary, href, project, ticket_key, created_at, resolved, read]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [approval, dispatch, mention, review, blocked, suggestion] }
+        kind: { type: string, enum: [approval, dispatch, mention, review, blocked, suggestion, planning] }
         title: { type: string }
         summary: { type: string }
         href: { type: string }
@@ -2188,6 +2323,17 @@ components:
         steps_done: { type: integer }
         steps_total: { type: integer }
 
+    PlanningWork:
+      type: object
+      required: [id, run_id, goal, state, harness, model]
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        goal: { type: string }
+        state: { type: string }
+        harness: { type: string }
+        model: { type: string }
+
     AgentScopeSummary:
       type: object
       required: [scope, mode, enforcement, how]
@@ -2199,11 +2345,12 @@ components:
 
     AgentOverview:
       type: object
-      required: [agent, max_concurrency, harness, assignments, queue, queue_count, stats, scopes]
+      required: [agent, max_concurrency, harness, planning_runs, assignments, queue, queue_count, stats, scopes]
       properties:
         agent: { $ref: "#/components/schemas/Agent" }
         max_concurrency: { type: integer }
         harness: { type: string }
+        planning_runs: { type: array, items: { $ref: "#/components/schemas/PlanningWork" } }
         assignments: { type: array, items: { $ref: "#/components/schemas/AgentWork" } }
         queue: { type: array, items: { $ref: "#/components/schemas/WorkTicket" } }
         queue_count: { type: integer }
@@ -2285,3 +2432,80 @@ components:
         cost_usd: { type: number, format: double }
         tool_calls: { type: integer }
         tokens: { type: integer, format: int64 }
+
+    TicketProposal:
+      type: object
+      required: [title, description, criteria]
+      properties:
+        ref: { type: string, description: Stable unique proposal reference }
+        depends_on: { type: array, items: { type: string }, description: References to other proposals }
+        blocked_by: { type: array, items: { type: string }, description: Existing blocker ticket keys }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        description: { type: string }
+        criteria:
+          type: array
+          items: { type: string }
+        agent_id: { type: string, format: uuid }
+    PlanningInput:
+      type: object
+      required: [project, agent_id, goal]
+      properties:
+        project: { type: string }
+        agent_id: { type: string, format: uuid }
+        goal: { type: string, maxLength: 20000 }
+        epic_id: { type: string, format: uuid }
+        artifact_id: { type: string, format: uuid }
+    PlanningSession:
+      type: object
+      required: [id, project, goal, run_id, run_state, state, revision, proposals, ticket_keys, ready_keys, created_at, updated_at, harness, model]
+      properties:
+        id: { type: string, format: uuid }
+        project: { type: string }
+        epic_id: { type: string, format: uuid }
+        artifact_id: { type: string, format: uuid }
+        source_version_id: { type: string, format: uuid }
+        goal: { type: string }
+        run_id: { type: string, format: uuid }
+        run_state: { type: string }
+        outcome: { type: string }
+        harness: { type: string }
+        model: { type: string }
+        state: { type: string, enum: [planning, review, accepted, dismissed] }
+        revision: { type: integer }
+        proposals:
+          type: array
+          items: { $ref: '#/components/schemas/TicketProposal' }
+        ready_keys: { type: array, items: { type: string }, description: Created tickets currently ready for manual dispatch }
+        ticket_keys:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    NewProject:
+      type: object
+      required: [key, name, color, repo_url, default_branch]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        color: { type: string }
+        repo_url: { type: string }
+        default_branch: { type: string }
+    ProjectUpdate:
+      type: object
+      required: [name, color, repo_url, default_branch, archived, revision]
+      properties:
+        name: { type: string }
+        color: { type: string }
+        repo_url: { type: string }
+        default_branch: { type: string }
+        archived: { type: boolean }
+        revision: { type: integer }
+    TicketDependency:
+      type: object
+      required: [id, key, title, status]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/TicketStatus' }

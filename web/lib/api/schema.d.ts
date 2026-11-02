@@ -954,6 +954,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/planning-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPlanningSessions"];
+        put?: never;
+        post: operations["startPlanning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/planning-sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getPlanningSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["reviewPlanning"];
+        trace?: never;
+    };
+    "/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProjects"];
+        put?: never;
+        post: operations["createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateProject"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{key}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setTicketDependencies"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -998,6 +1084,10 @@ export interface components {
             key: string;
             name: string;
             color: string;
+            repo_url?: string;
+            default_branch: string;
+            archived: boolean;
+            revision: number;
         };
         Agent: {
             /** Format: uuid */
@@ -1089,6 +1179,7 @@ export interface components {
             /** Format: date */
             due_date?: string;
             pr?: components["schemas"]["PullRequest"];
+            unmet_dependencies: number;
             criteria_total: number;
             criteria_done: number;
             /** Format: date-time */
@@ -1104,6 +1195,9 @@ export interface components {
             project: components["schemas"]["Project"];
             title: string;
             description_md: string;
+            dependency_revision: number;
+            blocked_by: components["schemas"]["TicketDependency"][];
+            blocks: components["schemas"]["TicketDependency"][];
             status: components["schemas"]["TicketStatus"];
             priority: components["schemas"]["Priority"];
             epic?: components["schemas"]["EpicRef"];
@@ -1474,7 +1568,10 @@ export interface components {
         Run: {
             /** Format: uuid */
             id: string;
+            /** @description Empty for standalone planning runs */
             ticket_key: string;
+            /** Format: uuid */
+            planning_id?: string;
             agent: components["schemas"]["AgentRef"];
             /** @enum {string} */
             mode: "managed" | "unmanaged";
@@ -1772,6 +1869,7 @@ export interface components {
             definition_version?: number;
             has_override?: boolean;
             resolved: components["schemas"]["ResolvedDefinition"];
+            base_branch?: string;
             repo_url?: string;
             branch: string;
             setup: string[];
@@ -1789,7 +1887,7 @@ export interface components {
         InboxItem: {
             id: string;
             /** @enum {string} */
-            kind: "approval" | "dispatch" | "mention" | "review" | "blocked" | "suggestion";
+            kind: "approval" | "dispatch" | "mention" | "review" | "blocked" | "suggestion" | "planning";
             title: string;
             summary: string;
             href: string;
@@ -1851,6 +1949,16 @@ export interface components {
             steps_done: number;
             steps_total: number;
         };
+        PlanningWork: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            run_id: string;
+            goal: string;
+            state: string;
+            harness: string;
+            model: string;
+        };
         AgentScopeSummary: {
             scope: string;
             mode: components["schemas"]["ScopeMode"];
@@ -1862,6 +1970,7 @@ export interface components {
             agent: components["schemas"]["Agent"];
             max_concurrency: number;
             harness: string;
+            planning_runs: components["schemas"]["PlanningWork"][];
             assignments: components["schemas"]["AgentWork"][];
             queue: components["schemas"]["WorkTicket"][];
             queue_count: number;
@@ -1934,6 +2043,80 @@ export interface components {
             tool_calls: number;
             /** Format: int64 */
             tokens: number;
+        };
+        TicketProposal: {
+            /** @description Stable unique proposal reference */
+            ref?: string;
+            /** @description References to other proposals */
+            depends_on?: string[];
+            /** @description Existing blocker ticket keys */
+            blocked_by?: string[];
+            title: string;
+            description: string;
+            criteria: string[];
+            /** Format: uuid */
+            agent_id?: string;
+        };
+        PlanningInput: {
+            project: string;
+            /** Format: uuid */
+            agent_id: string;
+            goal: string;
+            /** Format: uuid */
+            epic_id?: string;
+            /** Format: uuid */
+            artifact_id?: string;
+        };
+        PlanningSession: {
+            /** Format: uuid */
+            id: string;
+            project: string;
+            /** Format: uuid */
+            epic_id?: string;
+            /** Format: uuid */
+            artifact_id?: string;
+            /** Format: uuid */
+            source_version_id?: string;
+            goal: string;
+            /** Format: uuid */
+            run_id: string;
+            run_state: string;
+            outcome?: string;
+            harness: string;
+            model: string;
+            /** @enum {string} */
+            state: "planning" | "review" | "accepted" | "dismissed";
+            revision: number;
+            proposals: components["schemas"]["TicketProposal"][];
+            /** @description Created tickets currently ready for manual dispatch */
+            ready_keys: string[];
+            ticket_keys: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        NewProject: {
+            key: string;
+            name: string;
+            color: string;
+            repo_url: string;
+            default_branch: string;
+        };
+        ProjectUpdate: {
+            name: string;
+            color: string;
+            repo_url: string;
+            default_branch: string;
+            archived: boolean;
+            revision: number;
+        };
+        TicketDependency: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            title: string;
+            status: components["schemas"]["TicketStatus"];
         };
     };
     responses: {
@@ -2188,6 +2371,8 @@ export interface operations {
                 view?: "active" | "backlog" | "agent_owned" | "needs_human" | "all";
                 /** @description Restrict to one status (applied within the view) */
                 status?: components["schemas"]["TicketStatus"];
+                /** @description Assigned tickets ready for manual dispatch */
+                ready?: boolean;
                 /** @description Agent handle */
                 assignee?: string;
                 /** @description Label id */
@@ -3517,6 +3702,206 @@ export interface operations {
                     "application/json": {
                         hits: components["schemas"]["SearchHit"][];
                     };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPlanningSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent planning sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningSession"][];
+                };
+            };
+        };
+    };
+    startPlanning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanningInput"];
+            };
+        };
+        responses: {
+            /** @description Approved planning run queued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningSession"];
+                };
+            };
+        };
+    };
+    getPlanningSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Planning session and draft proposals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningSession"];
+                };
+            };
+        };
+    };
+    reviewPlanning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    revision: number;
+                    /** @enum {string} */
+                    action: "save" | "accept" | "dismiss";
+                    proposals: components["schemas"]["TicketProposal"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Draft saved, accepted or dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningSession"];
+                };
+            };
+        };
+    };
+    listProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active and archived workspace projects */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProject"];
+            };
+        };
+        responses: {
+            /** @description Created project */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated project (key is immutable) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setTicketDependencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    revision: number;
+                    blocked_by: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated ticket with dependency relationships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
                 };
             };
             default: components["responses"]["Error"];

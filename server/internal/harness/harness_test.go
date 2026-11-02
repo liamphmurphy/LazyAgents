@@ -174,3 +174,35 @@ func TestAgentsMD(t *testing.T) {
 		t.Fatalf("re-render:\n%s", again)
 	}
 }
+
+func TestPlanningInvocationsAreReadOnly(t *testing.T) {
+	s := spec("repo:write", "denied", "tests:run", "denied")
+	s.HarnessOptions = map[string]string{"permission_mode": "plan", "sandbox": "read-only"}
+	claude, err := (ClaudeCode{}).Invocation(Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}, Turn{Spec: s, Prompt: "Plan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flag(claude.Argv, "--permission-mode") != "plan" {
+		t.Fatal("planning permission mode missing")
+	}
+	allowed := strings.Split(flag(claude.Argv, "--allowedTools"), ",")
+	for _, tool := range []string{"Edit", "Write", "Bash", "Agent"} {
+		if slices.Contains(allowed, tool) {
+			t.Fatalf("planning allowed %s", tool)
+		}
+	}
+	denied := strings.Split(flag(claude.Argv, "--disallowedTools"), ",")
+	for _, tool := range []string{"Edit", "Write", "Bash", "Agent"} {
+		if !slices.Contains(denied, tool) {
+			t.Fatalf("planning did not deny %s", tool)
+		}
+	}
+	codex, err := (Codex{}).Invocation(Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}, Turn{Spec: s, Prompt: "Plan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Join(codex.Argv, " ")
+	if !strings.Contains(args, `sandbox_mode="read-only"`) || strings.Contains(args, "network_access=true") {
+		t.Fatalf("unsafe Codex invocation: %s", args)
+	}
+}

@@ -336,11 +336,14 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 	}
 	var projectID *uuid.UUID
 	if in.ProjectKey != "" || in.Type != "note" {
-		p, err := q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: ws, Key: in.ProjectKey})
+		p, err := q.LockProjectByKey(ctx, store.LockProjectByKeyParams{WorkspaceID: ws, Key: in.ProjectKey})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return a, apperr.Invalid("project_key", "unknown project")
 		} else if err != nil {
 			return a, err
+		}
+		if p.Archived {
+			return a, apperr.Conflict("restore the archived project before creating artifacts")
 		}
 		projectID = &p.ID
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/httpapi"
@@ -144,7 +145,7 @@ func (e env) run(key string) store.Run {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	r, err := e.q.LatestRunForTicket(e.ctx, tk.ID)
+	r, err := e.q.LatestRunForTicket(e.ctx, &tk.ID)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -446,4 +447,169 @@ func TestCodexOverride(t *testing.T) {
 	if tk.Status != "todo" { // the fake hands a denied ticket back
 		t.Fatalf("status %s", tk.Status)
 	}
+}
+
+// Planning uses the same guarded fake binaries as execution tests. It has no
+// ticket, skips repo/setup work, and submits through the real MCP transport.
+func TestPlanningRun(t *testing.T) {
+	for _, harness := range []string{"claude-code", "codex"} {
+		t.Run(harness, func(t *testing.T) {
+			e := setup(t)
+			t.Setenv("FAKE_HARNESS_MODE", "planning")
+			svc := &agents.Service{Pool: e.pool}
+			if err := svc.SetOverride(e.ctx, e.ws, e.me.ID, "atlas", "PAY", agentdef.Override{Harness: harness, Setup: []string{"exit 79"}}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url='https://invalid.example/planning-must-not-clone.git' WHERE key='PAY'"); err != nil {
+				t.Fatal(err)
+			}
+			plan, err := e.runs.StartPlanning(e.ctx, e.ws, e.me.ID, runs.PlanningInput{Project: "PAY", AgentID: e.atlas.ID, Goal: "Plan safely"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			sec := e.runner.Secrets.(*secrets.Service)
+			for _, name := range []string{"git:pat", "db:staging", "harness:anthropic", "harness:openai"} {
+				if _, err := sec.Set(e.ctx, e.ws, e.me.ID, secrets.SetInput{Name: name, Value: "fake-test-value"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			frozen, err := e.q.GetRun(e.ctx, store.GetRunParams{ID: plan.RunID, WorkspaceID: e.ws})
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolved, _ := runs.Spec(frozen)
+			project, _ := e.q.GetProjectByKey(e.ctx, store.GetProjectByKeyParams{WorkspaceID: e.ws, Key: "PAY"})
+			decisions, err := runner.PlanSecrets(e.ctx, e.q, e.ws, &project.ID, resolved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, decision := range decisions {
+				if decision.Injected && !strings.HasPrefix(decision.Name, "harness:") {
+					t.Fatalf("planning injected write credential %s", decision.Name)
+				}
+			}
+			e.until("planning submitted", func() bool {
+				p, err := e.q.GetPlanningSession(e.ctx, store.GetPlanningSessionParams{ID: plan.ID, WorkspaceID: e.ws})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if p.State != "review" {
+					run, _ := e.q.GetRun(e.ctx, store.GetRunParams{ID: p.RunID, WorkspaceID: e.ws})
+					if run.State == "failed" {
+						events, _ := e.q.ListRunEvents(e.ctx, store.ListRunEventsParams{RunID: run.ID})
+						raw, _ := json.Marshal(events)
+						t.Fatalf("planning failed: %v; events %s", deref(run.Outcome), raw)
+					}
+				}
+				return p.State == "review"
+			})
+			run, err := e.q.GetRun(e.ctx, store.GetRunParams{ID: plan.RunID, WorkspaceID: e.ws})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if run.State != "completed" || run.TicketID != nil || run.ToolCalls != 3 || run.HarnessSessionID == nil {
+				t.Fatalf("planning run %+v; events %s", run, e.eventTypes(run.ID))
+			}
+			p, _ := e.q.GetPlanningSession(e.ctx, store.GetPlanningSessionParams{ID: plan.ID, WorkspaceID: e.ws})
+			var proposals []runs.Proposal
+			if err := json.Unmarshal(p.Proposals, &proposals); err != nil {
+				t.Fatal(err)
+			}
+			if len(proposals) != 1 || proposals[0].AgentID == nil || *proposals[0].AgentID != e.atlas.ID {
+				t.Fatalf("MCP proposal corrupted: %s", p.Proposals)
+			}
+			if strings.Contains(e.eventTypes(run.ID), "ToolSearch") {
+				t.Fatal("a real CLI ran")
+			}
+			if _, err := os.Stat(e.runner.Backend.WorkspaceDir(run.ID.String())); !os.IsNotExist(err) {
+				t.Fatal("planning workspace was not cleaned up")
+			}
+			toks, _ := e.q.ListAgentTokens(e.ctx, e.atlas.ID)
+			for _, tok := range toks {
+				if tok.Kind == "run" && tok.RevokedAt == nil {
+					t.Fatal("planning token left active")
+				}
+			}
+		})
+	}
+}
+
+func TestQueuedRunRechecksDependencies(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "complete")
+	blocker, err := e.tr.Create(e.ctx, e.ws, tracker.UserActor(e.me.ID), tracker.NewTicket{ProjectKey: "PAY", Title: "Prerequisite", Status: "done"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := tracker.Get(e.ctx, e.q, e.ws, "PAY-224")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.tr.SetDependencies(e.ctx, e.ws, tracker.UserActor(e.me.ID), tk.Key, tk.DependencyRevision, []string{blocker.Key}); err != nil {
+		t.Fatal(err)
+	}
+	e.dispatch(tk.Key)
+	todo := "todo"
+	if _, err := e.tr.Update(e.ctx, e.ws, tracker.UserActor(e.me.ID), blocker.Key, tracker.Patch{Status: &todo}); err != nil {
+		t.Fatal(err)
+	}
+	e.until("queued dependency rejected", e.state(tk.Key+"=failed"))
+	run := e.run(tk.Key)
+	if run.HarnessSessionID != nil || run.ToolCalls != 0 || !strings.Contains(deref(run.Outcome), blocker.Key) {
+		t.Fatalf("blocked run started a harness: %+v", run)
+	}
+	if strings.Contains(e.eventTypes(run.ID), "harness_started") {
+		t.Fatal("reopened blocker was ignored")
+	}
+}
+
+func TestApprovedRepositoryAndBaseBranchAreFrozen(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "idle")
+	origin := filepath.Join(e.dir, "origin")
+	if err := os.MkdirAll(origin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", origin}, args...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+		return string(out)
+	}
+	git("init", "--quiet", "-b", "main")
+	git("config", "user.name", "Test")
+	git("config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(origin, "main.txt"), []byte("main"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "--quiet", "-m", "main")
+	git("checkout", "--quiet", "-b", "develop")
+	if err := os.WriteFile(filepath.Join(origin, "develop.txt"), []byte("approved develop source"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "--quiet", "-m", "develop")
+	git("checkout", "--quiet", "main")
+	if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url=$1,default_branch='develop' WHERE key='PAY'", origin); err != nil {
+		t.Fatal(err)
+	}
+	e.dispatch("PAY-224")
+	if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url='https://invalid.example/must-not-clone.git',default_branch='main' WHERE key='PAY'"); err != nil {
+		t.Fatal(err)
+	}
+	e.until("approved workspace ready", e.state("PAY-224=running"))
+	run := e.run("PAY-224")
+	root := e.runner.Backend.WorkspaceDir(run.ID.String())
+	content, err := os.ReadFile(filepath.Join(root, "develop.txt"))
+	if err != nil || string(content) != "approved develop source" {
+		t.Fatalf("did not clone approved base: %q %v", content, err)
+	}
+	if _, err := e.runs.SetRunControl(e.ctx, e.ws, e.me.ID, run.ID, "cancel"); err != nil {
+		t.Fatal(err)
+	}
+	e.runner.Sweep(e.ctx)
 }

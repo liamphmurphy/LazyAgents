@@ -25,6 +25,7 @@ RETURNING *;
 SELECT
   t.id, t.key, t.number, t.title, t.status, t.priority, t.due_date, t.estimate,
   t.pr_number, t.pr_state, t.sort_order, t.created_at, t.updated_at,
+  (SELECT count(*) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')::int AS unmet_dependencies,
   p.key AS project_key, p.color AS project_color,
   e.id AS epic_id, e.name AS epic_name,
   a.id AS agent_id, a.name AS agent_name, a.handle AS agent_handle, a.color_index AS agent_color_index,
@@ -35,6 +36,12 @@ JOIN projects p ON p.id = t.project_id
 LEFT JOIN epics e ON e.id = t.epic_id
 LEFT JOIN agents a ON a.id = t.assignee_agent_id
 WHERE t.workspace_id = sqlc.arg(workspace_id)
+  AND (NOT p.archived OR sqlc.narg(project_id)::uuid IS NOT NULL)
+  AND (NOT sqlc.arg(ready)::boolean OR (
+    NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
+    AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
+    AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
+  ))
   AND (NOT sqlc.arg(needs_human)::bool OR t.status='in_review' OR EXISTS (SELECT 1 FROM approval_requests ap WHERE ap.ticket_id=t.id AND ap.state='pending'))
   AND (sqlc.narg(epic_id)::uuid IS NULL OR t.epic_id=sqlc.narg(epic_id))
   AND (sqlc.narg(project_id)::uuid IS NULL OR t.project_id = sqlc.narg(project_id))
@@ -130,8 +137,8 @@ LIMIT 20;
 
 -- name: AgentQueue :many
 -- Tickets assigned to an agent that aren't done, most urgent first.
-SELECT t.key, t.title, t.status, t.priority FROM tickets t
-WHERE t.assignee_agent_id = $1 AND t.status <> 'done'
+SELECT t.key, t.title, t.status, t.priority FROM tickets t JOIN projects p ON p.id=t.project_id
+WHERE NOT p.archived AND t.assignee_agent_id = $1 AND t.status <> 'done'
 ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
   CASE t.status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 ELSE 3 END, t.created_at
 LIMIT 20;

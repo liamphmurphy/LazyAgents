@@ -46,6 +46,7 @@ func (s *Server) ListTickets(ctx context.Context, req api.ListTicketsRequestObje
 
 	params := store.ListTicketsParams{
 		WorkspaceID:    ws,
+		Ready:          deref(p.Ready),
 		Statuses:       statuses,
 		OnlyAgentOwned: view == api.ListTicketsParamsViewAgentOwned,
 		NeedsHuman:     view == api.ListTicketsParamsViewNeedsHuman,
@@ -94,7 +95,7 @@ func (s *Server) ListTickets(ctx context.Context, req api.ListTicketsRequestObje
 	for _, r := range rows {
 		t := api.TicketSummary{
 			Id: r.ID, Key: r.Key, ProjectKey: r.ProjectKey, Title: r.Title,
-			Status: api.TicketStatus(r.Status), Priority: api.Priority(r.Priority),
+			UnmetDependencies: int(r.UnmetDependencies), Status: api.TicketStatus(r.Status), Priority: api.Priority(r.Priority),
 			Labels: labels[r.ID], DueDate: toDate(r.DueDate),
 			Pr:            toPR(r.PrNumber, r.PrState, nil, nil, nil),
 			CriteriaTotal: int(r.CriteriaTotal), CriteriaDone: int(r.CriteriaDone), UpdatedAt: r.UpdatedAt,
@@ -137,6 +138,23 @@ func (s *Server) ticketDetail(ctx context.Context, ws uuid.UUID, t store.Ticket)
 		Estimate: t.Estimate, DueDate: toDate(t.DueDate), Branch: t.Branch,
 		Pr:        withSync(toPR(t.PrNumber, t.PrState, t.PrUrl, t.PrAdditions, t.PrDeletions), t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+	}
+	out.DependencyRevision = int(t.DependencyRevision)
+	out.BlockedBy = []api.TicketDependency{}
+	out.Blocks = []api.TicketDependency{}
+	deps, err := s.Q.TicketDependencies(ctx, t.ID)
+	if err != nil {
+		return out, err
+	}
+	for _, d := range deps {
+		out.BlockedBy = append(out.BlockedBy, api.TicketDependency{Id: d.ID, Key: d.Key, Title: d.Title, Status: api.TicketStatus(d.Status)})
+	}
+	dependents, err := s.Q.TicketDependents(ctx, t.ID)
+	if err != nil {
+		return out, err
+	}
+	for _, d := range dependents {
+		out.Blocks = append(out.Blocks, api.TicketDependency{Id: d.ID, Key: d.Key, Title: d.Title, Status: api.TicketStatus(d.Status)})
 	}
 	if t.EpicID != nil {
 		if e, err := s.Q.GetEpic(ctx, store.GetEpicParams{ID: *t.EpicID, WorkspaceID: ws}); err == nil {

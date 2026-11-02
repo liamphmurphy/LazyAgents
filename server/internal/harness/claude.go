@@ -50,6 +50,10 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		allow = append(allow, "Bash")
 	}
 	var deny []string
+	if spec.HarnessOptions["permission_mode"] == "plan" {
+		allow = []string{"mcp__" + lazyagentsServer, "Read", "Glob", "Grep"}
+		deny = append(deny, "Edit", "Write", "NotebookEdit", "Bash", "Agent")
+	}
 	if denied(spec, "repo:write") {
 		deny = append(deny, "Bash(git push:*)", "Bash(gh pr create:*)")
 	}
