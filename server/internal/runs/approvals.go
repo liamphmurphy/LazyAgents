@@ -229,7 +229,7 @@ func (s *Service) AwaitSignal(ctx context.Context, c Caller, key string, since t
 		run, t, err := s.Active(ctx, q, c, key)
 		if err != nil {
 			// A finished run has no Active; report it as such.
-			return Signal{State: "ended", Cursor: now}, err
+			return Signal{State: "ended", Cursor: since}, err
 		}
 		comments, err := q.HumanCommentsSince(ctx, store.HumanCommentsSinceParams{TicketID: t.ID, CreatedAt: since})
 		if err != nil {
@@ -239,7 +239,21 @@ func (s *Service) AwaitSignal(ctx context.Context, c Caller, key string, since t
 		if err != nil {
 			return Signal{}, err
 		}
-		sig := Signal{State: run.State, WaitReason: deref(run.WaitReason), Comments: comments, Decisions: decided, Cursor: now}
+		// The cursor only advances to timestamps the database wrote. A host
+		// clock would drift from Postgres's (Docker Desktop runs it in a VM)
+		// and a reply stamped just behind it would be skipped forever.
+		cursor := since
+		for _, cm := range comments {
+			if cm.CreatedAt.After(cursor) {
+				cursor = cm.CreatedAt
+			}
+		}
+		for _, ap := range decided {
+			if ap.DecidedAt != nil && ap.DecidedAt.After(cursor) {
+				cursor = *ap.DecidedAt
+			}
+		}
+		sig := Signal{State: run.State, WaitReason: deref(run.WaitReason), Comments: comments, Decisions: decided, Cursor: cursor}
 		changed := len(comments) > 0 || len(decided) > 0 || run.State == "running" || run.State == "cancelled"
 		if changed || now.After(deadline) {
 			return sig, nil

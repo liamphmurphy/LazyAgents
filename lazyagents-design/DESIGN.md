@@ -413,6 +413,19 @@ Every screen uses these patterns rather than a blank page or a spinner.
 
 ---
 
+### Wiki (built in Phase 4.5, no mockup; extends the system above)
+* **Layout:** top bar (Wiki / folder / page), a page tree (~240px, `--bg-sidebar`), the page at reading width, and the usual right panel (~340px, `--bg-panel`).
+* **Tree:** "Pages" by folder, then "Agent memory" with one folder per agent (`agents/<handle>/`). Pages with pending suggestions show an amber mono count; so does the Wiki nav item.
+* **Page:** folder line (tertiary), title (`type-display`), "author · vN · time" meta. A leading `# Title` that repeats the title is hidden. `E` edits.
+* **Editor:** a path field (moving a page keeps its links; the old path still resolves) and a mono textarea. Typing `[[` opens a listbox (float panel) of pages, documents, tickets, epics and agents; ↑↓ moves, ↵/Tab inserts. ⌘S saves silently as a new version; Esc cancels. A 409 shows a red banner.
+* **Links:** accent text with a 12px leading mark for what they point at: a page icon in the doc-type color (new token `--doc-note` for wiki pages, a neutral grey), a status glyph for tickets, a 12px agent square, the epics icon. `[[X#Section]]` reads "X › Section". **Ghost links** (unresolved) are tertiary text with a dashed underline; clicking creates the page and opens the editor.
+* **Suggestions:** an amber card per agent suggestion: avatar, "Sentry suggested an edit", note and time, a line diff (green additions, red struck deletions, unchanged runs folded to "⋯ n unchanged lines"), then Reject (approve-outline) and Accept (approve). A stale suggestion says so.
+* **Right panel:** Local graph (radial SVG: centre, direct links on an inner ring, second hops outside; node color = doc type, ticket state or agent hue; nodes are links), Backlinks (linked mentions with snippets and cited sections, then unlinked mentions with "Link it"), Outline with citations, Read by, History.
+* **Home:** search (matches highlighted with the amber pill tint), suggestions, recently updated, agent memory shortcuts, vault import/export.
+* **Elsewhere:** a Backlinks section on artifact detail and in the ticket panel; a "Wiki pages" tab on Artifacts; a Memory card (on/off, inject Index/Linked/Search, token budget) on the agent definition.
+
+---
+
 ## 6. Interaction and accessibility notes
 
 * Use real elements: `<a href>` for navigation and rows that open something, `<button>` for actions, `<input>`/`<textarea>` with labels. Never put click handlers on divs.
@@ -451,5 +464,6 @@ The UI implies these entities. They're a starting point, not a schema decision.
 * Settings pages other than Connections & secrets (General, Members, Projects & repos, Runner). Build them from the same cards, form controls and tables.
 * The Overview, Runs and Tokens tabs of an agent, and the project-override editor. Reuse the Definition cards and show only overridable fields.
 * The logo. The sidebar and Foundations still use the placeholder mark.
+* The workspace-wide wiki graph view (only the local graph exists).
 
 Extend the system above for these rather than inventing new patterns.

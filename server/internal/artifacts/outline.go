@@ -4,7 +4,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
+
+	"github.com/liamphmurphy/lazyagents/server/internal/links"
 )
 
 // Section is one markdown heading, in document order.
@@ -105,27 +106,8 @@ func stripInline(s string) string {
 	})
 }
 
-// Slug lowercases, keeps letters and digits, and joins the rest with single
-// hyphens: "§4.2 Partition by month" → "4-2-partition-by-month".
-func Slug(s string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(s) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			if dash && b.Len() > 0 {
-				b.WriteByte('-')
-			}
-			b.WriteRune(r)
-			dash = false
-		} else {
-			dash = true
-		}
-	}
-	if b.Len() == 0 {
-		return "section"
-	}
-	return b.String()
-}
+// Slug is links.Slug: "§4.2 Partition by month" → "4-2-partition-by-month".
+func Slug(s string) string { return links.Slug(s) }
 
 // PlainText is the searchable text of a markdown body: markup characters
 // removed, link text kept. Good enough for tsvector input.

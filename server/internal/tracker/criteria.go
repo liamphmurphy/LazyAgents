@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/links"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
@@ -127,6 +128,9 @@ func (s *Service) Comment(ctx context.Context, ws uuid.UUID, actor Actor, key st
 			AuthorType: actor.Type, AuthorID: *actor.ID, BodyMd: body,
 		})
 		if err != nil {
+			return err
+		}
+		if err := links.Index(ctx, q, ws, links.Source{Kind: links.SourceComment, ID: c.ID, TicketID: &t.ID}, c.BodyMd); err != nil {
 			return err
 		}
 		payload := map[string]any{"comment_id": c.ID, "body_md": c.BodyMd}

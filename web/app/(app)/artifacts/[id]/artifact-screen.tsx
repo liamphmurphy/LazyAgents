@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { contentUrl, type Artifact } from "@/lib/api/client";
 import { useArtifact, useUpdateArtifact } from "@/lib/api/hooks";
@@ -14,9 +15,11 @@ import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitiv
 import { AgentAvatar } from "@/components/domain/avatars";
 import { artifactTitle } from "@/components/domain/artifacts";
 import { NewVersionDialog } from "@/components/domain/artifact-dialogs";
+import { BacklinksPanel } from "@/components/domain/backlinks";
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { DocTypeTag } from "@/components/domain/labels";
 import { Markdown } from "@/components/domain/markdown";
+import { wikiHref } from "@/lib/wikilinks";
 import { TopBar } from "@/components/shell/topbar";
 
 /** Body of an older version, fetched as raw text. */
@@ -89,6 +92,14 @@ export function ArtifactScreen({ id }: { id: string }) {
   const viewing = a?.versions.find((v) => v.id === versionId) ?? a?.current_version;
   const old = useVersionBody(a, versionId);
   const isOld = !!a && !!viewing && viewing.id !== a.current_version.id;
+  const router = useRouter();
+  const search = useSearchParams();
+
+  // Wiki pages live at /wiki/<path>; this screen still serves their full
+  // version history (?versions=1).
+  useEffect(() => {
+    if (a?.type === "note" && a.path && !search.get("versions")) router.replace(wikiHref(a.path));
+  }, [a?.type, a?.path, search, router]);
 
   // Jump to #anchor once the body has rendered.
   useEffect(() => {
@@ -119,7 +130,13 @@ export function ArtifactScreen({ id }: { id: string }) {
       <TopBar
         crumbs={
           a
-            ? [{ label: a.project.name, swatch: a.project.color }, { label: "Artifacts", href: "/artifacts" }, { label: artifactTitle(a) }]
+            ? [
+                ...(a.project ? [{ label: a.project.name, swatch: a.project.color }] : []),
+                a.type === "note" && a.path
+                  ? { label: "Wiki", href: wikiHref(a.path) }
+                  : { label: "Artifacts", href: "/artifacts" },
+                { label: artifactTitle(a) },
+              ]
             : [{ label: "Artifacts", href: "/artifacts" }, { label: "…" }]
         }
         actions={
@@ -206,6 +223,11 @@ export function ArtifactScreen({ id }: { id: string }) {
               ) : (
                 <p className="text-xs text-fg-tertiary">No agent has read this yet.</p>
               )}
+            </section>
+
+            <section className="flex flex-col gap-2">
+              <h2 className="text-[12.5px] text-fg-tertiary">Backlinks</h2>
+              <BacklinksPanel kind="artifact" id={a.id} />
             </section>
 
             <section className="flex flex-col gap-1">

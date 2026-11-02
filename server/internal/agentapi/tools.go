@@ -7,24 +7,28 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
 )
 
 type Deps struct {
 	Q       *store.Queries
 	Runs    *runs.Service
 	Tracker *tracker.Service
+	Wiki    *wiki.Service
 }
 
 // Tool is one Agent API operation, independent of transport.
@@ -104,10 +108,23 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 	for _, s := range spec.Scopes {
 		scopes[s.Scope] = string(s.Mode)
 	}
+	// Wiki memory this run starts with (PLAN.md §12.3); delivered pages
+	// count as one read each.
+	memory := []wiki.ContextPage{}
+	if t, err := d.Q.GetTicketByID(ctx, run.TicketID); err == nil {
+		if memory, err = wiki.RunContext(ctx, d.Q, c.Agent, t, spec.Memory); err != nil {
+			return nil, err
+		}
+		if err := wiki.RecordContextReads(ctx, d.Q, c.Agent.WorkspaceID, c.Agent.ID, &run.ID, memory); err != nil {
+			return nil, err
+		}
+	}
 	return map[string]any{
 		"run_id": run.ID, "ticket": strings.ToUpper(in.Ticket), "state": run.State, "scopes": scopes,
 		"instructions": spec.Instructions,
-		"next":         "Call get_ticket, read the attached artifacts with read_artifact, then post_plan before editing.",
+		"memory":       memory,
+		"next": "Read memory first: it's what you and others learned before. Call get_ticket, read the attached artifacts with read_artifact, then post_plan before editing. " +
+			"When you learn something worth remembering, write_note under " + wiki.MemoryRoot(c.Agent.Handle) + " and link it with [[…]] to the tickets and documents it's about.",
 	}, nil
 }
 
@@ -321,6 +338,181 @@ type CompleteIn struct {
 	Status  string `json:"status,omitempty" jsonschema:"in_review (default), done, or todo to hand the ticket back"`
 }
 
+type SearchIn struct {
+	Q       string   `json:"q" jsonschema:"What to look for; web-search syntax (quotes, OR, -word)"`
+	Kinds   []string `json:"kinds,omitempty" jsonschema:"Limit to note, prd, spec, adr, report, design or ticket"`
+	Project string   `json:"project,omitempty" jsonschema:"Project key; notes without a project always match"`
+	Limit   int      `json:"limit,omitempty" jsonschema:"Up to 50, default 10"`
+}
+
+type PageIn struct {
+	TicketArg
+	Ref     string `json:"ref" jsonschema:"A page title or path, ADR-012, an artifact id, or [[Page#Section]]"`
+	Section string `json:"section,omitempty" jsonschema:"Optional heading (or its anchor) to read just that section"`
+}
+
+type WriteNoteIn struct {
+	TicketArg
+	Path string `json:"path" jsonschema:"Page path, e.g. agents/atlas/Partition gotchas (your memory) or Payments/Rollback runbook (shared)"`
+	Body string `json:"body" jsonschema:"Markdown. Link what it's about with [[PAY-214]], [[ADR-012]], [[Page title]] or [[Page#Section]]."`
+	Mode string `json:"mode,omitempty" jsonschema:"create, replace (default) or append"`
+	Note string `json:"note,omitempty" jsonschema:"One line on what changed"`
+}
+
+type BacklinksIn struct {
+	Ref string `json:"ref" jsonschema:"A page title or path, ADR-012, PAY-214, an epic name, @handle or an artifact id"`
+}
+
+// scopesFor is the caller's scope map: the live run's frozen definition if
+// there is one, else the agent's current definition.
+func scopesFor(ctx context.Context, d Deps, c agents.Caller, ticket string) (map[string]agentdef.Mode, *uuid.UUID, error) {
+	out := map[string]agentdef.Mode{}
+	if run, _, err := d.Runs.Active(ctx, d.Q, c, ticket); err == nil {
+		spec, err := runs.Spec(run)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, s := range spec.Scopes {
+			out[s.Scope] = s.Mode
+		}
+		return out, &run.ID, nil
+	}
+	spec, _, err := agents.CurrentSpec(ctx, d.Q, c.Agent)
+	if err != nil {
+		return nil, nil, err
+	}
+	return spec.Scopes, nil, nil
+}
+
+func searchKnowledge(ctx context.Context, d Deps, c agents.Caller, in SearchIn) (any, error) {
+	if strings.TrimSpace(in.Q) == "" {
+		return nil, apperr.Invalid("q", "is required")
+	}
+	var project *uuid.UUID
+	if in.Project != "" {
+		p, err := d.Q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: c.Agent.WorkspaceID, Key: strings.ToUpper(in.Project)})
+		if err != nil {
+			return nil, apperr.Invalid("project", "no project %s", in.Project)
+		}
+		project = &p.ID
+	}
+	hits, err := wiki.Search(ctx, d.Q, c.Agent.WorkspaceID, in.Q, in.Kinds, project, in.Limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, len(hits))
+	for i, h := range hits {
+		out[i] = map[string]any{"ref": wiki.LinkText(h.Target), "kind": h.Kind, "type": h.ArtifactType, "title": h.Title, "snippet": h.Snippet}
+	}
+	return map[string]any{"results": out, "hint": "Open one with read_page(ref)."}, nil
+}
+
+func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, error) {
+	ws := c.Agent.WorkspaceID
+	ref, t, err := wiki.LookupRef(ctx, d.Q, ws, in.Ref)
+	if err != nil {
+		return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
+	}
+	if ref.Kind == "ticket" {
+		return nil, apperr.Invalid("ref", "%s is a ticket: use get_ticket", t.DisplayID)
+	}
+	if ref.Kind != "artifact" {
+		return map[string]any{"kind": ref.Kind, "title": t.Title, "message": "Not a page. get_backlinks shows what links to it."}, nil
+	}
+	a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws})
+	if err != nil {
+		return nil, err
+	}
+	if a.CurrentVersionID == nil {
+		return nil, apperr.Invalid("ref", "%q is only a suggestion so far", in.Ref)
+	}
+	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
+	if err != nil {
+		return nil, err
+	}
+	if v.BodyMd == nil {
+		return nil, apperr.Invalid("ref", "%s is a %s file, not text", a.Title, v.ContentType)
+	}
+	body := *v.BodyMd
+	anchor := t.Anchor
+	if in.Section != "" {
+		anchor = artifacts.Slug(in.Section)
+	}
+	if anchor != "" {
+		sec, ok := artifacts.SectionText(body, anchor)
+		if !ok {
+			return nil, apperr.Invalid("section", "no section %q; read the page without section to see its outline", anchor)
+		}
+		body = sec
+	}
+	var runID *uuid.UUID
+	if run, _, err := d.Runs.Active(ctx, d.Q, c, in.Ticket); err == nil {
+		runID = &run.ID
+	}
+	if err := artifacts.RecordRead(ctx, d.Q, a, c.Agent.ID, runID, anchor, nil); err != nil {
+		return nil, err
+	}
+	outline := []map[string]any{}
+	for _, s := range artifacts.Outline(*v.BodyMd) {
+		outline = append(outline, map[string]any{"level": s.Level, "heading": s.Heading, "anchor": s.Anchor})
+	}
+	ls, err := d.Q.LinksFromSource(ctx, store.LinksFromSourceParams{SourceKind: "artifact", SourceID: a.ID})
+	if err != nil {
+		return nil, err
+	}
+	linksOut := []string{}
+	for _, l := range ls {
+		if !slices.Contains(linksOut, l.RawText) {
+			linksOut = append(linksOut, l.RawText)
+		}
+	}
+	out := map[string]any{"title": a.Title, "type": a.Type, "version": v.Label, "markdown": body, "outline": outline, "links": linksOut}
+	if a.Path != nil {
+		out["path"] = *a.Path
+	}
+	if t.DisplayID != "" {
+		out["display_id"] = t.DisplayID
+	}
+	return out, nil
+}
+
+func writeNote(ctx context.Context, d Deps, c agents.Caller, in WriteNoteIn) (any, error) {
+	scopes, _, err := scopesFor(ctx, d, c, in.Ticket)
+	if err != nil {
+		return nil, err
+	}
+	res, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: in.Path, Body: in.Body, Mode: in.Mode, Note: in.Note})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"path": *res.Note.Path, "state": res.State, "created": res.Created}
+	if res.State == "suggested" {
+		out["message"] = "Saved as a suggestion: a person will accept or reject it. Your own memory (" + wiki.MemoryRoot(c.Agent.Handle) + ") is always writable."
+	}
+	return ok(out), nil
+}
+
+func getBacklinks(ctx context.Context, d Deps, c agents.Caller, in BacklinksIn) (any, error) {
+	ws := c.Agent.WorkspaceID
+	ref, t, err := wiki.LookupRef(ctx, d.Q, ws, in.Ref)
+	if err != nil {
+		return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
+	}
+	bl, err := wiki.Backlinks(ctx, d.Q, ws, ref)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, len(bl))
+	for i, m := range bl {
+		r := map[string]any{"ref": wiki.LinkText(m.Source), "kind": m.Source.Kind, "title": m.Source.Title, "snippets": m.Snippets}
+		if len(m.Anchors) > 0 {
+			r["cites_sections"] = m.Anchors
+		}
+		out[i] = r
+	}
+	return map[string]any{"target": t.Title, "linked_from": out}, nil
+}
+
 func timeoutOf(s int) time.Duration { return time.Duration(s) * time.Second }
 
 func parseUUID(field, s string) (uuid.UUID, error) {
@@ -493,6 +685,10 @@ var Tools = []Tool{
 			return map[string]any{"run_state": sig.State, "wait_reason": sig.WaitReason, "comments": comments, "decisions": decisions,
 				"cursor": sig.Cursor.Format(time.RFC3339Nano)}, nil
 		}),
+	define("search_knowledge", "Search the wiki, agent memory, documents and tickets. Well-linked pages rank higher.", searchKnowledge),
+	define("read_page", "Read a wiki page or any document by title, path, ADR id or [[Page#Section]]. Lists the page's outgoing [[links]]; reads count as citations.", readPage),
+	define("write_note", "Write a wiki note. Your memory (agents/<your handle>/…) is always writable; other pages follow your wiki:write scope (allowed edits directly, requires_approval saves a suggestion). Link what it's about with [[…]].", writeNote),
+	define("get_backlinks", "What links to a page, document, ticket, epic or agent, with the sentence around each link.", getBacklinks),
 	define("complete_run", "Finish the run: the ticket moves to In Review (or done/todo).",
 		func(ctx context.Context, d Deps, c agents.Caller, in CompleteIn) (any, error) {
 			return ok(nil), d.Runs.Complete(ctx, c, in.Ticket, in.Outcome, in.Status)

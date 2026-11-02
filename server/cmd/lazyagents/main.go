@@ -30,6 +30,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/seed"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
 )
 
 func main() {
@@ -135,6 +136,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Agents:         &agents.Service{Pool: pool},
 		Secrets:        secretsSvc,
 		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc},
+		Wiki:           &wiki.Service{Pool: pool, Artifacts: arts, Tracker: trackerSvc},
 		PublicURL:      cfg.PublicURL,
 		Blobs:          blobs,
 		ArtifactBucket: cfg.S3.ArtifactBucket,

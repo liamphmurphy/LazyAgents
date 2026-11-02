@@ -2,20 +2,20 @@
 
 Read `PLAN.md` first for architecture and phases, then `lazyagents-design/DESIGN.md`, which is the visual source of truth.
 
-Phases 0–1 were committed by the user as `072484f initial work` on `main`. The Phase 2 work is uncommitted in the working tree. Ask the user before committing.
+Phases 0–4 are committed on `main` (latest: `d61039b add agent creation`). Phase 4.5 is uncommitted in the working tree. Ask the user before committing.
 
 ## Status
 
 | Phase | State |
 |---|---|
-| 0 Scaffold | ✅ Done, but **`docker compose up` has never run**: Docker isn't installed on this machine. Run it first (or ask the user to). Likely trouble spots: the SeaweedFS healthcheck command, distroless permissions, the Next standalone build inside Docker (it needs network for Google Fonts). |
+| 0 Scaffold | ✅ Done. `docker compose up --build` verified on 2026-11-02: all five services healthy, demo seeded, pages served through Caddy on :8080. |
 | 1 Design system and shell | ✅ Done |
 | 2 Core tracker | ✅ Done (deferred items are listed below) |
 | 3 Artifacts | ✅ Done |
 | 4 Agent definitions and Agent API | ✅ Done (see "Phase 4 progress") |
-| 4.5 / 5 | **Next.** Suggested order: Phase 5 (runner) before 4.5 (wiki), since managed runs make the wiki's agent memory useful. Ask the user. |
-| 4.5 Wiki and agent memory | Planned (PLAN §12, added at the user's request) |
-| 5–8 | Not started |
+| 4.5 Wiki and agent memory | ✅ Done (the user chose it before Phase 5; see "Phase 4.5: what shipped") |
+| 5 Runner and harness adapters | **Next** |
+| 6–8 | Not started |
 
 ## What exists
 
@@ -263,6 +263,98 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
 - **Phase 5:** the run log viewer (`GET /runs/{id}` exists; no UI yet); managed runs, dispatch and the runner; turn-based harness resume.
 - **Phase 6:** Inbox, SSE.
 - **Phase 7:** the agent Overview/Runs tabs.
+
+## Phase 4.5: what shipped
+
+**Server**
+- **Schema (`00009_wiki.sql`):**
+  - `artifacts.type` gains `note`. Notes have `path` (unique per workspace, case-insensitive), and `project_id` is now nullable for notes only.
+  - `artifact_aliases` keeps old paths of moved pages.
+  - `artifact_versions.state` (`published|suggested|rejected`) plus `based_on_version_id` and `decided_by/at`.
+  - `knowledge_links`: one row per `[[link]]` in current content. Source kinds: artifact, ticket, comment. Targets: artifact, section, ticket, epic, agent, or unresolved.
+- **`internal/links`** (below artifacts and tracker, so both can index):
+  - `Parse` skips code fences and spans and reads `\|` in tables. `web/lib/wikilinks.ts` mirrors it.
+  - `Resolve` order: `@handle` → `ADR-NNN` → ticket key → note path → note title (shortest path wins) → other artifact title → epic name → alias. A note that's only a suggestion doesn't resolve.
+  - `Index` replaces a source's links in the same transaction as the save. `ResolvePending` re-resolves every ghost after anything nameable is created.
+  - `Slug` moved here; `artifacts.Slug` delegates.
+- **Where links are indexed:**
+  - artifact versions, but only published ones (`artifacts.writeVersion`/`makeCurrent`);
+  - ticket create and description edits;
+  - comments.
+- **`internal/wiki`:**
+  - `notes.go`: `SaveAsUser` publishes silently. `AgentWrite` applies §12.5 through `Decide`:
+    - the agent's own `agents/<handle>/` is always direct;
+    - another agent's namespace is refused;
+    - other pages follow `wiki:write`, and **unset means suggest**.
+  - Agent writes to its own namespace are listed on `agents/<handle>/Memory`, which is created on first write.
+  - `DecideSuggestion`: accepting relabels the version `vN` and publishes it. Rejecting the only suggestion of a new page deletes the page.
+  - `Rename` adds an alias. Saving to an old path follows the alias; `mode: create` takes the path over instead.
+  - `backlinks.go`: `Backlinks` gives one entry per source with snippets and cited anchors. `UnlinkedMentions` uses FTS or ILIKE candidates, then a boundary-checked match outside code and links. `LinkMention` rewrites the first mention (a new version, or a description patch). `LookupRef` handles refs typed by agents.
+  - `graph.go`: `LocalGraph` (BFS, ≤60 nodes; comment links count as their ticket's), `Search` (`ts_rank` × (1 + ln(1 + backlinks))), `Autocomplete`, `LinkText`.
+  - `memory.go`: `RunContext` returns, in order:
+    1. the Memory index;
+    2. notes linked from the ticket, its comments and its attached artifacts;
+    3. notes linking to the ticket or its artifacts, the agent's own first;
+    4. with inject `search`, note hits for the ticket title.
+
+    It's trimmed to `max_tokens` (about 4 bytes a token). `RecordContextReads` counts each delivered page as one read.
+  - `vault.go`: export and import as a zip with frontmatter. Import is one transaction; `project` frontmatter applies to new pages.
+- **Agent definitions:** `spec.memory {enabled, inject: index|linked|search, max_tokens}` (pointer; nil means the default linked/4000), carried into `Resolved.Memory`. `wiki:write` is `APIOnly` in the catalog, so it's always "brokered" (mirrored in `web/lib/enforcement.ts`).
+- **Agent API:**
+  - New tools: `search_knowledge`, `read_page` (records reads and section citations; lists outgoing links), `write_note`, `get_backlinks`.
+  - `claim_ticket` returns `memory` pages and a hint to write notes.
+- **REST:**
+  - `/wiki/pages` (GET tree, POST create), `/wiki/page?path=`, `PUT /wiki/pages/{id}` (body and/or path, `base_version_id` → 409 when stale), `/wiki/suggestions` (list, and `/{versionId}/{accept|reject}`), `/wiki/export`, `/wiki/import`.
+  - `/knowledge/resolve|suggest|backlinks|link-mention|graph|search`.
+  - Bootstrap `counts.wiki_suggestions`, which also adds to `inbox`.
+  - `ListArtifacts` "All" excludes notes; there's a `note` count.
+- **Seed:** three team pages, Atlas's memory note and index, ADR-012 attached to PAY-224, and a pending Sentry suggestion on the runbook.
+- **Fix found along the way:** `await_signal` built its cursor from host time but compared it to Postgres timestamps. On Docker Desktop the DB clock lags by milliseconds, so replies were skipped (`TestRunLifecycle` failed at HEAD too). Cursors now advance only to DB timestamps the agent was given. A comment from a transaction that started before the last seen timestamp but committed after it can still be missed (rare; fix with a sequence column like `activity_events.seq` if it matters).
+- **Tests:**
+  - `links/parse_test.go`;
+  - `wiki/wiki_test.go`: ghosts, rename and aliases, ticket and comment links, unlinked mentions and link-it, the permission matrix and suggestions, `RunContext` (including the exit scenario, budget, index-only, disabled, search), graph, search, autocomplete, vault round trip;
+  - `httpapi/agentapi_test.go` drives the four tools over real MCP.
+
+**Web**
+- **Wiki links:** `lib/wikilinks.ts` rewrites `[[…]]` into `wikilink:` links before react-markdown, and `Markdown` resolves them in one `/knowledge/resolve` call per body, so links render in descriptions, comments, artifacts and pages. `Markdown` is now a client component.
+- **`components/domain`:**
+  - `wikilink.tsx`: `WikiLink`, ghost links that create the page, and `TargetMark`;
+  - `link-editor.tsx`: textarea with `[[` autocomplete;
+  - `backlinks.tsx`;
+  - `local-graph.tsx`.
+- **`/wiki` and `/wiki/[...path]`** (`app/(app)/wiki/_components`): page tree with Agent memory, page view (E to edit, ⌘S to save, path rename), suggestion cards with a folded line diff (`lib/diff.ts`), right panel (graph, backlinks, outline, read by, history), and home (search, suggestions, recent pages, memory, import/export). New-page dialog.
+- **Elsewhere:**
+  - Backlinks on artifact detail and the ticket panel.
+  - The Artifacts "Wiki pages" tab.
+  - `/artifacts/{note id}` redirects to the wiki unless `?versions=1`.
+  - A Memory card on the agent definition.
+  - Wiki nav item with an amber suggestions count.
+  - Icons `wiki` and `graph`; token `--doc-note`.
+- **Verified in a browser (Playwright, 1440 and 390px, no console errors, no overflow):**
+  - tree navigation and link rendering;
+  - accepting a suggestion;
+  - a ghost click creating a page, then `[[PAY-2` autocomplete and ⌘S;
+  - the ghost resolving on the source page;
+  - rename and old-path redirect;
+  - ADR-012 backlinks and unlinked mentions;
+  - comment links and ghosts;
+  - the Notes tab and the Memory card.
+- **Exit demo, run live:** the fake agent on PAY-214 writes memory; claiming PAY-224 returns `agents/atlas/Partition rollback gotchas` ("Links to ADR-012"), recorded as reads.
+
+**Deferred (wiki)**
+- `#tags`, rendering embeds (`![[…]]` currently renders as a link), rewriting link text when a page moves (aliases cover resolution), and the workspace graph view.
+- Deleting pages. Suggestions show on the page and the wiki home; the Inbox (Phase 6) should list them too.
+- ⌘K page search (Phase 6). The API is `/knowledge/search`.
+- The runner (Phase 5) should write `RunContext` pages to `.lazyagents/context/` and list them in `AGENTS.md` (§12.3). The function is ready; `claim_ticket` already uses it.
+- Open questions §11 (2)–(4) still stand. Implemented defaults: suggestions, no embeddings, zip import/export.
+
+## Local test setup with Docker (this session)
+
+- `docker compose -f docker-compose.dev.yml up -d --wait` gives Postgres on 5432 and S3 on 8333.
+- Tests: `TEST_DATABASE_URL=postgres://lazyagents:lazyagents@127.0.0.1:5432/lazyagents?sslmode=disable go test ./...`.
+- sqlc came from `nix build nixpkgs#sqlc`.
+- The dev `lazyagents` database already held a workspace from an earlier session, so the demo used scratch databases `la_wiki_demo` and `la_staging_demo`. Drop them when you're done.
+- Playwright still lives in the old scratchpad (`…/e3bd4d0c-…/scratchpad/pw`, `PLAYWRIGHT_BROWSERS_PATH=$P/browsers`). `wiki.js` there is this phase's walkthrough.
 
 ## Decisions to keep (PLAN.md §11)
 

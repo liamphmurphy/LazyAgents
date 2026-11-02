@@ -58,6 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           workspace={data.workspace.name}
           inboxCount={data.counts.inbox}
           liveAgents={data.counts.live_agents}
+          wikiSuggestions={data.counts.wiki_suggestions}
           projects={data.projects}
           user={{ name: data.me.name, initials: data.me.initials, role: data.me.role_title }}
         />

@@ -26,6 +26,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
 )
 
 // Pinger is anything the health endpoint can check.
@@ -45,6 +46,7 @@ type Server struct {
 	Agents    *agents.Service
 	Secrets   *secrets.Service
 	Runs      *runs.Service
+	Wiki      *wiki.Service
 	// PublicURL is how agents reach this server (the /mcp link shown with tokens).
 	PublicURL      string
 	Blobs          *blob.Store
@@ -73,7 +75,7 @@ func (s *Server) Handler() http.Handler {
 		},
 	})
 	// Agent API (PLAN.md §5.2): bearer agent tokens, not the local user.
-	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker}
+	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker, Wiki: s.Wiki}
 	mux.Handle("/mcp", agentapi.MCPHandler(deps, s.Version, s.Log))
 	mux.Handle("/api/v1/agent/", agentapi.RESTHandler(deps))
 	return requestLog(s.Log, s.localUser(mux))

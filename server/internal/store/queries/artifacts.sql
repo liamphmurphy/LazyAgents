@@ -1,6 +1,6 @@
 -- name: CreateArtifact :one
-INSERT INTO artifacts (workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO artifacts (workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, path)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: NextADRNumber :one
@@ -26,8 +26,8 @@ UPDATE artifacts SET current_version_id = $2, search_text = $3, summary = $4 WHE
 UPDATE artifacts SET title = $2, summary = $3, epic_id = $4 WHERE id = $1 RETURNING *;
 
 -- name: CreateArtifactVersion :one
-INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id)
-VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id)
+VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING *;
 
 -- name: GetArtifactVersion :one
@@ -36,7 +36,10 @@ WHERE v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3;
 
 -- name: ListArtifactVersions :many
 SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at
-FROM artifact_versions WHERE artifact_id = $1 ORDER BY seq DESC;
+FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' ORDER BY seq DESC;
+
+-- name: CountPublishedVersions :one
+SELECT count(*)::int FROM artifact_versions WHERE artifact_id = $1 AND state = 'published';
 
 -- name: InsertSection :exec
 INSERT INTO artifact_sections (version_id, position, level, anchor, heading) VALUES ($1, $2, $3, $4, $5);
@@ -70,7 +73,7 @@ GROUP BY a.id ORDER BY max(r.read_at) DESC;
 
 -- name: ListArtifacts :many
 SELECT
-  ar.id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.updated_at, ar.created_at,
+  ar.id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.updated_at, ar.created_at, ar.path,
   p.key AS project_key, p.name AS project_name, p.color AS project_color,
   e.id AS epic_id, e.name AS epic_name,
   v.label AS version_label, v.seq AS version_seq, v.content_type, v.size_bytes, v.filename,
@@ -78,11 +81,12 @@ SELECT
   (SELECT count(*) FROM artifact_sections s WHERE s.version_id = v.id)::int AS section_count,
   (SELECT count(*) FROM ticket_artifacts ta WHERE ta.artifact_id = ar.id)::int AS ticket_count
 FROM artifacts ar
-JOIN projects p ON p.id = ar.project_id
+LEFT JOIN projects p ON p.id = ar.project_id
 LEFT JOIN epics e ON e.id = ar.epic_id
-LEFT JOIN artifact_versions v ON v.id = ar.current_version_id
+JOIN artifact_versions v ON v.id = ar.current_version_id
 WHERE ar.workspace_id = sqlc.arg(workspace_id)
-  AND (sqlc.narg(type)::text IS NULL OR ar.type = sqlc.narg(type))
+  -- Notes have their own tab and stay out of "All".
+  AND (CASE WHEN sqlc.narg(type)::text IS NULL THEN ar.type <> 'note' ELSE ar.type = sqlc.narg(type) END)
   AND (sqlc.narg(project_id)::uuid IS NULL OR ar.project_id = sqlc.narg(project_id))
   AND (sqlc.narg(q)::text IS NULL
        OR ar.search @@ websearch_to_tsquery('english', sqlc.narg(q))
@@ -92,7 +96,7 @@ LIMIT 500;
 
 -- name: CountArtifactsByType :many
 SELECT type, count(*)::int AS n FROM artifacts
-WHERE workspace_id = sqlc.arg(workspace_id)
+WHERE workspace_id = sqlc.arg(workspace_id) AND current_version_id IS NOT NULL
   AND (sqlc.narg(project_id)::uuid IS NULL OR project_id = sqlc.narg(project_id))
   AND (sqlc.narg(q)::text IS NULL
        OR search @@ websearch_to_tsquery('english', sqlc.narg(q))

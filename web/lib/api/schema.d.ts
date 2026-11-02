@@ -535,6 +535,233 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wiki/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every wiki page (the page tree), with pending suggestion counts */
+        get: operations["listWikiPages"];
+        put?: never;
+        /** Create a page at a path */
+        post: operations["createWikiPage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page by path (or a renamed page's old path) */
+        get: operations["getWikiPage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/pages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Save a page's body (a new version, silently) and/or move it to a new path */
+        put: operations["saveWikiPage"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agent edits waiting for a person, oldest first */
+        get: operations["listWikiSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/suggestions/{versionId}/{decision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                versionId: string;
+                decision: "accept" | "reject";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept (publish as the next version) or reject a suggestion */
+        post: operations["decideWikiSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every page as an Obsidian-compatible vault (zip of markdown files) */
+        get: operations["exportWiki"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import a vault zip; each .md file creates or replaces the page at its path */
+        post: operations["importWiki"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve [[link]] texts to what they point at (for rendering) */
+        get: operations["resolveLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** [[ autocomplete over pages, artifacts, tickets, epics and agents */
+        get: operations["suggestLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge/backlinks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Linked and unlinked mentions of an artifact, ticket, epic or agent */
+        get: operations["getBacklinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge/link-mention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn the first unlinked mention of a target in a source into a [[link]] */
+        post: operations["linkMention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The local link graph around a node (1–2 hops, both directions) */
+        get: operations["getGraph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Full-text search over pages, artifacts and tickets, boosted by links */
+        get: operations["searchKnowledge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -617,6 +844,7 @@ export interface components {
             labels: components["schemas"]["Label"][];
             counts: {
                 inbox: number;
+                wiki_suggestions: number;
                 live_agents: number;
             };
         };
@@ -753,7 +981,7 @@ export interface components {
             attach_artifact_id?: string;
         };
         /** @enum {string} */
-        ArtifactType: "prd" | "spec" | "adr" | "report" | "design";
+        ArtifactType: "prd" | "spec" | "adr" | "report" | "design" | "note";
         /** @enum {string} */
         ArtifactRelation: "context" | "generated";
         ArtifactContent: {
@@ -774,7 +1002,9 @@ export interface components {
             /** @description ADR-012; set for numbered types */
             display_id?: string;
             summary: string;
-            project: components["schemas"]["Project"];
+            project?: components["schemas"]["Project"];
+            /** @description Notes only */
+            path?: string;
             epic?: components["schemas"]["EpicRef"];
             author: components["schemas"]["Actor"];
             version_label?: string;
@@ -784,7 +1014,9 @@ export interface components {
             updated_at: string;
         };
         ArtifactCounts: {
+            /** @description Everything except notes */
             all: number;
+            note: number;
             prd: number;
             spec: number;
             adr: number;
@@ -834,7 +1066,11 @@ export interface components {
             title: string;
             display_id?: string;
             summary: string;
-            project: components["schemas"]["Project"];
+            project?: components["schemas"]["Project"];
+            /** @description Notes: Payments/Ledger/Rollback runbook */
+            path?: string;
+            /** @description Pending agent suggestions (notes) */
+            suggestions: number;
             epic?: components["schemas"]["EpicRef"];
             author: components["schemas"]["Actor"];
             current_version: components["schemas"]["ArtifactVersion"];
@@ -910,6 +1146,7 @@ export interface components {
                     [key: string]: string;
                 };
             };
+            memory?: components["schemas"]["AgentMemory"];
         };
         AgentOverride: {
             harness?: components["schemas"]["Harness"];
@@ -944,6 +1181,7 @@ export interface components {
                 [key: string]: string;
             };
             setup: string[];
+            memory?: components["schemas"]["AgentMemory"];
             /** @description Fields a project changed, e.g. {"harness":"project"} */
             provenance: {
                 [key: string]: "agent" | "project";
@@ -979,6 +1217,8 @@ export interface components {
             description: string;
             secret?: string;
             brokered: boolean;
+            /** @description Only possible through the LazyAgents API (wiki edits), so every mode is enforced server-side */
+            api_only?: boolean;
         };
         AgentDetail: {
             agent: components["schemas"]["Agent"];
@@ -1154,6 +1394,127 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /** @enum {string} */
+        NodeKind: "artifact" | "ticket" | "epic" | "agent";
+        /** @description What a [[link]] points at, with enough to render it */
+        LinkTarget: {
+            /** @enum {string} */
+            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "unresolved";
+            /** Format: uuid */
+            id?: string;
+            anchor?: string;
+            title: string;
+            artifact_type?: components["schemas"]["ArtifactType"];
+            path?: string;
+            display_id?: string;
+            href?: string;
+            status?: string;
+            color_index?: number;
+        };
+        ResolvedLink: {
+            ref: string;
+            target: components["schemas"]["LinkTarget"];
+        };
+        Mention: {
+            /** @enum {string} */
+            source_kind: "artifact" | "ticket" | "comment";
+            /** Format: uuid */
+            source_id: string;
+            source: components["schemas"]["LinkTarget"];
+            snippets: string[];
+            /** @description Sections of the target it cites */
+            anchors?: string[];
+        };
+        Backlinks: {
+            linked: components["schemas"]["Mention"][];
+            unlinked: components["schemas"]["Mention"][];
+        };
+        GraphNode: {
+            key: string;
+            hop: number;
+            target: components["schemas"]["LinkTarget"];
+        };
+        Graph: {
+            nodes: components["schemas"]["GraphNode"][];
+            edges: {
+                from: string;
+                to: string;
+            }[];
+        };
+        SearchHit: {
+            target: components["schemas"]["LinkTarget"];
+            /** @description Matches are wrapped in « » */
+            snippet: string;
+            score: number;
+        };
+        WikiPageSummary: {
+            /** Format: uuid */
+            id: string;
+            path: string;
+            title: string;
+            author: components["schemas"]["Actor"];
+            /** Format: uuid */
+            project_id?: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description False while the page only exists as an agent's suggestion */
+            published: boolean;
+            suggestions: number;
+        };
+        WikiTree: {
+            pages: components["schemas"]["WikiPageSummary"][];
+            /** @description Pending suggestions across the wiki */
+            suggestions: number;
+        };
+        NewWikiPage: {
+            path: string;
+            body_md: string;
+            project_key?: string;
+        };
+        WikiPageSave: {
+            body_md?: string;
+            /** @description Move the page here; the old path keeps resolving */
+            path?: string;
+            /**
+             * Format: uuid
+             * @description The version the editor started from; a save over a newer version is refused (409)
+             */
+            base_version_id?: string;
+            note?: string;
+        };
+        WikiSuggestion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            artifact_id: string;
+            path: string;
+            title: string;
+            note?: string;
+            body_md: string;
+            /** @description The page as it is now ("" for a new page) */
+            current_body_md: string;
+            author: components["schemas"]["Actor"];
+            /** Format: date-time */
+            created_at: string;
+            /** @description The page changed after the agent wrote this */
+            stale: boolean;
+            new_page: boolean;
+        };
+        WikiImportResult: {
+            created: number;
+            updated: number;
+            unchanged: number;
+            skipped: string[];
+        };
+        AgentMemory: {
+            enabled: boolean;
+            /**
+             * @description index: the Memory page; linked: plus pages linked to or from the ticket; search: plus title search hits
+             * @enum {string}
+             */
+            inject: "index" | "linked" | "search";
+            max_tokens: number;
+        };
     };
     responses: {
         /** @description Error */
@@ -1167,6 +1528,8 @@ export interface components {
         };
     };
     parameters: {
+        NodeKind: components["schemas"]["NodeKind"];
+        NodeId: string;
         /** @description Ticket key, e.g. PAY-214 */
         TicketKey: string;
         AgentHandle: string;
@@ -2092,6 +2455,355 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWikiPages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pages, sorted by path */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WikiTree"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createWikiPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewWikiPage"];
+            };
+        };
+        responses: {
+            /** @description The new page */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getWikiPage: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    saveWikiPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WikiPageSave"];
+            };
+        };
+        responses: {
+            /** @description The page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWikiSuggestions: {
+        parameters: {
+            query?: {
+                artifact_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending suggestions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        suggestions: components["schemas"]["WikiSuggestion"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    decideWikiSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                versionId: string;
+                decision: "accept" | "reject";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Decided */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    exportWiki: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Zip archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    importWiki: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description What changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WikiImportResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resolveLinks: {
+        parameters: {
+            query: {
+                /** @description Link texts as written inside [[…]], without the brackets */
+                ref: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per distinct ref */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        links: components["schemas"]["ResolvedLink"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    suggestLinks: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidates, best first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        targets: components["schemas"]["LinkTarget"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getBacklinks: {
+        parameters: {
+            query: {
+                kind: components["parameters"]["NodeKind"];
+                id: components["parameters"]["NodeId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mentions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Backlinks"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    linkMention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    target_kind: components["schemas"]["NodeKind"];
+                    /** Format: uuid */
+                    target_id: string;
+                    /** @enum {string} */
+                    source_kind: "artifact" | "ticket";
+                    /** Format: uuid */
+                    source_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Linked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getGraph: {
+        parameters: {
+            query: {
+                kind: components["parameters"]["NodeKind"];
+                id: components["parameters"]["NodeId"];
+                depth?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nodes and edges */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Graph"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    searchKnowledge: {
+        parameters: {
+            query: {
+                q: string;
+                kind?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        hits: components["schemas"]["SearchHit"][];
+                    };
                 };
             };
             default: components["responses"]["Error"];

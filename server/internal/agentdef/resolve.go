@@ -31,6 +31,7 @@ type Resolved struct {
 	MCPServers     []MCPServer                  `json:"mcp_servers"`
 	HarnessOptions map[string]string            `json:"harness_options"` // for the resolved harness only
 	Setup          []string                     `json:"setup"`
+	Memory         Memory                       `json:"memory"`
 	Provenance     map[string]Source            `json:"provenance"` // field → source, for fields a project changed
 	allOptions     map[string]map[string]string // kept for re-resolution
 }
@@ -104,7 +105,7 @@ func minPositive(a, b int) int {
 func Resolve(s Spec, o *Override) Resolved {
 	r := Resolved{
 		Harness: s.Harness, Model: s.Model, Instructions: s.Instructions,
-		Budget: s.Budget, MaxConcurrency: s.MaxConcurrency,
+		Budget: s.Budget, MaxConcurrency: s.MaxConcurrency, Memory: s.MemoryOrDefault(),
 		MCPServers: append([]MCPServer{}, s.MCPServers...),
 		Setup:      []string{}, Provenance: map[string]Source{}, allOptions: s.HarnessOptions,
 	}

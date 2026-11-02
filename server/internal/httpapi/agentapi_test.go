@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
 )
 
 type bearer struct {
@@ -62,6 +64,7 @@ func TestAgentAPIOverMCP(t *testing.T) {
 		Version: "test", Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Secrets: sec,
 		Agents: &agents.Service{Pool: pool}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Runs: &runs.Service{Pool: pool, Secrets: sec, Tracker: tr, Artifacts: arts, Poll: 20 * time.Millisecond},
+		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr},
 	}
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -171,6 +174,27 @@ func TestAgentAPIOverMCP(t *testing.T) {
 	}
 	call("log_event", map[string]any{"kind": "test_run", "payload": map[string]any{"passed": 312, "failed": 0, "duration_s": 252}})
 	call("report_usage", map[string]any{"tool_calls": 186, "input_tokens": 1800000, "output_tokens": 300000, "cost_usd": 4.18})
+	// Memory (PLAN.md §12): Atlas writes what it learned, linked to the
+	// ticket and the ADR; shared pages become suggestions.
+	if w := call("write_note", map[string]any{"path": "agents/atlas/Partition rollback gotchas",
+		"body": "Detaching a partition locks the parent; see [[ADR-012#Decision]]. From [[PAY-214]]."}); w["state"] != "published" {
+		t.Fatalf("write_note = %v", w)
+	}
+	if w := call("write_note", map[string]any{"path": "Payments/Runbooks/Partitions", "body": "Draft"}); w["state"] != "suggested" {
+		t.Fatalf("shared write_note = %v", w)
+	}
+	if msg := callErr("write_note", map[string]any{"path": "agents/echo/x", "body": "x"}); !strings.Contains(msg, "only write under agents/atlas/") {
+		t.Fatalf("cross-namespace = %q", msg)
+	}
+	if bl := call("get_backlinks", map[string]any{"ref": "ADR-012"}); !strings.Contains(fmt.Sprint(bl["linked_from"]), "ref:agents/atlas/Partition rollback gotchas") {
+		t.Fatalf("get_backlinks = %v", bl)
+	}
+	if pg := call("read_page", map[string]any{"ref": "[[Partition rollback gotchas]]"}); pg["path"] != "agents/atlas/Partition rollback gotchas" || len(pg["links"].([]any)) != 2 {
+		t.Fatalf("read_page = %v", pg)
+	}
+	if hits := call("search_knowledge", map[string]any{"q": "partition", "kinds": []string{"note"}}); len(hits["results"].([]any)) == 0 {
+		t.Fatalf("search_knowledge = %v", hits)
+	}
 	call("complete_run", map[string]any{"outcome": "Applied to staging"})
 
 	// The human view reflects it all.

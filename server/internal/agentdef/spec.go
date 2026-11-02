@@ -71,7 +71,27 @@ type Spec struct {
 	MaxConcurrency int                          `json:"max_concurrency"`
 	MCPServers     []MCPServer                  `json:"mcp_servers"`
 	HarnessOptions map[string]map[string]string `json:"harness_options"`
+	Memory         *Memory                      `json:"memory"` // nil (saved before memory existed) = DefaultMemory
 }
+
+// Memory says what wiki context a run gets (PLAN.md §12.3). Inject levels
+// are cumulative: index (the agent's Memory page) → linked (plus pages
+// linked to or from the ticket and its artifacts) → search (plus the top
+// search hits for the ticket title).
+type Memory struct {
+	Enabled   bool   `json:"enabled"`
+	Inject    string `json:"inject"`
+	MaxTokens int    `json:"max_tokens"`
+}
+
+const (
+	InjectIndex  = "index"
+	InjectLinked = "linked"
+	InjectSearch = "search"
+)
+
+// DefaultMemory applies when a definition doesn't say.
+var DefaultMemory = Memory{Enabled: true, Inject: InjectLinked, MaxTokens: 4000}
 
 // Override is a project's partial definition, merged over the agent's.
 type Override struct {
@@ -198,6 +218,23 @@ func (s *Spec) Normalize() error {
 	if err := validBudget("budget", s.Budget); err != nil {
 		return err
 	}
+	if s.Memory == nil {
+		m := DefaultMemory
+		s.Memory = &m
+	}
+	switch s.Memory.Inject {
+	case "":
+		s.Memory.Inject = InjectLinked
+	case InjectIndex, InjectLinked, InjectSearch:
+	default:
+		return invalid("memory.inject", "must be index, linked or search")
+	}
+	if s.Memory.MaxTokens == 0 {
+		s.Memory.MaxTokens = DefaultMemory.MaxTokens
+	}
+	if s.Memory.MaxTokens < 500 || s.Memory.MaxTokens > 50000 {
+		return invalid("memory.max_tokens", "must be between 500 and 50000")
+	}
 	return validMCP("mcp_servers", s.MCPServers)
 }
 
@@ -233,4 +270,12 @@ func sortedScopes(m map[string]Mode) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// MemoryOrDefault is the spec's memory settings, defaulted.
+func (s Spec) MemoryOrDefault() Memory {
+	if s.Memory == nil {
+		return DefaultMemory
+	}
+	return *s.Memory
 }

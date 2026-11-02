@@ -162,7 +162,7 @@ export function ArtifactPicker({
                 <span className="flex min-w-0 flex-1 flex-col leading-tight">
                   <span className="truncate font-medium">{artifactTitle(a)}</span>
                   <span className="truncate text-[11.5px] text-fg-tertiary">
-                    {a.project.name} · {artifactMeta(a)}
+                    {a.project?.name ?? a.path ?? "Workspace"} · {artifactMeta(a)}
                   </span>
                 </span>
               </div>

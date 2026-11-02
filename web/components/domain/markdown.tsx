@@ -1,6 +1,15 @@
-import ReactMarkdown, { type Components } from "react-markdown";
+"use client";
+
+import { useMemo } from "react";
+import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
+import type { LinkTarget } from "@/lib/api/client";
+import { useResolvedLinks } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { headingAnchors } from "@/lib/slug";
+import { linkify, parseWikiLinks, WIKILINK_SCHEME } from "@/lib/wikilinks";
+import { LinkTargets, WikiLink } from "./wikilink";
+
+const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) ? url : defaultUrlTransform(url));
 
 /**
  * Renders user and agent markdown. react-markdown escapes raw HTML by
@@ -10,6 +19,15 @@ export function Markdown({ children, className, anchors }: { children: string; c
   // Heading ids come from source lines, so they match the API's outline
   // anchors and stay stable across re-renders.
   const ids = anchors ? headingAnchors(children) : undefined;
+  // [[links]] become wikilink: links, resolved in one request per body.
+  const refs = useMemo(() => parseWikiLinks(children).map((r) => r.ref), [children]);
+  const md = useMemo(() => (refs.length ? linkify(children) : children), [children, refs.length]);
+  const resolved = useResolvedLinks(refs);
+  const targets = useMemo(() => {
+    const m = new Map<string, LinkTarget>();
+    for (const l of resolved.data ?? []) m.set(l.ref, l.target);
+    return m;
+  }, [resolved.data]);
   const idOf = (node: { position?: { start: { line: number } } } | undefined) =>
     ids && node?.position ? ids.get(node.position.start.line) : undefined;
   const headings: Components = {
@@ -19,8 +37,10 @@ export function Markdown({ children, className, anchors }: { children: string; c
     h4: ({ children, node }) => <h5 id={idOf(node)} className="mt-2 scroll-mt-6 font-semibold">{children}</h5>,
   };
   return (
+    <LinkTargets.Provider value={targets}>
     <div className={cx("prose-code flex flex-col gap-2.5 [&_a]:text-accent [&_a]:underline-offset-2 hover:[&_a]:underline", className)}>
       <ReactMarkdown
+        urlTransform={urlTransform}
         components={{
           p: ({ children }) => <p>{children}</p>,
           ul: ({ children }) => <ul className="ml-5 list-disc space-y-1">{children}</ul>,
@@ -37,15 +57,21 @@ export function Markdown({ children, className, anchors }: { children: string; c
               {children}
             </pre>
           ),
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer noopener">
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) =>
+            href?.startsWith(WIKILINK_SCHEME) ? (
+              <WikiLink refText={decodeURIComponent(href.slice(WIKILINK_SCHEME.length))}>{children}</WikiLink>
+            ) : href?.startsWith("#") ? (
+              <a href={href}>{children}</a>
+            ) : (
+              <a href={href} target="_blank" rel="noreferrer noopener">
+                {children}
+              </a>
+            ),
         }}
       >
-        {children}
+        {md}
       </ReactMarkdown>
     </div>
+    </LinkTargets.Provider>
   );
 }

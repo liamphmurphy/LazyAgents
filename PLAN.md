@@ -372,7 +372,7 @@ Each phase ends with something you can demo.
 - Unmanaged sessions are working: `examples/fake-agent` (a script that drives the full lifecycle) plus a sample MCP config for a local Claude Code session
 - *Exit:* a local, unmanaged Claude Code session picks up PAY-214, posts a plan, requests `db:migrate` approval, a human approves it, and the migration runs through the broker
 
-**Phase 4.5: Wiki and agent memory** (§12)
+**Phase 4.5: Wiki and agent memory** (§12) ✅ *done. Exit demo: `examples/README.md` (scripted agent writes memory on PAY-214; claiming PAY-224 returns it). Tags (`#migration`), embeds (`![[…]]` render as links), rewriting link text on rename and the workspace graph view are deferred; see CONTINUE.md.*
 - `note` pages, `[[link]]` parsing into `knowledge_links`, link resolution and ghost pages, backlinks (linked and unlinked mentions) on pages, artifacts, tickets and epics
 - Wiki screen: page tree, editor with `[[` autocomplete, rendered links, backlinks panel, local graph. This extends the design system, since it isn't designed yet.
 - Agent memory: per-agent namespaces, the `wiki:write` scope, MCP tools `search_knowledge`, `read_page`, `write_note` and `get_backlinks`, and suggested edits that a person accepts
@@ -515,7 +515,7 @@ There's a new scope, `wiki:write`, using the usual modes (§6.3). Enforcement is
 - **PRDs, specs, ADRs and designs:** agents never edit these. They can only link to them and comment.
 - **Reports:** agent-generated reports stay agent-owned, as in Phase 3.
 
-### 12.6 UI (not designed yet; add to DESIGN.md §8)
+### 12.6 UI (built in Phase 4.5; specified in DESIGN.md §5 "Wiki")
 
 - **Sidebar:** a **Wiki** nav item. The Wiki screen has:
   - a page tree, with agent namespaces grouped under "Agent memory";

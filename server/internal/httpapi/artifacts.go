@@ -140,15 +140,19 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 	if err != nil {
 		return api.Artifact{}, err
 	}
-	proj, err := s.Q.GetProject(ctx, store.GetProjectParams{ID: a.ProjectID, WorkspaceID: ws})
-	if err != nil {
-		return api.Artifact{}, err
-	}
 	out := api.Artifact{
 		Id: a.ID, Type: api.ArtifactType(a.Type), Title: a.Title, DisplayId: artifacts.DisplayID(a.Type, a.Number),
-		Summary: a.Summary, Project: toProject(proj), Author: dir.actor(a.AuthorType, &a.AuthorID),
+		Summary: a.Summary, Path: a.Path, Author: dir.actor(a.AuthorType, &a.AuthorID),
 		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 		Outline: []api.OutlineSection{}, ReadBy: []api.ArtifactReader{}, Versions: []api.ArtifactVersion{}, Tickets: []api.LinkedTicket{},
+	}
+	if a.ProjectID != nil {
+		proj, err := s.Q.GetProject(ctx, store.GetProjectParams{ID: *a.ProjectID, WorkspaceID: ws})
+		if err != nil {
+			return api.Artifact{}, err
+		}
+		p := toProject(proj)
+		out.Project = &p
 	}
 	if a.EpicID != nil {
 		if e, err := s.Q.GetEpic(ctx, store.GetEpicParams{ID: *a.EpicID, WorkspaceID: ws}); err == nil {
@@ -156,7 +160,15 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 		}
 	}
 	if a.CurrentVersionID == nil {
-		return out, errors.New("artifact has no current version")
+		// A page that so far exists only as an agent's suggestion.
+		return out, apperr.ErrNotFound
+	}
+	if a.Type == "note" {
+		sugg, err := s.Q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: &a.ID})
+		if err != nil {
+			return out, err
+		}
+		out.Suggestions = len(sugg)
 	}
 	cur, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
 	if err != nil {
@@ -275,8 +287,12 @@ func (s *Server) ListArtifacts(ctx context.Context, req api.ListArtifactsRequest
 	}
 	out := api.ListArtifacts200JSONResponse{Artifacts: make([]api.ArtifactSummary, 0, len(rows))}
 	for _, c := range byType {
-		out.Counts.All += int(c.N)
+		if c.Type != "note" {
+			out.Counts.All += int(c.N)
+		}
 		switch c.Type {
+		case "note":
+			out.Counts.Note = int(c.N)
 		case "prd":
 			out.Counts.Prd = int(c.N)
 		case "spec":
@@ -292,10 +308,13 @@ func (s *Server) ListArtifacts(ctx context.Context, req api.ListArtifactsRequest
 	for _, r := range rows {
 		a := api.ArtifactSummary{
 			Id: r.ID, Type: api.ArtifactType(r.Type), Title: r.Title, DisplayId: artifacts.DisplayID(r.Type, r.Number),
-			Summary: r.Summary, Project: api.Project{Key: r.ProjectKey, Name: r.ProjectName, Color: r.ProjectColor},
-			Author: dir.actor(r.AuthorType, &r.AuthorID), VersionLabel: r.VersionLabel,
-			Content:     contentOf(r.IsMarkdown, r.ContentType, r.SizeBytes, r.Filename, r.SectionCount),
+			Summary: r.Summary, Path: r.Path,
+			Author: dir.actor(r.AuthorType, &r.AuthorID), VersionLabel: &r.VersionLabel,
+			Content:     contentOf(r.IsMarkdown, &r.ContentType, &r.SizeBytes, r.Filename, r.SectionCount),
 			TicketCount: int(r.TicketCount), UpdatedAt: r.UpdatedAt,
+		}
+		if r.ProjectKey != nil {
+			a.Project = &api.Project{Key: *r.ProjectKey, Name: deref(r.ProjectName), Color: deref(r.ProjectColor)}
 		}
 		if r.EpicID != nil {
 			a.Epic = &api.EpicRef{Id: *r.EpicID, Name: deref(r.EpicName)}

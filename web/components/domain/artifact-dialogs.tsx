@@ -31,7 +31,7 @@ export function guessType(name: string, mime: string): ArtifactType {
   return "spec";
 }
 
-function DialogShell({
+export function DialogShell({
   open,
   onOpenChange,
   title,

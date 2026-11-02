@@ -8,6 +8,7 @@ import { Button, ButtonLink, IconButton } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
 import { Markdown } from "@/components/domain/markdown";
 import { TopBar } from "@/components/shell/topbar";
+import { BacklinksPanel } from "@/components/domain/backlinks";
 import { ContextArtifacts } from "./context-artifacts";
 import { Criteria } from "./criteria";
 import { CodeSection, Properties } from "./properties";
@@ -227,6 +228,10 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
             <Properties t={t} boot={boot.data} />
             {t.run && <RunCard t={t} run={t.run} />}
             <CodeSection t={t} />
+            <section className="flex flex-col gap-2 px-1">
+              <h2 className="text-[12.5px] text-fg-tertiary">Backlinks</h2>
+              <BacklinksPanel kind="ticket" id={t.id} compact />
+            </section>
           </aside>
         </div>
       )}

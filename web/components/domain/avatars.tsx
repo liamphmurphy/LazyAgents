@@ -143,3 +143,18 @@ export function AvatarStack({
     </span>
   );
 }
+
+/** Avatar for an API Actor ({type, name, color_index, initials, avatar_color}). */
+export function ApiActorAvatar({
+  actor,
+  label = false,
+}: {
+  actor: { type: string; name: string; color_index?: number; initials?: string; avatar_color?: string };
+  label?: boolean;
+}) {
+  return actor.type === "agent" ? (
+    <AgentAvatar name={actor.name} colorIndex={actor.color_index ?? 0} label={label} />
+  ) : (
+    <HumanAvatar name={actor.name} initials={actor.initials} color={actor.avatar_color} label={label} />
+  );
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/links"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
@@ -217,6 +218,13 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, actor Actor, in NewT
 				}
 			}
 		}
+		if err := links.Index(ctx, q, ws, links.Source{Kind: links.SourceTicket, ID: t.ID, TicketID: &t.ID}, t.DescriptionMd); err != nil {
+			return err
+		}
+		// [[PAY-230]] written before the ticket existed resolves now.
+		if err := links.ResolvePending(ctx, q, ws); err != nil {
+			return err
+		}
 		at := in.CreatedAt
 		if err := record(ctx, q, ws, t.ID, t.EpicID, actor, event{verb: VerbCreated, at: at}); err != nil {
 			return err
@@ -413,6 +421,11 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 	if len(events) > 0 {
 		if t, err = q.UpdateTicket(ctx, next); err != nil {
 			return cur, err
+		}
+		if t.DescriptionMd != cur.DescriptionMd {
+			if err := links.Index(ctx, q, ws, links.Source{Kind: links.SourceTicket, ID: t.ID, TicketID: &t.ID}, t.DescriptionMd); err != nil {
+				return cur, err
+			}
 		}
 	}
 

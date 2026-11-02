@@ -189,7 +189,11 @@ func TestRunLifecycle(t *testing.T) {
 	if err := svc.AwaitHuman(ctx, atlas, "", "Spec and PRD disagree on the p95 target"); err != nil {
 		t.Fatal(err)
 	}
-	cursor := time.Now()
+	// Cursors are database timestamps; the host clock can differ from Postgres's.
+	var cursor time.Time
+	if err := pool.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&cursor); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.Tracker.Comment(ctx, ws, tracker.UserActor(me.ID), "PAY-214", tracker.NewComment{BodyMd: "Looking"}); err != nil {
 		t.Fatal(err)
 	}

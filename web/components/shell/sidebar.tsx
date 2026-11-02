@@ -12,6 +12,8 @@ export type SidebarProps = {
   workspace: string;
   inboxCount: number;
   liveAgents: number;
+  /** Agent edits to wiki pages waiting for a person (amber: a person acts). */
+  wikiSuggestions?: number;
   projects: Array<{ key: string; name: string; color: string }>;
   user: { name: string; initials?: string; role: string };
 };
@@ -23,6 +25,7 @@ const NAV: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/epics", label: "Epics", icon: "epics" },
   { href: "/agents", label: "Agents", icon: "agents" },
   { href: "/artifacts", label: "Artifacts", icon: "artifacts" },
+  { href: "/wiki", label: "Wiki", icon: "wiki" },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -44,7 +47,7 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
   );
 }
 
-export function Sidebar({ workspace, inboxCount, liveAgents, projects, user }: SidebarProps) {
+export function Sidebar({ workspace, inboxCount, liveAgents, wikiSuggestions = 0, projects, user }: SidebarProps) {
   const pathname = usePathname();
   const search = useSearchParams();
   const activeProject = pathname === "/tickets" ? search.get("project") : null;
@@ -85,6 +88,12 @@ export function Sidebar({ workspace, inboxCount, liveAgents, projects, user }: S
               <span className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-accent px-[5px] text-[11px] font-semibold text-on-accent">
                 {inboxCount}
                 <span className="sr-only"> unread</span>
+              </span>
+            )}
+            {n.icon === "wiki" && wikiSuggestions > 0 && (
+              <span className="font-mono text-[11.5px] text-pill-human-fg" title={`${wikiSuggestions} suggested edits to review`}>
+                {wikiSuggestions}
+                <span className="sr-only"> suggested edits to review</span>
               </span>
             )}
             {n.icon === "agents" && liveAgents > 0 && (

@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { DropdownMenu } from "radix-ui";
 import { useState, type ReactNode } from "react";
 import type { AgentDetail, AgentSpec, Harness, ScopeMode } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
 import { enforcementFor, MODE_LABEL } from "@/lib/enforcement";
 import { Button, IconButton } from "@/components/ui/button";
-import { Segmented } from "@/components/ui/controls";
+import { Segmented, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Card, Field, TextArea, TextInput } from "@/components/ui/primitives";
 import { AGENT_HUES, AgentAvatar } from "@/components/domain/avatars";
@@ -50,7 +51,67 @@ export function describeChanges(a: Draft, b: Draft): string {
   if (names(a.spec) !== names(b.spec)) out.push("Changed MCP servers");
   if (JSON.stringify(a.spec.budget) !== JSON.stringify(b.spec.budget) || a.spec.max_concurrency !== b.spec.max_concurrency) out.push("Changed run limits");
   if (JSON.stringify(a.spec.harness_options) !== JSON.stringify(b.spec.harness_options)) out.push("Changed harness options");
+  if (JSON.stringify(a.spec.memory) !== JSON.stringify(b.spec.memory)) out.push("Changed memory");
   return out.join("; ") || "No changes";
+}
+
+const DEFAULT_MEMORY: NonNullable<AgentSpec["memory"]> = { enabled: true, inject: "linked", max_tokens: 4000 };
+const INJECT_HELP = {
+  index: "Only the agent's Memory page.",
+  linked: "The Memory page, plus pages linked to or from the ticket and its documents.",
+  search: "Everything in Linked, plus the best wiki matches for the ticket title.",
+} as const;
+
+/** Wiki memory a run starts with (PLAN.md §12.3). */
+function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; set: (p: Partial<AgentSpec>) => void }) {
+  const m = spec.memory ?? DEFAULT_MEMORY;
+  const put = (p: Partial<typeof m>) => set({ memory: { ...m, ...p } });
+  return (
+    <SectionCard
+      title="Memory"
+      action={
+        <Link href={`/wiki/agents/${handle}/Memory`} className="text-xs text-accent hover:underline">
+          Open memory
+        </Link>
+      }
+    >
+      <Toggle checked={m.enabled} onChange={(enabled) => put({ enabled })} label="Start each run with wiki context" />
+      {m.enabled && (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12.5px] font-medium text-fg-2">Inject</span>
+            <Segmented
+              label="Inject"
+              value={m.inject}
+              onChange={(inject) => put({ inject })}
+              options={[
+                { value: "index", label: "Index" },
+                { value: "linked", label: "Linked" },
+                { value: "search", label: "Search" },
+              ]}
+            />
+            <span className="text-xs text-fg-tertiary">{INJECT_HELP[m.inject]}</span>
+          </div>
+          <Field label="Token budget" htmlFor="ag-mem-tokens" hint="Most relevant pages first; the rest is trimmed.">
+            <TextInput
+              id="ag-mem-tokens"
+              mono
+              type="number"
+              min={500}
+              max={50000}
+              step={500}
+              value={m.max_tokens}
+              onChange={(e) => put({ max_tokens: Number(e.target.value) || DEFAULT_MEMORY.max_tokens })}
+            />
+          </Field>
+        </div>
+      )}
+      <p className="-mt-1 text-xs text-fg-tertiary">
+        The agent always writes to <code className="inline">agents/{handle}/</code>. Edits to other pages follow the{" "}
+        <code className="inline">wiki:write</code> scope; without it they arrive as suggestions.
+      </p>
+    </SectionCard>
+  );
 }
 
 function SectionCard({ title, action, children, bodyClassName }: { title: string; action?: ReactNode; children: ReactNode; bodyClassName?: string }) {
@@ -169,6 +230,8 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           </Field>
         </div>
       </SectionCard>
+
+      <MemoryCard handle={detail.agent.handle} spec={spec} set={set} />
 
       <SectionCard title="Instructions" action={<span className="text-xs text-fg-tertiary">Markdown</span>}>
         <TextArea aria-label="Instructions" mono rows={9} value={spec.instructions} onChange={(e) => set({ instructions: e.target.value })} />

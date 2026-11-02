@@ -65,6 +65,12 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 	if err != nil {
 		return nil, err
 	}
-	out.Counts.Inbox = int(pending)
+	sugg, err := s.Q.CountSuggestions(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	// Agent edits to shared wiki pages wait for a person, like approvals.
+	out.Counts.WikiSuggestions = int(sugg)
+	out.Counts.Inbox = int(pending) + int(sugg)
 	return out, nil
 }

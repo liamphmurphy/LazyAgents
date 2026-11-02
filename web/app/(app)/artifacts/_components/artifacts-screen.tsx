@@ -24,6 +24,7 @@ const TABS: Array<{ key: "all" | ArtifactType; label: string }> = [
   { key: "adr", label: "ADRs" },
   { key: "report", label: "Agent reports" },
   { key: "design", label: "Designs" },
+  { key: "note", label: "Wiki pages" },
 ];
 
 function Author({ a }: { a: ArtifactSummary }) {
@@ -210,7 +211,7 @@ export function ArtifactsScreen() {
                                 >
                                   {artifactTitle(a)}
                                 </button>
-                                <span className="text-xs text-fg-tertiary">{artifactMeta(a)}</span>
+                                <span className="text-xs text-fg-tertiary">{a.path ?? artifactMeta(a)}</span>
                               </span>
                             </div>
                           </td>
@@ -218,10 +219,14 @@ export function ArtifactsScreen() {
                             <Author a={a} />
                           </td>
                           <td className="px-3">
-                            <span className="flex items-center gap-2 text-fg-secondary">
-                              <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: a.project.color }} />
-                              <span className="truncate">{a.project.name}</span>
-                            </span>
+                            {a.project ? (
+                              <span className="flex items-center gap-2 text-fg-secondary">
+                                <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: a.project.color }} />
+                                <span className="truncate">{a.project.name}</span>
+                              </span>
+                            ) : (
+                              <span className="text-fg-tertiary">Workspace</span>
+                            )}
                           </td>
                           <td className="px-3 font-mono text-xs text-fg-secondary">{a.ticket_count || "–"}</td>
                           <td className="px-4 text-right text-xs text-fg-tertiary" title={new Date(a.updated_at).toLocaleString()}>

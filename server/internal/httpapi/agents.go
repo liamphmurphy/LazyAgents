@@ -100,7 +100,7 @@ func (s *Server) agentDetail(ctx context.Context, ws uuid.UUID, a store.Agent) (
 	sort.Strings(names)
 	for _, k := range names {
 		info := agentdef.Catalog[k]
-		si := api.ScopeInfo{Scope: k, Description: info.Description, Brokered: info.Brokered}
+		si := api.ScopeInfo{Scope: k, Description: info.Description, Brokered: info.Brokered, ApiOnly: &info.APIOnly}
 		if info.Secret != "" {
 			si.Secret = &info.Secret
 		}

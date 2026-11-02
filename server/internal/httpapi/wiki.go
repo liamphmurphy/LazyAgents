@@ -1,0 +1,308 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/liamphmurphy/lazyagents/server/internal/api"
+	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/lazyagents/server/internal/links"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
+)
+
+// Wiki and knowledge endpoints (PLAN.md §12).
+
+// same converts between structs that share JSON tags (domain → API); the
+// shapes are fixed, so a failure is a programming error.
+func same[T any](v any) T {
+	out, err := recode[T](v)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+func toTarget(t links.Target) api.LinkTarget { return same[api.LinkTarget](t) }
+
+func toMentions(ms []wiki.Mention) []api.Mention { return same[[]api.Mention](ms) }
+
+func (s *Server) ListWikiPages(ctx context.Context, _ api.ListWikiPagesRequestObject) (api.ListWikiPagesResponseObject, error) {
+	_, _, ws := me(ctx)
+	rows, err := s.Q.ListNotes(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	dir, err := s.directory(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	out := api.ListWikiPages200JSONResponse{Pages: make([]api.WikiPageSummary, 0, len(rows))}
+	for _, r := range rows {
+		out.Pages = append(out.Pages, api.WikiPageSummary{
+			Id: r.ID, Path: deref(r.Path), Title: r.Title, Author: dir.actor(r.AuthorType, &r.AuthorID),
+			ProjectId: r.ProjectID, UpdatedAt: r.UpdatedAt, Published: r.Published, Suggestions: int(r.Suggestions),
+		})
+		out.Suggestions += int(r.Suggestions)
+	}
+	return out, nil
+}
+
+func (s *Server) noteDetail(ctx context.Context, ws, id uuid.UUID) (api.Artifact, error) {
+	a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+	if err != nil {
+		return api.Artifact{}, err
+	}
+	return s.artifactDetail(ctx, ws, a)
+}
+
+func (s *Server) CreateWikiPage(ctx context.Context, req api.CreateWikiPageRequestObject) (api.CreateWikiPageResponseObject, error) {
+	u, _, ws := me(ctx)
+	in := wiki.Save{Path: req.Body.Path, Body: req.Body.BodyMd, Mode: wiki.ModeCreate, ProjectKey: deref(req.Body.ProjectKey)}
+	if strings.TrimSpace(in.Body) == "" {
+		// A new page from a ghost link starts with its title.
+		in.Body = "# " + links.TitleOf(links.NormalizePath(in.Path)) + "\n"
+	}
+	res, err := s.Wiki.SaveAsUser(ctx, ws, u.ID, in)
+	if err != nil {
+		return nil, err
+	}
+	a, err := s.noteDetail(ctx, ws, res.Note.ID)
+	if err != nil {
+		return nil, err
+	}
+	return api.CreateWikiPage201JSONResponse(a), nil
+}
+
+func (s *Server) GetWikiPage(ctx context.Context, req api.GetWikiPageRequestObject) (api.GetWikiPageResponseObject, error) {
+	_, _, ws := me(ctx)
+	p := links.NormalizePath(req.Params.Path)
+	a, err := s.Q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p})
+	if errors.Is(err, pgx.ErrNoRows) {
+		a, err = s.Q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p})
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	out, err := s.artifactDetail(ctx, ws, a)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetWikiPage200JSONResponse(out), nil
+}
+
+func (s *Server) SaveWikiPage(ctx context.Context, req api.SaveWikiPageRequestObject) (api.SaveWikiPageResponseObject, error) {
+	u, _, ws := me(ctx)
+	a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.Id, WorkspaceID: ws})
+	if err != nil || a.Type != "note" {
+		return nil, apperr.ErrNotFound
+	}
+	if req.Body.Path != nil {
+		if a, err = s.Wiki.Rename(ctx, ws, a.ID, *req.Body.Path); err != nil {
+			return nil, err
+		}
+	}
+	if req.Body.BodyMd != nil {
+		if _, err := s.Wiki.SaveAsUser(ctx, ws, u.ID, wiki.Save{
+			Path: *a.Path, Body: *req.Body.BodyMd, Mode: wiki.ModeReplace, BaseID: req.Body.BaseVersionId, Note: deref(req.Body.Note),
+		}); err != nil {
+			return nil, err
+		}
+	}
+	out, err := s.noteDetail(ctx, ws, a.ID)
+	if err != nil {
+		return nil, err
+	}
+	return api.SaveWikiPage200JSONResponse(out), nil
+}
+
+func (s *Server) ListWikiSuggestions(ctx context.Context, req api.ListWikiSuggestionsRequestObject) (api.ListWikiSuggestionsResponseObject, error) {
+	_, _, ws := me(ctx)
+	rows, err := s.Q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: req.Params.ArtifactId})
+	if err != nil {
+		return nil, err
+	}
+	dir, err := s.directory(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	out := api.ListWikiSuggestions200JSONResponse{Suggestions: []api.WikiSuggestion{}}
+	for _, r := range rows {
+		cur := ""
+		if r.CurrentVersionID != nil {
+			v, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *r.CurrentVersionID, ArtifactID: r.ArtifactID, WorkspaceID: ws})
+			if err != nil {
+				return nil, err
+			}
+			cur = deref(v.BodyMd)
+		}
+		sg := api.WikiSuggestion{
+			Id: r.ID, ArtifactId: r.ArtifactID, Path: deref(r.Path), Title: r.Title, BodyMd: deref(r.BodyMd), CurrentBodyMd: cur,
+			Author: dir.actor(r.CreatedByType, &r.CreatedByID), CreatedAt: r.CreatedAt, NewPage: r.CurrentVersionID == nil,
+			Stale: r.CurrentVersionID != nil && (r.BasedOnVersionID == nil || *r.BasedOnVersionID != *r.CurrentVersionID),
+		}
+		if r.Note != "" {
+			sg.Note = &r.Note
+		}
+		out.Suggestions = append(out.Suggestions, sg)
+	}
+	return out, nil
+}
+
+func (s *Server) DecideWikiSuggestion(ctx context.Context, req api.DecideWikiSuggestionRequestObject) (api.DecideWikiSuggestionResponseObject, error) {
+	u, _, ws := me(ctx)
+	if req.Decision != "accept" && req.Decision != "reject" {
+		return nil, apperr.Invalid("decision", "must be accept or reject")
+	}
+	if _, err := s.Wiki.DecideSuggestion(ctx, ws, u.ID, req.VersionId, req.Decision == "accept"); err != nil {
+		return nil, err
+	}
+	return api.DecideWikiSuggestion204Response{}, nil
+}
+
+func (s *Server) ExportWiki(ctx context.Context, _ api.ExportWikiRequestObject) (api.ExportWikiResponseObject, error) {
+	_, _, ws := me(ctx)
+	var buf bytes.Buffer
+	if err := wiki.Export(ctx, s.Q, ws, &buf); err != nil {
+		return nil, err
+	}
+	return exportZip{api.ExportWiki200ApplicationzipResponse{Body: &buf, ContentLength: int64(buf.Len())}}, nil
+}
+
+// exportZip adds a download filename to the generated response.
+type exportZip struct {
+	api.ExportWiki200ApplicationzipResponse
+}
+
+func (e exportZip) VisitExportWikiResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Disposition", `attachment; filename="lazyagents-wiki.zip"`)
+	return e.ExportWiki200ApplicationzipResponse.VisitExportWikiResponse(w)
+}
+
+func (s *Server) ImportWiki(ctx context.Context, req api.ImportWikiRequestObject) (api.ImportWikiResponseObject, error) {
+	u, _, ws := me(ctx)
+	var data []byte
+	for {
+		part, err := req.Body.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, apperr.Invalid("body", "malformed multipart form")
+		}
+		if part.FormName() == "file" {
+			if data, err = io.ReadAll(io.LimitReader(part, 50<<20+1)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if data == nil {
+		return nil, apperr.Invalid("file", "is required")
+	}
+	res, err := s.Wiki.Import(ctx, ws, u.ID, data)
+	if err != nil {
+		return nil, err
+	}
+	return api.ImportWiki200JSONResponse(same[api.WikiImportResult](res)), nil
+}
+
+// ------------------------------------------------------------ knowledge
+
+func (s *Server) ResolveLinks(ctx context.Context, req api.ResolveLinksRequestObject) (api.ResolveLinksResponseObject, error) {
+	_, _, ws := me(ctx)
+	out := api.ResolveLinks200JSONResponse{Links: []api.ResolvedLink{}}
+	seen := map[string]bool{}
+	for _, raw := range req.Params.Ref {
+		if seen[raw] || len(seen) >= 200 {
+			continue
+		}
+		seen[raw] = true
+		r := links.ParseRef(raw)
+		t, err := links.Resolve(ctx, s.Q, ws, r.Target, r.Anchor)
+		if err != nil {
+			return nil, err
+		}
+		out.Links = append(out.Links, api.ResolvedLink{Ref: raw, Target: toTarget(t)})
+	}
+	return out, nil
+}
+
+func (s *Server) SuggestLinks(ctx context.Context, req api.SuggestLinksRequestObject) (api.SuggestLinksResponseObject, error) {
+	_, _, ws := me(ctx)
+	ts, err := wiki.Autocomplete(ctx, s.Q, ws, strings.TrimSpace(deref(req.Params.Q)))
+	if err != nil {
+		return nil, err
+	}
+	out := api.SuggestLinks200JSONResponse{Targets: make([]api.LinkTarget, len(ts))}
+	for i, t := range ts {
+		out.Targets[i] = toTarget(t)
+	}
+	return out, nil
+}
+
+func (s *Server) GetBacklinks(ctx context.Context, req api.GetBacklinksRequestObject) (api.GetBacklinksResponseObject, error) {
+	_, _, ws := me(ctx)
+	ref := wiki.Ref{Kind: string(req.Params.Kind), ID: req.Params.Id}
+	linked, err := wiki.Backlinks(ctx, s.Q, ws, ref)
+	if err != nil {
+		return nil, err
+	}
+	unlinked, err := wiki.UnlinkedMentions(ctx, s.Q, ws, ref, linked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	return api.GetBacklinks200JSONResponse{Linked: toMentions(linked), Unlinked: toMentions(unlinked)}, nil
+}
+
+func (s *Server) LinkMention(ctx context.Context, req api.LinkMentionRequestObject) (api.LinkMentionResponseObject, error) {
+	u, _, ws := me(ctx)
+	b := req.Body
+	if err := s.Wiki.LinkMention(ctx, ws, u.ID, wiki.Ref{Kind: string(b.TargetKind), ID: b.TargetId}, string(b.SourceKind), b.SourceId); err != nil {
+		return nil, err
+	}
+	return api.LinkMention204Response{}, nil
+}
+
+func (s *Server) GetGraph(ctx context.Context, req api.GetGraphRequestObject) (api.GetGraphResponseObject, error) {
+	_, _, ws := me(ctx)
+	depth := 2
+	if req.Params.Depth != nil {
+		depth = *req.Params.Depth
+	}
+	nodes, edges, err := wiki.LocalGraph(ctx, s.Q, ws, wiki.Ref{Kind: string(req.Params.Kind), ID: req.Params.Id}, depth)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetGraph200JSONResponse(same[api.Graph](map[string]any{"nodes": nodes, "edges": edges})), nil
+}
+
+func (s *Server) SearchKnowledge(ctx context.Context, req api.SearchKnowledgeRequestObject) (api.SearchKnowledgeResponseObject, error) {
+	_, _, ws := me(ctx)
+	if strings.TrimSpace(req.Params.Q) == "" {
+		return api.SearchKnowledge200JSONResponse{Hits: []api.SearchHit{}}, nil
+	}
+	var kinds []string
+	if req.Params.Kind != nil {
+		kinds = *req.Params.Kind
+	}
+	hits, err := wiki.Search(ctx, s.Q, ws, req.Params.Q, kinds, nil, 20)
+	if err != nil {
+		return nil, err
+	}
+	out := api.SearchKnowledge200JSONResponse{Hits: make([]api.SearchHit, len(hits))}
+	for i, h := range hits {
+		out.Hits[i] = api.SearchHit{Target: toTarget(h.Target), Snippet: h.Snippet, Score: float32(h.Score)}
+	}
+	return out, nil
+}

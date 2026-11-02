@@ -728,8 +728,288 @@ paths:
               schema: { $ref: "#/components/schemas/Run" }
         default: { $ref: "#/components/responses/Error" }
 
+  /wiki/pages:
+    get:
+      operationId: listWikiPages
+      summary: Every wiki page (the page tree), with pending suggestion counts
+      tags: [wiki]
+      responses:
+        "200":
+          description: Pages, sorted by path
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiTree" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createWikiPage
+      summary: Create a page at a path
+      tags: [wiki]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewWikiPage" }
+      responses:
+        "201":
+          description: The new page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/page:
+    get:
+      operationId: getWikiPage
+      summary: A page by path (or a renamed page's old path)
+      tags: [wiki]
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/pages/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    put:
+      operationId: saveWikiPage
+      summary: Save a page's body (a new version, silently) and/or move it to a new path
+      tags: [wiki]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WikiPageSave" }
+      responses:
+        "200":
+          description: The page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/suggestions:
+    get:
+      operationId: listWikiSuggestions
+      summary: Agent edits waiting for a person, oldest first
+      tags: [wiki]
+      parameters:
+        - name: artifact_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Pending suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions]
+                properties:
+                  suggestions: { type: array, items: { $ref: "#/components/schemas/WikiSuggestion" } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/suggestions/{versionId}/{decision}:
+    parameters:
+      - name: versionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: decision
+        in: path
+        required: true
+        schema: { type: string, enum: [accept, reject] }
+    post:
+      operationId: decideWikiSuggestion
+      summary: Accept (publish as the next version) or reject a suggestion
+      tags: [wiki]
+      responses:
+        "204": { description: Decided }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/export:
+    get:
+      operationId: exportWiki
+      summary: Every page as an Obsidian-compatible vault (zip of markdown files)
+      tags: [wiki]
+      responses:
+        "200":
+          description: Zip archive
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/import:
+    post:
+      operationId: importWiki
+      summary: Import a vault zip; each .md file creates or replaces the page at its path
+      tags: [wiki]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: What changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiImportResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /knowledge/resolve:
+    get:
+      operationId: resolveLinks
+      summary: Resolve [[link]] texts to what they point at (for rendering)
+      tags: [knowledge]
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          description: Link texts as written inside [[…]], without the brackets
+          style: form
+          explode: true
+          schema: { type: array, items: { type: string }, maxItems: 200 }
+      responses:
+        "200":
+          description: One entry per distinct ref
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [links]
+                properties:
+                  links: { type: array, items: { $ref: "#/components/schemas/ResolvedLink" } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /knowledge/suggest:
+    get:
+      operationId: suggestLinks
+      summary: "[[ autocomplete over pages, artifacts, tickets, epics and agents"
+      tags: [knowledge]
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Candidates, best first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [targets]
+                properties:
+                  targets: { type: array, items: { $ref: "#/components/schemas/LinkTarget" } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /knowledge/backlinks:
+    get:
+      operationId: getBacklinks
+      summary: Linked and unlinked mentions of an artifact, ticket, epic or agent
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/NodeKind"
+        - $ref: "#/components/parameters/NodeId"
+      responses:
+        "200":
+          description: Mentions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Backlinks" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /knowledge/link-mention:
+    post:
+      operationId: linkMention
+      summary: Turn the first unlinked mention of a target in a source into a [[link]]
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_kind, target_id, source_kind, source_id]
+              properties:
+                target_kind: { $ref: "#/components/schemas/NodeKind" }
+                target_id: { type: string, format: uuid }
+                source_kind: { type: string, enum: [artifact, ticket] }
+                source_id: { type: string, format: uuid }
+      responses:
+        "204": { description: Linked }
+        default: { $ref: "#/components/responses/Error" }
+
+  /knowledge/graph:
+    get:
+      operationId: getGraph
+      summary: The local link graph around a node (1–2 hops, both directions)
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/NodeKind"
+        - $ref: "#/components/parameters/NodeId"
+        - name: depth
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 2 }
+      responses:
+        "200":
+          description: Nodes and edges
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Graph" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /knowledge/search:
+    get:
+      operationId: searchKnowledge
+      summary: Full-text search over pages, artifacts and tickets, boosted by links
+      tags: [knowledge]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: kind
+          in: query
+          style: form
+          explode: true
+          schema: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Hits
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hits]
+                properties:
+                  hits: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   parameters:
+    NodeKind:
+      name: kind
+      in: query
+      required: true
+      schema: { $ref: "#/components/schemas/NodeKind" }
+    NodeId:
+      name: id
+      in: query
+      required: true
+      schema: { type: string, format: uuid }
     TicketKey:
       name: key
       in: path
@@ -845,9 +1125,10 @@ components:
         labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
         counts:
           type: object
-          required: [inbox, live_agents]
+          required: [inbox, live_agents, wiki_suggestions]
           properties:
             inbox: { type: integer }
+            wiki_suggestions: { type: integer }
             live_agents: { type: integer }
 
     TicketStatus:
@@ -997,7 +1278,7 @@ components:
 
     ArtifactType:
       type: string
-      enum: [prd, spec, adr, report, design]
+      enum: [prd, spec, adr, report, design, note]
     ArtifactRelation:
       type: string
       enum: [context, generated]
@@ -1012,7 +1293,7 @@ components:
         sections: { type: integer, description: Headings in the outline (markdown only) }
     ArtifactSummary:
       type: object
-      required: [id, type, title, summary, project, author, content, ticket_count, updated_at]
+      required: [id, type, title, summary, author, content, ticket_count, updated_at]
       properties:
         id: { type: string, format: uuid }
         type: { $ref: "#/components/schemas/ArtifactType" }
@@ -1020,6 +1301,7 @@ components:
         display_id: { type: string, description: "ADR-012; set for numbered types" }
         summary: { type: string }
         project: { $ref: "#/components/schemas/Project" }
+        path: { type: string, description: Notes only }
         epic: { $ref: "#/components/schemas/EpicRef" }
         author: { $ref: "#/components/schemas/Actor" }
         version_label: { type: string }
@@ -1028,9 +1310,10 @@ components:
         updated_at: { type: string, format: date-time }
     ArtifactCounts:
       type: object
-      required: [all, prd, spec, adr, report, design]
+      required: [all, prd, spec, adr, report, design, note]
       properties:
-        all: { type: integer }
+        all: { type: integer, description: Everything except notes }
+        note: { type: integer }
         prd: { type: integer }
         spec: { type: integer }
         adr: { type: integer }
@@ -1079,7 +1362,7 @@ components:
         relation: { $ref: "#/components/schemas/ArtifactRelation" }
     Artifact:
       type: object
-      required: [id, type, title, summary, project, author, current_version, body_md, outline, read_by, versions, tickets, created_at, updated_at]
+      required: [id, type, title, summary, author, current_version, body_md, outline, read_by, versions, tickets, suggestions, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         type: { $ref: "#/components/schemas/ArtifactType" }
@@ -1087,6 +1370,8 @@ components:
         display_id: { type: string }
         summary: { type: string }
         project: { $ref: "#/components/schemas/Project" }
+        path: { type: string, description: "Notes: Payments/Ledger/Rollback runbook" }
+        suggestions: { type: integer, description: Pending agent suggestions (notes) }
         epic: { $ref: "#/components/schemas/EpicRef" }
         author: { $ref: "#/components/schemas/Actor" }
         current_version: { $ref: "#/components/schemas/ArtifactVersion" }
@@ -1169,6 +1454,7 @@ components:
           additionalProperties:
             type: object
             additionalProperties: { type: string }
+        memory: { $ref: "#/components/schemas/AgentMemory" }
     AgentOverride:
       type: object
       properties:
@@ -1206,6 +1492,7 @@ components:
           type: object
           additionalProperties: { type: string }
         setup: { type: array, items: { type: string } }
+        memory: { $ref: "#/components/schemas/AgentMemory" }
         provenance:
           type: object
           description: Fields a project changed, e.g. {"harness":"project"}
@@ -1246,6 +1533,7 @@ components:
         description: { type: string }
         secret: { type: string }
         brokered: { type: boolean }
+        api_only: { type: boolean, description: "Only possible through the LazyAgents API (wiki edits), so every mode is enforced server-side" }
     AgentDetail:
       type: object
       required: [agent, specialty, definition, spec, versions, overrides, harnesses, catalog]
@@ -1419,3 +1707,135 @@ components:
           type: object
           additionalProperties: true
         created_at: { type: string, format: date-time }
+
+    NodeKind:
+      type: string
+      enum: [artifact, ticket, epic, agent]
+    LinkTarget:
+      type: object
+      required: [kind, title]
+      description: What a [[link]] points at, with enough to render it
+      properties:
+        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, unresolved] }
+        id: { type: string, format: uuid }
+        anchor: { type: string }
+        title: { type: string }
+        artifact_type: { $ref: "#/components/schemas/ArtifactType" }
+        path: { type: string }
+        display_id: { type: string }
+        href: { type: string }
+        status: { type: string }
+        color_index: { type: integer }
+    ResolvedLink:
+      type: object
+      required: [ref, target]
+      properties:
+        ref: { type: string }
+        target: { $ref: "#/components/schemas/LinkTarget" }
+    Mention:
+      type: object
+      required: [source_kind, source_id, source, snippets]
+      properties:
+        source_kind: { type: string, enum: [artifact, ticket, comment] }
+        source_id: { type: string, format: uuid }
+        source: { $ref: "#/components/schemas/LinkTarget" }
+        snippets: { type: array, items: { type: string } }
+        anchors: { type: array, items: { type: string }, description: Sections of the target it cites }
+    Backlinks:
+      type: object
+      required: [linked, unlinked]
+      properties:
+        linked: { type: array, items: { $ref: "#/components/schemas/Mention" } }
+        unlinked: { type: array, items: { $ref: "#/components/schemas/Mention" } }
+    GraphNode:
+      type: object
+      required: [key, hop, target]
+      properties:
+        key: { type: string }
+        hop: { type: integer }
+        target: { $ref: "#/components/schemas/LinkTarget" }
+    Graph:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes: { type: array, items: { $ref: "#/components/schemas/GraphNode" } }
+        edges:
+          type: array
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              from: { type: string }
+              to: { type: string }
+    SearchHit:
+      type: object
+      required: [target, snippet, score]
+      properties:
+        target: { $ref: "#/components/schemas/LinkTarget" }
+        snippet: { type: string, description: "Matches are wrapped in « »" }
+        score: { type: number }
+    WikiPageSummary:
+      type: object
+      required: [id, path, title, author, updated_at, published, suggestions]
+      properties:
+        id: { type: string, format: uuid }
+        path: { type: string }
+        title: { type: string }
+        author: { $ref: "#/components/schemas/Actor" }
+        project_id: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+        published: { type: boolean, description: False while the page only exists as an agent's suggestion }
+        suggestions: { type: integer }
+    WikiTree:
+      type: object
+      required: [pages, suggestions]
+      properties:
+        pages: { type: array, items: { $ref: "#/components/schemas/WikiPageSummary" } }
+        suggestions: { type: integer, description: Pending suggestions across the wiki }
+    NewWikiPage:
+      type: object
+      required: [path, body_md]
+      properties:
+        path: { type: string, minLength: 1, maxLength: 300 }
+        body_md: { type: string }
+        project_key: { type: string }
+    WikiPageSave:
+      type: object
+      properties:
+        body_md: { type: string }
+        path: { type: string, description: Move the page here; the old path keeps resolving }
+        base_version_id:
+          type: string
+          format: uuid
+          description: The version the editor started from; a save over a newer version is refused (409)
+        note: { type: string }
+    WikiSuggestion:
+      type: object
+      required: [id, artifact_id, path, title, body_md, current_body_md, author, created_at, stale, new_page]
+      properties:
+        id: { type: string, format: uuid }
+        artifact_id: { type: string, format: uuid }
+        path: { type: string }
+        title: { type: string }
+        note: { type: string }
+        body_md: { type: string }
+        current_body_md: { type: string, description: The page as it is now ("" for a new page) }
+        author: { $ref: "#/components/schemas/Actor" }
+        created_at: { type: string, format: date-time }
+        stale: { type: boolean, description: The page changed after the agent wrote this }
+        new_page: { type: boolean }
+    WikiImportResult:
+      type: object
+      required: [created, updated, unchanged, skipped]
+      properties:
+        created: { type: integer }
+        updated: { type: integer }
+        unchanged: { type: integer }
+        skipped: { type: array, items: { type: string } }
+    AgentMemory:
+      type: object
+      required: [enabled, inject, max_tokens]
+      properties:
+        enabled: { type: boolean }
+        inject: { type: string, enum: [index, linked, search], description: "index: the Memory page; linked: plus pages linked to or from the ticket; search: plus title search hits" }
+        max_tokens: { type: integer, minimum: 500, maximum: 50000 }

@@ -37,6 +37,9 @@ type ScopeInfo struct {
 	Secret string `json:"secret,omitempty"`
 	// Brokered scopes can run server-side through run_gated after approval.
 	Brokered bool `json:"brokered"`
+	// APIOnly scopes cover actions that only exist in the LazyAgents API
+	// (wiki edits), so the server enforces every mode itself.
+	APIOnly bool `json:"api_only,omitempty"`
 }
 
 var Catalog = map[string]ScopeInfo{
@@ -46,7 +49,7 @@ var Catalog = map[string]ScopeInfo{
 	"db:migrate":      {Description: "Apply migrations to staging", Secret: "db:staging", Brokered: true},
 	"db:read-staging": {Description: "Query the staging snapshot", Secret: "db:staging-readonly"},
 	"deploy:staging":  {Description: "Trigger a staging deploy", Secret: "deploy:staging", Brokered: true},
-	"wiki:write":      {Description: "Edit wiki pages outside the agent's own memory"},
+	"wiki:write":      {Description: "Edit wiki pages outside the agent's own memory", APIOnly: true},
 }
 
 // EnforcementFor says how a resolved scope is held on a harness, with a
@@ -55,6 +58,12 @@ func EnforcementFor(scope string, mode Mode, harness string) (Enforcement, strin
 	info := Catalog[scope]
 	caps := Capabilities[harness]
 	switch {
+	case info.APIOnly && mode == Allowed:
+		return ByBroker, "Edits go through LazyAgents and publish directly"
+	case info.APIOnly && mode == RequiresApproval:
+		return ByBroker, "Edits are saved as suggestions a person accepts"
+	case info.APIOnly:
+		return ByBroker, "Only the agent's own memory pages can be written"
 	case mode == RequiresApproval && info.Brokered:
 		return ByBroker, "Runs server-side after a person approves"
 	case mode == RequiresApproval:

@@ -337,6 +337,9 @@ func demo(ctx context.Context, pool *pgxpool.Pool, arts *artifacts.Service) (Res
 		if err := seedArtifacts(ctx, arts, q, svc, ws, ids.users, ids.agents, ids.epics); err != nil {
 			return res, err
 		}
+		if err := seedWiki(ctx, pool, arts, svc, ws, ids.users, ids.agents); err != nil {
+			return res, err
+		}
 	}
 	return res, nil
 }

@@ -20,6 +20,12 @@ export type ScopeMode = Schemas["ScopeMode"];
 export type Harness = Schemas["Harness"];
 export type Run = Schemas["Run"];
 export type Approval = Schemas["Approval"];
+export type LinkTarget = Schemas["LinkTarget"];
+export type Mention = Schemas["Mention"];
+export type WikiPageSummary = Schemas["WikiPageSummary"];
+export type WikiSuggestion = Schemas["WikiSuggestion"];
+export type GraphData = Schemas["Graph"];
+export type NodeKind = Schemas["NodeKind"];
 
 // The browser always talks to the same origin (Caddy in compose, Next
 // rewrites in dev). Server components call the API over the internal network.

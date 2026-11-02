@@ -119,6 +119,7 @@
   --doc-adr: #F0BF4C;    --doc-adr-bg: #F0BF4C1F;
   --doc-report: #6FCF7F; --doc-report-bg: #6FCF7F1F;
   --doc-design: #F48A98; --doc-design-bg: #F27A8A1F;
+  --doc-note: #B9B9C3;   --doc-note-bg: #B9B9C31A;   /* wiki pages (v0.3) */
 
   /* Component tokens (v0.2): values the mockups hard-coded, named so both themes work */
   --row-hover: #131317;          /* list and card rows */
@@ -195,6 +196,7 @@
   --doc-adr: #8A6100;    --doc-adr-bg: #D49A0A1F;
   --doc-report: #1E7048; --doc-report-bg: #2E9E681A;
   --doc-design: #B42F48; --doc-design-bg: #C2364F17;
+  --doc-note: #55555F;   --doc-note-bg: #6B6B751A;
 
   --row-hover: #F7F7F9; --border-hover: #D4D4DA; --border-float: #E0E0E5; --kbd-border: #E0E0E5;
   --btn-secondary-bg: #FFFFFF; --btn-secondary-border: #D4D4DA; --btn-outline-bg: #FFFFFF; --approve-fg: #1A1206;
@@ -223,6 +225,7 @@
     --human-avatar-bg: #E3E3E8;
     --doc-prd: #4547C9; --doc-prd-bg: #5558E31A; --doc-spec: #1D5FB0; --doc-spec-bg: #2F7FE01A; --doc-adr: #8A6100; --doc-adr-bg: #D49A0A1F;
     --doc-report: #1E7048; --doc-report-bg: #2E9E681A; --doc-design: #B42F48; --doc-design-bg: #C2364F17;
+    --doc-note: #55555F; --doc-note-bg: #6B6B751A;
     --shadow-float: 0 12px 32px rgba(23, 23, 26, 0.12), 0 0 0 1px rgba(23, 23, 26, 0.04);
     --row-hover: #F7F7F9; --border-hover: #D4D4DA; --border-float: #E0E0E5; --kbd-border: #E0E0E5;
     --btn-secondary-bg: #FFFFFF; --btn-secondary-border: #D4D4DA; --btn-outline-bg: #FFFFFF; --approve-fg: #1A1206;

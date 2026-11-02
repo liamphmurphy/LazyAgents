@@ -98,7 +98,7 @@ type ApprovalRequest struct {
 type Artifact struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.UUID
-	ProjectID        uuid.UUID
+	ProjectID        *uuid.UUID
 	EpicID           *uuid.UUID
 	Type             string
 	Title            string
@@ -111,6 +111,14 @@ type Artifact struct {
 	Search           interface{}
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	Path             *string
+}
+
+type ArtifactAlias struct {
+	WorkspaceID uuid.UUID
+	ArtifactID  uuid.UUID
+	Path        string
+	CreatedAt   time.Time
 }
 
 type ArtifactRead struct {
@@ -132,19 +140,23 @@ type ArtifactSection struct {
 }
 
 type ArtifactVersion struct {
-	ID            uuid.UUID
-	ArtifactID    uuid.UUID
-	Seq           int32
-	Label         string
-	BodyMd        *string
-	BlobKey       *string
-	Filename      *string
-	ContentType   string
-	SizeBytes     int64
-	Note          string
-	CreatedByType string
-	CreatedByID   uuid.UUID
-	CreatedAt     time.Time
+	ID               uuid.UUID
+	ArtifactID       uuid.UUID
+	Seq              int32
+	Label            string
+	BodyMd           *string
+	BlobKey          *string
+	Filename         *string
+	ContentType      string
+	SizeBytes        int64
+	Note             string
+	CreatedByType    string
+	CreatedByID      uuid.UUID
+	CreatedAt        time.Time
+	State            string
+	BasedOnVersionID *uuid.UUID
+	DecidedByID      *uuid.UUID
+	DecidedAt        *time.Time
 }
 
 type Comment struct {
@@ -182,6 +194,23 @@ type Epic struct {
 	Icon        *string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type KnowledgeLink struct {
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	SourceKind      string
+	SourceID        uuid.UUID
+	SourceVersionID *uuid.UUID
+	SourceTicketID  *uuid.UUID
+	TargetKind      string
+	TargetID        *uuid.UUID
+	TargetAnchor    string
+	TargetText      string
+	RawText         string
+	Snippet         string
+	Position        int32
+	CreatedAt       time.Time
 }
 
 type Label struct {

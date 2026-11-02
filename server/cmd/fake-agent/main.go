@@ -70,8 +70,15 @@ func main() {
 
 	who := call("whoami", nil)
 	say("I'm %s (@%s), %s session", who["name"], who["handle"], who["session"])
-	call("claim_ticket", map[string]any{"ticket": *ticket})
+	claimed := call("claim_ticket", map[string]any{"ticket": *ticket})
 	say("claimed %s", *ticket)
+	// Wiki memory delivered with the claim (PLAN.md §12.3).
+	if mem, _ := claimed["memory"].([]any); len(mem) > 0 {
+		for _, m := range mem {
+			page := m.(map[string]any)
+			say("memory: %s (%s)", page["ref"], page["reason"])
+		}
+	}
 	tk := call("get_ticket", map[string]any{"ticket": *ticket})
 	say("%s: %s", *ticket, tk["title"])
 	for _, a := range tk["artifacts"].([]any) {
@@ -136,6 +143,11 @@ func main() {
 	call("create_artifact", map[string]any{"title": "Staging migration report — " + *ticket,
 		"body": "# Staging migration report\n\n## Result\n\nApplied through the db:migrate broker.\n\n## Next\n\nPR ready for review.\n"})
 	call("check_criterion", map[string]any{"n": 4})
+	// Remember what was learned, linked to the ticket and the ADR, so the
+	// next run on a related ticket starts with it.
+	call("write_note", map[string]any{"path": "agents/" + who["handle"].(string) + "/Partition rollback gotchas", "mode": "append",
+		"body": "- " + *ticket + ": applied the partitioning from [[ADR-012]] to staging through the broker. Keep the legacy index until the rollback window closes. See [[" + *ticket + "]].\n"})
+	say("wrote a memory note")
 	call("update_step", map[string]any{"step": 5, "state": "done"})
 	call("complete_run", map[string]any{"outcome": "Applied the migration to staging; ready for review"})
 	say("done: %s is In Review", *ticket)

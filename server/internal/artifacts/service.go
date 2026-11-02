@@ -20,10 +20,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/lazyagents/server/internal/links"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
-var Types = []string{"prd", "spec", "adr", "report", "design"}
+var Types = []string{"prd", "spec", "adr", "report", "design", "note"}
+
+// Version states. Suggested versions are agent edits to shared notes waiting
+// for a person (PLAN.md §12.5); they never become current on their own.
+const (
+	Published = "published"
+	Suggested = "suggested"
+	Rejected  = "rejected"
+)
 
 const (
 	// MaxMarkdownBytes bounds text bodies kept in Postgres.
@@ -65,7 +74,8 @@ type Content struct {
 }
 
 type NewArtifact struct {
-	ProjectKey   string
+	ProjectKey   string // required except for notes
+	Path         string // notes only: "Payments/Ledger/Rollback runbook"
 	Type         string
 	Title        string
 	Summary      string
@@ -74,12 +84,19 @@ type NewArtifact struct {
 	Content      Content
 	// Number keeps an existing ADR's number on import; nil takes the next one.
 	Number *int32
+	// State is Suggested for a note an agent proposes but may not publish:
+	// it has no current version until a person accepts it.
+	State string
 }
 
 type NewVersion struct {
 	Label   string
 	Note    string
 	Content Content
+	// State defaults to published. A suggested version is stored without
+	// becoming current; BasedOn records the version it was written against.
+	State   string
+	BasedOn *uuid.UUID
 }
 
 // IsMarkdown reports whether an upload should be stored as text.
@@ -197,16 +214,20 @@ func validTitle(t string) (string, error) {
 	return t, nil
 }
 
-// writeVersion inserts a version, extracts its outline and makes it current.
-func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r resolved, label, note string, by Actor, summary string) (store.ArtifactVersion, error) {
+// writeVersion inserts a version and extracts its outline. Published
+// versions become current and have their [[links]] indexed.
+func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r resolved, label, note string, by Actor, summary, state string, basedOn *uuid.UUID) (store.ArtifactVersion, error) {
+	if state == "" {
+		state = Published
+	}
 	v, err := q.CreateArtifactVersion(ctx, store.CreateArtifactVersionParams{
 		ArtifactID: a.ID, Label: label, BodyMd: r.body, BlobKey: r.blobKey, Filename: r.filename,
 		ContentType: r.contentType, SizeBytes: r.size, Note: note, CreatedByType: by.Type, CreatedByID: by.ID,
+		State: state, BasedOnVersionID: basedOn,
 	})
 	if err != nil {
 		return v, err
 	}
-	search := ""
 	if r.body != nil {
 		for i, sec := range Outline(*r.body) {
 			if err := q.InsertSection(ctx, store.InsertSectionParams{
@@ -215,16 +236,41 @@ func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r res
 				return v, err
 			}
 		}
-		search = PlainText(*r.body)
-		if summary == "" {
-			summary = Summary(*r.body)
-		}
-	} else if r.filename != nil {
-		search = *r.filename
 	}
-	return v, q.SetArtifactCurrentVersion(ctx, store.SetArtifactCurrentVersionParams{
+	if state != Published {
+		return v, nil
+	}
+	return v, makeCurrent(ctx, q, a, v, summary)
+}
+
+// makeCurrent points the artifact at a version, refreshes its search text
+// and summary, and re-indexes the links it contains.
+func makeCurrent(ctx context.Context, q *store.Queries, a store.Artifact, v store.ArtifactVersion, summary string) error {
+	search := ""
+	if v.BodyMd != nil {
+		search = PlainText(*v.BodyMd)
+		if summary == "" || a.Type == "note" {
+			summary = Summary(*v.BodyMd)
+		}
+	} else if v.Filename != nil {
+		search = *v.Filename
+	}
+	if err := q.SetArtifactCurrentVersion(ctx, store.SetArtifactCurrentVersionParams{
 		ID: a.ID, CurrentVersionID: &v.ID, SearchText: search, Summary: summary,
-	})
+	}); err != nil {
+		return err
+	}
+	body := ""
+	if v.BodyMd != nil {
+		body = *v.BodyMd
+	}
+	return links.Index(ctx, q, a.WorkspaceID, links.Source{Kind: links.SourceArtifact, ID: a.ID, VersionID: &v.ID}, body)
+}
+
+// Publish makes a stored (suggested) version current. The caller marks the
+// version published and holds the artifact lock.
+func Publish(ctx context.Context, q *store.Queries, a store.Artifact, v store.ArtifactVersion) error {
+	return makeCurrent(ctx, q, a, v, a.Summary)
 }
 
 // Create stores a new artifact and its first version.
@@ -232,82 +278,135 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, by Actor, in NewArti
 	if !slices.Contains(Types, in.Type) {
 		return store.Artifact{}, apperr.Invalid("type", "must be one of %s", strings.Join(Types, ", "))
 	}
-	fileName := ""
-	if in.Content.File != nil {
-		fileName = in.Content.File.Name
+	if in.Type != "note" && in.Path != "" {
+		return store.Artifact{}, apperr.Invalid("path", "only notes have a path")
+	}
+	if in.Type == "note" && in.Content.File != nil && !IsMarkdown(in.Content.File.Name, in.Content.File.ContentType) {
+		return store.Artifact{}, apperr.Invalid("file", "notes are markdown")
 	}
 	r, cleanup, err := s.resolve(ctx, ws, in.Content)
 	if err != nil {
 		return store.Artifact{}, err
 	}
-	title, err := validTitle(defaultTitle(r, in.Title, fileName))
+	var a store.Artifact
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		var err error
+		a, err = s.create(ctx, store.New(tx), ws, by, in, r)
+		return err
+	})
 	if err != nil {
 		cleanup()
+	}
+	return a, err
+}
+
+// CreateNoteTx creates a markdown note inside the caller's transaction.
+func (s *Service) CreateNoteTx(ctx context.Context, q *store.Queries, ws uuid.UUID, by Actor, path, projectKey, body, state string) (store.Artifact, error) {
+	in := NewArtifact{Type: "note", Path: path, ProjectKey: projectKey, Content: Content{BodyMD: &body}, State: state}
+	r, _, err := s.resolve(ctx, ws, in.Content) // markdown: nothing to clean up
+	if err != nil {
 		return store.Artifact{}, err
+	}
+	return s.create(ctx, q, ws, by, in, r)
+}
+
+func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by Actor, in NewArtifact, r resolved) (store.Artifact, error) {
+	var a store.Artifact
+	fileName := ""
+	if in.Content.File != nil {
+		fileName = in.Content.File.Name
+	}
+	var notePath *string
+	title := ""
+	if in.Type == "note" {
+		p, err := ValidNotePath(in.Path)
+		if err != nil {
+			return a, err
+		}
+		notePath, title = &p, links.TitleOf(p)
+	} else {
+		var err error
+		if title, err = validTitle(defaultTitle(r, in.Title, fileName)); err != nil {
+			return a, err
+		}
 	}
 	label := strings.TrimSpace(in.VersionLabel)
 	if label == "" {
 		label = "v1"
 	}
-
-	var a store.Artifact
-	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		q := store.New(tx)
+	var projectID *uuid.UUID
+	if in.ProjectKey != "" || in.Type != "note" {
 		p, err := q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: ws, Key: in.ProjectKey})
 		if errors.Is(err, pgx.ErrNoRows) {
-			return apperr.Invalid("project_key", "unknown project")
+			return a, apperr.Invalid("project_key", "unknown project")
 		} else if err != nil {
-			return err
+			return a, err
 		}
-		if in.EpicID != nil {
-			e, err := q.GetEpic(ctx, store.GetEpicParams{ID: *in.EpicID, WorkspaceID: ws})
-			if err != nil || e.ProjectID != p.ID {
-				return apperr.Invalid("epic_id", "unknown epic in this project")
+		projectID = &p.ID
+	}
+	if in.EpicID != nil {
+		e, err := q.GetEpic(ctx, store.GetEpicParams{ID: *in.EpicID, WorkspaceID: ws})
+		if err != nil || projectID == nil || e.ProjectID != *projectID {
+			return a, apperr.Invalid("epic_id", "unknown epic in this project")
+		}
+	}
+	if notePath != nil {
+		if _, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: *notePath}); err == nil {
+			return a, apperr.Invalid("path", "a page called %q already exists", *notePath)
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return a, err
+		}
+		// The new page takes over this path from any renamed page.
+		if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: ws, Path: *notePath}); err != nil {
+			return a, err
+		}
+	}
+	var number *int32
+	if in.Number != nil && in.Type != "adr" {
+		return a, apperr.Invalid("number", "only ADRs are numbered")
+	}
+	if in.Type == "adr" {
+		if err := q.LockArtifactNumbering(ctx, ws); err != nil {
+			return a, err
+		}
+		if in.Number != nil {
+			if *in.Number < 1 {
+				return a, apperr.Invalid("number", "must be positive")
 			}
-		}
-		var number *int32
-		if in.Number != nil && in.Type != "adr" {
-			return apperr.Invalid("number", "only ADRs are numbered")
-		}
-		if in.Type == "adr" {
-			if err := q.LockArtifactNumbering(ctx, ws); err != nil {
-				return err
+			taken, err := q.ADRNumberTaken(ctx, store.ADRNumberTakenParams{WorkspaceID: ws, Number: in.Number})
+			if err != nil {
+				return a, err
 			}
-			if in.Number != nil {
-				if *in.Number < 1 {
-					return apperr.Invalid("number", "must be positive")
-				}
-				taken, err := q.ADRNumberTaken(ctx, store.ADRNumberTakenParams{WorkspaceID: ws, Number: in.Number})
-				if err != nil {
-					return err
-				}
-				if taken {
-					return apperr.Invalid("number", "ADR-%03d already exists", *in.Number)
-				}
-				number = in.Number
-			} else {
-				n, err := q.NextADRNumber(ctx, ws)
-				if err != nil {
-					return err
-				}
-				number = &n
+			if taken {
+				return a, apperr.Invalid("number", "ADR-%03d already exists", *in.Number)
 			}
+			number = in.Number
+		} else {
+			n, err := q.NextADRNumber(ctx, ws)
+			if err != nil {
+				return a, err
+			}
+			number = &n
 		}
-		a, err = q.CreateArtifact(ctx, store.CreateArtifactParams{
-			WorkspaceID: ws, ProjectID: p.ID, EpicID: in.EpicID, Type: in.Type, Title: title, Number: number,
-			Summary: strings.TrimSpace(in.Summary), AuthorType: by.Type, AuthorID: by.ID,
-		})
-		if err != nil {
-			return err
-		}
-		_, err = writeVersion(ctx, q, a, r, label, "", by, a.Summary)
-		return err
+	}
+	a, err := q.CreateArtifact(ctx, store.CreateArtifactParams{
+		WorkspaceID: ws, ProjectID: projectID, EpicID: in.EpicID, Type: in.Type, Title: title, Number: number,
+		Summary: strings.TrimSpace(in.Summary), AuthorType: by.Type, AuthorID: by.ID, Path: notePath,
 	})
 	if err != nil {
-		cleanup()
 		return a, err
 	}
-	return a, nil
+	if in.State == Suggested {
+		label = "suggestion"
+	}
+	if _, err = writeVersion(ctx, q, a, r, label, "", by, a.Summary, in.State, nil); err != nil {
+		return a, err
+	}
+	if in.State == Suggested {
+		return a, nil // nothing to resolve to until a person accepts it
+	}
+	// Ghost links naming this artifact now resolve to it.
+	return a, links.ResolvePending(ctx, q, ws)
 }
 
 // AddVersion makes new content current. Labels default to v<seq>.
@@ -326,21 +425,64 @@ func (s *Service) AddVersion(ctx context.Context, ws uuid.UUID, by Actor, id uui
 			}
 			return err
 		}
-		label := strings.TrimSpace(in.Label)
-		if label == "" {
-			versions, err := q.ListArtifactVersions(ctx, a.ID)
-			if err != nil {
-				return err
-			}
-			label = fmt.Sprintf("v%d", len(versions)+1)
-		}
-		_, err = writeVersion(ctx, q, a, r, label, strings.TrimSpace(in.Note), by, a.Summary)
+		_, err = AddVersionTx(ctx, q, a, r, by, in)
 		return err
 	})
 	if err != nil {
 		cleanup()
 	}
 	return a, err
+}
+
+// AddVersionTx adds a version to a locked artifact in the caller's
+// transaction. Labels count published versions: a suggestion accepted later
+// is relabelled then.
+func AddVersionTx(ctx context.Context, q *store.Queries, a store.Artifact, r resolved, by Actor, in NewVersion) (store.ArtifactVersion, error) {
+	if a.Type == "note" && r.body == nil {
+		return store.ArtifactVersion{}, apperr.Invalid("file", "notes are markdown")
+	}
+	label := strings.TrimSpace(in.Label)
+	if label == "" {
+		n, err := q.CountPublishedVersions(ctx, a.ID)
+		if err != nil {
+			return store.ArtifactVersion{}, err
+		}
+		label = fmt.Sprintf("v%d", n+1)
+		if in.State == Suggested {
+			label = "suggestion"
+		}
+	}
+	return writeVersion(ctx, q, a, r, label, strings.TrimSpace(in.Note), by, a.Summary, in.State, in.BasedOn)
+}
+
+// Markdown validates a markdown body for AddVersionTx.
+func Markdown(body string) (resolved, error) {
+	var s Service
+	r, _, err := s.resolve(context.Background(), uuid.Nil, Content{BodyMD: &body})
+	return r, err
+}
+
+// ValidNotePath normalizes a wiki path and checks it can be linked to.
+func ValidNotePath(p string) (string, error) {
+	p = links.NormalizePath(p)
+	if p == "" {
+		return "", apperr.Invalid("path", "is required, e.g. Payments/Rollback runbook")
+	}
+	if strings.ContainsAny(p, "[]#|^") {
+		return "", apperr.Invalid("path", "can't contain [ ] # | or ^, which would break [[links]] to it")
+	}
+	if utf8.RuneCountInString(p) > 300 {
+		return "", apperr.Invalid("path", "must be at most 300 characters")
+	}
+	if strings.Count(p, "/") > 8 {
+		return "", apperr.Invalid("path", "can be at most 9 levels deep")
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "." || seg == ".." {
+			return "", apperr.Invalid("path", "can't contain . or .. segments")
+		}
+	}
+	return p, nil
 }
 
 type MetaPatch struct {
@@ -361,6 +503,9 @@ func (s *Service) UpdateMeta(ctx context.Context, ws uuid.UUID, id uuid.UUID, p 
 			return err
 		}
 		next := store.UpdateArtifactMetaParams{ID: cur.ID, Title: cur.Title, Summary: cur.Summary, EpicID: cur.EpicID}
+		if p.Title != nil && cur.Type == "note" && *p.Title != cur.Title {
+			return apperr.Invalid("title", "a page's title is the last part of its path: move the page to rename it")
+		}
 		if p.Title != nil {
 			if next.Title, err = validTitle(*p.Title); err != nil {
 				return err
@@ -372,7 +517,7 @@ func (s *Service) UpdateMeta(ctx context.Context, ws uuid.UUID, id uuid.UUID, p 
 		if p.EpicSet {
 			if p.EpicID != nil {
 				e, err := q.GetEpic(ctx, store.GetEpicParams{ID: *p.EpicID, WorkspaceID: ws})
-				if err != nil || e.ProjectID != cur.ProjectID {
+				if err != nil || cur.ProjectID == nil || e.ProjectID != *cur.ProjectID {
 					return apperr.Invalid("epic_id", "unknown epic in this project")
 				}
 			}

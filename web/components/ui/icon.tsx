@@ -7,6 +7,8 @@ const paths = {
   epics: <><path d="M8 2.5 13.5 5.3 8 8.1 2.5 5.3z" /><path d="m2.5 8.2 5.5 2.8 5.5-2.8" /><path d="m2.5 11 5.5 2.8 5.5-2.8" /></>,
   agents: <><rect x="2.5" y="5" width="11" height="8" rx="2.2" /><path d="M8 2.5V5" /><path d="M6 8.6v.8M10 8.6v.8" /></>,
   artifacts: <><path d="M4 2.5h5l3 3v8H4z" /><path d="M9 2.5v3h3" /></>,
+  wiki: <><path d="M2.5 3.5h3.8A1.7 1.7 0 0 1 8 5.2v8.3a1.3 1.3 0 0 0-1.3-1.3H2.5z" /><path d="M13.5 3.5H9.7A1.7 1.7 0 0 0 8 5.2v8.3a1.3 1.3 0 0 1 1.3-1.3h4.2z" /></>,
+  graph: <><circle cx="8" cy="8" r="1.8" /><circle cx="3.5" cy="4" r="1.3" /><circle cx="12.5" cy="4.5" r="1.3" /><circle cx="11.5" cy="12.5" r="1.3" /><path d="m4.6 4.9 2 1.9M11.4 5.3 9.4 7M10.6 11.4 9.2 9.4" /></>,
   search: <><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></>,
   plus: <path d="M8 3.5v9M3.5 8h9" />,
   chev: <path d="m4.5 6.5 3.5 3.5 3.5-3.5" />,

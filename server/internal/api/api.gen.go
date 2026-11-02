@@ -72,6 +72,27 @@ func (e AgentStatus) Valid() bool {
 	}
 }
 
+// Defines values for AgentMemoryInject.
+const (
+	Index  AgentMemoryInject = "index"
+	Linked AgentMemoryInject = "linked"
+	Search AgentMemoryInject = "search"
+)
+
+// Valid indicates whether the value is a known member of the AgentMemoryInject enum.
+func (e AgentMemoryInject) Valid() bool {
+	switch e {
+	case Index:
+		return true
+	case Linked:
+		return true
+	case Search:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApprovalState.
 const (
 	ApprovalStateApproved ApprovalState = "approved"
@@ -136,6 +157,7 @@ func (e ArtifactRelation) Valid() bool {
 const (
 	Adr    ArtifactType = "adr"
 	Design ArtifactType = "design"
+	Note   ArtifactType = "note"
 	Prd    ArtifactType = "prd"
 	Report ArtifactType = "report"
 	Spec   ArtifactType = "spec"
@@ -147,6 +169,8 @@ func (e ArtifactType) Valid() bool {
 	case Adr:
 		return true
 	case Design:
+		return true
+	case Note:
 		return true
 	case Prd:
 		return true
@@ -237,6 +261,84 @@ func (e HealthStatus) Valid() bool {
 	case Degraded:
 		return true
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LinkTargetKind.
+const (
+	LinkTargetKindAgent      LinkTargetKind = "agent"
+	LinkTargetKindArtifact   LinkTargetKind = "artifact"
+	LinkTargetKindComment    LinkTargetKind = "comment"
+	LinkTargetKindEpic       LinkTargetKind = "epic"
+	LinkTargetKindSection    LinkTargetKind = "section"
+	LinkTargetKindTicket     LinkTargetKind = "ticket"
+	LinkTargetKindUnresolved LinkTargetKind = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the LinkTargetKind enum.
+func (e LinkTargetKind) Valid() bool {
+	switch e {
+	case LinkTargetKindAgent:
+		return true
+	case LinkTargetKindArtifact:
+		return true
+	case LinkTargetKindComment:
+		return true
+	case LinkTargetKindEpic:
+		return true
+	case LinkTargetKindSection:
+		return true
+	case LinkTargetKindTicket:
+		return true
+	case LinkTargetKindUnresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MentionSourceKind.
+const (
+	MentionSourceKindArtifact MentionSourceKind = "artifact"
+	MentionSourceKindComment  MentionSourceKind = "comment"
+	MentionSourceKindTicket   MentionSourceKind = "ticket"
+)
+
+// Valid indicates whether the value is a known member of the MentionSourceKind enum.
+func (e MentionSourceKind) Valid() bool {
+	switch e {
+	case MentionSourceKindArtifact:
+		return true
+	case MentionSourceKindComment:
+		return true
+	case MentionSourceKindTicket:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NodeKind.
+const (
+	NodeKindAgent    NodeKind = "agent"
+	NodeKindArtifact NodeKind = "artifact"
+	NodeKindEpic     NodeKind = "epic"
+	NodeKindTicket   NodeKind = "ticket"
+)
+
+// Valid indicates whether the value is a known member of the NodeKind enum.
+func (e NodeKind) Valid() bool {
+	switch e {
+	case NodeKindAgent:
+		return true
+	case NodeKindArtifact:
+		return true
+	case NodeKindEpic:
+		return true
+	case NodeKindTicket:
 		return true
 	default:
 		return false
@@ -561,6 +663,24 @@ func (e TicketStatus) Valid() bool {
 	}
 }
 
+// Defines values for LinkMentionJSONBodySourceKind.
+const (
+	LinkMentionJSONBodySourceKindArtifact LinkMentionJSONBodySourceKind = "artifact"
+	LinkMentionJSONBodySourceKindTicket   LinkMentionJSONBodySourceKind = "ticket"
+)
+
+// Valid indicates whether the value is a known member of the LinkMentionJSONBodySourceKind enum.
+func (e LinkMentionJSONBodySourceKind) Valid() bool {
+	switch e {
+	case LinkMentionJSONBodySourceKindArtifact:
+		return true
+	case LinkMentionJSONBodySourceKindTicket:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListTicketsParamsView.
 const (
 	ListTicketsParamsViewActive     ListTicketsParamsView = "active"
@@ -638,6 +758,18 @@ type AgentDetail struct {
 	Versions   []DefinitionVersion `json:"versions"`
 }
 
+// AgentMemory defines model for AgentMemory.
+type AgentMemory struct {
+	Enabled bool `json:"enabled"`
+
+	// Inject index: the Memory page; linked: plus pages linked to or from the ticket; search: plus title search hits
+	Inject    AgentMemoryInject `json:"inject"`
+	MaxTokens int               `json:"max_tokens"`
+}
+
+// AgentMemoryInject index: the Memory page; linked: plus pages linked to or from the ticket; search: plus title search hits
+type AgentMemoryInject string
+
 // AgentOverride defines model for AgentOverride.
 type AgentOverride struct {
 	Budget             *Budget               `json:"budget,omitempty"`
@@ -667,6 +799,7 @@ type AgentSpec struct {
 	Instructions   string                       `json:"instructions"`
 	MaxConcurrency int                          `json:"max_concurrency"`
 	McpServers     []McpServer                  `json:"mcp_servers"`
+	Memory         *AgentMemory                 `json:"memory,omitempty"`
 	Model          string                       `json:"model"`
 	Scopes         map[string]ScopeMode         `json:"scopes"`
 }
@@ -720,14 +853,20 @@ type Artifact struct {
 	Epic           *EpicRef                  `json:"epic,omitempty"`
 	Id             openapi_types.UUID        `json:"id"`
 	Outline        []OutlineSection          `json:"outline"`
-	Project        Project                   `json:"project"`
-	ReadBy         []ArtifactReader          `json:"read_by"`
-	Summary        string                    `json:"summary"`
-	Tickets        []LinkedTicket            `json:"tickets"`
-	Title          string                    `json:"title"`
-	Type           ArtifactType              `json:"type"`
-	UpdatedAt      time.Time                 `json:"updated_at"`
-	Versions       []ArtifactVersion         `json:"versions"`
+
+	// Path Notes: Payments/Ledger/Rollback runbook
+	Path    *string          `json:"path,omitempty"`
+	Project *Project         `json:"project,omitempty"`
+	ReadBy  []ArtifactReader `json:"read_by"`
+
+	// Suggestions Pending agent suggestions (notes)
+	Suggestions int               `json:"suggestions"`
+	Summary     string            `json:"summary"`
+	Tickets     []LinkedTicket    `json:"tickets"`
+	Title       string            `json:"title"`
+	Type        ArtifactType      `json:"type"`
+	UpdatedAt   time.Time         `json:"updated_at"`
+	Versions    []ArtifactVersion `json:"versions"`
 }
 
 // ArtifactContent defines model for ArtifactContent.
@@ -746,9 +885,12 @@ type ArtifactContentKind string
 
 // ArtifactCounts defines model for ArtifactCounts.
 type ArtifactCounts struct {
-	Adr    int `json:"adr"`
+	Adr int `json:"adr"`
+
+	// All Everything except notes
 	All    int `json:"all"`
 	Design int `json:"design"`
+	Note   int `json:"note"`
 	Prd    int `json:"prd"`
 	Report int `json:"report"`
 	Spec   int `json:"spec"`
@@ -776,16 +918,19 @@ type ArtifactSummary struct {
 	Content ArtifactContent `json:"content"`
 
 	// DisplayId ADR-012; set for numbered types
-	DisplayId    *string            `json:"display_id,omitempty"`
-	Epic         *EpicRef           `json:"epic,omitempty"`
-	Id           openapi_types.UUID `json:"id"`
-	Project      Project            `json:"project"`
-	Summary      string             `json:"summary"`
-	TicketCount  int                `json:"ticket_count"`
-	Title        string             `json:"title"`
-	Type         ArtifactType       `json:"type"`
-	UpdatedAt    time.Time          `json:"updated_at"`
-	VersionLabel *string            `json:"version_label,omitempty"`
+	DisplayId *string            `json:"display_id,omitempty"`
+	Epic      *EpicRef           `json:"epic,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Path Notes only
+	Path         *string      `json:"path,omitempty"`
+	Project      *Project     `json:"project,omitempty"`
+	Summary      string       `json:"summary"`
+	TicketCount  int          `json:"ticket_count"`
+	Title        string       `json:"title"`
+	Type         ArtifactType `json:"type"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+	VersionLabel *string      `json:"version_label,omitempty"`
 }
 
 // ArtifactType defines model for ArtifactType.
@@ -802,12 +947,19 @@ type ArtifactVersion struct {
 	Seq       int                `json:"seq"`
 }
 
+// Backlinks defines model for Backlinks.
+type Backlinks struct {
+	Linked   []Mention `json:"linked"`
+	Unlinked []Mention `json:"unlinked"`
+}
+
 // Bootstrap defines model for Bootstrap.
 type Bootstrap struct {
 	Agents []Agent `json:"agents"`
 	Counts struct {
-		Inbox      int `json:"inbox"`
-		LiveAgents int `json:"live_agents"`
+		Inbox           int `json:"inbox"`
+		LiveAgents      int `json:"live_agents"`
+		WikiSuggestions int `json:"wiki_suggestions"`
 	} `json:"counts"`
 	Epics     []Epic    `json:"epics"`
 	Labels    []Label   `json:"labels"`
@@ -890,6 +1042,24 @@ type Error struct {
 // ErrorCode defines model for Error.Code.
 type ErrorCode string
 
+// Graph defines model for Graph.
+type Graph struct {
+	Edges []struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"edges"`
+	Nodes []GraphNode `json:"nodes"`
+}
+
+// GraphNode defines model for GraphNode.
+type GraphNode struct {
+	Hop int    `json:"hop"`
+	Key string `json:"key"`
+
+	// Target What a [[link]] points at, with enough to render it
+	Target LinkTarget `json:"target"`
+}
+
 // Harness defines model for Harness.
 type Harness string
 
@@ -927,6 +1097,23 @@ type Label struct {
 	Name  string             `json:"name"`
 }
 
+// LinkTarget What a [[link]] points at, with enough to render it
+type LinkTarget struct {
+	Anchor       *string             `json:"anchor,omitempty"`
+	ArtifactType *ArtifactType       `json:"artifact_type,omitempty"`
+	ColorIndex   *int                `json:"color_index,omitempty"`
+	DisplayId    *string             `json:"display_id,omitempty"`
+	Href         *string             `json:"href,omitempty"`
+	Id           *openapi_types.UUID `json:"id,omitempty"`
+	Kind         LinkTargetKind      `json:"kind"`
+	Path         *string             `json:"path,omitempty"`
+	Status       *string             `json:"status,omitempty"`
+	Title        string              `json:"title"`
+}
+
+// LinkTargetKind defines model for LinkTarget.Kind.
+type LinkTargetKind string
+
 // LinkedTicket defines model for LinkedTicket.
 type LinkedTicket struct {
 	Key      string           `json:"key"`
@@ -941,6 +1128,21 @@ type McpServer struct {
 	Name        string  `json:"name"`
 	Url         string  `json:"url"`
 }
+
+// Mention defines model for Mention.
+type Mention struct {
+	// Anchors Sections of the target it cites
+	Anchors  *[]string `json:"anchors,omitempty"`
+	Snippets []string  `json:"snippets"`
+
+	// Source What a [[link]] points at, with enough to render it
+	Source     LinkTarget         `json:"source"`
+	SourceId   openapi_types.UUID `json:"source_id"`
+	SourceKind MentionSourceKind  `json:"source_kind"`
+}
+
+// MentionSourceKind defines model for Mention.SourceKind.
+type MentionSourceKind string
 
 // NewArtifact defines model for NewArtifact.
 type NewArtifact struct {
@@ -983,6 +1185,16 @@ type NewTicket struct {
 	Status          *TicketStatus         `json:"status,omitempty"`
 	Title           string                `json:"title"`
 }
+
+// NewWikiPage defines model for NewWikiPage.
+type NewWikiPage struct {
+	BodyMd     string  `json:"body_md"`
+	Path       string  `json:"path"`
+	ProjectKey *string `json:"project_key,omitempty"`
+}
+
+// NodeKind defines model for NodeKind.
+type NodeKind string
 
 // OutlineSection defines model for OutlineSection.
 type OutlineSection struct {
@@ -1045,6 +1257,7 @@ type ResolvedDefinition struct {
 	Instructions   string            `json:"instructions"`
 	MaxConcurrency int               `json:"max_concurrency"`
 	McpServers     []McpServer       `json:"mcp_servers"`
+	Memory         *AgentMemory      `json:"memory,omitempty"`
 	Model          string            `json:"model"`
 
 	// Provenance Fields a project changed, e.g. {"harness":"project"}
@@ -1055,6 +1268,14 @@ type ResolvedDefinition struct {
 
 // ResolvedDefinitionProvenance defines model for ResolvedDefinition.Provenance.
 type ResolvedDefinitionProvenance string
+
+// ResolvedLink defines model for ResolvedLink.
+type ResolvedLink struct {
+	Ref string `json:"ref"`
+
+	// Target What a [[link]] points at, with enough to render it
+	Target LinkTarget `json:"target"`
+}
 
 // ResolvedScope defines model for ResolvedScope.
 type ResolvedScope struct {
@@ -1142,6 +1363,8 @@ type RunTurnTrigger string
 
 // ScopeInfo defines model for ScopeInfo.
 type ScopeInfo struct {
+	// ApiOnly Only possible through the LazyAgents API (wiki edits), so every mode is enforced server-side
+	ApiOnly     *bool   `json:"api_only,omitempty"`
 	Brokered    bool    `json:"brokered"`
 	Description string  `json:"description"`
 	Scope       string  `json:"scope"`
@@ -1150,6 +1373,17 @@ type ScopeInfo struct {
 
 // ScopeMode defines model for ScopeMode.
 type ScopeMode string
+
+// SearchHit defines model for SearchHit.
+type SearchHit struct {
+	Score float32 `json:"score"`
+
+	// Snippet Matches are wrapped in « »
+	Snippet string `json:"snippet"`
+
+	// Target What a [[link]] points at, with enough to render it
+	Target LinkTarget `json:"target"`
+}
 
 // SecretInfo defines model for SecretInfo.
 type SecretInfo struct {
@@ -1264,6 +1498,66 @@ type UserRef struct {
 	Name        string             `json:"name"`
 }
 
+// WikiImportResult defines model for WikiImportResult.
+type WikiImportResult struct {
+	Created   int      `json:"created"`
+	Skipped   []string `json:"skipped"`
+	Unchanged int      `json:"unchanged"`
+	Updated   int      `json:"updated"`
+}
+
+// WikiPageSave defines model for WikiPageSave.
+type WikiPageSave struct {
+	// BaseVersionId The version the editor started from; a save over a newer version is refused (409)
+	BaseVersionId *openapi_types.UUID `json:"base_version_id,omitempty"`
+	BodyMd        *string             `json:"body_md,omitempty"`
+	Note          *string             `json:"note,omitempty"`
+
+	// Path Move the page here; the old path keeps resolving
+	Path *string `json:"path,omitempty"`
+}
+
+// WikiPageSummary defines model for WikiPageSummary.
+type WikiPageSummary struct {
+	Author    Actor               `json:"author"`
+	Id        openapi_types.UUID  `json:"id"`
+	Path      string              `json:"path"`
+	ProjectId *openapi_types.UUID `json:"project_id,omitempty"`
+
+	// Published False while the page only exists as an agent's suggestion
+	Published   bool      `json:"published"`
+	Suggestions int       `json:"suggestions"`
+	Title       string    `json:"title"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// WikiSuggestion defines model for WikiSuggestion.
+type WikiSuggestion struct {
+	ArtifactId openapi_types.UUID `json:"artifact_id"`
+	Author     Actor              `json:"author"`
+	BodyMd     string             `json:"body_md"`
+	CreatedAt  time.Time          `json:"created_at"`
+
+	// CurrentBodyMd The page as it is now ("" for a new page)
+	CurrentBodyMd string             `json:"current_body_md"`
+	Id            openapi_types.UUID `json:"id"`
+	NewPage       bool               `json:"new_page"`
+	Note          *string            `json:"note,omitempty"`
+	Path          string             `json:"path"`
+
+	// Stale The page changed after the agent wrote this
+	Stale bool   `json:"stale"`
+	Title string `json:"title"`
+}
+
+// WikiTree defines model for WikiTree.
+type WikiTree struct {
+	Pages []WikiPageSummary `json:"pages"`
+
+	// Suggestions Pending suggestions across the wiki
+	Suggestions int `json:"suggestions"`
+}
+
 // Workspace defines model for Workspace.
 type Workspace struct {
 	Id   openapi_types.UUID `json:"id"`
@@ -1276,6 +1570,9 @@ type AgentHandle = string
 
 // ArtifactId defines model for ArtifactId.
 type ArtifactId = openapi_types.UUID
+
+// NodeId defines model for NodeId.
+type NodeId = openapi_types.UUID
 
 // TicketKey defines model for TicketKey.
 type TicketKey = string
@@ -1347,6 +1644,47 @@ type UpdateCriterionJSONBody struct {
 	Text *string `json:"text,omitempty"`
 }
 
+// GetBacklinksParams defines parameters for GetBacklinks.
+type GetBacklinksParams struct {
+	Kind NodeKind `form:"kind" json:"kind"`
+	Id   NodeId   `form:"id" json:"id"`
+}
+
+// GetGraphParams defines parameters for GetGraph.
+type GetGraphParams struct {
+	Kind  NodeKind `form:"kind" json:"kind"`
+	Id    NodeId   `form:"id" json:"id"`
+	Depth *int     `form:"depth,omitempty" json:"depth,omitempty"`
+}
+
+// LinkMentionJSONBody defines parameters for LinkMention.
+type LinkMentionJSONBody struct {
+	SourceId   openapi_types.UUID            `json:"source_id"`
+	SourceKind LinkMentionJSONBodySourceKind `json:"source_kind"`
+	TargetId   openapi_types.UUID            `json:"target_id"`
+	TargetKind NodeKind                      `json:"target_kind"`
+}
+
+// LinkMentionJSONBodySourceKind defines parameters for LinkMention.
+type LinkMentionJSONBodySourceKind string
+
+// ResolveLinksParams defines parameters for ResolveLinks.
+type ResolveLinksParams struct {
+	// Ref Link texts as written inside [[…]], without the brackets
+	Ref []string `form:"ref" json:"ref"`
+}
+
+// SearchKnowledgeParams defines parameters for SearchKnowledge.
+type SearchKnowledgeParams struct {
+	Q    string    `form:"q" json:"q"`
+	Kind *[]string `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// SuggestLinksParams defines parameters for SuggestLinks.
+type SuggestLinksParams struct {
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+}
+
 // GetRunParams defines parameters for GetRun.
 type GetRunParams struct {
 	// After Only events after this sequence number
@@ -1396,6 +1734,21 @@ type CreateCriterionJSONBody struct {
 	Text string `json:"text"`
 }
 
+// ImportWikiMultipartBody defines parameters for ImportWiki.
+type ImportWikiMultipartBody struct {
+	File openapi_types.File `json:"file"`
+}
+
+// GetWikiPageParams defines parameters for GetWikiPage.
+type GetWikiPageParams struct {
+	Path string `form:"path" json:"path"`
+}
+
+// ListWikiSuggestionsParams defines parameters for ListWikiSuggestions.
+type ListWikiSuggestionsParams struct {
+	ArtifactId *openapi_types.UUID `form:"artifact_id,omitempty" json:"artifact_id,omitempty"`
+}
+
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody CreateAgentJSONBody
 
@@ -1423,6 +1776,9 @@ type CreateArtifactVersionMultipartRequestBody = NewArtifactVersion
 // UpdateCriterionJSONRequestBody defines body for UpdateCriterion for application/json ContentType.
 type UpdateCriterionJSONRequestBody UpdateCriterionJSONBody
 
+// LinkMentionJSONRequestBody defines body for LinkMention for application/json ContentType.
+type LinkMentionJSONRequestBody LinkMentionJSONBody
+
 // SetSecretJSONRequestBody defines body for SetSecret for application/json ContentType.
 type SetSecretJSONRequestBody SetSecretJSONBody
 
@@ -1443,6 +1799,15 @@ type CreateCommentJSONRequestBody = NewComment
 
 // CreateCriterionJSONRequestBody defines body for CreateCriterion for application/json ContentType.
 type CreateCriterionJSONRequestBody CreateCriterionJSONBody
+
+// ImportWikiMultipartRequestBody defines body for ImportWiki for multipart/form-data ContentType.
+type ImportWikiMultipartRequestBody ImportWikiMultipartBody
+
+// CreateWikiPageJSONRequestBody defines body for CreateWikiPage for application/json ContentType.
+type CreateWikiPageJSONRequestBody = NewWikiPage
+
+// SaveWikiPageJSONRequestBody defines body for SaveWikiPage for application/json ContentType.
+type SaveWikiPageJSONRequestBody = WikiPageSave
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1503,6 +1868,24 @@ type ServerInterface interface {
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetBacklinks Linked and unlinked mentions of an artifact, ticket, epic or agent
+	// (GET /knowledge/backlinks)
+	GetBacklinks(w http.ResponseWriter, r *http.Request, params GetBacklinksParams)
+	// GetGraph The local link graph around a node (1–2 hops, both directions)
+	// (GET /knowledge/graph)
+	GetGraph(w http.ResponseWriter, r *http.Request, params GetGraphParams)
+	// LinkMention Turn the first unlinked mention of a target in a source into a [[link]]
+	// (POST /knowledge/link-mention)
+	LinkMention(w http.ResponseWriter, r *http.Request)
+	// ResolveLinks Resolve [[link]] texts to what they point at (for rendering)
+	// (GET /knowledge/resolve)
+	ResolveLinks(w http.ResponseWriter, r *http.Request, params ResolveLinksParams)
+	// SearchKnowledge Full-text search over pages, artifacts and tickets, boosted by links
+	// (GET /knowledge/search)
+	SearchKnowledge(w http.ResponseWriter, r *http.Request, params SearchKnowledgeParams)
+	// SuggestLinks [[ autocomplete over pages, artifacts, tickets, epics and agents
+	// (GET /knowledge/suggest)
+	SuggestLinks(w http.ResponseWriter, r *http.Request, params SuggestLinksParams)
 	// GetRun A run with its turns, plan, approvals and events (the run log)
 	// (GET /runs/{id})
 	GetRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params GetRunParams)
@@ -1548,6 +1931,30 @@ type ServerInterface interface {
 	// CreateCriterion Add an acceptance criterion
 	// (POST /tickets/{key}/criteria)
 	CreateCriterion(w http.ResponseWriter, r *http.Request, key TicketKey)
+	// ExportWiki Every page as an Obsidian-compatible vault (zip of markdown files)
+	// (GET /wiki/export)
+	ExportWiki(w http.ResponseWriter, r *http.Request)
+	// ImportWiki Import a vault zip; each .md file creates or replaces the page at its path
+	// (POST /wiki/import)
+	ImportWiki(w http.ResponseWriter, r *http.Request)
+	// GetWikiPage A page by path (or a renamed page's old path)
+	// (GET /wiki/page)
+	GetWikiPage(w http.ResponseWriter, r *http.Request, params GetWikiPageParams)
+	// ListWikiPages Every wiki page (the page tree), with pending suggestion counts
+	// (GET /wiki/pages)
+	ListWikiPages(w http.ResponseWriter, r *http.Request)
+	// CreateWikiPage Create a page at a path
+	// (POST /wiki/pages)
+	CreateWikiPage(w http.ResponseWriter, r *http.Request)
+	// SaveWikiPage Save a page's body (a new version, silently) and/or move it to a new path
+	// (PUT /wiki/pages/{id})
+	SaveWikiPage(w http.ResponseWriter, r *http.Request, id ArtifactId)
+	// ListWikiSuggestions Agent edits waiting for a person, oldest first
+	// (GET /wiki/suggestions)
+	ListWikiSuggestions(w http.ResponseWriter, r *http.Request, params ListWikiSuggestionsParams)
+	// DecideWikiSuggestion Accept (publish as the next version) or reject a suggestion
+	// (POST /wiki/suggestions/{versionId}/{decision})
+	DecideWikiSuggestion(w http.ResponseWriter, r *http.Request, versionId openapi_types.UUID, decision string)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -2106,6 +2513,237 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetBacklinks operation middleware
+func (siw *ServerInterfaceWrapper) GetBacklinks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBacklinksParams
+
+	// ------------- Required query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "id", r.URL.Query(), &params.Id, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBacklinks(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGraph operation middleware
+func (siw *ServerInterfaceWrapper) GetGraph(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetGraphParams
+
+	// ------------- Required query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "id", r.URL.Query(), &params.Id, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "depth" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "depth", r.URL.Query(), &params.Depth, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "depth"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "depth", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGraph(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkMention operation middleware
+func (siw *ServerInterfaceWrapper) LinkMention(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkMention(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveLinks operation middleware
+func (siw *ServerInterfaceWrapper) ResolveLinks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResolveLinksParams
+
+	// ------------- Required query parameter "ref" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "ref", r.URL.Query(), &params.Ref, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ref"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveLinks(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchKnowledge operation middleware
+func (siw *ServerInterfaceWrapper) SearchKnowledge(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchKnowledgeParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchKnowledge(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SuggestLinks operation middleware
+func (siw *ServerInterfaceWrapper) SuggestLinks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SuggestLinksParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SuggestLinks(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRun operation middleware
 func (siw *ServerInterfaceWrapper) GetRun(w http.ResponseWriter, r *http.Request) {
 
@@ -2554,6 +3192,189 @@ func (siw *ServerInterfaceWrapper) CreateCriterion(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ExportWiki operation middleware
+func (siw *ServerInterfaceWrapper) ExportWiki(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportWiki(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportWiki operation middleware
+func (siw *ServerInterfaceWrapper) ImportWiki(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportWiki(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWikiPage operation middleware
+func (siw *ServerInterfaceWrapper) GetWikiPage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWikiPageParams
+
+	// ------------- Required query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWikiPage(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWikiPages operation middleware
+func (siw *ServerInterfaceWrapper) ListWikiPages(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWikiPages(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWikiPage operation middleware
+func (siw *ServerInterfaceWrapper) CreateWikiPage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWikiPage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveWikiPage operation middleware
+func (siw *ServerInterfaceWrapper) SaveWikiPage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ArtifactId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveWikiPage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWikiSuggestions operation middleware
+func (siw *ServerInterfaceWrapper) ListWikiSuggestions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWikiSuggestionsParams
+
+	// ------------- Optional query parameter "artifact_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "artifact_id", r.URL.Query(), &params.ArtifactId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "artifact_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifact_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWikiSuggestions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DecideWikiSuggestion operation middleware
+func (siw *ServerInterfaceWrapper) DecideWikiSuggestion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "versionId" -------------
+	var versionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "versionId", r.PathValue("versionId"), &versionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "versionId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "decision" -------------
+	var decision string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "decision", r.PathValue("decision"), &decision, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decision", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideWikiSuggestion(w, r, versionId, decision)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2708,6 +3529,20 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/approvals/{id}/{decision}", wrapper.DecideApproval)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs/{id}", wrapper.GetRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/runs/{id}/{action}", wrapper.ControlRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/wiki/pages", wrapper.ListWikiPages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/wiki/pages", wrapper.CreateWikiPage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/wiki/page", wrapper.GetWikiPage)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/wiki/pages/{id}", wrapper.SaveWikiPage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/wiki/suggestions", wrapper.ListWikiSuggestions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/wiki/suggestions/{versionId}/{decision}", wrapper.DecideWikiSuggestion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/wiki/export", wrapper.ExportWiki)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/wiki/import", wrapper.ImportWiki)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/knowledge/resolve", wrapper.ResolveLinks)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/knowledge/suggest", wrapper.SuggestLinks)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/knowledge/backlinks", wrapper.GetBacklinks)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/knowledge/link-mention", wrapper.LinkMention)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/knowledge/graph", wrapper.GetGraph)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/knowledge/search", wrapper.SearchKnowledge)
 
 	return m
 }
@@ -3466,6 +4301,240 @@ func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	return err
 }
 
+type GetBacklinksRequestObject struct {
+	Params GetBacklinksParams
+}
+
+type GetBacklinksResponseObject interface {
+	VisitGetBacklinksResponse(w http.ResponseWriter) error
+}
+
+type GetBacklinks200JSONResponse Backlinks
+
+func (response GetBacklinks200JSONResponse) VisitGetBacklinksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBacklinksdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetBacklinksdefaultJSONResponse) VisitGetBacklinksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGraphRequestObject struct {
+	Params GetGraphParams
+}
+
+type GetGraphResponseObject interface {
+	VisitGetGraphResponse(w http.ResponseWriter) error
+}
+
+type GetGraph200JSONResponse Graph
+
+func (response GetGraph200JSONResponse) VisitGetGraphResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGraphdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetGraphdefaultJSONResponse) VisitGetGraphResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LinkMentionRequestObject struct {
+	Body *LinkMentionJSONRequestBody
+}
+
+type LinkMentionResponseObject interface {
+	VisitLinkMentionResponse(w http.ResponseWriter) error
+}
+
+type LinkMention204Response struct {
+}
+
+func (response LinkMention204Response) VisitLinkMentionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type LinkMentiondefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response LinkMentiondefaultJSONResponse) VisitLinkMentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveLinksRequestObject struct {
+	Params ResolveLinksParams
+}
+
+type ResolveLinksResponseObject interface {
+	VisitResolveLinksResponse(w http.ResponseWriter) error
+}
+
+type ResolveLinks200JSONResponse struct {
+	Links []ResolvedLink `json:"links"`
+}
+
+func (response ResolveLinks200JSONResponse) VisitResolveLinksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveLinksdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ResolveLinksdefaultJSONResponse) VisitResolveLinksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchKnowledgeRequestObject struct {
+	Params SearchKnowledgeParams
+}
+
+type SearchKnowledgeResponseObject interface {
+	VisitSearchKnowledgeResponse(w http.ResponseWriter) error
+}
+
+type SearchKnowledge200JSONResponse struct {
+	Hits []SearchHit `json:"hits"`
+}
+
+func (response SearchKnowledge200JSONResponse) VisitSearchKnowledgeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchKnowledgedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SearchKnowledgedefaultJSONResponse) VisitSearchKnowledgeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SuggestLinksRequestObject struct {
+	Params SuggestLinksParams
+}
+
+type SuggestLinksResponseObject interface {
+	VisitSuggestLinksResponse(w http.ResponseWriter) error
+}
+
+type SuggestLinks200JSONResponse struct {
+	Targets []LinkTarget `json:"targets"`
+}
+
+func (response SuggestLinks200JSONResponse) VisitSuggestLinksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SuggestLinksdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SuggestLinksdefaultJSONResponse) VisitSuggestLinksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRunRequestObject struct {
 	Id     openapi_types.UUID `json:"id"`
 	Params GetRunParams
@@ -4055,6 +5124,320 @@ func (response CreateCriteriondefaultJSONResponse) VisitCreateCriterionResponse(
 	return err
 }
 
+type ExportWikiRequestObject struct {
+}
+
+type ExportWikiResponseObject interface {
+	VisitExportWikiResponse(w http.ResponseWriter) error
+}
+
+type ExportWiki200ApplicationzipResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response ExportWiki200ApplicationzipResponse) VisitExportWikiResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/zip")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportWikidefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ExportWikidefaultJSONResponse) VisitExportWikiResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportWikiRequestObject struct {
+	Body *multipart.Reader
+}
+
+type ImportWikiResponseObject interface {
+	VisitImportWikiResponse(w http.ResponseWriter) error
+}
+
+type ImportWiki200JSONResponse WikiImportResult
+
+func (response ImportWiki200JSONResponse) VisitImportWikiResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportWikidefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ImportWikidefaultJSONResponse) VisitImportWikiResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWikiPageRequestObject struct {
+	Params GetWikiPageParams
+}
+
+type GetWikiPageResponseObject interface {
+	VisitGetWikiPageResponse(w http.ResponseWriter) error
+}
+
+type GetWikiPage200JSONResponse Artifact
+
+func (response GetWikiPage200JSONResponse) VisitGetWikiPageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWikiPagedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetWikiPagedefaultJSONResponse) VisitGetWikiPageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWikiPagesRequestObject struct {
+}
+
+type ListWikiPagesResponseObject interface {
+	VisitListWikiPagesResponse(w http.ResponseWriter) error
+}
+
+type ListWikiPages200JSONResponse WikiTree
+
+func (response ListWikiPages200JSONResponse) VisitListWikiPagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWikiPagesdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListWikiPagesdefaultJSONResponse) VisitListWikiPagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWikiPageRequestObject struct {
+	Body *CreateWikiPageJSONRequestBody
+}
+
+type CreateWikiPageResponseObject interface {
+	VisitCreateWikiPageResponse(w http.ResponseWriter) error
+}
+
+type CreateWikiPage201JSONResponse Artifact
+
+func (response CreateWikiPage201JSONResponse) VisitCreateWikiPageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWikiPagedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateWikiPagedefaultJSONResponse) VisitCreateWikiPageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SaveWikiPageRequestObject struct {
+	Id   ArtifactId `json:"id"`
+	Body *SaveWikiPageJSONRequestBody
+}
+
+type SaveWikiPageResponseObject interface {
+	VisitSaveWikiPageResponse(w http.ResponseWriter) error
+}
+
+type SaveWikiPage200JSONResponse Artifact
+
+func (response SaveWikiPage200JSONResponse) VisitSaveWikiPageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SaveWikiPagedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SaveWikiPagedefaultJSONResponse) VisitSaveWikiPageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWikiSuggestionsRequestObject struct {
+	Params ListWikiSuggestionsParams
+}
+
+type ListWikiSuggestionsResponseObject interface {
+	VisitListWikiSuggestionsResponse(w http.ResponseWriter) error
+}
+
+type ListWikiSuggestions200JSONResponse struct {
+	Suggestions []WikiSuggestion `json:"suggestions"`
+}
+
+func (response ListWikiSuggestions200JSONResponse) VisitListWikiSuggestionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWikiSuggestionsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListWikiSuggestionsdefaultJSONResponse) VisitListWikiSuggestionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideWikiSuggestionRequestObject struct {
+	VersionId openapi_types.UUID `json:"versionId"`
+	Decision  string             `json:"decision"`
+}
+
+type DecideWikiSuggestionResponseObject interface {
+	VisitDecideWikiSuggestionResponse(w http.ResponseWriter) error
+}
+
+type DecideWikiSuggestion204Response struct {
+}
+
+func (response DecideWikiSuggestion204Response) VisitDecideWikiSuggestionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DecideWikiSuggestiondefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DecideWikiSuggestiondefaultJSONResponse) VisitDecideWikiSuggestionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// CreateAgent Create an agent with a default definition
@@ -4114,6 +5497,24 @@ type StrictServerInterface interface {
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// GetBacklinks Linked and unlinked mentions of an artifact, ticket, epic or agent
+	// (GET /knowledge/backlinks)
+	GetBacklinks(ctx context.Context, request GetBacklinksRequestObject) (GetBacklinksResponseObject, error)
+	// GetGraph The local link graph around a node (1–2 hops, both directions)
+	// (GET /knowledge/graph)
+	GetGraph(ctx context.Context, request GetGraphRequestObject) (GetGraphResponseObject, error)
+	// LinkMention Turn the first unlinked mention of a target in a source into a [[link]]
+	// (POST /knowledge/link-mention)
+	LinkMention(ctx context.Context, request LinkMentionRequestObject) (LinkMentionResponseObject, error)
+	// ResolveLinks Resolve [[link]] texts to what they point at (for rendering)
+	// (GET /knowledge/resolve)
+	ResolveLinks(ctx context.Context, request ResolveLinksRequestObject) (ResolveLinksResponseObject, error)
+	// SearchKnowledge Full-text search over pages, artifacts and tickets, boosted by links
+	// (GET /knowledge/search)
+	SearchKnowledge(ctx context.Context, request SearchKnowledgeRequestObject) (SearchKnowledgeResponseObject, error)
+	// SuggestLinks [[ autocomplete over pages, artifacts, tickets, epics and agents
+	// (GET /knowledge/suggest)
+	SuggestLinks(ctx context.Context, request SuggestLinksRequestObject) (SuggestLinksResponseObject, error)
 	// GetRun A run with its turns, plan, approvals and events (the run log)
 	// (GET /runs/{id})
 	GetRun(ctx context.Context, request GetRunRequestObject) (GetRunResponseObject, error)
@@ -4159,6 +5560,30 @@ type StrictServerInterface interface {
 	// CreateCriterion Add an acceptance criterion
 	// (POST /tickets/{key}/criteria)
 	CreateCriterion(ctx context.Context, request CreateCriterionRequestObject) (CreateCriterionResponseObject, error)
+	// ExportWiki Every page as an Obsidian-compatible vault (zip of markdown files)
+	// (GET /wiki/export)
+	ExportWiki(ctx context.Context, request ExportWikiRequestObject) (ExportWikiResponseObject, error)
+	// ImportWiki Import a vault zip; each .md file creates or replaces the page at its path
+	// (POST /wiki/import)
+	ImportWiki(ctx context.Context, request ImportWikiRequestObject) (ImportWikiResponseObject, error)
+	// GetWikiPage A page by path (or a renamed page's old path)
+	// (GET /wiki/page)
+	GetWikiPage(ctx context.Context, request GetWikiPageRequestObject) (GetWikiPageResponseObject, error)
+	// ListWikiPages Every wiki page (the page tree), with pending suggestion counts
+	// (GET /wiki/pages)
+	ListWikiPages(ctx context.Context, request ListWikiPagesRequestObject) (ListWikiPagesResponseObject, error)
+	// CreateWikiPage Create a page at a path
+	// (POST /wiki/pages)
+	CreateWikiPage(ctx context.Context, request CreateWikiPageRequestObject) (CreateWikiPageResponseObject, error)
+	// SaveWikiPage Save a page's body (a new version, silently) and/or move it to a new path
+	// (PUT /wiki/pages/{id})
+	SaveWikiPage(ctx context.Context, request SaveWikiPageRequestObject) (SaveWikiPageResponseObject, error)
+	// ListWikiSuggestions Agent edits waiting for a person, oldest first
+	// (GET /wiki/suggestions)
+	ListWikiSuggestions(ctx context.Context, request ListWikiSuggestionsRequestObject) (ListWikiSuggestionsResponseObject, error)
+	// DecideWikiSuggestion Accept (publish as the next version) or reject a suggestion
+	// (POST /wiki/suggestions/{versionId}/{decision})
+	DecideWikiSuggestion(ctx context.Context, request DecideWikiSuggestionRequestObject) (DecideWikiSuggestionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -4758,6 +6183,167 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetBacklinks operation middleware
+func (sh *strictHandler) GetBacklinks(w http.ResponseWriter, r *http.Request, params GetBacklinksParams) {
+	var request GetBacklinksRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBacklinks(ctx, request.(GetBacklinksRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBacklinks")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBacklinksResponseObject); ok {
+		if err := validResponse.VisitGetBacklinksResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetGraph operation middleware
+func (sh *strictHandler) GetGraph(w http.ResponseWriter, r *http.Request, params GetGraphParams) {
+	var request GetGraphRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetGraph(ctx, request.(GetGraphRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetGraph")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetGraphResponseObject); ok {
+		if err := validResponse.VisitGetGraphResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LinkMention operation middleware
+func (sh *strictHandler) LinkMention(w http.ResponseWriter, r *http.Request) {
+	var request LinkMentionRequestObject
+
+	var body LinkMentionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LinkMention(ctx, request.(LinkMentionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LinkMention")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LinkMentionResponseObject); ok {
+		if err := validResponse.VisitLinkMentionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResolveLinks operation middleware
+func (sh *strictHandler) ResolveLinks(w http.ResponseWriter, r *http.Request, params ResolveLinksParams) {
+	var request ResolveLinksRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResolveLinks(ctx, request.(ResolveLinksRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResolveLinks")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResolveLinksResponseObject); ok {
+		if err := validResponse.VisitResolveLinksResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchKnowledge operation middleware
+func (sh *strictHandler) SearchKnowledge(w http.ResponseWriter, r *http.Request, params SearchKnowledgeParams) {
+	var request SearchKnowledgeRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchKnowledge(ctx, request.(SearchKnowledgeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchKnowledge")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchKnowledgeResponseObject); ok {
+		if err := validResponse.VisitSearchKnowledgeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SuggestLinks operation middleware
+func (sh *strictHandler) SuggestLinks(w http.ResponseWriter, r *http.Request, params SuggestLinksParams) {
+	var request SuggestLinksRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SuggestLinks(ctx, request.(SuggestLinksRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SuggestLinks")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SuggestLinksResponseObject); ok {
+		if err := validResponse.VisitSuggestLinksResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetRun operation middleware
 func (sh *strictHandler) GetRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params GetRunParams) {
 	var request GetRunRequestObject
@@ -5192,129 +6778,386 @@ func (sh *strictHandler) CreateCriterion(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// ExportWiki operation middleware
+func (sh *strictHandler) ExportWiki(w http.ResponseWriter, r *http.Request) {
+	var request ExportWikiRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportWiki(ctx, request.(ExportWikiRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportWiki")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportWikiResponseObject); ok {
+		if err := validResponse.VisitExportWikiResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImportWiki operation middleware
+func (sh *strictHandler) ImportWiki(w http.ResponseWriter, r *http.Request) {
+	var request ImportWikiRequestObject
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportWiki(ctx, request.(ImportWikiRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportWiki")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImportWikiResponseObject); ok {
+		if err := validResponse.VisitImportWikiResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWikiPage operation middleware
+func (sh *strictHandler) GetWikiPage(w http.ResponseWriter, r *http.Request, params GetWikiPageParams) {
+	var request GetWikiPageRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWikiPage(ctx, request.(GetWikiPageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWikiPage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWikiPageResponseObject); ok {
+		if err := validResponse.VisitGetWikiPageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWikiPages operation middleware
+func (sh *strictHandler) ListWikiPages(w http.ResponseWriter, r *http.Request) {
+	var request ListWikiPagesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWikiPages(ctx, request.(ListWikiPagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWikiPages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWikiPagesResponseObject); ok {
+		if err := validResponse.VisitListWikiPagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateWikiPage operation middleware
+func (sh *strictHandler) CreateWikiPage(w http.ResponseWriter, r *http.Request) {
+	var request CreateWikiPageRequestObject
+
+	var body CreateWikiPageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateWikiPage(ctx, request.(CreateWikiPageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateWikiPage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateWikiPageResponseObject); ok {
+		if err := validResponse.VisitCreateWikiPageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SaveWikiPage operation middleware
+func (sh *strictHandler) SaveWikiPage(w http.ResponseWriter, r *http.Request, id ArtifactId) {
+	var request SaveWikiPageRequestObject
+
+	request.Id = id
+
+	var body SaveWikiPageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SaveWikiPage(ctx, request.(SaveWikiPageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SaveWikiPage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SaveWikiPageResponseObject); ok {
+		if err := validResponse.VisitSaveWikiPageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWikiSuggestions operation middleware
+func (sh *strictHandler) ListWikiSuggestions(w http.ResponseWriter, r *http.Request, params ListWikiSuggestionsParams) {
+	var request ListWikiSuggestionsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWikiSuggestions(ctx, request.(ListWikiSuggestionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWikiSuggestions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWikiSuggestionsResponseObject); ok {
+		if err := validResponse.VisitListWikiSuggestionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DecideWikiSuggestion operation middleware
+func (sh *strictHandler) DecideWikiSuggestion(w http.ResponseWriter, r *http.Request, versionId openapi_types.UUID, decision string) {
+	var request DecideWikiSuggestionRequestObject
+
+	request.VersionId = versionId
+	request.Decision = decision
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DecideWikiSuggestion(ctx, request.(DecideWikiSuggestionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DecideWikiSuggestion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DecideWikiSuggestionResponseObject); ok {
+		if err := validResponse.VisitDecideWikiSuggestionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"GwAA//8=",
+	"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",
+	"//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

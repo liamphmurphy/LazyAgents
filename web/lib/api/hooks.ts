@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
+  ApiError,
   postForm,
   unwrap,
   type AgentDetail,
@@ -112,6 +113,7 @@ export function useUpdateTicket(key: string) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["tickets", "list"] });
       qc.invalidateQueries({ queryKey: keys.activity(key) });
+      qc.invalidateQueries({ queryKey: ["knowledge"] }); // [[links]] in the description
     },
   });
 }
@@ -147,6 +149,7 @@ function useTicketChildMutation<V>(key: string, fn: (v: V) => Promise<unknown>) 
       qc.invalidateQueries({ queryKey: keys.ticket(key) });
       qc.invalidateQueries({ queryKey: keys.activity(key) });
       qc.invalidateQueries({ queryKey: ["tickets", "list"] });
+      qc.invalidateQueries({ queryKey: ["knowledge"] }); // comments can carry [[links]]
     },
   });
 }
@@ -228,6 +231,7 @@ export function useNewVersion(id: string) {
     onSuccess: (a) => {
       qc.setQueryData(keys.artifact(a.id), a);
       qc.invalidateQueries({ queryKey: ["artifacts", "list"] });
+      qc.invalidateQueries({ queryKey: ["knowledge"] });
     },
   });
 }
@@ -396,5 +400,149 @@ export function useControlRun(key: string) {
     mutationFn: (v: { id: string; action: "pause" | "resume" | "cancel" }) =>
       unwrap(api.POST("/runs/{id}/{action}", { params: { path: { id: v.id, action: v.action } } })),
     onSettled: refresh,
+  });
+}
+
+// ------------------------------------------------------------- wiki (§12)
+
+export const wikiKeys = {
+  all: ["wiki"] as const,
+  tree: ["wiki", "tree"] as const,
+  page: (path: string) => ["wiki", "page", path.toLowerCase()] as const,
+  suggestions: (artifactId?: string) => ["wiki", "suggestions", artifactId ?? ""] as const,
+  // Links, backlinks and graphs change whenever anything is saved, so they
+  // share one prefix that every save invalidates.
+  knowledge: ["knowledge"] as const,
+};
+
+export function useWikiTree() {
+  return useQuery({ queryKey: wikiKeys.tree, queryFn: () => unwrap(api.GET("/wiki/pages")) });
+}
+
+export function useWikiPage(path: string) {
+  return useQuery({
+    queryKey: wikiKeys.page(path),
+    queryFn: () => unwrap(api.GET("/wiki/page", { params: { query: { path } } })),
+    enabled: path !== "",
+    retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 2,
+  });
+}
+
+/** Everything a page save can change: the tree, pages, links, artifacts lists. */
+function useInvalidateWiki() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: wikiKeys.all });
+    qc.invalidateQueries({ queryKey: wikiKeys.knowledge });
+    qc.invalidateQueries({ queryKey: keys.artifacts });
+    qc.invalidateQueries({ queryKey: keys.bootstrap });
+  };
+}
+
+export function useCreateWikiPage() {
+  const invalidate = useInvalidateWiki();
+  return useMutation({
+    mutationFn: (body: Schemas["NewWikiPage"]) => unwrap(api.POST("/wiki/pages", { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSaveWikiPage(id: string) {
+  const invalidate = useInvalidateWiki();
+  return useMutation({
+    mutationFn: (body: Schemas["WikiPageSave"]) => unwrap(api.PUT("/wiki/pages/{id}", { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useWikiSuggestions(artifactId?: string) {
+  return useQuery({
+    queryKey: wikiKeys.suggestions(artifactId),
+    queryFn: () =>
+      unwrap(api.GET("/wiki/suggestions", { params: { query: artifactId ? { artifact_id: artifactId } : {} } })).then((d) => d.suggestions),
+  });
+}
+
+export function useDecideSuggestion() {
+  const invalidate = useInvalidateWiki();
+  return useMutation({
+    mutationFn: async ({ id, decision }: { id: string; decision: "accept" | "reject" }) => {
+      const { error, response } = await api.POST("/wiki/suggestions/{versionId}/{decision}", { params: { path: { versionId: id, decision } } });
+      if (error) await unwrap(Promise.resolve({ error, response }));
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useImportWiki() {
+  const invalidate = useInvalidateWiki();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const f = new FormData();
+      f.append("file", file);
+      return postForm<Schemas["WikiImportResult"]>("/wiki/import", f);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/** Resolves [[link]] texts in one request; cached per set of refs. */
+export function useResolvedLinks(refs: string[]) {
+  const sorted = [...new Set(refs)].sort();
+  return useQuery({
+    queryKey: [...wikiKeys.knowledge, "resolve", sorted] as const,
+    queryFn: () => unwrap(api.GET("/knowledge/resolve", { params: { query: { ref: sorted } } })).then((d) => d.links),
+    enabled: sorted.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+export function useLinkSuggest(q: string, enabled = true) {
+  return useQuery({
+    queryKey: [...wikiKeys.knowledge, "suggest", q] as const,
+    queryFn: () => unwrap(api.GET("/knowledge/suggest", { params: { query: { q } } })).then((d) => d.targets),
+    enabled,
+    staleTime: 10_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useBacklinks(kind: Schemas["NodeKind"], id: string | undefined) {
+  return useQuery({
+    queryKey: [...wikiKeys.knowledge, "backlinks", kind, id] as const,
+    queryFn: () => unwrap(api.GET("/knowledge/backlinks", { params: { query: { kind, id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+export function useGraph(kind: Schemas["NodeKind"], id: string | undefined, depth = 2) {
+  return useQuery({
+    queryKey: [...wikiKeys.knowledge, "graph", kind, id, depth] as const,
+    queryFn: () => unwrap(api.GET("/knowledge/graph", { params: { query: { kind, id: id!, depth } } })),
+    enabled: !!id,
+  });
+}
+
+export function useLinkMention() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateWiki();
+  return useMutation({
+    mutationFn: async (body: { target_kind: Schemas["NodeKind"]; target_id: string; source_kind: "artifact" | "ticket"; source_id: string }) => {
+      const { error, response } = await api.POST("/knowledge/link-mention", { body });
+      if (error) await unwrap(Promise.resolve({ error, response }));
+    },
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: keys.tickets });
+    },
+  });
+}
+
+export function useKnowledgeSearch(q: string) {
+  return useQuery({
+    queryKey: [...wikiKeys.knowledge, "search", q] as const,
+    queryFn: () => unwrap(api.GET("/knowledge/search", { params: { query: { q } } })).then((d) => d.hits),
+    enabled: q.trim().length > 1,
+    placeholderData: (prev) => prev,
   });
 }
