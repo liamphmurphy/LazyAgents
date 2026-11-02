@@ -24,10 +24,24 @@ var (
 // Outline extracts ATX headings (# …), skipping fenced code blocks. Anchors
 // match web/lib/slug.ts so the UI can link to sections it renders itself.
 func Outline(md string) []Section {
-	var out []Section
+	lines := outlineLines(md)
+	out := make([]Section, len(lines))
+	for i, l := range lines {
+		out[i] = l.Section
+	}
+	return out
+}
+
+type lineSection struct {
+	Section
+	line int // 0-based line index of the heading
+}
+
+func outlineLines(md string) []lineSection {
+	var out []lineSection
 	seen := map[string]int{}
 	inFence := ""
-	for _, line := range strings.Split(md, "\n") {
+	for idx, line := range strings.Split(md, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if m := fence.FindStringSubmatch(line); m != nil {
 			switch inFence {
@@ -56,9 +70,30 @@ func Outline(md string) []Section {
 		} else {
 			seen[anchor] = 1
 		}
-		out = append(out, Section{Level: len(m[1]), Heading: text, Anchor: anchor})
+		out = append(out, lineSection{Section{Level: len(m[1]), Heading: text, Anchor: anchor}, idx})
 	}
 	return out
+}
+
+// SectionText returns one section: its heading line through to the next
+// heading of the same or a higher level. ok is false for an unknown anchor.
+func SectionText(md, anchor string) (string, bool) {
+	secs := outlineLines(md)
+	lines := strings.Split(md, "\n")
+	for i, s := range secs {
+		if s.Anchor != anchor {
+			continue
+		}
+		end := len(lines)
+		for _, n := range secs[i+1:] {
+			if n.Level <= s.Level {
+				end = n.line
+				break
+			}
+		}
+		return strings.TrimRight(strings.Join(lines[s.line:end], "\n"), "\n") + "\n", true
+	}
+	return "", false
 }
 
 func stripInline(s string) string {

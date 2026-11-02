@@ -231,6 +231,10 @@ func demo(ctx context.Context, pool *pgxpool.Pool, arts *artifacts.Service) (Res
 			}
 		}
 
+		if err := seedDefinitions(ctx, q, ws, ids.users["maya"].ID, ids.agents, ids.projects); err != nil {
+			return err
+		}
+
 		for _, l := range []struct{ name, color string }{
 			{"migration", "#8B8FFF"}, {"events", "#3FC1B0"}, {"db", "#5EA8FF"}, {"reliability", "#F0BF4C"},
 			{"research", "#8B8B94"}, {"refactor", "#E8925A"}, {"cleanup", "#8B8B94"}, {"data", "#5EA8FF"},

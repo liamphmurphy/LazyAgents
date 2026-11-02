@@ -19,6 +19,11 @@ type Config struct {
 	// login for now; every request acts as this user.
 	LocalUserName  string
 	LocalUserEmail string
+
+	// SecretsKey encrypts stored secrets (base64, 32 bytes). Empty = secrets disabled.
+	SecretsKey string
+	// PublicURL is how agents and browsers reach the app (Caddy in compose).
+	PublicURL string
 }
 
 type S3 struct {
@@ -49,6 +54,8 @@ func Load() (Config, error) {
 		Version:        env("LAZYAGENTS_VERSION", "dev"),
 		LocalUserName:  env("LOCAL_USER_NAME", "Local user"),
 		LocalUserEmail: env("LOCAL_USER_EMAIL", "me@localhost"),
+		SecretsKey:     env("SECRETS_KEY", ""),
+		PublicURL:      env("PUBLIC_URL", "http://localhost:8080"),
 	}
 	var err error
 	if c.Seed, err = boolEnv("SEED", false); err != nil {

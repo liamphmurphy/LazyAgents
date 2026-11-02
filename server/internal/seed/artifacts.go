@@ -307,7 +307,7 @@ func seedArtifacts(ctx context.Context, svc *artifacts.Service, q *store.Queries
 		a := byTitle[r.title]
 		for anchor, n := range r.anchors {
 			for range n {
-				if err := artifacts.RecordRead(ctx, q, a, agents[r.agent].ID, anchor, &readAt); err != nil {
+				if err := artifacts.RecordRead(ctx, q, a, agents[r.agent].ID, nil, anchor, &readAt); err != nil {
 					return fmt.Errorf("seed read %q#%s: %w", r.title, anchor, err)
 				}
 			}

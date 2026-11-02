@@ -1,0 +1,419 @@
+package runs
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"regexp"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/lazyagents/server/internal/broker"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+)
+
+// ApprovalOutcome is what request_approval returns to the agent.
+type ApprovalOutcome struct {
+	Approval    *store.ApprovalRequest
+	NotRequired bool // the scope is allowed: go ahead without asking
+}
+
+// RequestApproval asks a person before a requires_approval scope (§5.2).
+// The run waits; it resumes when someone approves or denies. For brokered
+// scopes, detail is exactly what run_gated will execute once approved.
+func (s *Service) RequestApproval(ctx context.Context, c Caller, key, scope, summary string, detail map[string]any, risk string) (ApprovalOutcome, error) {
+	scope = strings.TrimSpace(scope)
+	summary = strings.TrimSpace(summary)
+	if summary == "" || len([]rune(summary)) > 300 {
+		return ApprovalOutcome{}, apperr.Invalid("action", "describe the exact action in at most 300 characters")
+	}
+	if detail == nil {
+		detail = map[string]any{}
+	}
+	var out ApprovalOutcome
+	err := s.tx(ctx, func(q *store.Queries) error {
+		run, t, err := s.running(ctx, q, c, key)
+		if err != nil {
+			return err
+		}
+		spec, err := Spec(run)
+		if err != nil {
+			return err
+		}
+		switch spec.Mode(scope) {
+		case agentdef.Allowed:
+			out.NotRequired = true
+			return nil
+		case agentdef.Denied:
+			return apperr.Invalid("scope", "%s is denied for @%s in this project; don't attempt it", scope, c.Agent.Handle)
+		}
+		if a, ok := broker.For(scope); ok {
+			if err := a.Validate(detail); err != nil {
+				return apperr.Invalid("detail", "%v", err)
+			}
+		}
+		raw, _ := json.Marshal(detail)
+		ap, err := q.CreateApproval(ctx, store.CreateApprovalParams{
+			WorkspaceID: run.WorkspaceID, RunID: run.ID, TicketID: t.ID, AgentID: c.Agent.ID,
+			Scope: scope, ActionSummary: summary, ActionDetail: raw, RiskSummary: strings.TrimSpace(risk),
+		})
+		if err != nil {
+			return err
+		}
+		out.Approval = &ap
+		wait := "approval"
+		if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &wait}); err != nil {
+			return err
+		}
+		if err := q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](0)}); err != nil {
+			return err
+		}
+		if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "waiting", "reason": "approval", "approval_id": ap.ID, "scope": scope}); err != nil {
+			return err
+		}
+		if err := tracker.Record(ctx, q, run.WorkspaceID, t.ID, t.EpicID, agentActor(c), VerbApprovalRequested,
+			map[string]any{"approval_id": ap.ID, "scope": scope, "summary": summary}, nil); err != nil {
+			return err
+		}
+		return RecomputeAgentStatus(ctx, q, c.Agent.ID)
+	})
+	return out, err
+}
+
+func (s *Service) poll() time.Duration {
+	if s.Poll > 0 {
+		return s.Poll
+	}
+	return 500 * time.Millisecond
+}
+
+// MaxWait bounds long-polls below typical MCP tool-call timeouts; agents
+// call again on timeout (§5.2).
+const MaxWait = 50 * time.Second
+
+// WaitApproval long-polls until a person decides, or the timeout passes.
+func (s *Service) WaitApproval(ctx context.Context, c Caller, id uuid.UUID, timeout time.Duration) (store.ApprovalRequest, error) {
+	if timeout <= 0 || timeout > MaxWait {
+		timeout = MaxWait
+	}
+	deadline := time.Now().Add(timeout)
+	q := store.New(s.Pool)
+	for {
+		ap, err := q.GetApproval(ctx, store.GetApprovalParams{ID: id, WorkspaceID: c.Agent.WorkspaceID})
+		if err != nil || ap.AgentID != c.Agent.ID {
+			return ap, apperr.ErrNotFound
+		}
+		if ap.State != "pending" || time.Now().After(deadline) {
+			return ap, nil
+		}
+		select {
+		case <-ctx.Done():
+			return ap, ctx.Err()
+		case <-time.After(s.poll()):
+		}
+	}
+}
+
+// RunGated executes an approved brokered action server-side, once. The
+// agent passes only the approval id: what runs is what the person approved.
+func (s *Service) RunGated(ctx context.Context, c Caller, key string, approvalID uuid.UUID) (broker.Result, error) {
+	var ap store.ApprovalRequest
+	var run store.Run
+	var t store.Ticket
+	err := s.tx(ctx, func(q *store.Queries) error {
+		var err error
+		run, t, err = s.running(ctx, q, c, key)
+		if err != nil {
+			return err
+		}
+		cur, err := q.GetApproval(ctx, store.GetApprovalParams{ID: approvalID, WorkspaceID: run.WorkspaceID})
+		if err != nil || cur.RunID != run.ID {
+			return apperr.Invalid("approval_id", "no such approval on this run")
+		}
+		switch {
+		case cur.State == "pending":
+			return apperr.Conflict("not approved yet; wait for a person")
+		case cur.State != "approved":
+			return apperr.Conflict("this request was %s", cur.State)
+		case cur.ExecutedAt != nil:
+			return apperr.Conflict("this approval was already used; request a new one")
+		}
+		if _, ok := broker.For(cur.Scope); !ok {
+			return apperr.Conflict("%s isn't brokered: you have approval, so do it yourself", cur.Scope)
+		}
+		ap, err = q.ClaimApprovalExecution(ctx, store.ClaimApprovalExecutionParams{ID: approvalID, RunID: run.ID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperr.Conflict("this approval was already used")
+		}
+		return err
+	})
+	if err != nil {
+		return broker.Result{}, err
+	}
+
+	action, _ := broker.For(ap.Scope)
+	secret, err := s.Secrets.Reveal(ctx, run.WorkspaceID, &t.ProjectID, action.Secret())
+	if err != nil {
+		// Nothing ran, so the approval stays usable once a person adds the secret.
+		_ = store.New(s.Pool).ReleaseApprovalExecution(ctx, ap.ID)
+		return broker.Result{}, apperr.Conflict("the %s secret isn't set (Settings → Connections & secrets); ask a person to add it, then call run_gated again", action.Secret())
+	}
+	res := action.Run(ctx, secret, broker.DetailMap(ap.ActionDetail))
+	// The secret can appear in driver errors (e.g. a DSN); never return it.
+	res.Error = strings.ReplaceAll(res.Error, secret, "[secret]")
+	raw, _ := json.Marshal(res)
+	err = s.tx(ctx, func(q *store.Queries) error {
+		if err := q.SetApprovalResult(ctx, store.SetApprovalResultParams{ID: ap.ID, Result: raw}); err != nil {
+			return err
+		}
+		if err := event(ctx, q, run.ID, "tool_result", map[string]any{"tool": "run_gated", "scope": ap.Scope, "ok": res.OK, "summary": res.Summary, "duration_ms": res.DurationMS}); err != nil {
+			return err
+		}
+		return tracker.Record(ctx, q, run.WorkspaceID, t.ID, t.EpicID, agentActor(c), VerbGatedRan,
+			map[string]any{"approval_id": ap.ID, "scope": ap.Scope, "ok": res.OK, "summary": res.Summary, "error": res.Error}, nil)
+	})
+	return res, err
+}
+
+// AwaitHuman ends the turn until a person replies (a comment resumes it).
+func (s *Service) AwaitHuman(ctx context.Context, c Caller, key, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return apperr.Invalid("reason", "say what you need from a person")
+	}
+	return s.tx(ctx, func(q *store.Queries) error {
+		run, t, err := s.running(ctx, q, c, key)
+		if err != nil {
+			return err
+		}
+		wait := "human_reply"
+		if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &wait}); err != nil {
+			return err
+		}
+		if err := q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](0)}); err != nil {
+			return err
+		}
+		if err := tracker.Record(ctx, q, run.WorkspaceID, t.ID, t.EpicID, agentActor(c), VerbWaitingForHuman, map[string]any{"run_id": run.ID, "reason": reason}, nil); err != nil {
+			return err
+		}
+		return RecomputeAgentStatus(ctx, q, c.Agent.ID)
+	})
+}
+
+// Signal is what an unmanaged session sees while it waits (§5.2).
+type Signal struct {
+	State      string
+	WaitReason string
+	Comments   []store.HumanCommentsSinceRow
+	Decisions  []store.ApprovalRequest
+	Cursor     time.Time
+}
+
+// AwaitSignal long-polls for anything a person did: a decision, a comment,
+// a pause, resume or cancel. Pass the previous Cursor to get only new things.
+func (s *Service) AwaitSignal(ctx context.Context, c Caller, key string, since time.Time, timeout time.Duration) (Signal, error) {
+	if timeout <= 0 || timeout > MaxWait {
+		timeout = MaxWait
+	}
+	deadline := time.Now().Add(timeout)
+	q := store.New(s.Pool)
+	for {
+		now := time.Now()
+		run, t, err := s.Active(ctx, q, c, key)
+		if err != nil {
+			// A finished run has no Active; report it as such.
+			return Signal{State: "ended", Cursor: now}, err
+		}
+		comments, err := q.HumanCommentsSince(ctx, store.HumanCommentsSinceParams{TicketID: t.ID, CreatedAt: since})
+		if err != nil {
+			return Signal{}, err
+		}
+		decided, err := q.DecidedApprovalsSince(ctx, store.DecidedApprovalsSinceParams{RunID: run.ID, DecidedAt: &since})
+		if err != nil {
+			return Signal{}, err
+		}
+		sig := Signal{State: run.State, WaitReason: deref(run.WaitReason), Comments: comments, Decisions: decided, Cursor: now}
+		changed := len(comments) > 0 || len(decided) > 0 || run.State == "running" || run.State == "cancelled"
+		if changed || now.After(deadline) {
+			return sig, nil
+		}
+		select {
+		case <-ctx.Done():
+			return sig, ctx.Err()
+		case <-time.After(s.poll()):
+		}
+	}
+}
+
+// ---------------------------------------------------------------- people
+
+// Decide approves or denies a pending request. Either way the run resumes
+// with a new turn carrying the decision (§6.4).
+func (s *Service) Decide(ctx context.Context, ws, userID uuid.UUID, approvalID uuid.UUID, approve bool, note string) (store.ApprovalRequest, error) {
+	var ap store.ApprovalRequest
+	err := s.tx(ctx, func(q *store.Queries) error {
+		cur, err := q.LockApproval(ctx, store.LockApprovalParams{ID: approvalID, WorkspaceID: ws})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperr.ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		if cur.State != "pending" {
+			return apperr.Conflict("this request was already %s", cur.State)
+		}
+		state, verb := "denied", VerbApprovalDenied
+		if approve {
+			state, verb = "approved", VerbApprovalApproved
+		}
+		note = strings.TrimSpace(note)
+		ap, err = q.DecideApproval(ctx, store.DecideApprovalParams{ID: cur.ID, State: state, DecidedByUserID: &userID, DecisionNote: note})
+		if err != nil {
+			return err
+		}
+		run, err := q.LockRun(ctx, cur.RunID)
+		if err != nil {
+			return err
+		}
+		t, err := q.GetTicketByID(ctx, cur.TicketID)
+		if err != nil {
+			return err
+		}
+		if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, tracker.UserActor(userID), verb,
+			map[string]any{"approval_id": ap.ID, "scope": ap.Scope, "note": note, "summary": ap.ActionSummary}, nil); err != nil {
+			return err
+		}
+		if run.State != "waiting" || deref(run.WaitReason) != "approval" {
+			return nil // the run moved on (cancelled, etc.)
+		}
+		msg := "Approved: " + ap.ActionSummary
+		if !approve {
+			msg = "Denied: " + ap.ActionSummary + ". Don't attempt it; adjust the plan or ask in a comment."
+		}
+		if note != "" {
+			msg += "\nNote from the reviewer: " + note
+		}
+		return resume(ctx, q, run, "approval", msg)
+	})
+	return ap, err
+}
+
+func resume(ctx context.Context, q *store.Queries, run store.Run, trigger, msg string) error {
+	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "running"}); err != nil {
+		return err
+	}
+	if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: trigger, InputMessage: msg}); err != nil {
+		return err
+	}
+	if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "running", "trigger": trigger, "message": msg}); err != nil {
+		return err
+	}
+	return RecomputeAgentStatus(ctx, q, run.AgentID)
+}
+
+// SetRunControl handles Pause, Resume and Cancel from people.
+func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID, action string) (store.Run, error) {
+	var out store.Run
+	err := s.tx(ctx, func(q *store.Queries) error {
+		run, err := q.LockRun(ctx, runID)
+		if err != nil || run.WorkspaceID != ws {
+			return apperr.ErrNotFound
+		}
+		t, err := q.GetTicketByID(ctx, run.TicketID)
+		if err != nil {
+			return err
+		}
+		actor := tracker.UserActor(userID)
+		switch action {
+		case "pause":
+			if run.State != "running" && run.State != "waiting" {
+				return apperr.Conflict("only a running or waiting run can be paused")
+			}
+			wait := "pause"
+			if out, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "paused", WaitReason: &wait}); err != nil {
+				return err
+			}
+			_ = q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](130)})
+			if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunPaused, map[string]any{"run_id": run.ID}, nil); err != nil {
+				return err
+			}
+			return RecomputeAgentStatus(ctx, q, run.AgentID)
+		case "resume":
+			if run.State != "paused" {
+				return apperr.Conflict("only a paused run can be resumed")
+			}
+			if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunResumed, map[string]any{"run_id": run.ID}, nil); err != nil {
+				return err
+			}
+			if err := resume(ctx, q, run, "resume", "You were paused; continue."); err != nil {
+				return err
+			}
+			out, err = q.GetRun(ctx, store.GetRunParams{ID: run.ID, WorkspaceID: ws})
+			return err
+		case "cancel":
+			if slices.Contains(Terminal, run.State) {
+				return apperr.Conflict("the run already ended")
+			}
+			if out, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "cancelled"}); err != nil {
+				return err
+			}
+			_ = q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](143)})
+			if err := q.ExpireRunApprovals(ctx, run.ID); err != nil {
+				return err
+			}
+			if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "cancelled"}); err != nil {
+				return err
+			}
+			if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunCancelled, map[string]any{"run_id": run.ID}, nil); err != nil {
+				return err
+			}
+			return RecomputeAgentStatus(ctx, q, run.AgentID)
+		}
+		return apperr.Invalid("action", "must be pause, resume or cancel")
+	})
+	return out, err
+}
+
+// OnHumanComment resumes a run waiting for a reply when a person mentions
+// its agent (§4 comments: "a mention of an assigned agent queues a resume").
+func (s *Service) OnHumanComment(ctx context.Context, ws uuid.UUID, ticketKey, body string) error {
+	return s.tx(ctx, func(q *store.Queries) error {
+		t, err := tracker.Get(ctx, q, ws, ticketKey)
+		if err != nil {
+			return err
+		}
+		run, err := q.ActiveRunForTicket(ctx, t.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if run.State != "waiting" || deref(run.WaitReason) != "human_reply" {
+			return nil
+		}
+		a, err := q.GetAgent(ctx, store.GetAgentParams{ID: run.AgentID, WorkspaceID: ws})
+		if err != nil {
+			return err
+		}
+		if !Mentions(body, a.Handle) {
+			return nil
+		}
+		run, err = q.LockRun(ctx, run.ID)
+		if err != nil {
+			return err
+		}
+		return resume(ctx, q, run, "comment", body)
+	})
+}
+
+// Mentions reports whether text @-mentions handle as a whole word.
+func Mentions(text, handle string) bool {
+	re := regexp.MustCompile(`(?i)(^|[^\w@])@` + regexp.QuoteMeta(handle) + `\b`)
+	return re.MatchString(text)
+}

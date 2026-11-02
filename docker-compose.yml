@@ -7,6 +7,7 @@ x-api-env: &api-env
   S3_ACCESS_KEY: ${S3_ACCESS_KEY:-lazyagents}
   S3_SECRET_KEY: ${S3_SECRET_KEY:-lazyagents-secret}
   SECRETS_KEY: ${SECRETS_KEY:-}
+  PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
   SEED: ${SEED:-true}
   LOCAL_USER_NAME: ${LOCAL_USER_NAME:-Local user}
   LOCAL_USER_EMAIL: ${LOCAL_USER_EMAIL:-me@localhost}

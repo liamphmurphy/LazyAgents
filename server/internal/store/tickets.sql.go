@@ -29,6 +29,47 @@ func (q *Queries) AddTicketLabels(ctx context.Context, arg AddTicketLabelsParams
 	return err
 }
 
+const agentQueue = `-- name: AgentQueue :many
+SELECT t.key, t.title, t.status, t.priority FROM tickets t
+WHERE t.assignee_agent_id = $1 AND t.status <> 'done'
+ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+  CASE t.status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 ELSE 3 END, t.created_at
+LIMIT 20
+`
+
+type AgentQueueRow struct {
+	Key      string
+	Title    string
+	Status   string
+	Priority string
+}
+
+// Tickets assigned to an agent that aren't done, most urgent first.
+func (q *Queries) AgentQueue(ctx context.Context, assigneeAgentID *uuid.UUID) ([]AgentQueueRow, error) {
+	rows, err := q.db.Query(ctx, agentQueue, assigneeAgentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AgentQueueRow{}
+	for rows.Next() {
+		var i AgentQueueRow
+		if err := rows.Scan(
+			&i.Key,
+			&i.Title,
+			&i.Status,
+			&i.Priority,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const clearTicketLabels = `-- name: ClearTicketLabels :exec
 DELETE FROM ticket_labels WHERE ticket_id = $1
 `
@@ -237,6 +278,43 @@ func (q *Queries) GetCriterion(ctx context.Context, arg GetCriterionParams) (Cri
 	return i, err
 }
 
+const getTicketByID = `-- name: GetTicketByID :one
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at FROM tickets WHERE id = $1
+`
+
+func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, error) {
+	row := q.db.QueryRow(ctx, getTicketByID, id)
+	var i Ticket
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Number,
+		&i.Key,
+		&i.Title,
+		&i.DescriptionMd,
+		&i.Status,
+		&i.Priority,
+		&i.EpicID,
+		&i.AssigneeAgentID,
+		&i.ReviewerUserID,
+		&i.CreatedByUserID,
+		&i.Estimate,
+		&i.DueDate,
+		&i.Branch,
+		&i.PrNumber,
+		&i.PrUrl,
+		&i.PrState,
+		&i.PrAdditions,
+		&i.PrDeletions,
+		&i.SortOrder,
+		&i.Search,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getTicketByKey = `-- name: GetTicketByKey :one
 SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at FROM tickets WHERE workspace_id = $1 AND key = $2
 `
@@ -277,6 +355,51 @@ func (q *Queries) GetTicketByKey(ctx context.Context, arg GetTicketByKeyParams) 
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const humanCommentsSince = `-- name: HumanCommentsSince :many
+SELECT c.id, c.body_md, c.created_at, u.name AS author
+FROM comments c JOIN users u ON u.id = c.author_id
+WHERE c.ticket_id = $1 AND c.author_type = 'user' AND c.created_at > $2
+ORDER BY c.created_at
+`
+
+type HumanCommentsSinceParams struct {
+	TicketID  uuid.UUID
+	CreatedAt time.Time
+}
+
+type HumanCommentsSinceRow struct {
+	ID        uuid.UUID
+	BodyMd    string
+	CreatedAt time.Time
+	Author    string
+}
+
+// Comments by people on a ticket after a point in time (await_signal).
+func (q *Queries) HumanCommentsSince(ctx context.Context, arg HumanCommentsSinceParams) ([]HumanCommentsSinceRow, error) {
+	rows, err := q.db.Query(ctx, humanCommentsSince, arg.TicketID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HumanCommentsSinceRow{}
+	for rows.Next() {
+		var i HumanCommentsSinceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BodyMd,
+			&i.CreatedAt,
+			&i.Author,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertActivity = `-- name: InsertActivity :one
@@ -419,6 +542,54 @@ func (q *Queries) ListTicketActivity(ctx context.Context, ticketID *uuid.UUID) (
 			&i.Payload,
 			&i.CreatedAt,
 			&i.Seq,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTicketComments = `-- name: ListTicketComments :many
+SELECT c.id, c.parent_comment_id, c.author_type, c.body_md, c.created_at,
+  coalesce(u.name, a.name, 'Unknown')::text AS author
+FROM comments c
+LEFT JOIN users u ON c.author_type = 'user' AND u.id = c.author_id
+LEFT JOIN agents a ON c.author_type = 'agent' AND a.id = c.author_id
+WHERE c.ticket_id = $1
+ORDER BY c.created_at DESC
+LIMIT 20
+`
+
+type ListTicketCommentsRow struct {
+	ID              uuid.UUID
+	ParentCommentID *uuid.UUID
+	AuthorType      string
+	BodyMd          string
+	CreatedAt       time.Time
+	Author          string
+}
+
+// Recent comments with author names, for get_ticket.
+func (q *Queries) ListTicketComments(ctx context.Context, ticketID uuid.UUID) ([]ListTicketCommentsRow, error) {
+	rows, err := q.db.Query(ctx, listTicketComments, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTicketCommentsRow{}
+	for rows.Next() {
+		var i ListTicketCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentCommentID,
+			&i.AuthorType,
+			&i.BodyMd,
+			&i.CreatedAt,
+			&i.Author,
 		); err != nil {
 			return nil, err
 		}

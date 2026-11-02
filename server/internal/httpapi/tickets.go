@@ -172,6 +172,9 @@ func (s *Server) ticketDetail(ctx context.Context, ws uuid.UUID, t store.Ticket)
 	if out.Artifacts, err = s.docCards(ctx, ws, t); err != nil {
 		return api.Ticket{}, err
 	}
+	if err := s.runParts(ctx, ws, t, &out); err != nil {
+		return api.Ticket{}, err
+	}
 	return out, nil
 }
 
@@ -329,6 +332,10 @@ func (s *Server) CreateComment(ctx context.Context, req api.CreateCommentRequest
 	ev, err := s.Tracker.Comment(ctx, ws, actor, req.Key, tracker.NewComment{BodyMd: req.Body.BodyMd, ParentCommentID: req.Body.ParentCommentId})
 	if err != nil {
 		return nil, err
+	}
+	// "@atlas …" resumes a run waiting for a reply (best effort: the comment stands).
+	if err := s.Runs.OnHumanComment(ctx, ws, req.Key, req.Body.BodyMd); err != nil {
+		s.Log.Warn("resume on comment", "ticket", req.Key, "err", err)
 	}
 	dir, err := s.directory(ctx, ws)
 	if err != nil {

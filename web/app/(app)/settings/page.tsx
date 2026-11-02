@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { ThemeSwitch } from "@/components/shell/theme";
+import { SecretsCard } from "./secrets-card";
 
 export default function Settings() {
   return (
@@ -18,7 +19,8 @@ export default function Settings() {
               <ThemeSwitch />
             </div>
           </Card>
-          <p className="type-small text-fg-tertiary">Connections and secrets arrive with the runner in Phase 5.</p>
+          <h2 className="type-title mt-2">Connections &amp; secrets</h2>
+          <SecretsCard />
         </div>
       </Content>
     </>

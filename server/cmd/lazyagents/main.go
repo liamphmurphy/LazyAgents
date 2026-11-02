@@ -19,11 +19,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/blob"
 	"github.com/liamphmurphy/lazyagents/server/internal/config"
 	"github.com/liamphmurphy/lazyagents/server/internal/db"
 	"github.com/liamphmurphy/lazyagents/server/internal/httpapi"
+	"github.com/liamphmurphy/lazyagents/server/internal/runs"
+	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/seed"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
@@ -112,14 +115,27 @@ func serve(ctx context.Context, log *slog.Logger) error {
 	}
 
 	q := store.New(pool)
+	box, err := secrets.NewBox(cfg.SecretsKey)
+	if err != nil {
+		return err
+	}
+	if box == nil {
+		log.Warn("SECRETS_KEY is not set: storing secrets is disabled")
+	}
+	secretsSvc := &secrets.Service{Q: q, Box: box}
+	trackerSvc := &tracker.Service{Pool: pool}
 	srv := &httpapi.Server{
 		Version: cfg.Version,
 		Checks:  map[string]httpapi.Pinger{"postgres": pool, "s3": blobs},
 		Pool:    pool,
 		Q:       q,
-		Tracker: &tracker.Service{Pool: pool},
+		Tracker: trackerSvc,
 
 		Artifacts:      arts,
+		Agents:         &agents.Service{Pool: pool},
+		Secrets:        secretsSvc,
+		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc},
+		PublicURL:      cfg.PublicURL,
 		Blobs:          blobs,
 		ArtifactBucket: cfg.S3.ArtifactBucket,
 		Log:            log,

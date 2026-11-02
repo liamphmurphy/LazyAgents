@@ -15,10 +15,15 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/agentapi"
+	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/api"
+	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/auth"
 	"github.com/liamphmurphy/lazyagents/server/internal/blob"
+	"github.com/liamphmurphy/lazyagents/server/internal/runs"
+	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
@@ -36,7 +41,12 @@ type Server struct {
 	Tracker *tracker.Service
 	Log     *slog.Logger
 
-	Artifacts      *artifacts.Service
+	Artifacts *artifacts.Service
+	Agents    *agents.Service
+	Secrets   *secrets.Service
+	Runs      *runs.Service
+	// PublicURL is how agents reach this server (the /mcp link shown with tokens).
+	PublicURL      string
 	Blobs          *blob.Store
 	ArtifactBucket string
 }
@@ -62,6 +72,10 @@ func (s *Server) Handler() http.Handler {
 			writeError(w, http.StatusBadRequest, api.Invalid, err.Error(), "")
 		},
 	})
+	// Agent API (PLAN.md §5.2): bearer agent tokens, not the local user.
+	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker}
+	mux.Handle("/mcp", agentapi.MCPHandler(deps, s.Version, s.Log))
+	mux.Handle("/api/v1/agent/", agentapi.RESTHandler(deps))
 	return requestLog(s.Log, s.localUser(mux))
 }
 
@@ -69,7 +83,7 @@ func (s *Server) Handler() http.Handler {
 // login for now (PLAN.md §5.4): everyone acts as the workspace's first user.
 func (s *Server) localUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/health" || !strings.HasPrefix(r.URL.Path, "/api/") {
+		if r.URL.Path == "/api/v1/health" || !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/agent/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -92,6 +106,10 @@ func (s *Server) responseError(w http.ResponseWriter, r *http.Request, err error
 	switch {
 	case errors.As(err, &ve):
 		writeError(w, http.StatusUnprocessableEntity, api.Invalid, ve.Error(), ve.Field)
+	case errors.As(err, new(*apperr.ConflictError)):
+		writeError(w, http.StatusConflict, api.Conflict, err.Error(), "")
+	case errors.Is(err, secrets.ErrNoKey):
+		writeError(w, http.StatusConflict, api.Conflict, "Set SECRETS_KEY (openssl rand -base64 32) and restart the API to store secrets", "")
 	case errors.Is(err, tracker.ErrNotFound):
 		writeError(w, http.StatusNotFound, api.NotFound, "not found", "")
 	default:
@@ -155,6 +173,10 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap lets http.ResponseController reach the underlying writer
+// (streaming MCP responses, deadlines).
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 // Flush keeps SSE streaming working through the logging wrapper.
 func (r *statusRecorder) Flush() {

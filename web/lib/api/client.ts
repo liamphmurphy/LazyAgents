@@ -13,6 +13,13 @@ export type ArtifactType = Schemas["ArtifactType"];
 export type ArtifactSummary = Schemas["ArtifactSummary"];
 export type Artifact = Schemas["Artifact"];
 export type DocCardData = Schemas["DocCard"];
+export type AgentDetail = Schemas["AgentDetail"];
+export type AgentSpec = Schemas["AgentSpec"];
+export type AgentOverride = Schemas["AgentOverride"];
+export type ScopeMode = Schemas["ScopeMode"];
+export type Harness = Schemas["Harness"];
+export type Run = Schemas["Run"];
+export type Approval = Schemas["Approval"];
 
 // The browser always talks to the same origin (Caddy in compose, Next
 // rewrites in dev). Server components call the API over the internal network.

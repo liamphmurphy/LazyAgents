@@ -1,9 +1,5 @@
-import { Placeholder } from "../placeholder";
+import { AgentsScreen } from "./agents-screen";
 
-export default function Page() {
-  return (
-    <Placeholder title="Agents" icon="agents" phase={7}>
-      Agent definitions, live status, queues and how each scope is enforced.
-    </Placeholder>
-  );
+export default function AgentsPage() {
+  return <AgentsScreen />;
 }

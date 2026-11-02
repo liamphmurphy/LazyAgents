@@ -160,19 +160,24 @@ export function Field({
 }
 
 const inputBase =
-  "w-full rounded-md border border-border-strong bg-surface text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none";
+  "rounded-md border border-border-strong bg-surface text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none";
+
+/** Full width unless the caller sets a width (w-*, flex-1, min-w-*). */
+function widthOf(className?: string) {
+  return className && /(^|\s)(w-|flex-1|min-w-)/.test(className) ? "" : "w-full";
+}
 
 export function TextInput({ mono, prefix, className, ...rest }: { mono?: boolean; prefix?: string } & ComponentProps<"input">) {
   const font = mono ? "font-mono text-[12.5px]" : "text-[13px]";
   if (prefix) {
     return (
-      <span className={cx(inputBase, "flex h-[30px] items-center overflow-hidden focus-within:border-accent", className)}>
+      <span className={cx(inputBase, widthOf(className), "flex h-[30px] items-center overflow-hidden focus-within:border-accent", className)}>
         <span className="pl-2.5 font-mono text-[12.5px] text-fg-tertiary">{prefix}</span>
         <input className={cx("h-full min-w-0 flex-1 bg-transparent pl-px pr-2.5 outline-none", font)} {...rest} />
       </span>
     );
   }
-  return <input className={cx(inputBase, "h-[30px] px-2.5", font, className)} {...rest} />;
+  return <input className={cx(inputBase, widthOf(className), "h-[30px] px-2.5", font, className)} {...rest} />;
 }
 
 export function TextArea({ mono, className, ...rest }: { mono?: boolean } & ComponentProps<"textarea">) {
@@ -180,6 +185,7 @@ export function TextArea({ mono, className, ...rest }: { mono?: boolean } & Comp
     <textarea
       className={cx(
         inputBase,
+        widthOf(className),
         "px-2.5 py-2",
         mono ? "bg-surface-sunken font-mono text-[12.5px] leading-relaxed" : "type-reading",
         className,

@@ -12,7 +12,8 @@ Phases 0–1 were committed by the user as `072484f initial work` on `main`. The
 | 1 Design system and shell | ✅ Done |
 | 2 Core tracker | ✅ Done (deferred items are listed below) |
 | 3 Artifacts | ✅ Done |
-| 4 Agent definitions and Agent API | **Next** |
+| 4 Agent definitions and Agent API | ✅ Done (see "Phase 4 progress") |
+| 4.5 / 5 | **Next.** Suggested order: Phase 5 (runner) before 4.5 (wiki), since managed runs make the wiki's agent memory useful. Ask the user. |
 | 4.5 Wiki and agent memory | Planned (PLAN §12, added at the user's request) |
 | 5–8 | Not started |
 
@@ -161,17 +162,107 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
 - "Generate tickets" (Phase 8).
 - Wiki links (Phase 4.5).
 
-## Next: Phase 4 (Agent definitions and Agent API)
+## Phase 4 progress
 
-Follow PLAN §5.2, §6.1–6.3 and Phase 4's exit criteria.
-- **Definitions:** `agent_definition_versions` and `agent_project_overrides`, plus the merge logic where scopes can only tighten (heavily unit-tested).
-- **Agent identity and secrets:** agent tokens (`la_…`, hashed) and encrypted secrets (AES-GCM, `SECRETS_KEY`).
-- **Agent API:** an MCP server at `/mcp` via `modelcontextprotocol/go-sdk`, mirrored in REST.
-  - `read_artifact` should call `artifacts.RecordRead`.
-- **Runs:** runs/turns/plan_steps, approvals and the `run_gated` broker.
-- **UI on the ticket:** the approval banner, run card and plan card.
-- **Agent configuration:** the screen is mocked in `lazyagents-design/screens/agent-config.html`.
-- **There's no login** (PLAN §5.4). Human actions are attributed to the local user, and agent tokens are a separate auth path at `/mcp`.
+**4a: Definitions ✅**
+- `internal/agentdef` holds the harness-independent definition (no DB code):
+  - `Spec`, `Override`, and `Resolve`. Scalars replace; `instructions_append` and `mcp_servers_add` append; budget takes the lower of each limit.
+  - Scopes only tighten. A scope the agent doesn't grant stays denied whatever the project says. Wildcards like `prod:*` cover matching scopes, including scopes added later.
+  - `EnforcementFor` (credential / brokered / harness / none), harness `Capabilities`, and the scope `Catalog`.
+  - Tested in `resolve_test.go`, including the loosening cases. A loosening bug was caught and fixed while writing it.
+- **Schema:** `00006` adds `agent_definition_versions` (immutable, numbered per agent), `agents.current_definition_version_id` and `agent_project_overrides`.
+- **`internal/agents` service:**
+  - Create (default spec), SaveDefinition (writes a version and syncs the agent row's model and concurrency), SetOverride (empty deletes), CurrentSpec and Resolve.
+  - `WriteVersion` is exported for seeding.
+- **API:** `GET/POST /agents`, `GET /agents/{handle}`, `PUT …/definition`, `PUT …/overrides/{project}`, `GET …/resolved?project=`.
+- **Seed:** all 8 agents have definitions. Atlas has v1–v7 with the notes from `agent-config.html`, plus overrides for PAY (instructions and postgres-staging MCP) and BIL (Codex, `prod:*` denied).
+- **Web:**
+  - `/agents`: a minimal roster plus New agent. The full screen is Phase 7.
+  - `/agents/[handle]`: the configuration screen.
+    - Identity, Runtime (harness capabilities), Instructions, a Permissions table with live enforcement chips (`lib/enforcement.ts` mirrors the Go rules), MCP servers and harness options.
+    - "Save as vN" with ⌘S. The version note is generated from the diff (`describeChanges`).
+    - Right panel: overrides list, override dialog (only offers tighter modes), a "Resolved for [project]" panel, and versions.
+  - `TextInput`/`TextArea` are full width unless given a width class.
+  - `lib/format.ts` gains `ago()`.
+- **Not yet:** the agent Overview/Runs/Tokens tabs (Tokens arrives with 4b, Runs with 4c).
+
+**4b: Tokens and secrets ✅**
+- **Schema:** `00007` adds `agent_tokens` (sha256 hash, a display prefix `la_xxxx`, kind `run|unmanaged`, expiry, revocation) and `secrets`.
+  - Secrets hold AES-256-GCM nonce and ciphertext plus a last-4 preview (empty under 12 characters).
+  - Secret names are unique per workspace and per project.
+- **`internal/agents/tokens.go`:** IssueToken (plaintext returned once), ResolveToken (unknown, revoked and expired all give `ErrBadToken`; last-used is touched at most once a minute) and RevokeToken.
+- **`internal/secrets`:**
+  - The key comes from `SECRETS_KEY` (base64, 32 bytes). Without it, `ErrNoKey` → 409 with instructions.
+  - The ciphertext is bound by AAD to workspace + project + **name**, not the row id. Upserts keep the old id, so binding to the id would make replaced values undecryptable.
+  - `Reveal` is server-side only (broker, runner). A project secret beats the workspace one.
+  - `DefaultGrants` maps `git:pat` → `repo:write`, `db:staging` → `db:migrate`, and so on.
+- **API:** `GET/POST /agents/{handle}/tokens`, `DELETE …/tokens/{id}`, `GET/PUT /secrets`, `DELETE /secrets/{id}`. Values are never returned.
+- **Config:** `PUBLIC_URL` (the MCP URL shown with tokens; `make api` defaults it to `:8000`) and `SECRETS_KEY` (now in compose and `.env.example`).
+- **Web:**
+  - Agent **Tokens** tab (`?tab=tokens`): create → shows the token once, with copy-ready `claude mcp add --transport http … --header "Authorization: Bearer …"` and `codex mcp add … --bearer-token-env-var` commands (checked against the installed CLIs' `--help`), plus revoke.
+  - **Settings → Connections & secrets:** Anthropic, OpenAI and GitHub status; a write-only form (name with known-name suggestions, value, workspace or project scope); a table with grants and previews; a banner when the key is missing.
+  - `components/ui/copy-button.tsx`.
+- **Tests:** `secrets_test.go` (wrong key, values moved between names or projects, short key, replace-then-reveal, project precedence) and `agents/tokens_test.go`.
+
+**4c: Runs, approvals and the broker ✅**
+- **Schema:** `00008` adds `runs` (a frozen `resolved_spec`, state, wait_reason, usage; one live run per ticket via a partial unique index), `run_turns`, `run_events`, `plan_steps` and `approval_requests` (with `executed_at` and `result`).
+  - FKs from `agent_tokens.run_id` and `artifact_reads.run_id`.
+- **`internal/broker`:** `Registry` maps scope → action. The first action is `db:migrate` → `SQLMigration`.
+  - It runs `detail.sql` against the `db:staging` secret in one transaction, with a 60s statement timeout and a 5s lock timeout.
+  - The secret is scrubbed from error text.
+- **`internal/runs` (`service.go`, `approvals.go`):**
+  - Claim: assignee only. Re-claiming returns the live run. It freezes the resolved definition, moves the ticket to In Progress and sets agent status.
+  - Plan and steps (one current at a time), LogEvent (`test_run` → timeline), ReportUsage (unmanaged only), SetBranch, SetPR (GitHub URLs only), CheckCriterion, CreateReport (report + generated attachment), Comment, Complete.
+  - **RequestApproval** checks the run's *frozen* scopes:
+    - allowed → `not_required`;
+    - denied → error;
+    - requires_approval → pending, and the run waits.
+  - **RunGated** executes exactly the approved `action_detail`, once.
+    - A missing secret releases the claim, since nothing ran.
+    - A failed run uses the approval up.
+  - WaitApproval and AwaitSignal are polling long-polls (≤50s).
+  - **Decide** resumes the run with a new turn carrying the decision text.
+  - AwaitHuman; `OnHumanComment` resumes only on an `@handle` mention (`Mentions`).
+  - SetRunControl handles pause, resume and cancel.
+  - `RecomputeAgentStatus` derives agent status from live runs.
+- **Human REST:** `POST /approvals/{id}/{approve|deny}`, `GET /runs/{id}` (turns, approvals, events after `?after=seq`), `POST /runs/{id}/{pause|resume|cancel}`.
+  - `Ticket.run` (latest run, with plan and scopes) and `Ticket.approvals` (pending).
+  - Bootstrap's inbox count = pending approvals.
+  - Human comments call `OnHumanComment`.
+- **Shared:** `apperr.Conflict` → 409; `tracker.Record` and `tracker.AgentActor` are exported for other domains.
+- **Tests:** `internal/runs/runs_test.go` covers the whole lifecycle, including migrating a throwaway "staging" DB exactly once. `broker_test.go` covers rollback.
+
+**4d: Agent API ✅**
+- **`internal/agentapi`:** one tool table (`Tools`, built with generic `define`) serves MCP at `/mcp` (go-sdk v1.8.0, streamable HTTP) and REST at `POST /api/v1/agent/tools/{name}` (`GET /api/v1/agent/tools` lists them).
+- **Auth:** `auth.RequireBearerToken` with a verifier that resolves the agent token on *every* request, so revocation is immediate even mid-session. The caller travels in `TokenInfo.Extra`. Agent paths bypass the local-user middleware.
+- **Tools:** whoami, next_ticket, claim_ticket, get_ticket, read_artifact (by id or `ADR-012`; optional `section` anchor via `artifacts.SectionText`; reads recorded against the run), post_plan, update_step, log_event, report_usage, set_branch, set_pr, check_criterion, create_artifact (reports only), comment, create_ticket, request_approval, wait_for_approval, run_gated, await_human, await_signal, complete_run.
+- **Errors:** domain errors reach the agent verbatim; anything else is "internal error" and logged (`PublicError`).
+- **Tests:** `internal/httpapi/agentapi_test.go` drives PAY-214 end to end through a real MCP client, including the person approving over REST, the broker migrating staging, the ticket reflecting the run, and revoked tokens failing on both transports.
+
+**4e: Ticket UI ✅** (`app/(app)/tickets/[key]/run-parts.tsx`)
+- `ApprovalBanner`: one per pending approval. Shows the scope, action and risk. "View action" shows the exact SQL with "LazyAgents runs exactly this…". An optional note goes with Deny or Approve & continue.
+- `RunCard` in the properties panel: state pill, model · harness · unmanaged, run time, tool calls, tokens, spend, permissions (approval scopes amber), outcome, Pause/Resume and Cancel.
+- `PlanCard` renders the live `ticket.run.plan` under the latest `plan_posted` event of that run.
+- Timeline sentences for every run verb (`timeline.tsx`).
+- **Live updates until SSE (Phase 6):** a ticket with a live run polls the ticket and activity every 5s (`hasLiveRun`); bootstrap refetches every 20s for the inbox badge.
+- **Helpers:** `lib/format.ts` gains `duration`, `compact`.
+
+**4f: Exit demo ✅**
+- `server/cmd/fake-agent` acts as Atlas over real MCP. `examples/README.md` covers Claude Code, Codex and the scripted agent.
+- **Verified in a browser:**
+  - The fake agent claimed PAY-214, read the 3 context documents, posted the plan and ran "tests", then requested `db:migrate`.
+  - The banner appeared by polling, showing the SQL. Approving with a note resumed the agent with that note.
+  - The broker created the partitioned table in a separate `staging_demo` database.
+  - The ticket moved to In Review with the run card filled in.
+- **To reproduce locally:**
+  1. Set the `db:staging` secret to a scratch DB.
+  2. Mint a token on Atlas's Tokens tab.
+  3. Run `LAZYAGENTS_TOKEN=… go run ./cmd/fake-agent -url http://localhost:8000/mcp`.
+
+**Known gaps (later phases):**
+- **Phase 5:** the run log viewer (`GET /runs/{id}` exists; no UI yet); managed runs, dispatch and the runner; turn-based harness resume.
+- **Phase 6:** Inbox, SSE.
+- **Phase 7:** the agent Overview/Runs tabs.
 
 ## Decisions to keep (PLAN.md §11)
 

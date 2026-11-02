@@ -32,6 +32,17 @@ export function timelineTime(iso: string, now = Date.now()): string {
   return monthDay.format(t);
 }
 
+/** Sentence style: "12m ago", "5h ago", "3d ago", "on Oct 3". */
+export function ago(iso: string, now = Date.now()): string {
+  const t = new Date(iso).getTime();
+  const d = Math.max(0, now - t);
+  if (d < MIN) return "just now";
+  if (d < HOUR) return `${Math.floor(d / MIN)}m ago`;
+  if (d < DAY) return `${Math.floor(d / HOUR)}h ago`;
+  if (d < 30 * DAY) return `${Math.floor(d / DAY)}d ago`;
+  return `on ${monthDay.format(t)}`;
+}
+
 export function absoluteTime(iso: string): string {
   return absolute.format(new Date(iso));
 }
@@ -40,4 +51,20 @@ export function absoluteTime(iso: string): string {
 export function dueDate(ymd: string): string {
   const [y, m, d] = ymd.split("-").map(Number);
   return fullDate.format(new Date(y, m - 1, d));
+}
+
+/** "1h 42m", "12m", "45s". */
+export function duration(fromIso: string, toIso?: string, now = Date.now()): string {
+  const ms = Math.max(0, (toIso ? new Date(toIso).getTime() : now) - new Date(fromIso).getTime());
+  const m = Math.floor(ms / MIN);
+  if (m < 1) return `${Math.floor(ms / 1000)}s`;
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+/** 2_100_000 → "2.1M", 18_400 → "18.4K". */
+export function compact(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(n);
 }

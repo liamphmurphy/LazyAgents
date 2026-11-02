@@ -386,7 +386,7 @@ func (s *Service) UpdateMeta(ctx context.Context, ws uuid.UUID, id uuid.UUID, p 
 
 // RecordRead logs an agent reading the current version, optionally one
 // section by anchor. The Agent API (Phase 4) calls this from read_artifact.
-func RecordRead(ctx context.Context, q *store.Queries, a store.Artifact, agentID uuid.UUID, anchor string, at *time.Time) error {
+func RecordRead(ctx context.Context, q *store.Queries, a store.Artifact, agentID uuid.UUID, runID *uuid.UUID, anchor string, at *time.Time) error {
 	if a.CurrentVersionID == nil {
 		return apperr.Invalid("artifact", "has no content")
 	}
@@ -401,7 +401,7 @@ func RecordRead(ctx context.Context, q *store.Queries, a store.Artifact, agentID
 		section = &sec.ID
 	}
 	return q.InsertArtifactRead(ctx, store.InsertArtifactReadParams{
-		VersionID: *a.CurrentVersionID, SectionID: section, AgentID: agentID, ReadAt: at,
+		VersionID: *a.CurrentVersionID, SectionID: section, AgentID: agentID, RunID: runID, ReadAt: at,
 	})
 }
 

@@ -125,3 +125,6 @@ SELECT t.key, t.title, t.status, ta.relation
 FROM ticket_artifacts ta JOIN tickets t ON t.id = ta.ticket_id
 WHERE ta.artifact_id = $1
 ORDER BY t.updated_at DESC;
+
+-- name: GetADRByNumber :one
+SELECT * FROM artifacts WHERE workspace_id = $1 AND type = 'adr' AND number = $2;

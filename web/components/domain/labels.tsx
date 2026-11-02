@@ -87,9 +87,9 @@ export function ScopeMode({ mode }: { mode: ScopeModeValue }) {
   );
 }
 
-export type Enforcement = "credential" | "brokered" | "harness";
+export type Enforcement = "credential" | "brokered" | "harness" | "none";
 
-/** How a scope is enforced. Harness-gated is weaker, so it gets the outlined chip. */
+/** How a scope is enforced. Harness-gated (and none) are weaker, so they get the outlined chip. */
 export function EnforcementChip({ level }: { level: Enforcement }) {
-  return <MonoChip variant={level === "harness" ? "outline" : "fill"}>{level}</MonoChip>;
+  return <MonoChip variant={level === "harness" || level === "none" ? "outline" : "fill"}>{level}</MonoChip>;
 }

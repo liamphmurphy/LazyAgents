@@ -1,0 +1,121 @@
+-- name: CreateRun :one
+INSERT INTO runs (workspace_id, ticket_id, agent_id, mode, state, resolved_spec, definition_version_id, harness, model)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;
+
+-- name: GetRun :one
+SELECT * FROM runs WHERE id = $1 AND workspace_id = $2;
+
+-- name: LockRun :one
+SELECT * FROM runs WHERE id = $1 FOR UPDATE;
+
+-- name: ActiveRunForTicket :one
+SELECT * FROM runs WHERE ticket_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled');
+
+-- name: LatestRunForTicket :one
+SELECT * FROM runs WHERE ticket_id = $1 ORDER BY started_at DESC LIMIT 1;
+
+-- name: ActiveRunsForAgent :many
+SELECT r.*, t.key AS ticket_key FROM runs r JOIN tickets t ON t.id = r.ticket_id
+WHERE r.agent_id = $1 AND r.state NOT IN ('completed', 'failed', 'cancelled')
+ORDER BY r.started_at;
+
+-- name: SetRunState :one
+UPDATE runs SET state = $2, wait_reason = $3,
+  ended_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN now() ELSE ended_at END,
+  outcome = coalesce(sqlc.narg(outcome), outcome)
+WHERE id = $1 RETURNING *;
+
+-- name: AddRunUsage :one
+UPDATE runs SET tool_calls = tool_calls + $2, input_tokens = input_tokens + $3, output_tokens = output_tokens + $4,
+  cost_usd_micros = cost_usd_micros + $5, cost_source = coalesce(cost_source, $6)
+WHERE id = $1 RETURNING *;
+
+-- name: StartTurn :one
+INSERT INTO run_turns (run_id, seq, trigger, input_message)
+VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM run_turns WHERE run_id = $1), $2, $3)
+RETURNING *;
+
+-- name: EndOpenTurn :exec
+UPDATE run_turns SET ended_at = now(), exit_code = $2 WHERE run_id = $1 AND ended_at IS NULL;
+
+-- name: ListTurns :many
+SELECT * FROM run_turns WHERE run_id = $1 ORDER BY seq;
+
+-- name: AddRunEvent :exec
+INSERT INTO run_events (run_id, type, payload) VALUES ($1, $2, $3);
+
+-- name: ListRunEvents :many
+SELECT * FROM run_events WHERE run_id = $1 AND seq > $2 ORDER BY seq LIMIT 1000;
+
+-- name: DeletePlan :exec
+DELETE FROM plan_steps WHERE run_id = $1;
+
+-- name: InsertPlanStep :exec
+INSERT INTO plan_steps (run_id, position, text, state) VALUES ($1, $2, $3, $4);
+
+-- name: ListPlan :many
+SELECT * FROM plan_steps WHERE run_id = $1 ORDER BY position;
+
+-- name: SetStepState :execrows
+UPDATE plan_steps SET state = $3 WHERE run_id = $1 AND position = $2;
+
+-- name: ClearCurrentStep :exec
+UPDATE plan_steps SET state = 'pending' WHERE run_id = $1 AND state = 'current' AND position <> $2;
+
+-- name: SetAgentStatus :exec
+UPDATE agents SET status = $2 WHERE id = $1;
+
+-- name: CreateApproval :one
+INSERT INTO approval_requests (workspace_id, run_id, ticket_id, agent_id, scope, action_summary, action_detail, risk_summary)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;
+
+-- name: GetApproval :one
+SELECT * FROM approval_requests WHERE id = $1 AND workspace_id = $2;
+
+-- name: LockApproval :one
+SELECT * FROM approval_requests WHERE id = $1 AND workspace_id = $2 FOR UPDATE;
+
+-- name: DecideApproval :one
+UPDATE approval_requests SET state = $2, decided_by_user_id = $3, decided_at = now(), decision_note = $4
+WHERE id = $1 AND state = 'pending' RETURNING *;
+
+-- name: MarkApprovalExecuted :one
+UPDATE approval_requests SET executed_at = now(), result = $2
+WHERE id = $1 AND state = 'approved' AND executed_at IS NULL RETURNING *;
+
+-- name: ExpireRunApprovals :exec
+UPDATE approval_requests SET state = 'expired' WHERE run_id = $1 AND state = 'pending';
+
+-- name: PendingApprovalsForTicket :many
+SELECT * FROM approval_requests WHERE ticket_id = $1 AND state = 'pending' ORDER BY created_at;
+
+-- name: CountPendingApprovals :one
+SELECT count(*)::int FROM approval_requests WHERE workspace_id = $1 AND state = 'pending';
+
+-- name: SetTicketBranch :exec
+UPDATE tickets SET branch = $2 WHERE id = $1;
+
+-- name: SetTicketPR :exec
+UPDATE tickets SET pr_number = $2, pr_url = $3, pr_state = coalesce($4, pr_state, 'open') WHERE id = $1;
+
+-- name: GetCriterionByPosition :one
+SELECT * FROM acceptance_criteria WHERE ticket_id = $1 ORDER BY position, created_at OFFSET $2 LIMIT 1;
+
+-- name: ClaimApprovalExecution :one
+-- Marks an approved request as executing exactly once (concurrent callers lose).
+UPDATE approval_requests SET executed_at = now()
+WHERE id = $1 AND run_id = $2 AND state = 'approved' AND executed_at IS NULL
+RETURNING *;
+
+-- name: SetApprovalResult :exec
+UPDATE approval_requests SET result = $2 WHERE id = $1;
+
+-- name: DecidedApprovalsSince :many
+SELECT * FROM approval_requests WHERE run_id = $1 AND decided_at > $2 ORDER BY decided_at;
+
+-- name: ListApprovalsForRun :many
+SELECT * FROM approval_requests WHERE run_id = $1 ORDER BY created_at;
+
+-- name: ReleaseApprovalExecution :exec
+-- Nothing ran (e.g. the secret was missing): the approval can be used again.
+UPDATE approval_requests SET executed_at = NULL WHERE id = $1 AND result IS NULL;

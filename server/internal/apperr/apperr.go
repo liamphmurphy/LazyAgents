@@ -20,3 +20,13 @@ func (e *ValidationError) Error() string { return fmt.Sprintf("%s: %s", e.Field,
 func Invalid(field, format string, args ...any) error {
 	return &ValidationError{Field: field, Msg: fmt.Sprintf(format, args...)}
 }
+
+// ConflictError means the request is valid but the current state forbids it
+// (e.g. acting on a run that isn't running). Mapped to 409.
+type ConflictError struct{ Msg string }
+
+func (e *ConflictError) Error() string { return e.Msg }
+
+func Conflict(format string, args ...any) error {
+	return &ConflictError{Msg: fmt.Sprintf(format, args...)}
+}

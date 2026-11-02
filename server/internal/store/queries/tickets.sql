@@ -104,3 +104,32 @@ SELECT * FROM activity_events WHERE ticket_id = $1 ORDER BY created_at, seq;
 -- sync job (Phase 5) refreshes state and diff stats.
 UPDATE tickets SET branch = $2, pr_number = $3, pr_url = $4, pr_state = $5, pr_additions = $6, pr_deletions = $7
 WHERE id = $1;
+
+-- name: GetTicketByID :one
+SELECT * FROM tickets WHERE id = $1;
+
+-- name: HumanCommentsSince :many
+-- Comments by people on a ticket after a point in time (await_signal).
+SELECT c.id, c.body_md, c.created_at, u.name AS author
+FROM comments c JOIN users u ON u.id = c.author_id
+WHERE c.ticket_id = $1 AND c.author_type = 'user' AND c.created_at > $2
+ORDER BY c.created_at;
+
+-- name: ListTicketComments :many
+-- Recent comments with author names, for get_ticket.
+SELECT c.id, c.parent_comment_id, c.author_type, c.body_md, c.created_at,
+  coalesce(u.name, a.name, 'Unknown')::text AS author
+FROM comments c
+LEFT JOIN users u ON c.author_type = 'user' AND u.id = c.author_id
+LEFT JOIN agents a ON c.author_type = 'agent' AND a.id = c.author_id
+WHERE c.ticket_id = $1
+ORDER BY c.created_at DESC
+LIMIT 20;
+
+-- name: AgentQueue :many
+-- Tickets assigned to an agent that aren't done, most urgent first.
+SELECT t.key, t.title, t.status, t.priority FROM tickets t
+WHERE t.assignee_agent_id = $1 AND t.status <> 'done'
+ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+  CASE t.status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 ELSE 3 END, t.created_at
+LIMIT 20;

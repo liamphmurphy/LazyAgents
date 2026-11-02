@@ -74,3 +74,12 @@ func insert(ctx context.Context, q *store.Queries, ws uuid.UUID, ticketID uuid.U
 		CreatedAt:   e.at,
 	})
 }
+
+// Record writes a timeline event for another domain package (runs,
+// approvals) inside the caller's transaction. at backdates (seeding only).
+func Record(ctx context.Context, q *store.Queries, ws, ticketID uuid.UUID, epicID *uuid.UUID, a Actor, verb string, payload map[string]any, at *time.Time) error {
+	return record(ctx, q, ws, ticketID, epicID, a, event{verb: verb, payload: payload, at: at})
+}
+
+// AgentActor is an agent acting on a ticket.
+func AgentActor(id uuid.UUID) Actor { return Actor{Type: "agent", ID: &id} }

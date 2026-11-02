@@ -25,18 +25,74 @@ type ActivityEvent struct {
 }
 
 type Agent struct {
-	ID             uuid.UUID
-	WorkspaceID    uuid.UUID
-	Name           string
-	Handle         string
-	ColorIndex     int32
-	Role           string
-	Specialty      string
-	Model          string
-	Status         string
-	MaxConcurrency int32
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                         uuid.UUID
+	WorkspaceID                uuid.UUID
+	Name                       string
+	Handle                     string
+	ColorIndex                 int32
+	Role                       string
+	Specialty                  string
+	Model                      string
+	Status                     string
+	MaxConcurrency             int32
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+	CurrentDefinitionVersionID *uuid.UUID
+}
+
+type AgentDefinitionVersion struct {
+	ID              uuid.UUID
+	AgentID         uuid.UUID
+	Version         int32
+	Spec            json.RawMessage
+	Note            string
+	CreatedByUserID *uuid.UUID
+	CreatedAt       time.Time
+}
+
+type AgentProjectOverride struct {
+	ID              uuid.UUID
+	AgentID         uuid.UUID
+	ProjectID       uuid.UUID
+	Spec            json.RawMessage
+	Version         int32
+	UpdatedByUserID *uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type AgentToken struct {
+	ID              uuid.UUID
+	AgentID         uuid.UUID
+	TokenHash       []byte
+	Prefix          string
+	Kind            string
+	Label           string
+	RunID           *uuid.UUID
+	CreatedByUserID *uuid.UUID
+	CreatedAt       time.Time
+	ExpiresAt       *time.Time
+	LastUsedAt      *time.Time
+	RevokedAt       *time.Time
+}
+
+type ApprovalRequest struct {
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	RunID           uuid.UUID
+	TicketID        uuid.UUID
+	AgentID         uuid.UUID
+	Scope           string
+	ActionSummary   string
+	ActionDetail    json.RawMessage
+	RiskSummary     string
+	State           string
+	DecidedByUserID *uuid.UUID
+	DecidedAt       *time.Time
+	DecisionNote    string
+	ExecutedAt      *time.Time
+	Result          []byte
+	CreatedAt       time.Time
 }
 
 type Artifact struct {
@@ -137,6 +193,14 @@ type Label struct {
 	UpdatedAt   time.Time
 }
 
+type PlanStep struct {
+	ID       uuid.UUID
+	RunID    uuid.UUID
+	Position int32
+	Text     string
+	State    string
+}
+
 type Project struct {
 	ID            uuid.UUID
 	WorkspaceID   uuid.UUID
@@ -148,6 +212,66 @@ type Project struct {
 	DefaultBranch string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+type Run struct {
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	TicketID            uuid.UUID
+	AgentID             uuid.UUID
+	Mode                string
+	State               string
+	WaitReason          *string
+	ResolvedSpec        json.RawMessage
+	DefinitionVersionID *uuid.UUID
+	Harness             string
+	Model               string
+	HarnessSessionID    *string
+	Outcome             *string
+	ToolCalls           int32
+	InputTokens         int64
+	OutputTokens        int64
+	CostUsdMicros       int64
+	CostSource          *string
+	StartedAt           time.Time
+	EndedAt             *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type RunEvent struct {
+	ID      uuid.UUID
+	RunID   uuid.UUID
+	Seq     int64
+	Type    string
+	Payload json.RawMessage
+	At      time.Time
+}
+
+type RunTurn struct {
+	ID           uuid.UUID
+	RunID        uuid.UUID
+	Seq          int32
+	Trigger      string
+	InputMessage string
+	StartedAt    time.Time
+	EndedAt      *time.Time
+	ExitCode     *int32
+}
+
+type Secret struct {
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	ProjectID       *uuid.UUID
+	Name            string
+	GrantsScope     *string
+	Nonce           []byte
+	Ciphertext      []byte
+	Preview         string
+	CreatedByUserID *uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	LastUsedAt      *time.Time
 }
 
 type Ticket struct {

@@ -66,3 +66,17 @@ func TestSummary(t *testing.T) {
 		t.Fatalf("long summary not trimmed: %d", len(got))
 	}
 }
+
+func TestSectionText(t *testing.T) {
+	md := "# Doc\n\nIntro\n\n## Goals\n\nFast.\n\n### Sub\n\nDetail.\n\n## Risks\n\nLocks.\n"
+	got, ok := SectionText(md, "goals")
+	if !ok || got != "## Goals\n\nFast.\n\n### Sub\n\nDetail.\n" {
+		t.Fatalf("goals = %q", got)
+	}
+	if got, _ := SectionText(md, "risks"); got != "## Risks\n\nLocks.\n" {
+		t.Fatalf("risks = %q", got)
+	}
+	if _, ok := SectionText(md, "nope"); ok {
+		t.Fatal("unknown anchor found")
+	}
+}

@@ -27,7 +27,7 @@ func (q *Queries) AllocateTicketNumber(ctx context.Context, id uuid.UUID) (int32
 
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (workspace_id, name, handle, color_index, role, specialty, model, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id
 `
 
 type CreateAgentParams struct {
@@ -66,6 +66,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.MaxConcurrency,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CurrentDefinitionVersionID,
 	)
 	return i, err
 }
@@ -177,7 +178,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at FROM agents WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id FROM agents WHERE id = $1 AND workspace_id = $2
 `
 
 type GetAgentParams struct {
@@ -201,6 +202,7 @@ func (q *Queries) GetAgent(ctx context.Context, arg GetAgentParams) (Agent, erro
 		&i.MaxConcurrency,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CurrentDefinitionVersionID,
 	)
 	return i, err
 }
@@ -316,7 +318,7 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 }
 
 const listAgents = `-- name: ListAgents :many
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at FROM agents WHERE workspace_id = $1 ORDER BY color_index, name
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id FROM agents WHERE workspace_id = $1 ORDER BY color_index, name
 `
 
 func (q *Queries) ListAgents(ctx context.Context, workspaceID uuid.UUID) ([]Agent, error) {
@@ -341,6 +343,7 @@ func (q *Queries) ListAgents(ctx context.Context, workspaceID uuid.UUID) ([]Agen
 			&i.MaxConcurrency,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CurrentDefinitionVersionID,
 		); err != nil {
 			return nil, err
 		}

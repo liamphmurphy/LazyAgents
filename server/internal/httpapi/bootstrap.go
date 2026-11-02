@@ -60,6 +60,11 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 	for _, x := range labels {
 		out.Labels = append(out.Labels, toLabel(x))
 	}
-	// Inbox counts (approvals, mentions) arrive with Phase 4/6.
+	// Mentions join the inbox count in Phase 6.
+	pending, err := s.Q.CountPendingApprovals(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	out.Counts.Inbox = int(pending)
 	return out, nil
 }

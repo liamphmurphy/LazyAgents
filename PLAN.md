@@ -364,7 +364,7 @@ Each phase ends with something you can demo.
 - Artifacts screen (tabs, table, drop zone, preview panel), attaching artifacts to tickets, doc cards
 - *Exit:* upload a PRD, attach it to a ticket, preview its outline
 
-**Phase 4: Agent definitions and Agent API**
+**Phase 4: Agent definitions and Agent API** ✅ *done. Exit demo: `examples/README.md` (scripted agent → approve in UI → broker migrates staging).*
 - Agents, versioned definitions, project overrides, the merge logic (with tightening-only scopes) and the resolved-definition view
 - Tokens, encrypted secrets, MCP server and REST mirror
 - Runs and turns, plan steps, approvals and the `run_gated` broker, comments that mention an agent, read tracking and citation counts, agent-generated reports

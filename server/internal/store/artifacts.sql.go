@@ -207,6 +207,38 @@ func (q *Queries) DetachArtifact(ctx context.Context, arg DetachArtifactParams) 
 	return result.RowsAffected(), nil
 }
 
+const getADRByNumber = `-- name: GetADRByNumber :one
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at FROM artifacts WHERE workspace_id = $1 AND type = 'adr' AND number = $2
+`
+
+type GetADRByNumberParams struct {
+	WorkspaceID uuid.UUID
+	Number      *int32
+}
+
+func (q *Queries) GetADRByNumber(ctx context.Context, arg GetADRByNumberParams) (Artifact, error) {
+	row := q.db.QueryRow(ctx, getADRByNumber, arg.WorkspaceID, arg.Number)
+	var i Artifact
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.EpicID,
+		&i.Type,
+		&i.Title,
+		&i.Number,
+		&i.Summary,
+		&i.AuthorType,
+		&i.AuthorID,
+		&i.CurrentVersionID,
+		&i.SearchText,
+		&i.Search,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getArtifact = `-- name: GetArtifact :one
 SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at FROM artifacts WHERE id = $1 AND workspace_id = $2
 `

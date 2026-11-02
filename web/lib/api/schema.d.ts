@@ -301,6 +301,240 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an agent with a default definition */
+        post: operations["createAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{handle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        /** An agent with its current definition, history and project overrides */
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{handle}/definition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Save a new immutable definition version (runs in progress keep their snapshot) */
+        put: operations["saveAgentDefinition"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{handle}/overrides/{project}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+                /** @description Project key */
+                project: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a project's override. An empty override removes it. Scopes can only tighten. */
+        put: operations["setAgentOverride"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{handle}/resolved": {
+        parameters: {
+            query?: {
+                /** @description Project key; omit for the bare definition */
+                project?: string;
+            };
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        /** The definition merged with a project's override, as a run would snapshot it */
+        get: operations["getResolvedDefinition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{handle}/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        /** Tokens for unmanaged sessions (bring your own agent) */
+        get: operations["listAgentTokens"];
+        put?: never;
+        /** Mint a token. The plaintext is returned once and never stored. */
+        post: operations["createAgentToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{handle}/tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a token immediately */
+        delete: operations["revokeAgentToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Secret names and metadata (values are never returned) */
+        get: operations["listSecrets"];
+        /** Create or replace a secret's value (409 when SECRETS_KEY isn't set) */
+        put: operations["setSecret"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a secret */
+        delete: operations["deleteSecret"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/approvals/{id}/{decision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                decision: "approve" | "deny";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or deny an agent's request. The run resumes with the decision. */
+        post: operations["decideApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** A run with its turns, plan, approvals and events (the run log) */
+        get: operations["getRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                action: "pause" | "resume" | "cancel";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause, resume or cancel a run */
+        post: operations["controlRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -455,6 +689,9 @@ export interface components {
             labels: components["schemas"]["Label"][];
             criteria: components["schemas"]["Criterion"][];
             artifacts: components["schemas"]["DocCard"][];
+            run?: components["schemas"]["Run"];
+            /** @description Pending approval requests on this ticket */
+            approvals: components["schemas"]["Approval"][];
             estimate?: string;
             /** Format: date */
             due_date?: string;
@@ -643,6 +880,250 @@ export interface components {
             /** Format: binary */
             file?: string;
         };
+        /** @enum {string} */
+        ScopeMode: "allowed" | "requires_approval" | "denied";
+        /** @enum {string} */
+        Harness: "claude-code" | "codex";
+        Budget: {
+            /** @description Go duration, e.g. 2h */
+            max_runtime?: string;
+            max_turns?: number;
+        };
+        McpServer: {
+            name: string;
+            url: string;
+            description?: string;
+        };
+        AgentSpec: {
+            harness: components["schemas"]["Harness"];
+            model: string;
+            instructions: string;
+            scopes: {
+                [key: string]: components["schemas"]["ScopeMode"];
+            };
+            budget: components["schemas"]["Budget"];
+            max_concurrency: number;
+            mcp_servers: components["schemas"]["McpServer"][];
+            /** @description Per-harness key/values passed only to that harness's adapter */
+            harness_options: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
+        };
+        AgentOverride: {
+            harness?: components["schemas"]["Harness"];
+            model?: string;
+            instructions_append?: string;
+            scopes?: {
+                [key: string]: components["schemas"]["ScopeMode"];
+            };
+            budget?: components["schemas"]["Budget"];
+            mcp_servers_add?: components["schemas"]["McpServer"][];
+            setup?: string[];
+        };
+        ResolvedScope: {
+            scope: string;
+            mode: components["schemas"]["ScopeMode"];
+            /** @enum {string} */
+            source: "agent" | "project";
+            /** @enum {string} */
+            enforcement: "credential" | "brokered" | "harness" | "none";
+            how: string;
+            description: string;
+        };
+        ResolvedDefinition: {
+            harness: components["schemas"]["Harness"];
+            model: string;
+            instructions: string;
+            scopes: components["schemas"]["ResolvedScope"][];
+            budget: components["schemas"]["Budget"];
+            max_concurrency: number;
+            mcp_servers: components["schemas"]["McpServer"][];
+            harness_options: {
+                [key: string]: string;
+            };
+            setup: string[];
+            /** @description Fields a project changed, e.g. {"harness":"project"} */
+            provenance: {
+                [key: string]: "agent" | "project";
+            };
+        };
+        DefinitionVersion: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            note: string;
+            created_by?: components["schemas"]["UserRef"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ProjectOverride: {
+            project: components["schemas"]["Project"];
+            override: components["schemas"]["AgentOverride"];
+            changes: string[];
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        HarnessInfo: {
+            name: components["schemas"]["Harness"];
+            label: string;
+            tool_gating: boolean;
+            permission_prompt: boolean;
+            native_cost: boolean;
+            resume: boolean;
+        };
+        ScopeInfo: {
+            scope: string;
+            description: string;
+            secret?: string;
+            brokered: boolean;
+        };
+        AgentDetail: {
+            agent: components["schemas"]["Agent"];
+            specialty: string;
+            definition: components["schemas"]["DefinitionVersion"];
+            spec: components["schemas"]["AgentSpec"];
+            versions: components["schemas"]["DefinitionVersion"][];
+            overrides: components["schemas"]["ProjectOverride"][];
+            harnesses: components["schemas"]["HarnessInfo"][];
+            catalog: components["schemas"]["ScopeInfo"][];
+        };
+        AgentToken: {
+            /** Format: uuid */
+            id: string;
+            prefix: string;
+            label: string;
+            created_by?: components["schemas"]["UserRef"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            /** Format: date-time */
+            revoked_at?: string;
+        };
+        SecretInfo: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            project?: components["schemas"]["Project"];
+            grants_scope?: string;
+            /** @description Last 4 characters, or empty for short values */
+            preview: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            last_used_at?: string;
+        };
+        SecretList: {
+            secrets: components["schemas"]["SecretInfo"][];
+            /** @description SECRETS_KEY is set */
+            key_configured: boolean;
+            /** @description Well-known secret names and the scope each backs */
+            known: {
+                name: string;
+                grants_scope?: string;
+                description: string;
+            }[];
+        };
+        PlanStep: {
+            position: number;
+            text: string;
+            /** @enum {string} */
+            state: "pending" | "current" | "done" | "needs_human" | "failed";
+        };
+        Run: {
+            /** Format: uuid */
+            id: string;
+            ticket_key: string;
+            agent: components["schemas"]["AgentRef"];
+            /** @enum {string} */
+            mode: "managed" | "unmanaged";
+            /** @enum {string} */
+            state: "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+            /** @enum {string} */
+            wait_reason?: "approval" | "human_reply" | "pause";
+            harness: string;
+            model: string;
+            outcome?: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            ended_at?: string;
+            tool_calls: number;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            cost_usd: number;
+            cost_source?: string;
+            plan: components["schemas"]["PlanStep"][];
+            /** @description Allowed scopes in the run's frozen definition */
+            scopes: string[];
+            /** @description Scopes that need approval in this run */
+            approval_scopes: string[];
+        };
+        Approval: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            run_id: string;
+            ticket_key: string;
+            agent: components["schemas"]["AgentRef"];
+            scope: string;
+            action_summary: string;
+            action_detail: {
+                [key: string]: unknown;
+            };
+            /** @description What will run, e.g. the SQL, for brokered scopes */
+            action_preview?: string;
+            risk_summary: string;
+            /** @enum {string} */
+            state: "pending" | "approved" | "denied" | "expired";
+            brokered: boolean;
+            decided_by?: components["schemas"]["UserRef"];
+            /** Format: date-time */
+            decided_at?: string;
+            decision_note?: string;
+            /** Format: date-time */
+            executed_at?: string;
+            result?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+        };
+        RunTurn: {
+            seq: number;
+            /** @enum {string} */
+            trigger: "start" | "approval" | "comment" | "resume";
+            input_message: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            ended_at?: string;
+            exit_code?: number;
+        };
+        RunEvent: {
+            /** Format: int64 */
+            seq: number;
+            /** @enum {string} */
+            type: "message" | "tool_call" | "tool_result" | "usage" | "error" | "lifecycle";
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            at: string;
+        };
+        RunDetail: {
+            run: components["schemas"]["Run"];
+            turns: components["schemas"]["RunTurn"][];
+            approvals: components["schemas"]["Approval"][];
+            events: components["schemas"]["RunEvent"][];
+        };
         NewComment: {
             body_md: string;
             /** Format: uuid */
@@ -688,6 +1169,7 @@ export interface components {
     parameters: {
         /** @description Ticket key, e.g. PAY-214 */
         TicketKey: string;
+        AgentHandle: string;
         ArtifactId: string;
     };
     requestBodies: never;
@@ -1231,6 +1713,385 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    handle: string;
+                    name: string;
+                    role?: string;
+                    specialty?: string;
+                    color_index?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    saveAgentDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    role: string;
+                    specialty: string;
+                    color_index: number;
+                    spec: components["schemas"]["AgentSpec"];
+                    /** @description What changed, for the version list */
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The agent at its new version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setAgentOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+                /** @description Project key */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentOverride"];
+            };
+        };
+        responses: {
+            /** @description The agent with its overrides */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getResolvedDefinition: {
+        parameters: {
+            query?: {
+                /** @description Project key; omit for the bare definition */
+                project?: string;
+            };
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved definition */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedDefinition"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listAgentTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tokens, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tokens: components["schemas"]["AgentToken"][];
+                        /** @description Where agents connect */
+                        mcp_url: string;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createAgentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    label?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token: string;
+                        info: components["schemas"]["AgentToken"];
+                        mcp_url: string;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    revokeAgentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Secrets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    value: string;
+                    grants_scope?: string;
+                    /** @description Omit for a workspace-wide secret */
+                    project_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretInfo"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    decideApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                decision: "approve" | "deny";
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Decided */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getRun: {
+        parameters: {
+            query?: {
+                /** @description Only events after this sequence number */
+                after?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    controlRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                action: "pause" | "resume" | "cancel";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
                 };
             };
             default: components["responses"]["Error"];

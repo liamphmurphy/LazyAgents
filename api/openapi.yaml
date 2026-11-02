@@ -16,6 +16,9 @@ tags:
   - name: workspace
   - name: tickets
   - name: artifacts
+  - name: agents
+  - name: secrets
+  - name: runs
 paths:
   /health:
     get:
@@ -425,6 +428,306 @@ paths:
               schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
 
+  /agents:
+    post:
+      operationId: createAgent
+      summary: Create an agent with a default definition
+      tags: [agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [handle, name]
+              properties:
+                handle: { type: string }
+                name: { type: string }
+                role: { type: string }
+                specialty: { type: string }
+                color_index: { type: integer }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /agents/{handle}:
+    parameters:
+      - $ref: "#/components/parameters/AgentHandle"
+    get:
+      operationId: getAgent
+      summary: An agent with its current definition, history and project overrides
+      tags: [agents]
+      responses:
+        "200":
+          description: The agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /agents/{handle}/definition:
+    parameters:
+      - $ref: "#/components/parameters/AgentHandle"
+    put:
+      operationId: saveAgentDefinition
+      summary: Save a new immutable definition version (runs in progress keep their snapshot)
+      tags: [agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, role, specialty, color_index, spec]
+              properties:
+                name: { type: string }
+                role: { type: string }
+                specialty: { type: string }
+                color_index: { type: integer }
+                spec: { $ref: "#/components/schemas/AgentSpec" }
+                note: { type: string, description: "What changed, for the version list" }
+      responses:
+        "200":
+          description: The agent at its new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /agents/{handle}/overrides/{project}:
+    parameters:
+      - $ref: "#/components/parameters/AgentHandle"
+      - name: project
+        in: path
+        required: true
+        description: Project key
+        schema: { type: string }
+    put:
+      operationId: setAgentOverride
+      summary: Set a project's override. An empty override removes it. Scopes can only tighten.
+      tags: [agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentOverride" }
+      responses:
+        "200":
+          description: The agent with its overrides
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /agents/{handle}/resolved:
+    parameters:
+      - $ref: "#/components/parameters/AgentHandle"
+      - name: project
+        in: query
+        description: Project key; omit for the bare definition
+        schema: { type: string }
+    get:
+      operationId: getResolvedDefinition
+      summary: The definition merged with a project's override, as a run would snapshot it
+      tags: [agents]
+      responses:
+        "200":
+          description: Resolved definition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResolvedDefinition" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /agents/{handle}/tokens:
+    parameters:
+      - $ref: "#/components/parameters/AgentHandle"
+    get:
+      operationId: listAgentTokens
+      summary: Tokens for unmanaged sessions (bring your own agent)
+      tags: [agents]
+      responses:
+        "200":
+          description: Tokens, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tokens, mcp_url]
+                properties:
+                  tokens: { type: array, items: { $ref: "#/components/schemas/AgentToken" } }
+                  mcp_url: { type: string, description: Where agents connect }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createAgentToken
+      summary: Mint a token. The plaintext is returned once and never stored.
+      tags: [agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, maxLength: 80 }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, info, mcp_url]
+                properties:
+                  token: { type: string }
+                  info: { $ref: "#/components/schemas/AgentToken" }
+                  mcp_url: { type: string }
+        default: { $ref: "#/components/responses/Error" }
+
+  /agents/{handle}/tokens/{tokenId}:
+    parameters:
+      - $ref: "#/components/parameters/AgentHandle"
+      - name: tokenId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      operationId: revokeAgentToken
+      summary: Revoke a token immediately
+      tags: [agents]
+      responses:
+        "204":
+          description: Revoked
+        default: { $ref: "#/components/responses/Error" }
+
+  /secrets:
+    get:
+      operationId: listSecrets
+      summary: Secret names and metadata (values are never returned)
+      tags: [secrets]
+      responses:
+        "200":
+          description: Secrets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecretList" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: setSecret
+      summary: Create or replace a secret's value (409 when SECRETS_KEY isn't set)
+      tags: [secrets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, value]
+              properties:
+                name: { type: string }
+                value: { type: string }
+                grants_scope: { type: string }
+                project_key: { type: string, description: Omit for a workspace-wide secret }
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecretInfo" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /secrets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      operationId: deleteSecret
+      summary: Delete a secret
+      tags: [secrets]
+      responses:
+        "204":
+          description: Deleted
+        default: { $ref: "#/components/responses/Error" }
+
+  /approvals/{id}/{decision}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: decision
+        in: path
+        required: true
+        schema: { type: string, enum: [approve, deny] }
+    post:
+      operationId: decideApproval
+      summary: Approve or deny an agent's request. The run resumes with the decision.
+      tags: [runs]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Decided
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Approval" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /runs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getRun
+      summary: A run with its turns, plan, approvals and events (the run log)
+      tags: [runs]
+      parameters:
+        - name: after
+          in: query
+          description: Only events after this sequence number
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /runs/{id}/{action}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: action
+        in: path
+        required: true
+        schema: { type: string, enum: [pause, resume, cancel] }
+    post:
+      operationId: controlRun
+      summary: Pause, resume or cancel a run
+      tags: [runs]
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   parameters:
     TicketKey:
@@ -434,6 +737,11 @@ components:
       description: Ticket key, e.g. PAY-214
       schema: { type: string, pattern: "^[A-Z][A-Z0-9]{1,9}-[0-9]+$" }
 
+    AgentHandle:
+      name: handle
+      in: path
+      required: true
+      schema: { type: string }
     ArtifactId:
       name: id
       in: path
@@ -607,7 +915,7 @@ components:
           items: { $ref: "#/components/schemas/TicketSummary" }
     Ticket:
       type: object
-      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, created_at, updated_at]
+      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         key: { type: string }
@@ -623,6 +931,11 @@ components:
         labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
         criteria: { type: array, items: { $ref: "#/components/schemas/Criterion" } }
         artifacts: { type: array, items: { $ref: "#/components/schemas/DocCard" } }
+        run: { $ref: "#/components/schemas/Run" }
+        approvals:
+          type: array
+          description: Pending approval requests on this ticket
+          items: { $ref: "#/components/schemas/Approval" }
         estimate: { type: string }
         due_date: { type: string, format: date }
         branch: { type: string }
@@ -818,6 +1131,263 @@ components:
         note: { type: string }
         body_md: { type: string }
         file: { type: string, format: binary }
+
+    ScopeMode:
+      type: string
+      enum: [allowed, requires_approval, denied]
+    Harness:
+      type: string
+      enum: [claude-code, codex]
+    Budget:
+      type: object
+      properties:
+        max_runtime: { type: string, description: "Go duration, e.g. 2h" }
+        max_turns: { type: integer }
+    McpServer:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string }
+        url: { type: string }
+        description: { type: string }
+    AgentSpec:
+      type: object
+      required: [harness, model, instructions, scopes, budget, max_concurrency, mcp_servers, harness_options]
+      properties:
+        harness: { $ref: "#/components/schemas/Harness" }
+        model: { type: string }
+        instructions: { type: string }
+        scopes:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/ScopeMode" }
+        budget: { $ref: "#/components/schemas/Budget" }
+        max_concurrency: { type: integer }
+        mcp_servers: { type: array, items: { $ref: "#/components/schemas/McpServer" } }
+        harness_options:
+          type: object
+          description: Per-harness key/values passed only to that harness's adapter
+          additionalProperties:
+            type: object
+            additionalProperties: { type: string }
+    AgentOverride:
+      type: object
+      properties:
+        harness: { $ref: "#/components/schemas/Harness" }
+        model: { type: string }
+        instructions_append: { type: string }
+        scopes:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/ScopeMode" }
+        budget: { $ref: "#/components/schemas/Budget" }
+        mcp_servers_add: { type: array, items: { $ref: "#/components/schemas/McpServer" } }
+        setup: { type: array, items: { type: string } }
+    ResolvedScope:
+      type: object
+      required: [scope, mode, source, enforcement, how, description]
+      properties:
+        scope: { type: string }
+        mode: { $ref: "#/components/schemas/ScopeMode" }
+        source: { type: string, enum: [agent, project] }
+        enforcement: { type: string, enum: [credential, brokered, harness, none] }
+        how: { type: string }
+        description: { type: string }
+    ResolvedDefinition:
+      type: object
+      required: [harness, model, instructions, scopes, budget, max_concurrency, mcp_servers, harness_options, setup, provenance]
+      properties:
+        harness: { $ref: "#/components/schemas/Harness" }
+        model: { type: string }
+        instructions: { type: string }
+        scopes: { type: array, items: { $ref: "#/components/schemas/ResolvedScope" } }
+        budget: { $ref: "#/components/schemas/Budget" }
+        max_concurrency: { type: integer }
+        mcp_servers: { type: array, items: { $ref: "#/components/schemas/McpServer" } }
+        harness_options:
+          type: object
+          additionalProperties: { type: string }
+        setup: { type: array, items: { type: string } }
+        provenance:
+          type: object
+          description: Fields a project changed, e.g. {"harness":"project"}
+          additionalProperties: { type: string, enum: [agent, project] }
+    DefinitionVersion:
+      type: object
+      required: [id, version, note, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer }
+        note: { type: string }
+        created_by: { $ref: "#/components/schemas/UserRef" }
+        created_at: { type: string, format: date-time }
+    ProjectOverride:
+      type: object
+      required: [project, override, changes, version, updated_at]
+      properties:
+        project: { $ref: "#/components/schemas/Project" }
+        override: { $ref: "#/components/schemas/AgentOverride" }
+        changes: { type: array, items: { type: string } }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    HarnessInfo:
+      type: object
+      required: [name, label, tool_gating, permission_prompt, native_cost, resume]
+      properties:
+        name: { $ref: "#/components/schemas/Harness" }
+        label: { type: string }
+        tool_gating: { type: boolean }
+        permission_prompt: { type: boolean }
+        native_cost: { type: boolean }
+        resume: { type: boolean }
+    ScopeInfo:
+      type: object
+      required: [scope, description, brokered]
+      properties:
+        scope: { type: string }
+        description: { type: string }
+        secret: { type: string }
+        brokered: { type: boolean }
+    AgentDetail:
+      type: object
+      required: [agent, specialty, definition, spec, versions, overrides, harnesses, catalog]
+      properties:
+        agent: { $ref: "#/components/schemas/Agent" }
+        specialty: { type: string }
+        definition: { $ref: "#/components/schemas/DefinitionVersion" }
+        spec: { $ref: "#/components/schemas/AgentSpec" }
+        versions: { type: array, items: { $ref: "#/components/schemas/DefinitionVersion" } }
+        overrides: { type: array, items: { $ref: "#/components/schemas/ProjectOverride" } }
+        harnesses: { type: array, items: { $ref: "#/components/schemas/HarnessInfo" } }
+        catalog: { type: array, items: { $ref: "#/components/schemas/ScopeInfo" } }
+
+    AgentToken:
+      type: object
+      required: [id, prefix, label, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        prefix: { type: string }
+        label: { type: string }
+        created_by: { $ref: "#/components/schemas/UserRef" }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time }
+    SecretInfo:
+      type: object
+      required: [id, name, preview, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        project: { $ref: "#/components/schemas/Project" }
+        grants_scope: { type: string }
+        preview: { type: string, description: "Last 4 characters, or empty for short values" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+    SecretList:
+      type: object
+      required: [secrets, key_configured, known]
+      properties:
+        secrets: { type: array, items: { $ref: "#/components/schemas/SecretInfo" } }
+        key_configured: { type: boolean, description: SECRETS_KEY is set }
+        known:
+          type: array
+          description: Well-known secret names and the scope each backs
+          items:
+            type: object
+            required: [name, description]
+            properties:
+              name: { type: string }
+              grants_scope: { type: string }
+              description: { type: string }
+
+    PlanStep:
+      type: object
+      required: [position, text, state]
+      properties:
+        position: { type: integer }
+        text: { type: string }
+        state: { type: string, enum: [pending, current, done, needs_human, failed] }
+    Run:
+      type: object
+      required: [id, ticket_key, agent, mode, state, harness, model, started_at, tool_calls, input_tokens, output_tokens, cost_usd, plan, approval_scopes, scopes]
+      properties:
+        id: { type: string, format: uuid }
+        ticket_key: { type: string }
+        agent: { $ref: "#/components/schemas/AgentRef" }
+        mode: { type: string, enum: [managed, unmanaged] }
+        state: { type: string, enum: [queued, starting, running, waiting, paused, blocked, completed, failed, cancelled] }
+        wait_reason: { type: string, enum: [approval, human_reply, pause] }
+        harness: { type: string }
+        model: { type: string }
+        outcome: { type: string }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        tool_calls: { type: integer }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        cost_usd: { type: number }
+        cost_source: { type: string }
+        plan: { type: array, items: { $ref: "#/components/schemas/PlanStep" } }
+        scopes:
+          type: array
+          description: Allowed scopes in the run's frozen definition
+          items: { type: string }
+        approval_scopes:
+          type: array
+          description: Scopes that need approval in this run
+          items: { type: string }
+    Approval:
+      type: object
+      required: [id, run_id, ticket_key, agent, scope, action_summary, action_detail, risk_summary, state, brokered, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        ticket_key: { type: string }
+        agent: { $ref: "#/components/schemas/AgentRef" }
+        scope: { type: string }
+        action_summary: { type: string }
+        action_detail:
+          type: object
+          additionalProperties: true
+        action_preview: { type: string, description: "What will run, e.g. the SQL, for brokered scopes" }
+        risk_summary: { type: string }
+        state: { type: string, enum: [pending, approved, denied, expired] }
+        brokered: { type: boolean }
+        decided_by: { $ref: "#/components/schemas/UserRef" }
+        decided_at: { type: string, format: date-time }
+        decision_note: { type: string }
+        executed_at: { type: string, format: date-time }
+        result:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+    RunTurn:
+      type: object
+      required: [seq, trigger, input_message, started_at]
+      properties:
+        seq: { type: integer }
+        trigger: { type: string, enum: [start, approval, comment, resume] }
+        input_message: { type: string }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        exit_code: { type: integer }
+    RunEvent:
+      type: object
+      required: [seq, type, payload, at]
+      properties:
+        seq: { type: integer, format: int64 }
+        type: { type: string, enum: [message, tool_call, tool_result, usage, error, lifecycle] }
+        payload:
+          type: object
+          additionalProperties: true
+        at: { type: string, format: date-time }
+    RunDetail:
+      type: object
+      required: [run, turns, approvals, events]
+      properties:
+        run: { $ref: "#/components/schemas/Run" }
+        turns: { type: array, items: { $ref: "#/components/schemas/RunTurn" } }
+        approvals: { type: array, items: { $ref: "#/components/schemas/Approval" } }
+        events: { type: array, items: { $ref: "#/components/schemas/RunEvent" } }
 
     NewComment:
       type: object

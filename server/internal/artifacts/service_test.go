@@ -153,11 +153,11 @@ func TestCitationsSurviveNewVersions(t *testing.T) {
 	}
 	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws})
 	for range 3 {
-		if err := artifacts.RecordRead(ctx, f.q, a, f.atlas.ID, "risks", nil); err != nil {
+		if err := artifacts.RecordRead(ctx, f.q, a, f.atlas.ID, nil, "risks", nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := artifacts.RecordRead(ctx, f.q, a, f.atlas.ID, "missing", nil); err == nil {
+	if err := artifacts.RecordRead(ctx, f.q, a, f.atlas.ID, nil, "missing", nil); err == nil {
 		t.Fatal("reading an unknown section should fail")
 	}
 	if _, err := f.svc.AddVersion(ctx, f.ws, f.maya, a.ID, artifacts.NewVersion{Content: md("## Goals\n\n## Scope\n\n## Risks\n")}); err != nil {

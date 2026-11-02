@@ -1,0 +1,191 @@
+"use client";
+
+import { Dialog } from "radix-ui";
+import { useState } from "react";
+import type { AgentDetail, AgentOverride, Harness, ScopeMode } from "@/lib/api/client";
+import { useSetOverride } from "@/lib/api/hooks";
+import { MODE_LABEL, MODE_RANK } from "@/lib/enforcement";
+import { Button, IconButton } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/controls";
+import { Field, TextArea, TextInput } from "@/components/ui/primitives";
+
+type ScopeChoice = ScopeMode | "inherit";
+
+/**
+ * Edit one project's override. Scope choices only offer modes at or above
+ * the agent's (projects can only tighten, PLAN.md §6.1); the server enforces
+ * the same rule when resolving.
+ */
+export function OverrideDialog({
+  detail,
+  project,
+  onOpenChange,
+}: {
+  detail: AgentDetail;
+  project: { key: string; name: string; color: string };
+  onOpenChange: (o: boolean) => void;
+}) {
+  const existing = detail.overrides.find((o) => o.project.key === project.key)?.override ?? {};
+  const save = useSetOverride(detail.agent.handle);
+  const spec = detail.spec;
+
+  const [harness, setHarness] = useState<Harness | "inherit">(existing.harness ?? "inherit");
+  const [model, setModel] = useState(existing.model ?? "");
+  const [append, setAppend] = useState(existing.instructions_append ?? "");
+  const [scopes, setScopes] = useState<Record<string, ScopeChoice>>(() => {
+    const out: Record<string, ScopeChoice> = {};
+    for (const s of Object.keys(spec.scopes)) out[s] = existing.scopes?.[s] ?? "inherit";
+    for (const [s, m] of Object.entries(existing.scopes ?? {})) out[s] = m;
+    return out;
+  });
+  const [wildcard, setWildcard] = useState("");
+  const [setup, setSetup] = useState((existing.setup ?? []).join("\n"));
+  const [servers, setServers] = useState(existing.mcp_servers_add ?? []);
+  const [server, setServer] = useState({ name: "", url: "" });
+  const [runtime, setRuntime] = useState(existing.budget?.max_runtime ?? "");
+  const [turns, setTurns] = useState(existing.budget?.max_turns ? String(existing.budget.max_turns) : "");
+
+  function build(): AgentOverride {
+    const sc: Record<string, ScopeMode> = {};
+    for (const [s, m] of Object.entries(scopes)) if (m !== "inherit") sc[s] = m;
+    return {
+      harness: harness === "inherit" ? undefined : harness,
+      model: model.trim() || undefined,
+      instructions_append: append.trim() || undefined,
+      scopes: Object.keys(sc).length ? sc : undefined,
+      mcp_servers_add: servers.length ? servers : undefined,
+      setup: setup.split("\n").map((l) => l.trim()).filter(Boolean),
+      budget: { max_runtime: runtime.trim() || undefined, max_turns: turns ? Number(turns) : undefined },
+    };
+  }
+
+  const submit = (o: AgentOverride) => save.mutate({ project: project.key, override: o }, { onSuccess: () => onOpenChange(false) });
+
+  return (
+    <Dialog.Root open onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          className="fixed left-1/2 top-[6vh] z-50 flex max-h-[88vh] w-[min(720px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
+        >
+          <div className="flex items-center gap-2 px-[18px] pt-3.5">
+            <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: project.color }} />
+            <Dialog.Title className="type-heading">
+              {detail.agent.name} in {project.name}
+            </Dialog.Title>
+            <Dialog.Close asChild>
+              <IconButton icon="x" label="Close" className="ml-auto" />
+            </Dialog.Close>
+          </div>
+          <div className="flex flex-col gap-4 overflow-y-auto px-[18px] pb-4 pt-3">
+            <p className="text-[12.5px] text-fg-tertiary">Overrides merge over the agent&apos;s definition for runs in this project. Permissions can only get stricter.</p>
+            <Field label="Harness" htmlFor="ov-h">
+              <Segmented
+                label="Harness"
+                value={harness}
+                onChange={setHarness}
+                options={[{ value: "inherit" as const, label: `Agent's (${spec.harness})` }, ...detail.harnesses.map((h) => ({ value: h.name, label: h.label }))]}
+              />
+            </Field>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+              <Field label="Model" htmlFor="ov-model">
+                <TextInput id="ov-model" mono placeholder={spec.model} value={model} onChange={(e) => setModel(e.target.value)} />
+              </Field>
+              <Field label="Max runtime" htmlFor="ov-rt" hint="Only lowers the agent's guard">
+                <TextInput id="ov-rt" mono placeholder={spec.budget.max_runtime ?? "none"} value={runtime} onChange={(e) => setRuntime(e.target.value)} />
+              </Field>
+              <Field label="Max turns" htmlFor="ov-turns">
+                <TextInput id="ov-turns" mono type="number" min={0} placeholder={String(spec.budget.max_turns ?? "none")} value={turns} onChange={(e) => setTurns(e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Append to instructions" htmlFor="ov-append">
+              <TextArea id="ov-append" mono rows={3} value={append} onChange={(e) => setAppend(e.target.value)} placeholder="e.g. Follow ADR-012 for partitioning." />
+            </Field>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-[12.5px] font-medium text-fg-2">Permissions</span>
+              {Object.keys(scopes)
+                .sort()
+                .map((s) => {
+                  const agentMode = spec.scopes[s];
+                  const options: Array<{ value: ScopeChoice; label: string }> = [
+                    { value: "inherit", label: agentMode ? `Inherit (${MODE_LABEL[agentMode]})` : "Inherit (Denied)" },
+                    ...(["requires_approval", "denied"] as const)
+                      .filter((m) => !agentMode || MODE_RANK[m] > MODE_RANK[agentMode])
+                      .map((m) => ({ value: m, label: MODE_LABEL[m] })),
+                  ];
+                  return (
+                    <div key={s} className="flex flex-wrap items-center gap-3">
+                      <span className="w-40 font-mono text-xs">{s}</span>
+                      <Segmented small label={`${s} in ${project.name}`} value={scopes[s]} options={options} onChange={(m) => setScopes({ ...scopes, [s]: m })} />
+                    </div>
+                  );
+                })}
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const w = wildcard.trim().toLowerCase();
+                  if (/^[a-z][a-z0-9-]*:([a-z0-9][a-z0-9-]*|\*)$/.test(w)) {
+                    setScopes({ ...scopes, [w]: "denied" });
+                    setWildcard("");
+                  }
+                }}
+              >
+                <TextInput mono aria-label="Deny another scope" placeholder="Deny a scope, e.g. prod:*" className="w-60" value={wildcard} onChange={(e) => setWildcard(e.target.value)} />
+                <Button type="submit" variant="outline">Deny</Button>
+              </form>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-[12.5px] font-medium text-fg-2">Extra MCP servers</span>
+              {servers.map((m, i) => (
+                <div key={m.name} className="flex items-center gap-2 font-mono text-xs">
+                  <span>{m.name}</span>
+                  <span className="truncate text-fg-tertiary">{m.url}</span>
+                  <IconButton icon="trash" label={`Remove ${m.name}`} size={24} className="ml-auto" onClick={() => setServers(servers.filter((_, j) => j !== i))} />
+                </div>
+              ))}
+              <form
+                className="flex flex-wrap gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (server.name.trim() && server.url.trim()) {
+                    setServers([...servers, { name: server.name.trim(), url: server.url.trim() }]);
+                    setServer({ name: "", url: "" });
+                  }
+                }}
+              >
+                <TextInput mono aria-label="Server name" placeholder="name" className="w-36" value={server.name} onChange={(e) => setServer({ ...server, name: e.target.value })} />
+                <TextInput mono aria-label="Server URL" placeholder="https://…/mcp" className="min-w-[180px] flex-1" value={server.url} onChange={(e) => setServer({ ...server, url: e.target.value })} />
+                <Button type="submit" variant="outline" icon="plus">Add</Button>
+              </form>
+            </div>
+            <Field label="Setup commands" htmlFor="ov-setup" hint="One per line. Run in the workspace after cloning (Phase 5).">
+              <TextArea id="ov-setup" mono rows={2} value={setup} onChange={(e) => setSetup(e.target.value)} placeholder="make deps" />
+            </Field>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
+            {save.isError && (
+              <span role="alert" className="mr-auto text-xs text-pill-blocked-fg">
+                {save.error.message}
+              </span>
+            )}
+            {detail.overrides.some((o) => o.project.key === project.key) && (
+              <Button variant="ghost" className="mr-auto text-pill-blocked-fg" onClick={() => submit({})}>
+                Remove override
+              </Button>
+            )}
+            <Dialog.Close asChild>
+              <Button variant="ghost">Cancel</Button>
+            </Dialog.Close>
+            <Button variant="primary" disabled={save.isPending} onClick={() => submit(build())}>
+              Save override
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}

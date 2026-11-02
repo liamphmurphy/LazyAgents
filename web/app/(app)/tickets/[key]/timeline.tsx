@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import type { ActivityEvent, Bootstrap, Priority, TicketStatus } from "@/lib/api/client";
+import type { ActivityEvent, Bootstrap, Priority, Run, TicketStatus } from "@/lib/api/client";
 import { useComment } from "@/lib/api/hooks";
 import { absoluteTime, dueDate, timelineTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { AgentAvatar, HumanAvatar, agentHue } from "@/components/domain/avatars"
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { Markdown } from "@/components/domain/markdown";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
+import { PlanCard } from "./run-parts";
 
 type Actor = ActivityEvent["actor"];
 type P = Record<string, unknown>;
@@ -163,6 +164,85 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
           removed <B>{str(p.title)}</B> from context
         </>
       );
+    case "run_started":
+      return p.mode === "unmanaged" ? "started working (unmanaged session)" : "started working";
+    case "plan_posted":
+      return "posted an execution plan";
+    case "tests_ran": {
+      const failed = Number(p.failed ?? 0);
+      return (
+        <>
+          ran the test suite{" "}
+          <span className={failed ? "rounded-[5px] bg-pill-blocked-bg px-1.5 font-mono text-xs text-pill-blocked-fg" : "rounded-[5px] bg-pill-done-bg px-1.5 font-mono text-xs text-pill-done-fg"}>
+            {Number(p.passed ?? 0)} passed
+          </span>{" "}
+          <span className="rounded-[5px] border border-track px-1.5 font-mono text-xs text-fg-tertiary">
+            {failed} failed{p.duration_s ? ` · ${Math.round(Number(p.duration_s) / 60)}m ${Math.round(Number(p.duration_s) % 60)}s` : ""}
+          </span>
+        </>
+      );
+    }
+    case "branch_set":
+      return (
+        <>
+          created branch <code className="inline">{str(p.branch)}</code>
+        </>
+      );
+    case "pr_opened":
+      return (
+        <>
+          opened{" "}
+          <a href={str(p.url)} target="_blank" rel="noreferrer noopener" className="font-medium text-pill-review-fg hover:underline">
+            PR #{String(p.number)}
+          </a>
+          {p.draft ? " as a draft" : ""}
+        </>
+      );
+    case "approval_requested":
+      return (
+        <>
+          paused and requested approval for <code className="inline">{str(p.scope)}</code>: {str(p.summary)}
+        </>
+      );
+    case "approval_approved":
+      return (
+        <>
+          approved <code className="inline">{str(p.scope)}</code>
+          {p.note ? <>: “{str(p.note)}”</> : null}
+        </>
+      );
+    case "approval_denied":
+      return (
+        <>
+          denied <code className="inline">{str(p.scope)}</code>
+          {p.note ? <>: “{str(p.note)}”</> : null}
+        </>
+      );
+    case "gated_action_ran":
+      return p.ok ? (
+        <>
+          ran <code className="inline">{str(p.scope)}</code> through LazyAgents: <span className="text-pill-done-fg">{str(p.summary)}</span>
+        </>
+      ) : (
+        <>
+          ran <code className="inline">{str(p.scope)}</code> through LazyAgents: <span className="text-pill-blocked-fg">{str(p.summary)}</span>
+          {p.error ? <span className="block font-mono text-xs text-fg-tertiary">{str(p.error)}</span> : null}
+        </>
+      );
+    case "waiting_for_human":
+      return (
+        <>
+          is waiting for a reply: <span className="text-pill-human-fg">{str(p.reason)}</span>
+        </>
+      );
+    case "run_paused":
+      return "paused the run";
+    case "run_resumed":
+      return "resumed the run";
+    case "run_cancelled":
+      return "cancelled the run";
+    case "run_completed":
+      return p.outcome ? <>finished the run: {str(p.outcome)}</> : "finished the run";
     default:
       return <span className="font-mono text-xs">{e.verb}</span>;
   }
@@ -285,7 +365,9 @@ export function Composer({
 }
 
 /** Activity timeline (DESIGN.md §4): 1px rule at x=11, avatar + one sentence; comments as threads. */
-export function Timeline({ events, ticketKey, boot }: { events: ActivityEvent[]; ticketKey: string; boot?: Bootstrap }) {
+export function Timeline({ events, ticketKey, boot, run }: { events: ActivityEvent[]; ticketKey: string; boot?: Bootstrap; run?: Run }) {
+  // The live plan renders under the latest plan_posted event of the latest run.
+  const planEvent = run ? [...events].reverse().find((e) => e.verb === "plan_posted" && str((e.payload as P).run_id) === run.id) : undefined;
   const agentColor = (id: string) => boot?.agents.find((a) => a.id === id)?.color_index;
   const replies = new Map<string, ActivityEvent[]>();
   for (const e of events) {
@@ -306,10 +388,13 @@ export function Timeline({ events, ticketKey, boot }: { events: ActivityEvent[];
               <Thread root={e} replies={replies.get(str((e.payload as P).comment_id)) ?? []} ticketKey={ticketKey} />
             </div>
           ) : (
-            <p className="min-w-0 flex-1 pt-0.5 text-[13px] text-fg-secondary">
-              <B>{e.actor.name}</B> {sentence(e, agentColor)}
-              <Time iso={e.created_at} />
-            </p>
+            <div className="min-w-0 flex-1 pt-0.5 text-[13px] text-fg-secondary">
+              <p>
+                <B>{e.actor.name}</B> {sentence(e, agentColor)}
+                <Time iso={e.created_at} />
+              </p>
+              {e === planEvent && run && run.plan.length > 0 && <PlanCard plan={run.plan} />}
+            </div>
           )}
         </li>
       ))}

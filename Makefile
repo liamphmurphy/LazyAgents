@@ -23,7 +23,8 @@ dev: dev-infra ## Infra in Docker, API (hot reload) + Next dev on the host → h
 	  wait
 
 api: ## Run the API (hot reload if air is installed: go install github.com/air-verse/air@latest)
-	cd server && if command -v air >/dev/null; then air; else go run ./cmd/lazyagents serve; fi
+	cd server && export PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000}; \
+	  if command -v air >/dev/null; then air; else go run ./cmd/lazyagents serve; fi
 
 web: ## Run Next dev server
 	cd web && npm run dev

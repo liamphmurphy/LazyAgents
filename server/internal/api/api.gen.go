@@ -50,22 +50,46 @@ func (e ActorType) Valid() bool {
 
 // Defines values for AgentStatus.
 const (
-	Blocked AgentStatus = "blocked"
-	Idle    AgentStatus = "idle"
-	Running AgentStatus = "running"
-	Waiting AgentStatus = "waiting"
+	AgentStatusBlocked AgentStatus = "blocked"
+	AgentStatusIdle    AgentStatus = "idle"
+	AgentStatusRunning AgentStatus = "running"
+	AgentStatusWaiting AgentStatus = "waiting"
 )
 
 // Valid indicates whether the value is a known member of the AgentStatus enum.
 func (e AgentStatus) Valid() bool {
 	switch e {
-	case Blocked:
+	case AgentStatusBlocked:
 		return true
-	case Idle:
+	case AgentStatusIdle:
 		return true
-	case Running:
+	case AgentStatusRunning:
 		return true
-	case Waiting:
+	case AgentStatusWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ApprovalState.
+const (
+	ApprovalStateApproved ApprovalState = "approved"
+	ApprovalStateDenied   ApprovalState = "denied"
+	ApprovalStateExpired  ApprovalState = "expired"
+	ApprovalStatePending  ApprovalState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalState enum.
+func (e ApprovalState) Valid() bool {
+	switch e {
+	case ApprovalStateApproved:
+		return true
+	case ApprovalStateDenied:
+		return true
+	case ApprovalStateExpired:
+		return true
+	case ApprovalStatePending:
 		return true
 	default:
 		return false
@@ -183,6 +207,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for Harness.
+const (
+	ClaudeCode Harness = "claude-code"
+	Codex      Harness = "codex"
+)
+
+// Valid indicates whether the value is a known member of the Harness enum.
+func (e Harness) Valid() bool {
+	switch e {
+	case ClaudeCode:
+		return true
+	case Codex:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatus.
 const (
 	Degraded HealthStatus = "degraded"
@@ -201,27 +243,54 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for PlanStepState.
+const (
+	PlanStepStateCurrent    PlanStepState = "current"
+	PlanStepStateDone       PlanStepState = "done"
+	PlanStepStateFailed     PlanStepState = "failed"
+	PlanStepStateNeedsHuman PlanStepState = "needs_human"
+	PlanStepStatePending    PlanStepState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the PlanStepState enum.
+func (e PlanStepState) Valid() bool {
+	switch e {
+	case PlanStepStateCurrent:
+		return true
+	case PlanStepStateDone:
+		return true
+	case PlanStepStateFailed:
+		return true
+	case PlanStepStateNeedsHuman:
+		return true
+	case PlanStepStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Priority.
 const (
-	High   Priority = "high"
-	Low    Priority = "low"
-	Medium Priority = "medium"
-	None   Priority = "none"
-	Urgent Priority = "urgent"
+	PriorityHigh   Priority = "high"
+	PriorityLow    Priority = "low"
+	PriorityMedium Priority = "medium"
+	PriorityNone   Priority = "none"
+	PriorityUrgent Priority = "urgent"
 )
 
 // Valid indicates whether the value is a known member of the Priority enum.
 func (e Priority) Valid() bool {
 	switch e {
-	case High:
+	case PriorityHigh:
 		return true
-	case Low:
+	case PriorityLow:
 		return true
-	case Medium:
+	case PriorityMedium:
 		return true
-	case None:
+	case PriorityNone:
 		return true
-	case Urgent:
+	case PriorityUrgent:
 		return true
 	default:
 		return false
@@ -246,6 +315,219 @@ func (e PullRequestState) Valid() bool {
 	case Merged:
 		return true
 	case Open:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolvedDefinitionProvenance.
+const (
+	ResolvedDefinitionProvenanceAgent   ResolvedDefinitionProvenance = "agent"
+	ResolvedDefinitionProvenanceProject ResolvedDefinitionProvenance = "project"
+)
+
+// Valid indicates whether the value is a known member of the ResolvedDefinitionProvenance enum.
+func (e ResolvedDefinitionProvenance) Valid() bool {
+	switch e {
+	case ResolvedDefinitionProvenanceAgent:
+		return true
+	case ResolvedDefinitionProvenanceProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolvedScopeEnforcement.
+const (
+	ResolvedScopeEnforcementBrokered   ResolvedScopeEnforcement = "brokered"
+	ResolvedScopeEnforcementCredential ResolvedScopeEnforcement = "credential"
+	ResolvedScopeEnforcementHarness    ResolvedScopeEnforcement = "harness"
+	ResolvedScopeEnforcementNone       ResolvedScopeEnforcement = "none"
+)
+
+// Valid indicates whether the value is a known member of the ResolvedScopeEnforcement enum.
+func (e ResolvedScopeEnforcement) Valid() bool {
+	switch e {
+	case ResolvedScopeEnforcementBrokered:
+		return true
+	case ResolvedScopeEnforcementCredential:
+		return true
+	case ResolvedScopeEnforcementHarness:
+		return true
+	case ResolvedScopeEnforcementNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolvedScopeSource.
+const (
+	ResolvedScopeSourceAgent   ResolvedScopeSource = "agent"
+	ResolvedScopeSourceProject ResolvedScopeSource = "project"
+)
+
+// Valid indicates whether the value is a known member of the ResolvedScopeSource enum.
+func (e ResolvedScopeSource) Valid() bool {
+	switch e {
+	case ResolvedScopeSourceAgent:
+		return true
+	case ResolvedScopeSourceProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunMode.
+const (
+	Managed   RunMode = "managed"
+	Unmanaged RunMode = "unmanaged"
+)
+
+// Valid indicates whether the value is a known member of the RunMode enum.
+func (e RunMode) Valid() bool {
+	switch e {
+	case Managed:
+		return true
+	case Unmanaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunState.
+const (
+	RunStateBlocked   RunState = "blocked"
+	RunStateCancelled RunState = "cancelled"
+	RunStateCompleted RunState = "completed"
+	RunStateFailed    RunState = "failed"
+	RunStatePaused    RunState = "paused"
+	RunStateQueued    RunState = "queued"
+	RunStateRunning   RunState = "running"
+	RunStateStarting  RunState = "starting"
+	RunStateWaiting   RunState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the RunState enum.
+func (e RunState) Valid() bool {
+	switch e {
+	case RunStateBlocked:
+		return true
+	case RunStateCancelled:
+		return true
+	case RunStateCompleted:
+		return true
+	case RunStateFailed:
+		return true
+	case RunStatePaused:
+		return true
+	case RunStateQueued:
+		return true
+	case RunStateRunning:
+		return true
+	case RunStateStarting:
+		return true
+	case RunStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunWaitReason.
+const (
+	RunWaitReasonApproval   RunWaitReason = "approval"
+	RunWaitReasonHumanReply RunWaitReason = "human_reply"
+	RunWaitReasonPause      RunWaitReason = "pause"
+)
+
+// Valid indicates whether the value is a known member of the RunWaitReason enum.
+func (e RunWaitReason) Valid() bool {
+	switch e {
+	case RunWaitReasonApproval:
+		return true
+	case RunWaitReasonHumanReply:
+		return true
+	case RunWaitReasonPause:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunEventType.
+const (
+	RunEventTypeError      RunEventType = "error"
+	RunEventTypeLifecycle  RunEventType = "lifecycle"
+	RunEventTypeMessage    RunEventType = "message"
+	RunEventTypeToolCall   RunEventType = "tool_call"
+	RunEventTypeToolResult RunEventType = "tool_result"
+	RunEventTypeUsage      RunEventType = "usage"
+)
+
+// Valid indicates whether the value is a known member of the RunEventType enum.
+func (e RunEventType) Valid() bool {
+	switch e {
+	case RunEventTypeError:
+		return true
+	case RunEventTypeLifecycle:
+		return true
+	case RunEventTypeMessage:
+		return true
+	case RunEventTypeToolCall:
+		return true
+	case RunEventTypeToolResult:
+		return true
+	case RunEventTypeUsage:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunTurnTrigger.
+const (
+	RunTurnTriggerApproval RunTurnTrigger = "approval"
+	RunTurnTriggerComment  RunTurnTrigger = "comment"
+	RunTurnTriggerResume   RunTurnTrigger = "resume"
+	RunTurnTriggerStart    RunTurnTrigger = "start"
+)
+
+// Valid indicates whether the value is a known member of the RunTurnTrigger enum.
+func (e RunTurnTrigger) Valid() bool {
+	switch e {
+	case RunTurnTriggerApproval:
+		return true
+	case RunTurnTriggerComment:
+		return true
+	case RunTurnTriggerResume:
+		return true
+	case RunTurnTriggerStart:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScopeMode.
+const (
+	ScopeModeAllowed          ScopeMode = "allowed"
+	ScopeModeDenied           ScopeMode = "denied"
+	ScopeModeRequiresApproval ScopeMode = "requires_approval"
+)
+
+// Valid indicates whether the value is a known member of the ScopeMode enum.
+func (e ScopeMode) Valid() bool {
+	switch e {
+	case ScopeModeAllowed:
+		return true
+	case ScopeModeDenied:
+		return true
+	case ScopeModeRequiresApproval:
 		return true
 	default:
 		return false
@@ -344,6 +626,29 @@ type Agent struct {
 // AgentStatus defines model for Agent.Status.
 type AgentStatus string
 
+// AgentDetail defines model for AgentDetail.
+type AgentDetail struct {
+	Agent      Agent               `json:"agent"`
+	Catalog    []ScopeInfo         `json:"catalog"`
+	Definition DefinitionVersion   `json:"definition"`
+	Harnesses  []HarnessInfo       `json:"harnesses"`
+	Overrides  []ProjectOverride   `json:"overrides"`
+	Spec       AgentSpec           `json:"spec"`
+	Specialty  string              `json:"specialty"`
+	Versions   []DefinitionVersion `json:"versions"`
+}
+
+// AgentOverride defines model for AgentOverride.
+type AgentOverride struct {
+	Budget             *Budget               `json:"budget,omitempty"`
+	Harness            *Harness              `json:"harness,omitempty"`
+	InstructionsAppend *string               `json:"instructions_append,omitempty"`
+	McpServersAdd      *[]McpServer          `json:"mcp_servers_add,omitempty"`
+	Model              *string               `json:"model,omitempty"`
+	Scopes             *map[string]ScopeMode `json:"scopes,omitempty"`
+	Setup              *[]string             `json:"setup,omitempty"`
+}
+
 // AgentRef defines model for AgentRef.
 type AgentRef struct {
 	ColorIndex int                `json:"color_index"`
@@ -351,6 +656,57 @@ type AgentRef struct {
 	Id         openapi_types.UUID `json:"id"`
 	Name       string             `json:"name"`
 }
+
+// AgentSpec defines model for AgentSpec.
+type AgentSpec struct {
+	Budget  Budget  `json:"budget"`
+	Harness Harness `json:"harness"`
+
+	// HarnessOptions Per-harness key/values passed only to that harness's adapter
+	HarnessOptions map[string]map[string]string `json:"harness_options"`
+	Instructions   string                       `json:"instructions"`
+	MaxConcurrency int                          `json:"max_concurrency"`
+	McpServers     []McpServer                  `json:"mcp_servers"`
+	Model          string                       `json:"model"`
+	Scopes         map[string]ScopeMode         `json:"scopes"`
+}
+
+// AgentToken defines model for AgentToken.
+type AgentToken struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	CreatedBy  *UserRef           `json:"created_by,omitempty"`
+	Id         openapi_types.UUID `json:"id"`
+	Label      string             `json:"label"`
+	LastUsedAt *time.Time         `json:"last_used_at,omitempty"`
+	Prefix     string             `json:"prefix"`
+	RevokedAt  *time.Time         `json:"revoked_at,omitempty"`
+}
+
+// Approval defines model for Approval.
+type Approval struct {
+	ActionDetail map[string]interface{} `json:"action_detail"`
+
+	// ActionPreview What will run, e.g. the SQL, for brokered scopes
+	ActionPreview *string                 `json:"action_preview,omitempty"`
+	ActionSummary string                  `json:"action_summary"`
+	Agent         AgentRef                `json:"agent"`
+	Brokered      bool                    `json:"brokered"`
+	CreatedAt     time.Time               `json:"created_at"`
+	DecidedAt     *time.Time              `json:"decided_at,omitempty"`
+	DecidedBy     *UserRef                `json:"decided_by,omitempty"`
+	DecisionNote  *string                 `json:"decision_note,omitempty"`
+	ExecutedAt    *time.Time              `json:"executed_at,omitempty"`
+	Id            openapi_types.UUID      `json:"id"`
+	Result        *map[string]interface{} `json:"result,omitempty"`
+	RiskSummary   string                  `json:"risk_summary"`
+	RunId         openapi_types.UUID      `json:"run_id"`
+	Scope         string                  `json:"scope"`
+	State         ApprovalState           `json:"state"`
+	TicketKey     string                  `json:"ticket_key"`
+}
+
+// ApprovalState defines model for Approval.State.
+type ApprovalState string
 
 // Artifact defines model for Artifact.
 type Artifact struct {
@@ -461,6 +817,13 @@ type Bootstrap struct {
 	Workspace Workspace `json:"workspace"`
 }
 
+// Budget defines model for Budget.
+type Budget struct {
+	// MaxRuntime Go duration, e.g. 2h
+	MaxRuntime *string `json:"max_runtime,omitempty"`
+	MaxTurns   *int    `json:"max_turns,omitempty"`
+}
+
 // BulkUpdate defines model for BulkUpdate.
 type BulkUpdate struct {
 	// AttachArtifactId Also attach this artifact (as context) to every ticket
@@ -475,6 +838,15 @@ type Criterion struct {
 	Id       openapi_types.UUID `json:"id"`
 	Position int                `json:"position"`
 	Text     string             `json:"text"`
+}
+
+// DefinitionVersion defines model for DefinitionVersion.
+type DefinitionVersion struct {
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy *UserRef           `json:"created_by,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	Note      string             `json:"note"`
+	Version   int                `json:"version"`
 }
 
 // DocCard defines model for DocCard.
@@ -518,6 +890,19 @@ type Error struct {
 // ErrorCode defines model for Error.Code.
 type ErrorCode string
 
+// Harness defines model for Harness.
+type Harness string
+
+// HarnessInfo defines model for HarnessInfo.
+type HarnessInfo struct {
+	Label            string  `json:"label"`
+	Name             Harness `json:"name"`
+	NativeCost       bool    `json:"native_cost"`
+	PermissionPrompt bool    `json:"permission_prompt"`
+	Resume           bool    `json:"resume"`
+	ToolGating       bool    `json:"tool_gating"`
+}
+
 // Health defines model for Health.
 type Health struct {
 	Checks  map[string]HealthCheck `json:"checks"`
@@ -548,6 +933,13 @@ type LinkedTicket struct {
 	Relation ArtifactRelation `json:"relation"`
 	Status   TicketStatus     `json:"status"`
 	Title    string           `json:"title"`
+}
+
+// McpServer defines model for McpServer.
+type McpServer struct {
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+	Url         string  `json:"url"`
 }
 
 // NewArtifact defines model for NewArtifact.
@@ -603,6 +995,16 @@ type OutlineSection struct {
 	Level     int                `json:"level"`
 }
 
+// PlanStep defines model for PlanStep.
+type PlanStep struct {
+	Position int           `json:"position"`
+	State    PlanStepState `json:"state"`
+	Text     string        `json:"text"`
+}
+
+// PlanStepState defines model for PlanStep.State.
+type PlanStepState string
+
 // Priority defines model for Priority.
 type Priority string
 
@@ -612,6 +1014,15 @@ type Project struct {
 	Id    openapi_types.UUID `json:"id"`
 	Key   string             `json:"key"`
 	Name  string             `json:"name"`
+}
+
+// ProjectOverride defines model for ProjectOverride.
+type ProjectOverride struct {
+	Changes   []string      `json:"changes"`
+	Override  AgentOverride `json:"override"`
+	Project   Project       `json:"project"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Version   int           `json:"version"`
 }
 
 // PullRequest defines model for PullRequest.
@@ -626,8 +1037,152 @@ type PullRequest struct {
 // PullRequestState defines model for PullRequest.State.
 type PullRequestState string
 
+// ResolvedDefinition defines model for ResolvedDefinition.
+type ResolvedDefinition struct {
+	Budget         Budget            `json:"budget"`
+	Harness        Harness           `json:"harness"`
+	HarnessOptions map[string]string `json:"harness_options"`
+	Instructions   string            `json:"instructions"`
+	MaxConcurrency int               `json:"max_concurrency"`
+	McpServers     []McpServer       `json:"mcp_servers"`
+	Model          string            `json:"model"`
+
+	// Provenance Fields a project changed, e.g. {"harness":"project"}
+	Provenance map[string]ResolvedDefinitionProvenance `json:"provenance"`
+	Scopes     []ResolvedScope                         `json:"scopes"`
+	Setup      []string                                `json:"setup"`
+}
+
+// ResolvedDefinitionProvenance defines model for ResolvedDefinition.Provenance.
+type ResolvedDefinitionProvenance string
+
+// ResolvedScope defines model for ResolvedScope.
+type ResolvedScope struct {
+	Description string                   `json:"description"`
+	Enforcement ResolvedScopeEnforcement `json:"enforcement"`
+	How         string                   `json:"how"`
+	Mode        ScopeMode                `json:"mode"`
+	Scope       string                   `json:"scope"`
+	Source      ResolvedScopeSource      `json:"source"`
+}
+
+// ResolvedScopeEnforcement defines model for ResolvedScope.Enforcement.
+type ResolvedScopeEnforcement string
+
+// ResolvedScopeSource defines model for ResolvedScope.Source.
+type ResolvedScopeSource string
+
+// Run defines model for Run.
+type Run struct {
+	Agent AgentRef `json:"agent"`
+
+	// ApprovalScopes Scopes that need approval in this run
+	ApprovalScopes []string           `json:"approval_scopes"`
+	CostSource     *string            `json:"cost_source,omitempty"`
+	CostUsd        float32            `json:"cost_usd"`
+	EndedAt        *time.Time         `json:"ended_at,omitempty"`
+	Harness        string             `json:"harness"`
+	Id             openapi_types.UUID `json:"id"`
+	InputTokens    int64              `json:"input_tokens"`
+	Mode           RunMode            `json:"mode"`
+	Model          string             `json:"model"`
+	Outcome        *string            `json:"outcome,omitempty"`
+	OutputTokens   int64              `json:"output_tokens"`
+	Plan           []PlanStep         `json:"plan"`
+
+	// Scopes Allowed scopes in the run's frozen definition
+	Scopes     []string       `json:"scopes"`
+	StartedAt  time.Time      `json:"started_at"`
+	State      RunState       `json:"state"`
+	TicketKey  string         `json:"ticket_key"`
+	ToolCalls  int            `json:"tool_calls"`
+	WaitReason *RunWaitReason `json:"wait_reason,omitempty"`
+}
+
+// RunMode defines model for Run.Mode.
+type RunMode string
+
+// RunState defines model for Run.State.
+type RunState string
+
+// RunWaitReason defines model for Run.WaitReason.
+type RunWaitReason string
+
+// RunDetail defines model for RunDetail.
+type RunDetail struct {
+	Approvals []Approval `json:"approvals"`
+	Events    []RunEvent `json:"events"`
+	Run       Run        `json:"run"`
+	Turns     []RunTurn  `json:"turns"`
+}
+
+// RunEvent defines model for RunEvent.
+type RunEvent struct {
+	At      time.Time              `json:"at"`
+	Payload map[string]interface{} `json:"payload"`
+	Seq     int64                  `json:"seq"`
+	Type    RunEventType           `json:"type"`
+}
+
+// RunEventType defines model for RunEvent.Type.
+type RunEventType string
+
+// RunTurn defines model for RunTurn.
+type RunTurn struct {
+	EndedAt      *time.Time     `json:"ended_at,omitempty"`
+	ExitCode     *int           `json:"exit_code,omitempty"`
+	InputMessage string         `json:"input_message"`
+	Seq          int            `json:"seq"`
+	StartedAt    time.Time      `json:"started_at"`
+	Trigger      RunTurnTrigger `json:"trigger"`
+}
+
+// RunTurnTrigger defines model for RunTurn.Trigger.
+type RunTurnTrigger string
+
+// ScopeInfo defines model for ScopeInfo.
+type ScopeInfo struct {
+	Brokered    bool    `json:"brokered"`
+	Description string  `json:"description"`
+	Scope       string  `json:"scope"`
+	Secret      *string `json:"secret,omitempty"`
+}
+
+// ScopeMode defines model for ScopeMode.
+type ScopeMode string
+
+// SecretInfo defines model for SecretInfo.
+type SecretInfo struct {
+	CreatedAt   time.Time          `json:"created_at"`
+	GrantsScope *string            `json:"grants_scope,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	LastUsedAt  *time.Time         `json:"last_used_at,omitempty"`
+	Name        string             `json:"name"`
+
+	// Preview Last 4 characters, or empty for short values
+	Preview   string    `json:"preview"`
+	Project   *Project  `json:"project,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// SecretList defines model for SecretList.
+type SecretList struct {
+	// KeyConfigured SECRETS_KEY is set
+	KeyConfigured bool `json:"key_configured"`
+
+	// Known Well-known secret names and the scope each backs
+	Known []struct {
+		Description string  `json:"description"`
+		GrantsScope *string `json:"grants_scope,omitempty"`
+		Name        string  `json:"name"`
+	} `json:"known"`
+	Secrets []SecretInfo `json:"secrets"`
+}
+
 // Ticket defines model for Ticket.
 type Ticket struct {
+	// Approvals Pending approval requests on this ticket
+	Approvals     []Approval          `json:"approvals"`
 	Artifacts     []DocCard           `json:"artifacts"`
 	Assignee      *AgentRef           `json:"assignee,omitempty"`
 	Branch        *string             `json:"branch,omitempty"`
@@ -645,6 +1200,7 @@ type Ticket struct {
 	Priority      Priority            `json:"priority"`
 	Project       Project             `json:"project"`
 	Reviewer      *UserRef            `json:"reviewer,omitempty"`
+	Run           *Run                `json:"run,omitempty"`
 	Status        TicketStatus        `json:"status"`
 	Title         string              `json:"title"`
 	UpdatedAt     time.Time           `json:"updated_at"`
@@ -715,11 +1271,51 @@ type Workspace struct {
 	Slug string             `json:"slug"`
 }
 
+// AgentHandle defines model for AgentHandle.
+type AgentHandle = string
+
 // ArtifactId defines model for ArtifactId.
 type ArtifactId = openapi_types.UUID
 
 // TicketKey defines model for TicketKey.
 type TicketKey = string
+
+// CreateAgentJSONBody defines parameters for CreateAgent.
+type CreateAgentJSONBody struct {
+	ColorIndex *int    `json:"color_index,omitempty"`
+	Handle     string  `json:"handle"`
+	Name       string  `json:"name"`
+	Role       *string `json:"role,omitempty"`
+	Specialty  *string `json:"specialty,omitempty"`
+}
+
+// SaveAgentDefinitionJSONBody defines parameters for SaveAgentDefinition.
+type SaveAgentDefinitionJSONBody struct {
+	ColorIndex int    `json:"color_index"`
+	Name       string `json:"name"`
+
+	// Note What changed, for the version list
+	Note      *string   `json:"note,omitempty"`
+	Role      string    `json:"role"`
+	Spec      AgentSpec `json:"spec"`
+	Specialty string    `json:"specialty"`
+}
+
+// GetResolvedDefinitionParams defines parameters for GetResolvedDefinition.
+type GetResolvedDefinitionParams struct {
+	// Project Project key; omit for the bare definition
+	Project *string `form:"project,omitempty" json:"project,omitempty"`
+}
+
+// CreateAgentTokenJSONBody defines parameters for CreateAgentToken.
+type CreateAgentTokenJSONBody struct {
+	Label *string `json:"label,omitempty"`
+}
+
+// DecideApprovalJSONBody defines parameters for DecideApproval.
+type DecideApprovalJSONBody struct {
+	Note *string `json:"note,omitempty"`
+}
 
 // ListArtifactsParams defines parameters for ListArtifacts.
 type ListArtifactsParams struct {
@@ -749,6 +1345,22 @@ type GetArtifactContentParams struct {
 type UpdateCriterionJSONBody struct {
 	Done *bool   `json:"done,omitempty"`
 	Text *string `json:"text,omitempty"`
+}
+
+// GetRunParams defines parameters for GetRun.
+type GetRunParams struct {
+	// After Only events after this sequence number
+	After *int64 `form:"after,omitempty" json:"after,omitempty"`
+}
+
+// SetSecretJSONBody defines parameters for SetSecret.
+type SetSecretJSONBody struct {
+	GrantsScope *string `json:"grants_scope,omitempty"`
+	Name        string  `json:"name"`
+
+	// ProjectKey Omit for a workspace-wide secret
+	ProjectKey *string `json:"project_key,omitempty"`
+	Value      string  `json:"value"`
 }
 
 // ListTicketsParams defines parameters for ListTickets.
@@ -784,6 +1396,21 @@ type CreateCriterionJSONBody struct {
 	Text string `json:"text"`
 }
 
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody CreateAgentJSONBody
+
+// SaveAgentDefinitionJSONRequestBody defines body for SaveAgentDefinition for application/json ContentType.
+type SaveAgentDefinitionJSONRequestBody SaveAgentDefinitionJSONBody
+
+// SetAgentOverrideJSONRequestBody defines body for SetAgentOverride for application/json ContentType.
+type SetAgentOverrideJSONRequestBody = AgentOverride
+
+// CreateAgentTokenJSONRequestBody defines body for CreateAgentToken for application/json ContentType.
+type CreateAgentTokenJSONRequestBody CreateAgentTokenJSONBody
+
+// DecideApprovalJSONRequestBody defines body for DecideApproval for application/json ContentType.
+type DecideApprovalJSONRequestBody DecideApprovalJSONBody
+
 // CreateArtifactMultipartRequestBody defines body for CreateArtifact for multipart/form-data ContentType.
 type CreateArtifactMultipartRequestBody = NewArtifact
 
@@ -795,6 +1422,9 @@ type CreateArtifactVersionMultipartRequestBody = NewArtifactVersion
 
 // UpdateCriterionJSONRequestBody defines body for UpdateCriterion for application/json ContentType.
 type UpdateCriterionJSONRequestBody UpdateCriterionJSONBody
+
+// SetSecretJSONRequestBody defines body for SetSecret for application/json ContentType.
+type SetSecretJSONRequestBody SetSecretJSONBody
 
 // CreateTicketJSONRequestBody defines body for CreateTicket for application/json ContentType.
 type CreateTicketJSONRequestBody = NewTicket
@@ -816,6 +1446,33 @@ type CreateCriterionJSONRequestBody CreateCriterionJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// CreateAgent Create an agent with a default definition
+	// (POST /agents)
+	CreateAgent(w http.ResponseWriter, r *http.Request)
+	// GetAgent An agent with its current definition, history and project overrides
+	// (GET /agents/{handle})
+	GetAgent(w http.ResponseWriter, r *http.Request, handle AgentHandle)
+	// SaveAgentDefinition Save a new immutable definition version (runs in progress keep their snapshot)
+	// (PUT /agents/{handle}/definition)
+	SaveAgentDefinition(w http.ResponseWriter, r *http.Request, handle AgentHandle)
+	// SetAgentOverride Set a project's override. An empty override removes it. Scopes can only tighten.
+	// (PUT /agents/{handle}/overrides/{project})
+	SetAgentOverride(w http.ResponseWriter, r *http.Request, handle AgentHandle, project string)
+	// GetResolvedDefinition The definition merged with a project's override, as a run would snapshot it
+	// (GET /agents/{handle}/resolved)
+	GetResolvedDefinition(w http.ResponseWriter, r *http.Request, handle AgentHandle, params GetResolvedDefinitionParams)
+	// ListAgentTokens Tokens for unmanaged sessions (bring your own agent)
+	// (GET /agents/{handle}/tokens)
+	ListAgentTokens(w http.ResponseWriter, r *http.Request, handle AgentHandle)
+	// CreateAgentToken Mint a token. The plaintext is returned once and never stored.
+	// (POST /agents/{handle}/tokens)
+	CreateAgentToken(w http.ResponseWriter, r *http.Request, handle AgentHandle)
+	// RevokeAgentToken Revoke a token immediately
+	// (DELETE /agents/{handle}/tokens/{tokenId})
+	RevokeAgentToken(w http.ResponseWriter, r *http.Request, handle AgentHandle, tokenId openapi_types.UUID)
+	// DecideApproval Approve or deny an agent's request. The run resumes with the decision.
+	// (POST /approvals/{id}/{decision})
+	DecideApproval(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, decision string)
 	// ListArtifacts Artifacts, newest first, with per-type counts for the tabs
 	// (GET /artifacts)
 	ListArtifacts(w http.ResponseWriter, r *http.Request, params ListArtifactsParams)
@@ -846,6 +1503,21 @@ type ServerInterface interface {
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetRun A run with its turns, plan, approvals and events (the run log)
+	// (GET /runs/{id})
+	GetRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params GetRunParams)
+	// ControlRun Pause, resume or cancel a run
+	// (POST /runs/{id}/{action})
+	ControlRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, action string)
+	// ListSecrets Secret names and metadata (values are never returned)
+	// (GET /secrets)
+	ListSecrets(w http.ResponseWriter, r *http.Request)
+	// SetSecret Create or replace a secret's value (409 when SECRETS_KEY isn't set)
+	// (PUT /secrets)
+	SetSecret(w http.ResponseWriter, r *http.Request)
+	// DeleteSecret Delete a secret
+	// (DELETE /secrets/{id})
+	DeleteSecret(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// ListTickets List tickets for a view, with optional filters
 	// (GET /tickets)
 	ListTickets(w http.ResponseWriter, r *http.Request, params ListTicketsParams)
@@ -886,6 +1558,271 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// CreateAgent operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgent operation middleware
+func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "handle" -------------
+	var handle AgentHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgent(w, r, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveAgentDefinition operation middleware
+func (siw *ServerInterfaceWrapper) SaveAgentDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "handle" -------------
+	var handle AgentHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveAgentDefinition(w, r, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAgentOverride operation middleware
+func (siw *ServerInterfaceWrapper) SetAgentOverride(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "handle" -------------
+	var handle AgentHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "project" -------------
+	var project string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAgentOverride(w, r, handle, project)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetResolvedDefinition operation middleware
+func (siw *ServerInterfaceWrapper) GetResolvedDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "handle" -------------
+	var handle AgentHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetResolvedDefinitionParams
+
+	// ------------- Optional query parameter "project" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetResolvedDefinition(w, r, handle, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgentTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentTokens(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "handle" -------------
+	var handle AgentHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentTokens(w, r, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAgentToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgentToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "handle" -------------
+	var handle AgentHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgentToken(w, r, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeAgentToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokeAgentToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "handle" -------------
+	var handle AgentHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "tokenId" -------------
+	var tokenId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tokenId", r.PathValue("tokenId"), &tokenId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tokenId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeAgentToken(w, r, handle, tokenId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DecideApproval operation middleware
+func (siw *ServerInterfaceWrapper) DecideApproval(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "decision" -------------
+	var decision string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "decision", r.PathValue("decision"), &decision, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decision", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideApproval(w, r, id, decision)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListArtifacts operation middleware
 func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.Request) {
@@ -1160,6 +2097,137 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRun operation middleware
+func (siw *ServerInterfaceWrapper) GetRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRunParams
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRun(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ControlRun operation middleware
+func (siw *ServerInterfaceWrapper) ControlRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "action" -------------
+	var action string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "action", r.PathValue("action"), &action, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ControlRun(w, r, id, action)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSecrets operation middleware
+func (siw *ServerInterfaceWrapper) ListSecrets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSecrets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSecret operation middleware
+func (siw *ServerInterfaceWrapper) SetSecret(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSecret(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSecret operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSecret(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1626,11 +2694,386 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/artifacts/{id}", wrapper.UpdateArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/artifacts/{id}/versions", wrapper.CreateArtifactVersion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/artifacts/{id}/versions/{versionId}/content", wrapper.GetArtifactContent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{handle}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{handle}/definition", wrapper.SaveAgentDefinition)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{handle}/overrides/{project}", wrapper.SetAgentOverride)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{handle}/resolved", wrapper.GetResolvedDefinition)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{handle}/tokens", wrapper.ListAgentTokens)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{handle}/tokens", wrapper.CreateAgentToken)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{handle}/tokens/{tokenId}", wrapper.RevokeAgentToken)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/secrets", wrapper.ListSecrets)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/secrets", wrapper.SetSecret)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/secrets/{id}", wrapper.DeleteSecret)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/approvals/{id}/{decision}", wrapper.DecideApproval)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs/{id}", wrapper.GetRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/runs/{id}/{action}", wrapper.ControlRun)
 
 	return m
 }
 
 type ErrorJSONResponse Error
+
+type CreateAgentRequestObject struct {
+	Body *CreateAgentJSONRequestBody
+}
+
+type CreateAgentResponseObject interface {
+	VisitCreateAgentResponse(w http.ResponseWriter) error
+}
+
+type CreateAgent201JSONResponse AgentDetail
+
+func (response CreateAgent201JSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgentdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateAgentdefaultJSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentRequestObject struct {
+	Handle AgentHandle `json:"handle"`
+}
+
+type GetAgentResponseObject interface {
+	VisitGetAgentResponse(w http.ResponseWriter) error
+}
+
+type GetAgent200JSONResponse AgentDetail
+
+func (response GetAgent200JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetAgentdefaultJSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SaveAgentDefinitionRequestObject struct {
+	Handle AgentHandle `json:"handle"`
+	Body   *SaveAgentDefinitionJSONRequestBody
+}
+
+type SaveAgentDefinitionResponseObject interface {
+	VisitSaveAgentDefinitionResponse(w http.ResponseWriter) error
+}
+
+type SaveAgentDefinition200JSONResponse AgentDetail
+
+func (response SaveAgentDefinition200JSONResponse) VisitSaveAgentDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SaveAgentDefinitiondefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SaveAgentDefinitiondefaultJSONResponse) VisitSaveAgentDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentOverrideRequestObject struct {
+	Handle  AgentHandle `json:"handle"`
+	Project string      `json:"project"`
+	Body    *SetAgentOverrideJSONRequestBody
+}
+
+type SetAgentOverrideResponseObject interface {
+	VisitSetAgentOverrideResponse(w http.ResponseWriter) error
+}
+
+type SetAgentOverride200JSONResponse AgentDetail
+
+func (response SetAgentOverride200JSONResponse) VisitSetAgentOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentOverridedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SetAgentOverridedefaultJSONResponse) VisitSetAgentOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetResolvedDefinitionRequestObject struct {
+	Handle AgentHandle `json:"handle"`
+	Params GetResolvedDefinitionParams
+}
+
+type GetResolvedDefinitionResponseObject interface {
+	VisitGetResolvedDefinitionResponse(w http.ResponseWriter) error
+}
+
+type GetResolvedDefinition200JSONResponse ResolvedDefinition
+
+func (response GetResolvedDefinition200JSONResponse) VisitGetResolvedDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetResolvedDefinitiondefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetResolvedDefinitiondefaultJSONResponse) VisitGetResolvedDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentTokensRequestObject struct {
+	Handle AgentHandle `json:"handle"`
+}
+
+type ListAgentTokensResponseObject interface {
+	VisitListAgentTokensResponse(w http.ResponseWriter) error
+}
+
+type ListAgentTokens200JSONResponse struct {
+	// McpUrl Where agents connect
+	McpUrl string       `json:"mcp_url"`
+	Tokens []AgentToken `json:"tokens"`
+}
+
+func (response ListAgentTokens200JSONResponse) VisitListAgentTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentTokensdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListAgentTokensdefaultJSONResponse) VisitListAgentTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgentTokenRequestObject struct {
+	Handle AgentHandle `json:"handle"`
+	Body   *CreateAgentTokenJSONRequestBody
+}
+
+type CreateAgentTokenResponseObject interface {
+	VisitCreateAgentTokenResponse(w http.ResponseWriter) error
+}
+
+type CreateAgentToken201JSONResponse struct {
+	Info   AgentToken `json:"info"`
+	McpUrl string     `json:"mcp_url"`
+	Token  string     `json:"token"`
+}
+
+func (response CreateAgentToken201JSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgentTokendefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateAgentTokendefaultJSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeAgentTokenRequestObject struct {
+	Handle  AgentHandle        `json:"handle"`
+	TokenId openapi_types.UUID `json:"tokenId"`
+}
+
+type RevokeAgentTokenResponseObject interface {
+	VisitRevokeAgentTokenResponse(w http.ResponseWriter) error
+}
+
+type RevokeAgentToken204Response struct {
+}
+
+func (response RevokeAgentToken204Response) VisitRevokeAgentTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeAgentTokendefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RevokeAgentTokendefaultJSONResponse) VisitRevokeAgentTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideApprovalRequestObject struct {
+	Id       openapi_types.UUID `json:"id"`
+	Decision string             `json:"decision"`
+	Body     *DecideApprovalJSONRequestBody
+}
+
+type DecideApprovalResponseObject interface {
+	VisitDecideApprovalResponse(w http.ResponseWriter) error
+}
+
+type DecideApproval200JSONResponse Approval
+
+func (response DecideApproval200JSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideApprovaldefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DecideApprovaldefaultJSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListArtifactsRequestObject struct {
 	Params ListArtifactsParams
@@ -2019,6 +3462,196 @@ func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunRequestObject struct {
+	Id     openapi_types.UUID `json:"id"`
+	Params GetRunParams
+}
+
+type GetRunResponseObject interface {
+	VisitGetRunResponse(w http.ResponseWriter) error
+}
+
+type GetRun200JSONResponse RunDetail
+
+func (response GetRun200JSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRundefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetRundefaultJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ControlRunRequestObject struct {
+	Id     openapi_types.UUID `json:"id"`
+	Action string             `json:"action"`
+}
+
+type ControlRunResponseObject interface {
+	VisitControlRunResponse(w http.ResponseWriter) error
+}
+
+type ControlRun200JSONResponse Run
+
+func (response ControlRun200JSONResponse) VisitControlRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ControlRundefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ControlRundefaultJSONResponse) VisitControlRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretsRequestObject struct {
+}
+
+type ListSecretsResponseObject interface {
+	VisitListSecretsResponse(w http.ResponseWriter) error
+}
+
+type ListSecrets200JSONResponse SecretList
+
+func (response ListSecrets200JSONResponse) VisitListSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListSecretsdefaultJSONResponse) VisitListSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSecretRequestObject struct {
+	Body *SetSecretJSONRequestBody
+}
+
+type SetSecretResponseObject interface {
+	VisitSetSecretResponse(w http.ResponseWriter) error
+}
+
+type SetSecret200JSONResponse SecretInfo
+
+func (response SetSecret200JSONResponse) VisitSetSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSecretdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SetSecretdefaultJSONResponse) VisitSetSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSecretRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DeleteSecretResponseObject interface {
+	VisitDeleteSecretResponse(w http.ResponseWriter) error
+}
+
+type DeleteSecret204Response struct {
+}
+
+func (response DeleteSecret204Response) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSecretdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DeleteSecretdefaultJSONResponse) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2424,6 +4057,33 @@ func (response CreateCriteriondefaultJSONResponse) VisitCreateCriterionResponse(
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// CreateAgent Create an agent with a default definition
+	// (POST /agents)
+	CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error)
+	// GetAgent An agent with its current definition, history and project overrides
+	// (GET /agents/{handle})
+	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
+	// SaveAgentDefinition Save a new immutable definition version (runs in progress keep their snapshot)
+	// (PUT /agents/{handle}/definition)
+	SaveAgentDefinition(ctx context.Context, request SaveAgentDefinitionRequestObject) (SaveAgentDefinitionResponseObject, error)
+	// SetAgentOverride Set a project's override. An empty override removes it. Scopes can only tighten.
+	// (PUT /agents/{handle}/overrides/{project})
+	SetAgentOverride(ctx context.Context, request SetAgentOverrideRequestObject) (SetAgentOverrideResponseObject, error)
+	// GetResolvedDefinition The definition merged with a project's override, as a run would snapshot it
+	// (GET /agents/{handle}/resolved)
+	GetResolvedDefinition(ctx context.Context, request GetResolvedDefinitionRequestObject) (GetResolvedDefinitionResponseObject, error)
+	// ListAgentTokens Tokens for unmanaged sessions (bring your own agent)
+	// (GET /agents/{handle}/tokens)
+	ListAgentTokens(ctx context.Context, request ListAgentTokensRequestObject) (ListAgentTokensResponseObject, error)
+	// CreateAgentToken Mint a token. The plaintext is returned once and never stored.
+	// (POST /agents/{handle}/tokens)
+	CreateAgentToken(ctx context.Context, request CreateAgentTokenRequestObject) (CreateAgentTokenResponseObject, error)
+	// RevokeAgentToken Revoke a token immediately
+	// (DELETE /agents/{handle}/tokens/{tokenId})
+	RevokeAgentToken(ctx context.Context, request RevokeAgentTokenRequestObject) (RevokeAgentTokenResponseObject, error)
+	// DecideApproval Approve or deny an agent's request. The run resumes with the decision.
+	// (POST /approvals/{id}/{decision})
+	DecideApproval(ctx context.Context, request DecideApprovalRequestObject) (DecideApprovalResponseObject, error)
 	// ListArtifacts Artifacts, newest first, with per-type counts for the tabs
 	// (GET /artifacts)
 	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
@@ -2454,6 +4114,21 @@ type StrictServerInterface interface {
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// GetRun A run with its turns, plan, approvals and events (the run log)
+	// (GET /runs/{id})
+	GetRun(ctx context.Context, request GetRunRequestObject) (GetRunResponseObject, error)
+	// ControlRun Pause, resume or cancel a run
+	// (POST /runs/{id}/{action})
+	ControlRun(ctx context.Context, request ControlRunRequestObject) (ControlRunResponseObject, error)
+	// ListSecrets Secret names and metadata (values are never returned)
+	// (GET /secrets)
+	ListSecrets(ctx context.Context, request ListSecretsRequestObject) (ListSecretsResponseObject, error)
+	// SetSecret Create or replace a secret's value (409 when SECRETS_KEY isn't set)
+	// (PUT /secrets)
+	SetSecret(ctx context.Context, request SetSecretRequestObject) (SetSecretResponseObject, error)
+	// DeleteSecret Delete a secret
+	// (DELETE /secrets/{id})
+	DeleteSecret(ctx context.Context, request DeleteSecretRequestObject) (DeleteSecretResponseObject, error)
 	// ListTickets List tickets for a view, with optional filters
 	// (GET /tickets)
 	ListTickets(ctx context.Context, request ListTicketsRequestObject) (ListTicketsResponseObject, error)
@@ -2523,6 +4198,280 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// CreateAgent operation middleware
+func (sh *strictHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
+	var request CreateAgentRequestObject
+
+	var body CreateAgentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAgent(ctx, request.(CreateAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAgentResponseObject); ok {
+		if err := validResponse.VisitCreateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgent operation middleware
+func (sh *strictHandler) GetAgent(w http.ResponseWriter, r *http.Request, handle AgentHandle) {
+	var request GetAgentRequestObject
+
+	request.Handle = handle
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgent(ctx, request.(GetAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentResponseObject); ok {
+		if err := validResponse.VisitGetAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SaveAgentDefinition operation middleware
+func (sh *strictHandler) SaveAgentDefinition(w http.ResponseWriter, r *http.Request, handle AgentHandle) {
+	var request SaveAgentDefinitionRequestObject
+
+	request.Handle = handle
+
+	var body SaveAgentDefinitionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SaveAgentDefinition(ctx, request.(SaveAgentDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SaveAgentDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SaveAgentDefinitionResponseObject); ok {
+		if err := validResponse.VisitSaveAgentDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAgentOverride operation middleware
+func (sh *strictHandler) SetAgentOverride(w http.ResponseWriter, r *http.Request, handle AgentHandle, project string) {
+	var request SetAgentOverrideRequestObject
+
+	request.Handle = handle
+	request.Project = project
+
+	var body SetAgentOverrideJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAgentOverride(ctx, request.(SetAgentOverrideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAgentOverride")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAgentOverrideResponseObject); ok {
+		if err := validResponse.VisitSetAgentOverrideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetResolvedDefinition operation middleware
+func (sh *strictHandler) GetResolvedDefinition(w http.ResponseWriter, r *http.Request, handle AgentHandle, params GetResolvedDefinitionParams) {
+	var request GetResolvedDefinitionRequestObject
+
+	request.Handle = handle
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetResolvedDefinition(ctx, request.(GetResolvedDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetResolvedDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetResolvedDefinitionResponseObject); ok {
+		if err := validResponse.VisitGetResolvedDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAgentTokens operation middleware
+func (sh *strictHandler) ListAgentTokens(w http.ResponseWriter, r *http.Request, handle AgentHandle) {
+	var request ListAgentTokensRequestObject
+
+	request.Handle = handle
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAgentTokens(ctx, request.(ListAgentTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAgentTokens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAgentTokensResponseObject); ok {
+		if err := validResponse.VisitListAgentTokensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAgentToken operation middleware
+func (sh *strictHandler) CreateAgentToken(w http.ResponseWriter, r *http.Request, handle AgentHandle) {
+	var request CreateAgentTokenRequestObject
+
+	request.Handle = handle
+
+	var body CreateAgentTokenJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAgentToken(ctx, request.(CreateAgentTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAgentToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAgentTokenResponseObject); ok {
+		if err := validResponse.VisitCreateAgentTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeAgentToken operation middleware
+func (sh *strictHandler) RevokeAgentToken(w http.ResponseWriter, r *http.Request, handle AgentHandle, tokenId openapi_types.UUID) {
+	var request RevokeAgentTokenRequestObject
+
+	request.Handle = handle
+	request.TokenId = tokenId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeAgentToken(ctx, request.(RevokeAgentTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeAgentToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeAgentTokenResponseObject); ok {
+		if err := validResponse.VisitRevokeAgentTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DecideApproval operation middleware
+func (sh *strictHandler) DecideApproval(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, decision string) {
+	var request DecideApprovalRequestObject
+
+	request.Id = id
+	request.Decision = decision
+
+	var body DecideApprovalJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DecideApproval(ctx, request.(DecideApprovalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DecideApproval")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DecideApprovalResponseObject); ok {
+		if err := validResponse.VisitDecideApprovalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListArtifacts operation middleware
@@ -2802,6 +4751,141 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRun operation middleware
+func (sh *strictHandler) GetRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params GetRunParams) {
+	var request GetRunRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRun(ctx, request.(GetRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRunResponseObject); ok {
+		if err := validResponse.VisitGetRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ControlRun operation middleware
+func (sh *strictHandler) ControlRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, action string) {
+	var request ControlRunRequestObject
+
+	request.Id = id
+	request.Action = action
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ControlRun(ctx, request.(ControlRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ControlRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ControlRunResponseObject); ok {
+		if err := validResponse.VisitControlRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSecrets operation middleware
+func (sh *strictHandler) ListSecrets(w http.ResponseWriter, r *http.Request) {
+	var request ListSecretsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSecrets(ctx, request.(ListSecretsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSecrets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSecretsResponseObject); ok {
+		if err := validResponse.VisitListSecretsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetSecret operation middleware
+func (sh *strictHandler) SetSecret(w http.ResponseWriter, r *http.Request) {
+	var request SetSecretRequestObject
+
+	var body SetSecretJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetSecret(ctx, request.(SetSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetSecretResponseObject); ok {
+		if err := validResponse.VisitSetSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSecret operation middleware
+func (sh *strictHandler) DeleteSecret(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DeleteSecretRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSecret(ctx, request.(DeleteSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSecretResponseObject); ok {
+		if err := validResponse.VisitDeleteSecretResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3113,80 +5197,124 @@ func (sh *strictHandler) CreateCriterion(w http.ResponseWriter, r *http.Request,
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"P/otgp8CVf7l6X8DAAD//w==",
+	"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",
+	"GwAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

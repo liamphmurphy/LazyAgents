@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Ticket } from "@/lib/api/client";
-import { useActivity, useBootstrap, useTicket, useTickets, useUpdateTicket } from "@/lib/api/hooks";
+import { useActivity, useBootstrap, useTicket, useTickets, useUpdateTicket, hasLiveRun } from "@/lib/api/hooks";
 import { Button, ButtonLink, IconButton } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
 import { Markdown } from "@/components/domain/markdown";
@@ -11,6 +11,7 @@ import { TopBar } from "@/components/shell/topbar";
 import { ContextArtifacts } from "./context-artifacts";
 import { Criteria } from "./criteria";
 import { CodeSection, Properties } from "./properties";
+import { ApprovalBanner, RunCard } from "./run-parts";
 import { Composer, Timeline } from "./timeline";
 
 function TitleEditor({ t }: { t: Ticket }) {
@@ -125,7 +126,7 @@ function DetailSkeleton() {
 export function TicketScreen({ ticketKey }: { ticketKey: string }) {
   const router = useRouter();
   const ticket = useTicket(ticketKey);
-  const activity = useActivity(ticketKey);
+  const activity = useActivity(ticketKey, hasLiveRun(ticket.data));
   const boot = useBootstrap();
   const t = ticket.data;
   const pager = usePager(t);
@@ -202,6 +203,9 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
         <div className="flex flex-1 flex-wrap">
           <article className="flex min-w-0 flex-[999_1_480px] justify-center px-7 py-8 max-sm:px-4">
             <div className="flex w-full max-w-[700px] flex-col gap-7">
+              {t.approvals.map((ap) => (
+                <ApprovalBanner key={ap.id} t={t} ap={ap} />
+              ))}
               <div className="flex flex-col gap-3">
                 <TitleEditor t={t} />
                 <Description t={t} />
@@ -211,7 +215,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               <section className="flex flex-col gap-4">
                 <h2 className="type-heading">Activity</h2>
                 {activity.data ? (
-                  <Timeline events={activity.data} ticketKey={t.key} boot={boot.data} />
+                  <Timeline events={activity.data} ticketKey={t.key} boot={boot.data} run={t.run} />
                 ) : (
                   <Skeleton className="h-3 w-1/2" />
                 )}
@@ -221,6 +225,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
           </article>
           <aside aria-label="Properties" className="flex flex-[1_1_300px] flex-col gap-6 border-l border-border-subtle bg-panel px-4 py-6 lg:max-w-[340px]">
             <Properties t={t} boot={boot.data} />
+            {t.run && <RunCard t={t} run={t.run} />}
             <CodeSection t={t} />
           </aside>
         </div>
