@@ -64,5 +64,8 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: "1.31.1"
       - run: cd web && npm ci
       - run: make gen-check

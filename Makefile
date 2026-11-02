@@ -28,12 +28,13 @@ api: ## Run the API (hot reload if air is installed: go install github.com/air-v
 web: ## Run Next dev server
 	cd web && npm run dev
 
-gen: ## Regenerate Go server + TS client from api/openapi.yaml
+gen: ## Regenerate API code (Go + TS) and sqlc queries. Needs sqlc 1.31+ on PATH.
 	cd server && go generate ./...
+	cd server && sqlc generate
 	cd web && npm run gen
 
 gen-check: gen ## Fail if generated code is out of date
-	@git diff --exit-code -- server/internal/api web/lib/api || \
+	@git diff --exit-code -- server/internal/api server/internal/store web/lib/api || \
 	  (echo "generated code is stale: run 'make gen' and commit" && exit 1)
 
 test: ## Run Go and web tests

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -61,6 +62,54 @@ func (s *Store) ensure(ctx context.Context, bucket string) error {
 	if errors.As(err, &owned) || errors.As(err, &exists) {
 		return nil
 	}
+	return err
+}
+
+// Object is a stored blob being read.
+type Object struct {
+	Body          io.ReadCloser
+	ContentType   string
+	ContentLength int64
+}
+
+// ErrNotFound means the key doesn't exist.
+var ErrNotFound = errors.New("blob: not found")
+
+// Put stores a blob. size must be exact; the S3 API needs it up front.
+func (s *Store) Put(ctx context.Context, bucket, key string, body io.Reader, size int64, contentType string) error {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        &bucket,
+		Key:           &key,
+		Body:          body,
+		ContentLength: &size,
+		ContentType:   &contentType,
+	})
+	if err != nil {
+		return fmt.Errorf("blob: put %s/%s: %w", bucket, key, err)
+	}
+	return nil
+}
+
+// Get opens a blob for reading. The caller closes Body.
+func (s *Store) Get(ctx context.Context, bucket, key string) (Object, error) {
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: &bucket, Key: &key})
+	if err != nil {
+		var nsk *types.NoSuchKey
+		if errors.As(err, &nsk) {
+			return Object{}, ErrNotFound
+		}
+		return Object{}, fmt.Errorf("blob: get %s/%s: %w", bucket, key, err)
+	}
+	o := Object{Body: out.Body, ContentType: aws.ToString(out.ContentType)}
+	if out.ContentLength != nil {
+		o.ContentLength = *out.ContentLength
+	}
+	return o, nil
+}
+
+// Delete removes a blob; a missing key is not an error.
+func (s *Store) Delete(ctx context.Context, bucket, key string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &bucket, Key: &key})
 	return err
 }
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
+import { themeScript } from "@/components/shell/theme";
 import "./globals.css";
 
 const inter = Inter({
@@ -22,7 +23,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    // suppressHydrationWarning: the head script may set data-theme before React hydrates.
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-dvh">
         <Providers>{children}</Providers>
       </body>

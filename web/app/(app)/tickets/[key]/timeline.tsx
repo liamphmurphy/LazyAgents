@@ -1,0 +1,318 @@
+"use client";
+
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import type { ActivityEvent, Bootstrap, Priority, TicketStatus } from "@/lib/api/client";
+import { useComment } from "@/lib/api/hooks";
+import { absoluteTime, dueDate, timelineTime } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { TextArea } from "@/components/ui/primitives";
+import { AgentAvatar, HumanAvatar, agentHue } from "@/components/domain/avatars";
+import { StatusGlyph } from "@/components/domain/glyphs";
+import { Markdown } from "@/components/domain/markdown";
+import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
+
+type Actor = ActivityEvent["actor"];
+type P = Record<string, unknown>;
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+
+function ActorAvatar({ actor }: { actor: Actor }) {
+  if (actor.type === "agent") return <AgentAvatar name={actor.name} colorIndex={actor.color_index ?? 0} size="stack" label={false} />;
+  if (actor.type === "system")
+    return <span aria-hidden className="grid size-[22px] place-items-center rounded-full bg-selected text-[10px] text-fg-tertiary">⚙</span>;
+  return <HumanAvatar name={actor.name} initials={actor.initials} color={actor.avatar_color} size={22} label={false} />;
+}
+
+const B = ({ children }: { children: ReactNode }) => <b className="font-medium text-fg">{children}</b>;
+
+function Time({ iso }: { iso: string }) {
+  return (
+    <time dateTime={iso} title={absoluteTime(iso)} className="text-fg-tertiary">
+      {" · "}
+      {timelineTime(iso)}
+    </time>
+  );
+}
+
+function names(list: string[]) {
+  return list.map((l, i) => (
+    <span key={l}>
+      {i > 0 && ", "}
+      <B>{l}</B>
+    </span>
+  ));
+}
+
+/** One sentence per verb (server/internal/tracker/activity.go). */
+function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefined): ReactNode {
+  const p = e.payload as P;
+  const agent = () => {
+    const ci = agentColor(str(p.agent_id));
+    return (
+      <b className="font-medium" style={{ color: ci === undefined ? undefined : `var(--agent-${agentHue(ci)})` }}>
+        {str(p.agent_name)}
+      </b>
+    );
+  };
+  switch (e.verb) {
+    case "created":
+      return "created the ticket";
+    case "status_changed":
+      return (
+        <>
+          moved this from {STATUS_NAME[p.from as TicketStatus] ?? str(p.from)} to{" "}
+          <span className="inline-flex items-center gap-1.5 align-middle">
+            <StatusGlyph state={p.to as TicketStatus} size={12} label={false} />
+            <B>{STATUS_NAME[p.to as TicketStatus] ?? str(p.to)}</B>
+          </span>
+        </>
+      );
+    case "priority_changed":
+      return (
+        <>
+          set priority to <B>{PRIORITY_NAME[p.to as Priority] ?? str(p.to)}</B>
+        </>
+      );
+    case "title_changed":
+      return <>renamed this from “{str(p.from)}”</>;
+    case "description_edited":
+      return "edited the description";
+    case "assigned":
+      return <>assigned this to {agent()}</>;
+    case "unassigned":
+      return <>unassigned {agent()}</>;
+    case "reviewer_set":
+      return (
+        <>
+          set <B>{str(p.user_name)}</B> as reviewer
+        </>
+      );
+    case "reviewer_cleared":
+      return "removed the reviewer";
+    case "epic_changed":
+      return p.epic_name ? (
+        <>
+          moved this to <B>{str(p.epic_name)}</B>
+        </>
+      ) : (
+        "removed it from its epic"
+      );
+    case "labels_changed": {
+      const added = (p.added as string[]) ?? [];
+      const removed = (p.removed as string[]) ?? [];
+      return (
+        <>
+          {added.length > 0 && <>added {names(added)}</>}
+          {added.length > 0 && removed.length > 0 && " and "}
+          {removed.length > 0 && <>removed {names(removed)}</>}
+        </>
+      );
+    }
+    case "estimate_changed":
+      return p.to ? (
+        <>
+          set the estimate to <B>{str(p.to)}</B>
+        </>
+      ) : (
+        "cleared the estimate"
+      );
+    case "due_changed":
+      return p.to ? (
+        <>
+          set the due date to <B>{dueDate(str(p.to))}</B>
+        </>
+      ) : (
+        "cleared the due date"
+      );
+    case "criterion_added":
+      return (
+        <>
+          added a criterion: <span className="text-fg-2">{str(p.text)}</span>
+        </>
+      );
+    case "criterion_checked":
+      return (
+        <>
+          checked off <span className="text-fg-2">{str(p.text)}</span>
+        </>
+      );
+    case "criterion_unchecked":
+      return (
+        <>
+          unchecked <span className="text-fg-2">{str(p.text)}</span>
+        </>
+      );
+    case "criterion_removed":
+      return (
+        <>
+          removed a criterion: <span className="text-fg-2 line-through">{str(p.text)}</span>
+        </>
+      );
+    case "artifact_attached":
+      return (
+        <>
+          {p.relation === "generated" ? "generated " : "attached "}
+          <Link href={`/artifacts/${str(p.artifact_id)}`} className={p.relation === "generated" ? "font-medium text-doc-report hover:underline" : "font-medium text-fg hover:underline"}>
+            {str(p.title)}
+          </Link>
+        </>
+      );
+    case "artifact_detached":
+      return (
+        <>
+          removed <B>{str(p.title)}</B> from context
+        </>
+      );
+    default:
+      return <span className="font-mono text-xs">{e.verb}</span>;
+  }
+}
+
+function CommentBody({ e }: { e: ActivityEvent }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="text-[12.5px]">
+        <B>{e.actor.name}</B>
+        <Time iso={e.created_at} />
+      </div>
+      <Markdown className="type-reading text-fg-2">{str((e.payload as P).body_md)}</Markdown>
+    </div>
+  );
+}
+
+function Thread({ root, replies, ticketKey }: { root: ActivityEvent; replies: ActivityEvent[]; ticketKey: string }) {
+  const [replying, setReplying] = useState(false);
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="px-4 py-3">
+        <CommentBody e={root} />
+      </div>
+      {(replies.length > 0 || replying) && (
+        <div className="flex flex-col gap-3 border-t border-border-subtle bg-surface-sunken px-4 py-3">
+          {replies.map((r) => (
+            <div key={r.id} className="flex gap-2.5">
+              <ActorAvatar actor={r.actor} />
+              <CommentBody e={r} />
+            </div>
+          ))}
+          {replying && (
+            <Composer
+              ticketKey={ticketKey}
+              parentId={str((root.payload as P).comment_id)}
+              placeholder="Reply…"
+              autoFocus
+              onDone={() => setReplying(false)}
+            />
+          )}
+        </div>
+      )}
+      {!replying && (
+        <div className="border-t border-border-subtle px-2 py-1">
+          <Button variant="ghost" className="h-7 text-xs text-fg-tertiary" onClick={() => setReplying(true)}>
+            Reply
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Composer({
+  ticketKey,
+  parentId,
+  placeholder = "Leave a comment…",
+  autoFocus,
+  onDone,
+}: {
+  ticketKey: string;
+  parentId?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+  onDone?: () => void;
+}) {
+  const [body, setBody] = useState("");
+  const comment = useComment(ticketKey);
+  const id = `composer-${parentId ?? "root"}`;
+  const submit = () => {
+    if (!body.trim() || comment.isPending) return;
+    comment.mutate(
+      { body_md: body, parent_comment_id: parentId },
+      {
+        onSuccess: () => {
+          setBody("");
+          onDone?.();
+        },
+      },
+    );
+  };
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-surface focus-within:border-border-hover">
+      <label className="sr-only" htmlFor={id}>
+        {parentId ? "Reply" : "Comment"}
+      </label>
+      <TextArea
+        id={id}
+        value={body}
+        autoFocus={autoFocus}
+        rows={parentId ? 2 : 3}
+        placeholder={placeholder}
+        onChange={(e) => setBody(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            submit();
+          }
+          if (e.key === "Escape" && onDone) onDone();
+        }}
+        className="resize-y rounded-none border-0 bg-transparent px-3.5 py-3 focus:border-0"
+      />
+      <div className="flex flex-wrap items-center justify-end gap-3 px-3 pb-2.5">
+        {comment.isError && <span className="mr-auto text-xs text-pill-blocked-fg">{comment.error.message}</span>}
+        <span className="text-xs text-fg-tertiary">
+          <kbd className="font-mono">⌘↵</kbd> to send
+        </span>
+        {onDone && (
+          <Button variant="ghost" onClick={onDone}>
+            Cancel
+          </Button>
+        )}
+        <Button variant="primary" onClick={submit} disabled={!body.trim() || comment.isPending}>
+          {parentId ? "Reply" : "Comment"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Activity timeline (DESIGN.md §4): 1px rule at x=11, avatar + one sentence; comments as threads. */
+export function Timeline({ events, ticketKey, boot }: { events: ActivityEvent[]; ticketKey: string; boot?: Bootstrap }) {
+  const agentColor = (id: string) => boot?.agents.find((a) => a.id === id)?.color_index;
+  const replies = new Map<string, ActivityEvent[]>();
+  for (const e of events) {
+    const parent = str((e.payload as P).parent_comment_id);
+    if (e.verb === "commented" && parent) replies.set(parent, [...(replies.get(parent) ?? []), e]);
+  }
+  const top = events.filter((e) => !(e.verb === "commented" && str((e.payload as P).parent_comment_id)));
+
+  return (
+    <ol className="relative flex flex-col gap-4 before:absolute before:bottom-2 before:left-[11px] before:top-2 before:w-px before:bg-border">
+      {top.map((e) => (
+        <li key={e.id} className="relative flex gap-3">
+          <span className="relative z-10 h-fit flex-none rounded-full bg-bg py-0.5">
+            <ActorAvatar actor={e.actor} />
+          </span>
+          {e.verb === "commented" ? (
+            <div className="min-w-0 flex-1">
+              <Thread root={e} replies={replies.get(str((e.payload as P).comment_id)) ?? []} ticketKey={ticketKey} />
+            </div>
+          ) : (
+            <p className="min-w-0 flex-1 pt-0.5 text-[13px] text-fg-secondary">
+              <B>{e.actor.name}</B> {sentence(e, agentColor)}
+              <Time iso={e.created_at} />
+            </p>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}

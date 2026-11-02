@@ -1,6 +1,19 @@
 import createClient from "openapi-fetch";
 import type { components, paths } from "./schema";
 
+export type Schemas = components["schemas"];
+export type Ticket = Schemas["Ticket"];
+export type TicketSummary = Schemas["TicketSummary"];
+export type TicketStatus = Schemas["TicketStatus"];
+export type Priority = Schemas["Priority"];
+export type TicketPatch = Schemas["TicketPatch"];
+export type ActivityEvent = Schemas["ActivityEvent"];
+export type Bootstrap = Schemas["Bootstrap"];
+export type ArtifactType = Schemas["ArtifactType"];
+export type ArtifactSummary = Schemas["ArtifactSummary"];
+export type Artifact = Schemas["Artifact"];
+export type DocCardData = Schemas["DocCard"];
+
 // The browser always talks to the same origin (Caddy in compose, Next
 // rewrites in dev). Server components call the API over the internal network.
 const baseUrl =
@@ -10,4 +23,43 @@ const baseUrl =
 
 export const api = createClient<paths>({ baseUrl });
 
-export type Schemas = components["schemas"];
+/** Thrown by `unwrap` so TanStack Query sees failures. */
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    public field?: string,
+  ) {
+    super(message);
+  }
+}
+
+/** Returns data or throws an ApiError built from the shared Error shape. */
+export async function unwrap<T>(p: Promise<{ data?: T; error?: unknown; response: Response }>): Promise<T> {
+  const { data, error, response } = await p;
+  if (error !== undefined || data === undefined) {
+    const e = (error ?? {}) as Partial<Schemas["Error"]>;
+    throw new ApiError(response.status, e.code ?? "internal", e.message ?? response.statusText, e.field);
+  }
+  return data;
+}
+
+/**
+ * Multipart POST for uploads (openapi-fetch types binary parts as strings).
+ * Same error contract as `unwrap`.
+ */
+export async function postForm<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`/api/v1${path}`, { method: "POST", body: form });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const e = body as Partial<Schemas["Error"]>;
+    throw new ApiError(res.status, e.code ?? "internal", e.message ?? res.statusText, e.field);
+  }
+  return body as T;
+}
+
+/** URL of one version's raw content (markdown text or the stored file). */
+export function contentUrl(artifactId: string, versionId: string, download = false) {
+  return `/api/v1/artifacts/${artifactId}/versions/${versionId}/content${download ? "?download=true" : ""}`;
+}

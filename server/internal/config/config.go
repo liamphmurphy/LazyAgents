@@ -14,6 +14,11 @@ type Config struct {
 	S3          S3
 	Seed        bool
 	Version     string
+
+	// The local user created when SEED=false (first boot only). There is no
+	// login for now; every request acts as this user.
+	LocalUserName  string
+	LocalUserEmail string
 }
 
 type S3 struct {
@@ -23,6 +28,8 @@ type S3 struct {
 	SecretKey    string
 	Buckets      []string
 	UsePathStyle bool
+	// ArtifactBucket holds uploaded artifact files (one of Buckets).
+	ArtifactBucket string
 }
 
 // Load reads configuration from environment variables, applying local-dev defaults.
@@ -31,14 +38,17 @@ func Load() (Config, error) {
 		Addr:        env("API_ADDR", ":8000"),
 		DatabaseURL: env("DATABASE_URL", "postgres://lazyagents:lazyagents@localhost:5432/lazyagents?sslmode=disable"),
 		S3: S3{
-			Endpoint:     env("S3_ENDPOINT", "http://localhost:8333"),
-			Region:       env("S3_REGION", "us-east-1"),
-			AccessKey:    env("S3_ACCESS_KEY", "lazyagents"),
-			SecretKey:    env("S3_SECRET_KEY", "lazyagents-secret"),
-			Buckets:      splitList(env("S3_BUCKETS", "artifacts,run-logs")),
-			UsePathStyle: true,
+			Endpoint:       env("S3_ENDPOINT", "http://localhost:8333"),
+			Region:         env("S3_REGION", "us-east-1"),
+			AccessKey:      env("S3_ACCESS_KEY", "lazyagents"),
+			SecretKey:      env("S3_SECRET_KEY", "lazyagents-secret"),
+			Buckets:        splitList(env("S3_BUCKETS", "artifacts,run-logs")),
+			UsePathStyle:   true,
+			ArtifactBucket: env("S3_ARTIFACT_BUCKET", "artifacts"),
 		},
-		Version: env("LAZYAGENTS_VERSION", "dev"),
+		Version:        env("LAZYAGENTS_VERSION", "dev"),
+		LocalUserName:  env("LOCAL_USER_NAME", "Local user"),
+		LocalUserEmail: env("LOCAL_USER_EMAIL", "me@localhost"),
 	}
 	var err error
 	if c.Seed, err = boolEnv("SEED", false); err != nil {

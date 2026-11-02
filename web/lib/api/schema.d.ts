@@ -21,6 +21,286 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everything the shell and pickers need in one call (`me` is the local user) */
+        get: operations["getBootstrap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tickets for a view, with optional filters */
+        get: operations["listTickets"];
+        put?: never;
+        /** Create a ticket */
+        post: operations["createTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply one patch to many tickets */
+        post: operations["bulkUpdateTickets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /** A ticket with its criteria */
+        get: operations["getTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change ticket fields. Omitted fields are untouched; null clears. */
+        patch: operations["updateTicket"];
+        trace?: never;
+    };
+    "/tickets/{key}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /** The ticket timeline, oldest first */
+        get: operations["listTicketActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{key}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Comment on a ticket (appears in the timeline) */
+        post: operations["createComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{key}/criteria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an acceptance criterion */
+        post: operations["createCriterion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/criteria/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an acceptance criterion */
+        delete: operations["deleteCriterion"];
+        options?: never;
+        head?: never;
+        /** Edit or tick an acceptance criterion */
+        patch: operations["updateCriterion"];
+        trace?: never;
+    };
+    "/tickets/{key}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attach an artifact to a ticket as context (or as generated output) */
+        post: operations["attachArtifact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{key}/artifacts/{artifactId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+                artifactId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an artifact from a ticket */
+        delete: operations["detachArtifact"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Artifacts, newest first, with per-type counts for the tabs */
+        get: operations["listArtifacts"];
+        put?: never;
+        /**
+         * Create an artifact from markdown (body_md) or an uploaded file
+         * @description Send exactly one of `body_md` or `file`. Markdown files (.md, text/markdown)
+         *     are stored as text so they can be outlined and searched; anything else is
+         *     stored in object storage. The title defaults to the first heading, then
+         *     the filename.
+         */
+        post: operations["createArtifact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/artifacts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        /** An artifact with its current version, outline, readers, history and tickets */
+        get: operations["getArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit title, summary or epic (contents change via new versions) */
+        patch: operations["updateArtifact"];
+        trace?: never;
+    };
+    "/artifacts/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a version (markdown or file); it becomes current */
+        post: operations["createArtifactVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/artifacts/{id}/versions/{versionId}/content": {
+        parameters: {
+            query?: {
+                /** @description Send Content-Disposition attachment instead of inline */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        /** The raw content of one version (markdown text or the stored file) */
+        get: operations["getArtifactContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -39,12 +319,377 @@ export interface components {
             latency_ms?: number;
         };
         Error: {
-            code: string;
+            /** @enum {string} */
+            code: "not_found" | "invalid" | "conflict" | "internal" | "no_user";
             message: string;
+            field?: string;
+        };
+        Workspace: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+        };
+        User: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            email: string;
+            initials: string;
+            role_title: string;
+            avatar_color?: string;
+        };
+        Project: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            name: string;
+            color: string;
+        };
+        Agent: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            handle: string;
+            color_index: number;
+            role: string;
+            specialty: string;
+            model: string;
+            /** @enum {string} */
+            status: "running" | "waiting" | "blocked" | "idle";
+        };
+        Epic: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            name: string;
+            /** @enum {string} */
+            health: "on_track" | "at_risk" | "off_track";
+        };
+        Label: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            color: string;
+        };
+        Bootstrap: {
+            workspace: components["schemas"]["Workspace"];
+            me: components["schemas"]["User"];
+            users: components["schemas"]["User"][];
+            projects: components["schemas"]["Project"][];
+            agents: components["schemas"]["Agent"][];
+            epics: components["schemas"]["Epic"][];
+            labels: components["schemas"]["Label"][];
+            counts: {
+                inbox: number;
+                live_agents: number;
+            };
+        };
+        /** @enum {string} */
+        TicketStatus: "backlog" | "todo" | "in_progress" | "in_review" | "done";
+        /** @enum {string} */
+        Priority: "none" | "low" | "medium" | "high" | "urgent";
+        AgentRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            handle: string;
+            color_index: number;
+        };
+        UserRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            initials: string;
+            avatar_color?: string;
+        };
+        EpicRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        PullRequest: {
+            number: number;
+            /** @enum {string} */
+            state: "draft" | "open" | "merged" | "closed";
+            url?: string;
+            additions?: number;
+            deletions?: number;
+        };
+        TicketSummary: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            project_key: string;
+            title: string;
+            status: components["schemas"]["TicketStatus"];
+            priority: components["schemas"]["Priority"];
+            epic?: components["schemas"]["EpicRef"];
+            assignee?: components["schemas"]["AgentRef"];
+            labels: components["schemas"]["Label"][];
+            /** Format: date */
+            due_date?: string;
+            pr?: components["schemas"]["PullRequest"];
+            criteria_total: number;
+            criteria_done: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TicketList: {
+            tickets: components["schemas"]["TicketSummary"][];
+        };
+        Ticket: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            project: components["schemas"]["Project"];
+            title: string;
+            description_md: string;
+            status: components["schemas"]["TicketStatus"];
+            priority: components["schemas"]["Priority"];
+            epic?: components["schemas"]["EpicRef"];
+            assignee?: components["schemas"]["AgentRef"];
+            reviewer?: components["schemas"]["UserRef"];
+            created_by?: components["schemas"]["UserRef"];
+            labels: components["schemas"]["Label"][];
+            criteria: components["schemas"]["Criterion"][];
+            artifacts: components["schemas"]["DocCard"][];
+            estimate?: string;
+            /** Format: date */
+            due_date?: string;
+            branch?: string;
+            pr?: components["schemas"]["PullRequest"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        Criterion: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            text: string;
+            done: boolean;
+        };
+        NewTicket: {
+            project_key: string;
+            title: string;
+            description_md?: string;
+            status?: components["schemas"]["TicketStatus"];
+            priority?: components["schemas"]["Priority"];
+            /** Format: uuid */
+            epic_id?: string;
+            /** Format: uuid */
+            assignee_agent_id?: string;
+            /** Format: uuid */
+            reviewer_user_id?: string;
+            label_ids?: string[];
+            estimate?: string;
+            /** Format: date */
+            due_date?: string;
+            criteria?: string[];
+        };
+        TicketPatch: {
+            title?: string;
+            description_md?: string;
+            status?: components["schemas"]["TicketStatus"];
+            priority?: components["schemas"]["Priority"];
+            /** Format: uuid */
+            epic_id?: string | null;
+            /** Format: uuid */
+            assignee_agent_id?: string | null;
+            /** Format: uuid */
+            reviewer_user_id?: string | null;
+            estimate?: string | null;
+            /** Format: date */
+            due_date?: string | null;
+            label_ids?: string[];
+        };
+        BulkUpdate: {
+            keys: string[];
+            patch: components["schemas"]["TicketPatch"];
+            /**
+             * Format: uuid
+             * @description Also attach this artifact (as context) to every ticket
+             */
+            attach_artifact_id?: string;
+        };
+        /** @enum {string} */
+        ArtifactType: "prd" | "spec" | "adr" | "report" | "design";
+        /** @enum {string} */
+        ArtifactRelation: "context" | "generated";
+        ArtifactContent: {
+            /** @enum {string} */
+            kind: "markdown" | "file";
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            filename?: string;
+            /** @description Headings in the outline (markdown only) */
+            sections: number;
+        };
+        ArtifactSummary: {
+            /** Format: uuid */
+            id: string;
+            type: components["schemas"]["ArtifactType"];
+            title: string;
+            /** @description ADR-012; set for numbered types */
+            display_id?: string;
+            summary: string;
+            project: components["schemas"]["Project"];
+            epic?: components["schemas"]["EpicRef"];
+            author: components["schemas"]["Actor"];
+            version_label?: string;
+            content: components["schemas"]["ArtifactContent"];
+            ticket_count: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ArtifactCounts: {
+            all: number;
+            prd: number;
+            spec: number;
+            adr: number;
+            report: number;
+            design: number;
+        };
+        ArtifactList: {
+            artifacts: components["schemas"]["ArtifactSummary"][];
+            counts: components["schemas"]["ArtifactCounts"];
+        };
+        ArtifactVersion: {
+            /** Format: uuid */
+            id: string;
+            seq: number;
+            label: string;
+            note: string;
+            content: components["schemas"]["ArtifactContent"];
+            created_by: components["schemas"]["Actor"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        OutlineSection: {
+            /** Format: uuid */
+            id: string;
+            level: number;
+            anchor: string;
+            heading: string;
+            /** @description Times agents cited this section (by anchor */
+            citations: number;
+        };
+        ArtifactReader: {
+            agent: components["schemas"]["AgentRef"];
+            reads: number;
+            /** Format: date-time */
+            last_read_at: string;
+        };
+        LinkedTicket: {
+            key: string;
+            title: string;
+            status: components["schemas"]["TicketStatus"];
+            relation: components["schemas"]["ArtifactRelation"];
+        };
+        Artifact: {
+            /** Format: uuid */
+            id: string;
+            type: components["schemas"]["ArtifactType"];
+            title: string;
+            display_id?: string;
+            summary: string;
+            project: components["schemas"]["Project"];
+            epic?: components["schemas"]["EpicRef"];
+            author: components["schemas"]["Actor"];
+            current_version: components["schemas"]["ArtifactVersion"];
+            /** @description Markdown of the current version; null for files */
+            body_md: string | null;
+            outline: components["schemas"]["OutlineSection"][];
+            read_by: components["schemas"]["ArtifactReader"][];
+            versions: components["schemas"]["ArtifactVersion"][];
+            tickets: components["schemas"]["LinkedTicket"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DocCard: {
+            /** Format: uuid */
+            id: string;
+            type: components["schemas"]["ArtifactType"];
+            title: string;
+            display_id?: string;
+            version_label?: string;
+            relation: components["schemas"]["ArtifactRelation"];
+            author: components["schemas"]["Actor"];
+            /** @description The ticket's agent has read it ("Read by Atlas") */
+            read_by_assignee: boolean;
+        };
+        NewArtifact: {
+            project_key: string;
+            type: components["schemas"]["ArtifactType"];
+            title?: string;
+            summary?: string;
+            /** Format: uuid */
+            epic_id?: string;
+            version_label?: string;
+            body_md?: string;
+            /** Format: binary */
+            file?: string;
+        };
+        NewArtifactVersion: {
+            version_label?: string;
+            note?: string;
+            body_md?: string;
+            /** Format: binary */
+            file?: string;
+        };
+        NewComment: {
+            body_md: string;
+            /** Format: uuid */
+            parent_comment_id?: string;
+        };
+        Actor: {
+            /** @enum {string} */
+            type: "user" | "agent" | "system";
+            /** Format: uuid */
+            id?: string;
+            name: string;
+            initials?: string;
+            avatar_color?: string;
+            color_index?: number;
+        };
+        /**
+         * @description One timeline entry. `verb` says what happened; `payload` carries the
+         *     details for that verb (see server/internal/tracker/activity.go).
+         */
+        ActivityEvent: {
+            /** Format: uuid */
+            id: string;
+            actor: components["schemas"]["Actor"];
+            verb: string;
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
         };
     };
-    responses: never;
-    parameters: never;
+    responses: {
+        /** @description Error */
+        Error: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+    };
+    parameters: {
+        /** @description Ticket key, e.g. PAY-214 */
+        TicketKey: string;
+        ArtifactId: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -78,6 +723,517 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+        };
+    };
+    getBootstrap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace context for the signed-in user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bootstrap"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listTickets: {
+        parameters: {
+            query?: {
+                /** @description Project key, e.g. PAY */
+                project?: string;
+                view?: "active" | "backlog" | "agent_owned" | "needs_human" | "all";
+                /** @description Restrict to one status (applied within the view) */
+                status?: components["schemas"]["TicketStatus"];
+                /** @description Agent handle */
+                assignee?: string;
+                /** @description Label id */
+                label?: string;
+                /** @description Free-text search over key, title and description */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching tickets, ordered by status then priority */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewTicket"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    bulkUpdateTickets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        updated: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketPatch"];
+            };
+        };
+        responses: {
+            /** @description The updated ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listTicketActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: components["schemas"]["ActivityEvent"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewComment"];
+            };
+        };
+        responses: {
+            /** @description The timeline event for the comment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityEvent"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createCriterion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Criterion"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteCriterion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateCriterion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text?: string;
+                    done?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Criterion"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    attachArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    artifact_id: string;
+                    relation?: components["schemas"]["ArtifactRelation"];
+                };
+            };
+        };
+        responses: {
+            /** @description The ticket with its artifacts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    detachArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+                artifactId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ticket with its artifacts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listArtifacts: {
+        parameters: {
+            query?: {
+                type?: components["schemas"]["ArtifactType"];
+                /** @description Project key */
+                project?: string;
+                /** @description Full-text search over titles, summaries and contents */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching artifacts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["NewArtifact"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The artifact */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    summary?: string;
+                    /** Format: uuid */
+                    epic_id?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createArtifactVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["NewArtifactVersion"];
+            };
+        };
+        responses: {
+            /** @description The artifact at its new version */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getArtifactContent: {
+        parameters: {
+            query?: {
+                /** @description Send Content-Disposition attachment instead of inline */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Raw bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            default: components["responses"]["Error"];
         };
     };
 }

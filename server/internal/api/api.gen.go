@@ -11,14 +11,177 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/oapi-codegen/nullable"
+	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for ActorType.
+const (
+	ActorTypeAgent  ActorType = "agent"
+	ActorTypeSystem ActorType = "system"
+	ActorTypeUser   ActorType = "user"
+)
+
+// Valid indicates whether the value is a known member of the ActorType enum.
+func (e ActorType) Valid() bool {
+	switch e {
+	case ActorTypeAgent:
+		return true
+	case ActorTypeSystem:
+		return true
+	case ActorTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentStatus.
+const (
+	Blocked AgentStatus = "blocked"
+	Idle    AgentStatus = "idle"
+	Running AgentStatus = "running"
+	Waiting AgentStatus = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the AgentStatus enum.
+func (e AgentStatus) Valid() bool {
+	switch e {
+	case Blocked:
+		return true
+	case Idle:
+		return true
+	case Running:
+		return true
+	case Waiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactContentKind.
+const (
+	File     ArtifactContentKind = "file"
+	Markdown ArtifactContentKind = "markdown"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactContentKind enum.
+func (e ArtifactContentKind) Valid() bool {
+	switch e {
+	case File:
+		return true
+	case Markdown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactRelation.
+const (
+	Context   ArtifactRelation = "context"
+	Generated ArtifactRelation = "generated"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactRelation enum.
+func (e ArtifactRelation) Valid() bool {
+	switch e {
+	case Context:
+		return true
+	case Generated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactType.
+const (
+	Adr    ArtifactType = "adr"
+	Design ArtifactType = "design"
+	Prd    ArtifactType = "prd"
+	Report ArtifactType = "report"
+	Spec   ArtifactType = "spec"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactType enum.
+func (e ArtifactType) Valid() bool {
+	switch e {
+	case Adr:
+		return true
+	case Design:
+		return true
+	case Prd:
+		return true
+	case Report:
+		return true
+	case Spec:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EpicHealth.
+const (
+	AtRisk   EpicHealth = "at_risk"
+	OffTrack EpicHealth = "off_track"
+	OnTrack  EpicHealth = "on_track"
+)
+
+// Valid indicates whether the value is a known member of the EpicHealth enum.
+func (e EpicHealth) Valid() bool {
+	switch e {
+	case AtRisk:
+		return true
+	case OffTrack:
+		return true
+	case OnTrack:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ErrorCode.
+const (
+	Conflict ErrorCode = "conflict"
+	Internal ErrorCode = "internal"
+	Invalid  ErrorCode = "invalid"
+	NoUser   ErrorCode = "no_user"
+	NotFound ErrorCode = "not_found"
+)
+
+// Valid indicates whether the value is a known member of the ErrorCode enum.
+func (e ErrorCode) Valid() bool {
+	switch e {
+	case Conflict:
+		return true
+	case Internal:
+		return true
+	case Invalid:
+		return true
+	case NoUser:
+		return true
+	case NotFound:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for HealthStatus.
 const (
@@ -38,6 +201,323 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for Priority.
+const (
+	High   Priority = "high"
+	Low    Priority = "low"
+	Medium Priority = "medium"
+	None   Priority = "none"
+	Urgent Priority = "urgent"
+)
+
+// Valid indicates whether the value is a known member of the Priority enum.
+func (e Priority) Valid() bool {
+	switch e {
+	case High:
+		return true
+	case Low:
+		return true
+	case Medium:
+		return true
+	case None:
+		return true
+	case Urgent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PullRequestState.
+const (
+	Closed PullRequestState = "closed"
+	Draft  PullRequestState = "draft"
+	Merged PullRequestState = "merged"
+	Open   PullRequestState = "open"
+)
+
+// Valid indicates whether the value is a known member of the PullRequestState enum.
+func (e PullRequestState) Valid() bool {
+	switch e {
+	case Closed:
+		return true
+	case Draft:
+		return true
+	case Merged:
+		return true
+	case Open:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TicketStatus.
+const (
+	TicketStatusBacklog    TicketStatus = "backlog"
+	TicketStatusDone       TicketStatus = "done"
+	TicketStatusInProgress TicketStatus = "in_progress"
+	TicketStatusInReview   TicketStatus = "in_review"
+	TicketStatusTodo       TicketStatus = "todo"
+)
+
+// Valid indicates whether the value is a known member of the TicketStatus enum.
+func (e TicketStatus) Valid() bool {
+	switch e {
+	case TicketStatusBacklog:
+		return true
+	case TicketStatusDone:
+		return true
+	case TicketStatusInProgress:
+		return true
+	case TicketStatusInReview:
+		return true
+	case TicketStatusTodo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListTicketsParamsView.
+const (
+	ListTicketsParamsViewActive     ListTicketsParamsView = "active"
+	ListTicketsParamsViewAgentOwned ListTicketsParamsView = "agent_owned"
+	ListTicketsParamsViewAll        ListTicketsParamsView = "all"
+	ListTicketsParamsViewBacklog    ListTicketsParamsView = "backlog"
+	ListTicketsParamsViewNeedsHuman ListTicketsParamsView = "needs_human"
+)
+
+// Valid indicates whether the value is a known member of the ListTicketsParamsView enum.
+func (e ListTicketsParamsView) Valid() bool {
+	switch e {
+	case ListTicketsParamsViewActive:
+		return true
+	case ListTicketsParamsViewAgentOwned:
+		return true
+	case ListTicketsParamsViewAll:
+		return true
+	case ListTicketsParamsViewBacklog:
+		return true
+	case ListTicketsParamsViewNeedsHuman:
+		return true
+	default:
+		return false
+	}
+}
+
+// ActivityEvent One timeline entry. `verb` says what happened; `payload` carries the
+// details for that verb (see server/internal/tracker/activity.go).
+type ActivityEvent struct {
+	Actor     Actor                  `json:"actor"`
+	CreatedAt time.Time              `json:"created_at"`
+	Id        openapi_types.UUID     `json:"id"`
+	Payload   map[string]interface{} `json:"payload"`
+	Verb      string                 `json:"verb"`
+}
+
+// Actor defines model for Actor.
+type Actor struct {
+	AvatarColor *string             `json:"avatar_color,omitempty"`
+	ColorIndex  *int                `json:"color_index,omitempty"`
+	Id          *openapi_types.UUID `json:"id,omitempty"`
+	Initials    *string             `json:"initials,omitempty"`
+	Name        string              `json:"name"`
+	Type        ActorType           `json:"type"`
+}
+
+// ActorType defines model for Actor.Type.
+type ActorType string
+
+// Agent defines model for Agent.
+type Agent struct {
+	ColorIndex int                `json:"color_index"`
+	Handle     string             `json:"handle"`
+	Id         openapi_types.UUID `json:"id"`
+	Model      string             `json:"model"`
+	Name       string             `json:"name"`
+	Role       string             `json:"role"`
+	Specialty  string             `json:"specialty"`
+	Status     AgentStatus        `json:"status"`
+}
+
+// AgentStatus defines model for Agent.Status.
+type AgentStatus string
+
+// AgentRef defines model for AgentRef.
+type AgentRef struct {
+	ColorIndex int                `json:"color_index"`
+	Handle     string             `json:"handle"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+}
+
+// Artifact defines model for Artifact.
+type Artifact struct {
+	Author Actor `json:"author"`
+
+	// BodyMd Markdown of the current version; null for files
+	BodyMd         nullable.Nullable[string] `json:"body_md"`
+	CreatedAt      time.Time                 `json:"created_at"`
+	CurrentVersion ArtifactVersion           `json:"current_version"`
+	DisplayId      *string                   `json:"display_id,omitempty"`
+	Epic           *EpicRef                  `json:"epic,omitempty"`
+	Id             openapi_types.UUID        `json:"id"`
+	Outline        []OutlineSection          `json:"outline"`
+	Project        Project                   `json:"project"`
+	ReadBy         []ArtifactReader          `json:"read_by"`
+	Summary        string                    `json:"summary"`
+	Tickets        []LinkedTicket            `json:"tickets"`
+	Title          string                    `json:"title"`
+	Type           ArtifactType              `json:"type"`
+	UpdatedAt      time.Time                 `json:"updated_at"`
+	Versions       []ArtifactVersion         `json:"versions"`
+}
+
+// ArtifactContent defines model for ArtifactContent.
+type ArtifactContent struct {
+	ContentType string              `json:"content_type"`
+	Filename    *string             `json:"filename,omitempty"`
+	Kind        ArtifactContentKind `json:"kind"`
+
+	// Sections Headings in the outline (markdown only)
+	Sections  int   `json:"sections"`
+	SizeBytes int64 `json:"size_bytes"`
+}
+
+// ArtifactContentKind defines model for ArtifactContent.Kind.
+type ArtifactContentKind string
+
+// ArtifactCounts defines model for ArtifactCounts.
+type ArtifactCounts struct {
+	Adr    int `json:"adr"`
+	All    int `json:"all"`
+	Design int `json:"design"`
+	Prd    int `json:"prd"`
+	Report int `json:"report"`
+	Spec   int `json:"spec"`
+}
+
+// ArtifactList defines model for ArtifactList.
+type ArtifactList struct {
+	Artifacts []ArtifactSummary `json:"artifacts"`
+	Counts    ArtifactCounts    `json:"counts"`
+}
+
+// ArtifactReader defines model for ArtifactReader.
+type ArtifactReader struct {
+	Agent      AgentRef  `json:"agent"`
+	LastReadAt time.Time `json:"last_read_at"`
+	Reads      int       `json:"reads"`
+}
+
+// ArtifactRelation defines model for ArtifactRelation.
+type ArtifactRelation string
+
+// ArtifactSummary defines model for ArtifactSummary.
+type ArtifactSummary struct {
+	Author  Actor           `json:"author"`
+	Content ArtifactContent `json:"content"`
+
+	// DisplayId ADR-012; set for numbered types
+	DisplayId    *string            `json:"display_id,omitempty"`
+	Epic         *EpicRef           `json:"epic,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	Project      Project            `json:"project"`
+	Summary      string             `json:"summary"`
+	TicketCount  int                `json:"ticket_count"`
+	Title        string             `json:"title"`
+	Type         ArtifactType       `json:"type"`
+	UpdatedAt    time.Time          `json:"updated_at"`
+	VersionLabel *string            `json:"version_label,omitempty"`
+}
+
+// ArtifactType defines model for ArtifactType.
+type ArtifactType string
+
+// ArtifactVersion defines model for ArtifactVersion.
+type ArtifactVersion struct {
+	Content   ArtifactContent    `json:"content"`
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy Actor              `json:"created_by"`
+	Id        openapi_types.UUID `json:"id"`
+	Label     string             `json:"label"`
+	Note      string             `json:"note"`
+	Seq       int                `json:"seq"`
+}
+
+// Bootstrap defines model for Bootstrap.
+type Bootstrap struct {
+	Agents []Agent `json:"agents"`
+	Counts struct {
+		Inbox      int `json:"inbox"`
+		LiveAgents int `json:"live_agents"`
+	} `json:"counts"`
+	Epics     []Epic    `json:"epics"`
+	Labels    []Label   `json:"labels"`
+	Me        User      `json:"me"`
+	Projects  []Project `json:"projects"`
+	Users     []User    `json:"users"`
+	Workspace Workspace `json:"workspace"`
+}
+
+// BulkUpdate defines model for BulkUpdate.
+type BulkUpdate struct {
+	// AttachArtifactId Also attach this artifact (as context) to every ticket
+	AttachArtifactId *openapi_types.UUID `json:"attach_artifact_id,omitempty"`
+	Keys             []string            `json:"keys"`
+	Patch            TicketPatch         `json:"patch"`
+}
+
+// Criterion defines model for Criterion.
+type Criterion struct {
+	Done     bool               `json:"done"`
+	Id       openapi_types.UUID `json:"id"`
+	Position int                `json:"position"`
+	Text     string             `json:"text"`
+}
+
+// DocCard defines model for DocCard.
+type DocCard struct {
+	Author    Actor              `json:"author"`
+	DisplayId *string            `json:"display_id,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// ReadByAssignee The ticket's agent has read it ("Read by Atlas")
+	ReadByAssignee bool             `json:"read_by_assignee"`
+	Relation       ArtifactRelation `json:"relation"`
+	Title          string           `json:"title"`
+	Type           ArtifactType     `json:"type"`
+	VersionLabel   *string          `json:"version_label,omitempty"`
+}
+
+// Epic defines model for Epic.
+type Epic struct {
+	Health    EpicHealth         `json:"health"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+	ProjectId openapi_types.UUID `json:"project_id"`
+}
+
+// EpicHealth defines model for Epic.Health.
+type EpicHealth string
+
+// EpicRef defines model for EpicRef.
+type EpicRef struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+}
+
+// Error defines model for Error.
+type Error struct {
+	Code    ErrorCode `json:"code"`
+	Field   *string   `json:"field,omitempty"`
+	Message string    `json:"message"`
+}
+
+// ErrorCode defines model for Error.Code.
+type ErrorCode string
+
 // Health defines model for Health.
 type Health struct {
 	Checks  map[string]HealthCheck `json:"checks"`
@@ -55,11 +535,347 @@ type HealthCheck struct {
 	Ok        bool    `json:"ok"`
 }
 
+// Label defines model for Label.
+type Label struct {
+	Color string             `json:"color"`
+	Id    openapi_types.UUID `json:"id"`
+	Name  string             `json:"name"`
+}
+
+// LinkedTicket defines model for LinkedTicket.
+type LinkedTicket struct {
+	Key      string           `json:"key"`
+	Relation ArtifactRelation `json:"relation"`
+	Status   TicketStatus     `json:"status"`
+	Title    string           `json:"title"`
+}
+
+// NewArtifact defines model for NewArtifact.
+type NewArtifact struct {
+	BodyMd       *string             `json:"body_md,omitempty"`
+	EpicId       *openapi_types.UUID `json:"epic_id,omitempty"`
+	File         *openapi_types.File `json:"file,omitempty"`
+	ProjectKey   string              `json:"project_key"`
+	Summary      *string             `json:"summary,omitempty"`
+	Title        *string             `json:"title,omitempty"`
+	Type         ArtifactType        `json:"type"`
+	VersionLabel *string             `json:"version_label,omitempty"`
+}
+
+// NewArtifactVersion defines model for NewArtifactVersion.
+type NewArtifactVersion struct {
+	BodyMd       *string             `json:"body_md,omitempty"`
+	File         *openapi_types.File `json:"file,omitempty"`
+	Note         *string             `json:"note,omitempty"`
+	VersionLabel *string             `json:"version_label,omitempty"`
+}
+
+// NewComment defines model for NewComment.
+type NewComment struct {
+	BodyMd          string              `json:"body_md"`
+	ParentCommentId *openapi_types.UUID `json:"parent_comment_id,omitempty"`
+}
+
+// NewTicket defines model for NewTicket.
+type NewTicket struct {
+	AssigneeAgentId *openapi_types.UUID   `json:"assignee_agent_id,omitempty"`
+	Criteria        *[]string             `json:"criteria,omitempty"`
+	DescriptionMd   *string               `json:"description_md,omitempty"`
+	DueDate         *openapi_types.Date   `json:"due_date,omitempty"`
+	EpicId          *openapi_types.UUID   `json:"epic_id,omitempty"`
+	Estimate        *string               `json:"estimate,omitempty"`
+	LabelIds        *[]openapi_types.UUID `json:"label_ids,omitempty"`
+	Priority        *Priority             `json:"priority,omitempty"`
+	ProjectKey      string                `json:"project_key"`
+	ReviewerUserId  *openapi_types.UUID   `json:"reviewer_user_id,omitempty"`
+	Status          *TicketStatus         `json:"status,omitempty"`
+	Title           string                `json:"title"`
+}
+
+// OutlineSection defines model for OutlineSection.
+type OutlineSection struct {
+	Anchor string `json:"anchor"`
+
+	// Citations Times agents cited this section (by anchor
+	Citations int                `json:"citations"`
+	Heading   string             `json:"heading"`
+	Id        openapi_types.UUID `json:"id"`
+	Level     int                `json:"level"`
+}
+
+// Priority defines model for Priority.
+type Priority string
+
+// Project defines model for Project.
+type Project struct {
+	Color string             `json:"color"`
+	Id    openapi_types.UUID `json:"id"`
+	Key   string             `json:"key"`
+	Name  string             `json:"name"`
+}
+
+// PullRequest defines model for PullRequest.
+type PullRequest struct {
+	Additions *int             `json:"additions,omitempty"`
+	Deletions *int             `json:"deletions,omitempty"`
+	Number    int              `json:"number"`
+	State     PullRequestState `json:"state"`
+	Url       *string          `json:"url,omitempty"`
+}
+
+// PullRequestState defines model for PullRequest.State.
+type PullRequestState string
+
+// Ticket defines model for Ticket.
+type Ticket struct {
+	Artifacts     []DocCard           `json:"artifacts"`
+	Assignee      *AgentRef           `json:"assignee,omitempty"`
+	Branch        *string             `json:"branch,omitempty"`
+	CreatedAt     time.Time           `json:"created_at"`
+	CreatedBy     *UserRef            `json:"created_by,omitempty"`
+	Criteria      []Criterion         `json:"criteria"`
+	DescriptionMd string              `json:"description_md"`
+	DueDate       *openapi_types.Date `json:"due_date,omitempty"`
+	Epic          *EpicRef            `json:"epic,omitempty"`
+	Estimate      *string             `json:"estimate,omitempty"`
+	Id            openapi_types.UUID  `json:"id"`
+	Key           string              `json:"key"`
+	Labels        []Label             `json:"labels"`
+	Pr            *PullRequest        `json:"pr,omitempty"`
+	Priority      Priority            `json:"priority"`
+	Project       Project             `json:"project"`
+	Reviewer      *UserRef            `json:"reviewer,omitempty"`
+	Status        TicketStatus        `json:"status"`
+	Title         string              `json:"title"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+}
+
+// TicketList defines model for TicketList.
+type TicketList struct {
+	Tickets []TicketSummary `json:"tickets"`
+}
+
+// TicketPatch defines model for TicketPatch.
+type TicketPatch struct {
+	AssigneeAgentId nullable.Nullable[openapi_types.UUID] `json:"assignee_agent_id,omitempty"`
+	DescriptionMd   *string                               `json:"description_md,omitempty"`
+	DueDate         nullable.Nullable[openapi_types.Date] `json:"due_date,omitempty"`
+	EpicId          nullable.Nullable[openapi_types.UUID] `json:"epic_id,omitempty"`
+	Estimate        nullable.Nullable[string]             `json:"estimate,omitempty"`
+	LabelIds        *[]openapi_types.UUID                 `json:"label_ids,omitempty"`
+	Priority        *Priority                             `json:"priority,omitempty"`
+	ReviewerUserId  nullable.Nullable[openapi_types.UUID] `json:"reviewer_user_id,omitempty"`
+	Status          *TicketStatus                         `json:"status,omitempty"`
+	Title           *string                               `json:"title,omitempty"`
+}
+
+// TicketStatus defines model for TicketStatus.
+type TicketStatus string
+
+// TicketSummary defines model for TicketSummary.
+type TicketSummary struct {
+	Assignee      *AgentRef           `json:"assignee,omitempty"`
+	CriteriaDone  int                 `json:"criteria_done"`
+	CriteriaTotal int                 `json:"criteria_total"`
+	DueDate       *openapi_types.Date `json:"due_date,omitempty"`
+	Epic          *EpicRef            `json:"epic,omitempty"`
+	Id            openapi_types.UUID  `json:"id"`
+	Key           string              `json:"key"`
+	Labels        []Label             `json:"labels"`
+	Pr            *PullRequest        `json:"pr,omitempty"`
+	Priority      Priority            `json:"priority"`
+	ProjectKey    string              `json:"project_key"`
+	Status        TicketStatus        `json:"status"`
+	Title         string              `json:"title"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+}
+
+// User defines model for User.
+type User struct {
+	AvatarColor *string            `json:"avatar_color,omitempty"`
+	Email       string             `json:"email"`
+	Id          openapi_types.UUID `json:"id"`
+	Initials    string             `json:"initials"`
+	Name        string             `json:"name"`
+	RoleTitle   string             `json:"role_title"`
+}
+
+// UserRef defines model for UserRef.
+type UserRef struct {
+	AvatarColor *string            `json:"avatar_color,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	Initials    string             `json:"initials"`
+	Name        string             `json:"name"`
+}
+
+// Workspace defines model for Workspace.
+type Workspace struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+	Slug string             `json:"slug"`
+}
+
+// ArtifactId defines model for ArtifactId.
+type ArtifactId = openapi_types.UUID
+
+// TicketKey defines model for TicketKey.
+type TicketKey = string
+
+// ListArtifactsParams defines parameters for ListArtifacts.
+type ListArtifactsParams struct {
+	Type *ArtifactType `form:"type,omitempty" json:"type,omitempty"`
+
+	// Project Project key
+	Project *string `form:"project,omitempty" json:"project,omitempty"`
+
+	// Q Full-text search over titles, summaries and contents
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// UpdateArtifactJSONBody defines parameters for UpdateArtifact.
+type UpdateArtifactJSONBody struct {
+	EpicId  nullable.Nullable[openapi_types.UUID] `json:"epic_id,omitempty"`
+	Summary *string                               `json:"summary,omitempty"`
+	Title   *string                               `json:"title,omitempty"`
+}
+
+// GetArtifactContentParams defines parameters for GetArtifactContent.
+type GetArtifactContentParams struct {
+	// Download Send Content-Disposition attachment instead of inline
+	Download *bool `form:"download,omitempty" json:"download,omitempty"`
+}
+
+// UpdateCriterionJSONBody defines parameters for UpdateCriterion.
+type UpdateCriterionJSONBody struct {
+	Done *bool   `json:"done,omitempty"`
+	Text *string `json:"text,omitempty"`
+}
+
+// ListTicketsParams defines parameters for ListTickets.
+type ListTicketsParams struct {
+	// Project Project key, e.g. PAY
+	Project *string                `form:"project,omitempty" json:"project,omitempty"`
+	View    *ListTicketsParamsView `form:"view,omitempty" json:"view,omitempty"`
+
+	// Status Restrict to one status (applied within the view)
+	Status *TicketStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Assignee Agent handle
+	Assignee *string `form:"assignee,omitempty" json:"assignee,omitempty"`
+
+	// Label Label id
+	Label *openapi_types.UUID `form:"label,omitempty" json:"label,omitempty"`
+
+	// Q Free-text search over key, title and description
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// ListTicketsParamsView defines parameters for ListTickets.
+type ListTicketsParamsView string
+
+// AttachArtifactJSONBody defines parameters for AttachArtifact.
+type AttachArtifactJSONBody struct {
+	ArtifactId openapi_types.UUID `json:"artifact_id"`
+	Relation   *ArtifactRelation  `json:"relation,omitempty"`
+}
+
+// CreateCriterionJSONBody defines parameters for CreateCriterion.
+type CreateCriterionJSONBody struct {
+	Text string `json:"text"`
+}
+
+// CreateArtifactMultipartRequestBody defines body for CreateArtifact for multipart/form-data ContentType.
+type CreateArtifactMultipartRequestBody = NewArtifact
+
+// UpdateArtifactJSONRequestBody defines body for UpdateArtifact for application/json ContentType.
+type UpdateArtifactJSONRequestBody UpdateArtifactJSONBody
+
+// CreateArtifactVersionMultipartRequestBody defines body for CreateArtifactVersion for multipart/form-data ContentType.
+type CreateArtifactVersionMultipartRequestBody = NewArtifactVersion
+
+// UpdateCriterionJSONRequestBody defines body for UpdateCriterion for application/json ContentType.
+type UpdateCriterionJSONRequestBody UpdateCriterionJSONBody
+
+// CreateTicketJSONRequestBody defines body for CreateTicket for application/json ContentType.
+type CreateTicketJSONRequestBody = NewTicket
+
+// BulkUpdateTicketsJSONRequestBody defines body for BulkUpdateTickets for application/json ContentType.
+type BulkUpdateTicketsJSONRequestBody = BulkUpdate
+
+// UpdateTicketJSONRequestBody defines body for UpdateTicket for application/json ContentType.
+type UpdateTicketJSONRequestBody = TicketPatch
+
+// AttachArtifactJSONRequestBody defines body for AttachArtifact for application/json ContentType.
+type AttachArtifactJSONRequestBody AttachArtifactJSONBody
+
+// CreateCommentJSONRequestBody defines body for CreateComment for application/json ContentType.
+type CreateCommentJSONRequestBody = NewComment
+
+// CreateCriterionJSONRequestBody defines body for CreateCriterion for application/json ContentType.
+type CreateCriterionJSONRequestBody CreateCriterionJSONBody
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListArtifacts Artifacts, newest first, with per-type counts for the tabs
+	// (GET /artifacts)
+	ListArtifacts(w http.ResponseWriter, r *http.Request, params ListArtifactsParams)
+	// CreateArtifact Create an artifact from markdown (body_md) or an uploaded file
+	// (POST /artifacts)
+	CreateArtifact(w http.ResponseWriter, r *http.Request)
+	// GetArtifact An artifact with its current version, outline, readers, history and tickets
+	// (GET /artifacts/{id})
+	GetArtifact(w http.ResponseWriter, r *http.Request, id ArtifactId)
+	// UpdateArtifact Edit title, summary or epic (contents change via new versions)
+	// (PATCH /artifacts/{id})
+	UpdateArtifact(w http.ResponseWriter, r *http.Request, id ArtifactId)
+	// CreateArtifactVersion Add a version (markdown or file); it becomes current
+	// (POST /artifacts/{id}/versions)
+	CreateArtifactVersion(w http.ResponseWriter, r *http.Request, id ArtifactId)
+	// GetArtifactContent The raw content of one version (markdown text or the stored file)
+	// (GET /artifacts/{id}/versions/{versionId}/content)
+	GetArtifactContent(w http.ResponseWriter, r *http.Request, id ArtifactId, versionId openapi_types.UUID, params GetArtifactContentParams)
+	// GetBootstrap Everything the shell and pickers need in one call (`me` is the local user)
+	// (GET /bootstrap)
+	GetBootstrap(w http.ResponseWriter, r *http.Request)
+	// DeleteCriterion Remove an acceptance criterion
+	// (DELETE /criteria/{id})
+	DeleteCriterion(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// UpdateCriterion Edit or tick an acceptance criterion
+	// (PATCH /criteria/{id})
+	UpdateCriterion(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// ListTickets List tickets for a view, with optional filters
+	// (GET /tickets)
+	ListTickets(w http.ResponseWriter, r *http.Request, params ListTicketsParams)
+	// CreateTicket Create a ticket
+	// (POST /tickets)
+	CreateTicket(w http.ResponseWriter, r *http.Request)
+	// BulkUpdateTickets Apply one patch to many tickets
+	// (POST /tickets/bulk)
+	BulkUpdateTickets(w http.ResponseWriter, r *http.Request)
+	// GetTicket A ticket with its criteria
+	// (GET /tickets/{key})
+	GetTicket(w http.ResponseWriter, r *http.Request, key TicketKey)
+	// UpdateTicket Change ticket fields. Omitted fields are untouched; null clears.
+	// (PATCH /tickets/{key})
+	UpdateTicket(w http.ResponseWriter, r *http.Request, key TicketKey)
+	// ListTicketActivity The ticket timeline, oldest first
+	// (GET /tickets/{key}/activity)
+	ListTicketActivity(w http.ResponseWriter, r *http.Request, key TicketKey)
+	// AttachArtifact Attach an artifact to a ticket as context (or as generated output)
+	// (POST /tickets/{key}/artifacts)
+	AttachArtifact(w http.ResponseWriter, r *http.Request, key TicketKey)
+	// DetachArtifact Remove an artifact from a ticket
+	// (DELETE /tickets/{key}/artifacts/{artifactId})
+	DetachArtifact(w http.ResponseWriter, r *http.Request, key TicketKey, artifactId openapi_types.UUID)
+	// CreateComment Comment on a ticket (appears in the timeline)
+	// (POST /tickets/{key}/comments)
+	CreateComment(w http.ResponseWriter, r *http.Request, key TicketKey)
+	// CreateCriterion Add an acceptance criterion
+	// (POST /tickets/{key}/criteria)
+	CreateCriterion(w http.ResponseWriter, r *http.Request, key TicketKey)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -71,11 +887,596 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// ListArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListArtifactsParams
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "project" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifacts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateArtifact operation middleware
+func (siw *ServerInterfaceWrapper) CreateArtifact(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateArtifact(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifact operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ArtifactId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifact(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateArtifact operation middleware
+func (siw *ServerInterfaceWrapper) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ArtifactId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateArtifact(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateArtifactVersion operation middleware
+func (siw *ServerInterfaceWrapper) CreateArtifactVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ArtifactId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateArtifactVersion(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactContent operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ArtifactId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "versionId" -------------
+	var versionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "versionId", r.PathValue("versionId"), &versionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "versionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactContentParams
+
+	// ------------- Optional query parameter "download" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "download", r.URL.Query(), &params.Download, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "download"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "download", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactContent(w, r, id, versionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBootstrap operation middleware
+func (siw *ServerInterfaceWrapper) GetBootstrap(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBootstrap(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCriterion operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCriterion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCriterion(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCriterion operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCriterion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCriterion(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTickets operation middleware
+func (siw *ServerInterfaceWrapper) ListTickets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTicketsParams
+
+	// ------------- Optional query parameter "project" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "view" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "view", r.URL.Query(), &params.View, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "view"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "assignee" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "assignee", r.URL.Query(), &params.Assignee, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "assignee"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assignee", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "label" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "label", r.URL.Query(), &params.Label, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "label"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTickets(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTicket operation middleware
+func (siw *ServerInterfaceWrapper) CreateTicket(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTicket(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BulkUpdateTickets operation middleware
+func (siw *ServerInterfaceWrapper) BulkUpdateTickets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkUpdateTickets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTicket operation middleware
+func (siw *ServerInterfaceWrapper) GetTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key TicketKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTicket(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTicket operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key TicketKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTicket(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTicketActivity operation middleware
+func (siw *ServerInterfaceWrapper) ListTicketActivity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key TicketKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTicketActivity(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AttachArtifact operation middleware
+func (siw *ServerInterfaceWrapper) AttachArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key TicketKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AttachArtifact(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DetachArtifact operation middleware
+func (siw *ServerInterfaceWrapper) DetachArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key TicketKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactId" -------------
+	var artifactId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactId", r.PathValue("artifactId"), &artifactId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DetachArtifact(w, r, key, artifactId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateComment operation middleware
+func (siw *ServerInterfaceWrapper) CreateComment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key TicketKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateComment(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCriterion operation middleware
+func (siw *ServerInterfaceWrapper) CreateCriterion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key TicketKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCriterion(w, r, key)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -206,8 +1607,385 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/health", wrapper.GetHealth)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/bootstrap", wrapper.GetBootstrap)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tickets", wrapper.ListTickets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tickets", wrapper.CreateTicket)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tickets/bulk", wrapper.BulkUpdateTickets)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tickets/{key}", wrapper.GetTicket)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/tickets/{key}", wrapper.UpdateTicket)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/tickets/{key}/activity", wrapper.ListTicketActivity)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tickets/{key}/comments", wrapper.CreateComment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tickets/{key}/criteria", wrapper.CreateCriterion)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/criteria/{id}", wrapper.DeleteCriterion)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/criteria/{id}", wrapper.UpdateCriterion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tickets/{key}/artifacts", wrapper.AttachArtifact)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/tickets/{key}/artifacts/{artifactId}", wrapper.DetachArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/artifacts", wrapper.ListArtifacts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/artifacts", wrapper.CreateArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/artifacts/{id}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/artifacts/{id}", wrapper.UpdateArtifact)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/artifacts/{id}/versions", wrapper.CreateArtifactVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/artifacts/{id}/versions/{versionId}/content", wrapper.GetArtifactContent)
 
 	return m
+}
+
+type ErrorJSONResponse Error
+
+type ListArtifactsRequestObject struct {
+	Params ListArtifactsParams
+}
+
+type ListArtifactsResponseObject interface {
+	VisitListArtifactsResponse(w http.ResponseWriter) error
+}
+
+type ListArtifacts200JSONResponse ArtifactList
+
+func (response ListArtifacts200JSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListArtifactsdefaultJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifactRequestObject struct {
+	Body *multipart.Reader
+}
+
+type CreateArtifactResponseObject interface {
+	VisitCreateArtifactResponse(w http.ResponseWriter) error
+}
+
+type CreateArtifact201JSONResponse Artifact
+
+func (response CreateArtifact201JSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifactdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateArtifactdefaultJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactRequestObject struct {
+	Id ArtifactId `json:"id"`
+}
+
+type GetArtifactResponseObject interface {
+	VisitGetArtifactResponse(w http.ResponseWriter) error
+}
+
+type GetArtifact200JSONResponse Artifact
+
+func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetArtifactdefaultJSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifactRequestObject struct {
+	Id   ArtifactId `json:"id"`
+	Body *UpdateArtifactJSONRequestBody
+}
+
+type UpdateArtifactResponseObject interface {
+	VisitUpdateArtifactResponse(w http.ResponseWriter) error
+}
+
+type UpdateArtifact200JSONResponse Artifact
+
+func (response UpdateArtifact200JSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifactdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateArtifactdefaultJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifactVersionRequestObject struct {
+	Id   ArtifactId `json:"id"`
+	Body *multipart.Reader
+}
+
+type CreateArtifactVersionResponseObject interface {
+	VisitCreateArtifactVersionResponse(w http.ResponseWriter) error
+}
+
+type CreateArtifactVersion201JSONResponse Artifact
+
+func (response CreateArtifactVersion201JSONResponse) VisitCreateArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifactVersiondefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateArtifactVersiondefaultJSONResponse) VisitCreateArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactContentRequestObject struct {
+	Id        ArtifactId         `json:"id"`
+	VersionId openapi_types.UUID `json:"versionId"`
+	Params    GetArtifactContentParams
+}
+
+type GetArtifactContentResponseObject interface {
+	VisitGetArtifactContentResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactContent200AsteriskResponse struct {
+	Body          io.Reader
+	ContentType   string
+	ContentLength int64
+}
+
+func (response GetArtifactContent200AsteriskResponse) VisitGetArtifactContentResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", response.ContentType)
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetArtifactContentdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetArtifactContentdefaultJSONResponse) VisitGetArtifactContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBootstrapRequestObject struct {
+}
+
+type GetBootstrapResponseObject interface {
+	VisitGetBootstrapResponse(w http.ResponseWriter) error
+}
+
+type GetBootstrap200JSONResponse Bootstrap
+
+func (response GetBootstrap200JSONResponse) VisitGetBootstrapResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBootstrapdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetBootstrapdefaultJSONResponse) VisitGetBootstrapResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCriterionRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DeleteCriterionResponseObject interface {
+	VisitDeleteCriterionResponse(w http.ResponseWriter) error
+}
+
+type DeleteCriterion204Response struct {
+}
+
+func (response DeleteCriterion204Response) VisitDeleteCriterionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCriteriondefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DeleteCriteriondefaultJSONResponse) VisitDeleteCriterionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCriterionRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *UpdateCriterionJSONRequestBody
+}
+
+type UpdateCriterionResponseObject interface {
+	VisitUpdateCriterionResponse(w http.ResponseWriter) error
+}
+
+type UpdateCriterion200JSONResponse Criterion
+
+func (response UpdateCriterion200JSONResponse) VisitUpdateCriterionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCriteriondefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateCriteriondefaultJSONResponse) VisitUpdateCriterionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type GetHealthRequestObject struct {
@@ -245,11 +2023,467 @@ func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	return err
 }
 
+type ListTicketsRequestObject struct {
+	Params ListTicketsParams
+}
+
+type ListTicketsResponseObject interface {
+	VisitListTicketsResponse(w http.ResponseWriter) error
+}
+
+type ListTickets200JSONResponse TicketList
+
+func (response ListTickets200JSONResponse) VisitListTicketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTicketsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListTicketsdefaultJSONResponse) VisitListTicketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTicketRequestObject struct {
+	Body *CreateTicketJSONRequestBody
+}
+
+type CreateTicketResponseObject interface {
+	VisitCreateTicketResponse(w http.ResponseWriter) error
+}
+
+type CreateTicket201JSONResponse Ticket
+
+func (response CreateTicket201JSONResponse) VisitCreateTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTicketdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateTicketdefaultJSONResponse) VisitCreateTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkUpdateTicketsRequestObject struct {
+	Body *BulkUpdateTicketsJSONRequestBody
+}
+
+type BulkUpdateTicketsResponseObject interface {
+	VisitBulkUpdateTicketsResponse(w http.ResponseWriter) error
+}
+
+type BulkUpdateTickets200JSONResponse struct {
+	Updated int `json:"updated"`
+}
+
+func (response BulkUpdateTickets200JSONResponse) VisitBulkUpdateTicketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkUpdateTicketsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response BulkUpdateTicketsdefaultJSONResponse) VisitBulkUpdateTicketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTicketRequestObject struct {
+	Key TicketKey `json:"key"`
+}
+
+type GetTicketResponseObject interface {
+	VisitGetTicketResponse(w http.ResponseWriter) error
+}
+
+type GetTicket200JSONResponse Ticket
+
+func (response GetTicket200JSONResponse) VisitGetTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTicketdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetTicketdefaultJSONResponse) VisitGetTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTicketRequestObject struct {
+	Key  TicketKey `json:"key"`
+	Body *UpdateTicketJSONRequestBody
+}
+
+type UpdateTicketResponseObject interface {
+	VisitUpdateTicketResponse(w http.ResponseWriter) error
+}
+
+type UpdateTicket200JSONResponse Ticket
+
+func (response UpdateTicket200JSONResponse) VisitUpdateTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTicketdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateTicketdefaultJSONResponse) VisitUpdateTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTicketActivityRequestObject struct {
+	Key TicketKey `json:"key"`
+}
+
+type ListTicketActivityResponseObject interface {
+	VisitListTicketActivityResponse(w http.ResponseWriter) error
+}
+
+type ListTicketActivity200JSONResponse struct {
+	Events []ActivityEvent `json:"events"`
+}
+
+func (response ListTicketActivity200JSONResponse) VisitListTicketActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTicketActivitydefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListTicketActivitydefaultJSONResponse) VisitListTicketActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AttachArtifactRequestObject struct {
+	Key  TicketKey `json:"key"`
+	Body *AttachArtifactJSONRequestBody
+}
+
+type AttachArtifactResponseObject interface {
+	VisitAttachArtifactResponse(w http.ResponseWriter) error
+}
+
+type AttachArtifact200JSONResponse Ticket
+
+func (response AttachArtifact200JSONResponse) VisitAttachArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AttachArtifactdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response AttachArtifactdefaultJSONResponse) VisitAttachArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DetachArtifactRequestObject struct {
+	Key        TicketKey          `json:"key"`
+	ArtifactId openapi_types.UUID `json:"artifactId"`
+}
+
+type DetachArtifactResponseObject interface {
+	VisitDetachArtifactResponse(w http.ResponseWriter) error
+}
+
+type DetachArtifact200JSONResponse Ticket
+
+func (response DetachArtifact200JSONResponse) VisitDetachArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DetachArtifactdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DetachArtifactdefaultJSONResponse) VisitDetachArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCommentRequestObject struct {
+	Key  TicketKey `json:"key"`
+	Body *CreateCommentJSONRequestBody
+}
+
+type CreateCommentResponseObject interface {
+	VisitCreateCommentResponse(w http.ResponseWriter) error
+}
+
+type CreateComment201JSONResponse ActivityEvent
+
+func (response CreateComment201JSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCommentdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateCommentdefaultJSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCriterionRequestObject struct {
+	Key  TicketKey `json:"key"`
+	Body *CreateCriterionJSONRequestBody
+}
+
+type CreateCriterionResponseObject interface {
+	VisitCreateCriterionResponse(w http.ResponseWriter) error
+}
+
+type CreateCriterion201JSONResponse Criterion
+
+func (response CreateCriterion201JSONResponse) VisitCreateCriterionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCriteriondefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateCriteriondefaultJSONResponse) VisitCreateCriterionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListArtifacts Artifacts, newest first, with per-type counts for the tabs
+	// (GET /artifacts)
+	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
+	// CreateArtifact Create an artifact from markdown (body_md) or an uploaded file
+	// (POST /artifacts)
+	CreateArtifact(ctx context.Context, request CreateArtifactRequestObject) (CreateArtifactResponseObject, error)
+	// GetArtifact An artifact with its current version, outline, readers, history and tickets
+	// (GET /artifacts/{id})
+	GetArtifact(ctx context.Context, request GetArtifactRequestObject) (GetArtifactResponseObject, error)
+	// UpdateArtifact Edit title, summary or epic (contents change via new versions)
+	// (PATCH /artifacts/{id})
+	UpdateArtifact(ctx context.Context, request UpdateArtifactRequestObject) (UpdateArtifactResponseObject, error)
+	// CreateArtifactVersion Add a version (markdown or file); it becomes current
+	// (POST /artifacts/{id}/versions)
+	CreateArtifactVersion(ctx context.Context, request CreateArtifactVersionRequestObject) (CreateArtifactVersionResponseObject, error)
+	// GetArtifactContent The raw content of one version (markdown text or the stored file)
+	// (GET /artifacts/{id}/versions/{versionId}/content)
+	GetArtifactContent(ctx context.Context, request GetArtifactContentRequestObject) (GetArtifactContentResponseObject, error)
+	// GetBootstrap Everything the shell and pickers need in one call (`me` is the local user)
+	// (GET /bootstrap)
+	GetBootstrap(ctx context.Context, request GetBootstrapRequestObject) (GetBootstrapResponseObject, error)
+	// DeleteCriterion Remove an acceptance criterion
+	// (DELETE /criteria/{id})
+	DeleteCriterion(ctx context.Context, request DeleteCriterionRequestObject) (DeleteCriterionResponseObject, error)
+	// UpdateCriterion Edit or tick an acceptance criterion
+	// (PATCH /criteria/{id})
+	UpdateCriterion(ctx context.Context, request UpdateCriterionRequestObject) (UpdateCriterionResponseObject, error)
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// ListTickets List tickets for a view, with optional filters
+	// (GET /tickets)
+	ListTickets(ctx context.Context, request ListTicketsRequestObject) (ListTicketsResponseObject, error)
+	// CreateTicket Create a ticket
+	// (POST /tickets)
+	CreateTicket(ctx context.Context, request CreateTicketRequestObject) (CreateTicketResponseObject, error)
+	// BulkUpdateTickets Apply one patch to many tickets
+	// (POST /tickets/bulk)
+	BulkUpdateTickets(ctx context.Context, request BulkUpdateTicketsRequestObject) (BulkUpdateTicketsResponseObject, error)
+	// GetTicket A ticket with its criteria
+	// (GET /tickets/{key})
+	GetTicket(ctx context.Context, request GetTicketRequestObject) (GetTicketResponseObject, error)
+	// UpdateTicket Change ticket fields. Omitted fields are untouched; null clears.
+	// (PATCH /tickets/{key})
+	UpdateTicket(ctx context.Context, request UpdateTicketRequestObject) (UpdateTicketResponseObject, error)
+	// ListTicketActivity The ticket timeline, oldest first
+	// (GET /tickets/{key}/activity)
+	ListTicketActivity(ctx context.Context, request ListTicketActivityRequestObject) (ListTicketActivityResponseObject, error)
+	// AttachArtifact Attach an artifact to a ticket as context (or as generated output)
+	// (POST /tickets/{key}/artifacts)
+	AttachArtifact(ctx context.Context, request AttachArtifactRequestObject) (AttachArtifactResponseObject, error)
+	// DetachArtifact Remove an artifact from a ticket
+	// (DELETE /tickets/{key}/artifacts/{artifactId})
+	DetachArtifact(ctx context.Context, request DetachArtifactRequestObject) (DetachArtifactResponseObject, error)
+	// CreateComment Comment on a ticket (appears in the timeline)
+	// (POST /tickets/{key}/comments)
+	CreateComment(ctx context.Context, request CreateCommentRequestObject) (CreateCommentResponseObject, error)
+	// CreateCriterion Add an acceptance criterion
+	// (POST /tickets/{key}/criteria)
+	CreateCriterion(ctx context.Context, request CreateCriterionRequestObject) (CreateCriterionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -291,6 +2525,266 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
+// ListArtifacts operation middleware
+func (sh *strictHandler) ListArtifacts(w http.ResponseWriter, r *http.Request, params ListArtifactsParams) {
+	var request ListArtifactsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListArtifacts(ctx, request.(ListArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListArtifactsResponseObject); ok {
+		if err := validResponse.VisitListArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateArtifact operation middleware
+func (sh *strictHandler) CreateArtifact(w http.ResponseWriter, r *http.Request) {
+	var request CreateArtifactRequestObject
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateArtifact(ctx, request.(CreateArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateArtifactResponseObject); ok {
+		if err := validResponse.VisitCreateArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifact operation middleware
+func (sh *strictHandler) GetArtifact(w http.ResponseWriter, r *http.Request, id ArtifactId) {
+	var request GetArtifactRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifact(ctx, request.(GetArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactResponseObject); ok {
+		if err := validResponse.VisitGetArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateArtifact operation middleware
+func (sh *strictHandler) UpdateArtifact(w http.ResponseWriter, r *http.Request, id ArtifactId) {
+	var request UpdateArtifactRequestObject
+
+	request.Id = id
+
+	var body UpdateArtifactJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateArtifact(ctx, request.(UpdateArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateArtifactResponseObject); ok {
+		if err := validResponse.VisitUpdateArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateArtifactVersion operation middleware
+func (sh *strictHandler) CreateArtifactVersion(w http.ResponseWriter, r *http.Request, id ArtifactId) {
+	var request CreateArtifactVersionRequestObject
+
+	request.Id = id
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateArtifactVersion(ctx, request.(CreateArtifactVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateArtifactVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateArtifactVersionResponseObject); ok {
+		if err := validResponse.VisitCreateArtifactVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactContent operation middleware
+func (sh *strictHandler) GetArtifactContent(w http.ResponseWriter, r *http.Request, id ArtifactId, versionId openapi_types.UUID, params GetArtifactContentParams) {
+	var request GetArtifactContentRequestObject
+
+	request.Id = id
+	request.VersionId = versionId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactContent(ctx, request.(GetArtifactContentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactContent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactContentResponseObject); ok {
+		if err := validResponse.VisitGetArtifactContentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBootstrap operation middleware
+func (sh *strictHandler) GetBootstrap(w http.ResponseWriter, r *http.Request) {
+	var request GetBootstrapRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBootstrap(ctx, request.(GetBootstrapRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBootstrap")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBootstrapResponseObject); ok {
+		if err := validResponse.VisitGetBootstrapResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCriterion operation middleware
+func (sh *strictHandler) DeleteCriterion(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DeleteCriterionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCriterion(ctx, request.(DeleteCriterionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCriterion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCriterionResponseObject); ok {
+		if err := validResponse.VisitDeleteCriterionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCriterion operation middleware
+func (sh *strictHandler) UpdateCriterion(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request UpdateCriterionRequestObject
+
+	request.Id = id
+
+	var body UpdateCriterionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCriterion(ctx, request.(UpdateCriterionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCriterion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCriterionResponseObject); ok {
+		if err := validResponse.VisitUpdateCriterionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetHealth operation middleware
 func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	var request GetHealthRequestObject
@@ -315,20 +2809,384 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListTickets operation middleware
+func (sh *strictHandler) ListTickets(w http.ResponseWriter, r *http.Request, params ListTicketsParams) {
+	var request ListTicketsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTickets(ctx, request.(ListTicketsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTickets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTicketsResponseObject); ok {
+		if err := validResponse.VisitListTicketsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTicket operation middleware
+func (sh *strictHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
+	var request CreateTicketRequestObject
+
+	var body CreateTicketJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTicket(ctx, request.(CreateTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTicketResponseObject); ok {
+		if err := validResponse.VisitCreateTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BulkUpdateTickets operation middleware
+func (sh *strictHandler) BulkUpdateTickets(w http.ResponseWriter, r *http.Request) {
+	var request BulkUpdateTicketsRequestObject
+
+	var body BulkUpdateTicketsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BulkUpdateTickets(ctx, request.(BulkUpdateTicketsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BulkUpdateTickets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BulkUpdateTicketsResponseObject); ok {
+		if err := validResponse.VisitBulkUpdateTicketsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTicket operation middleware
+func (sh *strictHandler) GetTicket(w http.ResponseWriter, r *http.Request, key TicketKey) {
+	var request GetTicketRequestObject
+
+	request.Key = key
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTicket(ctx, request.(GetTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTicketResponseObject); ok {
+		if err := validResponse.VisitGetTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateTicket operation middleware
+func (sh *strictHandler) UpdateTicket(w http.ResponseWriter, r *http.Request, key TicketKey) {
+	var request UpdateTicketRequestObject
+
+	request.Key = key
+
+	var body UpdateTicketJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateTicket(ctx, request.(UpdateTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateTicketResponseObject); ok {
+		if err := validResponse.VisitUpdateTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTicketActivity operation middleware
+func (sh *strictHandler) ListTicketActivity(w http.ResponseWriter, r *http.Request, key TicketKey) {
+	var request ListTicketActivityRequestObject
+
+	request.Key = key
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTicketActivity(ctx, request.(ListTicketActivityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTicketActivity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTicketActivityResponseObject); ok {
+		if err := validResponse.VisitListTicketActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AttachArtifact operation middleware
+func (sh *strictHandler) AttachArtifact(w http.ResponseWriter, r *http.Request, key TicketKey) {
+	var request AttachArtifactRequestObject
+
+	request.Key = key
+
+	var body AttachArtifactJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AttachArtifact(ctx, request.(AttachArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AttachArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AttachArtifactResponseObject); ok {
+		if err := validResponse.VisitAttachArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DetachArtifact operation middleware
+func (sh *strictHandler) DetachArtifact(w http.ResponseWriter, r *http.Request, key TicketKey, artifactId openapi_types.UUID) {
+	var request DetachArtifactRequestObject
+
+	request.Key = key
+	request.ArtifactId = artifactId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DetachArtifact(ctx, request.(DetachArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DetachArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DetachArtifactResponseObject); ok {
+		if err := validResponse.VisitDetachArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateComment operation middleware
+func (sh *strictHandler) CreateComment(w http.ResponseWriter, r *http.Request, key TicketKey) {
+	var request CreateCommentRequestObject
+
+	request.Key = key
+
+	var body CreateCommentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateComment(ctx, request.(CreateCommentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateComment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCommentResponseObject); ok {
+		if err := validResponse.VisitCreateCommentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCriterion operation middleware
+func (sh *strictHandler) CreateCriterion(w http.ResponseWriter, r *http.Request, key TicketKey) {
+	var request CreateCriterionRequestObject
+
+	request.Key = key
+
+	var body CreateCriterionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCriterion(ctx, request.(CreateCriterionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCriterion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCriterionResponseObject); ok {
+		if err := validResponse.VisitCreateCriterionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"vFPBbtQwEP0Va+C42mypuORWIVQqIVHRcqIr6jpvE3eTsRlPVgrV/juyU7Zb2gMnTnFm5j2/mXl+IBeG",
-	"GBisieoHSq7DYMvxE2yvXT5FCRGiHiXuOrhtOdmm8eoD2/7yWcVbwYZqelM9cVePxNXM+iFz0H5BOkVQ",
-	"TeHuHk5zIKnVsbCAx4Hq7xS2tKAGrdgGDa0PmKTiuc2YHST5wBn0V26/IMHP0QuaTPVI/oRY/Olm/YqU",
-	"Y6kvpgCRIK/cuKDeKthNP4Z0lPasaCE5H7ZH8bsQelh+oTRsX5GUizxvQsY3SE581NI3ff14dW1cYBXr",
-	"1GyCGO1gPttf01mbx2++XRjLjbHlb2muO5/MxvcwPpXSFEZxMGFzwyqjdrW5HewWpgXfGkELhljFXHwe",
-	"TILsICa3JRvrkAp9Tl5PEVdFmnG9B+vyJs9Zvfa5lyNNZ5cXR6uoabU8Wa7KhCLYRk81nS5Xy1NaULTa",
-	"lXFW3cGVLTR/8lJsHsNFQzWdQx99m+eZYuA07+vdalXMG1jBBWhj7L0r0Oo+zfaZXfpvHp738XwPZ31v",
-	"GkRwA3YeyQis6+xdj9zX+9Xpf9DwhWGCmCEInmuxAjPykaL83MZhsDLlxfgdGGle5AE3mcObUdum8oim",
-	"pBhoXa6efZDjDzRKTzVVNvpqd0L79f53AAAA//8=",
+	"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",
+	"P/otgp8CVf7l6X8DAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

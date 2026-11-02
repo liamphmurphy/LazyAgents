@@ -1,12 +1,21 @@
 openapi: 3.0.3
 info:
   title: LazyAgents API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     REST contract for the LazyAgents UI and agents. This file is the source of
     truth: `make gen` regenerates the Go server interfaces and the TypeScript client.
+
+    There is no login for now: every request acts as the workspace's local
+    user (its first user). Errors share the `Error` shape: 404 not found,
+    422 validation (with `field` set when one input is at fault).
 servers:
   - url: /api/v1
+tags:
+  - name: system
+  - name: workspace
+  - name: tickets
+  - name: artifacts
 paths:
   /health:
     get:
@@ -24,21 +33,430 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
+
+  /bootstrap:
+    get:
+      operationId: getBootstrap
+      summary: Everything the shell and pickers need in one call (`me` is the local user)
+      tags: [workspace]
+      responses:
+        "200":
+          description: Workspace context for the signed-in user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bootstrap" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tickets:
+    get:
+      operationId: listTickets
+      summary: List tickets for a view, with optional filters
+      tags: [tickets]
+      parameters:
+        - name: project
+          in: query
+          description: Project key, e.g. PAY
+          schema: { type: string }
+        - name: view
+          in: query
+          schema:
+            type: string
+            enum: [active, backlog, agent_owned, needs_human, all]
+            default: active
+        - name: status
+          in: query
+          description: Restrict to one status (applied within the view)
+          schema: { $ref: "#/components/schemas/TicketStatus" }
+        - name: assignee
+          in: query
+          description: Agent handle
+          schema: { type: string }
+        - name: label
+          in: query
+          description: Label id
+          schema: { type: string, format: uuid }
+        - name: q
+          in: query
+          description: Free-text search over key, title and description
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching tickets, ordered by status then priority
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createTicket
+      summary: Create a ticket
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewTicket" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tickets/bulk:
+    post:
+      operationId: bulkUpdateTickets
+      summary: Apply one patch to many tickets
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated: { type: integer }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tickets/{key}:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    get:
+      operationId: getTicket
+      summary: A ticket with its criteria
+      tags: [tickets]
+      responses:
+        "200":
+          description: The ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateTicket
+      summary: Change ticket fields. Omitted fields are untouched; null clears.
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketPatch" }
+      responses:
+        "200":
+          description: The updated ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tickets/{key}/activity:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    get:
+      operationId: listTicketActivity
+      summary: The ticket timeline, oldest first
+      tags: [tickets]
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: "#/components/schemas/ActivityEvent" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tickets/{key}/comments:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    post:
+      operationId: createComment
+      summary: Comment on a ticket (appears in the timeline)
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewComment" }
+      responses:
+        "201":
+          description: The timeline event for the comment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivityEvent" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tickets/{key}/criteria:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    post:
+      operationId: createCriterion
+      summary: Add an acceptance criterion
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Criterion" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /criteria/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateCriterion
+      summary: Edit or tick an acceptance criterion
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string, minLength: 1, maxLength: 1000 }
+                done: { type: boolean }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Criterion" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteCriterion
+      summary: Remove an acceptance criterion
+      tags: [tickets]
+      responses:
+        "204":
+          description: Deleted
+        default: { $ref: "#/components/responses/Error" }
+
+  /tickets/{key}/artifacts:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    post:
+      operationId: attachArtifact
+      summary: Attach an artifact to a ticket as context (or as generated output)
+      tags: [tickets, artifacts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [artifact_id]
+              properties:
+                artifact_id: { type: string, format: uuid }
+                relation: { $ref: "#/components/schemas/ArtifactRelation" }
+      responses:
+        "200":
+          description: The ticket with its artifacts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tickets/{key}/artifacts/{artifactId}:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+      - name: artifactId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      operationId: detachArtifact
+      summary: Remove an artifact from a ticket
+      tags: [tickets, artifacts]
+      responses:
+        "200":
+          description: The ticket with its artifacts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /artifacts:
+    get:
+      operationId: listArtifacts
+      summary: Artifacts, newest first, with per-type counts for the tabs
+      tags: [artifacts]
+      parameters:
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/ArtifactType" }
+        - name: project
+          in: query
+          description: Project key
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Full-text search over titles, summaries and contents
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching artifacts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArtifactList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createArtifact
+      summary: Create an artifact from markdown (body_md) or an uploaded file
+      description: |
+        Send exactly one of `body_md` or `file`. Markdown files (.md, text/markdown)
+        are stored as text so they can be outlined and searched; anything else is
+        stored in object storage. The title defaults to the first heading, then
+        the filename.
+      tags: [artifacts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/NewArtifact" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /artifacts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    get:
+      operationId: getArtifact
+      summary: An artifact with its current version, outline, readers, history and tickets
+      tags: [artifacts]
+      responses:
+        "200":
+          description: The artifact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateArtifact
+      summary: Edit title, summary or epic (contents change via new versions)
+      tags: [artifacts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, minLength: 1, maxLength: 300 }
+                summary: { type: string, maxLength: 2000 }
+                epic_id: { type: string, format: uuid, nullable: true }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /artifacts/{id}/versions:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    post:
+      operationId: createArtifactVersion
+      summary: Add a version (markdown or file); it becomes current
+      tags: [artifacts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/NewArtifactVersion" }
+      responses:
+        "201":
+          description: The artifact at its new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /artifacts/{id}/versions/{versionId}/content:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+      - name: versionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: download
+        in: query
+        description: Send Content-Disposition attachment instead of inline
+        schema: { type: boolean }
+    get:
+      operationId: getArtifactContent
+      summary: The raw content of one version (markdown text or the stored file)
+      tags: [artifacts]
+      responses:
+        "200":
+          description: Raw bytes
+          content:
+            "*/*":
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
+  parameters:
+    TicketKey:
+      name: key
+      in: path
+      required: true
+      description: Ticket key, e.g. PAY-214
+      schema: { type: string, pattern: "^[A-Z][A-Z0-9]{1,9}-[0-9]+$" }
+
+    ArtifactId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
   schemas:
     Health:
       type: object
       required: [status, version, checks]
       properties:
-        status:
-          type: string
-          enum: [ok, degraded]
-        version:
-          type: string
+        status: { type: string, enum: [ok, degraded] }
+        version: { type: string }
         checks:
           type: object
-          additionalProperties:
-            $ref: "#/components/schemas/HealthCheck"
+          additionalProperties: { $ref: "#/components/schemas/HealthCheck" }
     HealthCheck:
       type: object
       required: [ok]
@@ -50,5 +468,384 @@ components:
       type: object
       required: [code, message]
       properties:
-        code: { type: string }
+        code: { type: string, enum: [not_found, invalid, conflict, internal, no_user] }
         message: { type: string }
+        field: { type: string }
+
+    Workspace:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+    User:
+      type: object
+      required: [id, name, email, initials, role_title]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string }
+        initials: { type: string }
+        role_title: { type: string }
+        avatar_color: { type: string }
+    Project:
+      type: object
+      required: [id, key, name, color]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        name: { type: string }
+        color: { type: string }
+    Agent:
+      type: object
+      required: [id, name, handle, color_index, role, specialty, model, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        handle: { type: string }
+        color_index: { type: integer }
+        role: { type: string }
+        specialty: { type: string }
+        model: { type: string }
+        status: { type: string, enum: [running, waiting, blocked, idle] }
+    Epic:
+      type: object
+      required: [id, project_id, name, health]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        name: { type: string }
+        health: { type: string, enum: [on_track, at_risk, off_track] }
+    Label:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+    Bootstrap:
+      type: object
+      required: [workspace, me, users, projects, agents, epics, labels, counts]
+      properties:
+        workspace: { $ref: "#/components/schemas/Workspace" }
+        me: { $ref: "#/components/schemas/User" }
+        users: { type: array, items: { $ref: "#/components/schemas/User" } }
+        projects: { type: array, items: { $ref: "#/components/schemas/Project" } }
+        agents: { type: array, items: { $ref: "#/components/schemas/Agent" } }
+        epics: { type: array, items: { $ref: "#/components/schemas/Epic" } }
+        labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
+        counts:
+          type: object
+          required: [inbox, live_agents]
+          properties:
+            inbox: { type: integer }
+            live_agents: { type: integer }
+
+    TicketStatus:
+      type: string
+      enum: [backlog, todo, in_progress, in_review, done]
+    Priority:
+      type: string
+      enum: [none, low, medium, high, urgent]
+    AgentRef:
+      type: object
+      required: [id, name, handle, color_index]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        handle: { type: string }
+        color_index: { type: integer }
+    UserRef:
+      type: object
+      required: [id, name, initials]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        initials: { type: string }
+        avatar_color: { type: string }
+    EpicRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    PullRequest:
+      type: object
+      required: [number, state]
+      properties:
+        number: { type: integer }
+        state: { type: string, enum: [draft, open, merged, closed] }
+        url: { type: string }
+        additions: { type: integer }
+        deletions: { type: integer }
+
+    TicketSummary:
+      type: object
+      required: [id, key, project_key, title, status, priority, labels, criteria_total, criteria_done, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        project_key: { type: string }
+        title: { type: string }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        priority: { $ref: "#/components/schemas/Priority" }
+        epic: { $ref: "#/components/schemas/EpicRef" }
+        assignee: { $ref: "#/components/schemas/AgentRef" }
+        labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
+        due_date: { type: string, format: date }
+        pr: { $ref: "#/components/schemas/PullRequest" }
+        criteria_total: { type: integer }
+        criteria_done: { type: integer }
+        updated_at: { type: string, format: date-time }
+    TicketList:
+      type: object
+      required: [tickets]
+      properties:
+        tickets:
+          type: array
+          items: { $ref: "#/components/schemas/TicketSummary" }
+    Ticket:
+      type: object
+      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        project: { $ref: "#/components/schemas/Project" }
+        title: { type: string }
+        description_md: { type: string }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        priority: { $ref: "#/components/schemas/Priority" }
+        epic: { $ref: "#/components/schemas/EpicRef" }
+        assignee: { $ref: "#/components/schemas/AgentRef" }
+        reviewer: { $ref: "#/components/schemas/UserRef" }
+        created_by: { $ref: "#/components/schemas/UserRef" }
+        labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
+        criteria: { type: array, items: { $ref: "#/components/schemas/Criterion" } }
+        artifacts: { type: array, items: { $ref: "#/components/schemas/DocCard" } }
+        estimate: { type: string }
+        due_date: { type: string, format: date }
+        branch: { type: string }
+        pr: { $ref: "#/components/schemas/PullRequest" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Criterion:
+      type: object
+      required: [id, position, text, done]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer }
+        text: { type: string }
+        done: { type: boolean }
+
+    NewTicket:
+      type: object
+      required: [project_key, title]
+      properties:
+        project_key: { type: string }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        description_md: { type: string }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        priority: { $ref: "#/components/schemas/Priority" }
+        epic_id: { type: string, format: uuid }
+        assignee_agent_id: { type: string, format: uuid }
+        reviewer_user_id: { type: string, format: uuid }
+        label_ids: { type: array, items: { type: string, format: uuid } }
+        estimate: { type: string }
+        due_date: { type: string, format: date }
+        criteria: { type: array, items: { type: string } }
+    TicketPatch:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        description_md: { type: string }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        priority: { $ref: "#/components/schemas/Priority" }
+        epic_id: { type: string, format: uuid, nullable: true }
+        assignee_agent_id: { type: string, format: uuid, nullable: true }
+        reviewer_user_id: { type: string, format: uuid, nullable: true }
+        estimate: { type: string, nullable: true }
+        due_date: { type: string, format: date, nullable: true }
+        label_ids: { type: array, items: { type: string, format: uuid } }
+    BulkUpdate:
+      type: object
+      required: [keys, patch]
+      properties:
+        keys:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: string }
+        patch: { $ref: "#/components/schemas/TicketPatch" }
+        attach_artifact_id:
+          type: string
+          format: uuid
+          description: Also attach this artifact (as context) to every ticket
+
+    ArtifactType:
+      type: string
+      enum: [prd, spec, adr, report, design]
+    ArtifactRelation:
+      type: string
+      enum: [context, generated]
+    ArtifactContent:
+      type: object
+      required: [kind, content_type, size_bytes, sections]
+      properties:
+        kind: { type: string, enum: [markdown, file] }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        filename: { type: string }
+        sections: { type: integer, description: Headings in the outline (markdown only) }
+    ArtifactSummary:
+      type: object
+      required: [id, type, title, summary, project, author, content, ticket_count, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/ArtifactType" }
+        title: { type: string }
+        display_id: { type: string, description: "ADR-012; set for numbered types" }
+        summary: { type: string }
+        project: { $ref: "#/components/schemas/Project" }
+        epic: { $ref: "#/components/schemas/EpicRef" }
+        author: { $ref: "#/components/schemas/Actor" }
+        version_label: { type: string }
+        content: { $ref: "#/components/schemas/ArtifactContent" }
+        ticket_count: { type: integer }
+        updated_at: { type: string, format: date-time }
+    ArtifactCounts:
+      type: object
+      required: [all, prd, spec, adr, report, design]
+      properties:
+        all: { type: integer }
+        prd: { type: integer }
+        spec: { type: integer }
+        adr: { type: integer }
+        report: { type: integer }
+        design: { type: integer }
+    ArtifactList:
+      type: object
+      required: [artifacts, counts]
+      properties:
+        artifacts: { type: array, items: { $ref: "#/components/schemas/ArtifactSummary" } }
+        counts: { $ref: "#/components/schemas/ArtifactCounts" }
+    ArtifactVersion:
+      type: object
+      required: [id, seq, label, note, content, created_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        seq: { type: integer }
+        label: { type: string }
+        note: { type: string }
+        content: { $ref: "#/components/schemas/ArtifactContent" }
+        created_by: { $ref: "#/components/schemas/Actor" }
+        created_at: { type: string, format: date-time }
+    OutlineSection:
+      type: object
+      required: [id, level, anchor, heading, citations]
+      properties:
+        id: { type: string, format: uuid }
+        level: { type: integer }
+        anchor: { type: string }
+        heading: { type: string }
+        citations: { type: integer, description: Times agents cited this section (by anchor, across versions) }
+    ArtifactReader:
+      type: object
+      required: [agent, reads, last_read_at]
+      properties:
+        agent: { $ref: "#/components/schemas/AgentRef" }
+        reads: { type: integer }
+        last_read_at: { type: string, format: date-time }
+    LinkedTicket:
+      type: object
+      required: [key, title, status, relation]
+      properties:
+        key: { type: string }
+        title: { type: string }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        relation: { $ref: "#/components/schemas/ArtifactRelation" }
+    Artifact:
+      type: object
+      required: [id, type, title, summary, project, author, current_version, body_md, outline, read_by, versions, tickets, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/ArtifactType" }
+        title: { type: string }
+        display_id: { type: string }
+        summary: { type: string }
+        project: { $ref: "#/components/schemas/Project" }
+        epic: { $ref: "#/components/schemas/EpicRef" }
+        author: { $ref: "#/components/schemas/Actor" }
+        current_version: { $ref: "#/components/schemas/ArtifactVersion" }
+        body_md:
+          type: string
+          nullable: true
+          description: Markdown of the current version; null for files
+        outline: { type: array, items: { $ref: "#/components/schemas/OutlineSection" } }
+        read_by: { type: array, items: { $ref: "#/components/schemas/ArtifactReader" } }
+        versions: { type: array, items: { $ref: "#/components/schemas/ArtifactVersion" } }
+        tickets: { type: array, items: { $ref: "#/components/schemas/LinkedTicket" } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DocCard:
+      type: object
+      required: [id, type, title, relation, author, read_by_assignee]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/ArtifactType" }
+        title: { type: string }
+        display_id: { type: string }
+        version_label: { type: string }
+        relation: { $ref: "#/components/schemas/ArtifactRelation" }
+        author: { $ref: "#/components/schemas/Actor" }
+        read_by_assignee: { type: boolean, description: "The ticket's agent has read it (\"Read by Atlas\")" }
+    NewArtifact:
+      type: object
+      required: [project_key, type]
+      properties:
+        project_key: { type: string }
+        type: { $ref: "#/components/schemas/ArtifactType" }
+        title: { type: string }
+        summary: { type: string }
+        epic_id: { type: string, format: uuid }
+        version_label: { type: string }
+        body_md: { type: string }
+        file: { type: string, format: binary }
+    NewArtifactVersion:
+      type: object
+      properties:
+        version_label: { type: string }
+        note: { type: string }
+        body_md: { type: string }
+        file: { type: string, format: binary }
+
+    NewComment:
+      type: object
+      required: [body_md]
+      properties:
+        body_md: { type: string, minLength: 1, maxLength: 20000 }
+        parent_comment_id: { type: string, format: uuid }
+    Actor:
+      type: object
+      required: [type, name]
+      properties:
+        type: { type: string, enum: [user, agent, system] }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        initials: { type: string }
+        avatar_color: { type: string }
+        color_index: { type: integer }
+    ActivityEvent:
+      type: object
+      required: [id, actor, verb, payload, created_at]
+      description: |
+        One timeline entry. `verb` says what happened; `payload` carries the
+        details for that verb (see server/internal/tracker/activity.go).
+      properties:
+        id: { type: string, format: uuid }
+        actor: { $ref: "#/components/schemas/Actor" }
+        verb: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }

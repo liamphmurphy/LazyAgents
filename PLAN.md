@@ -131,6 +131,7 @@ All primary keys are UUIDv7. Every table has `created_at` and `updated_at`. Ever
 - `artifact_sections`: id, version_id, anchor, heading, level, position (extracted from markdown headings by a background job)
 - `artifact_reads`: artifact_version_id, section_id (nullable), agent_id, run_id, read_at. This table feeds the "Read by" chips and the outline citation counts.
 - `ticket_artifacts`: ticket_id, artifact_id, relation (`context|generated`)
+- Wiki pages and `[[links]]` build on these tables. See §12.
 
 **Activity** (append-only)
 - `activity_events`: id, ticket_id (nullable), epic_id, actor (user or agent), verb, objects (jsonb refs), payload (jsonb, used for plan, test_run, comment, artifact_generated and approval_requested), created_at
@@ -175,6 +176,7 @@ Requests authenticate with a per-agent bearer token. Every tool is checked again
 | `run_gated(scope, action_id, params)` | Brokered execution of an approval-gated action (for example, `db:migrate`), using a secret the agent never sees. Only works after an approval. |
 | `await_human(reason)` | Ends the turn so the run waits for a reply. A comment that mentions the agent resumes it. |
 | `set_status(status)` / `complete_run(outcome)` | Moves the ticket to In Review or Done, or marks it blocked |
+| `search_knowledge` / `read_page` / `write_note` / `get_backlinks` | The wiki and agent memory (§12, Phase 4.5) |
 
 Unmanaged sessions can't be resumed by us, so for them `request_approval` takes `wait: true`, which long-polls (bounded by the harness's MCP tool timeout and repeated on timeout). Unmanaged sessions also use `await_signal(timeout)` to pick up pause, cancel and comments.
 
@@ -182,7 +184,7 @@ Unmanaged sessions can't be resumed by us, so for them `request_approval` takes 
 The browser subscribes once. The server pushes `{type, ids}` invalidation messages such as `ticket.updated`, `activity.created`, `approval.created` and `run.updated`. The client invalidates the matching TanStack Query keys. Payloads stay small and the client refetches what it needs.
 
 ### 5.4 Auth
-- **Humans:** email and password (argon2id) with an HTTP-only session cookie. A first admin is seeded from env. OIDC comes later.
+- **Humans: no login for now.** Every request acts as the workspace's first user, which suits the single-laptop target (§6.5). Don't expose the port beyond localhost. When sign-in returns: email and password (argon2id; users already carry a hash), an HTTP-only session cookie, then OIDC. Approvals and dispatches record that local user as the actor until then.
 - **Agents:** opaque bearer tokens (`la_…`), stored hashed. Managed runs get a per-run token that expires when the run ends. Unmanaged sessions use a long-lived token, shown once at creation.
 
 ---
@@ -309,7 +311,7 @@ A River periodic job (about every 60s, plus right away when an agent calls `set_
 - **Fonts:** load Inter and JetBrains Mono through `next/font`, and apply `font-feature-settings: "cv11","ss01","ss03"` globally.
 - **Build domain components first,** before any screen, and check them against `foundations.html`: `StatusGlyph`, `PriorityGlyph`, `AgentAvatar`, `HumanAvatar`, `AvatarStack`, `Pill`, `Flag`, `DocTypeTag`, `LabelChip`, `FilterChip`, `Segmented`, `Button` variants, `Card`, `KpiTile`, `ProgressBar` and `StackedBar`, `PropertyRow`, `Kbd`.
 - **Then the shell:** sidebar, top bar with breadcrumb, content container and optional right panel. Screens are composed from these pieces.
-- **Rendering:** server components fetch the first load from the API over the internal network, so pages paint with data. Client components take over for interactive lists, popovers and live updates.
+- **Rendering:** data loads client-side through TanStack Query, and pages show layout-true skeletons until it arrives. *(Changed in Phase 2: the original plan was a server-side first load. Next 16's Cache Components make that a Suspense boundary per page, plus cookie forwarding to the API, for little gain on a laptop. Revisit if first-paint latency matters.)*
 - **Accessibility rules from DESIGN.md §6 are requirements,** not nice-to-haves: real links and buttons, `aria-label` on icon buttons, and glyph shapes that carry state independently of color.
 - **Visual regression:** Playwright screenshots of each seeded screen at 1440px, compared by eye against `lazyagents-design/shots/*.png` during build-out.
 
@@ -340,24 +342,24 @@ Harness API keys and `SECRETS_KEY` are set in `.env`. The app works without harn
 
 Each phase ends with something you can demo.
 
-**Phase 0: Scaffold** (1–2 days)
+**Phase 0: Scaffold** (1–2 days) ✅ *done, but `docker compose up` hasn't been run yet*
 - Monorepo layout, Go module, Next.js app, Makefile, `.env.example`
 - docker-compose with postgres, seaweedfs, api, web and caddy up and healthy (runner added in Phase 5), Caddy routing, migrations running on boot
 - OpenAPI codegen wired into both Go and TS (`make gen`), plus CI running lint, test and build
 - *Exit:* `docker compose up` serves a placeholder page that calls `/api/v1/health`
 
-**Phase 1: Design system and shell**
+**Phase 1: Design system and shell** ✅ *done*
 - `tokens.css` mapped into Tailwind, fonts, every domain component in a `/dev/foundations` route that mirrors `foundations.html`
 - App shell (sidebar, top bar), dark and light themes
 - *Exit:* the foundations page and the empty shell match the mockups
 
-**Phase 2: Core tracker (people only)**
+**Phase 2: Core tracker (people only)** ✅ *done. See CONTINUE.md for what shipped and what was deferred.*
 - Schema and migrations for workspaces, users, projects, epics, tickets, criteria, labels and activity, plus session auth and seed data
 - Tickets list: grouping, view tabs, filters, selection, bulk bar, assign popover (agents as plain records for now)
 - Ticket detail: description, criteria, properties panel, activity timeline, comments, pager
 - *Exit:* a person can create, triage and edit tickets end to end, and the timeline records it all
 
-**Phase 3: Artifacts**
+**Phase 3: Artifacts** ✅ *done. Outlines are extracted inline on save (no River yet).*
 - Markdown artifacts with versions stored in Postgres, binary uploads to SeaweedFS, outline extraction job
 - Artifacts screen (tabs, table, drop zone, preview panel), attaching artifacts to tickets, doc cards
 - *Exit:* upload a PRD, attach it to a ticket, preview its outline
@@ -369,6 +371,12 @@ Each phase ends with something you can demo.
 - Ticket detail shows the approval banner, run card, plan card and Code section
 - Unmanaged sessions are working: `examples/fake-agent` (a script that drives the full lifecycle) plus a sample MCP config for a local Claude Code session
 - *Exit:* a local, unmanaged Claude Code session picks up PAY-214, posts a plan, requests `db:migrate` approval, a human approves it, and the migration runs through the broker
+
+**Phase 4.5: Wiki and agent memory** (§12)
+- `note` pages, `[[link]]` parsing into `knowledge_links`, link resolution and ghost pages, backlinks (linked and unlinked mentions) on pages, artifacts, tickets and epics
+- Wiki screen: page tree, editor with `[[` autocomplete, rendered links, backlinks panel, local graph. This extends the design system, since it isn't designed yet.
+- Agent memory: per-agent namespaces, the `wiki:write` scope, MCP tools `search_knowledge`, `read_page`, `write_note` and `get_backlinks`, and suggested edits that a person accepts
+- *Exit:* Atlas finishes PAY-214, writes "Partition rollback gotchas" into its memory linking `[[ADR-012]]` and `[[PAY-214]]`, and the next Atlas run on PAY-224 gets that note in its context. ADR-012 shows the note under backlinks.
 
 **Phase 5: Runner and harness adapters**
 - `agent-base` image, workspace preparation, container lifecycle, credential injection, scheduler and concurrency limits
@@ -425,3 +433,103 @@ Each phase ends with something you can demo.
 
 **Still open**
 1. **Logo:** deferred. The placeholder mark stays for now.
+2. **Wiki: agent edits to people's pages** (§12.5). Edit directly, or always as a suggestion? The plan defaults to suggestions.
+3. **Wiki: retrieval.** Is full-text search plus the link graph enough, or do we add embeddings (pgvector) for `search_knowledge` from the start? The plan starts without embeddings.
+4. **Wiki: Obsidian interop.** Is markdown-folder import/export (an Obsidian-compatible vault) enough, or do people want live two-way sync with a local vault?
+
+---
+
+## 12. Wiki and agent memory (planned, Phase 4.5)
+
+An Obsidian-style wiki on top of artifacts. The wiki is mostly the **links**: any page, artifact, ticket, epic or agent can link to any other with `[[…]]`, and every link shows up as a backlink on its target. The wiki does two jobs:
+- **A team wiki for people:** runbooks, glossaries, architecture notes, and the context that never fit in a PRD.
+- **A second brain for agents:** what agents learn while working (repo gotchas, decisions, dead ends) persists as linked notes and comes back in later runs, instead of being lost when a session ends.
+
+### 12.1 Pages are artifacts
+
+A wiki page is an artifact of type **`note`**. That reuses everything from Phase 3: versions, markdown in Postgres, outline extraction, full-text search, read tracking and citation counts, and ticket attachment. Notes differ from the other types in three ways:
+- **Lightweight editing.** Saving creates a new version silently. There's no "New version" ceremony.
+- **Path-based titles.** For example `Payments/Ledger/Rollback runbook` or `agents/atlas/Partition gotchas`. The path gives the page tree, and the last segment is the display title.
+- **Workspace-wide by default.** A note can optionally belong to a project. PRDs, specs and the other types keep their required project.
+
+### 12.2 Links
+
+| Syntax | Resolves to |
+|---|---|
+| `[[Rollback runbook]]` | A note, by title (or full path when titles clash) |
+| `[[Ledger v2 — Product requirements#Reconciliation performance]]` | A section of any artifact. It counts as a citation of that section when an agent follows it. |
+| `[[ADR-012]]`, `[[PAY-214]]`, `[[Ledger v2]]`, `[[@atlas]]` | ADRs by number, tickets by key, epics by name, agents by handle |
+| `[[Rollback runbook\|the runbook]]` | Any of the above, with display text |
+| `#migration` | A tag. It shares the label vocabulary from §4. |
+
+**How links are stored.** On every save, links are parsed from the markdown (skipping code) into:
+- `knowledge_links`: source_artifact_id, source_version_id, target_kind (`artifact|section|ticket|epic|agent|unresolved`), target_id, target_anchor, raw_text, and a context snippet (the sentence around the link)
+
+Ticket descriptions and comments are parsed the same way, so `[[ADR-012]]` in a comment links too.
+
+**Behaviour:**
+- **Unresolved links are ghost pages,** as in Obsidian: dashed and dimmed. Clicking one creates the page, and the link resolves.
+- **Links are stored by id, so renames don't break them.** The text is rewritten in place on rename.
+- **Backlinks panel** on every page, artifact, ticket and epic:
+  - **Linked mentions:** sources, with their snippets.
+  - **Unlinked mentions:** the target's title appearing in text without brackets, found by full-text search. Each has a one-click "link it".
+- **Graph:**
+  - A local graph (1–2 hops) in the page's side panel.
+  - A workspace graph view, colored by type, with doc-type and agent hues from the tokens.
+- **Embeds:** `![[Page#Section]]` embeds that section read-only. This comes later than the rest.
+
+### 12.3 Agent memory
+
+- **A namespace per agent.** Each agent has a namespace `agents/<handle>/` with an index page `agents/<handle>/Memory`.
+  - Agents write notes there as they work ("ledger_entries has a trigger that blocks ALTER, see [[ADR-012]]").
+  - Agents link the notes to the tickets, artifacts and code concepts they relate to.
+- **Shared notes.** Agents can also write and link team-wide notes (`Payments/…`), subject to §12.5.
+- **The definition decides what's injected.** The agent definition (§6.1) gains `memory: { enabled, inject: index|linked|search, max_tokens }`.
+- **What the runner adds to context.** When preparing a run (§6.5), alongside the ticket's attached artifacts, the runner adds:
+  - the agent's memory index;
+  - pages linked from the ticket and its artifacts (one hop);
+  - top `search_knowledge` hits for the ticket title.
+
+  It writes them to `.lazyagents/context/` and lists them in `AGENTS.md`, trimmed to `max_tokens`.
+- **Reads are logged.** Reading memory counts like any other read, so "Read by" and citation counts show which notes actually get used. Notes nobody reads for a long time can be flagged for pruning.
+
+### 12.4 Agent API additions (§5.2)
+
+| Tool | Purpose |
+|---|---|
+| `search_knowledge(q, kinds?, project?)` | Full-text and link-aware search over notes and artifacts. A section that matches ranks higher when well-linked pages link to it. |
+| `read_page(ref, section?)` | `ref` is a title, path, `ADR-012` or an id. Records the read or citation. |
+| `write_note(path, body, mode: create\|replace\|append)` | Creates or updates a note. Links are parsed and resolved on save. |
+| `get_backlinks(ref)` | What links here, with snippets |
+
+### 12.5 Permissions
+
+There's a new scope, `wiki:write`, using the usual modes (§6.3). Enforcement is **brokered**: agents only write through the API.
+- **Own namespace (`agents/<handle>/`):** always allowed.
+- **Other notes:** follow `wiki:write`.
+  - `allowed`: edit directly.
+  - `requires_approval`: the edit is stored as a **suggested version** that a person accepts or rejects. It shows in the Inbox as a human action.
+  - `denied`: no edits outside the agent's namespace.
+
+  The default is `requires_approval`.
+- **PRDs, specs, ADRs and designs:** agents never edit these. They can only link to them and comment.
+- **Reports:** agent-generated reports stay agent-owned, as in Phase 3.
+
+### 12.6 UI (not designed yet; add to DESIGN.md §8)
+
+- **Sidebar:** a **Wiki** nav item. The Wiki screen has:
+  - a page tree, with agent namespaces grouped under "Agent memory";
+  - the editor: markdown with `[[` autocomplete over pages, artifacts, tickets, epics and agents, and a rendered view where links get type-colored icons;
+  - a right panel with backlinks, a local graph and properties.
+- **Elsewhere:**
+  - ⌘K searches pages.
+  - Every artifact, ticket and epic detail gains a **Backlinks** section.
+  - The Artifacts screen gets a "Notes" tab.
+- **Import and export:** a markdown folder in an Obsidian-compatible vault layout, with `[[wikilinks]]` and frontmatter properties preserved.
+
+### 12.7 Schema additions
+
+- `artifacts.type` gains `note`. `artifacts.path` (unique per workspace for notes) and `artifacts.project_id` become nullable for notes.
+- `knowledge_links` as in §12.2, indexed on (target_kind, target_id) for backlinks.
+- `artifact_versions.state` (`published|suggested|rejected`) for agent suggestions, and `agent_definition.spec.memory` (§6.1).
+

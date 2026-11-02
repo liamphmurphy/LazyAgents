@@ -1,0 +1,264 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { contentUrl, type Artifact } from "@/lib/api/client";
+import { useArtifact, useUpdateArtifact } from "@/lib/api/hooks";
+import { cx } from "@/lib/cx";
+import { fileKind, formatBytes } from "@/lib/files";
+import { absoluteTime, timelineTime } from "@/lib/format";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
+import { AgentAvatar } from "@/components/domain/avatars";
+import { artifactTitle } from "@/components/domain/artifacts";
+import { NewVersionDialog } from "@/components/domain/artifact-dialogs";
+import { StatusGlyph } from "@/components/domain/glyphs";
+import { DocTypeTag } from "@/components/domain/labels";
+import { Markdown } from "@/components/domain/markdown";
+import { TopBar } from "@/components/shell/topbar";
+
+/** Body of an older version, fetched as raw text. */
+function useVersionBody(a: Artifact | undefined, versionId: string | null) {
+  const v = a?.versions.find((x) => x.id === versionId);
+  return useQuery({
+    queryKey: ["artifacts", "content", a?.id, versionId],
+    enabled: !!a && !!v && v.content.kind === "markdown" && v.id !== a.current_version.id,
+    queryFn: async () => {
+      const res = await fetch(contentUrl(a!.id, v!.id));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.text();
+    },
+    staleTime: Infinity, // versions are immutable
+  });
+}
+
+function FileView({ a, versionId }: { a: Artifact; versionId: string }) {
+  const v = a.versions.find((x) => x.id === versionId) ?? a.current_version;
+  const c = v.content;
+  const src = contentUrl(a.id, v.id);
+  if (c.content_type.startsWith("image/")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- user uploads, served by the API
+      <img src={src} alt={a.title} className="max-h-[70vh] w-full rounded-xl border border-border bg-surface object-contain" />
+    );
+  }
+  if (c.content_type === "application/pdf") {
+    return <iframe src={src} title={a.title} className="h-[75vh] w-full rounded-xl border border-border bg-surface" />;
+  }
+  return (
+    <EmptyState icon="artifacts" title={c.filename ?? a.title} actions={<ButtonLink href={contentUrl(a.id, v.id, true)} variant="outline" icon="download">Download</ButtonLink>}>
+      {fileKind(c.content_type, c.filename)} · {formatBytes(c.size_bytes)}. This file type can&apos;t be previewed here.
+    </EmptyState>
+  );
+}
+
+function SummaryEditor({ a }: { a: Artifact }) {
+  const update = useUpdateArtifact(a.id);
+  const [draft, setDraft] = useState<string | null>(null);
+  if (draft === null) {
+    return (
+      <button type="button" onClick={() => setDraft(a.summary)} className="-mx-1 rounded-md px-1 text-left text-sm leading-relaxed text-fg-secondary hover:bg-hover">
+        {a.summary || <span className="text-fg-tertiary">Add a summary…</span>}
+      </button>
+    );
+  }
+  const save = () => {
+    if (draft !== a.summary) update.mutate({ summary: draft });
+    setDraft(null);
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <TextArea aria-label="Summary" autoFocus rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
+        if (e.key === "Escape") setDraft(null);
+      }} />
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={() => setDraft(null)}>Cancel</Button>
+        <Button variant="primary" onClick={save} hint="⌘↵">Save</Button>
+      </div>
+    </div>
+  );
+}
+
+export function ArtifactScreen({ id }: { id: string }) {
+  const { data: a, isError, error } = useArtifact(id);
+  const [versionId, setVersionId] = useState<string | null>(null);
+  const [versioning, setVersioning] = useState(false);
+  const viewing = a?.versions.find((v) => v.id === versionId) ?? a?.current_version;
+  const old = useVersionBody(a, versionId);
+  const isOld = !!a && !!viewing && viewing.id !== a.current_version.id;
+
+  // Jump to #anchor once the body has rendered.
+  useEffect(() => {
+    if (!a || !window.location.hash) return;
+    document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView();
+  }, [a]);
+
+  if (isError) {
+    const missing = "status" in error && error.status === 404;
+    return (
+      <>
+        <TopBar crumbs={[{ label: "Artifacts", href: "/artifacts" }, { label: "Not found" }]} />
+        {missing ? (
+          <EmptyState icon="artifacts" title="This artifact doesn't exist" actions={<ButtonLink href="/artifacts" variant="outline">All artifacts</ButtonLink>}>
+            It may have been removed, or the link is wrong.
+          </EmptyState>
+        ) : (
+          <div className="p-6"><Banner tone="blocked" title="Couldn't load this artifact">{error.message}</Banner></div>
+        )}
+      </>
+    );
+  }
+
+  const body = isOld ? old.data : a?.body_md;
+
+  return (
+    <>
+      <TopBar
+        crumbs={
+          a
+            ? [{ label: a.project.name, swatch: a.project.color }, { label: "Artifacts", href: "/artifacts" }, { label: artifactTitle(a) }]
+            : [{ label: "Artifacts", href: "/artifacts" }, { label: "…" }]
+        }
+        actions={
+          a && (
+            <>
+              <ButtonLink href={contentUrl(a.id, (viewing ?? a.current_version).id, true)} variant="outline" icon="download">
+                Download
+              </ButtonLink>
+              <Button variant="secondary" icon="history" onClick={() => setVersioning(true)}>
+                New version
+              </Button>
+            </>
+          )
+        }
+      />
+      {!a || !viewing ? (
+        <div aria-busy="true" className="mx-auto flex w-full max-w-[var(--reading-max)] flex-col gap-4 px-7 py-10">
+          <Skeleton className="h-7 w-2/3" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-5/6" />
+        </div>
+      ) : (
+        <div className="flex flex-1 flex-wrap">
+          <article className="flex min-w-0 flex-[999_1_480px] justify-center px-7 py-8 max-sm:px-4">
+            <div className="flex w-full max-w-[var(--reading-max)] flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <DocTypeTag type={a.type} />
+                  <span className="font-mono text-xs text-fg-tertiary">{viewing.label}</span>
+                </div>
+                <h1 className="type-display">{artifactTitle(a)}</h1>
+                <SummaryEditor a={a} />
+              </div>
+              {isOld && (
+                <Banner tone="human" title={`Viewing ${viewing.label}, not the current version`} actions={<Button variant="outline" onClick={() => setVersionId(null)}>Back to {a.current_version.label}</Button>}>
+                  Agents always read the current version ({a.current_version.label}).
+                </Banner>
+              )}
+              <div className="border-t border-border-subtle pt-5">
+                {viewing.content.kind === "file" ? (
+                  <FileView a={a} versionId={viewing.id} />
+                ) : body == null ? (
+                  <Skeleton className="h-3 w-1/2" />
+                ) : (
+                  <Markdown anchors className="type-reading text-fg-2">{body}</Markdown>
+                )}
+              </div>
+            </div>
+          </article>
+
+          <aside aria-label="Artifact details" className="flex flex-[1_1_300px] flex-col gap-6 border-l border-border-subtle bg-panel px-5 py-6 lg:max-w-[340px]">
+            {a.outline.length > 0 && !isOld && (
+              <section className="flex flex-col gap-1">
+                <h2 className="text-[12.5px] text-fg-tertiary">Outline · citations</h2>
+                <ol>
+                  {a.outline.map((s) => (
+                    <li key={s.id}>
+                      <a href={`#${s.anchor}`} className="flex min-h-[26px] items-center gap-2 rounded-sm text-[13px] hover:bg-hover" style={{ paddingLeft: (s.level - 1) * 12 }}>
+                        <span className={cx("flex-1 truncate", s.level === 1 && "font-medium")}>{s.heading}</span>
+                        <span className={cx("font-mono text-xs", s.citations ? "text-fg-secondary" : "text-fg-tertiary")} aria-label={`${s.citations} citations`}>
+                          {s.citations || ""}
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
+            <section className="flex flex-col gap-2">
+              <h2 className="text-[12.5px] text-fg-tertiary">Read by</h2>
+              {a.read_by.length ? (
+                <ul className="flex flex-col gap-1.5">
+                  {a.read_by.map((r) => (
+                    <li key={r.agent.id} className="flex items-center gap-2 text-[13px]">
+                      <AgentAvatar name={r.agent.name} colorIndex={r.agent.color_index} label={false} />
+                      <span className="flex-1">{r.agent.name}</span>
+                      <span className="font-mono text-xs text-fg-tertiary" title={`Last read ${absoluteTime(r.last_read_at)}`}>
+                        {r.reads} reads
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-fg-tertiary">No agent has read this yet.</p>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-1">
+              <h2 className="text-[12.5px] text-fg-tertiary">Tickets</h2>
+              {a.tickets.length ? (
+                a.tickets.map((t) => (
+                  <Link key={t.key} href={`/tickets/${t.key}`} className="flex h-7 items-center gap-2 rounded-sm text-[13px] hover:bg-hover">
+                    <StatusGlyph state={t.status} size={12} surface="var(--bg-panel)" label={false} />
+                    <span className="w-16 font-mono text-xs text-fg-tertiary">{t.key}</span>
+                    <span className="flex-1 truncate">{t.title}</span>
+                  </Link>
+                ))
+              ) : (
+                <p className="text-xs text-fg-tertiary">Not attached to any ticket. Attach it from a ticket&apos;s Context artifacts.</p>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-1">
+              <h2 className="text-[12.5px] text-fg-tertiary">History</h2>
+              <ol className="flex flex-col">
+                {a.versions.map((v) => {
+                  const on = v.id === viewing.id;
+                  return (
+                    <li key={v.id}>
+                      <button
+                        type="button"
+                        aria-current={on ? "true" : undefined}
+                        onClick={() => setVersionId(v.id === a.current_version.id ? null : v.id)}
+                        className={cx("flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-hover", on && "bg-selected")}
+                      >
+                        <span className="flex items-center gap-2 text-[13px]">
+                          <span className="font-mono text-xs">{v.label}</span>
+                          {v.id === a.current_version.id && <span className="text-[11px] text-pill-done-fg">current</span>}
+                          <span className="ml-auto text-xs text-fg-tertiary" title={absoluteTime(v.created_at)}>{timelineTime(v.created_at)}</span>
+                        </span>
+                        <span className="truncate text-xs text-fg-tertiary">
+                          {v.created_by.name}
+                          {v.note && ` · ${v.note}`}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+            <p className="flex items-center gap-1.5 text-xs text-fg-tertiary">
+              <Icon name="sliders" size={12} />
+              Generate tickets from this document arrives in Phase 8.
+            </p>
+          </aside>
+        </div>
+      )}
+      {versioning && a && <NewVersionDialog artifact={a} open onOpenChange={setVersioning} />}
+    </>
+  );
+}

@@ -8,6 +8,8 @@ x-api-env: &api-env
   S3_SECRET_KEY: ${S3_SECRET_KEY:-lazyagents-secret}
   SECRETS_KEY: ${SECRETS_KEY:-}
   SEED: ${SEED:-true}
+  LOCAL_USER_NAME: ${LOCAL_USER_NAME:-Local user}
+  LOCAL_USER_EMAIL: ${LOCAL_USER_EMAIL:-me@localhost}
 
 services:
   postgres:
@@ -25,8 +27,10 @@ services:
       retries: 30
 
   seaweedfs:
+    # Each bucket grows 7 volumes up front. The defaults (30 GB volumes, a low
+    # volume cap) run out after one bucket, so use 1 GB volumes and allow 100.
     image: chrislusf/seaweedfs:4.48
-    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip=seaweedfs -ip.bind=0.0.0.0
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -master.volumeSizeLimitMB=1024 -volume.max=100 -ip=seaweedfs -ip.bind=0.0.0.0
     volumes:
       - seaweed:/data
       - ./deploy/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro

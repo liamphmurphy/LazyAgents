@@ -19,10 +19,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/blob"
 	"github.com/liamphmurphy/lazyagents/server/internal/config"
 	"github.com/liamphmurphy/lazyagents/server/internal/db"
 	"github.com/liamphmurphy/lazyagents/server/internal/httpapi"
+	"github.com/liamphmurphy/lazyagents/server/internal/seed"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
 
 func main() {
@@ -98,13 +102,31 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		return err
 	}
 
+	arts := &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}
+	res, err := seed.Run(ctx, pool, seed.Options{Demo: cfg.Seed, UserName: cfg.LocalUserName, UserEmail: cfg.LocalUserEmail, Artifacts: arts})
+	if err != nil {
+		return fmt.Errorf("seed: %w", err)
+	}
+	if res.Created {
+		log.Info("seeded first workspace", "demo", cfg.Seed)
+	}
+
+	q := store.New(pool)
 	srv := &httpapi.Server{
 		Version: cfg.Version,
 		Checks:  map[string]httpapi.Pinger{"postgres": pool, "s3": blobs},
+		Pool:    pool,
+		Q:       q,
+		Tracker: &tracker.Service{Pool: pool},
+
+		Artifacts:      arts,
+		Blobs:          blobs,
+		ArtifactBucket: cfg.S3.ArtifactBucket,
+		Log:            log,
 	}
 	hs := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           srv.Handler(log),
+		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

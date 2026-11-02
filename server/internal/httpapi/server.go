@@ -4,12 +4,23 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/liamphmurphy/lazyagents/server/internal/api"
+	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/auth"
+	"github.com/liamphmurphy/lazyagents/server/internal/blob"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
 
 // Pinger is anything the health endpoint can check.
@@ -20,18 +31,83 @@ type Pinger interface {
 type Server struct {
 	Version string
 	Checks  map[string]Pinger
+	Pool    *pgxpool.Pool
+	Q       *store.Queries
+	Tracker *tracker.Service
+	Log     *slog.Logger
+
+	Artifacts      *artifacts.Service
+	Blobs          *blob.Store
+	ArtifactBucket string
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)
 
 // Handler returns the root HTTP handler.
-func (s *Server) Handler(log *slog.Logger) http.Handler {
+func (s *Server) Handler() http.Handler {
+	if s.Log == nil {
+		s.Log = slog.Default()
+	}
 	mux := http.NewServeMux()
-	api.HandlerWithOptions(api.NewStrictHandler(s, nil), api.StdHTTPServerOptions{
+	strict := api.NewStrictHandlerWithOptions(s, nil, api.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			writeError(w, http.StatusBadRequest, api.Invalid, err.Error(), "")
+		},
+		ResponseErrorHandlerFunc: s.responseError,
+	})
+	api.HandlerWithOptions(strict, api.StdHTTPServerOptions{
 		BaseURL:    "/api/v1",
 		BaseRouter: mux,
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			writeError(w, http.StatusBadRequest, api.Invalid, err.Error(), "")
+		},
 	})
-	return requestLog(log, mux)
+	return requestLog(s.Log, s.localUser(mux))
+}
+
+// localUser attaches the acting user to every API request. There is no
+// login for now (PLAN.md §5.4): everyone acts as the workspace's first user.
+func (s *Server) localUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/health" || !strings.HasPrefix(r.URL.Path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		u, err := s.Q.GetLocalUser(r.Context())
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusServiceUnavailable, api.NoUser, "no workspace user yet: restart the API to seed one", "")
+			return
+		}
+		if err != nil {
+			s.Log.Error("local user lookup", "err", err)
+			writeError(w, http.StatusInternalServerError, api.Internal, "internal error", "")
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(auth.WithUser(r.Context(), u)))
+	})
+}
+
+func (s *Server) responseError(w http.ResponseWriter, r *http.Request, err error) {
+	var ve *tracker.ValidationError
+	switch {
+	case errors.As(err, &ve):
+		writeError(w, http.StatusUnprocessableEntity, api.Invalid, ve.Error(), ve.Field)
+	case errors.Is(err, tracker.ErrNotFound):
+		writeError(w, http.StatusNotFound, api.NotFound, "not found", "")
+	default:
+		s.Log.Error("handler", "method", r.Method, "path", r.URL.Path, "err", err)
+		writeError(w, http.StatusInternalServerError, api.Internal, "internal error", "")
+	}
+}
+
+func writeError(w http.ResponseWriter, status int, code api.ErrorCode, msg, field string) {
+	e := api.Error{Code: code, Message: msg}
+	if field != "" {
+		e.Field = &field
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(e)
 }
 
 func (s *Server) GetHealth(ctx context.Context, _ api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {
