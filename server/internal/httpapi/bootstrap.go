@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/api"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
 func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObject) (api.GetBootstrapResponseObject, error) {
@@ -48,9 +49,18 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 	for _, x := range projects {
 		out.Projects = append(out.Projects, toProject(x))
 	}
+	statuses, err := s.liveAgentStatuses(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
 	for _, x := range agents {
-		out.Agents = append(out.Agents, toAgent(x))
-		if x.Status == "running" {
+		a := toAgent(x)
+		a.Status = api.AgentStatusIdle
+		if st, ok := statuses[x.ID]; ok {
+			a.Status = st
+		}
+		out.Agents = append(out.Agents, a)
+		if a.Status == api.AgentStatusRunning {
 			out.Counts.LiveAgents++
 		}
 	}
@@ -60,17 +70,17 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 	for _, x := range labels {
 		out.Labels = append(out.Labels, toLabel(x))
 	}
-	// Mentions join the inbox count in Phase 6.
-	pending, err := s.Q.CountPendingApprovals(ctx, ws)
+	items, err := s.Q.ListInbox(ctx, store.ListInboxParams{WorkspaceID: ws, UserID: u.ID})
 	if err != nil {
 		return nil, err
+	}
+	if len(items) > 0 {
+		out.Counts.Inbox = int(items[0].UnreadCount)
 	}
 	sugg, err := s.Q.CountSuggestions(ctx, ws)
 	if err != nil {
 		return nil, err
 	}
-	// Agent edits to shared wiki pages wait for a person, like approvals.
 	out.Counts.WikiSuggestions = int(sugg)
-	out.Counts.Inbox = int(pending) + int(sugg)
 	return out, nil
 }

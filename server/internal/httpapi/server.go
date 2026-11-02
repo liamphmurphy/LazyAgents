@@ -22,6 +22,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/auth"
 	"github.com/liamphmurphy/lazyagents/server/internal/blob"
+	"github.com/liamphmurphy/lazyagents/server/internal/realtime"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
@@ -35,6 +36,7 @@ type Pinger interface {
 }
 
 type Server struct {
+	Events  *realtime.Hub
 	Version string
 	Checks  map[string]Pinger
 	Pool    *pgxpool.Pool
@@ -61,6 +63,9 @@ func (s *Server) Handler() http.Handler {
 		s.Log = slog.Default()
 	}
 	mux := http.NewServeMux()
+	if s.Events != nil {
+		mux.Handle("GET /events", s.Events)
+	}
 	strict := api.NewStrictHandlerWithOptions(s, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			writeError(w, http.StatusBadRequest, api.Invalid, err.Error(), "")

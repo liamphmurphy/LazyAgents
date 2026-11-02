@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { Icon, Mark, type IconName } from "@/components/ui/icon";
 import { Kbd } from "@/components/ui/primitives";
+import { SidebarCapacity } from "@/components/domain/runner-capacity";
 import { HumanAvatar } from "@/components/domain/avatars";
 
 export type SidebarProps = {
@@ -69,9 +70,10 @@ export function Sidebar({ workspace, inboxCount, liveAgents, wikiSuggestions = 0
         </Link>
       </div>
 
-      {/* ⌘K command menu lands in Phase 6. */}
+      {/* Shared command menu also opens from the keyboard. */}
       <button
         type="button"
+        onClick={() => window.dispatchEvent(new Event("la:search"))}
         className="flex h-8 items-center gap-[9px] rounded-md border border-border bg-search px-2.5 text-[13px] text-fg-tertiary hover:bg-hover"
       >
         <Icon name="search" size={14} strokeWidth={1.6} />
@@ -119,7 +121,8 @@ export function Sidebar({ workspace, inboxCount, liveAgents, wikiSuggestions = 0
         ))}
       </div>
 
-      <div className="mt-auto flex items-center gap-2.5 px-1.5 py-1">
+      {pathname === "/" && <SidebarCapacity />}
+      <div className={cx("flex items-center gap-2.5 px-1.5 py-1", pathname !== "/" && "mt-auto")}>
         <HumanAvatar name={user.name} initials={user.initials} size={26} label={false} />
         <span className="flex flex-1 flex-col leading-tight">
           <span className="font-medium">{user.name}</span>

@@ -7,7 +7,7 @@ import { useBootstrap, useTickets, type TicketView } from "@/lib/api/hooks";
 import { ButtonLink } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
-import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { Banner, EmptyState, FilterChip, Skeleton } from "@/components/ui/primitives";
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { STATUS_NAME, STATUS_ORDER } from "@/components/domain/meta";
 import { AgentPicker } from "@/components/domain/pickers";
@@ -52,10 +52,11 @@ export function TicketsScreen() {
   const view = (params.get("view") as TicketView) ?? "all";
   const assignee = params.get("assignee") ?? undefined;
   const q = params.get("q") ?? "";
+  const epic = params.get("epic") ?? undefined;
   const [search, setSearch] = useState(q);
 
   const boot = useBootstrap();
-  const list = useTickets({ project, view, assignee, q: q || undefined });
+  const list = useTickets({ project, view, assignee, epic, q: q || undefined });
 
   // Debounced search → URL, so views are shareable.
   useEffect(() => {
@@ -133,6 +134,7 @@ export function TicketsScreen() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-6 py-2.5">
         <Tabs label="Views" value={view} items={VIEWS.map((v) => ({ ...v, href: href(v.key) }))} />
         <div className="flex flex-wrap items-center gap-2">
+          {epic && <FilterChip label="Epic" value={`${boot.data?.epics.find(e => e.id === epic)?.name ?? "Selected epic"} ×`} onClick={() => setParam("epic", null)} title="Clear epic filter"/>}
           <label className="flex h-[26px] items-center gap-1.5 rounded-sm border border-border-strong px-2 text-xs text-fg-tertiary focus-within:border-accent">
             <Icon name="search" size={12} />
             <span className="sr-only">Search tickets</span>

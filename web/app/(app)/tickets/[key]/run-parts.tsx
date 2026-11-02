@@ -62,9 +62,9 @@ const RUN_STATE: Record<Run["state"], { tone: PillTone; label: string }> = {
  * Approval banner (DESIGN.md §4): the exact action, its risk, and what will
  * run for brokered scopes. Amber because a person must act.
  */
-export function ApprovalBanner({ t, ap }: { t: Ticket; ap: Approval }) {
+export function ApprovalBanner({ t, ap, expanded = false }: { t: Ticket; ap: Approval; expanded?: boolean }) {
   const decide = useDecideApproval(t.key);
-  const [showAction, setShowAction] = useState(false);
+  const [showAction, setShowAction] = useState(expanded);
   const [note, setNote] = useState("");
   const send = (decision: "approve" | "deny") => decide.mutate({ id: ap.id, decision, note: note.trim() || undefined });
 

@@ -21,6 +21,7 @@ type NewTicket = Schemas["NewTicket"];
 
 export type TicketView = "active" | "backlog" | "agent_owned" | "needs_human" | "all";
 export type TicketFilters = {
+  epic?: string;
   project?: string;
   view?: TicketView;
   status?: TicketStatus;
@@ -29,7 +30,7 @@ export type TicketFilters = {
   q?: string;
 };
 
-// Query keys. SSE invalidations (Phase 6) target these prefixes.
+// Query keys. The shell SSE subscription invalidates these prefixes.
 export const keys = {
   bootstrap: ["bootstrap"] as const,
   tickets: ["tickets"] as const,
@@ -50,7 +51,7 @@ export function useBootstrap() {
     queryKey: keys.bootstrap,
     queryFn: () => unwrap(api.GET("/bootstrap")),
     staleTime: 60_000,
-    // Keeps the inbox badge and live-agent count fresh until SSE (Phase 6).
+    // Slow fallback while the SSE connection is unavailable.
     refetchInterval: 20_000,
   });
 }
@@ -69,12 +70,12 @@ export function hasLiveRun(t?: Ticket) {
   return !!t?.run && LIVE_RUN.includes(t.run.state);
 }
 
-// Until SSE lands (Phase 6), tickets with a live run poll so agent progress
-// and approvals show up without a reload.
+// Slow fallback for live tickets if the realtime connection is interrupted.
 const LIVE_POLL_MS = 5000;
 
 export function useTicket(key: string) {
   return useQuery({
+    enabled: !!key,
     queryKey: keys.ticket(key),
     queryFn: () => unwrap(api.GET("/tickets/{key}", { params: { path: { key } } })),
     refetchInterval: (q) => (hasLiveRun(q.state.data) ? LIVE_POLL_MS : false),
@@ -382,6 +383,7 @@ function useTicketRefresh(key: string) {
     qc.invalidateQueries({ queryKey: keys.ticket(key) });
     qc.invalidateQueries({ queryKey: keys.activity(key) });
     qc.invalidateQueries({ queryKey: keys.bootstrap });
+    qc.invalidateQueries({ queryKey: ["inbox"] });
   };
 }
 
@@ -443,8 +445,8 @@ export function useRunnerStatus() {
 const RUN_DONE = ["completed", "failed", "cancelled"];
 
 /**
- * A run with its turns and events. Polls while the run is live (SSE comes
- * in Phase 6); events are fetched incrementally with ?after=seq.
+ * A run with its turns and events. SSE invalidates this query; polling is a
+ * fallback. Events are fetched incrementally with ?after=seq.
  */
 export function useRunLog(id: string) {
   const qc = useQueryClient();
@@ -504,6 +506,7 @@ function useInvalidateWiki() {
     qc.invalidateQueries({ queryKey: wikiKeys.knowledge });
     qc.invalidateQueries({ queryKey: keys.artifacts });
     qc.invalidateQueries({ queryKey: keys.bootstrap });
+    qc.invalidateQueries({ queryKey: ["inbox"] });
   };
 }
 
@@ -613,4 +616,34 @@ export function useKnowledgeSearch(q: string) {
     enabled: q.trim().length > 1,
     placeholderData: (prev) => prev,
   });
+}
+
+// ------------------------------------------------------------- attention
+export function useInbox(project?: string) {
+  return useQuery({queryKey:["inbox",project??""],queryFn:()=>unwrap(api.GET("/inbox",{params:{query:{project}}})).then(d=>d.items)});
+}
+export function useReadInbox() {
+ const qc=useQueryClient();
+ return useMutation({mutationFn:async(id:string)=>{
+  const r=await api.POST("/inbox/read",{body:{id}});
+  if(!r.response.ok)throw new Error("Couldn't mark item read");
+ },onSuccess:()=>{void qc.invalidateQueries({queryKey:["inbox"]});void qc.invalidateQueries({queryKey:keys.bootstrap});}});
+}
+export function useSearch(q:string,project?:string) {
+ return useQuery({queryKey:["search",q,project??""],queryFn:()=>unwrap(api.GET("/search",{params:{query:{q,project}}})).then(d=>d.hits),enabled:q.trim().length>0});
+}
+
+// ------------------------------------------------------------- overviews
+export type DashboardRange = "24h" | "7d" | "30d";
+export function useDashboard(range: DashboardRange) {
+ return useQuery({queryKey:["dashboard",range],queryFn:()=>unwrap(api.GET("/dashboard",{params:{query:{range}}})),refetchInterval:30_000});
+}
+export function useEpicOverviews() {
+ return useQuery({queryKey:["epics"],queryFn:()=>unwrap(api.GET("/epics")).then(d=>d.epics)});
+}
+export function useAgentOverviews() {
+ return useQuery({queryKey:["agent-overviews"],queryFn:()=>unwrap(api.GET("/agent-overviews")),refetchInterval:30_000});
+}
+export function useAgentRuns(handle:string,offset=0) {
+ return useQuery({queryKey:["agent-overviews","runs",handle,offset],queryFn:()=>unwrap(api.GET("/agents/{handle}/runs",{params:{path:{handle},query:{offset}}}))});
 }

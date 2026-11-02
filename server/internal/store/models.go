@@ -196,6 +196,12 @@ type Epic struct {
 	UpdatedAt   time.Time
 }
 
+type InboxRead struct {
+	UserID uuid.UUID
+	ItemID string
+	ReadAt time.Time
+}
+
 type KnowledgeLink struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
@@ -220,6 +226,13 @@ type Label struct {
 	Color       string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type MetricSnapshot struct {
+	WorkspaceID uuid.UUID
+	Range       string
+	Payload     json.RawMessage
+	GeneratedAt time.Time
 }
 
 type PlanStep struct {

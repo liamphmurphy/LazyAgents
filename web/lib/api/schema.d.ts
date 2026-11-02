@@ -4,6 +4,123 @@
  */
 
 export interface paths {
+    "/agents/{handle}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Dashboard data and recorded performance statistics */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/epics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live EpicOverviewList data and recorded performance statistics */
+        get: operations["listEpicOverviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent-overviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live AgentOverviewList data and recorded performance statistics */
+        get: operations["listAgentOverviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Attention items for the local user, including resolved history */
+        get: operations["listInbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inbox/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["readInboxItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search tickets, artifacts, wiki pages, epics and agents */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1669,6 +1786,155 @@ export interface components {
             /** @description Why dispatch would be refused right now (no agent, a live run, done) */
             blockers: string[];
         };
+        InboxItem: {
+            id: string;
+            /** @enum {string} */
+            kind: "approval" | "dispatch" | "mention" | "review" | "blocked" | "suggestion";
+            title: string;
+            summary: string;
+            href: string;
+            project: string;
+            ticket_key: string;
+            /** Format: date-time */
+            created_at: string;
+            resolved: boolean;
+            read: boolean;
+        };
+        WorkflowCounts: {
+            total: number;
+            backlog: number;
+            todo: number;
+            in_progress: number;
+            in_review: number;
+            done: number;
+        };
+        PerformanceStats: {
+            completed: number;
+            /** Format: double */
+            median_cycle_seconds: number | null;
+            merged_prs: number;
+            closed_prs: number;
+            /** Format: double */
+            spend_usd: number;
+        };
+        DailyCompletions: {
+            /** Format: date */
+            date: string;
+            count: number;
+        };
+        RangeStats: {
+            range: string;
+            /** Format: date-time */
+            generated_at: string;
+            performance: components["schemas"]["PerformanceStats"];
+            daily: components["schemas"]["DailyCompletions"][];
+        };
+        WorkTicket: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            title: string;
+            status: components["schemas"]["TicketStatus"];
+            priority: components["schemas"]["Priority"];
+        };
+        AgentWork: {
+            /** Format: uuid */
+            run_id: string;
+            ticket: components["schemas"]["WorkTicket"];
+            state: string;
+            harness: string;
+            model: string;
+            /** Format: date-time */
+            started_at: string;
+            step: string;
+            step_position: number;
+            steps_done: number;
+            steps_total: number;
+        };
+        AgentScopeSummary: {
+            scope: string;
+            mode: components["schemas"]["ScopeMode"];
+            /** @enum {string} */
+            enforcement: "credential" | "brokered" | "harness" | "none";
+            how: string;
+        };
+        AgentOverview: {
+            agent: components["schemas"]["Agent"];
+            max_concurrency: number;
+            harness: string;
+            assignments: components["schemas"]["AgentWork"][];
+            queue: components["schemas"]["WorkTicket"][];
+            queue_count: number;
+            stats: components["schemas"]["PerformanceStats"];
+            scopes: components["schemas"]["AgentScopeSummary"][];
+        };
+        AgentOverviewList: {
+            agents: components["schemas"]["AgentOverview"][];
+            /** Format: date-time */
+            stats_as_of: string;
+        };
+        ProjectOverview: {
+            project: components["schemas"]["Project"];
+            counts: components["schemas"]["WorkflowCounts"];
+            agents: components["schemas"]["AgentRef"][];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        OverviewArtifact: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            type: components["schemas"]["ArtifactType"];
+            href: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        EpicOverview: {
+            epic: components["schemas"]["Epic"];
+            project: components["schemas"]["Project"];
+            objective: string;
+            owner?: components["schemas"]["UserRef"];
+            source?: components["schemas"]["OverviewArtifact"];
+            /** Format: date */
+            start_date?: string;
+            /** Format: date */
+            target_date?: string;
+            counts: components["schemas"]["WorkflowCounts"];
+            agents: components["schemas"]["AgentRef"][];
+            /** Format: double */
+            agent_seconds: number;
+            tickets: components["schemas"]["WorkTicket"][];
+        };
+        EpicOverviewList: {
+            epics: components["schemas"]["EpicOverview"][];
+        };
+        Dashboard: {
+            stats: components["schemas"]["RangeStats"];
+            counts: components["schemas"]["WorkflowCounts"];
+            review_over_day: number;
+            agents: components["schemas"]["AgentOverview"][];
+            projects: components["schemas"]["ProjectOverview"][];
+            attention: components["schemas"]["InboxItem"][];
+            recent_artifacts: components["schemas"]["OverviewArtifact"][];
+            runner: components["schemas"]["RunnerStatus"];
+        };
+        AgentRunSummary: {
+            /** Format: uuid */
+            id: string;
+            ticket: components["schemas"]["WorkTicket"];
+            state: string;
+            harness: string;
+            model: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            ended_at?: string;
+            /** Format: double */
+            cost_usd: number;
+            tool_calls: number;
+            /** Format: int64 */
+            tokens: number;
+        };
     };
     responses: {
         /** @description Error */
@@ -1695,6 +1961,175 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAgentRuns: {
+        parameters: {
+            query?: {
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                handle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run history, newest first, 50 per page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        runs: components["schemas"]["AgentRunSummary"][];
+                        has_more: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: {
+                range?: "24h" | "7d" | "30d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listEpicOverviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpicOverviewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listAgentOverviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentOverviewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listInbox: {
+        parameters: {
+            query?: {
+                project?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inbox items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["InboxItem"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    readInboxItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Marked read */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                q: string;
+                project?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Search results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        hits: components["schemas"]["SearchHit"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;
@@ -1759,6 +2194,8 @@ export interface operations {
                 label?: string;
                 /** @description Free-text search over key, title and description */
                 q?: string;
+                /** @description Epic id */
+                epic?: string;
             };
             header?: never;
             path?: never;

@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 
 	"github.com/liamphmurphy/lazyagents/server/migrations"
 )
@@ -45,7 +47,26 @@ func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	sqldb := stdlib.OpenDBFromPool(pool)
 	defer sqldb.Close()
-	return migrate(ctx, sqldb)
+	if err := migrate(ctx, sqldb); err != nil {
+		return err
+	}
+	// River owns its migration history; serialize API/runner startup migrations.
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(71933712)"); err != nil {
+		return err
+	}
+	m, err := rivermigrate.New(riverpgxv5.New(pool), nil)
+	if err != nil {
+		return err
+	}
+	if _, err = m.MigrateTx(ctx, tx, rivermigrate.DirectionUp, nil); err != nil {
+		return fmt.Errorf("river migrate: %w", err)
+	}
+	return tx.Commit(ctx)
 }
 
 func migrate(ctx context.Context, sqldb *sql.DB) error {

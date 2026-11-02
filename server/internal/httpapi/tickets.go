@@ -19,8 +19,8 @@ var viewStatuses = map[api.ListTicketsParamsView][]string{
 	api.ListTicketsParamsViewActive:     {"todo", "in_progress", "in_review"},
 	api.ListTicketsParamsViewBacklog:    {"backlog"},
 	api.ListTicketsParamsViewAgentOwned: {"backlog", "todo", "in_progress", "in_review"},
-	// Approvals and review requests join this view in Phase 4.
-	api.ListTicketsParamsViewNeedsHuman: {"in_review"},
+	// Pending approvals also qualify, regardless of ticket status.
+	api.ListTicketsParamsViewNeedsHuman: nil,
 	api.ListTicketsParamsViewAll:        nil,
 }
 
@@ -48,6 +48,8 @@ func (s *Server) ListTickets(ctx context.Context, req api.ListTicketsRequestObje
 		WorkspaceID:    ws,
 		Statuses:       statuses,
 		OnlyAgentOwned: view == api.ListTicketsParamsViewAgentOwned,
+		NeedsHuman:     view == api.ListTicketsParamsViewNeedsHuman,
+		EpicID:         p.Epic,
 		LabelID:        p.Label,
 	}
 	if p.Project != nil && *p.Project != "" {

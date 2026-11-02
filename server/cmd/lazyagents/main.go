@@ -26,7 +26,9 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/config"
 	"github.com/liamphmurphy/lazyagents/server/internal/db"
 	"github.com/liamphmurphy/lazyagents/server/internal/httpapi"
+	"github.com/liamphmurphy/lazyagents/server/internal/metrics"
 	"github.com/liamphmurphy/lazyagents/server/internal/prsync"
+	"github.com/liamphmurphy/lazyagents/server/internal/realtime"
 	"github.com/liamphmurphy/lazyagents/server/internal/runner"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
@@ -120,6 +122,18 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		log.Info("seeded first workspace", "demo", cfg.Seed)
 	}
 
+	jobs, err := metrics.NewClient(pool, log)
+	if err != nil {
+		return err
+	}
+	if err = jobs.Start(ctx); err != nil {
+		return err
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = jobs.Stop(stopCtx)
+	}()
 	q := store.New(pool)
 	box, err := secrets.NewBox(cfg.SecretsKey)
 	if err != nil {
@@ -130,7 +144,10 @@ func serve(ctx context.Context, log *slog.Logger) error {
 	}
 	secretsSvc := &secrets.Service{Q: q, Box: box}
 	trackerSvc := &tracker.Service{Pool: pool}
+	events := realtime.New()
+	go events.Run(ctx, pool)
 	srv := &httpapi.Server{
+		Events:  events,
 		Version: cfg.Version,
 		Checks:  map[string]httpapi.Pinger{"postgres": pool, "s3": blobs},
 		Pool:    pool,

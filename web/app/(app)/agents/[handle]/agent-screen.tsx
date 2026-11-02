@@ -17,6 +17,7 @@ import { floatPanel } from "@/components/domain/pickers";
 import { TopBar } from "@/components/shell/topbar";
 import { DefinitionEditor, describeChanges, draftOf, type Draft } from "./definition-editor";
 import { OverrideDialog } from "./override-dialog";
+import { OverviewTab, RunsTab } from "./overview-tab";
 import { TokensTab } from "./tokens-tab";
 
 const STATUS: Record<AgentDetail["agent"]["status"], { tone: PillTone; label: string }> = {
@@ -154,7 +155,8 @@ function OverridesPanel({ detail, onEdit }: { detail: AgentDetail; onEdit: (key:
 
 export function AgentScreen({ handle }: { handle: string }) {
   const { data: detail, isError, error } = useAgent(handle);
-  const tab = useSearchParams().get("tab") === "tokens" ? "tokens" : "definition";
+  const requestedTab = useSearchParams().get("tab") ?? "definition";
+ const tab = ["tokens", "overview", "runs"].includes(requestedTab) ? requestedTab : "definition";
   const boot = useBootstrap();
   const save = useSaveDefinition(handle);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -172,7 +174,7 @@ export function AgentScreen({ handle }: { handle: string }) {
   // ⌘S saves the definition (DESIGN.md §6).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+      if (tab === "definition" && (e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         doSave();
       }
@@ -241,7 +243,7 @@ export function AgentScreen({ handle }: { handle: string }) {
               <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-2.5">
                   <h1 className="type-display">{detail.agent.name}</h1>
-                  <Pill tone={STATUS[detail.agent.status].tone}>{STATUS[detail.agent.status].label}</Pill>
+                  <Pill tone={STATUS[boot.data?.agents.find(a => a.handle === handle)?.status ?? detail.agent.status].tone}>{STATUS[boot.data?.agents.find(a => a.handle === handle)?.status ?? detail.agent.status].label}</Pill>
                 </div>
                 <span className="text-[13px] text-fg-secondary">
                   {detail.agent.role} · definition <b className="font-mono font-medium text-fg">v{detail.definition.version}</b>
@@ -253,6 +255,8 @@ export function AgentScreen({ handle }: { handle: string }) {
               label="Agent sections"
               value={tab}
               items={[
+                { key: "overview", label: "Overview", href: `/agents/${handle}?tab=overview` },
+                { key: "runs", label: "Runs", href: `/agents/${handle}?tab=runs` },
                 { key: "definition", label: "Definition", href: `/agents/${handle}` },
                 { key: "overrides", label: "Project overrides", count: detail.overrides.length, href: `/agents/${handle}#overrides` },
                 { key: "tokens", label: "Tokens", href: `/agents/${handle}?tab=tokens` },
@@ -262,7 +266,7 @@ export function AgentScreen({ handle }: { handle: string }) {
           <div className="flex flex-1 flex-wrap">
             <div className="min-w-0 flex-[999_1_560px] px-7 py-6 max-sm:px-4">
               <div className="mx-auto max-w-[760px]">
-                {tab === "tokens" ? <TokensTab detail={detail} /> : <DefinitionEditor detail={detail} draft={current} onChange={setDraft} />}
+                {tab === "overview" ? <OverviewTab handle={handle} /> : tab === "runs" ? <RunsTab handle={handle} /> : tab === "tokens" ? <TokensTab detail={detail} /> : <DefinitionEditor detail={detail} draft={current} onChange={setDraft} />}
               </div>
             </div>
             <aside aria-label="Overrides and versions" className="flex min-w-0 flex-[1_1_300px] flex-col gap-5 border-l border-border-subtle bg-panel px-4 py-6 lg:max-w-[340px]">

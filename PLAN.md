@@ -385,12 +385,12 @@ Each phase ends with something you can demo.
 - Dispatch flow (single and bulk), context files in the workspace, GitHub PR sync job (merged → Done)
 - *Exit:* assigning PAY-214 to Atlas runs it on Claude Code. A project override switches it to Codex, and the same approval flow works on both.
 
-**Phase 6: Realtime and attention surfaces**
+**Phase 6: Realtime and attention surfaces** ✅ *implemented; integration exit passes; browser QA waived by user on 2026-11-02. See CONTINUE.md.*
 - SSE hub over LISTEN/NOTIFY with client-side invalidation
 - Inbox (approvals, mentions, reviews), the ⌘K command menu backed by `/search`, and the `C` new-ticket shortcut
 - *Exit:* approving in one tab resumes the run and updates another open tab within a second
 
-**Phase 7: Dashboard, Epics, Agents screens**
+**Phase 7: Dashboard, Epics, Agents screens** ✅ *implemented. River rollups, live overview APIs and all three screens are in place; regression/build checks pass. See CONTINUE.md for metric definitions and verification limits.*
 - Dashboard KPIs and rollups (River periodic jobs for 7-day stats and median cycle time), agent capacity from runner slots
 - Epics: featured card, Q4 timeline, card grid, health
 - Agents: status filters, cards with current assignment, stats, enforcement levels for each scope, queue, plus an agent configuration editor (extending the design system, since it isn't designed yet)

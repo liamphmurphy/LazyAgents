@@ -35,6 +35,8 @@ JOIN projects p ON p.id = t.project_id
 LEFT JOIN epics e ON e.id = t.epic_id
 LEFT JOIN agents a ON a.id = t.assignee_agent_id
 WHERE t.workspace_id = sqlc.arg(workspace_id)
+  AND (NOT sqlc.arg(needs_human)::bool OR t.status='in_review' OR EXISTS (SELECT 1 FROM approval_requests ap WHERE ap.ticket_id=t.id AND ap.state='pending'))
+  AND (sqlc.narg(epic_id)::uuid IS NULL OR t.epic_id=sqlc.narg(epic_id))
   AND (sqlc.narg(project_id)::uuid IS NULL OR t.project_id = sqlc.narg(project_id))
   AND (sqlc.narg(statuses)::text[] IS NULL OR t.status = ANY (sqlc.narg(statuses)::text[]))
   AND (sqlc.narg(assignee_agent_id)::uuid IS NULL OR t.assignee_agent_id = sqlc.narg(assignee_agent_id))

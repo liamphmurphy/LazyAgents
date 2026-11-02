@@ -37,7 +37,7 @@ export function Composer() {
   const projects = boot.data?.projects ?? [];
   const [projectKey, setProjectKey] = useState<string | null>(params.get("project"));
   const project = projects.find((p) => p.key === projectKey) ?? projects[0];
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(params.get("title") ?? "");
   const [description, setDescription] = useState("");
   const [criteria, setCriteria] = useState<string[]>([]);
   const [status, setStatus] = useState<TicketStatus>((params.get("status") as TicketStatus) ?? "todo");

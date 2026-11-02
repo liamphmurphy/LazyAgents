@@ -621,16 +621,18 @@ JOIN projects p ON p.id = t.project_id
 LEFT JOIN epics e ON e.id = t.epic_id
 LEFT JOIN agents a ON a.id = t.assignee_agent_id
 WHERE t.workspace_id = $1
-  AND ($2::uuid IS NULL OR t.project_id = $2)
-  AND ($3::text[] IS NULL OR t.status = ANY ($3::text[]))
-  AND ($4::uuid IS NULL OR t.assignee_agent_id = $4)
-  AND (NOT $5::bool OR t.assignee_agent_id IS NOT NULL)
-  AND ($6::uuid IS NULL OR EXISTS (
-        SELECT 1 FROM ticket_labels tl WHERE tl.ticket_id = t.id AND tl.label_id = $6))
-  AND ($7::text IS NULL
-       OR t.search @@ websearch_to_tsquery('english', $7)
-       OR t.key ILIKE $7 || '%'
-       OR t.title ILIKE '%' || $7 || '%')
+  AND (NOT $2::bool OR t.status='in_review' OR EXISTS (SELECT 1 FROM approval_requests ap WHERE ap.ticket_id=t.id AND ap.state='pending'))
+  AND ($3::uuid IS NULL OR t.epic_id=$3)
+  AND ($4::uuid IS NULL OR t.project_id = $4)
+  AND ($5::text[] IS NULL OR t.status = ANY ($5::text[]))
+  AND ($6::uuid IS NULL OR t.assignee_agent_id = $6)
+  AND (NOT $7::bool OR t.assignee_agent_id IS NOT NULL)
+  AND ($8::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM ticket_labels tl WHERE tl.ticket_id = t.id AND tl.label_id = $8))
+  AND ($9::text IS NULL
+       OR t.search @@ websearch_to_tsquery('english', $9)
+       OR t.key ILIKE $9 || '%'
+       OR t.title ILIKE '%' || $9 || '%')
 ORDER BY
   CASE t.status WHEN 'in_progress' THEN 0 WHEN 'in_review' THEN 1 WHEN 'todo' THEN 2 WHEN 'backlog' THEN 3 ELSE 4 END,
   CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
@@ -640,6 +642,8 @@ LIMIT 500
 
 type ListTicketsParams struct {
 	WorkspaceID     uuid.UUID
+	NeedsHuman      bool
+	EpicID          *uuid.UUID
 	ProjectID       *uuid.UUID
 	Statuses        []string
 	AssigneeAgentID *uuid.UUID
@@ -677,6 +681,8 @@ type ListTicketsRow struct {
 func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]ListTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listTickets,
 		arg.WorkspaceID,
+		arg.NeedsHuman,
+		arg.EpicID,
 		arg.ProjectID,
 		arg.Statuses,
 		arg.AssigneeAgentID,

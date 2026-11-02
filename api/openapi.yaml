@@ -20,6 +20,109 @@ tags:
   - name: secrets
   - name: runs
 paths:
+  /agents/{handle}/runs:
+    get:
+      operationId: listAgentRuns
+      parameters:
+        - { name: handle, in: path, required: true, schema: { type: string } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+      responses:
+        "200":
+          description: Run history, newest first, 50 per page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs, has_more]
+                properties:
+                  runs: { type: array, items: { $ref: "#/components/schemas/AgentRunSummary" } }
+                  has_more: { type: boolean }
+        default: { $ref: "#/components/responses/Error" }
+  /dashboard:
+    get:
+      operationId: getDashboard
+      summary: Live Dashboard data and recorded performance statistics
+      parameters:
+        - { name: range, in: query, schema: { type: string, enum: [24h, 7d, 30d], default: 7d } }
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        default: { $ref: "#/components/responses/Error" }
+  /epics:
+    get:
+      operationId: listEpicOverviews
+      summary: Live EpicOverviewList data and recorded performance statistics
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EpicOverviewList" }
+        default: { $ref: "#/components/responses/Error" }
+  /agent-overviews:
+    get:
+      operationId: listAgentOverviews
+      summary: Live AgentOverviewList data and recorded performance statistics
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOverviewList" }
+        default: { $ref: "#/components/responses/Error" }
+  /inbox:
+    get:
+      operationId: listInbox
+      summary: Attention items for the local user, including resolved history
+      parameters:
+        - { name: project, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Inbox items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/InboxItem" } }
+        default: { $ref: "#/components/responses/Error" }
+  /inbox/read:
+    post:
+      operationId: readInboxItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "204": { description: Marked read }
+        default: { $ref: "#/components/responses/Error" }
+  /search:
+    get:
+      operationId: search
+      summary: Search tickets, artifacts, wiki pages, epics and agents
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, maxLength: 500 } }
+        - { name: project, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hits]
+                properties:
+                  hits: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
+        default: { $ref: "#/components/responses/Error" }
   /health:
     get:
       operationId: getHealth
@@ -82,6 +185,7 @@ paths:
           in: query
           description: Free-text search over key, title and description
           schema: { type: string }
+        - { name: epic, in: query, description: Epic id, schema: { type: string, format: uuid } }
       responses:
         "200":
           description: Matching tickets, ordered by status then priority
@@ -2006,3 +2110,178 @@ components:
           type: array
           description: Why dispatch would be refused right now (no agent, a live run, done)
           items: { type: string }
+
+    InboxItem:
+      type: object
+      required: [id, kind, title, summary, href, project, ticket_key, created_at, resolved, read]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [approval, dispatch, mention, review, blocked, suggestion] }
+        title: { type: string }
+        summary: { type: string }
+        href: { type: string }
+        project: { type: string }
+        ticket_key: { type: string }
+        created_at: { type: string, format: date-time }
+        resolved: { type: boolean }
+        read: { type: boolean }
+
+    WorkflowCounts:
+      type: object
+      required: [total, backlog, todo, in_progress, in_review, done]
+      properties:
+        total: { type: integer }
+        backlog: { type: integer }
+        todo: { type: integer }
+        in_progress: { type: integer }
+        in_review: { type: integer }
+        done: { type: integer }
+
+    PerformanceStats:
+      type: object
+      required: [completed, median_cycle_seconds, merged_prs, closed_prs, spend_usd]
+      properties:
+        completed: { type: integer }
+        median_cycle_seconds: { type: number, format: double, nullable: true }
+        merged_prs: { type: integer }
+        closed_prs: { type: integer }
+        spend_usd: { type: number, format: double }
+
+    DailyCompletions:
+      type: object
+      required: [date, count]
+      properties:
+        date: { type: string, format: date }
+        count: { type: integer }
+
+    RangeStats:
+      type: object
+      required: [range, generated_at, performance, daily]
+      properties:
+        range: { type: string }
+        generated_at: { type: string, format: date-time }
+        performance: { $ref: "#/components/schemas/PerformanceStats" }
+        daily: { type: array, items: { $ref: "#/components/schemas/DailyCompletions" } }
+
+    WorkTicket:
+      type: object
+      required: [id, key, title, status, priority]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        title: { type: string }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        priority: { $ref: "#/components/schemas/Priority" }
+
+    AgentWork:
+      type: object
+      required: [run_id, ticket, state, harness, model, started_at, step, step_position, steps_done, steps_total]
+      properties:
+        run_id: { type: string, format: uuid }
+        ticket: { $ref: "#/components/schemas/WorkTicket" }
+        state: { type: string }
+        harness: { type: string }
+        model: { type: string }
+        started_at: { type: string, format: date-time }
+        step: { type: string }
+        step_position: { type: integer }
+        steps_done: { type: integer }
+        steps_total: { type: integer }
+
+    AgentScopeSummary:
+      type: object
+      required: [scope, mode, enforcement, how]
+      properties:
+        scope: { type: string }
+        mode: { $ref: "#/components/schemas/ScopeMode" }
+        enforcement: { type: string, enum: [credential, brokered, harness, none] }
+        how: { type: string }
+
+    AgentOverview:
+      type: object
+      required: [agent, max_concurrency, harness, assignments, queue, queue_count, stats, scopes]
+      properties:
+        agent: { $ref: "#/components/schemas/Agent" }
+        max_concurrency: { type: integer }
+        harness: { type: string }
+        assignments: { type: array, items: { $ref: "#/components/schemas/AgentWork" } }
+        queue: { type: array, items: { $ref: "#/components/schemas/WorkTicket" } }
+        queue_count: { type: integer }
+        stats: { $ref: "#/components/schemas/PerformanceStats" }
+        scopes: { type: array, items: { $ref: "#/components/schemas/AgentScopeSummary" } }
+
+    AgentOverviewList:
+      type: object
+      required: [agents, stats_as_of]
+      properties:
+        agents: { type: array, items: { $ref: "#/components/schemas/AgentOverview" } }
+        stats_as_of: { type: string, format: date-time }
+
+    ProjectOverview:
+      type: object
+      required: [project, counts, agents, updated_at]
+      properties:
+        project: { $ref: "#/components/schemas/Project" }
+        counts: { $ref: "#/components/schemas/WorkflowCounts" }
+        agents: { type: array, items: { $ref: "#/components/schemas/AgentRef" } }
+        updated_at: { type: string, format: date-time }
+
+    OverviewArtifact:
+      type: object
+      required: [id, title, type, href, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        type: { $ref: "#/components/schemas/ArtifactType" }
+        href: { type: string }
+        updated_at: { type: string, format: date-time }
+
+    EpicOverview:
+      type: object
+      required: [epic, project, objective, counts, agents, agent_seconds, tickets]
+      properties:
+        epic: { $ref: "#/components/schemas/Epic" }
+        project: { $ref: "#/components/schemas/Project" }
+        objective: { type: string }
+        owner: { $ref: "#/components/schemas/UserRef" }
+        source: { $ref: "#/components/schemas/OverviewArtifact" }
+        start_date: { type: string, format: date }
+        target_date: { type: string, format: date }
+        counts: { $ref: "#/components/schemas/WorkflowCounts" }
+        agents: { type: array, items: { $ref: "#/components/schemas/AgentRef" } }
+        agent_seconds: { type: number, format: double }
+        tickets: { type: array, items: { $ref: "#/components/schemas/WorkTicket" } }
+
+    EpicOverviewList:
+      type: object
+      required: [epics]
+      properties:
+        epics: { type: array, items: { $ref: "#/components/schemas/EpicOverview" } }
+
+    Dashboard:
+      type: object
+      required: [stats, counts, review_over_day, agents, projects, attention, recent_artifacts, runner]
+      properties:
+        stats: { $ref: "#/components/schemas/RangeStats" }
+        counts: { $ref: "#/components/schemas/WorkflowCounts" }
+        review_over_day: { type: integer }
+        agents: { type: array, items: { $ref: "#/components/schemas/AgentOverview" } }
+        projects: { type: array, items: { $ref: "#/components/schemas/ProjectOverview" } }
+        attention: { type: array, items: { $ref: "#/components/schemas/InboxItem" } }
+        recent_artifacts: { type: array, items: { $ref: "#/components/schemas/OverviewArtifact" } }
+        runner: { $ref: "#/components/schemas/RunnerStatus" }
+
+    AgentRunSummary:
+      type: object
+      required: [id, ticket, state, harness, model, started_at, cost_usd, tool_calls, tokens]
+      properties:
+        id: { type: string, format: uuid }
+        ticket: { $ref: "#/components/schemas/WorkTicket" }
+        state: { type: string }
+        harness: { type: string }
+        model: { type: string }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        cost_usd: { type: number, format: double }
+        tool_calls: { type: integer }
+        tokens: { type: integer, format: int64 }

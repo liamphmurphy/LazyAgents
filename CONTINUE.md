@@ -2,7 +2,7 @@
 
 Read `PLAN.md` first for architecture and phases, then `lazyagents-design/DESIGN.md`, which is the visual source of truth.
 
-Phases 0–4 are committed on `main` (latest: `d61039b add agent creation`). Phases 4.5 and 5 are uncommitted in the working tree. Ask the user before committing.
+Phases 0–5 are committed on `main` (latest: `6279a97 add agent harness and execution`). Phases 6 and 7 are implemented in the working tree. The user explicitly waived Phase 6 browser QA and authorized Phase 7 on 2026-11-02. Ask the user before committing.
 
 > ⚠️ **Never exec a real harness CLI by accident.** This laptop has logged-in `claude` and `codex` in `~/.local/bin` and `~/.nix-profile/bin`. A runner test once ran the real `claude` (5 Opus sessions on the user's account) because binary substitution missed the `sh -c` wrapper. Runner tests now use `Local{OnlyBins: true}` and a PATH with only the fake harness and a `git` symlink, and fail if a real CLI is reachable. Keep both guards. Ask the user before any real-key run.
 
@@ -17,8 +17,9 @@ Phases 0–4 are committed on `main` (latest: `d61039b add agent creation`). Pha
 | 4 Agent definitions and Agent API | ✅ Done (see "Phase 4 progress") |
 | 4.5 Wiki and agent memory | ✅ Done (the user chose it before Phase 5; see "Phase 4.5: what shipped") |
 | 5 Runner and harness adapters | ✅ Done (see "Phase 5: what shipped") |
-| 6 Realtime and attention surfaces | **Next** |
-| 7–8 | Not started |
+| 6 Realtime and attention surfaces | Implemented; integration exit passes; browser QA waived by user |
+| 7 Dashboard, Epics, Agents | Implemented; API, metrics, queue, build and regression checks pass |
+| 8 | **Next**; select a stretch item with the user; planning proposal still requires discussion |
 
 ## What exists
 
@@ -101,7 +102,7 @@ Phases 0–4 are committed on `main` (latest: `d61039b add agent creation`). Pha
 
 ### Deferred from Phase 2, to do in the phase noted
 
-- Dashboard KPIs (7). Dispatch, the "Queued" flag and approval banners (4/5). The Inbox count is still 0 (4/6).
+- Dashboard KPIs (7), dispatch/Queued/approval banners (4/5), and Inbox counts (6) are now implemented.
 - `needs_human` currently means `in_review`. Add open approvals in Phase 4.
 - A "Display" menu and grouping options, and Status/Epic filter chips on the list. Only the agent filter and search exist.
 - Drag to reorder (`sort_order` exists but nothing sets it).
@@ -187,7 +188,7 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
     - Right panel: overrides list, override dialog (only offers tighter modes), a "Resolved for [project]" panel, and versions.
   - `TextInput`/`TextArea` are full width unless given a width class.
   - `lib/format.ts` gains `ago()`.
-- **Not yet:** the agent Overview/Runs/Tokens tabs (Tokens arrives with 4b, Runs with 4c).
+- **Now implemented:** Tokens (4b), Overview and paginated Runs (7).
 
 **4b: Tokens and secrets ✅**
 - **Schema:** `00007` adds `agent_tokens` (sha256 hash, a display prefix `la_xxxx`, kind `run|unmanaged`, expiry, revocation) and `secrets`.
@@ -264,8 +265,8 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
 
 **Known gaps (later phases):**
 - **Phase 5:** the run log viewer (`GET /runs/{id}` exists; no UI yet); managed runs, dispatch and the runner; turn-based harness resume.
-- **Phase 6:** Inbox, SSE.
-- **Phase 7:** the agent Overview/Runs tabs.
+- **Phase 6:** Inbox and SSE are implemented.
+- **Phase 7:** the agent Overview/Runs tabs are implemented.
 
 ## Phase 4.5: what shipped
 
@@ -347,7 +348,7 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
 **Deferred (wiki)**
 - `#tags`, rendering embeds (`![[…]]` currently renders as a link), rewriting link text when a page moves (aliases cover resolution), and the workspace graph view.
 - Deleting pages. Suggestions show on the page and the wiki home; the Inbox (Phase 6) should list them too.
-- ⌘K page search (Phase 6). The API is `/knowledge/search`.
+- ⌘K search now ships in Phase 6; `/knowledge/search` remains the wiki-specific search API.
 - The runner (Phase 5) should write `RunContext` pages to `.lazyagents/context/` and list them in `AGENTS.md` (§12.3). The function is ready; `claim_ticket` already uses it.
 - Open questions §11 (2)–(4) still stand. Implemented defaults: suggestions, no embeddings, zip import/export.
 
@@ -437,7 +438,7 @@ The same flow ran in the browser (Playwright: banner, dialog, run log, approve; 
   - `components/domain/dispatch-dialog.tsx` (single or bulk, per dispatch.html) and `DispatchBanner`/`needsDispatch` in `run-parts.tsx`;
   - a "Not dispatched"/"Queued" flag on the Agent property;
   - "Dispatch…" in the bulk bar.
-- **Run log:** `/runs/[id]` (run-log.html): summary strip, turns rail (with raw links and the waiting block), event stream with tabs, filter and Follow, tool cards paired with results, "denied by harness" and error rails, Pause/Resume/Cancel, Raw log. It polls every 2s while live, appending events via `?after=`.
+- **Run log:** `/runs/[id]` (run-log.html): summary strip, turns rail (with raw links and the waiting block), event stream with tabs, filter and Follow, tool cards paired with results, "denied by harness" and error rails, Pause/Resume/Cancel, Raw log. SSE now refreshes it; a 2s polling fallback remains while live, appending events via `?after=`.
 - **Elsewhere:** the run card has "View run log" and queued text; the Code section shows closed-unmerged and the last sync; timeline sentences for `dispatched`, `run_failed`, `pr_merged`, `pr_closed`, and cancel reasons.
 
 **Decided: MCP DNS-rebinding check is off** (`agentapi/transport.go`, `DisableLocalhostProtection: true`, the user's call on 2026-11-02).
@@ -454,7 +455,7 @@ The same flow ran in the browser (Playwright: banner, dialog, run log, approve; 
 - Per-project images.
 - Network policy beyond Codex's sandbox.
 - Settings → Runner page.
-- A dashboard runner-capacity tile (Phase 7).
+- Dashboard and sidebar runner-capacity displays are implemented in Phase 7.
 
 ## Proposed: plan and start agent work from the UI (not started)
 
@@ -502,3 +503,74 @@ Raised by the user on 2026-11-02, with no work done yet. Discuss it before build
 - **Spend and notifications:** no spend caps; notifications are pinned for later.
 - **Instructions file:** a single `AGENTS.md` for every harness.
 - **Logo:** deferred.
+
+
+## Phase 6: implemented (2026-11-02)
+
+**Server**
+- `00011_attention.sql`: per-user `inbox_reads` and statement-level commit notifications on tracker, run, approval, artifact, wiki and read-state tables. Payloads contain only `{type, ids: []}` invalidation hints. Existing installations do not require service mutations to be rewritten; runner writes notify too.
+- `internal/realtime`: one dedicated pooled LISTEN connection, bounded fan-out queues, slow-client disconnection, listener retry, SSE heartbeats and write deadlines. `/events` sends a reset on connection; listener reconnection resets all connected clients. Missed events are recovered by refetch, not replay.
+- `/api/v1/inbox`: pending and historical approvals, dispatchable assignments, human mentions, personal reviews, blocked/failed/human-reply runs, and wiki suggestions. Project filter; unresolved unread items sort first, maximum 500 rows. Bootstrap's unread count is computed over the whole result set before that limit.
+- Human mentions recognize `@<email-local-part>` (e.g. `@maya`) or `@<full name>`; self-comments are excluded. Agent mention/resume behavior is unchanged.
+- `/api/v1/inbox/read`: persistent read state per local user. Ticket-based items become unread again after ticket updates; immutable comment/approval items keep their state. This is attention state, not external notifications.
+- `/api/v1/search`: reuses full-text ticket/artifact/wiki ranking and adds epic/agent name matching. Optional project scope includes workspace-wide wiki pages and agents assigned within that project.
+- The ticket list's `needs_human` view includes pending approvals regardless of status.
+
+**Web**
+- One `EventSource` in the shell invalidates TanStack Query prefixes, coalesces bursts, and refetches on reconnect. Run event hints refresh run logs; run state updates refresh attention/tickets too. Existing polling remains as a fallback. Reconnecting toast follows the design.
+- Inbox replaces the placeholder: kind tabs/counts, project filter, Needs you / Waiting on others / Earlier groups, detail panel, exact approval action and optional note, existing dispatch dialog, run card, wiki suggestion links, and persistent read state. J/K navigates; A/D decides pending approvals, guarded against typing and dialogs.
+- Shared Radix command dialog opens with ⌘K/Ctrl-K or sidebar Search. Grouped results, highlighted title matches, keyboard navigation, current-project scope with Tab toggle, `>` actions, and create-ticket-with-query-title. Composer accepts `?title=`. The existing C shortcut now ignores open dialogs.
+- `api/openapi.yaml`, Go API code, sqlc code, and TS client types are regenerated.
+
+**Verification**
+- Full `go test ./...` with real throwaway Postgres databases passed, including the guarded fake-harness runner tests. No real harness CLI or real API key was used.
+- `go test -race ./internal/httpapi ./internal/realtime` passed. New tests cover commit-only/rollback notification delivery, slow subscribers, read persistence/isolation, human mentions, project scope, needs-human filtering, and two SSE subscribers receiving an approval decision within one second while a managed resume turn is queued with the reviewer's note.
+- Typecheck, ESLint, go vet and `git diff --check` passed.
+- Production API/web images built successfully and the compose stack is healthy. Host `npm run build` hit an environmental Turbopack helper port-binding restriction; the same production build passed inside Docker.
+- Through Caddy: health, Inbox, search, Inbox HTML and SSE reset all returned 200.
+- **Browser visual/interaction QA was waived by the user on 2026-11-02.** The browser access host was unavailable, and native Safari control timed out. Do not describe Phase 6 as browser-verified or block future work on that QA.
+
+**Environment left running**
+- Full compose API/web/Caddy/Postgres/S3 at `http://localhost:8080`, plus dev infra from `docker-compose.dev.yml`. Runner was explicitly excluded and is off.
+- Migration 00011 was applied to the local compose DB during this session. The demo run-events trigger was aligned with its final `run.events` hint after the optimization.
+- An unrelated pre-existing host server still listens on :13000; it was left alone.
+- No commit was made. The planning-workflow proposal above is still unstarted and still requires discussion.
+
+
+## Phase 7: implemented (2026-11-02)
+
+**Server / contract**
+- `GET /dashboard?range=24h|7d|30d`: recorded performance, live workflow counts, attention items, project progress, live agent work, recent documents and runner capacity.
+- `GET /epics`: objective, dates, health, owner, latest linked PRD as source, counts, agent avatars, cumulative observed turn time, and up to eight ticket previews per epic.
+- `GET /agent-overviews`: live/queued assignments with actual run harness/model and plan steps, undispatched queue (top ten plus full count), base definition scopes with server enforcement explanations, concurrency and seven-day stats. This is top-level so a valid handle like `overview` is not reserved.
+- `GET /agents/{handle}/runs?offset=0`: stable newest-first pagination, 50 rows plus `has_more`, run costs, tokens, tools and timestamps.
+- Ticket lists accept `?epic=<uuid>`; the UI shows a removable chip. The featured epic's View all link uses this filter.
+- Bootstrap and roster agent status now derive from active runs, matching the existing run-status priority. Seeded `running` labels without runs no longer count as live agents. Queued runs remain idle until they start.
+
+**Rollups / definitions**
+- River 0.51.0 and its pgx driver are pinned in `server/go.mod`. River schema migrations run after Goose in `db.Migrate`, inside an advisory-locked transaction; API, runner and `migrate` share this setup.
+- The API process runs a single River statistics worker and a unique periodic job, once on startup and every minute. This worker does not execute harnesses. It shuts down before the database pool closes.
+- Migration `00012_metrics.sql` adds `metric_snapshots` and an activity index. All three ranges publish atomically per workspace and emit `metrics.updated` SSE invalidations. Endpoints fall back to calculating directly when a snapshot is missing or older than 90 seconds.
+- `internal/metrics` uses recorded `status_changed` events. Completed = distinct tickets whose latest observed Done transition falls in the rolling window. Re-completion counts once. Cycle = first observed In Progress before that completion, falling back to ticket creation. Missing cycle observations render `—`, not a guessed duration.
+- PR merge percentage = merged / all terminal PRs with recorded `pr_merged` or `pr_closed` events in the window; no terminal PRs renders `—`. Attribution uses the ticket's current assignee.
+- Spend = reported/computed run cost for **runs started in the window**, including their accumulated cost. It is not a precise billing-by-day ledger; the card help text identifies this definition. Unknown harness pricing is not estimated.
+- Daily completion bars use UTC dates, with partial first/last days for rolling windows. Seven rolling days therefore span up to eight calendar bars. Chart totals match the KPI.
+- Epic agent hours sum observed turn durations (managed turns begin at `process_started_at`), excluding managed queue/wait gaps. No synthetic demo statistics were added.
+
+**Web**
+- Dashboard: greeting, range control, four KPI tiles and small charts; attention actions (including dispatch preview), project table, live agent plan blocks, ticket flow, recent artifacts and runner capacity. Sidebar capacity appears on Dashboard only. Performance timestamps are visible.
+- Epics: selected/featured objective with owner/source/hours and ticket preview, project filter, selectable cards, progress/health, and navigable quarter timeline with clipped bars and Today marker. The quarter/year follow the current date, rather than hard-coded Q4 dates.
+- Agents: counted status filters, responsive cards, current assignments, waiting/queued work, seven-day stats, expandable permission enforcement and the existing new-agent flow. Agent detail adds Overview and paginated Runs tabs while preserving Definition, overrides and Tokens.
+- Empty, loading and failure states are present; controls use the shared design system. SSE invalidates the new query prefixes; runner heartbeat freshness also has polling fallback.
+
+**Verified**
+- Full `TEST_DATABASE_URL=... go test ./...` passed, including guarded fake-harness tests. No real harnesses or real keys were used.
+- `go test -race ./internal/metrics ./internal/httpapi` passed. New tests cover empty data, range boundaries, latest completion after reopening, duplicate PR events, cycle fallback, immutable metrics after unrelated edits, per-agent/workspace attribution, cached rollups, actual River startup execution, epic metadata/filtering, live vs queued assignments and plan steps, bootstrap counts, and run-history pagination.
+- Typecheck, ESLint, go vet, generated API/sqlc clients, and `git diff --check` pass. Docker production builds pass; the host Turbopack limitation from Phase 6 remains environmental.
+- Through Caddy, all three dashboard ranges, Epics, roster summaries, run history and their HTML routes return 200. The running demo has 14 tickets, 4 projects, 7 epics and 8 agents. River jobs completed and all three snapshots were populated.
+- The browser access host is still unavailable, so these screens are not claimed as visually browser-verified. This was recorded rather than used to block the requested implementation.
+
+**State for the next session**
+- Full API/web/Caddy/Postgres/S3 stack remains running at `http://localhost:8080`; dev infra is also running. Agent runner is off. An unrelated existing host server on :13000 was left alone.
+- Phase 6 and 7 changes are uncommitted; do not commit without the user's instruction.
+- Phase 8 is next. The proposed planning workflow above is unstarted and still requires discussion. Epic/project creation and editing interfaces, settings expansions, external notifications and other stretch work are not silently included in this phase.
