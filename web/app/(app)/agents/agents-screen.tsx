@@ -17,6 +17,21 @@ const STATUS: Record<string, { tone: PillTone; label: string }> = {
   idle: { tone: "neutral", label: "Idle" },
 };
 
+/**
+ * A handle from a name, valid for the server's rule (2–32 lowercase letters,
+ * digits or -, starting with a letter): "Scout 2" → "scout-2".
+ */
+function handleFrom(name: string) {
+  const h = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^[^a-z]+/, "")
+    .slice(0, 32)
+    .replace(/-+$/, "");
+  return h.length >= 2 ? h : "";
+}
+
 /** Minimal roster until Phase 7 adds live assignments, stats and queues. */
 export function AgentsScreen() {
   const boot = useBootstrap();
@@ -25,6 +40,9 @@ export function AgentsScreen() {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", handle: "" });
   const agents = boot.data?.agents ?? [];
+  // An empty Handle field means "use the one derived from the name", which
+  // is what its placeholder shows.
+  const handle = form.handle.trim() || handleFrom(form.name);
 
   return (
     <>
@@ -44,18 +62,18 @@ export function AgentsScreen() {
               onSubmit={(e) => {
                 e.preventDefault();
                 create.mutate(
-                  { name: form.name, handle: form.handle, color_index: agents.length % 8 },
+                  { name: form.name.trim(), handle, color_index: agents.length % 8 },
                   { onSuccess: (d) => router.push(`/agents/${d.agent.handle}`) },
                 );
               }}
             >
               <Field label="Name" htmlFor="na-name">
-                <TextInput id="na-name" autoFocus value={form.name} onChange={(e) => setForm({ name: e.target.value, handle: form.handle || "" })} placeholder="Scout" />
+                <TextInput id="na-name" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Scout" />
               </Field>
               <Field label="Handle" htmlFor="na-handle">
-                <TextInput id="na-handle" mono prefix="@" value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value })} placeholder={form.name.toLowerCase().replace(/[^a-z0-9-]/g, "") || "scout"} />
+                <TextInput id="na-handle" mono prefix="@" value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value })} placeholder={handleFrom(form.name) || "scout"} />
               </Field>
-              <Button type="submit" variant="primary" disabled={!form.name.trim() || create.isPending}>Create</Button>
+              <Button type="submit" variant="primary" disabled={!form.name.trim() || !handle || create.isPending}>Create</Button>
               <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
               {create.isError && <span role="alert" className="w-full text-xs text-pill-blocked-fg">{create.error.message}</span>}
             </form>

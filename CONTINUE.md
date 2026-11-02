@@ -2,7 +2,9 @@
 
 Read `PLAN.md` first for architecture and phases, then `lazyagents-design/DESIGN.md`, which is the visual source of truth.
 
-Phases 0–4 are committed on `main` (latest: `d61039b add agent creation`). Phase 4.5 is uncommitted in the working tree. Ask the user before committing.
+Phases 0–4 are committed on `main` (latest: `d61039b add agent creation`). Phases 4.5 and 5 are uncommitted in the working tree. Ask the user before committing.
+
+> ⚠️ **Never exec a real harness CLI by accident.** This laptop has logged-in `claude` and `codex` in `~/.local/bin` and `~/.nix-profile/bin`. A runner test once ran the real `claude` (5 Opus sessions on the user's account) because binary substitution missed the `sh -c` wrapper. Runner tests now use `Local{OnlyBins: true}` and a PATH with only the fake harness and a `git` symlink, and fail if a real CLI is reachable. Keep both guards. Ask the user before any real-key run.
 
 ## Status
 
@@ -14,8 +16,9 @@ Phases 0–4 are committed on `main` (latest: `d61039b add agent creation`). Pha
 | 3 Artifacts | ✅ Done |
 | 4 Agent definitions and Agent API | ✅ Done (see "Phase 4 progress") |
 | 4.5 Wiki and agent memory | ✅ Done (the user chose it before Phase 5; see "Phase 4.5: what shipped") |
-| 5 Runner and harness adapters | **Next** |
-| 6–8 | Not started |
+| 5 Runner and harness adapters | ✅ Done (see "Phase 5: what shipped") |
+| 6 Realtime and attention surfaces | **Next** |
+| 7–8 | Not started |
 
 ## What exists
 
@@ -348,12 +351,145 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
 - The runner (Phase 5) should write `RunContext` pages to `.lazyagents/context/` and list them in `AGENTS.md` (§12.3). The function is ready; `claim_ticket` already uses it.
 - Open questions §11 (2)–(4) still stand. Implemented defaults: suggestions, no embeddings, zip import/export.
 
+## Phase 5: what shipped
+
+**Server**
+- **Schema (`00010_runner.sql`):**
+  - `run_turns.status` (`pending|running|done`; managed turns start pending, unmanaged start done), `process_started_at`, `log_key` and `usage`.
+  - `runs.dispatched_by_user_id`, `runner_id`, `workspace_volume` and `idle_turns`.
+  - A `runners` heartbeat table.
+  - `tickets.pr_synced_at` and `pr_closed_unmerged`.
+- **Dispatch (`runs.Dispatch`):** all or nothing. It creates a `queued` managed run with a pending `start` turn (`runs.StartPrompt`). Activity `dispatched`.
+  - Unmanaged `claim_ticket` on a dispatched ticket is refused.
+  - Queued runs don't count toward agent status.
+- **`internal/harness`:**
+  - **Interface:** `Invocation(ws, turn)` returns argv, env and files; `NewParser(model)` turns a line stream into normalized events plus a `Result` (session, usage, cost, error).
+  - **Claude Code** (`claude -p … --output-format stream-json --verbose --mcp-config .lazyagents/mcp.json --strict-mcp-config --permission-mode <opt|acceptEdits> --permission-prompts none --allowedTools/--disallowedTools [--resume]`):
+    - tool rules come from scopes;
+    - the run token goes into the git-excluded MCP config;
+    - `AnthropicModel` maps `opus-5.5` to `claude-opus-5-5`;
+    - harness-reported cost.
+  - **Codex** (`codex exec [resume] --json --skip-git-repo-check -m … -c approval_policy="never" -c sandbox_mode=… -c mcp_servers.lazyagents.url/bearer_token_env_var …`):
+    - network access is on only when `repo:write` is allowed;
+    - cost is computed from `harness.Prices` (unknown models leave cost unset).
+  - **Flags** were checked against Claude Code 2.1.316 and codex-cli 0.166.0. Codex headless auth is `CODEX_API_KEY`, which I verified.
+  - **Fixtures:** the `*-auth-error.jsonl` envelopes were recorded from the real CLIs with invalid keys (no spend). The tool-call fixtures are composed in the same shapes (`testdata/README.md`).
+  - **`AgentsMD`:** our section sits between markers above the repo's own `AGENTS.md`.
+- **`internal/runner`:**
+  - **Backends:**
+    - `Docker`: Engine API over the socket (no SDK). One named volume per run at `/workspace`; files go in by tar upload; attach before start; `Init` so SIGINT reaches the harness; cleanup by label.
+    - `Local`: host processes. `Bins`/`OnlyBins` control which binaries run. It uses its own `os.Pipe`s so `Wait` can't drop the stream's last lines.
+  - **`Runner.Tick`** claims queued runs, then pending turns, up to `MaxConcurrent`. Per-agent `max_concurrency` is enforced in SQL. One turn per run at a time, so a reply that arrives while a turn exits waits.
+  - **`start`:** secret plan → setup script → `running`, branch set, ticket moves to In Progress.
+    - The setup script clones or `git init`s, uses repo-local git config only, creates the branch, excludes `.lazyagents/`, and runs project `setup`.
+    - A tracked `AGENTS.md` is marked skip-worktree.
+  - **`turn`:**
+    - checks guards (`max_turns`, and `max_runtime` measured on harness time, not waits);
+    - issues a per-turn token (revoked after);
+    - writes context files (ticket artifacts and wiki `RunContext`), the MCP config and the AGENTS section;
+    - runs `TurnWrapper` + harness argv;
+    - streams events (secrets and token redacted, nothing else), stores the session id as soon as it's seen, and uploads the raw log to `run-logs/runs/<id>/turn-NNN.jsonl`;
+    - a watchdog handles pause (SIGINT, then SIGKILL after `Grace`), cancel and the runtime deadline.
+  - **`afterTurn`:**
+    - an ended run removes its workspace; waiting or paused does nothing;
+    - an error or non-zero exit fails the run (`run_failed`);
+    - an idle end gets one nudge (`IdleNudge`); a second idle end goes to `waiting/human_reply` (resumable by @mention).
+  - **`Recover`** on start requeues `starting` runs and `running` turns, and Docker cleanup removes stray turn containers. `Sweep` removes workspaces of runs that ended between turns.
+  - **Secrets (`PlanSecrets`/`SecretEnv`):**
+    - the harness key is always injected (`ANTHROPIC_API_KEY`, or `CODEX_API_KEY`+`OPENAI_API_KEY`);
+    - a scope-granting secret is injected only when that scope is `allowed`, as `DB_STAGING` and so on; `git:pat` also becomes `GH_TOKEN`/`GITHUB_TOKEN`;
+    - setup also gets the PAT when `repo:read` is allowed.
+
+    With no `SECRETS_KEY`, runs get no secrets. A Docker run without its harness key fails at start with a clear message (`RequireHarnessKey`).
+- **`internal/prsync`:** polls GitHub (`PR_SYNC_INTERVAL_S`, default 60) in the API process.
+  - merged → `pr_merged` event + ticket Done (system actor);
+  - closed unmerged → `pr_closed` + `pr_closed_unmerged`;
+  - diff stats replace self-reported ones; the PAT is optional for public repos.
+- **REST:**
+  - `GET/POST /tickets/{key}/dispatch` (preview with blockers, scopes and enforcement, secrets injected or withheld, context files, runner slots / dispatch);
+  - `POST /tickets/dispatch` (bulk);
+  - `GET /runner`;
+  - `GET /runs/{id}/turns/{seq}/log`.
+
+  Also: `Run.session_id`/`dispatched_by`, `RunTurn.status/has_log/usage`, and `PullRequest.closed_unmerged/synced_at`.
+- **Binary and deployment:**
+  - `lazyagents runner` (config: `RUNNER_*`, `DOCKER_SOCKET`).
+  - `deploy/agent-base` (node 24, git, gh, pinned CLIs, uid 1000, `/workspace` owned by it).
+  - compose adds `agent-base` (build-only) and `runner` (root, Docker socket, `RUNNER_IMAGE` overridable).
+  - `make runner` (local backend).
+- **Fake harness (`cmd/fake-harness`):** impersonates `claude` *and* `codex exec` with their real stream formats and does real MCP calls. Modes: `FAKE_HARNESS_MODE=approval|complete|idle|crash|slow`, `FAKE_HARNESS_RESUME=idle`.
+- **Tests:**
+  - `harness` (fixtures, invocations, `AGENTS.md`);
+  - `runner` (local backend + fake): approval round trip incl. workspace git state, `AGENTS.md`, reads, token revocation and over-redaction; idle nudge then @mention; crash then re-dispatch; pause/resume (exit 130) and the turn guard; Codex via a real project override (deny → resumed → handed back);
+  - `docker_test.go` (opt-in `RUNNER_DOCKER_TEST=1`, see below);
+  - `prsync` against a fake GitHub.
+
+**Verified end to end in compose** (with `RUNNER_IMAGE=lazyagents/agent-base:runner-test`, the fake baked in as `claude`, and a dummy key):
+- preview → dispatch → setup container → turn container → approval → approve → turn 2 resumed the session → completed;
+- raw logs downloadable;
+- volume and containers removed;
+- ticket In Review.
+
+The same flow ran in the browser (Playwright: banner, dialog, run log, approve; no console errors; 390px OK).
+
+**Web**
+- **Dispatch:**
+  - `components/domain/dispatch-dialog.tsx` (single or bulk, per dispatch.html) and `DispatchBanner`/`needsDispatch` in `run-parts.tsx`;
+  - a "Not dispatched"/"Queued" flag on the Agent property;
+  - "Dispatch…" in the bulk bar.
+- **Run log:** `/runs/[id]` (run-log.html): summary strip, turns rail (with raw links and the waiting block), event stream with tabs, filter and Follow, tool cards paired with results, "denied by harness" and error rails, Pause/Resume/Cancel, Raw log. It polls every 2s while live, appending events via `?after=`.
+- **Elsewhere:** the run card has "View run log" and queued text; the Code section shows closed-unmerged and the last sync; timeline sentences for `dispatched`, `run_failed`, `pr_merged`, `pr_closed`, and cancel reasons.
+
+**Decided: MCP DNS-rebinding check is off** (`agentapi/transport.go`, `DisableLocalhostProtection: true`, the user's call on 2026-11-02).
+- The SDK rejected requests that arrive on a loopback connection with a non-localhost `Host`.
+- Docker Desktop and OrbStack deliver `host.docker.internal` over loopback, so an API on the host (`make dev`) plus the Docker runner got 403.
+- Every `/mcp` request needs an agent bearer token, checked first, so rebinding has nothing to ride on.
+- `TestDockerBackend` (opt-in, `RUNNER_DOCKER_TEST=1`) passes: real containers against a host API.
+
+**Deferred (Phase 5)**
+- A real-key nightly smoke test (needs the user's go-ahead and keys).
+- Claude's `--permission-prompt-tool` (prompts are denied with `--permission-prompts none`; agents use `request_approval`).
+- Immediate PR sync on `set_pr` (the 60s poll covers it).
+- A `model_prices` table (it's `harness.Prices` for now).
+- Per-project images.
+- Network policy beyond Codex's sandbox.
+- Settings → Runner page.
+- A dashboard runner-capacity tile (Phase 7).
+
+## Proposed: plan and start agent work from the UI (not started)
+
+Raised by the user on 2026-11-02, with no work done yet. Discuss it before building. It probably fits after Phase 6 (it needs the Inbox and SSE) and pulls in Phase 8's "Generate tickets from a PRD".
+
+**The gap today:** work starts one ticket at a time: a person writes a ticket, assigns an agent, then dispatches. Nothing helps turn a goal ("ship Ledger v2 reconciliation") into tickets, and the only way to have an agent plan is an unmanaged session in a terminal.
+
+**Sketch:**
+1. **Start a plan.** A "Plan with an agent" action on an epic, a PRD or SPEC, or a blank goal. It dispatches a *planning run*: a managed run whose agent has read-only scopes and a planner prompt. It reads the source, the wiki and the linked tickets.
+2. **The agent proposes, a person decides.** The planning run calls a new tool such as `propose_tickets` (titles, descriptions, criteria, a suggested agent, dependencies, context docs), not `create_ticket`. The proposals appear as a reviewable draft:
+   - edit, merge, drop or reassign each item;
+   - see the dependency order;
+   - see a rough cost or turn estimate.
+
+   This works like wiki suggestions.
+3. **Accept and dispatch.** Accepting creates the tickets, attaches the context and assigns the agents. "Accept & dispatch" then opens the existing bulk dispatch dialog for the tickets with no unmet dependencies. Dependents wait and are offered for dispatch when their blockers reach In Review or Done.
+4. **Shortcut for small things.** "Create & dispatch" in the new-ticket composer for a one-off task. It still goes through the dispatch dialog.
+
+**Keep:** a person approves every run (§6.6). Agents never dispatch other agents.
+
+**Open questions:**
+- Is the planner a dedicated agent definition ("Planner") or any agent in a planning mode?
+- Do dependencies need a schema (`ticket_dependencies`) and auto-dispatch of the next wave, or is that manual at first?
+- Where do draft plans live: a new `plans` table, or an artifact of a new type `plan` that reuses versions and suggestions?
+- Should a plan have a spend estimate or cap before dispatch? (v1 has no spend caps.)
+- Does Codex or Claude Code planning need different prompts or harness options?
+
 ## Local test setup with Docker (this session)
 
 - `docker compose -f docker-compose.dev.yml up -d --wait` gives Postgres on 5432 and S3 on 8333.
 - Tests: `TEST_DATABASE_URL=postgres://lazyagents:lazyagents@127.0.0.1:5432/lazyagents?sslmode=disable go test ./...`.
 - sqlc came from `nix build nixpkgs#sqlc`.
 - The dev `lazyagents` database already held a workspace from an earlier session, so the demo used scratch databases `la_wiki_demo` and `la_staging_demo`. Drop them when you're done.
+- `RUNNER_DOCKER_TEST=1 go test ./internal/runner -run Docker` needs `lazyagents/agent-base:latest` built (`docker compose build agent-base`).
+- The compose stack was last left **down**. Its demo DB had PAY's repo URL cleared and a dummy `harness:anthropic` key added during testing.
 - Playwright still lives in the old scratchpad (`…/e3bd4d0c-…/scratchpad/pw`, `PLAYWRIGHT_BROWSERS_PATH=$P/browsers`). `wiki.js` there is this phase's walkthrough.
 
 ## Decisions to keep (PLAN.md §11)

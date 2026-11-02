@@ -103,7 +103,15 @@ func MCPHandler(d Deps, version string, log *slog.Logger) http.Handler {
 	for _, t := range Tools {
 		t.addMCP(srv, d)
 	}
-	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
+	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, &mcp.StreamableHTTPOptions{
+		// Off, by the user's decision (2026-11-02). The SDK rejects non-localhost
+		// Host headers on loopback connections (DNS rebinding), but run
+		// containers reach an API on the host as host.docker.internal, which
+		// Docker Desktop and OrbStack deliver over loopback. Rebinding needs an
+		// endpoint that trusts ambient browser credentials; every /mcp request
+		// must carry an agent bearer token, checked before this handler runs.
+		DisableLocalhostProtection: true,
+	})
 	return auth.RequireBearerToken(verifier(d), nil)(h)
 }
 

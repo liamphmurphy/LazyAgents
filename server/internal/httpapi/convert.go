@@ -67,6 +67,19 @@ func toPR(number *int32, state, url *string, add, del *int32) *api.PullRequest {
 	return &pr
 }
 
+// withSync adds what the PR sync job learned (§6.7).
+func withSync(pr *api.PullRequest, t store.Ticket) *api.PullRequest {
+	if pr == nil {
+		return nil
+	}
+	if t.PrClosedUnmerged {
+		v := true
+		pr.ClosedUnmerged = &v
+	}
+	pr.SyncedAt = t.PrSyncedAt
+	return pr
+}
+
 // actorDirectory resolves activity actors to display data.
 type actorDirectory struct {
 	users  map[[16]byte]store.User

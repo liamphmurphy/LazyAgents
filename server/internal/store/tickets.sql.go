@@ -150,7 +150,7 @@ INSERT INTO tickets (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
   (SELECT coalesce(max(sort_order), 0) + 1 FROM tickets WHERE project_id = $2)
-) RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at
+) RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged
 `
 
 type CreateTicketParams struct {
@@ -214,6 +214,8 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Tic
 		&i.Search,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrSyncedAt,
+		&i.PrClosedUnmerged,
 	)
 	return i, err
 }
@@ -279,7 +281,7 @@ func (q *Queries) GetCriterion(ctx context.Context, arg GetCriterionParams) (Cri
 }
 
 const getTicketByID = `-- name: GetTicketByID :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at FROM tickets WHERE id = $1
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged FROM tickets WHERE id = $1
 `
 
 func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, error) {
@@ -311,12 +313,14 @@ func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, erro
 		&i.Search,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrSyncedAt,
+		&i.PrClosedUnmerged,
 	)
 	return i, err
 }
 
 const getTicketByKey = `-- name: GetTicketByKey :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at FROM tickets WHERE workspace_id = $1 AND key = $2
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged FROM tickets WHERE workspace_id = $1 AND key = $2
 `
 
 type GetTicketByKeyParams struct {
@@ -353,6 +357,8 @@ func (q *Queries) GetTicketByKey(ctx context.Context, arg GetTicketByKeyParams) 
 		&i.Search,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrSyncedAt,
+		&i.PrClosedUnmerged,
 	)
 	return i, err
 }
@@ -721,7 +727,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 }
 
 const lockTicketByKey = `-- name: LockTicketByKey :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE
 `
 
 type LockTicketByKeyParams struct {
@@ -758,6 +764,8 @@ func (q *Queries) LockTicketByKey(ctx context.Context, arg LockTicketByKeyParams
 		&i.Search,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrSyncedAt,
+		&i.PrClosedUnmerged,
 	)
 	return i, err
 }
@@ -822,7 +830,7 @@ UPDATE tickets SET
   title = $2, description_md = $3, status = $4, priority = $5, epic_id = $6,
   assignee_agent_id = $7, reviewer_user_id = $8, estimate = $9, due_date = $10
 WHERE id = $1
-RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at
+RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged
 `
 
 type UpdateTicketParams struct {
@@ -879,6 +887,8 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Tic
 		&i.Search,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrSyncedAt,
+		&i.PrClosedUnmerged,
 	)
 	return i, err
 }

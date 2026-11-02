@@ -403,6 +403,74 @@ export function useControlRun(key: string) {
   });
 }
 
+// ----------------------------------------------------- dispatch & runs (§6)
+
+export function useDispatchPreview(key: string | undefined) {
+  return useQuery({
+    queryKey: ["tickets", "dispatch", key] as const,
+    queryFn: () => unwrap(api.GET("/tickets/{key}/dispatch", { params: { path: { key: key! } } })),
+    enabled: !!key,
+    staleTime: 5_000,
+  });
+}
+
+export function useDispatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (keys: string[]) => {
+      if (keys.length === 1) {
+        await unwrap(api.POST("/tickets/{key}/dispatch", { params: { path: { key: keys[0] } } }));
+        return 1;
+      }
+      return unwrap(api.POST("/tickets/dispatch", { body: { keys } })).then((d) => d.dispatched);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: keys.tickets });
+      qc.invalidateQueries({ queryKey: keys.bootstrap });
+      qc.invalidateQueries({ queryKey: ["runner"] });
+    },
+  });
+}
+
+export function useRunnerStatus() {
+  return useQuery({
+    queryKey: ["runner"] as const,
+    queryFn: () => unwrap(api.GET("/runner")),
+    refetchInterval: 15_000,
+  });
+}
+
+const RUN_DONE = ["completed", "failed", "cancelled"];
+
+/**
+ * A run with its turns and events. Polls while the run is live (SSE comes
+ * in Phase 6); events are fetched incrementally with ?after=seq.
+ */
+export function useRunLog(id: string) {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ["runs", id] as const,
+    queryFn: async () => {
+      const prev = qc.getQueryData<Schemas["RunDetail"]>(["runs", id]);
+      const after = prev?.events.at(-1)?.seq ?? 0;
+      const d = await unwrap(api.GET("/runs/{id}", { params: { path: { id }, query: { after } } }));
+      return prev ? { ...d, events: [...prev.events, ...d.events] } : d;
+    },
+    refetchInterval: (q) => (q.state.data && RUN_DONE.includes(q.state.data.run.state) ? false : 2_000),
+  });
+}
+
+export function useControlRunById(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (action: "pause" | "resume" | "cancel") => unwrap(api.POST("/runs/{id}/{action}", { params: { path: { id, action } } })),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["runs", id] });
+      qc.invalidateQueries({ queryKey: keys.tickets });
+    },
+  });
+}
+
 // ------------------------------------------------------------- wiki (§12)
 
 export const wikiKeys = {

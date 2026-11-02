@@ -4,11 +4,12 @@ import { useState, type ComponentProps, type ReactNode } from "react";
 import type { Bootstrap, Ticket } from "@/lib/api/client";
 import { useUpdateTicket } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
-import { dueDate } from "@/lib/format";
+import { absoluteTime, ago, dueDate } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 import { AgentAvatar, HumanAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
-import { LabelChip } from "@/components/domain/labels";
+import { Flag, LabelChip } from "@/components/domain/labels";
+import { needsDispatch } from "./run-parts";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
 import { AgentPicker, EpicMenu, LabelPicker, PriorityMenu, StatusMenu, UserMenu } from "@/components/domain/pickers";
 
@@ -108,6 +109,11 @@ export function Properties({ t, boot }: { t: Ticket; boot: Bootstrap }) {
             <>
               <AgentAvatar name={t.assignee.name} colorIndex={t.assignee.color_index} label={false} />
               {t.assignee.name}
+              {needsDispatch(t) ? (
+                <Flag tone="human">Not dispatched</Flag>
+              ) : t.run?.state === "queued" ? (
+                <Flag tone="neutral">Queued</Flag>
+              ) : null}
             </>
           ) : (
             <>
@@ -209,6 +215,12 @@ export function CodeSection({ t }: { t: Ticket }) {
             </span>
           )}
         </div>
+      )}
+      {t.pr?.closed_unmerged && <Flag tone="blocked">PR closed without merging</Flag>}
+      {t.pr?.synced_at && (
+        <span className="text-[11.5px] text-fg-tertiary" title={absoluteTime(t.pr.synced_at)}>
+          Synced from GitHub {ago(t.pr.synced_at)}
+        </span>
       )}
     </section>
   );

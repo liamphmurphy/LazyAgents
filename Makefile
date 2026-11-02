@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 
-.PHONY: help up down dev dev-infra api web gen gen-check test lint build reset
+.PHONY: help up down dev dev-infra api web runner gen gen-check test lint build reset
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -25,6 +25,9 @@ dev: dev-infra ## Infra in Docker, API (hot reload) + Next dev on the host → h
 api: ## Run the API (hot reload if air is installed: go install github.com/air-verse/air@latest)
 	cd server && export PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000}; \
 	  if command -v air >/dev/null; then air; else go run ./cmd/lazyagents serve; fi
+
+runner: ## Run dispatched tickets on this machine (local backend: real claude/codex CLIs and their logins, no isolation)
+	cd server && RUNNER_BACKEND=local go run ./cmd/lazyagents runner
 
 web: ## Run Next dev server
 	cd web && npm run dev

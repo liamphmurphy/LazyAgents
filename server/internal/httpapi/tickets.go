@@ -133,7 +133,7 @@ func (s *Server) ticketDetail(ctx context.Context, ws uuid.UUID, t store.Ticket)
 		Id: t.ID, Key: t.Key, Project: toProject(proj), Title: t.Title, DescriptionMd: t.DescriptionMd,
 		Status: api.TicketStatus(t.Status), Priority: api.Priority(t.Priority),
 		Estimate: t.Estimate, DueDate: toDate(t.DueDate), Branch: t.Branch,
-		Pr:        toPR(t.PrNumber, t.PrState, t.PrUrl, t.PrAdditions, t.PrDeletions),
+		Pr:        withSync(toPR(t.PrNumber, t.PrState, t.PrUrl, t.PrAdditions, t.PrDeletions), t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}
 	if t.EpicID != nil {

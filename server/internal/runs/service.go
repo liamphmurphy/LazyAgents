@@ -42,6 +42,10 @@ const (
 	VerbRunResumed        = "run_resumed"
 	VerbRunCancelled      = "run_cancelled"
 	VerbRunCompleted      = "run_completed" // {run_id, outcome}
+	VerbDispatched        = "dispatched"    // {run_id, agent_id, agent_name}
+	VerbRunFailed         = "run_failed"    // {run_id, reason}
+	VerbPRMerged          = "pr_merged"     // {number, url} (system)
+	VerbPRClosed          = "pr_closed"     // {number, url} (system)
 )
 
 var Terminal = []string{"completed", "failed", "cancelled"}
@@ -79,6 +83,8 @@ func RecomputeAgentStatus(ctx context.Context, q *store.Queries, agentID uuid.UU
 	for _, r := range live {
 		st := "running"
 		switch r.State {
+		case "queued":
+			continue // dispatched, not started: the agent isn't busy yet
 		case "waiting", "paused":
 			st = "waiting"
 		case "blocked":
@@ -116,6 +122,9 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 			}
 			if c.RunID != nil && *c.RunID != live.ID {
 				return apperr.Conflict("this token belongs to a different run")
+			}
+			if live.Mode == "managed" && c.RunID == nil {
+				return apperr.Conflict("%s was dispatched to the runner; it runs there, not in this session", t.Key)
 			}
 			run = live
 			return nil
@@ -162,6 +171,83 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		_, err = s.Tracker.Update(ctx, ws, agentActor(c), key, tracker.Patch{Status: &st})
 	}
 	return run, err
+}
+
+// Dispatch queues managed runs for tickets' assigned agents (§6.6): a
+// person's check before any agent runs. All or nothing.
+func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []string) ([]store.Run, error) {
+	if len(keys) == 0 {
+		return nil, apperr.Invalid("keys", "pick at least one ticket")
+	}
+	var out []store.Run
+	err := s.tx(ctx, func(q *store.Queries) error {
+		for _, key := range keys {
+			t, err := q.LockTicketByKey(ctx, store.LockTicketByKeyParams{WorkspaceID: ws, Key: strings.ToUpper(strings.TrimSpace(key))})
+			if errors.Is(err, pgx.ErrNoRows) {
+				return apperr.Invalid("keys", "no ticket %s", key)
+			} else if err != nil {
+				return err
+			}
+			if t.AssigneeAgentID == nil {
+				return apperr.Invalid("keys", "%s has no agent; assign one first", t.Key)
+			}
+			if t.Status == "done" {
+				return apperr.Conflict("%s is done", t.Key)
+			}
+			if live, err := q.ActiveRunForTicket(ctx, t.ID); err == nil {
+				return apperr.Conflict("%s already has a %s run", t.Key, live.State)
+			} else if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			agent, err := q.GetAgent(ctx, store.GetAgentParams{ID: *t.AssigneeAgentID, WorkspaceID: ws})
+			if err != nil {
+				return err
+			}
+			p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: ws})
+			if err != nil {
+				return err
+			}
+			resolved, err := agents.Resolve(ctx, q, ws, agent, p.Key)
+			if err != nil {
+				return err
+			}
+			raw, _ := json.Marshal(resolved)
+			run, err := q.CreateRun(ctx, store.CreateRunParams{
+				WorkspaceID: ws, TicketID: t.ID, AgentID: agent.ID, Mode: "managed", State: "queued",
+				ResolvedSpec: raw, DefinitionVersionID: agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model,
+			})
+			if err != nil {
+				return err
+			}
+			if err := q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &userID}); err != nil {
+				return err
+			}
+			if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "start", InputMessage: StartPrompt(t.Key)}); err != nil {
+				return err
+			}
+			if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "queued", "mode": "managed"}); err != nil {
+				return err
+			}
+			if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, tracker.UserActor(userID), VerbDispatched,
+				map[string]any{"run_id": run.ID, "agent_id": agent.ID, "agent_name": agent.Name}, nil); err != nil {
+				return err
+			}
+			if err := RecomputeAgentStatus(ctx, q, agent.ID); err != nil {
+				return err
+			}
+			out = append(out, run)
+		}
+		return nil
+	})
+	return out, err
+}
+
+// StartPrompt is the first message of a managed run. The rest of what the
+// agent needs is in AGENTS.md and the LazyAgents tools.
+func StartPrompt(key string) string {
+	return "You've been dispatched to work on " + key + ". Follow AGENTS.md: call claim_ticket(\"" + key +
+		"\") first, read the memory and context it gives you, post_plan, then work. When you need a person, " +
+		"call request_approval or await_human and end your turn. Finish with complete_run."
 }
 
 // Active resolves which run a tool call acts on: the token's run, the run on

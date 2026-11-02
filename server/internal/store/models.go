@@ -266,6 +266,10 @@ type Run struct {
 	EndedAt             *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+	DispatchedByUserID  *uuid.UUID
+	RunnerID            *string
+	WorkspaceVolume     *string
+	IdleTurns           int32
 }
 
 type RunEvent struct {
@@ -278,14 +282,28 @@ type RunEvent struct {
 }
 
 type RunTurn struct {
-	ID           uuid.UUID
-	RunID        uuid.UUID
-	Seq          int32
-	Trigger      string
-	InputMessage string
-	StartedAt    time.Time
-	EndedAt      *time.Time
-	ExitCode     *int32
+	ID               uuid.UUID
+	RunID            uuid.UUID
+	Seq              int32
+	Trigger          string
+	InputMessage     string
+	StartedAt        time.Time
+	EndedAt          *time.Time
+	ExitCode         *int32
+	Status           string
+	ProcessStartedAt *time.Time
+	LogKey           *string
+	Usage            json.RawMessage
+}
+
+type Runner struct {
+	ID            string
+	Backend       string
+	MaxConcurrent int32
+	Running       int32
+	Version       string
+	StartedAt     time.Time
+	HeartbeatAt   time.Time
 }
 
 type Secret struct {
@@ -304,31 +322,33 @@ type Secret struct {
 }
 
 type Ticket struct {
-	ID              uuid.UUID
-	WorkspaceID     uuid.UUID
-	ProjectID       uuid.UUID
-	Number          int32
-	Key             string
-	Title           string
-	DescriptionMd   string
-	Status          string
-	Priority        string
-	EpicID          *uuid.UUID
-	AssigneeAgentID *uuid.UUID
-	ReviewerUserID  *uuid.UUID
-	CreatedByUserID *uuid.UUID
-	Estimate        *string
-	DueDate         *time.Time
-	Branch          *string
-	PrNumber        *int32
-	PrUrl           *string
-	PrState         *string
-	PrAdditions     *int32
-	PrDeletions     *int32
-	SortOrder       float64
-	Search          interface{}
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	ProjectID        uuid.UUID
+	Number           int32
+	Key              string
+	Title            string
+	DescriptionMd    string
+	Status           string
+	Priority         string
+	EpicID           *uuid.UUID
+	AssigneeAgentID  *uuid.UUID
+	ReviewerUserID   *uuid.UUID
+	CreatedByUserID  *uuid.UUID
+	Estimate         *string
+	DueDate          *time.Time
+	Branch           *string
+	PrNumber         *int32
+	PrUrl            *string
+	PrState          *string
+	PrAdditions      *int32
+	PrDeletions      *int32
+	SortOrder        float64
+	Search           interface{}
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	PrSyncedAt       *time.Time
+	PrClosedUnmerged bool
 }
 
 type TicketArtifact struct {

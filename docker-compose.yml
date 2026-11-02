@@ -54,6 +54,36 @@ services:
       timeout: 3s
       retries: 30
 
+  # The image managed runs execute in. Built here; it runs once and exits.
+  agent-base:
+    build:
+      context: ./deploy/agent-base
+    image: lazyagents/agent-base:latest
+    command: ["true"]
+
+  # Executes dispatched runs (PLAN.md §6.4–6.6). It drives Docker through the
+  # socket, which is root-equivalent on the host: fine for a laptop (v1),
+  # documented in README. Turn containers join this compose network and
+  # reach the API as api:8000.
+  runner:
+    build:
+      context: ./server
+    command: ["runner"]
+    user: "0"
+    environment:
+      <<: *api-env
+      RUNNER_BACKEND: docker
+      RUNNER_IMAGE: ${RUNNER_IMAGE:-lazyagents/agent-base:latest}
+      RUNNER_NETWORK: lazyagents_default
+      RUNNER_MCP_URL: http://api:8000/mcp
+      RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-2}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      api: { condition: service_healthy }
+      agent-base: { condition: service_completed_successfully }
+    restart: unless-stopped
+
   web:
     build:
       context: ./web

@@ -12,7 +12,7 @@ import { BacklinksPanel } from "@/components/domain/backlinks";
 import { ContextArtifacts } from "./context-artifacts";
 import { Criteria } from "./criteria";
 import { CodeSection, Properties } from "./properties";
-import { ApprovalBanner, RunCard } from "./run-parts";
+import { ApprovalBanner, DispatchBanner, needsDispatch, RunCard } from "./run-parts";
 import { Composer, Timeline } from "./timeline";
 
 function TitleEditor({ t }: { t: Ticket }) {
@@ -207,6 +207,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               {t.approvals.map((ap) => (
                 <ApprovalBanner key={ap.id} t={t} ap={ap} />
               ))}
+              {needsDispatch(t) && <DispatchBanner t={t} />}
               <div className="flex flex-col gap-3">
                 <TitleEditor t={t} />
                 <Description t={t} />

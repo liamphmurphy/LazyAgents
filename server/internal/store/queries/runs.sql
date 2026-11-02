@@ -31,8 +31,10 @@ UPDATE runs SET tool_calls = tool_calls + $2, input_tokens = input_tokens + $3, 
 WHERE id = $1 RETURNING *;
 
 -- name: StartTurn :one
-INSERT INTO run_turns (run_id, seq, trigger, input_message)
-VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM run_turns WHERE run_id = $1), $2, $3)
+-- Managed turns wait for the runner (pending); unmanaged turns are records.
+INSERT INTO run_turns (run_id, seq, trigger, input_message, status)
+VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM run_turns WHERE run_id = $1), $2, $3,
+  CASE WHEN (SELECT mode FROM runs WHERE id = $1) = 'managed' THEN 'pending' ELSE 'done' END)
 RETURNING *;
 
 -- name: EndOpenTurn :exec

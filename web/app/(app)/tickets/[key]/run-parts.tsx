@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { Approval, Run, Ticket } from "@/lib/api/client";
 import { useControlRun, useDecideApproval } from "@/lib/api/hooks";
@@ -11,6 +12,39 @@ import { Banner, TextInput } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
 import { Stat } from "@/components/domain/data";
 import { MonoChip, SmallPill, type PillTone } from "@/components/domain/labels";
+import { DispatchDialog } from "@/components/domain/dispatch-dialog";
+
+const ENDED: Array<Run["state"]> = ["completed", "failed", "cancelled"];
+
+/** An assigned ticket with no live run waits for a person to dispatch it (§6.6). */
+export function needsDispatch(t: Ticket) {
+  return !!t.assignee && t.status !== "done" && (!t.run || ENDED.includes(t.run.state));
+}
+
+/** "Pike is assigned and waiting for dispatch" (dispatch.html). Amber: a person acts. */
+export function DispatchBanner({ t }: { t: Ticket }) {
+  const [open, setOpen] = useState(false);
+  if (!t.assignee) return null;
+  const again = t.run && ENDED.includes(t.run.state);
+  return (
+    <>
+      <Banner
+        lead={<AgentAvatar name={t.assignee.name} colorIndex={t.assignee.color_index} size="md" />}
+        title={`${t.assignee.name} is assigned and waiting for dispatch`}
+        actions={
+          <Button variant="approve" onClick={() => setOpen(true)}>
+            Review &amp; dispatch…
+          </Button>
+        }
+      >
+        {again
+          ? `The last run ${t.run!.state}. Dispatch again to start a new run.`
+          : "Assigning doesn't start work. Review what the run will get, then dispatch it."}
+      </Banner>
+      {open && <DispatchDialog keys={[t.key]} open onOpenChange={setOpen} />}
+    </>
+  );
+}
 
 const RUN_STATE: Record<Run["state"], { tone: PillTone; label: string }> = {
   queued: { tone: "neutral", label: "Queued" },
@@ -99,6 +133,9 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
         </div>
         <SmallPill tone={st.tone}>{st.label}</SmallPill>
       </div>
+      {run.state === "queued" && (
+        <p className="text-xs text-fg-secondary">Dispatched{run.dispatched_by && ` by ${run.dispatched_by.name}`}. Starts when a runner slot is free.</p>
+      )}
       {run.state === "waiting" && run.wait_reason === "human_reply" && (
         <p className="text-xs text-pill-human-fg">Waiting for a reply. Mention @{run.agent.handle} in a comment to resume.</p>
       )}
@@ -123,7 +160,12 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
           </div>
         </div>
       )}
-      {run.outcome && <p className="text-xs text-fg-secondary">{run.outcome}</p>}
+      {run.outcome && <p className="whitespace-pre-line text-xs text-fg-secondary">{run.outcome}</p>}
+      {run.mode === "managed" && (
+        <Link href={`/runs/${run.id}`} className="flex items-center gap-1.5 text-xs text-accent hover:underline">
+          <Icon name="terminal" size={13} /> View run log
+        </Link>
+      )}
       {live && (
         <div className="grid grid-cols-2 gap-2">
           {run.state === "paused" ? (

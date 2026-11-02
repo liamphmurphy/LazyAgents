@@ -496,6 +496,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tickets/{key}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /** Exactly what a run of this ticket would get, for the dispatch dialog */
+        get: operations["getDispatchPreview"];
+        put?: never;
+        /** Approve & dispatch: queue a managed run for the assigned agent */
+        post: operations["dispatchTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk dispatch (all or nothing) */
+        post: operations["dispatchTickets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Runner heartbeats, slots and the queue */
+        get: operations["getRunnerStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{id}/turns/{seq}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        /** The raw harness stream of one turn (JSONL) */
+        get: operations["getTurnLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}": {
         parameters: {
             query?: never;
@@ -878,6 +953,10 @@ export interface components {
             url?: string;
             additions?: number;
             deletions?: number;
+            /** @description Closed without merging; a person should look */
+            closed_unmerged?: boolean;
+            /** Format: date-time */
+            synced_at?: string;
         };
         TicketSummary: {
             /** Format: uuid */
@@ -1284,6 +1363,9 @@ export interface components {
             mode: "managed" | "unmanaged";
             /** @enum {string} */
             state: "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+            /** @description The harness session turns resume */
+            session_id?: string;
+            dispatched_by?: components["schemas"]["UserRef"];
             /** @enum {string} */
             wait_reason?: "approval" | "human_reply" | "pause";
             harness: string;
@@ -1346,6 +1428,18 @@ export interface components {
             /** Format: date-time */
             ended_at?: string;
             exit_code?: number;
+            /**
+             * @description Managed turns: waiting for the runner, executing, exited
+             * @enum {string}
+             */
+            status: "pending" | "running" | "done";
+            /** Format: date-time */
+            process_started_at?: string;
+            /** @description The raw stream is stored (GET …/turns/{seq}/log) */
+            has_log: boolean;
+            usage?: {
+                [key: string]: unknown;
+            };
         };
         RunEvent: {
             /** Format: int64 */
@@ -1514,6 +1608,66 @@ export interface components {
              */
             inject: "index" | "linked" | "search";
             max_tokens: number;
+        };
+        RunnerInfo: {
+            id: string;
+            /** @enum {string} */
+            backend: "docker" | "local";
+            max_concurrent: number;
+            running: number;
+            version?: string;
+            /** Format: date-time */
+            heartbeat_at: string;
+        };
+        RunnerStatus: {
+            online: boolean;
+            runners: components["schemas"]["RunnerInfo"][];
+            slots: number;
+            busy: number;
+            queued: number;
+        };
+        DispatchScope: {
+            scope: string;
+            mode: components["schemas"]["ScopeMode"];
+            /** @enum {string} */
+            source: "agent" | "project";
+            /** @enum {string} */
+            enforcement: "credential" | "brokered" | "harness" | "none";
+            how: string;
+            description?: string;
+        };
+        DispatchSecret: {
+            name: string;
+            scope?: string;
+            injected: boolean;
+            reason: string;
+        };
+        DispatchContext: {
+            title: string;
+            /** @description artifact type, or wiki */
+            kind: string;
+            /** @description Where it's written in the workspace */
+            path: string;
+        };
+        DispatchPreview: {
+            ticket_key: string;
+            agent: components["schemas"]["AgentRef"];
+            definition_version?: number;
+            has_override?: boolean;
+            resolved: components["schemas"]["ResolvedDefinition"];
+            repo_url?: string;
+            branch: string;
+            setup: string[];
+            context: components["schemas"]["DispatchContext"][];
+            scopes: components["schemas"]["DispatchScope"][];
+            secrets: components["schemas"]["DispatchSecret"][];
+            harness_key: {
+                secret: string;
+                present: boolean;
+            };
+            runner: components["schemas"]["RunnerStatus"];
+            /** @description Why dispatch would be refused right now (no agent, a live run, done) */
+            blockers: string[];
         };
     };
     responses: {
@@ -2405,6 +2559,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Approval"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDispatchPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DispatchPreview"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    dispatchTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ticket key, e.g. PAY-214 */
+                key: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ticket, with its queued run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    dispatchTickets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    keys: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description How many were queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        dispatched: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getRunnerStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunnerStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getTurnLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Raw log */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": string;
                 };
             };
             default: components["responses"]["Error"];

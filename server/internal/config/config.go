@@ -24,6 +24,23 @@ type Config struct {
 	SecretsKey string
 	// PublicURL is how agents and browsers reach the app (Caddy in compose).
 	PublicURL string
+
+	Runner Runner
+	// PRSyncInterval is how often open PRs are polled (0 disables).
+	PRSyncInterval int // seconds
+}
+
+// Runner configures `lazyagents runner` (PLAN.md §6.5).
+type Runner struct {
+	Backend       string // docker | local
+	MaxConcurrent int
+	MCPURL        string // how turns reach the API's /mcp
+	Image         string // docker
+	Network       string // docker
+	DockerSocket  string // docker
+	DataDir       string // local: run workspaces
+	ClaudeBin     string // local: path to `claude`
+	CodexBin      string // local: path to `codex`
 }
 
 type S3 struct {
@@ -61,7 +78,46 @@ func Load() (Config, error) {
 	if c.Seed, err = boolEnv("SEED", false); err != nil {
 		return c, err
 	}
+	r := Runner{
+		Backend:      env("RUNNER_BACKEND", "docker"),
+		Image:        env("RUNNER_IMAGE", "lazyagents/agent-base:latest"),
+		Network:      env("RUNNER_NETWORK", "lazyagents_default"),
+		DockerSocket: env("DOCKER_SOCKET", "/var/run/docker.sock"),
+		DataDir:      env("RUNNER_DATA_DIR", ".lazyagents/runs"),
+		ClaudeBin:    env("RUNNER_CLAUDE_BIN", ""),
+		CodexBin:     env("RUNNER_CODEX_BIN", ""),
+	}
+	if r.Backend != "docker" && r.Backend != "local" {
+		return c, fmt.Errorf("config: RUNNER_BACKEND=%q must be docker or local", r.Backend)
+	}
+	defMCP := "http://api:8000/mcp"
+	if r.Backend == "local" {
+		defMCP = "http://localhost:8000/mcp"
+	}
+	r.MCPURL = env("RUNNER_MCP_URL", defMCP)
+	if r.MaxConcurrent, err = intEnv("RUNNER_MAX_CONCURRENT", 2); err != nil {
+		return c, err
+	}
+	if r.MaxConcurrent < 1 || r.MaxConcurrent > 32 {
+		return c, fmt.Errorf("config: RUNNER_MAX_CONCURRENT must be 1–32")
+	}
+	c.Runner = r
+	if c.PRSyncInterval, err = intEnv("PR_SYNC_INTERVAL_S", 60); err != nil {
+		return c, err
+	}
 	return c, nil
+}
+
+func intEnv(key string, def int) (int, error) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def, fmt.Errorf("config: %s=%q is not a number", key, v)
+	}
+	return n, nil
 }
 
 func env(key, def string) string {

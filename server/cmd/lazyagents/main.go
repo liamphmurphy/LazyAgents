@@ -2,6 +2,7 @@
 //
 //	lazyagents serve        run migrations, ensure buckets, serve HTTP (default)
 //	lazyagents migrate      run migrations and exit
+//	lazyagents runner       execute dispatched runs (docker or local backend)
 //	lazyagents healthcheck  exit 0 if the local API reports healthy (for container probes)
 package main
 
@@ -25,6 +26,8 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/config"
 	"github.com/liamphmurphy/lazyagents/server/internal/db"
 	"github.com/liamphmurphy/lazyagents/server/internal/httpapi"
+	"github.com/liamphmurphy/lazyagents/server/internal/prsync"
+	"github.com/liamphmurphy/lazyagents/server/internal/runner"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/seed"
@@ -48,10 +51,12 @@ func main() {
 		err = serve(ctx, log)
 	case "migrate":
 		err = migrateOnly(ctx)
+	case "runner":
+		err = runRunner(ctx, log)
 	case "healthcheck":
 		err = healthcheck(ctx)
 	default:
-		err = fmt.Errorf("unknown command %q (want serve|migrate|healthcheck)", cmd)
+		err = fmt.Errorf("unknown command %q (want serve|migrate|runner|healthcheck)", cmd)
 	}
 	if err != nil {
 		log.Error("exit", "err", err)
@@ -142,6 +147,11 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		ArtifactBucket: cfg.S3.ArtifactBucket,
 		Log:            log,
 	}
+	if cfg.PRSyncInterval > 0 {
+		sync := &prsync.Syncer{Pool: pool, Secrets: secretsSvc, Tracker: trackerSvc, Log: log,
+			MinAge: time.Duration(cfg.PRSyncInterval) * time.Second}
+		go sync.Run(ctx, time.Duration(cfg.PRSyncInterval)*time.Second)
+	}
 	hs := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           srv.Handler(),
@@ -189,4 +199,59 @@ func healthcheck(ctx context.Context) error {
 		return fmt.Errorf("health: status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// runRunner executes dispatched runs (PLAN.md §6.4–6.6). It shares the
+// database with the API and reaches it over /mcp like any agent.
+func runRunner(ctx context.Context, log *slog.Logger) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	pool, err := connect(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	box, err := secrets.NewBox(cfg.SecretsKey)
+	if err != nil {
+		return err
+	}
+	if box == nil {
+		log.Warn("SECRETS_KEY is not set: runs get no secrets (harness keys, git:pat)")
+	}
+	rc := cfg.Runner
+	var backend runner.Backend
+	switch rc.Backend {
+	case "docker":
+		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network}
+		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := d.Ping(pctx)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("runner: docker: %w", err)
+		}
+		backend = d
+	case "local":
+		log.Warn("RUNNER_BACKEND=local runs harnesses on this machine with no isolation, using its own CLI logins")
+		bins := map[string]string{}
+		if rc.ClaudeBin != "" {
+			bins["claude"] = rc.ClaudeBin
+		}
+		if rc.CodexBin != "" {
+			bins["codex"] = rc.CodexBin
+		}
+		backend = &runner.Local{Dir: rc.DataDir, Bins: bins}
+	}
+	host, _ := os.Hostname()
+	r := &runner.Runner{
+		Cfg: runner.Config{
+			ID: fmt.Sprintf("%s-%d", host, os.Getpid()), MaxConcurrent: rc.MaxConcurrent, MCPURL: rc.MCPURL,
+			Grace: 30 * time.Second, LogBucket: "run-logs", Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
+		},
+		Pool: pool, Backend: backend, Secrets: &secrets.Service{Q: store.New(pool), Box: box},
+		Tracker: &tracker.Service{Pool: pool}, Blobs: blob.New(cfg.S3), Log: log,
+	}
+	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
+	return r.Run(ctx)
 }

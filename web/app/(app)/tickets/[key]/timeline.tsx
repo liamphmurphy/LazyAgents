@@ -164,8 +164,28 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
           removed <B>{str(p.title)}</B> from context
         </>
       );
+    case "dispatched":
+      return <>dispatched this to {agent()}</>;
     case "run_started":
-      return p.mode === "unmanaged" ? "started working (unmanaged session)" : "started working";
+      return p.mode === "unmanaged" ? "started working (unmanaged session)" : p.harness ? <>started working on <code className="inline">{str(p.harness)}</code></> : "started working";
+    case "run_failed":
+      return (
+        <>
+          stopped the run: <span className="whitespace-pre-line text-pill-blocked-fg">{str(p.reason)}</span>
+        </>
+      );
+    case "pr_merged":
+      return (
+        <>
+          saw <B>PR #{str(p.number)}</B> merge on GitHub
+        </>
+      );
+    case "pr_closed":
+      return (
+        <>
+          saw <B>PR #{str(p.number)}</B> closed without merging
+        </>
+      );
     case "plan_posted":
       return "posted an execution plan";
     case "tests_ran": {
@@ -240,7 +260,7 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
     case "run_resumed":
       return "resumed the run";
     case "run_cancelled":
-      return "cancelled the run";
+      return p.reason ? <>stopped the run: {str(p.reason)}</> : "cancelled the run";
     case "run_completed":
       return p.outcome ? <>finished the run: {str(p.outcome)}</> : "finished the run";
     default:

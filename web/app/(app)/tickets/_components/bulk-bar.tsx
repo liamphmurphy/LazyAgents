@@ -1,15 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBulkUpdate } from "@/lib/api/hooks";
 import { Button, IconButton } from "@/components/ui/button";
 import { ArtifactPicker } from "@/components/domain/artifacts";
+import { DispatchDialog } from "@/components/domain/dispatch-dialog";
 import { AgentPicker, PriorityMenu, StatusMenu } from "@/components/domain/pickers";
 
 /** Floating bulk-action bar (DESIGN.md §4). */
 export function BulkBar({ keys, agents, onClear }: { keys: string[]; agents: Schemas["Agent"][]; onClear: () => void }) {
   const bulk = useBulkUpdate();
   const apply = (patch: Schemas["TicketPatch"]) => bulk.mutate({ keys, patch });
+  const [dispatching, setDispatching] = useState(false);
   return (
     <div
       role="toolbar"
@@ -34,7 +37,11 @@ export function BulkBar({ keys, agents, onClear }: { keys: string[]; agents: Sch
           Assign agent
         </Button>
       </AgentPicker>
+      <Button variant="approve-outline" onClick={() => setDispatching(true)}>
+        Dispatch…
+      </Button>
       <IconButton icon="x" label="Clear selection" onClick={onClear} />
+      {dispatching && <DispatchDialog keys={keys} open onOpenChange={setDispatching} onDone={onClear} />}
     </div>
   );
 }

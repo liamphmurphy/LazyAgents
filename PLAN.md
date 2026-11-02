@@ -378,7 +378,7 @@ Each phase ends with something you can demo.
 - Agent memory: per-agent namespaces, the `wiki:write` scope, MCP tools `search_knowledge`, `read_page`, `write_note` and `get_backlinks`, and suggested edits that a person accepts
 - *Exit:* Atlas finishes PAY-214, writes "Partition rollback gotchas" into its memory linking `[[ADR-012]]` and `[[PAY-214]]`, and the next Atlas run on PAY-224 gets that note in its context. ADR-012 shows the note under backlinks.
 
-**Phase 5: Runner and harness adapters**
+**Phase 5: Runner and harness adapters** ✅ *done. See CONTINUE.md for what shipped.*
 - `agent-base` image, workspace preparation, container lifecycle, credential injection, scheduler and concurrency limits
 - The `Harness` interface with **Claude Code and Codex adapters**, normalized events, cost computation, turn-based approval / comment / pause resume, budget enforcement
 - Run-log viewer (normalized events live, raw log from SeaweedFS), Pause / Resume / Cancel in the UI

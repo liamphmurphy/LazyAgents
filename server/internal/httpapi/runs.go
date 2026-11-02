@@ -36,6 +36,12 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		w := api.RunWaitReason(*r.WaitReason)
 		out.WaitReason = &w
 	}
+	out.SessionId = r.HarnessSessionID
+	if r.DispatchedByUserID != nil {
+		if u, err := s.Q.GetUser(ctx, store.GetUserParams{ID: *r.DispatchedByUserID, WorkspaceID: r.WorkspaceID}); err == nil {
+			out.DispatchedBy = toUserRef(u)
+		}
+	}
 	if spec, err := runs.Spec(r); err == nil {
 		for _, sc := range spec.Scopes {
 			switch sc.Mode {
@@ -170,7 +176,14 @@ func (s *Server) GetRun(ctx context.Context, req api.GetRunRequestObject) (api.G
 		return nil, err
 	}
 	for _, t := range turns {
-		rt := api.RunTurn{Seq: int(t.Seq), Trigger: api.RunTurnTrigger(t.Trigger), InputMessage: t.InputMessage, StartedAt: t.StartedAt, EndedAt: t.EndedAt}
+		rt := api.RunTurn{Seq: int(t.Seq), Trigger: api.RunTurnTrigger(t.Trigger), InputMessage: t.InputMessage, StartedAt: t.StartedAt, EndedAt: t.EndedAt,
+			Status: api.RunTurnStatus(t.Status), ProcessStartedAt: t.ProcessStartedAt, HasLog: t.LogKey != nil}
+		if len(t.Usage) > 2 {
+			u := map[string]any{}
+			if json.Unmarshal(t.Usage, &u) == nil {
+				rt.Usage = &u
+			}
+		}
 		if t.ExitCode != nil {
 			c := int(*t.ExitCode)
 			rt.ExitCode = &c
