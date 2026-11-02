@@ -1,22 +1,37 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api/client";
+import { api, type Schemas } from "@/lib/api/client";
+
+type Health = Schemas["Health"];
+
+function isHealth(v: unknown): v is Health {
+  return typeof v === "object" && v !== null && "checks" in v && "status" in v;
+}
 
 export function HealthStatus() {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, error } = useQuery({
     queryKey: ["health"],
-    queryFn: async () => {
+    queryFn: async (): Promise<Health> => {
+      const { data, error, response } = await api.GET("/health");
       // 503 still carries a Health body describing which dependency failed.
-      const { data, error } = await api.GET("/health");
-      return data ?? error ?? null;
+      const body = data ?? error;
+      if (isHealth(body)) return body;
+      // Anything else (proxy error page, plain-text 502, empty body) means
+      // the API itself didn't answer.
+      throw new Error(`HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`);
     },
     refetchInterval: 10_000,
+    retry: false,
   });
 
   if (isPending) return <p className="type-small text-fg-tertiary">Checking API…</p>;
-  if (isError || !data || !("checks" in data)) {
-    return <p className="type-small text-state-blocked">API unreachable</p>;
+  if (!data) {
+    return (
+      <p className="type-small text-state-blocked">
+        API unreachable{error && <span className="type-mono text-fg-tertiary"> · {error.message}</span>}
+      </p>
+    );
   }
 
   return (
