@@ -1,6 +1,30 @@
 # Verification and handoff
 
-## Continuation on 2026-11-03
+## Review correction after 98d58b6
+
+Resumed a clean checkout at 98d58b6; read ticket, review blocker, supplied context
+and backend wiki ADR before editing. No plan-read tool or persisted plan artifact
+was exposed; posted a replacement three-step continuation plan. Preserved prior work.
+
+Retain 2.2.1 with source-verified `integration.use` / `mcp:*` deny and
+`mcp:lazyagents` allow, plus `skill:*` and `plugin:*` denies. New action names
+are rejected before launch. See policy-evidence.md for immutable tagged source,
+exact schema/evaluation references and limits. cli-help.txt remains installed 2.2.1
+evidence; it is not newer-release or effective-denial evidence.
+
+Follow-up checks passed: `GOCACHE=/tmp/lazyagents20-go-cache make gen-check`
+(no generated diff), `git diff --check`, Python JSON parsing of ADR template and
+normalized.json, policy statement shapes against the inspected 2.2.1 action enum,
+eight ordered allow/deny cases (selected/unapproved MCP, skills, plugins, provider
+allow/deny and shell/MCP-tool deny), and blanket permission denial. These static
+checks do not execute upstream or establish runtime conformance. No runtime source
+changed, so prior Go/typecheck evidence is preserved without claiming a new run.
+
+Main must update [[Architecture/ADR-020 OpenCode integration baseline]] to specify
+the retained 2.2.1 prefixed integration policy, obtain independent reviewer approval,
+and reassess criterion 4. No parent criteria, push or PR mutation performed.
+
+## Preserved continuation on 2026-11-03
 
 Inspected clean working tree, current branch and history before editing. Preserved
 5cd2b80 and its preceding work. Read LAZYAGENTS-20 description, criteria and owner
@@ -44,7 +68,7 @@ requested delegated reviewer approval before checking parent criteria/completion
 ## Actual implementation gaps and rollout
 
 LAZYAGENTS-21/22 must capture sanitized real wire success/error/resume/cancel events,
-implement parser and provider-aware secret/model resolution, validate the configuration
+implement parser and provider-aware secret/model resolution, validate the corrected configuration
 against 2.2.1, and enforce effective deny policy despite ambient configs/plugins.
 There is no verified authenticated pre-tool bridge or filesystem sandbox for this
 adapter today. Reject modes needing those guarantees until implemented; never mark

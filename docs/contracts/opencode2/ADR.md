@@ -167,6 +167,14 @@ behavior is removed. Planning retains its draft-only `propose_tickets` workflow.
 
 ### Concrete configuration contract
 
+Retain **2.2.1** using its versioned `integration.use` contract. See
+[policy-evidence.md](policy-evidence.md) for immutable upstream schema, implementation
+and documentation links. The newer `mcp.use`, `skill.use`, `plugin.use` and
+`integration.connect` actions are unsupported on this baseline: reject them before
+launch, never pass them through or count ignored statements as enforcement.
+Do not use the changed 2.2.3 integration semantics on 2.2.1. An upgrade requires
+separate compatibility verification; installed help remains 2.2.1 evidence only.
+
 Generate a protected run-specific `opencode.json` and isolated HOME plus XDG roots.
 Keep state stable for a segment and isolate it from other runs. A sanitized chat
 configuration shape follows; placeholders are runner substitutions, never literals
@@ -185,15 +193,21 @@ or user-controlled URLs. Validate against the pinned-release schema before launc
     {"action": "tool.use", "resource": "*", "effect": "deny"},
     {"action": "provider.use", "resource": "*", "effect": "deny"},
     {"action": "provider.use", "resource": "openai", "effect": "allow"},
-    {"action": "mcp.use", "resource": "*", "effect": "deny"},
-    {"action": "mcp.use", "resource": "lazyagents", "effect": "allow"}
+    {"action": "integration.use", "resource": "mcp:*", "effect": "deny"},
+    {"action": "integration.use", "resource": "mcp:lazyagents", "effect": "allow"},
+    {"action": "integration.use", "resource": "skill:*", "effect": "deny"},
+    {"action": "integration.use", "resource": "plugin:*", "effect": "deny"}
   ]
 }
 ```
 
 The renderer adds explicit permission and policy allows for each purpose's allowed
 MCP action (`lazyagents_<tool>` / `lazyagents_<tool>:*`) and reads of generated
-context/instruction/skill files, after blanket denies. This template intentionally
+context/instruction/skill files, after blanket denies. For native resolved skill discovery, add only exact
+`integration.use` / `skill:<resolved-id>` allows after the skill deny, once discovery
+is verified; otherwise keep it denied and use inert instruction files. Keep optional
+plugins denied; required built-in policy machinery must remain active.
+This template intentionally
 permits no tool until that expansion. Ticket policy adds only resolved scope actions;
 planning permits context reads and proposal tools, with no writes or project execution.
 No `--auto`. Required approval actions use the authenticated LazyAgents policy bridge;
@@ -202,8 +216,9 @@ replace LazyAgents delegation. Brokered operations stay server-side.
 
 [MCP configuration](https://opencode.ai/v2/docs/mcp-servers/) supplies the remote
 header and direct-tool shape. [Permissions](https://opencode.ai/v2/docs/permissions/)
-use ordered last-match rules, whereas [policies](https://opencode.ai/v2/docs/policies/)
-hard-deny tools after approvals. Invalid policy statements may be dropped, so schema
+use ordered last-match rules. The [2.2.1 policy contract](policy-evidence.md)
+also uses last-match rules and hard-denies tools after approvals. Current unversioned
+policy documentation describes newer actions and is not the 2.2.1 schema. Invalid policy statements may be dropped, so schema
 validation and effective-denial probes are mandatory. [Managed config precedence](https://opencode.ai/v2/docs/config/) must protect policy from repository
 config and plugins with managed configuration plus OS/container isolation; XDG roots
 alone do not suppress system, ancestor, compatibility-skill or project config.
