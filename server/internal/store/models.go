@@ -254,6 +254,14 @@ type KnowledgeLink struct {
 	CreatedAt       time.Time
 }
 
+type LaUsageRepair struct {
+	ID        uuid.UUID
+	RunID     uuid.UUID
+	StartSeq  int64
+	EndSeq    interface{}
+	Corrected interface{}
+}
+
 type Label struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

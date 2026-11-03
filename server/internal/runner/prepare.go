@@ -2,16 +2,20 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
+	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
@@ -192,8 +196,8 @@ var HarnessKeys = map[string]struct {
 	Secret string
 	Env    []string
 }{
-	agentdef.HarnessClaudeCode: {"harness:anthropic", []string{"ANTHROPIC_API_KEY"}},
-	agentdef.HarnessCodex:      {"harness:openai", []string{"CODEX_API_KEY", "OPENAI_API_KEY"}},
+	agentdef.HarnessClaudeCode: {chatmodels.KeySecret[agentdef.HarnessClaudeCode], []string{"ANTHROPIC_API_KEY"}},
+	agentdef.HarnessCodex:      {chatmodels.KeySecret[agentdef.HarnessCodex], []string{"CODEX_API_KEY", "OPENAI_API_KEY"}},
 }
 
 // Revealer decrypts secrets (secrets.Service).
@@ -298,4 +302,47 @@ func PlanningContextFile(ctx context.Context, q *store.Queries, run store.Run) (
 		return nil, apperr.Invalid("source", "planning source is not markdown")
 	}
 	return &ContextFile{Path: ".lazyagents/planning-source.md", Body: []byte(*v.BodyMd), ArtifactID: *p.ArtifactID, VersionID: p.SourceVersionID}, nil
+}
+
+// ChatTurnContext delivers the references attached to a chat turn's message.
+// File names are generated from the turn and position, never from the ref
+// itself, so a title or path can't escape .lazyagents/context/. prompt is the
+// text appended to the turn's prompt to list the files. A reference that no
+// longer resolves (deleted since it was queued) is named in the prompt but
+// not delivered.
+func ChatTurnContext(ctx context.Context, q *store.Queries, run store.Run, project uuid.UUID, turn store.RunTurn) (files []ContextFile, prompt string, err error) {
+	msg, err := q.ChatMessageForTurn(ctx, &turn.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	var refs []runs.ChatContextRef
+	if err = json.Unmarshal(msg.ContextRefs, &refs); err != nil || len(refs) == 0 {
+		return nil, "", err
+	}
+	var b strings.Builder
+	b.WriteString("\n\nThe person attached these references to this message. Read them first:\n")
+	for i, ref := range refs {
+		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, project, []runs.ChatContextRef{ref})
+		if err != nil {
+			if errors.As(err, new(*apperr.ValidationError)) {
+				fmt.Fprintf(&b, "- %s (no longer available)\n", ref)
+				continue
+			}
+			return nil, "", err
+		}
+		path := fmt.Sprintf(".lazyagents/context/chat-turn-%d-ref-%d.md", turn.Seq, i+1)
+		files = append(files, ContextFile{Path: path, Body: []byte(d[0].Body), ArtifactID: derefID(d[0].ArtifactID)})
+		fmt.Fprintf(&b, "- `%s`: %s %q\n", path, ref.Kind, d[0].Title)
+	}
+	return files, b.String(), nil
+}
+
+func derefID(id *uuid.UUID) uuid.UUID {
+	if id == nil {
+		return uuid.Nil
+	}
+	return *id
 }
