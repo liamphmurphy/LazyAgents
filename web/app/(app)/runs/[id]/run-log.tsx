@@ -3,9 +3,9 @@
 import { runCost } from "@/lib/format";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
-import { useControlRunById, useRunLog } from "@/lib/api/hooks";
+import { useControlRunById, useDelegatedRunLogs, useRunLog } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { absoluteTime, compact, duration } from "@/lib/format";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -169,7 +169,7 @@ function ToolCard({ call, result }: { call: RunEvent; result?: RunEvent }) {
   );
 }
 
-function EventRow({ row }: { row: Row }) {
+function EventRow({ row, source }: { row: Row; source?: Schemas["Run"] }) {
   const e = row.kind === "tool" ? row.call : row.e;
   const p = e.payload as P;
   const red = e.type === "error" || (row.kind === "tool" && (!!(row.call.payload as P).denied_by_harness || !!(row.result?.payload as P | undefined)?.is_error));
@@ -226,7 +226,10 @@ function EventRow({ row }: { row: Row }) {
         {clock.format(new Date(e.at))}
       </time>
       <span className="pt-0.5 font-mono text-[11.5px] text-fg-tertiary max-sm:hidden">{row.kind === "tool" ? "tool" : e.type}</span>
-      <div className="min-w-0 max-sm:col-start-2">{body}</div>
+      <div className="min-w-0 max-sm:col-start-2">
+        {source && <Link href={`/runs/${source.id}`} className="mb-1 block text-xs font-medium text-accent hover:underline">{source.agent.name} · delegated agent</Link>}
+        {body}
+      </div>
     </li>
   );
 }
@@ -275,12 +278,12 @@ function TurnsRail({ d }: { d: RunDetail }) {
       {run.state === "waiting" && (
         <div className="mt-1 flex flex-col gap-1 rounded-lg border border-dashed border-state-human/40 px-3 py-2.5 text-xs">
           <span className="font-medium text-pill-human-fg">
-            {run.wait_reason === "approval" ? "Next turn starts when someone decides" : "Next turn starts when someone replies"}
+            {run.wait_reason === "delegation" ? "Next turn starts when the delegated agent finishes" : run.wait_reason === "approval" ? "Next turn starts when someone decides" : "Next turn starts when someone replies"}
           </span>
-          <span className="text-fg-secondary">Nothing is running. The workspace and session are kept.</span>
-          <Link href={`/tickets/${run.ticket_key}`} className="text-accent hover:underline">
+          <span className="text-fg-secondary">{run.wait_reason === "delegation" ? "Follow the delegated agent’s activity in the event timeline." : "Nothing is running. The workspace and session are kept."}</span>
+          {run.wait_reason !== "delegation" && <Link href={`/tickets/${run.ticket_key}`} className="text-accent hover:underline">
             {pending ? "Review the request" : `Reply with @${run.agent.handle}`}
-          </Link>
+          </Link>}
         </div>
       )}
       {run.state === "queued" && (
@@ -305,15 +308,27 @@ function rowText(r: Row) {
 
 export function RunLogScreen({ id }: { id: string }) {
   const { data: d, isError, error } = useRunLog(id);
+  const children = useDelegatedRunLogs(d?.child_runs ?? []);
   const router = useRouter();
   const control = useControlRunById(id);
   const [tab, setTab] = useState("all");
   const [filter, setFilter] = useState("");
   const [follow, setFollow] = useState(true);
   const end = useRef<HTMLDivElement>(null);
-  const rows = useMemo(() => rowsOf(d?.events ?? []), [d?.events]);
-  const counts = useMemo(() => Object.fromEntries(Object.entries(TAB_FILTER).map(([k, f]) => [k, rows.filter(f).length])), [rows]);
-  const shown = rows.filter(TAB_FILTER[tab]).filter((r) => !filter || rowText(r).includes(filter.toLowerCase()));
+  // Pair tools within each run before merging: sequence numbers and tool IDs
+  // are scoped to their own run and can collide across delegated agents.
+  const entries = [
+    ...rowsOf(d?.events ?? []).map((row) => ({ row, source: undefined as Schemas["Run"] | undefined, runId: id })),
+    ...children.flatMap((child) => child.data ? rowsOf(child.data.events).map((row) => ({ row, source: child.data!.run, runId: child.data!.run.id })) : []),
+  ].sort((a, b) => {
+    const ae = a.row.kind === "tool" ? a.row.call : a.row.e;
+    const be = b.row.kind === "tool" ? b.row.call : b.row.e;
+    return Date.parse(ae.at) - Date.parse(be.at) || a.runId.localeCompare(b.runId) || ae.seq - be.seq;
+  });
+  const rows = entries.map(({ row }) => row);
+  const counts = Object.fromEntries(Object.entries(TAB_FILTER).map(([k, f]) => [k, rows.filter(f).length]));
+  const shown = entries.filter(({ row, source }) => TAB_FILTER[tab](row) &&
+    (!filter || `${source?.agent.name ?? ""} ${rowText(row)}`.toLowerCase().includes(filter.toLowerCase())));
 
   useEffect(() => {
     if (follow) end.current?.scrollIntoView({ block: "end" });
@@ -442,10 +457,14 @@ export function RunLogScreen({ id }: { id: string }) {
               <p className="whitespace-pre-line rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[13px] text-fg-2">{run.outcome}</p>
             </div>
           )}
+          {children.some((child) => child.isError) && (
+            <div className="px-5 pt-3"><Banner tone="blocked" title="Couldn't load delegated agent logs">Some delegated activity is unavailable. Open the delegated run or try again.</Banner></div>
+          )}
+          {children.some((child) => child.isPending) && <p role="status" className="px-5 py-2 text-xs text-fg-secondary">Loading delegated agent logs…</p>}
           {shown.length ? (
             <ol aria-live={follow ? "polite" : "off"}>
-              {shown.map((r) => (
-                <EventRow key={r.kind === "tool" ? r.call.seq : r.e.seq} row={r} />
+              {shown.map(({ row, source, runId }) => (
+                <EventRow key={`${runId}:${row.kind === "tool" ? row.call.seq : row.e.seq}`} row={row} source={source} />
               ))}
             </ol>
           ) : (
