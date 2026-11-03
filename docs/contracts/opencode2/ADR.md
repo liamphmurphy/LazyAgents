@@ -1,34 +1,34 @@
-# Proposed opencode2 integration contract (LAZYAGENTS-20)
+# OpenCode integration contract (LAZYAGENTS-20)
 
-Status: proposed; identity/version and read-only-chat compatibility decisions required.
-Evidence date: 2026-11-03. Baseline: [[Architecture/ADR - Project chat sessions]].
-Scope: contract and inventory only. No adapter, public harness enum, credentials,
-migration, deployment or model invocation is added by this change.
+Status: finalized contract for review; runtime implementation remains gated.
+Evidence date: 2026-11-03. Baseline: [[Architecture/ADR - Project chat sessions]],
+with the chat policy amendment below. Historical directory/ticket name: opencode2.
+Scope: contract only; no adapter, enum, credentials, migration or model invocation.
 
 ## Decision and alternatives
 
-Keep the current two-harness runtime until the owner confirms whether “opencode2”
-means official Anomaly OpenCode v2, and approves an exact distribution/version.
-The installed Nix OpenCode 2.2.1 is the recommended evaluation candidate, not a
-verified supported release. An executable name alone cannot settle product intent.
+Use official `@opencode/cli`, executable `opencode`, public harness ID `opencode`,
+and verified installed release **2.2.1** as the supported contract baseline.
+The owner's explicit reply confirms this product and Claude/Codex feature parity.
+Pin that release and artifact integrity in the implementation image; do not accept
+an arbitrary PATH version or register `opencode2` as an alias. New versions require
+compatibility verification. The inspected local distribution is the Nix package;
+help/version evidence does not claim npm artifact provenance or integrity testing.
 
-Alternatives: (1) alias opencode2 to whatever opencode is on PATH: cheap, but can
-silently select another major version and incompatible permissions; rejected.
-(2) pin official v2 after confirmation and implement one narrow adapter: additional
-verification work, but reproducible invocation and replaceable boundary; proposed.
-(3) retain current harnesses indefinitely: no implementation cost, but no new
-provider choice. Revisit this decision when the owner supplies the canonical
-package/repository, approved release and intended public harness identifier.
-Rollback is to remove the future catalog entry and adapter registration, preserving
-historical run/chat records. Never rewrite historical harness or session IDs.
+Alternatives: arbitrary PATH alias is simpler but silently changes behavior;
+rejected. Keeping two harnesses avoids integration cost but misses the owner's
+request; rejected. A pinned adapter costs verification work but preserves a narrow,
+replaceable boundary; selected. Rollback removes catalog/dispatch registration,
+while preserving historical harness/model/session values. Revisit the pin when
+upstream changes the wire or policy interface.
 
 ## Verified identity and invocation evidence
 
 `cli-help.txt` is a credential-free local capture using four isolated XDG roots in
-`/tmp/lazyagents20-evidence`; no auth listing, models query or model turn was run.
-The first unisolated help attempt failed opening the user log (EPERM); isolated
-help succeeded. Installed symlink target ends in `opencode-2.2.1/bin/opencode`.
-`opencode2` is absent from PATH. This establishes the installed candidate only.
+a fresh `/tmp/lazyagents20-verified-*` directory; no auth listing, models query or model turn was run.
+The prior unisolated help attempt failed opening the user log (EPERM); fresh
+isolated help succeeded. Installed symlink target ends in `opencode-2.2.1/bin/opencode`.
+`opencode2` is absent from PATH. Fresh isolated reverification again reports v2.2.1; this is the selected baseline.
 
 Official sources, accessed 2026-11-03:
 - https://opencode.ai/v2/docs/ identifies npm `@opencode/cli` and executable `opencode`.
@@ -39,7 +39,7 @@ Official sources, accessed 2026-11-03:
   describe instruction and skill configuration; effective loading still needs a
   pinned-release test before capability advertisement.
 
-Candidate argv (construct an argv array, never shell-concatenate user input):
+Contract argv (construct an argv array, never shell-concatenate user input):
 `opencode run --standalone --format json --model <provider/model#variant> <prompt>`.
 Continuation adds `--session <opaque-id>` in the same workspace and isolated state
 roots. Never use `--continue`, which could select a different run. Local help says
@@ -51,22 +51,40 @@ The official example `anthropic/claude-sonnet-5-5` is an example, not a promised
 account entitlement or a new default. Discover and validate eligible models with
 bounded output/timeouts under the exact runtime credential context.
 
-Authentication: proposed initial provider is Anthropic API-key mode, using existing
-`harness:anthropic` -> `ANTHROPIC_API_KEY`, subject to owner confirmation. Standalone
-mode keeps requests on a private process with injected credentials. Other providers,
-OAuth/host login and a shared background service remain unsupported until separately
-specified. Never infer a key from a provider-qualified string or inject every key.
-Do not copy or inspect host auth stores. Reject a missing key before launch when
-RequireHarnessKey is set. Pin package version and artifact integrity in the future
-image; the host binary must pass the same version gate. Unsupported version or
-provider yields a sanitized availability reason and no invocation.
+Authentication/provider contract:
+
+| Model provider | Existing LazyAgents secret | Injected credential | Mode |
+| --- | --- | --- | --- |
+| `anthropic/<model>#<variant>` | `harness:anthropic` | `ANTHROPIC_API_KEY` | API key, equivalent to Claude harness |
+| `openai/<model>#<variant>` | `harness:openai` | `OPENAI_API_KEY` | API key, equivalent to Codex harness |
+
+Resolve by validated provider ID, not a single `HarnessKeys[opencode]` entry.
+Only the selected provider key is injected. This mapping is the integration contract;
+existing runner maps must be extended in LAZYAGENTS-22, including discovery/fallbacks.
+[Official CI instructions](https://opencode.ai/v2/docs/cli/commands/) verify Anthropic
+environment authentication. [Provider configuration](https://opencode.ai/v2/docs/providers/)
+supports credential environment names: explicitly configure the OpenAI provider's
+`env: ["OPENAI_API_KEY"]` rather than assume `CODEX_API_KEY` is recognized.
+This is a proposed explicit configuration, not a tested provider request.
+[Provider login docs](https://opencode.ai/v2/docs/cli/providers/) document API-key
+login and provider-specific methods; `opencode auth login openai` selects an OpenAI
+method. [ChatGPT provider docs](https://opencode.ai/v2/docs/providers/#chatgpt)
+also document ChatGPT subscription authentication. Such login is an operator action,
+never an interactive runner turn. Subscription/OAuth support requires an explicitly
+provisioned isolated account store and refresh/lifecycle tests; reject selection
+with an unavailable reason until that mechanism is implemented. Never copy or inspect
+host credentials. Other providers/custom endpoints require a declared credential,
+endpoint, discovery and pricing mapping; reject unmapped provider/auth modes before
+launch, without blocking the two API-key equivalents. Missing required key, wrong
+version or unavailable model yields sanitized diagnostics before launch. No secret
+is passed through argv/logs. Do not equate subscription zero price with zero usage.
 
 ## Normalization boundary
 
 The fixtures in `normalized.json` are synthetic desired adapter outputs, NOT captured
 OpenCode wire events. Wire envelopes, end markers, native cost semantics, streamed
-usage and abort behavior remain unverified for an approved distribution. Do not
-write a parser from these examples. Implementation is blocked until sanitized real
+usage and abort behavior remain unverified for the pinned distribution. Do not
+write a parser from these examples. Runtime enablement is gated until sanitized real
 success, auth failure, tool/MCP failure, resume and cancellation captures exist.
 
 Use existing harness.Event, Result and Usage in server/internal/harness/harness.go:
@@ -109,7 +127,7 @@ always create a new segment with no native session ID. Keep message-level SSE.
 
 ## Policy, instructions, MCP and skills
 
-All behavior below is a proposed capability gate, not an implemented guarantee.
+All behavior below is the required capability gate, not an implemented guarantee.
 The existing server remains the authority for MCP token/project authorization.
 The adapter must fail closed before launch if it cannot enforce requested scopes;
 never mark ToolGating or PermissionPrompt true merely because a CLI has permissions.
@@ -118,7 +136,7 @@ never mark ToolGating or PermissionPrompt true merely because a CLI has permissi
 | --- | --- | --- |
 | Ticket | Repo worktree, resolved overrides, generated marked AGENTS.md and context | Inject only allowed credentials; denied tools denied; approval-required operations use authenticated tool-policy/run_gated; delegated run does not claim ticket |
 | Planning | Scratch workspace, PlanningSpec, no repo/setup/external MCP | Read supplied context; only draft proposal workflow; no project shell execution, writes or ticket claims; readonly fallback options retained |
-| Read-only chat | Scratch workspace per segment, ChatSpec, no setup/repo/external MCP/fallbacks | Baseline six context tools only: whoami, search_knowledge, read_page, read_artifact, get_backlinks, get_ticket; deny memory/tracker writes, shell, delegation and complete_run |
+| Chat (filesystem read-only) | Scratch workspace per segment, ChatSpec, no setup/repo/external MCP/fallbacks | Nine current tools: whoami, search_knowledge, read_page, read_artifact, get_backlinks, get_ticket, create_ticket, create_epic, list_epics; deny memory writes, shell, delegation and complete_run |
 
 Render agent instructions/persona and attached context with existing purpose-specific
 renderers; preserve repo instructions outside the generated section for tickets.
@@ -138,23 +156,85 @@ Use 422 field errors for user selection/spec validation; queued frozen specs fai
 with a safe lifecycle/error diagnostic before credentials or setup are provided.
 Missing MCP, inability to load policy, or unsupported enforced scope must never
 silently degrade to prompt-only enforcement. Keep the catalog unavailable until
-ticket, planning and read-only chat gates are independently verified.
+ticket, planning and chat gates are independently verified.
 
-Compatibility blocker: current `agentapi/chat.go`, `runs/chat.go` and
-`harness.ChatAgentsMD` permit create_ticket/create_epic/list_epics. That exceeds the
-baseline read-only ADR. Do not remove existing behavior in this contract ticket.
-Owner must explicitly choose baseline read-only for the new harness (requiring a
-server-side purpose/capability gate) or update the ADR to accept tracker mutations.
-CLI permissions alone cannot enforce a six-tool server token allowlist. Neither
-choice is represented as already implemented here.
+Chat ADR amendment: the owner's parity decision adopts current
+`agentapi/chat.go`, `runs.ChatSpec` and `harness.ChatAgentsMD` behavior, superseding
+the older six-tool-only/no-tracker-write clauses for this integration. Ticket/epic
+creation remains project-scoped and explicitly requested; cross-project access,
+memory writes, repository execution and ticket claiming remain denied. No current
+behavior is removed. Planning retains its draft-only `propose_tickets` workflow.
+
+### Concrete configuration contract
+
+Generate a protected run-specific `opencode.json` and isolated HOME plus XDG roots.
+Keep state stable for a segment and isolate it from other runs. A sanitized chat
+configuration shape follows; placeholders are runner substitutions, never literals
+or user-controlled URLs. Validate against the pinned-release schema before launch.
+
+```json
+{
+  "providers": {"openai": {"env": ["OPENAI_API_KEY"]}},
+  "mcp": {"servers": {"lazyagents": {
+    "type": "remote", "url": "<runner MCP endpoint>", "oauth": false,
+    "codemode": false,
+    "headers": {"Authorization": "Bearer {env:LAZYAGENTS_RUN_TOKEN}"}
+  }}},
+  "permissions": [{"action": "*", "resource": "*", "effect": "deny"}],
+  "policies": [
+    {"action": "tool.use", "resource": "*", "effect": "deny"},
+    {"action": "provider.use", "resource": "*", "effect": "deny"},
+    {"action": "provider.use", "resource": "openai", "effect": "allow"},
+    {"action": "mcp.use", "resource": "*", "effect": "deny"},
+    {"action": "mcp.use", "resource": "lazyagents", "effect": "allow"}
+  ]
+}
+```
+
+The renderer adds explicit permission and policy allows for each purpose's allowed
+MCP action (`lazyagents_<tool>` / `lazyagents_<tool>:*`) and reads of generated
+context/instruction/skill files, after blanket denies. This template intentionally
+permits no tool until that expansion. Ticket policy adds only resolved scope actions;
+planning permits context reads and proposal tools, with no writes or project execution.
+No `--auto`. Required approval actions use the authenticated LazyAgents policy bridge;
+if no bridge can enforce a nonbrokered scope, reject the spec. Native subagents cannot
+replace LazyAgents delegation. Brokered operations stay server-side.
+
+[MCP configuration](https://opencode.ai/v2/docs/mcp-servers/) supplies the remote
+header and direct-tool shape. [Permissions](https://opencode.ai/v2/docs/permissions/)
+use ordered last-match rules, whereas [policies](https://opencode.ai/v2/docs/policies/)
+hard-deny tools after approvals. Invalid policy statements may be dropped, so schema
+validation and effective-denial probes are mandatory. [Managed config precedence](https://opencode.ai/v2/docs/config/) must protect policy from repository
+config and plugins with managed configuration plus OS/container isolation; XDG roots
+alone do not suppress system, ancestor, compatibility-skill or project config.
+If the backend cannot isolate these inputs or enforce read-only filesystem bounds,
+reject the requested mode; prompt instructions and shell patterns are insufficient.
+
+Render marked `AGENTS.md` using existing purpose renderers. [Instructions docs](https://opencode.ai/v2/docs/instructions/)
+confirm V2 loads AGENTS.md, not CLAUDE.md. Stage only resolved skill directories under
+`.opencode/skills/<id>/SKILL.md` with their bounded supporting files and descriptions;
+[skills docs](https://opencode.ai/v2/docs/skills/) describe native discovery and
+compatibility directories. Disable unapproved skill/plugin sources via isolation and
+policy. Test effective loading; do not execute setup scripts or fetch remote skills.
+Unknown options/tools, inherited arbitrary MCP/plugins, unsupported auth or scope
+promises are rejected with 422 at selection/validation or sanitized frozen-run failure
+before setup/credentials. Advertise capabilities only after enforcement tests.
 
 ## API, persistence and rollout
 
-No OpenAPI or generated shape change is necessary while identity/capabilities are
-unresolved: advertising an enum would claim unavailable runtime support. Keep
-Harness=[claude-code,codex]. Once the public ID is approved, update
-api/openapi.yaml first, regenerate Go and TS with make gen-check, then implement
-validation, capabilities, discovery, runner and consumer handling together.
+The confirmed target API enum is `Harness=[claude-code,codex,opencode]`.
+Do not add it in this documentation release: current validation, dispatch, secret
+selection and parser branches cannot execute it safely. An enum addition now would
+make generated clients accept a value that runtime cannot honor.
+
+Coordinated rollout: LAZYAGENTS-21 implements the gated adapter/wire boundary;
+LAZYAGENTS-22 updates api/openapi.yaml first and regenerates Go/TS, then lands
+validation, provider-aware credentials, binary routing, frozen specs, capabilities
+and discovery together. LAZYAGENTS-23 verifies chat segment behavior;
+LAZYAGENTS-24 updates consumers to the exact `opencode` enum/label and qualified
+model IDs. LAZYAGENTS-25 verifies enforcement/parity before runtime advertisement.
+Keep adapter/capability/catalog availability disabled until those gates pass.
+No alias, new endpoint, default harness change or historical value rewrite.
 Unknown selections remain existing 422 field errors. No new endpoint is required.
 Existing optional cost_source and free-form usage/event payloads carry normalized
 cost availability; retain existing chat 404/409/422 behavior and SSE invalidation.
@@ -169,8 +249,8 @@ migration proposal and db:migrate approval; no migration file or DB command here
 
 | Risk | Likelihood/impact | Mitigation and owner |
 | --- | --- | --- |
-| Wrong product/version | High/high | Main agent obtains canonical distribution, pinned release and public ID |
-| Chat policy drift | Certain/high | Owner resolves baseline vs current tracker writes; backend verifies server allowlist |
+| Version drift | Medium/high | Backend pins verified 2.2.1 and rejects unverified versions |
+| Chat policy drift | Medium/high | Backend tests nine-tool project-scoped parity and filesystem denial |
 | CLI/global config bypass | Medium/high | Backend isolates config/state and tests policy failure before launch; reject unsupported modes |
 | Session silently recreated | High/high | Backend checks existence/ownership and bounded handoff with regression capture |
 | Double usage/unknown price | Medium/high | Backend tests duplicate totals, resume deltas, missing prices and UI unknown/partial display |
@@ -181,6 +261,6 @@ Verification for implementation: fresh/resumed/same-harness-model-switch turn,
 missing session one-retry handoff, harness switch transcript bounds, missing/wrong
 key, unknown provider/version/options, malformed/truncated stream, tool error vs
 quota, explicit zero vs absent cost, resumed cumulative usage, denied/approval
-policy and cross-project MCP reads, chat memory/tracker write rejection, skills
+policy and cross-project MCP reads, chat memory write rejection and permitted tracker actions/cross-project rejection, skills
 loading and cancellation before/during/after final. No live model call is claimed.
 See inventory.md and verification.md for repository evidence and checks.
