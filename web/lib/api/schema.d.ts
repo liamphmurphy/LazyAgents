@@ -1150,7 +1150,7 @@ export interface paths {
         };
         /**
          * Harnesses and models the chat picker offers
-         * @description The catalog chats validate against (agentdef.Models). A harness is unavailable when its API-key secret is missing and the runner requires one.
+         * @description Live model catalog for all supported harnesses. Local mode queries the installed CLIs using their existing logins; Docker mode queries provider APIs using stored secrets. A harness is unavailable when discovery fails or no chat models are returned.
          */
         get: operations["listChatModels"];
         put?: never;
