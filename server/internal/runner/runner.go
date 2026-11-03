@@ -197,7 +197,7 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 	if c.run, err = q.LockRunNoWait(ctx, runID); err != nil {
 		return c, err
 	}
-	if c.run.TicketID != nil {
+	if c.run.Purpose == "ticket" && c.run.TicketID != nil {
 		if c.ticket, err = q.GetTicketByID(ctx, *c.run.TicketID); err != nil {
 			return c, err
 		}
@@ -371,7 +371,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		log.Warn("run failed to start", "reason", msg)
 		r.end(ctx, c, "failed", msg, runs.VerbRunFailed)
 	}
-	if c.run.TicketID != nil {
+	if c.run.Purpose == "ticket" && c.run.TicketID != nil {
 		blockers, err := tracker.DispatchBlockers(ctx, r.q(), c.ticket)
 		if err != nil {
 			fail("Could not check dependencies: " + err.Error())
@@ -418,11 +418,11 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		branch = *c.ticket.Branch
 	}
 	repo := ""
-	if c.run.TicketID != nil && c.project.RepoUrl != nil {
+	if c.run.Purpose == "ticket" && c.run.TicketID != nil && c.project.RepoUrl != nil {
 		repo = *c.project.RepoUrl
 	}
 	base := ""
-	if c.run.TicketID != nil {
+	if c.run.Purpose == "ticket" && c.run.TicketID != nil {
 		base = c.project.DefaultBranch
 	}
 	script := SetupScriptForBranch(repo, base, branch, c.agent.Name+" (LazyAgents)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
@@ -606,7 +606,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if err != nil {
 		log.Warn("context files", "err", err)
 	}
-	if c.run.TicketID == nil {
+	if c.run.Purpose == "planning" {
 		source, err := PlanningContextFile(ctx, q, c.run)
 		if err != nil {
 			r.end(ctx, c, "failed", "Could not load planning source: "+err.Error(), runs.VerbRunFailed)
@@ -640,7 +640,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.run.ParentRunID != nil {
 		files[".lazyagents/agents-section.md"] = harness.SubagentAgentsMD("", c.spec, paths, c.ticket.Key)
 	}
-	if c.run.TicketID == nil {
+	if c.run.Purpose == "planning" {
 		files[".lazyagents/agents-section.md"] = []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n"))
 	}
 	for k, v := range inv.Env {
@@ -862,7 +862,7 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 				return err
 			}
 			_, err := q.StartTurn(ctx, store.StartTurnParams{RunID: runID, Trigger: "resume", InputMessage: func() string {
-				if c.run.TicketID == nil {
+				if c.run.Purpose == "planning" {
 					return "You stopped without submitting a draft. Finish this planning run with propose_tickets; do not use complete_run or claim_ticket."
 				}
 				return IdleNudge
@@ -874,7 +874,7 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 		}
 		return
 	}
-	if c.run.TicketID == nil {
+	if c.run.Purpose == "planning" {
 		r.end(ctx, c, "failed", "The planner stopped without submitting proposals. Start a new plan to retry.", runs.VerbRunFailed)
 		return
 	}
