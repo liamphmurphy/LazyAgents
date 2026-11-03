@@ -30,7 +30,23 @@ var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 var repoPattern = regexp.MustCompile(`^(?:git@github\.com:|ssh://git@github\.com/)[A-Za-z0-9][A-Za-z0-9-]{0,99}/[A-Za-z0-9._-]+$`)
 var branchPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}$`)
 
+// normalize validates everything, including a strict SSH repo_url (Create).
 func normalize(in *Config) error {
+	if err := normalizeBase(in); err != nil {
+		return err
+	}
+	return validateRepoURL(in.RepoURL)
+}
+
+func validateRepoURL(u string) error {
+	if u != "" && (!repoPattern.MatchString(u) || strings.HasSuffix(u, "/..") || strings.HasSuffix(u, "/.")) {
+		return apperr.Invalid("repo_url", "use an SSH GitHub repository URL like git@github.com:owner/repo.git")
+	}
+	return nil
+}
+
+// normalizeBase trims and validates all fields except repo_url's format.
+func normalizeBase(in *Config) error {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Color = strings.TrimSpace(in.Color)
 	in.RepoURL = strings.TrimRight(strings.TrimSpace(in.RepoURL), "/")
@@ -40,9 +56,6 @@ func normalize(in *Config) error {
 	}
 	if !colorPattern.MatchString(in.Color) {
 		return apperr.Invalid("color", "use a six-digit hex color")
-	}
-	if in.RepoURL != "" && (!repoPattern.MatchString(in.RepoURL) || strings.HasSuffix(in.RepoURL, "/..") || strings.HasSuffix(in.RepoURL, "/.")) {
-		return apperr.Invalid("repo_url", "use an SSH GitHub repository URL like git@github.com:owner/repo.git")
 	}
 	if in.DefaultBranch == "" {
 		in.DefaultBranch = "main"
@@ -80,7 +93,7 @@ func (s Service) Create(ctx context.Context, ws uuid.UUID, key string, in Config
 }
 func (s Service) Update(ctx context.Context, ws uuid.UUID, key string, in Config) (store.Project, error) {
 	var out store.Project
-	if err := normalize(&in); err != nil {
+	if err := normalizeBase(&in); err != nil {
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
@@ -94,6 +107,16 @@ func (s Service) Update(ctx context.Context, ws uuid.UUID, key string, in Config
 		}
 		if p.Revision != in.Revision {
 			return apperr.Conflict("the project changed; reload before saving")
+		}
+		// An unchanged (possibly legacy HTTPS) value is kept as-is; only a new one must be SSH.
+		stored := ""
+		if p.RepoUrl != nil {
+			stored = *p.RepoUrl
+		}
+		if in.RepoURL != stored {
+			if err := validateRepoURL(in.RepoURL); err != nil {
+				return err
+			}
 		}
 		if in.Archived && !p.Archived {
 			live, err := q.ProjectHasLiveRuns(ctx, p.ID)

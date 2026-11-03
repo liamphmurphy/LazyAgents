@@ -206,8 +206,9 @@ func gitSection(spec agentdef.Resolved) string {
 	var b strings.Builder
 	b.WriteString("## Git and GitHub\n\n")
 	b.WriteString("You're on your own branch of the project's repository. Commit your work in small, clear commits. ")
-	b.WriteString("Use the `gh` CLI for everything on GitHub (pull requests, reviews, checks, issues); it is installed and already authenticated through `GH_TOKEN`, ")
-	b.WriteString("and `origin` is an SSH remote that `git push` uses directly. Never print or store the token, and never force-push.\n\n")
+	b.WriteString("`origin` is an SSH remote that `git push` uses directly. Never print or store credentials, and never force-push. ")
+	b.WriteString("Check `command -v gh` once: if the `gh` CLI is present it is authenticated through `GH_TOKEN`, so use it for everything on GitHub (pull requests, reviews, checks, issues). ")
+	b.WriteString("If it is missing, just push with `git push -u origin HEAD` and say in a ticket comment that the pull request needs to be opened by hand.\n\n")
 	step := "When the work is done and tests pass"
 	if !allowed(spec, "repo:write") {
 		step = "`repo:write` needs a person's approval: call request_approval for it, end your turn, and once you're resumed with a yes"
