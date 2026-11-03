@@ -97,7 +97,7 @@ func (s *Server) GetDispatchPreview(ctx context.Context, req api.GetDispatchPrev
 		yes := true
 		out.HasOverride = &yes
 	}
-	resolved, err := agents.Resolve(ctx, s.Q, ws, agent, p.Key)
+	resolved, err := agents.ResolveRunnable(ctx, s.Q, ws, agent, p.Key)
 	if err != nil {
 		return nil, err
 	}

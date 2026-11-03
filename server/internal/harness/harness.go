@@ -85,6 +85,8 @@ func For(name string) (Harness, error) {
 		return ClaudeCode{}, nil
 	case agentdef.HarnessCodex:
 		return Codex{}, nil
+	case agentdef.HarnessOpenCode:
+		return OpenCode{}, nil // fail-closed until the runner attests isolation
 	}
 	return nil, fmt.Errorf("harness: unknown harness %q", name)
 }

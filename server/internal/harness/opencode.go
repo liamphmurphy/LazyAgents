@@ -11,10 +11,10 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 )
 
-// HarnessOpenCode is the public harness id for the pinned OpenCode CLI. It is
-// deliberately not registered in For or agentdef: selection, dispatch and the
-// API enum land with LAZYAGENTS-22 (see docs/contracts/opencode2/ADR.md).
-const HarnessOpenCode = "opencode"
+// HarnessOpenCode is the public harness id for the pinned OpenCode CLI. For
+// returns a fail-closed adapter: the runner sets ConfigIsolated/SessionOwned
+// only when it can honor them (docs/contracts/opencode2/ADR.md).
+const HarnessOpenCode = agentdef.HarnessOpenCode
 
 // OpenCodeVersion is the only release the contract covers (ADR.md).
 const OpenCodeVersion = "2.2.1"
@@ -40,6 +40,10 @@ type OpenCode struct {
 	// run's project. Resuming without it is rejected, because `--session`
 	// silently creates a missing session.
 	SessionOwned func(id string) bool
+	// Prices are exact per-million-token prices keyed by the full model id
+	// (provider/model[#variant]). There is no built-in table: another
+	// provider's matching model name must never price this one.
+	Prices map[string]Price
 }
 
 func (OpenCode) Name() string { return HarnessOpenCode }
@@ -61,19 +65,14 @@ func OpenCodeCredentialEnv(model string) (secret, env string, err error) {
 	return "", "", fmt.Errorf("harness: unsupported opencode provider %q", provider)
 }
 
-var opencodeModel = regexp.MustCompile(`^([a-z][a-z0-9-]*)/([A-Za-z0-9][A-Za-z0-9._:/-]*)(#[A-Za-z0-9._-]+)?$`)
-
 // opencodeProvider validates provider/model#variant and returns the provider.
 // Models keep their provider and variant: no Claude or Codex aliasing applies.
 func opencodeProvider(model string) (string, error) {
-	m := opencodeModel.FindStringSubmatch(model)
-	if m == nil {
-		return "", fmt.Errorf("harness: opencode model must be provider/model[#variant], got %q", model)
+	p, err := agentdef.OpenCodeProvider(model)
+	if err != nil {
+		return "", fmt.Errorf("harness: %w", err)
 	}
-	if m[1] != "anthropic" && m[1] != "openai" {
-		return "", fmt.Errorf("harness: unsupported opencode provider %q (supported: anthropic, openai)", m[1])
-	}
-	return m[1], nil
+	return p, nil
 }
 
 // CheckOpenCodeVersion accepts `opencode --version` output only for the pin.
