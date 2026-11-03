@@ -135,3 +135,9 @@ SELECT * FROM approval_requests WHERE run_id = $1 ORDER BY created_at;
 -- Nothing ran (e.g. the secret was missing): the approval can be used again.
 UPDATE approval_requests SET executed_at = NULL WHERE id = $1 AND result IS NULL;
 
+
+-- name: SetRunModel :exec
+-- Same-harness model switch: keeps the session id and workspace.
+UPDATE runs SET model = sqlc.arg(model)::text,
+  resolved_spec = jsonb_set(resolved_spec, '{model}', to_jsonb(sqlc.arg(model)::text))
+WHERE id = sqlc.arg(id);

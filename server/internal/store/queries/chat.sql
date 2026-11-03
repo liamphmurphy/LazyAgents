@@ -74,3 +74,18 @@ WITH locked AS MATERIALIZED (
 )
 UPDATE chat_sessions SET state = 'idle', revision = revision + 1, updated_at = now()
 WHERE current_run_id IN (SELECT id FROM cancelled);
+
+-- name: SetChatSelection :one
+-- Stores the harness/model the next segment turn should use. Callers validate
+-- the pair and hold the chat row lock; the runner applies it on the next message.
+UPDATE chat_sessions SET harness = $2, model = $3, revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING *;
+
+-- name: ListRecentChatMessages :many
+-- Newest rows first, bounded by limit; bodies are clipped so the read stays small.
+SELECT seq, role, harness, model, left(body_md, sqlc.arg(max_chars)::int)::text AS body_md
+FROM chat_messages WHERE session_id = sqlc.arg(session_id) AND role IN ('user', 'assistant')
+ORDER BY seq DESC LIMIT sqlc.arg(row_limit);
+
+-- name: CountChatHistory :one
+SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('user', 'assistant');

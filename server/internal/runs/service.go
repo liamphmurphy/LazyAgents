@@ -57,6 +57,9 @@ type Service struct {
 	Tracker   *tracker.Service
 	// Poll is how often waits re-check state (tests shorten it).
 	Poll time.Duration
+	// HandoffChars bounds the prior transcript handed to a chat segment started
+	// by a harness switch (0: DefaultHandoffChars).
+	HandoffChars int
 }
 
 type Caller = agents.Caller

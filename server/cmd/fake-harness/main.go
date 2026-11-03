@@ -100,7 +100,7 @@ func newUUID() string {
 }
 
 func main() {
-	var prompt, resume, cfgPath string
+	var prompt, resume, cfgPath, model string
 	var mcpURL, tokenEnv, mcpApproval string
 	args := os.Args[1:]
 	if len(args) > 0 && args[0] == "app-server" {
@@ -145,7 +145,10 @@ func main() {
 				case "mcp_servers.lazyagents.default_tools_approval_mode":
 					mcpApproval = v
 				}
-			case "-m", "-s", "-C":
+			case "-m":
+				model = args[i+1]
+				i++
+			case "-s", "-C":
 				i++
 			default:
 				if !strings.HasPrefix(args[i], "-") {
@@ -173,6 +176,9 @@ func main() {
 		case "--resume":
 			resume = args[i+1]
 			i++
+		case "--model":
+			model = args[i+1]
+			i++
 		case "--mcp-config":
 			cfgPath = args[i+1]
 			i++
@@ -198,7 +204,7 @@ func main() {
 			result(true, "You have hit your usage limit")
 			os.Exit(1)
 		}
-		answer := fmt.Sprintf("Chat reply (resumed=%v, session=%s): %s", resume != "", session, prompt)
+		answer := fmt.Sprintf("Chat reply (resumed=%v, session=%s, model=%s): %s", resume != "", session, model, prompt)
 		text(answer)
 		result(false, answer)
 		return
