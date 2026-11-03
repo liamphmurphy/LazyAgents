@@ -646,3 +646,93 @@ func TestDelegatedRunSharesParentWorkspace(t *testing.T) {
 		t.Fatal("the delegated run got its own workspace")
 	}
 }
+
+// commitOrigin builds a local origin repo with one commit on main and points PAY at it.
+func commitOrigin(e env) (origin string, git func(args ...string) string) {
+	e.t.Helper()
+	origin = filepath.Join(e.dir, "origin")
+	if err := os.MkdirAll(origin, 0700); err != nil {
+		e.t.Fatal(err)
+	}
+	git = func(args ...string) string {
+		e.t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", origin}, args...)...).CombinedOutput()
+		if err != nil {
+			e.t.Fatalf("git %v: %v %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("init", "--quiet", "-b", "main")
+	git("config", "user.name", "Test")
+	git("config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(origin, "main.txt"), []byte("main"), 0600); err != nil {
+		e.t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "--quiet", "-m", "main")
+	if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url=$1,default_branch='main' WHERE key='PAY'", origin); err != nil {
+		e.t.Fatal(err)
+	}
+	return origin, git
+}
+
+func ticketBranch(e env, key string) string {
+	e.t.Helper()
+	tk, err := tracker.Get(e.ctx, e.q, e.ws, key)
+	if err != nil || tk.Branch == nil {
+		e.t.Fatalf("ticket branch: %v", err)
+	}
+	return *tk.Branch
+}
+
+func TestRunBranchPushedBeforeCleanup(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "commit")
+	_, git := commitOrigin(e)
+	e.dispatch("PAY-224")
+	e.until("completed", e.state("PAY-224=completed"))
+	run := e.run("PAY-224")
+	root := e.runner.Backend.WorkspaceDir(run.ID.String())
+	e.until("workspace removed", func() bool { _, err := os.Stat(root); return os.IsNotExist(err) })
+	branch := ticketBranch(e, "PAY-224")
+	if got := git("log", "-1", "--format=%s", "refs/heads/"+branch); got != "Add work.txt" {
+		t.Fatalf("origin's %s tip = %q", branch, got)
+	}
+	if git("rev-parse", "main") == git("rev-parse", "refs/heads/"+branch) {
+		t.Fatal("branch wasn't ahead of main")
+	}
+	if strings.Contains(e.eventTypes(run.ID), "workspace_kept") {
+		t.Fatalf("unexpected warning: %s", e.eventTypes(run.ID))
+	}
+}
+
+func TestUnpushableWorkspaceKept(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "commit")
+	t.Setenv("FAKE_HARNESS_BREAK_ORIGIN", "1")
+	commitOrigin(e)
+	e.dispatch("PAY-224")
+	e.until("completed", e.state("PAY-224=completed"))
+	run := e.run("PAY-224")
+	root := e.runner.Backend.WorkspaceDir(run.ID.String())
+	kept := func() bool {
+		evs, _ := e.q.ListRunEvents(e.ctx, store.ListRunEventsParams{RunID: run.ID, Seq: 0})
+		for _, ev := range evs {
+			if ev.Type == "lifecycle" && strings.Contains(string(ev.Payload), `"warning"`) && strings.Contains(string(ev.Payload), "workspace_kept") {
+				return true
+			}
+		}
+		return false
+	}
+	e.until("workspace_kept warning", kept)
+	if _, err := os.Stat(filepath.Join(root, "work.txt")); err != nil {
+		t.Fatalf("workspace should be kept: %v", err)
+	}
+	if e.run("PAY-224").WorkspaceVolume != nil {
+		t.Fatal("workspace_volume should be cleared")
+	}
+	e.runner.Sweep(e.ctx) // must not retry or remove it
+	if _, err := os.Stat(root); err != nil {
+		t.Fatalf("sweep removed the kept workspace: %v", err)
+	}
+}

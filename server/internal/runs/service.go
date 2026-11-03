@@ -41,11 +41,12 @@ const (
 	VerbRunPaused         = "run_paused"
 	VerbRunResumed        = "run_resumed"
 	VerbRunCancelled      = "run_cancelled"
-	VerbRunCompleted      = "run_completed" // {run_id, outcome}
-	VerbDispatched        = "dispatched"    // {run_id, agent_id, agent_name}
-	VerbRunFailed         = "run_failed"    // {run_id, reason}
-	VerbPRMerged          = "pr_merged"     // {number, url} (system)
-	VerbPRClosed          = "pr_closed"     // {number, url} (system)
+	VerbRunCompleted      = "run_completed"  // {run_id, outcome}
+	VerbDispatched        = "dispatched"     // {run_id, agent_id, agent_name}
+	VerbRunFailed         = "run_failed"     // {run_id, reason}
+	VerbPRMerged          = "pr_merged"      // {number, url} (system)
+	VerbPRClosed          = "pr_closed"      // {number, url} (system)
+	VerbWorkspaceKept     = "workspace_kept" // {run_id, branch, workspace, reason} (system)
 )
 
 var Terminal = []string{"completed", "failed", "cancelled"}

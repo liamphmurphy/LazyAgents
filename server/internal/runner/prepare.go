@@ -79,11 +79,16 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 	b.WriteString("if [ ! -d .git ]; then\n")
 	if repoURL != "" {
 		b.WriteString("  echo '→ cloning " + strings.ReplaceAll(repoURL, "'", "") + "'\n")
-		cloneBranch := ""
+		// The workspace already holds .lazyagents/ (ssh setup), so `git clone … .`
+		// would refuse; init + fetch works in a non-empty directory.
+		fetchRef := "HEAD"
 		if baseBranch != "" {
-			cloneBranch = "--branch " + shellQuote(baseBranch) + " -- "
+			fetchRef = shellQuote(baseBranch)
 		}
-		b.WriteString(`  if [ -n "${GH_TOKEN:-}" ]; then git -c credential.helper= -c "credential.helper=$helper" clone --quiet ` + cloneBranch + shellQuote(repoURL) + " .; else git clone --quiet " + cloneBranch + shellQuote(repoURL) + " .; fi\n")
+		b.WriteString("  git init --quiet .\n")
+		b.WriteString("  git remote add origin " + shellQuote(repoURL) + "\n")
+		b.WriteString(`  if [ -n "${GH_TOKEN:-}" ]; then git -c credential.helper= -c "credential.helper=$helper" fetch --quiet origin ` + fetchRef + "; else git fetch --quiet origin " + fetchRef + "; fi\n")
+		b.WriteString("  git checkout --quiet --detach FETCH_HEAD\n")
 	} else {
 		b.WriteString("  echo '→ no repository configured for this project: starting an empty one'\n")
 		b.WriteString("  git init --quiet -b main .\n")
@@ -106,6 +111,28 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 	}
 	b.WriteString("echo '→ workspace ready on branch " + strings.ReplaceAll(branch, "'", "") + "'\n")
 	return b.String()
+}
+
+// SaveScript pushes the run's branch before its workspace is removed. It exits
+// 0 when there's nothing to save, and non-zero when the work can't be saved
+// (tracked changes are uncommitted, or the push fails). It never commits,
+// forces, or pushes any ref but the branch.
+func SaveScript(branch string) string {
+	b := shellQuote(branch)
+	return `branch=` + b + `
+[ -d .git ] || exit 0
+git remote get-url origin >/dev/null 2>&1 || exit 0
+git rev-parse --verify --quiet "refs/heads/$branch" >/dev/null || exit 0
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "uncommitted changes to tracked files; not pushing $branch:"
+  git status --porcelain --untracked-files=no
+  exit 1
+fi
+n=$(git rev-list --count "refs/heads/$branch" --not --remotes=origin) || exit 1
+[ "$n" -gt 0 ] || exit 0
+echo "pushing $n commit(s) on $branch"
+if [ -n "${GH_TOKEN:-}" ]; then helper='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'; git -c credential.helper= -c "credential.helper=$helper" push origin "refs/heads/$branch:refs/heads/$branch"; else git push origin "refs/heads/$branch:refs/heads/$branch"; fi
+`
 }
 
 // TurnWrapper git-excludes skill files, writes AGENTS.md (our section above the repo's own) and then

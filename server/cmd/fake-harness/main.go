@@ -12,6 +12,8 @@
 //	idle                end the turn without saying what's next
 //	crash               exit 3 with an error result
 //	slow                wait for SIGINT (pause), then end the turn
+//	commit              claim, commit work.txt in the checkout (FAKE_HARNESS_BREAK_ORIGIN=1
+//	                    first points origin at a nonexistent path), complete_run
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
 //	                    writes child.txt in the shared checkout and completes
 //
@@ -26,6 +28,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -298,6 +301,26 @@ func main() {
 		call("delegate", map[string]any{"agent": "scribe", "task": "Write child.txt"})
 		text("Delegated to @scribe. Ending my turn until it reports back.")
 		result(false, "Waiting for the sub agent.")
+		return
+	}
+	if os.Getenv("FAKE_HARNESS_MODE") == "commit" {
+		run := func(args ...string) {
+			if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+				result(true, fmt.Sprintf("git %v: %v %s", args, err, out))
+				os.Exit(2)
+			}
+		}
+		if err := os.WriteFile("work.txt", []byte("committed by the agent\n"), 0o644); err != nil {
+			result(true, err.Error())
+			os.Exit(2)
+		}
+		run("add", "work.txt")
+		run("commit", "--quiet", "-m", "Add work.txt")
+		if os.Getenv("FAKE_HARNESS_BREAK_ORIGIN") == "1" {
+			run("remote", "set-url", "origin", "/nonexistent")
+		}
+		call("complete_run", map[string]any{"outcome": "Committed work.txt"})
+		result(false, "Done.")
 		return
 	}
 	call("post_plan", map[string]any{"steps": []string{"Read context", "Make the change", "Apply to staging"}})

@@ -2,6 +2,10 @@
 // dispatched runs off the queue, prepares a workspace that persists between
 // turns, runs each turn as one headless harness invocation, streams its
 // events into run_events, and decides what happens when the process exits.
+//
+// Before a top-level run's workspace is removed, the runner pushes the run's
+// branch (SaveScript). If that fails or tracked changes are uncommitted, the
+// workspace is kept and a workspace_kept warning is recorded (PLAN.md §6.5).
 package runner
 
 import (

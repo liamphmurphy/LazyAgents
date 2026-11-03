@@ -29,3 +29,18 @@ func TestSetupScriptSSH(t *testing.T) {
 		t.Fatalf("core.sshCommand = %q", cfg)
 	}
 }
+
+func TestSaveScriptQuotesBranchAndNeverForces(t *testing.T) {
+	s := SaveScript("feat/it's")
+	if !strings.Contains(s, `branch='feat/it'\''s'`) {
+		t.Fatalf("branch not quoted: %s", s)
+	}
+	for _, bad := range []string{"--force", " -f ", "--mirror", "--all", "+refs"} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("script contains %q", bad)
+		}
+	}
+	if !strings.Contains(s, `refs/heads/$branch:refs/heads/$branch`) || !strings.Contains(s, "--untracked-files=no") {
+		t.Fatalf("script %s", s)
+	}
+}

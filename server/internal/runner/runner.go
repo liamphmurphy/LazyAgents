@@ -275,12 +275,138 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 	}
 }
 
+// revealGitCreds adds the git credentials to env when the agent may read or
+// write the repo: setup clones a private repo even when the agent only reads
+// it, and the save step pushes with the same credentials.
+func (r *Runner) revealGitCreds(ctx context.Context, ws, project uuid.UUID, spec agentdef.Resolved, env map[string]string) {
+	if !allowedScope(spec, "repo:read") && !allowedScope(spec, "repo:write") {
+		return
+	}
+	if env["GH_TOKEN"] == "" {
+		if v, err := r.Secrets.Reveal(ctx, ws, &project, "git:pat"); err == nil {
+			env["GH_TOKEN"] = v
+		}
+	}
+	if env[SSHKeyEnv] == "" {
+		if v, err := r.Secrets.Reveal(ctx, ws, &project, "git:ssh"); err == nil {
+			env[SSHKeyEnv] = v
+		}
+	}
+}
+
+// saveTimeout bounds the push that runs before a workspace is removed.
+const saveTimeout = 2 * time.Minute
+
+// cleanup removes a top-level run's workspace, after pushing the run's branch
+// so no commits are lost. When the branch can't be saved the workspace stays,
+// a warning is recorded, and workspace_volume is cleared so Sweep moves on.
 func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
+	if branch, reason := r.saveBranch(ctx, runID); reason != "" {
+		r.keepWorkspace(ctx, runID, branch, reason)
+		return
+	}
 	if err := r.Backend.RemoveWorkspace(ctx, runID.String()); err != nil {
 		r.Log.Warn("remove workspace", "run", runID, "err", err)
 		return
 	}
 	_ = r.q().SetRunWorkspace(ctx, store.SetRunWorkspaceParams{ID: runID, WorkspaceVolume: nil})
+}
+
+// saveBranch pushes the run's branch if it has commits origin lacks. It
+// returns a non-empty reason when the workspace must be kept.
+func (r *Runner) saveBranch(ctx context.Context, runID uuid.UUID) (branch, reason string) {
+	q := r.q()
+	run, err := q.LockRunNoWait(ctx, runID) // a plain read despite the name
+	if err != nil {
+		return "", "couldn't load the run: " + err.Error()
+	}
+	if run.TicketID == nil {
+		return "", "" // planning runs have no branch
+	}
+	t, err := q.GetTicketByID(ctx, *run.TicketID)
+	if err != nil {
+		return "", "couldn't load the ticket: " + err.Error()
+	}
+	if t.Branch == nil || *t.Branch == "" {
+		return "", ""
+	}
+	branch = *t.Branch
+	p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: run.WorkspaceID})
+	if err != nil {
+		return branch, "couldn't load the project: " + err.Error()
+	}
+	spec, _ := runs.Spec(run)
+	if spec.Repository != nil {
+		p.DefaultBranch = spec.Repository.DefaultBranch
+	}
+	if branch == p.DefaultBranch {
+		return branch, "the run's branch is the default branch; the runner never pushes it"
+	}
+	env := map[string]string{}
+	r.revealGitCreds(ctx, run.WorkspaceID, p.ID, spec, env)
+
+	sctx, cancel := context.WithTimeout(ctx, saveTimeout)
+	defer cancel()
+	proc, err := r.Backend.Start(sctx, runID.String(), ExecSpec{
+		Name: "lazyagents-save-" + runID.String(), Argv: []string{"sh", "-c", SaveScript(branch)}, Env: env,
+	})
+	if err != nil {
+		return branch, "couldn't start the save step: " + err.Error()
+	}
+	var out bytes.Buffer
+	var mu sync.Mutex
+	var cp sync.WaitGroup
+	for _, rd := range []io.Reader{proc.Stdout(), proc.Stderr()} {
+		cp.Add(1)
+		go func() {
+			defer cp.Done()
+			b, _ := io.ReadAll(io.LimitReader(rd, 1<<20))
+			mu.Lock()
+			out.Write(b)
+			mu.Unlock()
+		}()
+	}
+	timer := time.AfterFunc(saveTimeout, func() { _ = proc.Kill() })
+	code, err := proc.Wait()
+	timer.Stop()
+	timedOut := sctx.Err() != nil
+	if timedOut {
+		_ = proc.Kill()
+	}
+	cp.Wait()
+	if c, ok := proc.(io.Closer); ok {
+		_ = c.Close()
+	}
+	mu.Lock()
+	tail := lastLines(redact(out.String(), env), 20)
+	mu.Unlock()
+	switch {
+	case timedOut:
+		return branch, "timed out saving the branch:\n" + tail
+	case err != nil:
+		return branch, fmt.Sprintf("save step failed: %v\n%s", err, tail)
+	case code != 0:
+		return branch, fmt.Sprintf("save step exited %d:\n%s", code, tail)
+	}
+	return branch, ""
+}
+
+func (r *Runner) keepWorkspace(ctx context.Context, runID uuid.UUID, branch, reason string) {
+	dir := r.Backend.WorkspaceDir(runID.String())
+	r.Log.Warn("keeping workspace", "run", runID, "branch", branch, "workspace", dir)
+	// run_events.type has no "warning" (a CHECK constraint, and this change adds no
+	// migration), so the warning is a lifecycle event with level "warning".
+	r.event(ctx, runID, "lifecycle", map[string]any{"state": "workspace_kept", "level": "warning", "kind": "workspace_kept", "branch": branch, "workspace": dir, "reason": reason})
+	q := r.q()
+	if run, err := q.LockRunNoWait(ctx, runID); err == nil && run.TicketID != nil {
+		if t, err := q.GetTicketByID(ctx, *run.TicketID); err == nil {
+			if err := runnerRecord(ctx, q, run.WorkspaceID, t.ID, t.EpicID, r.system(), runs.VerbWorkspaceKept,
+				map[string]any{"run_id": runID, "branch": branch, "workspace": dir, "reason": reason}, nil); err != nil {
+				r.Log.Warn("record workspace_kept", "run", runID, "err", err)
+			}
+		}
+	}
+	_ = q.SetRunWorkspace(ctx, store.SetRunWorkspaceParams{ID: runID, WorkspaceVolume: nil})
 }
 
 // Sweep removes workspaces of runs that ended between turns.
@@ -397,18 +523,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		fail("Couldn't decrypt secrets: " + err.Error())
 		return
 	}
-	// Setup may clone a private repo even when the agent can only read it.
-	if gh := env["GH_TOKEN"]; gh == "" && (allowedScope(c.spec, "repo:read") || allowedScope(c.spec, "repo:write")) {
-		if v, err := r.Secrets.Reveal(ctx, run.WorkspaceID, &c.project.ID, "git:pat"); err == nil {
-			env["GH_TOKEN"] = v
-		}
-	}
-	// Same for the SSH key: setup clones over SSH even when the agent only reads.
-	if env[SSHKeyEnv] == "" && (allowedScope(c.spec, "repo:read") || allowedScope(c.spec, "repo:write")) {
-		if v, err := r.Secrets.Reveal(ctx, run.WorkspaceID, &c.project.ID, "git:ssh"); err == nil {
-			env[SSHKeyEnv] = v
-		}
-	}
+	r.revealGitCreds(ctx, run.WorkspaceID, c.project.ID, c.spec, env)
 	if err := r.Backend.EnsureWorkspace(ctx, run.ID.String()); err != nil {
 		fail("Couldn't create the workspace: " + err.Error())
 		return
