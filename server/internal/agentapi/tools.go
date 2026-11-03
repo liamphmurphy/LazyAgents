@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -59,6 +60,8 @@ type WhoamiOut struct {
 	Session      string         `json:"session"`
 	LiveRuns     []string       `json:"live_runs"`
 	Queue        []QueueItem    `json:"queue"`
+	Project      string         `json:"project,omitempty"` // chats only
+	ChatID       string         `json:"chat_id,omitempty"` // chats only
 }
 
 type QueueItem struct {
@@ -89,6 +92,16 @@ func whoami(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) 
 				}
 			}
 		}
+	}
+	// A chat has no tickets or queue: it answers a person from project context.
+	scope, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
+	if scope != nil {
+		out.Instructions = fmt.Sprintf(chatInstructions, scope.ProjectKey, scope.ChatID) + "\n\n" + out.Instructions
+		out.Project, out.ChatID = scope.ProjectKey, scope.ChatID.String()
+		return out, nil
 	}
 	live, err := d.Q.ActiveRunsForAgent(ctx, c.Agent.ID)
 	if err != nil {
@@ -147,8 +160,12 @@ type GetTicketIn struct {
 
 func getTicket(ctx context.Context, d Deps, c agents.Caller, in GetTicketIn) (any, error) {
 	ws := c.Agent.WorkspaceID
-	t, err := tracker.Get(ctx, d.Q, ws, strings.ToUpper(strings.TrimSpace(in.Ticket)))
+	scope, err := chatScopeFor(ctx, d, c)
 	if err != nil {
+		return nil, err
+	}
+	t, err := tracker.Get(ctx, d.Q, ws, strings.ToUpper(strings.TrimSpace(in.Ticket)))
+	if err != nil || !scope.allowsTicket(t) {
 		return nil, apperr.Invalid("ticket", "no ticket %s", in.Ticket)
 	}
 	crit, err := d.Q.ListCriteria(ctx, t.ID)
@@ -209,8 +226,21 @@ type ReadArtifactIn struct {
 	Section  string `json:"section,omitempty" jsonschema:"Optional section anchor from the outline, e.g. reconciliation-performance"`
 }
 
+// readRunID is the run a read is attributed to: the live run when there is
+// one, else the token's own run (chat runs have no ticket for Active to find).
+func readRunID(ctx context.Context, d Deps, c agents.Caller, ticket string) *uuid.UUID {
+	if run, _, err := d.Runs.Active(ctx, d.Q, c, ticket); err == nil {
+		return &run.ID
+	}
+	return c.RunID
+}
+
 func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactIn) (any, error) {
 	ws := c.Agent.WorkspaceID
+	scope, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
 	var a store.Artifact
 	ref := strings.TrimSpace(in.Artifact)
 	if id, err := uuid.Parse(ref); err == nil {
@@ -233,6 +263,9 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 	} else {
 		return nil, apperr.Invalid("artifact", "pass an artifact id or ADR-NNN")
 	}
+	if !scope.allowsArtifact(a) {
+		return nil, apperr.Invalid("artifact", "no artifact %s", ref)
+	}
 	if a.CurrentVersionID == nil {
 		return nil, apperr.Invalid("artifact", "has no content")
 	}
@@ -252,10 +285,7 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 		body = sec
 	}
 	// Reads are attributed to the run when there is one, for citation counts.
-	runID := c.RunID
-	if run, _, err := d.Runs.Active(ctx, d.Q, c, in.Ticket); err == nil {
-		runID = &run.ID
-	}
+	runID := readRunID(ctx, d, c, in.Ticket)
 	if err := artifacts.RecordRead(ctx, d.Q, a, c.Agent.ID, runID, in.Section, nil); err != nil {
 		return nil, err
 	}
@@ -417,8 +447,18 @@ func searchKnowledge(ctx context.Context, d Deps, c agents.Caller, in SearchIn) 
 	if strings.TrimSpace(in.Q) == "" {
 		return nil, apperr.Invalid("q", "is required")
 	}
+	scope, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
 	var project *uuid.UUID
-	if in.Project != "" {
+	if scope != nil {
+		// A chat searches its own project (plus project-less pages); a project argument can't widen that.
+		project = &scope.ProjectID
+		if in.Project != "" && !strings.EqualFold(strings.TrimSpace(in.Project), scope.ProjectKey) {
+			return nil, apperr.Invalid("project", "chats can only search project %s", scope.ProjectKey)
+		}
+	} else if in.Project != "" {
 		p, err := d.Q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: c.Agent.WorkspaceID, Key: strings.ToUpper(in.Project)})
 		if err != nil {
 			return nil, apperr.Invalid("project", "no project %s", in.Project)
@@ -438,6 +478,10 @@ func searchKnowledge(ctx context.Context, d Deps, c agents.Caller, in SearchIn) 
 
 func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, error) {
 	ws := c.Agent.WorkspaceID
+	scope, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
 	ref, t, err := wiki.LookupRef(ctx, d.Q, ws, in.Ref)
 	if err != nil {
 		return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
@@ -451,6 +495,9 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 	a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws})
 	if err != nil {
 		return nil, err
+	}
+	if !scope.allowsArtifact(a) {
+		return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
 	}
 	if a.CurrentVersionID == nil {
 		return nil, apperr.Invalid("ref", "%q is only a suggestion so far", in.Ref)
@@ -474,10 +521,7 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 		}
 		body = sec
 	}
-	var runID *uuid.UUID
-	if run, _, err := d.Runs.Active(ctx, d.Q, c, in.Ticket); err == nil {
-		runID = &run.ID
-	}
+	runID := readRunID(ctx, d, c, in.Ticket)
 	if err := artifacts.RecordRead(ctx, d.Q, a, c.Agent.ID, runID, anchor, nil); err != nil {
 		return nil, err
 	}
@@ -523,21 +567,40 @@ func writeNote(ctx context.Context, d Deps, c agents.Caller, in WriteNoteIn) (an
 
 func getBacklinks(ctx context.Context, d Deps, c agents.Caller, in BacklinksIn) (any, error) {
 	ws := c.Agent.WorkspaceID
+	scope, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
 	ref, t, err := wiki.LookupRef(ctx, d.Q, ws, in.Ref)
 	if err != nil {
 		return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
+	}
+	if scope != nil {
+		// The target and every source must be in the chat's project (or workspace-wide).
+		if ok, err := scope.sourceVisible(ctx, d, ref.Kind, ref.ID); err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
+		}
 	}
 	bl, err := wiki.Backlinks(ctx, d.Q, ws, ref)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]map[string]any, len(bl))
-	for i, m := range bl {
+	out := make([]map[string]any, 0, len(bl))
+	for _, m := range bl {
+		if scope != nil {
+			if ok, err := scope.sourceVisible(ctx, d, m.SourceKind, m.SourceID); err != nil {
+				return nil, err
+			} else if !ok {
+				continue
+			}
+		}
 		r := map[string]any{"ref": wiki.LinkText(m.Source), "kind": m.Source.Kind, "title": m.Source.Title, "snippets": m.Snippets}
 		if len(m.Anchors) > 0 {
 			r["cites_sections"] = m.Anchors
 		}
-		out[i] = r
+		out = append(out, r)
 	}
 	return map[string]any{"target": t.Title, "linked_from": out}, nil
 }

@@ -33,7 +33,15 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 			if err != nil {
 				return nil, err
 			}
-			if run.TicketID == nil {
+			switch {
+			case run.Purpose == "chat":
+				if !slices.Contains(chatTools, name) {
+					return nil, apperr.Conflict("%s isn't available in chats", name)
+				}
+				if slices.Contains([]string{"completed", "failed", "cancelled"}, run.State) {
+					return nil, apperr.Conflict("chat run is %s", run.State)
+				}
+			case run.TicketID == nil:
 				if !slices.Contains([]string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}, name) {
 					return nil, apperr.Conflict("planning runs can read context and propose tickets only")
 				}

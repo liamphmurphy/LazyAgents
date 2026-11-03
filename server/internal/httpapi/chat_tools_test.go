@@ -1,0 +1,197 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http/httptest"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/liamphmurphy/lazyagents/server/internal/agents"
+	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/runs"
+	"github.com/liamphmurphy/lazyagents/server/internal/seed"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
+	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
+)
+
+// A chat run's token reaches only the read-only context tools, and only for its own project.
+func TestChatRunToolAuthorization(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	q := store.New(pool)
+	arts := &artifacts.Service{Pool: pool}
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true, Artifacts: arts}); err != nil {
+		t.Fatal(err)
+	}
+	me, _ := q.GetLocalUser(ctx)
+	ws := me.WorkspaceID
+	atlas, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "atlas"})
+	tr := &tracker.Service{Pool: pool}
+	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
+	wk := &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}
+	handler := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: wk}).Handler()
+	call := func(token, name string, args any) (int, map[string]any) {
+		t.Helper()
+		raw, _ := json.Marshal(args)
+		req := httptest.NewRequest("POST", "/api/v1/agent/tools/"+name, bytes.NewReader(raw))
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		var out map[string]any
+		_ = json.Unmarshal(w.Body.Bytes(), &out)
+		return w.Code, out
+	}
+
+	// Content: the same word in a PAY page, a MOB page, a workspace-wide note and one ticket per project.
+	const word = "zebrafoxtrot"
+	md := "# Title\n\n## Findings\n\n" + word + " body\n"
+	payDoc, err := arts.Create(ctx, ws, artifacts.Actor{Type: "user", ID: me.ID}, artifacts.NewArtifact{ProjectKey: "PAY", Type: "spec", Title: "Pay " + word, Content: artifacts.Content{BodyMD: &md}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mobDoc, err := arts.Create(ctx, ws, artifacts.Actor{Type: "user", ID: me.ID}, artifacts.NewArtifact{ProjectKey: "MOB", Type: "spec", Title: "Mob " + word, Content: artifacts.Content{BodyMD: &md}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	note, err := wk.SaveAsUser(ctx, ws, me.ID, wiki.Save{Path: "Shared/Global " + word, Body: "workspace-wide " + word})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = wk.SaveAsUser(ctx, ws, me.ID, wiki.Save{Path: "Shared/Mob links " + word, ProjectKey: "MOB", Body: "secret " + word + " cites [[Pay " + word + "]]"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = wk.SaveAsUser(ctx, ws, me.ID, wiki.Save{Path: "Shared/Pay links " + word, ProjectKey: "PAY", Body: "public " + word + " cites [[Pay " + word + "]]"}); err != nil {
+		t.Fatal(err)
+	}
+	mt, err := tr.Create(ctx, ws, tracker.UserActor(me.ID), tracker.NewTicket{ProjectKey: "MOB", Title: "Mobile " + word})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mobTicket := mt.Key
+
+	chat, err := rs.StartChat(ctx, ws, me.ID, runs.ChatInput{Project: "PAY", AgentID: atlas.ID, Title: "Tools", Message: &runs.ChatMessageInput{Body: "hello"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat, err = q.GetChatSession(ctx, store.GetChatSessionParams{ID: chat.ID, WorkspaceID: ws})
+	if err != nil || chat.CurrentRunID == nil {
+		t.Fatalf("chat run: %v", err)
+	}
+	runID := *chat.CurrentRunID
+	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: runID, State: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := agents.IssueToken(ctx, q, atlas.ID, "run", "chat", &runID, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Every registered tool: the allowlist works, everything else (including tools added later) is refused by name.
+	req := httptest.NewRequest("GET", "/api/v1/agent/tools", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var listed struct{ Tools []struct{ Name string } }
+	if err := json.Unmarshal(w.Body.Bytes(), &listed); err != nil || len(listed.Tools) < 20 {
+		t.Fatalf("tool list: %s %v", w.Body.String(), err)
+	}
+	allowed := map[string]any{
+		"whoami": map[string]any{}, "search_knowledge": map[string]any{"q": word}, "read_page": map[string]any{"ref": *note.Note.Path},
+		"read_artifact": map[string]any{"artifact": payDoc.ID.String()}, "get_ticket": map[string]any{"ticket": "PAY-214"},
+		"get_backlinks": map[string]any{"ref": payDoc.ID.String()},
+	}
+	seen := 0
+	for _, tool := range listed.Tools {
+		args, ok := allowed[tool.Name]
+		code, out := call(token, tool.Name, args)
+		if ok {
+			seen++
+			if code != 200 {
+				t.Errorf("%s: %d %v", tool.Name, code, out)
+			}
+			continue
+		}
+		if code != 409 || out["message"] != tool.Name+" isn't available in chats" {
+			t.Errorf("%s: %d %v", tool.Name, code, out)
+		}
+	}
+	if seen != len(allowed) {
+		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed))
+	}
+
+	// whoami is chat-specific: no ticket queue, project and chat named.
+	_, who := call(token, "whoami", map[string]any{})
+	ins := fmt.Sprint(who["instructions"])
+	if who["project"] != "PAY" || who["chat_id"] != chat.ID.String() || !strings.Contains(ins, "Never claim tickets") || !strings.Contains(ins, "[[") || len(who["queue"].([]any)) != 0 || len(who["live_runs"].([]any)) != 0 {
+		t.Fatalf("chat whoami = %v", who)
+	}
+
+	// Search stays in the chat's project plus workspace-wide pages.
+	titles := func(args map[string]any) string {
+		code, out := call(token, "search_knowledge", args)
+		if code != 200 {
+			t.Fatalf("search %v: %d %v", args, code, out)
+		}
+		var ts []string
+		for _, r := range out["results"].([]any) {
+			ts = append(ts, r.(map[string]any)["title"].(string))
+		}
+		slices.Sort(ts)
+		return strings.Join(ts, "|")
+	}
+	got := titles(map[string]any{"q": word})
+	if !strings.Contains(got, "Pay "+word) || !strings.Contains(got, "Global "+word) || strings.Contains(got, "Mob") {
+		t.Fatalf("scoped search = %s", got)
+	}
+	if narrowed := titles(map[string]any{"q": word, "project": "pay"}); narrowed != got {
+		t.Fatalf("explicit own project = %s, want %s", narrowed, got)
+	}
+	if code, out := call(token, "search_knowledge", map[string]any{"q": word, "project": "MOB"}); code != 422 {
+		t.Fatalf("foreign project search = %d %v", code, out)
+	}
+
+	// Foreign content looks like it doesn't exist.
+	if code, out := call(token, "get_ticket", map[string]any{"ticket": mobTicket}); code != 422 || out["message"] != "ticket: no ticket "+mobTicket {
+		t.Fatalf("foreign ticket = %d %v", code, out)
+	}
+	if code, out := call(token, "read_artifact", map[string]any{"artifact": mobDoc.ID.String()}); code != 422 || !strings.Contains(fmt.Sprint(out["message"]), "no artifact") {
+		t.Fatalf("foreign artifact = %d %v", code, out)
+	}
+	if code, out := call(token, "read_page", map[string]any{"ref": mobDoc.ID.String()}); code != 422 {
+		t.Fatalf("foreign page = %d %v", code, out)
+	}
+	if code, out := call(token, "get_backlinks", map[string]any{"ref": mobDoc.ID.String()}); code != 422 {
+		t.Fatalf("foreign backlinks = %d %v", code, out)
+	}
+	_, bl := call(token, "get_backlinks", map[string]any{"ref": payDoc.ID.String()})
+	linked := fmt.Sprint(bl["linked_from"])
+	if !strings.Contains(linked, "Pay links") || strings.Contains(linked, "Mob links") {
+		t.Fatalf("backlinks leak across projects: %v", bl)
+	}
+
+	// Reads are attributed to the chat run, with the section read.
+	if code, out := call(token, "read_artifact", map[string]any{"artifact": payDoc.ID.String(), "section": "findings"}); code != 200 {
+		t.Fatalf("section read = %d %v", code, out)
+	}
+	if code, out := call(token, "read_page", map[string]any{"ref": *note.Note.Path}); code != 200 {
+		t.Fatalf("note read = %d %v", code, out)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM artifact_reads WHERE run_id=$1", runID).Scan(&n); err != nil || n < 4 {
+		t.Fatalf("reads attributed to chat run = %d, %v", n, err)
+	}
+
+	// A finished chat run is refused even for allowed tools.
+	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: runID, State: "failed"}); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := call(token, "whoami", map[string]any{}); code != 409 || !strings.Contains(fmt.Sprint(out["message"]), "chat run is failed") {
+		t.Fatalf("failed chat run = %d %v", code, out)
+	}
+}
