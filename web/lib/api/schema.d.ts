@@ -1040,6 +1040,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The local user's chats, most recently active first */
+        get: operations["listChats"];
+        put?: never;
+        /**
+         * Start a chat in a project
+         * @description Creates an idle chat. Nothing runs until the first message. When
+         *     `message` is set it is posted as the first message (same rules as
+         *     POST /chats/{id}/messages). 422 for an unknown or archived project,
+         *     an unknown or sub agent, or a harness/model not in GET /chat-models.
+         */
+        post: operations["createChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getChat"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a chat and its messages
+         * @description Cancels a running turn first. The chat's runs stay for cost history.
+         */
+        delete: operations["deleteChat"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, archive or restore a chat (revision-checked)
+         * @description Archiving ends the chat's current run and removes its workspace. 409 on a stale revision or while a turn is running.
+         */
+        patch: operations["updateChat"];
+        trace?: never;
+    };
+    "/chats/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** Messages in order of seq */
+        get: operations["listChatMessages"];
+        put?: never;
+        /**
+         * Send a message and start the assistant's turn
+         * @description Stores the user message and queues a turn. The reply arrives
+         *     later as an assistant message; watch for `chat.updated`.
+         *     `harness`/`model` switch the chat from this message on (same harness:
+         *     same session, new model; other harness: new session with a
+         *     transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
+         *     is running or the chat is archived; 422 empty body, unknown
+         *     harness/model, or a context ref outside the chat's project.
+         */
+        post: operations["postChatMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop the running turn
+         * @description Interrupts the current turn (like run pause, SIGINT then kill); the chat returns to idle with a system message. 409 when no turn is running.
+         */
+        post: operations["cancelChatTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Harnesses and models the chat picker offers
+         * @description The catalog chats validate against (agentdef.Models). A harness is unavailable when its API-key secret is missing and the runner requires one.
+         */
+        get: operations["listChatModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1084,6 +1205,7 @@ export interface components {
             key: string;
             name: string;
             color: string;
+            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
             repo_url?: string;
             default_branch: string;
             archived: boolean;
@@ -2125,12 +2247,14 @@ export interface components {
             key: string;
             name: string;
             color: string;
+            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
             repo_url: string;
             default_branch: string;
         };
         ProjectUpdate: {
             name: string;
             color: string;
+            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
             repo_url: string;
             default_branch: string;
             archived: boolean;
@@ -2142,6 +2266,126 @@ export interface components {
             key: string;
             title: string;
             status: components["schemas"]["TicketStatus"];
+        };
+        /**
+         * @description idle: waiting for the person; running: a turn is queued or executing; failed: the last turn failed (posting again retries)
+         * @enum {string}
+         */
+        ChatState: "idle" | "running" | "failed";
+        /** @description Something attached to a message for the assistant to read. Exactly one of id or key; must belong to the chat's project (notes may be workspace-wide). */
+        ChatContextRef: {
+            /** @enum {string} */
+            kind: "artifact" | "section" | "ticket" | "page";
+            /**
+             * Format: uuid
+             * @description Artifact or wiki page id
+             */
+            id?: string;
+            /** @description Ticket key */
+            key?: string;
+            /** @description Section anchor when kind is section */
+            anchor?: string;
+        };
+        /** @description Something the assistant read while answering (from read_artifact / read_page / get_ticket) */
+        ChatCitation: {
+            target: components["schemas"]["LinkTarget"];
+        };
+        ChatSession: {
+            /** Format: uuid */
+            id: string;
+            /** @description Project key */
+            project: string;
+            /** @description Defaults to the start of the first message */
+            title: string;
+            agent: components["schemas"]["AgentRef"];
+            harness: components["schemas"]["Harness"];
+            /** @description The model the next turn uses */
+            model: string;
+            state: components["schemas"]["ChatState"];
+            /** @description Why the last turn failed */
+            error?: string;
+            /**
+             * Format: uuid
+             * @description The run serving the current harness segment; its events show live activity
+             */
+            current_run_id?: string;
+            archived: boolean;
+            revision: number;
+            message_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            last_message_at?: string;
+        };
+        NewChat: {
+            /** @description Project key */
+            project: string;
+            title?: string;
+            /**
+             * Format: uuid
+             * @description A main agent; the server picks the default when omitted
+             */
+            agent_id?: string;
+            harness?: components["schemas"]["Harness"];
+            /** @description Defaults to the harness's default model in GET /chat-models */
+            model?: string;
+            message?: components["schemas"]["NewChatMessage"];
+        };
+        ChatPatch: {
+            revision: number;
+            title?: string;
+            archived?: boolean;
+        };
+        NewChatMessage: {
+            body: string;
+            harness?: components["schemas"]["Harness"];
+            model?: string;
+            context_refs?: components["schemas"]["ChatContextRef"][];
+        };
+        ChatMessage: {
+            /** Format: uuid */
+            id: string;
+            /** @description 1-based, monotonic per chat */
+            seq: number;
+            /**
+             * @description system: switches, handoffs, cancels and errors, shown inline
+             * @enum {string}
+             */
+            role: "user" | "assistant" | "system";
+            body_md: string;
+            harness?: components["schemas"]["Harness"];
+            model?: string;
+            /** Format: uuid */
+            run_id?: string;
+            /** @description The run turn that produced an assistant message */
+            turn_seq?: number;
+            context_refs?: components["schemas"]["ChatContextRef"][];
+            citations?: components["schemas"]["ChatCitation"][];
+            author?: components["schemas"]["UserRef"];
+            /** Format: int64 */
+            input_tokens?: number;
+            /** Format: int64 */
+            output_tokens?: number;
+            cost_usd?: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ChatModel: {
+            /** @description Value for the model field, e.g. opus-5.5 or gpt-5-codex */
+            id: string;
+            label: string;
+            /** @description The harness's default model */
+            default: boolean;
+        };
+        ChatHarnessModels: {
+            harness: components["schemas"]["Harness"];
+            label: string;
+            available: boolean;
+            /** @description e.g. no harness:openai secret */
+            unavailable_reason?: string;
+            models: components["schemas"]["ChatModel"][];
         };
     };
     responses: {
@@ -2162,6 +2406,7 @@ export interface components {
         TicketKey: string;
         AgentHandle: string;
         ArtifactId: string;
+        ChatId: string;
     };
     requestBodies: never;
     headers: never;
@@ -3930,6 +4175,251 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChats: {
+        parameters: {
+            query?: {
+                /** @description Project key; omit for all projects */
+                project?: string;
+                /** @description true lists archived chats instead */
+                archived?: boolean;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chats, 50 per page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        chats: components["schemas"]["ChatSession"][];
+                        has_more: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewChat"];
+            };
+        };
+        responses: {
+            /** @description The chat */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSession"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chat */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSession"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatPatch"];
+            };
+        };
+        responses: {
+            /** @description The updated chat */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSession"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatMessages: {
+        parameters: {
+            query?: {
+                /** @description Only messages with a greater seq (refetch after chat.updated) */
+                after?: number;
+                /** @description Only messages with a smaller seq (page back through history) */
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Messages, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        messages: components["schemas"]["ChatMessage"][];
+                        /** @description Older messages exist before the first one returned */
+                        has_more: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    postChatMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewChatMessage"];
+            };
+        };
+        responses: {
+            /** @description Message stored and turn queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        chat: components["schemas"]["ChatSession"];
+                        message: components["schemas"]["ChatMessage"];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelChatTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chat */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSession"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Harnesses in display order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatHarnessModels"][];
                 };
             };
             default: components["responses"]["Error"];
