@@ -119,12 +119,15 @@ type Override struct {
 	Budget             Budget          `json:"budget"`
 	MCPServersAdd      []MCPServer     `json:"mcp_servers_add,omitempty"`
 	Setup              []string        `json:"setup,omitempty"`
+	SkillsAdd          []Skill         `json:"skills_add,omitempty"`
+	SkillsRemove       []string        `json:"skills_remove,omitempty"`
 }
 
 // Empty reports whether the override changes nothing.
 func (o Override) Empty() bool {
 	return o.Harness == "" && o.Model == "" && strings.TrimSpace(o.InstructionsAppend) == "" && len(o.Scopes) == 0 &&
-		o.Budget == (Budget{}) && len(o.MCPServersAdd) == 0 && len(o.Setup) == 0
+		o.Budget == (Budget{}) && len(o.MCPServersAdd) == 0 && len(o.Setup) == 0 &&
+		len(o.SkillsAdd) == 0 && len(o.SkillsRemove) == 0
 }
 
 // The lazyagents MCP server is always injected by the runner; definitions
@@ -306,6 +309,21 @@ func (o *Override) Normalize() error {
 	}
 	if err := validMCP("mcp_servers_add", o.MCPServersAdd); err != nil {
 		return err
+	}
+	if err := validSkills("skills_add", o.SkillsAdd); err != nil {
+		return err
+	}
+	seenRemove := map[string]bool{}
+	for i, n := range o.SkillsRemove {
+		n = strings.TrimSpace(n)
+		o.SkillsRemove[i] = n
+		if !skillRe.MatchString(n) {
+			return invalid("skills_remove", "skill name %q must be lowercase letters, digits or -, up to 64 characters", n)
+		}
+		if seenRemove[n] {
+			return invalid("skills_remove", "duplicate skill %q", n)
+		}
+		seenRemove[n] = true
 	}
 	cleaned := o.Setup[:0]
 	for _, c := range o.Setup {

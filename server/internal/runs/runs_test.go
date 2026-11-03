@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
@@ -295,4 +296,73 @@ func deref[T any](p *T) T {
 		return z
 	}
 	return *p
+}
+
+// A project-added skill reaches the run's frozen snapshot; a removed one doesn't.
+func TestRunSnapshotSkillOverrides(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
+		t.Fatal(err)
+	}
+	q := store.New(pool)
+	me, _ := q.GetLocalUser(ctx)
+	ws := me.WorkspaceID
+	asvc := &agents.Service{Pool: pool}
+	a, err := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "atlas"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, _, err := agents.CurrentSpec(ctx, q, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.Skills = []agentdef.Skill{
+		{Name: "keep-me", Description: "Use when keeping", Body: "keep"},
+		{Name: "drop-me", Description: "Use when dropping", Body: "drop"},
+	}
+	if _, err := asvc.SaveDefinition(ctx, ws, me.ID, "atlas", agents.Identity{Name: a.Name, Role: a.Role, ColorIndex: int(a.ColorIndex)}, spec, "skills"); err != nil {
+		t.Fatal(err)
+	}
+	if err := asvc.SetOverride(ctx, ws, me.ID, "atlas", "PAY", agentdef.Override{
+		InstructionsAppend: "Follow PAY playbooks.",
+		SkillsRemove:       []string{"drop-me"},
+		SkillsAdd:          []agentdef.Skill{{Name: "pay-ledger", Description: "Use when touching the ledger", Body: "ledger rules"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	k := make([]byte, 32)
+	_, _ = rand.Read(k)
+	box, _ := secrets.NewBox(base64.StdEncoding.EncodeToString(k))
+	svc := &runs.Service{
+		Pool: pool, Secrets: &secrets.Service{Q: q, Box: box}, Tracker: &tracker.Service{Pool: pool},
+		Artifacts: &artifacts.Service{Pool: pool}, Poll: 20 * time.Millisecond,
+	}
+	tok, _, err := agents.IssueToken(ctx, q, a.ID, "unmanaged", "", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller, err := agents.ResolveToken(ctx, q, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := svc.Claim(ctx, caller, "PAY-214")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap, err := runs.Spec(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range snap.Skills {
+		got = append(got, s.Name)
+	}
+	if len(got) != 2 || got[0] != "keep-me" || got[1] != "pay-ledger" {
+		t.Fatalf("snapshot skills = %v", got)
+	}
+	if snap.Provenance["skills"] != agentdef.FromProject {
+		t.Fatalf("provenance = %v", snap.Provenance)
+	}
 }
