@@ -9,6 +9,12 @@ info:
     There is no login for now: every request acts as the workspace's local
     user (its first user). Errors share the `Error` shape: 404 not found,
     422 validation (with `field` set when one input is at fault).
+
+    Realtime: `GET /events` (outside /api/v1) is an SSE stream of
+    invalidation hints `{"type": "...", "ids": [...]}`; clients refetch.
+    Types include `ticket.updated`, `activity.created`, `approval.created`,
+    `run.updated`, and `chat.updated` (ids: the chat id) when a chat's
+    messages, state, title, archive flag or harness/model change.
 servers:
   - url: /api/v1
 tags:
@@ -19,6 +25,7 @@ tags:
   - name: agents
   - name: secrets
   - name: runs
+  - name: chats
 paths:
   /agents/{handle}/runs:
     get:
@@ -1316,6 +1323,185 @@ paths:
               schema: { $ref: '#/components/schemas/Ticket' }
         default: { $ref: '#/components/responses/Error' }
 
+  /chats:
+    get:
+      operationId: listChats
+      summary: The local user's chats, most recently active first
+      tags: [chats]
+      parameters:
+        - { name: project, in: query, description: Project key; omit for all projects, schema: { type: string } }
+        - { name: archived, in: query, description: "true lists archived chats instead", schema: { type: boolean, default: false } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+      responses:
+        "200":
+          description: Chats, 50 per page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chats, has_more]
+                properties:
+                  chats: { type: array, items: { $ref: "#/components/schemas/ChatSession" } }
+                  has_more: { type: boolean }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createChat
+      summary: Start a chat in a project
+      description: |
+        Creates an idle chat. Nothing runs until the first message. When
+        `message` is set it is posted as the first message (same rules as
+        POST /chats/{id}/messages). 422 for an unknown or archived project,
+        an unknown or sub agent, or a harness/model not in GET /chat-models.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewChat" }
+      responses:
+        "201":
+          description: The chat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: getChat
+      tags: [chats]
+      responses:
+        "200":
+          description: The chat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateChat
+      summary: Rename, archive or restore a chat (revision-checked)
+      description: Archiving ends the chat's current run and removes its workspace. 409 on a stale revision or while a turn is running.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatPatch" }
+      responses:
+        "200":
+          description: The updated chat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteChat
+      summary: Delete a chat and its messages
+      description: Cancels a running turn first. The chat's runs stay for cost history.
+      tags: [chats]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/messages:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listChatMessages
+      summary: Messages in order of seq
+      tags: [chats]
+      parameters:
+        - { name: after, in: query, description: Only messages with a greater seq (refetch after chat.updated), schema: { type: integer, minimum: 0 } }
+        - { name: before, in: query, description: Only messages with a smaller seq (page back through history), schema: { type: integer, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200":
+          description: Messages, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages, has_more]
+                properties:
+                  messages: { type: array, items: { $ref: "#/components/schemas/ChatMessage" } }
+                  has_more: { type: boolean, description: Older messages exist before the first one returned }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: postChatMessage
+      summary: Send a message and start the assistant's turn
+      description: |
+        Stores the user message and queues a turn. The reply arrives
+        later as an assistant message; watch for `chat.updated`.
+        `harness`/`model` switch the chat from this message on (same harness:
+        same session, new model; other harness: new session with a
+        transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
+        is running or the chat is archived; 422 empty body, unknown
+        harness/model, or a context ref outside the chat's project.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewChatMessage" }
+      responses:
+        "202":
+          description: Message stored and turn queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chat, message]
+                properties:
+                  chat: { $ref: "#/components/schemas/ChatSession" }
+                  message: { $ref: "#/components/schemas/ChatMessage" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/cancel:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    post:
+      operationId: cancelChatTurn
+      summary: Stop the running turn
+      description: Interrupts the current turn (like run pause, SIGINT then kill); the chat returns to idle with a system message. 409 when no turn is running.
+      tags: [chats]
+      responses:
+        "200":
+          description: The chat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chat-models:
+    get:
+      operationId: listChatModels
+      summary: Harnesses and models the chat picker offers
+      description: The catalog chats validate against (agentdef.Models). A harness is unavailable when its API-key secret is missing and the runner requires one.
+      tags: [chats]
+      responses:
+        "200":
+          description: Harnesses in display order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChatHarnessModels" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   parameters:
     NodeKind:
@@ -1341,6 +1527,11 @@ components:
       required: true
       schema: { type: string }
     ArtifactId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ChatId:
       name: id
       in: path
       required: true
@@ -2529,3 +2720,104 @@ components:
         key: { type: string }
         title: { type: string }
         status: { $ref: '#/components/schemas/TicketStatus' }
+    ChatState:
+      type: string
+      enum: [idle, running, failed]
+      description: "idle: waiting for the person; running: a turn is queued or executing; failed: the last turn failed (posting again retries)"
+    ChatContextRef:
+      type: object
+      required: [kind]
+      description: Something attached to a message for the assistant to read. Exactly one of id or key; must belong to the chat's project (notes may be workspace-wide).
+      properties:
+        kind: { type: string, enum: [artifact, section, ticket, page] }
+        id: { type: string, format: uuid, description: Artifact or wiki page id }
+        key: { type: string, description: Ticket key, e.g. PAY-214 }
+        anchor: { type: string, description: Section anchor when kind is section }
+    ChatCitation:
+      type: object
+      required: [target]
+      description: Something the assistant read while answering (from read_artifact / read_page / get_ticket)
+      properties:
+        target: { $ref: "#/components/schemas/LinkTarget" }
+    ChatSession:
+      type: object
+      required: [id, project, title, agent, harness, model, state, archived, revision, message_count, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        project: { type: string, description: Project key }
+        title: { type: string, description: "Defaults to the start of the first message" }
+        agent: { $ref: "#/components/schemas/AgentRef" }
+        harness: { $ref: "#/components/schemas/Harness" }
+        model: { type: string, description: The model the next turn uses }
+        state: { $ref: "#/components/schemas/ChatState" }
+        error: { type: string, description: Why the last turn failed, when state is failed }
+        current_run_id: { type: string, format: uuid, description: The run serving the current harness segment; its events show live activity }
+        archived: { type: boolean }
+        revision: { type: integer }
+        message_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_message_at: { type: string, format: date-time }
+    NewChat:
+      type: object
+      required: [project]
+      properties:
+        project: { type: string, description: Project key }
+        title: { type: string, maxLength: 200 }
+        agent_id: { type: string, format: uuid, description: A main agent; the server picks the default when omitted }
+        harness: { $ref: "#/components/schemas/Harness" }
+        model: { type: string, description: Defaults to the harness's default model in GET /chat-models }
+        message: { $ref: "#/components/schemas/NewChatMessage" }
+    ChatPatch:
+      type: object
+      required: [revision]
+      properties:
+        revision: { type: integer }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        archived: { type: boolean }
+    NewChatMessage:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 100000 }
+        harness: { $ref: "#/components/schemas/Harness" }
+        model: { type: string }
+        context_refs:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/ChatContextRef" }
+    ChatMessage:
+      type: object
+      required: [id, seq, role, body_md, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        seq: { type: integer, description: "1-based, monotonic per chat" }
+        role: { type: string, enum: [user, assistant, system], description: "system: switches, handoffs, cancels and errors, shown inline" }
+        body_md: { type: string }
+        harness: { $ref: "#/components/schemas/Harness" }
+        model: { type: string }
+        run_id: { type: string, format: uuid }
+        turn_seq: { type: integer, description: The run turn that produced an assistant message }
+        context_refs: { type: array, items: { $ref: "#/components/schemas/ChatContextRef" } }
+        citations: { type: array, items: { $ref: "#/components/schemas/ChatCitation" } }
+        author: { $ref: "#/components/schemas/UserRef" }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        cost_usd: { type: number }
+        created_at: { type: string, format: date-time }
+    ChatModel:
+      type: object
+      required: [id, label, default]
+      properties:
+        id: { type: string, description: "Value for the model field, e.g. opus-5.5 or gpt-5-codex" }
+        label: { type: string }
+        default: { type: boolean, description: The harness's default model }
+    ChatHarnessModels:
+      type: object
+      required: [harness, label, available, models]
+      properties:
+        harness: { $ref: "#/components/schemas/Harness" }
+        label: { type: string }
+        available: { type: boolean }
+        unavailable_reason: { type: string, description: "e.g. no harness:openai secret" }
+        models: { type: array, items: { $ref: "#/components/schemas/ChatModel" } }
