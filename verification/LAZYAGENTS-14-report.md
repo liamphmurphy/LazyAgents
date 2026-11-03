@@ -2,6 +2,17 @@
 
 ## Verdict
 
+Local-runner correction (2026-11-03): application provider secrets are required
+only for Docker mode. The local retry failed before provider startup: an older
+runner binary logged `load run` / `no rows in result set`; the API independently
+used Docker catalog gating and rejected Codex. Local CLI authentication was never
+tested by that attempt. Commit 21702bd aligns Makefile API/runner defaults to
+local while retaining explicit Docker mode. Owners must coordinate an idle
+refresh of stale workers and the API before retrying; no active process was
+interrupted. See the runtime evidence's local continuation and coordinated refresh
+procedure. Earlier missing-secret prerequisite language below describes the first
+attempt and is superseded for local execution.
+
 Partial verification; criterion 2 remains unverified. Do not treat this report as release or QA approval. Verification date: 2026-11-03. Reviewed checkout baseline: 4176f64; delegated evidence commit: 3f5de6c. No feature implementation, shared database migration or deployment was performed.
 
 ## Requirement traceability
@@ -24,7 +35,7 @@ Detailed commands, sanitized IDs, observations and evidence limits are in [runti
 
 Existing live app on localhost:8000/3000 advertised both harnesses unavailable: missing harness:anthropic and harness:openai application secrets (metadata-only check, no values accessed). A newly created LAZYAGENTS project chat accepted its first message, asking to remember amber-otter-14 and read/cite the Project chat sessions ADR. Run 01a1a227-f1ba-7b14-8c44-5e82797c7a46 remained starting; no assistant response was produced. No Claude → Codex switch or recall/citation success occurred. The live binary's provenance was not established.
 
-QA cancelled and deleted only its own smoke chat; run ended cancelled. No shared migration or deployment occurred. A person must configure provider secrets through normal settings and supply a working runner before criterion 2 can be rerun. Preserve the resulting two assistant replies, correct recall, wiki citation/version and segment IDs as evidence. A fake test cannot substitute for this criterion.
+QA cancelled and deleted only its own smoke chats; runs ended cancelled. No shared migration or deployment occurred. For local execution, owners must align the API mode and refresh all eligible stale workers when idle; existing host CLI logins supply authentication. Docker execution requires configured provider secrets. Preserve the resulting two assistant replies, correct recall, wiki citation/version and segment IDs as evidence. A fake test cannot substitute for this criterion.
 
 ## Filed follow-ups
 
