@@ -1,5 +1,6 @@
 "use client";
 
+import { runCost, spendCost } from "@/lib/format";
 import Link from "next/link";
 import { useState } from "react";
 import { useAgentOverviews, useAgentRuns } from "@/lib/api/hooks";
@@ -11,7 +12,6 @@ import {
   Assignment,
   PlanningAssignment,
   merged,
-  money,
   seconds,
   WorkRow,
 } from "@/components/domain/overview";
@@ -51,7 +51,7 @@ export function OverviewTab({ handle }: { handle: string }) {
         />
         <KpiTile
           label="Run spend · 7 days"
-          value={money(data.stats.spend_usd)}
+          value={spendCost(data.stats.spend_usd,data.stats.unpriced_runs)}
           context="runs started in window"
         />
       </div>
@@ -149,7 +149,7 @@ export function RunsTab({ handle }: { handle: string }) {
               </div>
               <p className="font-mono text-[11px] text-fg-tertiary">
                 {r.harness} · {r.model} · {r.tool_calls} tools ·{" "}
-                {compact(r.tokens)} tokens · {money(r.cost_usd)}
+                {compact(r.tokens)} tokens · {runCost(r.cost_usd,r.cost_source)}
               </p>
               <p className="text-xs text-fg-tertiary">
                 Started {ago(r.started_at)} ·{" "}

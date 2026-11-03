@@ -661,10 +661,17 @@ func TestUsageFallbackPreservesWorkspace(t *testing.T) {
 	if _, err := e.pool.Exec(e.ctx, "UPDATE runs SET resolved_spec=$2 WHERE id=$1", run.ID, raw); err != nil {
 		t.Fatal(err)
 	}
+	history, _ := json.Marshal(map[string]any{"tool": "get_ticket", "output": "Preserve this verified tool outcome across harnesses"})
+	if err := e.q.AddRunEvent(e.ctx, store.AddRunEventParams{RunID: run.ID, Type: "tool_result", Payload: history}); err != nil {
+		t.Fatal(err)
+	}
 	e.until("fallback completed", e.state("PAY-214=completed"))
 	run = e.run("PAY-214")
 	if run.Harness != "codex" || run.Model != "test-fallback" {
 		t.Fatalf("target: %s %s", run.Harness, run.Model)
+	}
+	if run.CostSource == nil || *run.CostSource != "partial" {
+		t.Fatalf("mixed priced/unpriced turns must remain partial: %v", run.CostSource)
 	}
 	if !strings.Contains(e.eventTypes(run.ID), "lifecycle:harness_fallback") {
 		t.Fatal("missing fallback event")
@@ -672,6 +679,9 @@ func TestUsageFallbackPreservesWorkspace(t *testing.T) {
 	turns, err := e.q.ListTurns(e.ctx, run.ID)
 	if err != nil || len(turns) != 2 {
 		t.Fatalf("turns=%d err=%v", len(turns), err)
+	}
+	if !strings.Contains(turns[1].InputMessage, "Preserve this verified tool outcome across harnesses") {
+		t.Fatal("fallback lost normalized tool history")
 	}
 	if !strings.Contains(deref(run.Outcome), "preserved checkout") {
 		t.Fatalf("outcome=%v", run.Outcome)
@@ -704,6 +714,48 @@ func TestFallbackStopsOnExhaustionOrUnrelatedErrors(t *testing.T) {
 			turns, err := e.q.ListTurns(e.ctx, run.ID)
 			if err != nil || len(turns) != tc.turns {
 				t.Fatalf("turns=%d want=%d err=%v", len(turns), tc.turns, err)
+			}
+		})
+	}
+}
+
+func TestHarnessToolApprovalParity(t *testing.T) {
+	for _, name := range []string{"claude-code", "codex"} {
+		t.Run(name, func(t *testing.T) {
+			e := setup(t)
+			t.Setenv("FAKE_HARNESS_MODE", "policy")
+			e.dispatch("PAY-214")
+			run := e.run("PAY-214")
+			var spec agentdef.Resolved
+			if err := json.Unmarshal(run.ResolvedSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			spec.Harness = name
+			for i := range spec.Scopes {
+				if spec.Scopes[i].Scope == "tests:run" {
+					spec.Scopes[i].Mode = agentdef.RequiresApproval
+				}
+			}
+			raw, _ := json.Marshal(spec)
+			if _, err := e.pool.Exec(e.ctx, "UPDATE runs SET resolved_spec=$2,harness=$3 WHERE id=$1", run.ID, raw, name); err != nil {
+				t.Fatal(err)
+			}
+			e.until("hook approval", e.state("PAY-214=waiting"))
+			pending, err := e.q.ListApprovalsForRun(e.ctx, run.ID)
+			if err != nil || len(pending) != 1 || pending[0].Scope != "tests:run" {
+				t.Fatalf("approval: %+v %v", pending, err)
+			}
+			marker := filepath.Join(e.runner.Backend.WorkspaceDir(run.ID.String()), "approved-action.txt")
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatal("tool executed before approval")
+			}
+			if _, err := e.runs.Decide(e.ctx, e.ws, e.me.ID, pending[0].ID, true, ""); err != nil {
+				t.Fatal(err)
+			}
+			e.until("approved tool completed", e.state("PAY-214=completed"))
+			ap, _ := e.q.GetApproval(e.ctx, store.GetApprovalParams{ID: pending[0].ID, WorkspaceID: e.ws})
+			if ap.ExecutedAt == nil {
+				t.Fatal("approval was not consumed")
 			}
 		})
 	}

@@ -356,7 +356,7 @@ func (s *Server) ListAgentRuns(ctx context.Context, req api.ListAgentRunsRequest
 		rows = rows[:50]
 	}
 	for _, r := range rows {
-		out.Runs = append(out.Runs, api.AgentRunSummary{Id: r.ID, Ticket: workTicket(r.TicketID, r.Key, r.Title, r.Status, r.Priority), State: r.State, Harness: r.Harness, Model: r.Model, StartedAt: r.StartedAt, EndedAt: r.EndedAt, CostUsd: float64(r.CostUsdMicros) / 1e6, ToolCalls: int(r.ToolCalls), Tokens: r.Tokens})
+		out.Runs = append(out.Runs, api.AgentRunSummary{Id: r.ID, Ticket: workTicket(r.TicketID, r.Key, r.Title, r.Status, r.Priority), State: r.State, Harness: r.Harness, Model: r.Model, StartedAt: r.StartedAt, EndedAt: r.EndedAt, CostUsd: float64(r.CostUsdMicros) / 1e6, CostSource: r.CostSource, ToolCalls: int(r.ToolCalls), Tokens: r.Tokens})
 	}
 	return out, nil
 }

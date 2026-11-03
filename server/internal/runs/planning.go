@@ -46,7 +46,7 @@ func PlanningSpec(r agentdef.Resolved) agentdef.Resolved {
 	for i := range r.Fallbacks {
 		r.Fallbacks[i].HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
 	}
-	r.Instructions = "You are a planner. Read the supplied goal, source documents, linked tickets and wiki. Propose a small, actionable set of tickets with acceptance criteria using propose_tickets. Give each a stable ref and suggest depends_on proposal refs or blocked_by existing ticket keys where work must finish first. Do not create tickets, modify files, run shell commands, or execute project work. Calling propose_tickets ends this planning run; a person edits and accepts the draft.\n"
+	r.Instructions = "You are a planner. Read the supplied goal, source documents, linked tickets and wiki. Propose a small, actionable set of tickets with acceptance criteria using propose_tickets. Give each a stable ref and suggest depends_on proposal refs or blocked_by existing ticket keys where work must finish first. Do not create tickets, modify files, or execute project work. Read supplied context with file tools or simple read-only shell commands. Calling propose_tickets ends this planning run; a person edits and accepts the draft.\n"
 	return r
 }
 

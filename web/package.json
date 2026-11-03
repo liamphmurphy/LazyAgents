@@ -9,7 +9,8 @@
     "lint": "eslint",
     "gen": "openapi-typescript ../api/openapi.yaml -o lib/api/schema.d.ts",
     "typecheck": "tsc --noEmit",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "test:unit": "node --experimental-strip-types --test lib/*.test.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.105.1",

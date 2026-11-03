@@ -68,3 +68,16 @@ export function compact(n: number): string {
   if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, "")}K`;
   return String(n);
 }
+
+/** Unknown and partially priced turns must never look free. */
+export function runCost(value: number, source?: string | null): string {
+  if (!source || source === "unknown") return "Unknown";
+  if (source === "partial") return `≥ $${value.toFixed(2)} (partial)`;
+  if (source === "computed") return `~$${value.toFixed(2)}`;
+  return `$${value.toFixed(2)}`;
+}
+
+export function spendCost(value: number, unpricedRuns = 0): string {
+  if (unpricedRuns > 0) return value > 0 ? `≥ $${value.toFixed(2)} (partial)` : "Unknown";
+  return `$${value.toFixed(2)}`;
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/broker"
+	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 )
 
 type mcpServer = *mcp.Server
@@ -140,6 +141,20 @@ func MCPHandler(d Deps, version string, log *slog.Logger) http.Handler {
 // arguments in, JSON result out) and lists them at GET /api/v1/agent/tools.
 func RESTHandler(d Deps) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/agent/tool-policy", func(w http.ResponseWriter, r *http.Request) {
+		c := r.Context().Value(restCallerKey{}).(agents.Caller)
+		var in runs.ToolCheck
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+			writeJSON(w, 400, map[string]string{"decision": "deny", "reason": "Invalid tool policy input"})
+			return
+		}
+		out, err := d.Runs.CheckTool(r.Context(), c, in)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"decision": "deny", "reason": "Tool policy unavailable; retry after the service recovers"})
+			return
+		}
+		writeJSON(w, 200, out)
+	})
 	mux.HandleFunc("GET /api/v1/agent/tools", func(w http.ResponseWriter, r *http.Request) {
 		list := make([]map[string]string, len(Tools))
 		for i, t := range Tools {

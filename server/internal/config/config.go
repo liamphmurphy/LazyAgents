@@ -2,7 +2,10 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/liamphmurphy/lazyagents/server/internal/harness"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -32,6 +35,7 @@ type Config struct {
 
 // Runner configures `lazyagents runner` (PLAN.md §6.5).
 type Runner struct {
+	ModelPrices   map[string]harness.Price
 	Backend       string // docker | local
 	MaxConcurrent int
 	MCPURL        string // how turns reach the API's /mcp
@@ -100,6 +104,27 @@ func Load() (Config, error) {
 	}
 	if r.MaxConcurrent < 1 || r.MaxConcurrent > 32 {
 		return c, fmt.Errorf("config: RUNNER_MAX_CONCURRENT must be 1–32")
+	}
+	if raw := os.Getenv("RUNNER_MODEL_PRICES"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &r.ModelPrices); err != nil {
+			return c, fmt.Errorf("config: RUNNER_MODEL_PRICES must be a JSON object of model token prices")
+		}
+		var entries map[string]map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+			return c, fmt.Errorf("config: invalid model price entries")
+		}
+		for model, price := range r.ModelPrices {
+			for _, key := range []string{"input_per_million", "cached_input_per_million", "output_per_million"} {
+				if value, ok := entries[model][key]; !ok || string(value) == "null" {
+					return c, fmt.Errorf("config: model %s is missing %s", model, key)
+				}
+			}
+			for _, v := range []float64{price.Input, price.CachedInput, price.Output} {
+				if v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+					return c, fmt.Errorf("config: invalid token price for %s", model)
+				}
+			}
+		}
 	}
 	c.Runner = r
 	if c.PRSyncInterval, err = intEnv("PR_SYNC_INTERVAL_S", 60); err != nil {

@@ -11,7 +11,10 @@ import (
 // Codex runs `codex exec --json` (checked against codex-cli 0.166.0).
 // Codex reads AGENTS.md itself; MCP servers and policy go in -c overrides.
 // It authenticates headless with CODEX_API_KEY.
-type Codex struct{}
+type Codex struct {
+	Prices   map[string]Price
+	Baseline Usage
+}
 
 func (Codex) Name() string { return agentdef.HarnessCodex }
 
@@ -19,22 +22,37 @@ func tomlString(s string) string { return strconv.Quote(s) }
 
 func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	spec := t.Spec
+	env, err := hookEnvironment(ws)
+	if err != nil {
+		return Invocation{}, err
+	}
+	env[ws.TokenEnv] = ws.Token
+	command := env["LAZYAGENTS_POLICY_HOOK_COMMAND"]
 	sandbox := spec.HarnessOptions["sandbox"]
 	if sandbox == "" {
 		sandbox = "workspace-write"
 	}
-	opts := []string{"--json", "--skip-git-repo-check"}
+	opts := []string{"--json", "--skip-git-repo-check", "--dangerously-bypass-hook-trust", "--strict-config"}
 	if spec.Model != "" {
 		opts = append(opts, "-m", spec.Model)
 	}
 	cfg := []string{
+		"features.hooks=true",
+		"features.multi_agent=false", // delegation stays in the run-scoped service
+		`hooks.PreToolUse=[{matcher="*",hooks=[{type="command",command=` + tomlString(command) + `,timeout=20}]}]`,
 		"approval_policy=" + tomlString("never"), // nobody answers prompts headless
 		"sandbox_mode=" + tomlString(sandbox),
 		"mcp_servers." + lazyagentsServer + ".url=" + tomlString(ws.MCPURL),
 		"mcp_servers." + lazyagentsServer + ".bearer_token_env_var=" + tomlString(ws.TokenEnv),
+		// These are the service's own authenticated workflow tools. MCP's
+		// approval policy is separate from shell approval_policy: without
+		// this, unannotated tools prompt and are rejected headless. Scope
+		// checks and human approvals still happen inside LazyAgents.
+		"mcp_servers." + lazyagentsServer + ".default_tools_approval_mode=" + tomlString("approve"),
+		"mcp_servers." + lazyagentsServer + ".required=true",
 	}
 	for _, m := range spec.MCPServers {
-		cfg = append(cfg, "mcp_servers."+m.Name+".url="+tomlString(m.URL))
+		cfg = append(cfg, "mcp_servers."+m.Name+".url="+tomlString(m.URL), "mcp_servers."+m.Name+".default_tools_approval_mode="+tomlString("approve"))
 	}
 	// Pushing and opening PRs needs the network, which workspace-write
 	// blocks by default.
@@ -53,14 +71,23 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		argv = append(argv, opts...)
 		argv = append(argv, t.Prompt)
 	}
-	return Invocation{Argv: argv, Env: map[string]string{ws.TokenEnv: ws.Token}, Files: SkillFiles(spec.Skills, false)}, nil
+	files := SkillFilesFor(spec.Skills, agentdef.HarnessCodex)
+	files[toolHookPath] = toolHook
+	files[".lazyagents/codex-launch.py"] = codexLauncher
+	argv = append([]string{"python3", ".lazyagents/codex-launch.py"}, argv...)
+	return Invocation{Argv: argv, Env: env, Files: files}, nil
 }
 
-func (Codex) NewParser(model string) Parser { return &codexParser{model: model} }
+func (c Codex) NewParser(model string) Parser {
+	return &codexParser{model: model, prices: c.Prices, baseline: c.Baseline}
+}
 
 type codexParser struct {
-	model string
-	res   Result
+	hookTrustNotice bool
+	baseline        Usage
+	model           string
+	prices          map[string]Price
+	res             Result
 }
 
 type codexItem struct {
@@ -110,18 +137,31 @@ func (p *codexParser) Line(b []byte) []Event {
 		return []Event{{"lifecycle", map[string]any{"state": "harness_started", "harness": agentdef.HarnessCodex, "model": p.model, "session_id": l.ThreadID}}}
 	case "turn.completed":
 		if l.Usage != nil {
-			p.res.Usage.InputTokens += l.Usage.InputTokens
-			p.res.Usage.CachedTokens += l.Usage.CachedInputTokens
-			p.res.Usage.OutputTokens += l.Usage.OutputTokens
+			baseline := p.baseline
+			if baseline.SessionID != "" && baseline.SessionID != p.res.SessionID {
+				baseline = Usage{}
+			}
+			if l.Usage.InputTokens < baseline.SessionInputTokens || l.Usage.OutputTokens < baseline.SessionOutputTokens || l.Usage.CachedInputTokens < baseline.SessionCachedTokens {
+				baseline = Usage{}
+			}
+			p.res.Usage.InputTokens = l.Usage.InputTokens - baseline.SessionInputTokens
+			p.res.Usage.OutputTokens = l.Usage.OutputTokens - baseline.SessionOutputTokens
+			p.res.Usage.CachedTokens = l.Usage.CachedInputTokens - baseline.SessionCachedTokens
+			p.res.Usage.SessionID = p.res.SessionID
+			p.res.Usage.SessionInputTokens = l.Usage.InputTokens
+			p.res.Usage.SessionOutputTokens = l.Usage.OutputTokens
+			p.res.Usage.SessionCachedTokens = l.Usage.CachedInputTokens
 		}
-		cost, known := ComputeCost(p.model, p.res.Usage)
+		p.res.Usage.CostSource = "unknown"
+		cost, known := computeCost(p.model, p.res.Usage, p.prices)
 		if known {
 			p.res.Usage.CostUSD, p.res.Usage.CostSource = cost, "computed"
 		}
-		return []Event{{"usage", map[string]any{
-			"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens,
-			"cached_tokens": p.res.Usage.CachedTokens, "cost_usd": p.res.Usage.CostUSD, "cost_source": p.res.Usage.CostSource,
-		}}}
+		payload := map[string]any{"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens, "cached_tokens": p.res.Usage.CachedTokens, "cost_source": p.res.Usage.CostSource, "cost_known": known}
+		if known {
+			payload["cost_usd"] = p.res.Usage.CostUSD
+		}
+		return []Event{{"usage", payload}}
 	case "turn.failed":
 		msg := "turn failed"
 		if l.Error != nil {
@@ -131,6 +171,13 @@ func (p *codexParser) Line(b []byte) []Event {
 		p.res.UsageLimited = p.res.UsageLimited || UsageLimit(msg)
 		return []Event{{"error", map[string]any{"message": msg}}}
 	case "error":
+		if l.Message == "`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation." {
+			if p.hookTrustNotice {
+				return nil
+			}
+			p.hookTrustNotice = true
+			return []Event{{"lifecycle", map[string]any{"state": "harness_notice", "code": "hook_trust_automation", "message": l.Message}}}
+		}
 		// Transient ("Reconnecting… 2/5") errors are noise until the last.
 		if strings.HasPrefix(l.Message, "Reconnecting") {
 			return nil
@@ -178,10 +225,16 @@ func (p *codexParser) item(done bool, it codexItem) []Event {
 			return []Event{{"tool_call", map[string]any{"id": it.ID, "tool": tool, "input": args}}}
 		}
 		out := string(it.Result)
-		if len(it.Error) > 0 && string(it.Error) != "null" {
+		hasError := len(it.Error) > 0 && string(it.Error) != "null"
+		var resultFlags struct {
+			IsError      bool `json:"isError"`
+			IsErrorSnake bool `json:"is_error"`
+		}
+		_ = json.Unmarshal(it.Result, &resultFlags)
+		if hasError {
 			out = string(it.Error)
 		}
-		return []Event{{"tool_result", map[string]any{"id": it.ID, "tool": tool, "is_error": it.Status == "failed", "output": clip(out, 4000)}}}
+		return []Event{{"tool_result", map[string]any{"id": it.ID, "tool": tool, "is_error": it.Status == "failed" || hasError || resultFlags.IsError || resultFlags.IsErrorSnake, "output": clip(out, 4000)}}}
 	case "file_change":
 		if !done {
 			return nil
@@ -210,7 +263,11 @@ func (p *codexParser) Result() Result { return p.res }
 // ---------------------------------------------------------------- prices
 
 // Price is USD per million tokens.
-type Price struct{ Input, CachedInput, Output float64 }
+type Price struct {
+	Input       float64 `json:"input_per_million"`
+	CachedInput float64 `json:"cached_input_per_million"`
+	Output      float64 `json:"output_per_million"`
+}
 
 // Prices is the model_prices table for harnesses that don't report cost
 // (Codex). Unknown models leave cost unset rather than guessing; add rows
@@ -224,7 +281,14 @@ var Prices = map[string]Price{
 
 // ComputeCost prices usage for a model; known is false for unknown models.
 func ComputeCost(model string, u Usage) (cost float64, known bool) {
-	pr, ok := Prices[model]
+	return computeCost(model, u, nil)
+}
+
+func computeCost(model string, u Usage, overrides map[string]Price) (cost float64, known bool) {
+	pr, ok := overrides[model]
+	if !ok {
+		pr, ok = Prices[model]
+	}
 	if !ok {
 		return 0, false
 	}

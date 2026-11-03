@@ -146,7 +146,7 @@ func TestCodexInvocation(t *testing.T) {
 	inv, _ := Codex{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
 	a := strings.Join(inv.Argv, " ")
 	for _, want := range []string{"codex exec --json", `mcp_servers.lazyagents.url="http://api:8000/mcp"`, `bearer_token_env_var="LAZYAGENTS_TOKEN"`,
-		`approval_policy="never"`, "network_access=true", "-m gpt-5-codex"} {
+		`approval_policy="never"`, `mcp_servers.lazyagents.default_tools_approval_mode="approve"`, `mcp_servers.lazyagents.required=true`, "network_access=true", "-m gpt-5-codex"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("missing %q in %s", want, a)
 		}
@@ -156,7 +156,7 @@ func TestCodexInvocation(t *testing.T) {
 	}
 	inv, _ = Codex{}.Invocation(ws, Turn{Spec: spec(), Prompt: "next", SessionID: "th1"})
 	n := len(inv.Argv)
-	if inv.Argv[2] != "resume" || inv.Argv[n-2] != "th1" || inv.Argv[n-1] != "next" || strings.Contains(strings.Join(inv.Argv, " "), "network_access") {
+	if inv.Argv[4] != "resume" || inv.Argv[n-2] != "th1" || inv.Argv[n-1] != "next" || strings.Contains(strings.Join(inv.Argv, " "), "network_access") {
 		t.Fatalf("resume argv %v", inv.Argv)
 	}
 }
@@ -237,11 +237,11 @@ func TestSkillsDeliveredPerHarness(t *testing.T) {
 	cs := s
 	cs.Harness = agentdef.HarnessCodex
 	inv, _ = Codex{}.Invocation(ws, Turn{Spec: cs, Prompt: "go"})
-	if _, ok := inv.Files[".lazyagents/skills/go-errors/SKILL.md"]; !ok || len(inv.Files) != 2 {
+	if _, ok := inv.Files[".agents/skills/go-errors/SKILL.md"]; !ok {
 		t.Fatalf("codex files %v", inv.Files)
 	}
 	md := string(AgentsMD("", cs, nil, "T-1"))
-	if !strings.Contains(md, "- `.lazyagents/skills/api-design/SKILL.md`: Use when adding endpoints") {
+	if strings.Contains(md, "## Skills") {
 		t.Fatalf("codex AGENTS.md:\n%s", md)
 	}
 
@@ -271,5 +271,28 @@ func TestAgentsMDGitHubSection(t *testing.T) {
 	}
 	if sub := string(SubagentAgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1")); strings.Contains(sub, "gh pr create") {
 		t.Fatal("sub agents leave PRs to the main agent")
+	}
+}
+
+func TestCodexMCPPolicyOnResumeAndPlanning(t *testing.T) {
+	for _, session := range []string{"", "thread-existing"} {
+		t.Run(session, func(t *testing.T) {
+			s := spec()
+			s.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
+			s.MCPServers = []agentdef.MCPServer{{Name: "external", URL: "https://example.com/mcp"}}
+			inv, err := (Codex{}).Invocation(ws, Turn{Spec: s, Prompt: "continue", SessionID: session})
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := strings.Join(inv.Argv, " ")
+			for _, required := range []string{`approval_policy="never"`, `sandbox_mode="read-only"`, `mcp_servers.lazyagents.default_tools_approval_mode="approve"`, `mcp_servers.lazyagents.required=true`} {
+				if !strings.Contains(args, required) {
+					t.Errorf("missing %s in %s", required, args)
+				}
+			}
+			if !strings.Contains(args, `mcp_servers.external.default_tools_approval_mode="approve"`) || strings.Contains(args, "network_access=true") {
+				t.Fatalf("configured MCP approval missing or shell network enabled: %s", args)
+			}
+		})
 	}
 }

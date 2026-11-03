@@ -32,8 +32,9 @@ func TestTurnWrapperExcludesSkills(t *testing.T) {
 	}
 	run("git", "init", "-q", ".")
 	write(".lazyagents/agents-section.md", "ours\n")
-	write(".lazyagents/skills-exclude.txt", "/.claude/skills/go-errors/\n")
+	write(".lazyagents/skills-exclude.txt", "/.claude/skills/go-errors/\n/.agents/skills/go-errors/\n")
 	write(".claude/skills/go-errors/SKILL.md", "x")
+	write(".agents/skills/go-errors/SKILL.md", "x")
 	write("code.go", "package x")
 	argv := append(append([]string{}, TurnWrapper...), "true") // "true" stands in for the harness
 	run(argv[0], argv[1:]...)
@@ -43,7 +44,7 @@ func TestTurnWrapperExcludesSkills(t *testing.T) {
 		t.Fatalf("exclude file:\n%s", ex)
 	}
 	run("git", "add", "-A")
-	if staged := run("git", "diff", "--cached", "--name-only"); strings.Contains(staged, ".claude") || !strings.Contains(staged, "code.go") {
+	if staged := run("git", "diff", "--cached", "--name-only"); strings.Contains(staged, ".claude") || strings.Contains(staged, ".agents/skills") || !strings.Contains(staged, "code.go") {
 		t.Fatalf("staged:\n%s", staged)
 	}
 }

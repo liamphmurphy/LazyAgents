@@ -1,5 +1,6 @@
 "use client";
 
+import { spendCost } from "@/lib/format";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -31,7 +32,6 @@ import {
   Assignment,
   PlanningAssignment,
   merged,
-  money,
   seconds,
   type AgentOverview,
 } from "@/components/domain/overview";
@@ -109,7 +109,7 @@ export function AgentCard({ overview: o }: { overview: AgentOverview }) {
         <Stat label="Done 7d" value={o.stats.completed} />
         <Stat label="Merged" value={merged(o.stats)} />
         <Stat label="Cycle" value={seconds(o.stats.median_cycle_seconds)} />
-        <Stat label="Spend" value={money(o.stats.spend_usd)} />
+        <Stat label="Spend" value={spendCost(o.stats.spend_usd,o.stats.unpriced_runs)} />
       </div>
       <details className="text-xs">
         <summary className="cursor-pointer text-fg-tertiary">

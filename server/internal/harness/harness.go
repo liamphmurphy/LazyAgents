@@ -43,12 +43,16 @@ type Event struct {
 
 // Usage is what one turn consumed.
 type Usage struct {
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	CachedTokens int64   `json:"cached_tokens"`
-	ToolCalls    int64   `json:"tool_calls"`
-	CostUSD      float64 `json:"cost_usd"`
-	CostSource   string  `json:"cost_source"` // harness | computed | ""
+	SessionID           string  `json:"session_id,omitempty"`
+	SessionInputTokens  int64   `json:"session_input_tokens,omitempty"`
+	SessionOutputTokens int64   `json:"session_output_tokens,omitempty"`
+	SessionCachedTokens int64   `json:"session_cached_tokens,omitempty"`
+	InputTokens         int64   `json:"input_tokens"`
+	OutputTokens        int64   `json:"output_tokens"`
+	CachedTokens        int64   `json:"cached_tokens"`
+	ToolCalls           int64   `json:"tool_calls"`
+	CostUSD             float64 `json:"cost_usd"`
+	CostSource          string  `json:"cost_source"` // harness | computed | unknown | ""
 }
 
 // Result is what a parser learned by the end of a turn.
@@ -151,7 +155,7 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		}
 		b.WriteString("\n")
 	}
-	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode {
+	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode && spec.Harness != agentdef.HarnessCodex {
 		b.WriteString(skillsIndex(spec.Skills))
 	}
 	if len(contextFiles) > 0 {

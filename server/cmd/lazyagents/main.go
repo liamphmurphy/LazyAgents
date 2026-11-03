@@ -263,7 +263,8 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	host, _ := os.Hostname()
 	r := &runner.Runner{
 		Cfg: runner.Config{
-			ID: fmt.Sprintf("%s-%d", host, os.Getpid()), MaxConcurrent: rc.MaxConcurrent, MCPURL: rc.MCPURL,
+			ModelPrices: rc.ModelPrices,
+			ID:          fmt.Sprintf("%s-%d", host, os.Getpid()), MaxConcurrent: rc.MaxConcurrent, MCPURL: rc.MCPURL,
 			Grace: 30 * time.Second, LogBucket: "run-logs", Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
 		},
 		Pool: pool, Backend: backend, Secrets: &secrets.Service{Q: store.New(pool), Box: box},

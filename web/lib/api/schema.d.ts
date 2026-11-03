@@ -1751,6 +1751,7 @@ export interface components {
             /** Format: int64 */
             output_tokens: number;
             cost_usd: number;
+            /** @description harness, computed, self_reported, unknown, or partial */
             cost_source?: string;
             plan: components["schemas"]["PlanStep"][];
             /** @description Allowed scopes in the run's frozen definition */
@@ -2070,6 +2071,8 @@ export interface components {
             closed_prs: number;
             /** Format: double */
             spend_usd: number;
+            /** @description Runs with unknown or partially priced usage in this window */
+            unpriced_runs?: number;
         };
         DailyCompletions: {
             /** Format: date */
@@ -2196,6 +2199,7 @@ export interface components {
             ended_at?: string;
             /** Format: double */
             cost_usd: number;
+            cost_source?: string;
             tool_calls: number;
             /** Format: int64 */
             tokens: number;

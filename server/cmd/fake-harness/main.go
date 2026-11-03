@@ -20,12 +20,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -75,7 +77,14 @@ func result(isError bool, msg string) {
 			emit(map[string]any{"type": "turn.failed", "error": map[string]any{"message": msg}})
 			return
 		}
-		emit(map[string]any{"type": "turn.completed", "usage": map[string]any{"input_tokens": 1000, "cached_input_tokens": 500, "output_tokens": 200}})
+		counts := map[string]int{}
+		raw, _ := os.ReadFile(".lazyagents/fake-codex-usage.json")
+		_ = json.Unmarshal(raw, &counts)
+		counts[session]++
+		raw, _ = json.Marshal(counts)
+		_ = os.WriteFile(".lazyagents/fake-codex-usage.json", raw, 0600)
+		count := counts[session]
+		emit(map[string]any{"type": "turn.completed", "usage": map[string]any{"input_tokens": 1000 * count, "cached_input_tokens": 500 * count, "output_tokens": 200 * count}})
 		return
 	}
 	emit(map[string]any{"type": "result", "subtype": "success", "is_error": isError, "result": msg, "num_turns": 3,
@@ -92,8 +101,27 @@ func newUUID() string {
 
 func main() {
 	var prompt, resume, cfgPath string
-	var mcpURL, tokenEnv string
+	var mcpURL, tokenEnv, mcpApproval string
 	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "app-server" {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			var request struct {
+				ID     any    `json:"id"`
+				Method string `json:"method"`
+			}
+			if json.Unmarshal(scanner.Bytes(), &request) != nil || request.ID == nil {
+				continue
+			}
+			result := any(map[string]any{})
+			if request.Method == "hooks/list" {
+				result = map[string]any{"data": []any{map[string]any{"errors": []any{}, "hooks": []any{map[string]any{"enabled": true, "source": "sessionFlags", "handlerType": "command", "command": os.Getenv("LAZYAGENTS_POLICY_HOOK_COMMAND"), "eventName": "preToolUse", "matcher": "*", "trustStatus": "untrusted"}}}}}
+			}
+			b, _ := json.Marshal(map[string]any{"id": request.ID, "result": result})
+			fmt.Println(string(b))
+		}
+		return
+	}
 	if len(args) > 0 && args[0] == "exec" {
 		codex = true
 		args = args[1:]
@@ -114,6 +142,8 @@ func main() {
 					mcpURL = v
 				case "mcp_servers.lazyagents.bearer_token_env_var":
 					tokenEnv = v
+				case "mcp_servers.lazyagents.default_tools_approval_mode":
+					mcpApproval = v
 				}
 			case "-m", "-s", "-C":
 				i++
@@ -128,6 +158,10 @@ func main() {
 		} else if len(pos) > 0 {
 			prompt = pos[len(pos)-1]
 		}
+	}
+	if codex && mcpApproval != "approve" {
+		result(true, "MCP tool call requires approval, but approval policy is never")
+		os.Exit(1)
 	}
 	for i := 0; !codex && i < len(args); i++ {
 		switch args[i] {
@@ -237,6 +271,25 @@ func main() {
 		return
 	}
 
+	if os.Getenv("FAKE_HARNESS_MODE") == "policy" {
+		call("claim_ticket", map[string]any{"ticket": ticket})
+		check := exec.Command("python3", ".lazyagents/tool-policy.py")
+		check.Stdin = strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"go test ./..."}}`)
+		body, err := check.CombinedOutput()
+		if err != nil {
+			result(true, "policy hook failed")
+			os.Exit(2)
+		}
+		if strings.Contains(string(body), `"deny"`) {
+			text("Tool blocked; waiting for LazyAgents approval.")
+			result(false, "Waiting for tool approval")
+			return
+		}
+		_ = os.WriteFile("approved-action.txt", []byte("ran after approval"), 0o644)
+		call("complete_run", map[string]any{"outcome": "Exact tool action approved and completed"})
+		result(false, "Done")
+		return
+	}
 	if resume != "" && os.Getenv("FAKE_HARNESS_RESUME") == "idle" {
 		text("Still looking around.")
 		result(false, "Still looking around.")

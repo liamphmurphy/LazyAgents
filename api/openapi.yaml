@@ -2164,7 +2164,7 @@ components:
         input_tokens: { type: integer, format: int64 }
         output_tokens: { type: integer, format: int64 }
         cost_usd: { type: number }
-        cost_source: { type: string }
+        cost_source: { type: string, description: "harness, computed, self_reported, unknown, or partial" }
         plan: { type: array, items: { $ref: "#/components/schemas/PlanStep" } }
         scopes:
           type: array
@@ -2503,6 +2503,7 @@ components:
         merged_prs: { type: integer }
         closed_prs: { type: integer }
         spend_usd: { type: number, format: double }
+        unpriced_runs: { type: integer, description: "Runs with unknown or partially priced usage in this window" }
 
     DailyCompletions:
       type: object
@@ -2652,6 +2653,7 @@ components:
         started_at: { type: string, format: date-time }
         ended_at: { type: string, format: date-time }
         cost_usd: { type: number, format: double }
+        cost_source: { type: string }
         tool_calls: { type: integer }
         tokens: { type: integer, format: int64 }
 

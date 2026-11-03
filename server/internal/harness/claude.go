@@ -24,6 +24,11 @@ type mcpEntry struct {
 
 func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	spec := t.Spec
+	env, err := hookEnvironment(ws)
+	if err != nil {
+		return Invocation{}, err
+	}
+	env[ws.TokenEnv] = ws.Token
 	servers := map[string]mcpEntry{
 		// The run token is written into the (git-excluded) config; it's
 		// revoked when the run ends.
@@ -48,12 +53,12 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 			mode = "default"
 		}
 	}
-	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite"}
+	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "Skill"}
 	for _, m := range spec.MCPServers {
 		allow = append(allow, "mcp__"+m.Name)
 	}
 	// Shell access backs tests and git; it's granted when either scope is.
-	if allowed(spec, "tests:run") || allowed(spec, "repo:write") || allowed(spec, "repo:read") {
+	if spec.Mode("tests:run") != agentdef.Denied || spec.Mode("repo:write") != agentdef.Denied || spec.Mode("repo:read") != agentdef.Denied {
 		allow = append(allow, "Bash")
 	}
 	var deny []string
@@ -64,9 +69,6 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	if denied(spec, "repo:write") {
 		deny = append(deny, "Bash(git push:*)", "Bash(gh pr create:*)")
 	}
-	if denied(spec, "tests:run") && !allowed(spec, "repo:write") {
-		deny = append(deny, "Bash")
-	}
 
 	argv := []string{"claude", "-p", t.Prompt,
 		"--output-format", "stream-json", "--verbose",
@@ -76,6 +78,7 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		// Nobody answers prompts headless: anything not allowed is denied
 		// and the agent is told to use request_approval.
 		"--permission-prompts", "none",
+		"--settings", ".lazyagents/claude-settings.json",
 		"--allowedTools", strings.Join(allow, ","),
 	}
 	if len(deny) > 0 {
@@ -86,9 +89,12 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	files := SkillFiles(spec.Skills, true)
 	files[claudeMCPFile] = cfg
+	files[toolHookPath] = toolHook
+	settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{"PreToolUse": []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": env["LAZYAGENTS_POLICY_HOOK_COMMAND"], "timeout": 20}}}}}})
+	files[".lazyagents/claude-settings.json"] = settings
 	return Invocation{
 		Argv:  argv,
-		Env:   map[string]string{ws.TokenEnv: ws.Token},
+		Env:   env,
 		Files: files,
 	}, nil
 }
@@ -110,7 +116,7 @@ type claudeLine struct {
 	// result
 	IsError    bool                            `json:"is_error"`
 	Result     string                          `json:"result"`
-	TotalCost  float64                         `json:"total_cost_usd"`
+	TotalCost  *float64                        `json:"total_cost_usd"`
 	NumTurns   int                             `json:"num_turns"`
 	DurationMS int64                           `json:"duration_ms"`
 	Terminal   string                          `json:"terminal_reason"`
@@ -215,10 +221,13 @@ func (p *claudeParser) Line(b []byte) []Event {
 			p.res.Usage.CachedTokens = l.Usage.CacheReadTokens
 			p.res.Usage.OutputTokens = l.Usage.OutputTokens
 		}
-		p.res.Usage.CostUSD, p.res.Usage.CostSource = l.TotalCost, "harness"
+		p.res.Usage.CostSource = "unknown"
+		if l.TotalCost != nil {
+			p.res.Usage.CostUSD, p.res.Usage.CostSource = *l.TotalCost, "harness"
+		}
 		out := []Event{{"usage", map[string]any{
 			"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens, "cached_tokens": p.res.Usage.CachedTokens,
-			"cost_usd": l.TotalCost, "num_turns": l.NumTurns, "duration_ms": l.DurationMS,
+			"cost_usd": l.TotalCost, "cost_source": p.res.Usage.CostSource, "cost_known": l.TotalCost != nil, "num_turns": l.NumTurns, "duration_ms": l.DurationMS,
 		}}}
 		for _, d := range l.Denials {
 			var den struct {

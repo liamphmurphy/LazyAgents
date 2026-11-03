@@ -14,7 +14,7 @@ import (
 )
 
 const agentRunHistory = `-- name: AgentRunHistory :many
-SELECT r.id,r.state,r.harness,r.model,r.started_at,r.ended_at,r.cost_usd_micros,r.tool_calls,
+SELECT r.id,r.state,r.harness,r.model,r.started_at,r.ended_at,r.cost_usd_micros,r.cost_source,r.tool_calls,
  (r.input_tokens+r.output_tokens)::bigint AS tokens,t.id AS ticket_id,t.key,t.title,t.status,t.priority
 FROM runs r JOIN tickets t ON t.id=r.ticket_id
 WHERE r.workspace_id=$1 AND r.agent_id=$2 ORDER BY r.started_at DESC,r.id DESC LIMIT 51 OFFSET $3::int
@@ -34,6 +34,7 @@ type AgentRunHistoryRow struct {
 	StartedAt     time.Time
 	EndedAt       *time.Time
 	CostUsdMicros int64
+	CostSource    *string
 	ToolCalls     int32
 	Tokens        int64
 	TicketID      uuid.UUID
@@ -60,6 +61,7 @@ func (q *Queries) AgentRunHistory(ctx context.Context, arg AgentRunHistoryParams
 			&i.StartedAt,
 			&i.EndedAt,
 			&i.CostUsdMicros,
+			&i.CostSource,
 			&i.ToolCalls,
 			&i.Tokens,
 			&i.TicketID,
@@ -529,7 +531,7 @@ func (q *Queries) ReviewOverDay(ctx context.Context, workspaceID uuid.UUID) (int
 }
 
 const runCostMetrics = `-- name: RunCostMetrics :many
-SELECT agent_id,started_at,(cost_usd_micros::float8/1000000)::float8 AS cost_usd
+SELECT agent_id,started_at,(cost_usd_micros::float8/1000000)::float8 AS cost_usd,cost_source
 FROM runs WHERE workspace_id=$1 AND started_at>=$2::timestamptz-interval '30 days' AND started_at<=$2::timestamptz
 `
 
@@ -539,9 +541,10 @@ type RunCostMetricsParams struct {
 }
 
 type RunCostMetricsRow struct {
-	AgentID   uuid.UUID
-	StartedAt time.Time
-	CostUsd   float64
+	AgentID    uuid.UUID
+	StartedAt  time.Time
+	CostUsd    float64
+	CostSource *string
 }
 
 // Spend is the reported cost of runs started in the selected window.
@@ -554,7 +557,12 @@ func (q *Queries) RunCostMetrics(ctx context.Context, arg RunCostMetricsParams) 
 	items := []RunCostMetricsRow{}
 	for rows.Next() {
 		var i RunCostMetricsRow
-		if err := rows.Scan(&i.AgentID, &i.StartedAt, &i.CostUsd); err != nil {
+		if err := rows.Scan(
+			&i.AgentID,
+			&i.StartedAt,
+			&i.CostUsd,
+			&i.CostSource,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

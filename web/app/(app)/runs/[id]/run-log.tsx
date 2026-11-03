@@ -1,5 +1,6 @@
 "use client";
 
+import { runCost } from "@/lib/format";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
@@ -110,6 +111,8 @@ function lifecycleText(p: P): ReactNode {
           Turn {str(p.turn)} started{p.resume ? " · resumed the harness session" : ""}
         </>
       );
+    case "harness_notice":
+      return <>Codex notice: {str(p.message)}</>;
     case "harness_started":
       return (
         <>
@@ -197,7 +200,7 @@ function EventRow({ row }: { row: Row }) {
       body = (
         <span className="font-mono text-[12px] text-fg-secondary">
           turn total · {compact(Number(p.input_tokens ?? 0))} in · {compact(Number(p.output_tokens ?? 0))} out
-          {p.cost_usd != null && ` · $${Number(p.cost_usd).toFixed(2)}`}
+          {` · ${runCost(Number(p.cost_usd ?? 0), p.cost_source === "harness" || p.cost_source === "computed" ? String(p.cost_source) : p.cost_known === true || Number(p.cost_usd ?? 0)>0 ? "harness" : "unknown")}`}
         </span>
       );
       break;
@@ -254,7 +257,7 @@ function TurnsRail({ d }: { d: RunDetail }) {
                   <>
                     {t.process_started_at && duration(t.process_started_at, t.ended_at ?? undefined)}
                     {u.tool_calls != null && ` · ${str(u.tool_calls)} calls`}
-                    {u.cost_usd ? ` · $${Number(u.cost_usd).toFixed(2)}` : ""}
+                    {` · ${runCost(Number(u.cost_usd ?? 0), typeof u.cost_source === "string" ? u.cost_source : undefined)}`}
                     {t.exit_code ? ` · exit ${t.exit_code}` : ""}
                   </>
                 )}
@@ -395,7 +398,7 @@ export function RunLogScreen({ id }: { id: string }) {
         <Stat label="Run time" value={duration(run.started_at, run.ended_at)} />
         <Stat label="Tool calls" value={run.tool_calls} />
         <Stat label="Tokens" value={compact(run.input_tokens + run.output_tokens)} />
-        <Stat label="Spend" value={`$${run.cost_usd.toFixed(2)}`} />
+        <Stat label="Spend" value={runCost(run.cost_usd, run.cost_source)} />
       </div>
       {control.isError && (
         <div className="px-6 pt-3">

@@ -91,6 +91,10 @@ func (s *Server) toApproval(ctx context.Context, ap store.ApprovalRequest, dir a
 		out.Brokered = true
 		preview := action.Describe(detail)
 		out.ActionPreview = &preview
+	} else if _, ok := detail["tool_name"]; ok {
+		preview, _ := json.MarshalIndent(detail, "", "  ")
+		text := string(preview)
+		out.ActionPreview = &text
 	}
 	if ap.DecisionNote != "" {
 		out.DecisionNote = &ap.DecisionNote

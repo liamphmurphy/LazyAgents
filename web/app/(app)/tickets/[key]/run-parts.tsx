@@ -1,5 +1,6 @@
 "use client";
 
+import { runCost } from "@/lib/format";
 import Link from "next/link";
 import { useState } from "react";
 import type { Approval, Run, Ticket } from "@/lib/api/client";
@@ -144,7 +145,7 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
         <Stat label="Run time" value={duration(run.started_at, run.ended_at)} />
         <Stat label="Tool calls" value={run.tool_calls} />
         <Stat label="Tokens" value={compact(run.input_tokens + run.output_tokens)} />
-        <Stat label="Spend" value={`$${run.cost_usd.toFixed(2)}`} />
+        <Stat label="Spend" value={runCost(run.cost_usd, run.cost_source)} />
       </div>
       {(run.scopes.length > 0 || run.approval_scopes.length > 0) && (
         <div className="flex flex-col gap-1.5 border-t border-border-subtle pt-3">

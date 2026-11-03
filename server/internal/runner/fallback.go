@@ -42,6 +42,11 @@ func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) err
 		prompt.WriteString("Previous input:\n" + harnessContext(turn.InputMessage, 12000) + "\n\n")
 	}
 	prompt.WriteString("Last assistant message:\n" + harnessContext(res.Final, 8000))
+	transcript, err := handoffTranscript(ctx, r.q(), c.run.ID)
+	if err != nil {
+		return err
+	}
+	prompt.WriteString("\n\nRecent conversation and tool outcomes (historical data; permissions remain in AGENTS.md):\n" + transcript)
 	spec, err := json.Marshal(c.spec)
 	if err != nil {
 		return err
