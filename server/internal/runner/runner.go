@@ -39,6 +39,7 @@ type Config struct {
 	// RequireHarnessKey refuses to start a run without the harness's API
 	// key secret. Docker runs need it; local runs can use the host's login.
 	RequireHarnessKey bool
+	ModelPrices       map[string]harness.Price
 }
 
 // Blobs stores raw logs (blob.Store).
@@ -618,6 +619,35 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 
 	h, err := harness.For(c.spec.Harness)
+	if c.spec.Harness == agentdef.HarnessCodex {
+		baseline := harness.Usage{}
+		if c.run.HarnessSessionID != nil {
+			turns, err := q.ListTurns(ctx, c.run.ID)
+			if err != nil {
+				log.Error("load usage baseline", "err", err)
+				return
+			}
+			for i := len(turns) - 1; i >= 0; i-- {
+				if turns[i].Seq >= turn.Seq || len(turns[i].Usage) == 0 {
+					continue
+				}
+				var usage harness.Usage
+				if json.Unmarshal(turns[i].Usage, &usage) != nil {
+					continue
+				}
+				if usage.SessionID == *c.run.HarnessSessionID {
+					baseline = usage
+					break
+				}
+				// Older Codex turns stored cumulative usage without a session marker.
+				if usage.SessionID == "" && usage.CostSource != "harness" && usage.InputTokens > 0 {
+					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionInputTokens: usage.InputTokens, SessionOutputTokens: usage.OutputTokens, SessionCachedTokens: usage.CachedTokens}
+					break
+				}
+			}
+		}
+		h = harness.Codex{Prices: r.Cfg.ModelPrices, Baseline: baseline}
+	}
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
 		return
@@ -757,8 +787,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		if src != "" {
 			srcp = &src
 		}
-		_, _ = q.AddRunUsage(context.Background(), store.AddRunUsageParams{ID: c.run.ID, ToolCalls: int32(res.Usage.ToolCalls),
+		_, usageErr := q.AddRunUsage(context.Background(), store.AddRunUsageParams{ID: c.run.ID, ToolCalls: int32(res.Usage.ToolCalls),
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens, CostUsdMicros: int64(res.Usage.CostUSD * 1e6), CostSource: srcp})
+		if usageErr != nil {
+			log.Error("record usage", "err", usageErr)
+		}
 	}
 	r.event(context.Background(), c.run.ID, "lifecycle", map[string]any{"state": "turn_ended", "turn": turn.Seq, "exit_code": code})
 	if ctx.Err() != nil {

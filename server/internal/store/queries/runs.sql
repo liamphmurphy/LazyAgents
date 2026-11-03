@@ -37,7 +37,10 @@ WHERE id = $1 RETURNING *;
 
 -- name: AddRunUsage :one
 UPDATE runs SET tool_calls = tool_calls + $2, input_tokens = input_tokens + $3, output_tokens = output_tokens + $4,
-  cost_usd_micros = cost_usd_micros + $5, cost_source = coalesce(cost_source, $6)
+  cost_usd_micros = cost_usd_micros + sqlc.arg(cost_usd_micros),
+  cost_source = CASE WHEN cost_source IN ('unknown','partial') OR sqlc.narg(cost_source)::text = 'unknown' THEN
+    CASE WHEN cost_usd_micros + sqlc.arg(cost_usd_micros) > 0 THEN 'partial' ELSE 'unknown' END
+    ELSE coalesce(cost_source, sqlc.narg(cost_source)) END
 WHERE id = $1 RETURNING *;
 
 -- name: StartTurn :one

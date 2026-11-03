@@ -11,7 +11,8 @@ import (
 
 // Skills reach an agent as files in the workspace. Claude Code loads
 // .claude/skills/<name>/SKILL.md natively (the description decides when);
-// other harnesses get the same file under .lazyagents/skills/ plus an index
+// Codex loads .agents/skills/<name>/SKILL.md natively; other harnesses
+// get the same file under .lazyagents/skills/ plus an index
 // in AGENTS.md telling them when to read it.
 const (
 	claudeSkillsDir = ".claude/skills"
@@ -61,4 +62,20 @@ func skillsIndex(skills []agentdef.Skill) string {
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// SkillFilesFor installs native skills for the selected harness.
+func SkillFilesFor(skills []agentdef.Skill, name string) map[string][]byte {
+	files := SkillFiles(skills, true)
+	if name != agentdef.HarnessCodex {
+		return files
+	}
+	out := map[string][]byte{}
+	for p, body := range files {
+		if p == SkillsExcludeFile {
+			body = []byte(strings.ReplaceAll(string(body), "/.claude/skills/", "/.agents/skills/"))
+		}
+		out[strings.ReplaceAll(p, ".claude/skills", ".agents/skills")] = body
+	}
+	return out
 }

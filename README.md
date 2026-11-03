@@ -133,3 +133,44 @@ task, recent inputs and last assistant message. Full conversation state is not
 transferred between harnesses. Existing turn/runtime guards still apply. When
 all targets are exhausted the run fails, and each switch appears as a
 `harness_fallback` lifecycle event. Definition changes apply to new runs.
+
+Both harness adapters now use the same run-scoped tool policy: native tool hooks
+check the frozen scopes before execution. Denied actions are blocked. Actions
+requiring approval pause the run and appear in the existing approval UI; a yes
+authorizes that exact tool input once, and the resumed turn retries it. Planning
+runs permit context reads (including simple read-only shell commands) and block
+project command execution and edits. The authenticated
+policy endpoint is `POST /api/v1/agent/tool-policy` and accepts `{tool, input}`;
+it requires a token bound to the running agent's run and returns `allow` or
+`deny`. A policy outage blocks the tool rather than permitting it.
+
+Codex performs an offline hook preflight before each new or resumed turn. It
+checks that the generated service hook has an absolute path, can execute from
+the workspace, and can reach the authenticated run policy before loading a model.
+It also checks that the hook is loaded and refuses to run if another
+active hook is unreviewed. Only then does it use Codex's automation hook-trust
+flag. It does not disable the sandbox or shell approval policy. Like the CLI's
+own tool rules, hooks provide best-effort enforcement, not isolation from a
+malicious program; Docker remains the isolation boundary. Local runners inherit
+the host's environment and logins. `python3` is required by both adapters and is
+included in the runner image.
+
+Skills use native discovery on both CLIs: `.claude/skills/<name>/SKILL.md` for
+Claude Code and `.agents/skills/<name>/SKILL.md` for Codex. Generated skill files
+are excluded from git. Cross-harness fallbacks include a bounded transcript of
+recent messages, tool calls and outcomes, and approval decisions; CLI-private
+session files and internal reasoning are not portable.
+
+Cost displays distinguish known, unknown and partially priced totals instead of
+showing unpriced usage as free. Native reported costs take precedence when
+available. Codex prices tokens using the built-in model table or the optional
+`RUNNER_MODEL_PRICES` JSON object, keyed by exact model id. Each entry must include
+nonnegative `input_per_million`, `cached_input_per_million`, and
+`output_per_million` USD rates. Supply your provider's applicable rates; no price
+is inferred for an unknown model. Aggregates identify windows containing
+unpriced runs. The migration also marks older unpriced turns as unknown/partial.
+
+Codex session-total token counters are normalized to per-turn deltas on resume,
+so resumed turns do not bill earlier usage twice. The migration repairs older
+turns where recorded lifecycle events identify the Codex session; original usage
+JSON is retained on those turns for audit.

@@ -199,7 +199,10 @@ func (q *Queries) AddRunEvent(ctx context.Context, arg AddRunEventParams) error 
 
 const addRunUsage = `-- name: AddRunUsage :one
 UPDATE runs SET tool_calls = tool_calls + $2, input_tokens = input_tokens + $3, output_tokens = output_tokens + $4,
-  cost_usd_micros = cost_usd_micros + $5, cost_source = coalesce(cost_source, $6)
+  cost_usd_micros = cost_usd_micros + $5,
+  cost_source = CASE WHEN cost_source IN ('unknown','partial') OR $6::text = 'unknown' THEN
+    CASE WHEN cost_usd_micros + $5 > 0 THEN 'partial' ELSE 'unknown' END
+    ELSE coalesce(cost_source, $6) END
 WHERE id = $1 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose
 `
 

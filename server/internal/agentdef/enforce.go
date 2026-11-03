@@ -8,10 +8,10 @@ type Caps struct {
 	Resume           bool `json:"resume"`            // resume a session by id
 }
 
-// Capabilities per harness. Codex gates by sandbox mode, not per tool.
+// Both harnesses use run-scoped PreToolUse hooks for service tool policy.
 var Capabilities = map[string]Caps{
 	HarnessClaudeCode: {ToolGating: true, PermissionPrompt: true, NativeCost: true, Resume: true},
-	HarnessCodex:      {ToolGating: false, PermissionPrompt: false, NativeCost: false, Resume: true},
+	HarnessCodex:      {ToolGating: true, PermissionPrompt: true, NativeCost: false, Resume: true},
 }
 
 // Enforcement is how strongly a scope holds (§6.3), strongest first:

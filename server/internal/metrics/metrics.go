@@ -16,6 +16,7 @@ import (
 )
 
 type Performance struct {
+	UnpricedRuns       int      `json:"unpriced_runs"`
 	Completed          int      `json:"completed"`
 	MedianCycleSeconds *float64 `json:"median_cycle_seconds"`
 	MergedPRs          int      `json:"merged_prs"`
@@ -112,6 +113,10 @@ func calculate(ctx context.Context, q *store.Queries, ws uuid.UUID, window strin
 		out.Performance.SpendUSD += c.CostUsd
 		a := out.Agents[c.AgentID]
 		a.SpendUSD += c.CostUsd
+		if c.CostSource == nil || *c.CostSource == "unknown" || *c.CostSource == "partial" {
+			a.UnpricedRuns++
+			out.Performance.UnpricedRuns++
+		}
 		out.Agents[c.AgentID] = a
 	}
 	for _, p := range prs {
