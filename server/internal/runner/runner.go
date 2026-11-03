@@ -1121,10 +1121,16 @@ func (r *Runner) openCode(c runCtx) harness.OpenCode {
 	}
 }
 
+// OpenCodePreflightTimeout bounds `opencode --version` before a turn; tests
+// shorten it.
+var OpenCodePreflightTimeout = 15 * time.Second
+
 // opencodePreflight checks the executable and the pinned version through the
 // same backend a turn runs on. It returns a user-facing failure or "". Output
 // is bounded and the environment carries no secrets.
-func (r *Runner) opencodePreflight(ctx context.Context, c runCtx, turn store.RunTurn) string {
+func (r *Runner) opencodePreflight(parent context.Context, c runCtx, turn store.RunTurn) string {
+	ctx, cancel := context.WithTimeout(parent, OpenCodePreflightTimeout)
+	defer cancel()
 	const missing = "OpenCode is not available: install @opencode/cli@" + harness.OpenCodeVersion + " (the agent-base image pins it) or set RUNNER_OPENCODE_BIN."
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
 		Name: fmt.Sprintf("lazyagents-preflight-%s-%d", c.run.ID, turn.Seq), Argv: []string{"opencode", "--version"}, Env: map[string]string{},
@@ -1145,10 +1151,27 @@ func (r *Runner) opencodePreflight(ctx context.Context, c runCtx, turn store.Run
 		defer wg.Done()
 		_, _ = io.Copy(io.Discard, proc.Stderr())
 	}()
+	// A hung or wrong binary must not block the turn: kill it when the
+	// timeout or the turn's context ends, which also closes its pipes.
+	exited := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = proc.Kill()
+		case <-exited:
+		}
+	}()
 	code, err := proc.Wait()
+	close(exited)
 	wg.Wait()
 	if cl, ok := proc.(io.Closer); ok {
 		_ = cl.Close()
+	}
+	if ctx.Err() != nil {
+		if parent.Err() != nil {
+			return "OpenCode preflight was cancelled."
+		}
+		return fmt.Sprintf("OpenCode did not answer `opencode --version` within %s: check RUNNER_OPENCODE_BIN points at a working OpenCode %s.", OpenCodePreflightTimeout, harness.OpenCodeVersion)
 	}
 	if err != nil || code != 0 {
 		return missing

@@ -139,6 +139,9 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "--version" {
+		if os.Getenv("FAKE_HARNESS_MODE") == "version-hang" {
+			time.Sleep(time.Hour) // until killed
+		}
 		fmt.Println("opencode v2.2.1")
 		return
 	}

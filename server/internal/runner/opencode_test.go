@@ -303,6 +303,26 @@ func TestOpenCodeMissingOrWrongBinary(t *testing.T) {
 	}
 }
 
+// A binary that never answers --version is killed at the timeout: the turn
+// fails with an actionable message instead of blocking. The fake sleeps for an
+// hour, so returning at all proves the process was killed and Wait unblocked.
+func TestOpenCodePreflightTimeout(t *testing.T) {
+	old := runner.OpenCodePreflightTimeout
+	runner.OpenCodePreflightTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { runner.OpenCodePreflightTimeout = old })
+	e := setup(t)
+	e.putSecrets("harness:anthropic")
+	e.useOpenCode("anthropic/claude-sonnet-5-5")
+	t.Setenv("FAKE_HARNESS_MODE", "version-hang")
+	start := time.Now()
+	e.dispatch("PAY-214")
+	e.failedWith("PAY-214", "did not answer `opencode --version` within 500ms")
+	if d := time.Since(start); d > 10*time.Second {
+		t.Fatalf("preflight took %s", d)
+	}
+	e.failedWith("PAY-214", "RUNNER_OPENCODE_BIN")
+}
+
 func TestOpenCodeProviderFailure(t *testing.T) {
 	e := setup(t)
 	e.putSecrets("harness:anthropic")
