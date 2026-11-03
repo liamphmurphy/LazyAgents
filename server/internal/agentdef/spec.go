@@ -61,8 +61,17 @@ type MCPServer struct {
 	Description string `json:"description,omitempty"`
 }
 
+// Fallback is the next harness/model to try when provider usage is exhausted.
+// Options belong only to this target; primary harness options are never reused.
+type Fallback struct {
+	Harness        string            `json:"harness"`
+	Model          string            `json:"model"`
+	HarnessOptions map[string]string `json:"harness_options,omitempty"`
+}
+
 // Spec is one immutable definition version, stored as jsonb.
 type Spec struct {
+	Fallbacks      []Fallback                   `json:"fallbacks,omitempty"`
 	Harness        string                       `json:"harness"`
 	Model          string                       `json:"model"`
 	Instructions   string                       `json:"instructions"`
@@ -239,6 +248,22 @@ func (s *Spec) Normalize() error {
 	}
 	if !slices.Contains(Harnesses, s.Harness) {
 		return invalid("harness", "must be one of %s", strings.Join(Harnesses, ", "))
+	}
+	if len(s.Fallbacks) > 8 {
+		return invalid("fallbacks", "at most 8 targets")
+	}
+	seen := map[string]bool{s.Harness + "\x00" + strings.TrimSpace(s.Model): true}
+	for i := range s.Fallbacks {
+		f := &s.Fallbacks[i]
+		f.Model = strings.TrimSpace(f.Model)
+		if !slices.Contains(Harnesses, f.Harness) || f.Model == "" {
+			return invalid("fallbacks", "each target needs a supported harness and a model")
+		}
+		key := f.Harness + "\x00" + f.Model
+		if seen[key] {
+			return invalid("fallbacks", "duplicate harness/model target")
+		}
+		seen[key] = true
 	}
 	s.Model = strings.TrimSpace(s.Model)
 	if s.Model == "" {

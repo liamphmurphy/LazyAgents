@@ -102,6 +102,7 @@ type claudeParser struct {
 
 type claudeLine struct {
 	Type      string          `json:"type"`
+	Error     string          `json:"error"`
 	Subtype   string          `json:"subtype"`
 	SessionID string          `json:"session_id"`
 	Model     string          `json:"model"`
@@ -143,6 +144,9 @@ func (p *claudeParser) Line(b []byte) []Event {
 	}
 	if l.SessionID != "" {
 		p.res.SessionID = l.SessionID
+	}
+	if UsageLimit(l.Error) || (l.Type == "result" && l.IsError && UsageLimit(l.Result+" "+l.Terminal)) {
+		p.res.UsageLimited = true
 	}
 	switch l.Type {
 	case "system":

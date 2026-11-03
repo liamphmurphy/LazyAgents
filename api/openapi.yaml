@@ -1959,12 +1959,22 @@ components:
         name: { type: string }
         url: { type: string }
         description: { type: string }
+    HarnessFallback:
+      type: object
+      required: [harness, model]
+      properties:
+        harness: { $ref: "#/components/schemas/Harness" }
+        model: { type: string }
+        harness_options:
+          type: object
+          additionalProperties: { type: string }
     AgentSpec:
       type: object
       required: [harness, model, instructions, scopes, budget, max_concurrency, mcp_servers, harness_options]
       properties:
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string }
+        fallbacks: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/HarnessFallback" } }
         instructions: { type: string }
         scopes:
           type: object
@@ -2018,6 +2028,7 @@ components:
       properties:
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string }
+        fallbacks: { type: array, items: { $ref: "#/components/schemas/HarnessFallback" } }
         instructions: { type: string }
         scopes: { type: array, items: { $ref: "#/components/schemas/ResolvedScope" } }
         budget: { $ref: "#/components/schemas/Budget" }

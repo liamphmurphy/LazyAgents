@@ -680,6 +680,15 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 
 	res, raw, code, waitErr := r.watch(ctx, c, proc, h.NewParser(c.spec.Model), sensitive, maxRuntime-used)
+	// Some CLI failures only reach stderr, without a JSON error event.
+	if code != 0 && !res.UsageLimited {
+		for _, line := range strings.Split(string(raw), "\n") {
+			if strings.HasPrefix(line, "[stderr] ") && harness.UsageLimit(line) {
+				res.UsageLimited = true
+				break
+			}
+		}
+	}
 	logKey := r.saveLog(c.run.ID, turn.Seq, raw)
 	usage, _ := json.Marshal(res.Usage)
 	exit := int32(code)
@@ -844,8 +853,17 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	if err != nil || pending {
 		return // a person already resumed it (a reply arrived mid-turn)
 	}
-	if waitErr != nil || code != 0 || res.IsError {
+	if res.UsageLimited && len(c.spec.Fallbacks) > 0 {
+		if err := r.fallback(ctx, c, res); err != nil {
+			r.end(ctx, c, "failed", "Could not switch to fallback: "+err.Error(), runs.VerbRunFailed)
+		}
+		return
+	}
+	if waitErr != nil || code != 0 || res.IsError || res.UsageLimited {
 		msg := res.Error
+		if msg == "" && res.UsageLimited {
+			msg = "Provider usage exhausted; no fallback targets remain"
+		}
 		if msg == "" && waitErr != nil {
 			msg = waitErr.Error()
 		}

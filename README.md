@@ -109,3 +109,27 @@ TEST_DATABASE_URL=postgres://lazyagents:lazyagents@localhost:5432/lazyagents?ssl
 | `server/internal/tracker/` | Ticket domain service; every change writes its activity event in the same transaction |
 | `web/` | Next.js app: a pure UI client of the API |
 | `deploy/` | Caddy and SeaweedFS config |
+
+Agents can continue automatically when a provider's usage or rate limit is
+reached. Add an ordered list under **Usage fallbacks** in the agent definition
+editor, or set `fallbacks` in the definition API:
+
+```json
+{
+  "harness": "claude-code",
+  "model": "your-primary-model",
+  "fallbacks": [
+    {"harness": "codex", "model": "your-codex-model"}
+  ]
+}
+```
+
+Each target requires a harness and model; optional `harness_options` apply only
+to that target. Configure credentials for every harness (local runners may use
+CLI logins). Targets are tried once, in order, only for provider quota/rate-limit
+errors. Other errors still fail the run. The same checkout, plan and accumulated
+usage are retained; the next harness starts a fresh session with the original
+task, recent inputs and last assistant message. Full conversation state is not
+transferred between harnesses. Existing turn/runtime guards still apply. When
+all targets are exhausted the run fails, and each switch appears as a
+`harness_fallback` lifecycle event. Definition changes apply to new runs.

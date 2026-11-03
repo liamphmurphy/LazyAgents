@@ -29,6 +29,7 @@ type Repository struct {
 }
 
 type Resolved struct {
+	Fallbacks      []Fallback                   `json:"fallbacks,omitempty"`
 	Repository     *Repository                  `json:"repository,omitempty"`
 	Harness        string                       `json:"harness"`
 	Model          string                       `json:"model"`
@@ -120,7 +121,8 @@ func minPositive(a, b int) int {
 func Resolve(s Spec, o *Override) Resolved {
 	r := Resolved{
 		Harness: s.Harness, Model: s.Model, Instructions: s.Instructions,
-		Budget: s.Budget, MaxConcurrency: s.MaxConcurrency, Memory: s.MemoryOrDefault(),
+		Fallbacks: append([]Fallback{}, s.Fallbacks...),
+		Budget:    s.Budget, MaxConcurrency: s.MaxConcurrency, Memory: s.MemoryOrDefault(),
 		MCPServers: append([]MCPServer{}, s.MCPServers...), Skills: append([]Skill{}, s.Skills...),
 		Setup: []string{}, Provenance: map[string]Source{}, allOptions: s.HarnessOptions,
 	}
@@ -194,6 +196,7 @@ func Resolve(s Spec, o *Override) Resolved {
 		}
 	}
 
+	r.Fallbacks = slices.DeleteFunc(r.Fallbacks, func(f Fallback) bool { return f.Harness == r.Harness && f.Model == r.Model })
 	r.HarnessOptions = map[string]string{}
 	for k, v := range s.HarnessOptions[r.Harness] {
 		r.HarnessOptions[k] = v

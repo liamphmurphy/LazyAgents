@@ -1548,9 +1548,17 @@ export interface components {
             url: string;
             description?: string;
         };
+        HarnessFallback: {
+            harness: components["schemas"]["Harness"];
+            model: string;
+            harness_options?: {
+                [key: string]: string;
+            };
+        };
         AgentSpec: {
             harness: components["schemas"]["Harness"];
             model: string;
+            fallbacks?: components["schemas"]["HarnessFallback"][];
             instructions: string;
             scopes: {
                 [key: string]: components["schemas"]["ScopeMode"];
@@ -1600,6 +1608,7 @@ export interface components {
         ResolvedDefinition: {
             harness: components["schemas"]["Harness"];
             model: string;
+            fallbacks?: components["schemas"]["HarnessFallback"][];
             instructions: string;
             scopes: components["schemas"]["ResolvedScope"][];
             budget: components["schemas"]["Budget"];

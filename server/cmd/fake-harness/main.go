@@ -269,6 +269,25 @@ func main() {
 		return
 	}
 
+	if os.Getenv("FAKE_HARNESS_MODE") == "quota" {
+		if !codex {
+			call("claim_ticket", map[string]any{"ticket": ticket})
+			_ = os.WriteFile("before-fallback.txt", []byte("work preserved"), 0o644)
+			result(true, "You have hit your usage limit")
+			os.Exit(1)
+		}
+		if _, err := os.Stat("before-fallback.txt"); err != nil {
+			result(true, "checkout was lost")
+			os.Exit(2)
+		}
+		if resume != "" || !strings.Contains(prompt, "fresh session") {
+			result(true, "missing handoff")
+			os.Exit(2)
+		}
+		call("complete_run", map[string]any{"outcome": "Completed on fallback with preserved checkout"})
+		result(false, "Done")
+		return
+	}
 	switch os.Getenv("FAKE_HARNESS_MODE") {
 	case "crash":
 		text("Something went wrong.")

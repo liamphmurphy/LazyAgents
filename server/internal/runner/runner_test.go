@@ -646,3 +646,65 @@ func TestDelegatedRunSharesParentWorkspace(t *testing.T) {
 		t.Fatal("the delegated run got its own workspace")
 	}
 }
+
+func TestUsageFallbackPreservesWorkspace(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "quota")
+	e.dispatch("PAY-214")
+	run := e.run("PAY-214")
+	var spec agentdef.Resolved
+	if err := json.Unmarshal(run.ResolvedSpec, &spec); err != nil {
+		t.Fatal(err)
+	}
+	spec.Fallbacks = []agentdef.Fallback{{Harness: agentdef.HarnessCodex, Model: "test-fallback"}}
+	raw, _ := json.Marshal(spec)
+	if _, err := e.pool.Exec(e.ctx, "UPDATE runs SET resolved_spec=$2 WHERE id=$1", run.ID, raw); err != nil {
+		t.Fatal(err)
+	}
+	e.until("fallback completed", e.state("PAY-214=completed"))
+	run = e.run("PAY-214")
+	if run.Harness != "codex" || run.Model != "test-fallback" {
+		t.Fatalf("target: %s %s", run.Harness, run.Model)
+	}
+	if !strings.Contains(e.eventTypes(run.ID), "lifecycle:harness_fallback") {
+		t.Fatal("missing fallback event")
+	}
+	turns, err := e.q.ListTurns(e.ctx, run.ID)
+	if err != nil || len(turns) != 2 {
+		t.Fatalf("turns=%d err=%v", len(turns), err)
+	}
+	if !strings.Contains(deref(run.Outcome), "preserved checkout") {
+		t.Fatalf("outcome=%v", run.Outcome)
+	}
+}
+
+func TestFallbackStopsOnExhaustionOrUnrelatedErrors(t *testing.T) {
+	for _, tc := range []struct {
+		mode, harness, model string
+		turns                int
+	}{
+		{"quota", "claude-code", "another-model", 2},
+		{"crash", "codex", "fallback-model", 1},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			e := setup(t)
+			t.Setenv("FAKE_HARNESS_MODE", tc.mode)
+			e.dispatch("PAY-214")
+			run := e.run("PAY-214")
+			var spec agentdef.Resolved
+			if err := json.Unmarshal(run.ResolvedSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			spec.Fallbacks = []agentdef.Fallback{{Harness: tc.harness, Model: tc.model}}
+			raw, _ := json.Marshal(spec)
+			if _, err := e.pool.Exec(e.ctx, "UPDATE runs SET resolved_spec=$2 WHERE id=$1", run.ID, raw); err != nil {
+				t.Fatal(err)
+			}
+			e.until("failed without looping", e.state("PAY-214=failed"))
+			turns, err := e.q.ListTurns(e.ctx, run.ID)
+			if err != nil || len(turns) != tc.turns {
+				t.Fatalf("turns=%d want=%d err=%v", len(turns), tc.turns, err)
+			}
+		})
+	}
+}

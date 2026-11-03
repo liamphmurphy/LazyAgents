@@ -128,6 +128,7 @@ func (p *codexParser) Line(b []byte) []Event {
 			msg = l.Error.Message
 		}
 		p.res.IsError, p.res.Error = true, msg
+		p.res.UsageLimited = p.res.UsageLimited || UsageLimit(msg)
 		return []Event{{"error", map[string]any{"message": msg}}}
 	case "error":
 		// Transient ("Reconnecting… 2/5") errors are noise until the last.
@@ -135,6 +136,7 @@ func (p *codexParser) Line(b []byte) []Event {
 			return nil
 		}
 		p.res.Error = l.Message
+		p.res.UsageLimited = p.res.UsageLimited || UsageLimit(l.Message)
 		return []Event{{"error", map[string]any{"message": l.Message}}}
 	case "item.started", "item.completed":
 		if l.Item == nil {

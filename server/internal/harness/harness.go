@@ -53,11 +53,12 @@ type Usage struct {
 
 // Result is what a parser learned by the end of a turn.
 type Result struct {
-	SessionID string
-	Usage     Usage
-	IsError   bool
-	Error     string
-	Final     string // the last assistant text
+	UsageLimited bool // provider quota/rate limit, eligible for fallback
+	SessionID    string
+	Usage        Usage
+	IsError      bool
+	Error        string
+	Final        string // the last assistant text
 }
 
 // Parser reads one turn's stream, line by line.
@@ -227,4 +228,15 @@ func delegationSection(agentdef.Resolved) string {
 	return "If sub agents exist (`list_subagents`), you may hand them self-contained parts of the ticket such as implementation or documentation with " +
 		"`delegate`. You wait while one works in this same checkout, then get its summary; review the diff before relying on it. " +
 		"You stay responsible for the ticket: only you call claim_ticket and complete_run for it.\n\n"
+}
+
+// UsageLimit reports provider exhaustion from an error, never ordinary tool output.
+func UsageLimit(message string) bool {
+	s := strings.ToLower(message)
+	for _, marker := range []string{"rate_limit", "usage_limit_reached", "insufficient_quota", "usage limit", "rate limit", "rate-limit", "quota exceeded", "exceeded your quota", "credit balance is too low", "out of extra usage", "you've hit your limit", "you have hit your limit"} {
+		if strings.Contains(s, marker) {
+			return true
+		}
+	}
+	return false
 }

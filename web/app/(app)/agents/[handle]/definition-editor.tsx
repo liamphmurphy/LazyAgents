@@ -38,6 +38,7 @@ export function describeChanges(a: Draft, b: Draft): string {
   if (a.name !== b.name || a.role !== b.role || a.specialty !== b.specialty || a.color_index !== b.color_index) out.push("Updated identity");
   if (a.kind !== b.kind) out.push(`Kind ${a.kind} → ${b.kind}`);
   if (a.spec.harness !== b.spec.harness) out.push(`Harness ${a.spec.harness} → ${b.spec.harness}`);
+  if (JSON.stringify(a.spec.fallbacks ?? []) !== JSON.stringify(b.spec.fallbacks ?? [])) out.push("Changed usage fallbacks");
   if (a.spec.model !== b.spec.model) out.push(`Model ${a.spec.model} → ${b.spec.model}`);
   if (a.spec.instructions !== b.spec.instructions) out.push("Edited instructions");
   const scopes = new Set([...Object.keys(a.spec.scopes), ...Object.keys(b.spec.scopes)]);
@@ -460,6 +461,22 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           <Button type="submit" variant="outline" icon="plus">Add server</Button>
         </form>
       </Card>
+
+      <SectionCard title="Usage fallbacks">
+        <p className="text-xs text-fg-tertiary">When provider usage runs out, continue with the next harness and model in this order. The checkout is preserved; each switch starts a fresh session. Configure credentials for each harness.</p>
+        {(spec.fallbacks ?? []).map((f, i) => (
+          <div key={i} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-fg-tertiary">{i + 1}.</span>
+            <Segmented label={`Fallback ${i + 1} harness`} value={f.harness} options={detail.harnesses.map((h) => ({ value: h.name, label: h.label }))}
+              onChange={(harness) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, harness, harness_options: {} } : v) })} />
+            <TextInput aria-label={`Fallback ${i + 1} model`} placeholder="Model" value={f.model}
+              onChange={(e) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, model: e.target.value } : v) })} />
+            <IconButton icon="trash" label={`Remove fallback ${i + 1}`} onClick={() => set({ fallbacks: spec.fallbacks!.filter((_, j) => j !== i) })} />
+          </div>
+        ))}
+        <Button type="button" variant="outline" disabled={(spec.fallbacks?.length ?? 0) >= 8}
+          onClick={() => set({ fallbacks: [...(spec.fallbacks ?? []), { harness: spec.harness === "claude-code" ? "codex" : "claude-code", model: "" }] })}>Add fallback</Button>
+      </SectionCard>
 
       <Card title="Harness options" bodyClassName="flex flex-col gap-2 px-[18px] py-4">
         <p className="text-xs text-fg-tertiary">Passed only to the matching harness. Use for settings that have no shared equivalent.</p>
