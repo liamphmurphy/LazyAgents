@@ -81,7 +81,7 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 			return err
 		}
 		if in.Message != nil {
-			out, _, err = postChatMessage(ctx, q, out, *in.Message)
+			out, _, err = postChatMessage(ctx, q, out, *in.Message, s.HandoffChars)
 		}
 		return err
 	})
@@ -97,7 +97,7 @@ func (s *Service) PostChatMessage(ctx context.Context, ws, user, id uuid.UUID, i
 		if err != nil {
 			return err
 		}
-		_, out, err = postChatMessage(ctx, q, chat, in)
+		_, out, err = postChatMessage(ctx, q, chat, in, s.HandoffChars)
 		return err
 	})
 	return out, err
@@ -111,7 +111,7 @@ func lockChat(ctx context.Context, q *store.Queries, ws, user, id uuid.UUID) (st
 	return chat, err
 }
 
-func postChatMessage(ctx context.Context, q *store.Queries, chat store.ChatSession, in ChatMessageInput) (store.ChatSession, store.ChatMessage, error) {
+func postChatMessage(ctx context.Context, q *store.Queries, chat store.ChatSession, in ChatMessageInput, handoffChars int) (store.ChatSession, store.ChatMessage, error) {
 	var msg store.ChatMessage
 	body := strings.TrimSpace(in.Body)
 	if body == "" || len([]rune(body)) > 100000 {
@@ -128,15 +128,39 @@ func postChatMessage(ctx context.Context, q *store.Queries, chat store.ChatSessi
 		return chat, msg, apperr.Conflict("restore the archived project before chatting")
 	}
 	var run store.Run
-	if chat.CurrentRunID != nil {
+	prompt := body
+	fresh := chat.CurrentRunID == nil
+	if !fresh {
 		run, err = q.LockRun(ctx, *chat.CurrentRunID)
 		if err != nil {
 			return chat, msg, err
 		}
+		// Only an idle/waiting segment may switch; a busy one conflicts here.
 		if run.State != "waiting" {
 			return chat, msg, apperr.Conflict("the chat run is not ready for a message")
 		}
-	} else {
+		switch {
+		case chat.Harness != run.Harness:
+			// Every harness switch starts a fresh session, even back to an earlier
+			// harness: the native session is stale. The runner sweep removes the
+			// ended segment's workspace.
+			outcome := "Chat switched to " + chat.Harness + "."
+			if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
+				return chat, msg, err
+			}
+			if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_segment_ended", "reason": "harness_switch", "harness": chat.Harness}); err != nil {
+				return chat, msg, err
+			}
+			fresh = true
+		case chat.Model != run.Model:
+			// Same harness: keep the CLI session and workspace, change the model.
+			if err = q.SetRunModel(ctx, store.SetRunModelParams{ID: run.ID, Model: chat.Model}); err != nil {
+				return chat, msg, err
+			}
+			run.Model = chat.Model
+		}
+	}
+	if fresh {
 		a, err := q.GetAgent(ctx, store.GetAgentParams{ID: chat.AgentID, WorkspaceID: chat.WorkspaceID})
 		if err != nil {
 			return chat, msg, err
@@ -159,6 +183,22 @@ func postChatMessage(ctx context.Context, q *store.Queries, chat store.ChatSessi
 		if err = q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &chat.CreatedBy}); err != nil {
 			return chat, msg, err
 		}
+		// A segment that follows earlier messages gets them as its first prompt.
+		total, err := q.CountChatHistory(ctx, chat.ID)
+		if err != nil {
+			return chat, msg, err
+		}
+		if total > 0 {
+			rows, err := q.ListRecentChatMessages(ctx, store.ListRecentChatMessagesParams{SessionID: chat.ID, RowLimit: handoffRows, MaxChars: handoffRowChars})
+			if err != nil {
+				return chat, msg, err
+			}
+			hist := make([]HandoffMessage, len(rows))
+			for i, r := range rows {
+				hist[i] = HandoffMessage{Seq: r.Seq, Role: r.Role, Harness: deref(r.Harness), Model: deref(r.Model), Body: r.BodyMd}
+			}
+			prompt = RenderHandoff(hist, int(total), handoffChars, body)
+		}
 	}
 	state := "running"
 	if run.WorkspaceVolume == nil {
@@ -167,7 +207,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, chat store.ChatSessi
 	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: state}); err != nil {
 		return chat, msg, err
 	}
-	turn, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "comment", InputMessage: body})
+	turn, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "comment", InputMessage: prompt})
 	if err != nil {
 		return chat, msg, err
 	}

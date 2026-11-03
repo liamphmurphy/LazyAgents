@@ -95,3 +95,18 @@ SELECT CASE sqlc.arg(source_kind)::text
   WHEN 'ticket' THEN EXISTS (SELECT 1 FROM tickets x WHERE x.id = sqlc.arg(source_id) AND x.project_id = sqlc.arg(project_id))
   WHEN 'comment' THEN EXISTS (SELECT 1 FROM comments c JOIN tickets t ON t.id = c.ticket_id WHERE c.id = sqlc.arg(source_id) AND t.project_id = sqlc.arg(project_id))
   ELSE false END::bool AS visible;
+
+-- name: SetChatSelection :one
+-- Stores the harness/model the next segment turn should use. Callers validate
+-- the pair and hold the chat row lock; the runner applies it on the next message.
+UPDATE chat_sessions SET harness = $2, model = $3, revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING *;
+
+-- name: ListRecentChatMessages :many
+-- Newest rows first, bounded by limit; bodies are clipped so the read stays small.
+SELECT seq, role, harness, model, left(body_md, sqlc.arg(max_chars)::int)::text AS body_md
+FROM chat_messages WHERE session_id = sqlc.arg(session_id) AND role IN ('user', 'assistant')
+ORDER BY seq DESC LIMIT sqlc.arg(row_limit);
+
+-- name: CountChatHistory :one
+SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('user', 'assistant');
