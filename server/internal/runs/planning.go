@@ -36,15 +36,24 @@ type PlanningInput struct {
 	ArtifactID *uuid.UUID `json:"artifact_id,omitempty"`
 }
 
+// planningOptions are the read-only options a harness understands. OpenCode
+// rejects unknown options (it has no sandbox mode), so it only gets readonly.
+func planningOptions(harness string) map[string]string {
+	if harness == agentdef.HarnessOpenCode {
+		return map[string]string{"readonly": "true"}
+	}
+	return map[string]string{"sandbox": "read-only", "readonly": "true"}
+}
+
 // PlanningSpec strips execution capabilities, including project setup and external MCP servers.
 func PlanningSpec(r agentdef.Resolved) agentdef.Resolved {
 	r.Scopes = []agentdef.ResolvedScope{{Scope: "repo:*", Mode: agentdef.Denied}, {Scope: "tests:run", Mode: agentdef.Denied}}
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
-	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
+	r.HarnessOptions = planningOptions(r.Harness)
 	r.Fallbacks = append([]agentdef.Fallback{}, r.Fallbacks...)
 	for i := range r.Fallbacks {
-		r.Fallbacks[i].HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
+		r.Fallbacks[i].HarnessOptions = planningOptions(r.Fallbacks[i].Harness)
 	}
 	r.Instructions = "You are a planner. Read the supplied goal, source documents, linked tickets and wiki. Propose a small, actionable set of tickets with acceptance criteria using propose_tickets. Give each a stable ref and suggest depends_on proposal refs or blocked_by existing ticket keys where work must finish first. Do not create tickets, modify files, or execute project work. Read supplied context with file tools or simple read-only shell commands. Calling propose_tickets ends this planning run; a person edits and accepts the draft.\n"
 	return r
@@ -112,11 +121,14 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 		if in.Goal == "" {
 			return apperr.Invalid("goal", "describe the goal")
 		}
-		resolved, err := agents.Resolve(ctx, q, ws, a, p.Key)
+		resolved, err := agents.ResolveRunnable(ctx, q, ws, a, p.Key)
 		if err != nil {
 			return err
 		}
 		resolved = PlanningSpec(resolved)
+		if err := resolved.Validate(); err != nil {
+			return apperr.Invalid("agent_id", "%s", err.Error())
+		}
 		raw, _ := json.Marshal(resolved)
 		run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, AgentID: a.ID, Mode: "managed", State: "queued", ResolvedSpec: raw, DefinitionVersionID: a.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model, Purpose: "planning"})
 		if err != nil {

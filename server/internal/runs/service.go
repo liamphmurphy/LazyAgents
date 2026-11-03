@@ -242,7 +242,7 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			if len(blockers) > 0 {
 				return apperr.Conflict("%s: %s", t.Key, strings.Join(blockers, "; "))
 			}
-			resolved, err := agents.Resolve(ctx, q, ws, agent, p.Key)
+			resolved, err := agents.ResolveRunnable(ctx, q, ws, agent, p.Key)
 			if err != nil {
 				return err
 			}

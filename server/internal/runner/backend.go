@@ -61,10 +61,39 @@ type Local struct {
 	// OnlyBins refuses to run a harness program that isn't in Bins, so a
 	// test can never fall through to a real, logged-in CLI on PATH.
 	OnlyBins bool
+	// OpenCodeIsolated attests that this host has no system, ancestor or
+	// repository OpenCode config that could override the generated policy.
+	// Running on the host is not isolation by itself, so it is off unless an
+	// operator (or a test with a fake CLI) says otherwise.
+	OpenCodeIsolated bool
+	// ExtraHostEnv names host variables OpenCode may inherit besides the
+	// minimal allowlist. It is a test hook (the fake CLI reads its script
+	// mode from the environment); production never sets it.
+	ExtraHostEnv []string
+}
+
+// ConfigIsolator is implemented by backends that can attest OpenCode's config
+// is isolated. A backend without it never runs OpenCode (fail closed).
+type ConfigIsolator interface{ OpenCodeConfigIsolated() bool }
+
+func (l *Local) OpenCodeConfigIsolated() bool { return l.OpenCodeIsolated }
+
+// opencodeHostEnv is the only host environment OpenCode inherits locally:
+// no provider keys, no HOME or XDG roots (the adapter supplies isolated ones).
+// Run-injected secrets arrive through ExecSpec.Env.
+func opencodeHostEnv(extra ...string) []string {
+	var out []string
+	for _, k := range append([]string{"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TZ", "USER", "LOGNAME", "SHELL",
+		"SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE"}, extra...) {
+		if v, ok := os.LookupEnv(k); ok {
+			out = append(out, k+"="+v)
+		}
+	}
+	return out
 }
 
 // harnessPrograms are the CLIs adapters invoke.
-var harnessPrograms = map[string]bool{"claude": true, "codex": true}
+var harnessPrograms = map[string]bool{"claude": true, "codex": true, "opencode": true}
 
 func (l *Local) Name() string { return "local" }
 
@@ -104,10 +133,12 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 		return nil, err
 	}
 	argv := append([]string{}, spec.Argv...)
+	program := ""
 	for i, a := range argv {
 		if !harnessPrograms[a] {
 			continue
 		}
+		program = a
 		b, ok := l.Bins[a]
 		if !ok && l.OnlyBins {
 			return nil, fmt.Errorf("runner: %q has no configured binary (OnlyBins)", a)
@@ -120,10 +151,13 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
+	if program == "opencode" {
+		cmd.Env = opencodeHostEnv(l.ExtraHostEnv...)
+	}
 	// Desktop-launched local runners may omit Homebrew from PATH. Preserve
 	// configured tool precedence while making installed tools such as gh visible.
 	// OnlyBins tests intentionally isolate PATH from real logged-in tools.
-	if runtime.GOOS == "darwin" && !l.OnlyBins {
+	if runtime.GOOS == "darwin" && !l.OnlyBins && program != "opencode" {
 		cmd.Env = append(cmd.Env, "PATH="+os.Getenv("PATH")+":/opt/homebrew/bin:/usr/local/bin")
 	}
 	for k, v := range spec.Env {

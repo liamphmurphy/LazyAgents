@@ -37,6 +37,11 @@ type Harness struct {
 
 var labels = map[string]string{agentdef.HarnessClaudeCode: "Claude Code", agentdef.HarnessCodex: "Codex"}
 
+// chatHarnesses are the harnesses a chat can use. OpenCode runs tickets and
+// planning only; chat segments, discovery and the picker follow in
+// LAZYAGENTS-23/24 (docs/contracts/opencode2/ADR.md), so it stays out.
+var chatHarnesses = []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex}
+
 // Catalog lists and validates chat selections.
 type Catalog struct {
 	// RequireKey mirrors the runner: a harness without its API-key secret
@@ -49,8 +54,8 @@ type Catalog struct {
 // List returns live harness models in display order. Credentials stay
 // server-side; unavailable providers have an empty list and a public reason.
 func (c Catalog) List(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]Harness, error) {
-	out := make([]Harness, 0, len(agentdef.Harnesses))
-	for _, name := range agentdef.Harnesses {
+	out := make([]Harness, 0, len(chatHarnesses))
+	for _, name := range chatHarnesses {
 		h := Harness{Harness: name, Label: labels[name], Available: true, Models: []Model{}}
 		if c.RequireKey {
 			ok, err := q.SecretExists(ctx, store.SecretExistsParams{WorkspaceID: ws, Name: KeySecret[name]})
