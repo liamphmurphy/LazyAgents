@@ -36,6 +36,32 @@ compose, with Claude Code and Codex installed). Before dispatching:
 > the host. v1 is meant for a single developer laptop. Works with Docker Desktop
 > and OrbStack.
 
+### Chat
+
+Select a project, open **Chat** in the sidebar, and choose **New chat**. Select
+a harness/model, type a message, and send with Enter (Shift+Enter adds a newline).
+Chats appear in the history panel so you can return to the conversation later.
+Configure `harness:anthropic` for Claude Code and `harness:openai` for Codex in
+**Settings → Connections & secrets**, and keep a runner online. Unavailable
+models are disabled in the picker.
+
+Change the picker before sending to use a different model or harness for the
+next reply. Model changes on the same harness resume its session. A harness
+change starts a fresh session with a bounded transcript handoff; hidden reasoning,
+tool results and older messages outside the budget do not transfer.
+
+Use **Add context** or type `[[` to attach a wiki page, artifact or ticket.
+**Start chat** on a context item's page opens a chat with that item attached.
+The assistant can read project context through LazyAgents MCP; pages it reads
+appear under **Sources**. Replies arrive when a turn finishes. **Stop** cancels
+the current turn; **Save to wiki** and **Save as artifact** preserve a reply.
+Chats use a scratch workspace and read-only context tools.
+
+Verification status and known gaps are recorded in
+[`verification/LAZYAGENTS-14-report.md`](verification/LAZYAGENTS-14-report.md).
+The real Claude Code → Codex smoke is still pending provider configuration and
+a working runner; automated fake-harness coverage does not establish provider parity.
+
 ### Skills
 
 An agent definition can carry **skills**: reusable playbooks (a name, a one-line
