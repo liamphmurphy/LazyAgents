@@ -80,10 +80,10 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 	return b.String()
 }
 
-// TurnWrapper writes AGENTS.md (our section above the repo's own) and then
+// TurnWrapper git-excludes skill files, writes AGENTS.md (our section above the repo's own) and then
 // execs the harness, so every harness reads the same instructions file.
 var TurnWrapper = []string{"sh", "-c",
-	`cat .lazyagents/agents-section.md > AGENTS.md && if [ -f .lazyagents/AGENTS.repo.md ]; then printf '\n' >> AGENTS.md && cat .lazyagents/AGENTS.repo.md >> AGENTS.md; fi && exec "$@"`,
+	`if [ -f .lazyagents/skills-exclude.txt ] && [ -d .git ]; then mkdir -p .git/info; while read -r p; do grep -qxF "$p" .git/info/exclude 2>/dev/null || echo "$p" >> .git/info/exclude; done < .lazyagents/skills-exclude.txt; fi; cat .lazyagents/agents-section.md > AGENTS.md && if [ -f .lazyagents/AGENTS.repo.md ]; then printf '\n' >> AGENTS.md && cat .lazyagents/AGENTS.repo.md >> AGENTS.md; fi && exec "$@"`,
 	"lazyagents-turn"}
 
 var fileSlug = regexp.MustCompile(`[^a-z0-9]+`)

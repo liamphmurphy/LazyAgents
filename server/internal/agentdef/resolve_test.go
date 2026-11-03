@@ -172,3 +172,32 @@ func TestChanges(t *testing.T) {
 		t.Fatalf("Changes = %q", got)
 	}
 }
+
+func TestSkillValidation(t *testing.T) {
+	ok := Skill{Name: "go-errors", Description: "  Use when\nhandling errors ", Body: "  body \n"}
+	s := base()
+	s.Skills = []Skill{ok}
+	if err := s.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Skills[0]; got.Description != "Use when handling errors" || got.Body != "body" {
+		t.Fatalf("not normalized: %+v", got)
+	}
+	if r := Resolve(s, nil); len(r.Skills) != 1 || r.Skills[0].Name != "go-errors" {
+		t.Fatalf("resolved skills %+v", r.Skills)
+	}
+	for name, sk := range map[string][]Skill{
+		"bad name":    {{Name: "Go Errors", Description: "d", Body: "b"}},
+		"no desc":     {{Name: "a", Body: "b"}},
+		"no body":     {{Name: "a", Description: "d"}},
+		"duplicate":   {ok, ok},
+		"huge body":   {{Name: "a", Description: "d", Body: string(make([]byte, MaxSkillBodyBytes+1))}},
+		"path escape": {{Name: "../x", Description: "d", Body: "b"}},
+	} {
+		s := base()
+		s.Skills = sk
+		if s.Normalize() == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

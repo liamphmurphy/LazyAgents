@@ -72,7 +72,24 @@ type Spec struct {
 	MCPServers     []MCPServer                  `json:"mcp_servers"`
 	HarnessOptions map[string]map[string]string `json:"harness_options"`
 	Memory         *Memory                      `json:"memory"` // nil (saved before memory existed) = DefaultMemory
+	Skills         []Skill                      `json:"skills"` // nil (saved before skills existed) = none
 }
+
+// Skill is a reusable playbook the agent loads on demand: a short
+// description it is matched against, and a markdown body it follows. On
+// Claude Code it becomes a native skill (.claude/skills/<name>/SKILL.md);
+// on harnesses without skills it is indexed in AGENTS.md and read as a file.
+type Skill struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Body        string `json:"body"`
+}
+
+const (
+	MaxSkills           = 30
+	MaxSkillBodyBytes   = 64 * 1024
+	MaxSkillDescription = 1024
+)
 
 // Memory says what wiki context a run gets (PLAN.md §12.3). Inject levels
 // are cumulative: index (the agent's Memory page) → linked (plus pages
@@ -117,6 +134,7 @@ const ReservedMCPName = "lazyagents"
 var (
 	scopeRe = regexp.MustCompile(`^[a-z][a-z0-9-]*:([a-z0-9][a-z0-9-]*|\*)$`)
 	nameRe  = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
+	skillRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 )
 
 // ValidationError names the offending field (mapped to 422 by the API).
@@ -180,6 +198,37 @@ func validMCP(field string, servers []MCPServer) error {
 	return nil
 }
 
+func validSkills(field string, skills []Skill) error {
+	if len(skills) > MaxSkills {
+		return invalid(field, "at most %d skills per agent", MaxSkills)
+	}
+	seen := map[string]bool{}
+	for i := range skills {
+		k := &skills[i]
+		k.Name = strings.TrimSpace(k.Name)
+		// Descriptions end up in YAML frontmatter and an index: one line.
+		k.Description = strings.Join(strings.Fields(k.Description), " ")
+		k.Body = strings.TrimSpace(k.Body)
+		if !skillRe.MatchString(k.Name) {
+			return invalid(field, "skill name %q must be lowercase letters, digits or -, up to 64 characters", k.Name)
+		}
+		if seen[k.Name] {
+			return invalid(field, "duplicate skill %q", k.Name)
+		}
+		seen[k.Name] = true
+		if k.Description == "" || len(k.Description) > MaxSkillDescription {
+			return invalid(field, "skill %q needs a description of up to %d characters saying when to use it", k.Name, MaxSkillDescription)
+		}
+		if k.Body == "" {
+			return invalid(field, "skill %q has no instructions", k.Name)
+		}
+		if len(k.Body) > MaxSkillBodyBytes {
+			return invalid(field, "skill %q is over %d KB", k.Name, MaxSkillBodyBytes/1024)
+		}
+	}
+	return nil
+}
+
 // Normalize fills defaults and validates. Saved specs are always normalized.
 func (s *Spec) Normalize() error {
 	if s.Harness == "" {
@@ -234,6 +283,12 @@ func (s *Spec) Normalize() error {
 	}
 	if s.Memory.MaxTokens < 500 || s.Memory.MaxTokens > 50000 {
 		return invalid("memory.max_tokens", "must be between 500 and 50000")
+	}
+	if s.Skills == nil {
+		s.Skills = []Skill{}
+	}
+	if err := validSkills("skills", s.Skills); err != nil {
+		return err
 	}
 	return validMCP("mcp_servers", s.MCPServers)
 }

@@ -129,6 +129,9 @@ func AgentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		}
 		b.WriteString("\n")
 	}
+	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode {
+		b.WriteString(skillsIndex(spec.Skills))
+	}
 	if len(contextFiles) > 0 {
 		b.WriteString("## Context\n\nRead these before planning. They're also available through `read_artifact` and `read_page`, which record citations.\n\n")
 		sort.Strings(contextFiles)

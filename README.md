@@ -36,6 +36,21 @@ compose, with Claude Code and Codex installed). Before dispatching:
 > the host. v1 is meant for a single developer laptop. Works with Docker Desktop
 > and OrbStack.
 
+### Skills
+
+An agent definition can carry **skills**: reusable playbooks (a name, a one-line
+"use when…" description, and markdown instructions). On Claude Code they're
+written into the run workspace as native skills (`.claude/skills/<name>/SKILL.md`,
+git-excluded), so the agent loads a skill's body only when a task matches its
+description. Codex has no skills, so it gets the same files under
+`.lazyagents/skills/` plus an index in `AGENTS.md`. Edit them in the agent's
+**Skills** card.
+
+`examples/skills/` holds a starter library, and
+`python3 examples/attach-skills.py` attaches it to the starter agents
+(`tech-lead`, `frontend-engineer`, `backend-engineer`, `code-reviewer`,
+`product-manager`). It's idempotent.
+
 ### Planning work
 
 Open **Plans**, choose a project and agent, describe a goal, then **Approve & start planning**.

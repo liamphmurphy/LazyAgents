@@ -206,3 +206,44 @@ func TestPlanningInvocationsAreReadOnly(t *testing.T) {
 		t.Fatalf("unsafe Codex invocation: %s", args)
 	}
 }
+
+func TestSkillsDeliveredPerHarness(t *testing.T) {
+	skills := []agentdef.Skill{
+		{Name: "go-errors", Description: `Use when "handling" errors in Go`, Body: "Wrap with %w."},
+		{Name: "api-design", Description: "Use when adding endpoints", Body: "Contract first."},
+	}
+	s := spec()
+	s.Skills = skills
+
+	inv, err := ClaudeCode{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(inv.Files[".claude/skills/go-errors/SKILL.md"])
+	if got != "---\nname: \"go-errors\"\ndescription: \"Use when \\\"handling\\\" errors in Go\"\n---\n\nWrap with %w.\n" {
+		t.Fatalf("SKILL.md:\n%s", got)
+	}
+	if ex := string(inv.Files[SkillsExcludeFile]); ex != "/.claude/skills/api-design/\n/.claude/skills/go-errors/\n" {
+		t.Fatalf("exclude list %q", ex)
+	}
+	// Native skills aren't repeated in AGENTS.md.
+	if md := string(AgentsMD("", s, nil, "T-1")); strings.Contains(md, "## Skills") {
+		t.Fatalf("claude AGENTS.md lists skills:\n%s", md)
+	}
+
+	cs := s
+	cs.Harness = agentdef.HarnessCodex
+	inv, _ = Codex{}.Invocation(ws, Turn{Spec: cs, Prompt: "go"})
+	if _, ok := inv.Files[".lazyagents/skills/go-errors/SKILL.md"]; !ok || len(inv.Files) != 2 {
+		t.Fatalf("codex files %v", inv.Files)
+	}
+	md := string(AgentsMD("", cs, nil, "T-1"))
+	if !strings.Contains(md, "- `.lazyagents/skills/api-design/SKILL.md`: Use when adding endpoints") {
+		t.Fatalf("codex AGENTS.md:\n%s", md)
+	}
+
+	inv, _ = ClaudeCode{}.Invocation(ws, Turn{Spec: spec(), Prompt: "go"})
+	if _, ok := inv.Files[SkillsExcludeFile]; ok {
+		t.Fatal("no skills, no exclude file")
+	}
+}

@@ -53,7 +53,7 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		argv = append(argv, opts...)
 		argv = append(argv, t.Prompt)
 	}
-	return Invocation{Argv: argv, Env: map[string]string{ws.TokenEnv: ws.Token}}, nil
+	return Invocation{Argv: argv, Env: map[string]string{ws.TokenEnv: ws.Token}, Files: SkillFiles(spec.Skills, false)}, nil
 }
 
 func (Codex) NewParser(model string) Parser { return &codexParser{model: model} }

@@ -1437,6 +1437,16 @@ export interface components {
                 };
             };
             memory?: components["schemas"]["AgentMemory"];
+            /** @description Playbooks the agent loads on demand (native skills on Claude Code, an AGENTS.md index elsewhere) */
+            skills?: components["schemas"]["AgentSkill"][];
+        };
+        AgentSkill: {
+            /** @description Lowercase letters, digits and -; becomes the skill's folder */
+            name: string;
+            /** @description When to use it. The agent matches tasks against this line */
+            description: string;
+            /** @description Markdown instructions */
+            body: string;
         };
         AgentOverride: {
             harness?: components["schemas"]["Harness"];
@@ -1472,6 +1482,7 @@ export interface components {
             };
             setup: string[];
             memory?: components["schemas"]["AgentMemory"];
+            skills?: components["schemas"]["AgentSkill"][];
             /** @description Fields a project changed, e.g. {"harness":"project"} */
             provenance: {
                 [key: string]: "agent" | "project";

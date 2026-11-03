@@ -1781,6 +1781,17 @@ components:
             type: object
             additionalProperties: { type: string }
         memory: { $ref: "#/components/schemas/AgentMemory" }
+        skills:
+          type: array
+          description: Playbooks the agent loads on demand (native skills on Claude Code, an AGENTS.md index elsewhere)
+          items: { $ref: "#/components/schemas/AgentSkill" }
+    AgentSkill:
+      type: object
+      required: [name, description, body]
+      properties:
+        name: { type: string, description: "Lowercase letters, digits and -; becomes the skill's folder" }
+        description: { type: string, description: When to use it. The agent matches tasks against this line }
+        body: { type: string, description: Markdown instructions }
     AgentOverride:
       type: object
       properties:
@@ -1819,6 +1830,7 @@ components:
           additionalProperties: { type: string }
         setup: { type: array, items: { type: string } }
         memory: { $ref: "#/components/schemas/AgentMemory" }
+        skills: { type: array, items: { $ref: "#/components/schemas/AgentSkill" } }
         provenance:
           type: object
           description: Fields a project changed, e.g. {"harness":"project"}

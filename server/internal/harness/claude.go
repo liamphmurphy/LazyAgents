@@ -77,10 +77,12 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	if t.SessionID != "" {
 		argv = append(argv, "--resume", t.SessionID)
 	}
+	files := SkillFiles(spec.Skills, true)
+	files[claudeMCPFile] = cfg
 	return Invocation{
 		Argv:  argv,
 		Env:   map[string]string{ws.TokenEnv: ws.Token},
-		Files: map[string][]byte{claudeMCPFile: cfg},
+		Files: files,
 	}, nil
 }
 

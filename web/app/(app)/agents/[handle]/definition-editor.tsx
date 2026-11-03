@@ -52,6 +52,13 @@ export function describeChanges(a: Draft, b: Draft): string {
   if (JSON.stringify(a.spec.budget) !== JSON.stringify(b.spec.budget) || a.spec.max_concurrency !== b.spec.max_concurrency) out.push("Changed run limits");
   if (JSON.stringify(a.spec.harness_options) !== JSON.stringify(b.spec.harness_options)) out.push("Changed harness options");
   if (JSON.stringify(a.spec.memory) !== JSON.stringify(b.spec.memory)) out.push("Changed memory");
+  const sk = (s: AgentSpec) => new Map((s.skills ?? []).map((k) => [k.name, k]));
+  const [sa, sb] = [sk(a.spec), sk(b.spec)];
+  for (const [n, k] of sb) {
+    if (!sa.has(n)) out.push(`Added skill ${n}`);
+    else if (JSON.stringify(sa.get(n)) !== JSON.stringify(k)) out.push(`Edited skill ${n}`);
+  }
+  for (const n of sa.keys()) if (!sb.has(n)) out.push(`Removed skill ${n}`);
   return out.join("; ") || "No changes";
 }
 
@@ -111,6 +118,66 @@ function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; se
         <code className="inline">wiki:write</code> scope; without it they arrive as suggestions.
       </p>
     </SectionCard>
+  );
+}
+
+const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/** Playbooks loaded on demand: native skills on Claude Code, an AGENTS.md index elsewhere. */
+function SkillsCard({ spec, set }: { spec: AgentSpec; set: (p: Partial<AgentSpec>) => void }) {
+  const skills = spec.skills ?? [];
+  const [open, setOpen] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const nameOk = SKILL_NAME.test(name) && !skills.some((k) => k.name === name);
+  const update = (i: number, patch: Partial<(typeof skills)[number]>) => set({ skills: skills.map((k, j) => (j === i ? { ...k, ...patch } : k)) });
+  return (
+    <Card title="Skills" bodyClassName="p-0" action={<span className="text-xs text-fg-tertiary">{skills.length} attached</span>}>
+      <p className="px-[18px] pt-3 text-xs text-fg-tertiary">
+        Reusable playbooks. The agent sees each <em>description</em> and reads the full instructions only when a task matches, so keep descriptions specific. On Claude Code they are
+        native skills; on Codex they are listed in <code className="inline">AGENTS.md</code> and read as files.
+      </p>
+      <ul className="mt-2">
+        {skills.map((k, i) => {
+          const isOpen = open === k.name;
+          return (
+            <li key={i} className="border-t border-border-row">
+              <div className="flex items-center gap-3 px-[18px] py-2.5 text-[13px]">
+                <Icon name="wiki" size={14} className="text-fg-tertiary" />
+                <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : k.name)} className="flex min-w-0 flex-1 items-baseline gap-3 text-left">
+                  <span className="font-mono text-[12.5px]">{k.name}</span>
+                  <span className="min-w-0 truncate text-xs text-fg-tertiary">{k.description}</span>
+                </button>
+                <IconButton icon="trash" label={`Remove skill ${k.name}`} onClick={() => set({ skills: skills.filter((_, j) => j !== i) })} />
+              </div>
+              {isOpen && (
+                <div className="flex flex-col gap-3 px-[18px] pb-4">
+                  <Field label="Use when…" htmlFor={`sk-desc-${i}`} hint="One line the agent matches tasks against.">
+                    <TextInput id={`sk-desc-${i}`} value={k.description} maxLength={1024} onChange={(e) => update(i, { description: e.target.value })} />
+                  </Field>
+                  <Field label="Instructions" htmlFor={`sk-body-${i}`} hint="Markdown. Up to 64 KB.">
+                    <TextArea id={`sk-body-${i}`} mono rows={14} value={k.body} onChange={(e) => update(i, { body: e.target.value })} />
+                  </Field>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <form
+        className="flex flex-wrap items-center gap-2 border-t border-border-subtle px-[18px] py-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!nameOk) return;
+          set({ skills: [...skills, { name, description: "", body: "" }] });
+          setOpen(name);
+          setName("");
+        }}
+      >
+        <TextInput mono aria-label="New skill name" placeholder="skill-name" className="w-56" value={name} onChange={(e) => setName(e.target.value.toLowerCase())} />
+        <Button type="submit" variant="outline" icon="plus" disabled={!nameOk}>Add skill</Button>
+        {name && !nameOk && <span className="text-xs text-fg-tertiary">Lowercase letters, digits and -; must be unique.</span>}
+      </form>
+    </Card>
   );
 }
 
@@ -239,6 +306,8 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           Written to <code className="inline">AGENTS.md</code> in the run workspace. If the repo already has one, this goes in a marked section and the repo&apos;s content is kept. Projects can append.
         </p>
       </SectionCard>
+
+      <SkillsCard spec={spec} set={set} />
 
       <Card
         title="Permissions"
