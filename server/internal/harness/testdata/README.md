@@ -8,3 +8,10 @@ exactly what the CLIs emit; long fields (tool lists, cf-ray ids) were trimmed.
 the recorded ones; the tool lines follow each CLI's documented stream
 shapes. Re-record them from a real run with keys when convenient (PLAN.md §10
 nightly smoke test).
+
+`opencode-*.jsonl` are SYNTHETIC. The OpenCode 2.2.1 wire format has not been
+captured (docs/contracts/opencode2/ADR.md, "Normalization boundary"); they
+follow the assumed envelope documented in `opencode_parser.go`, not real CLI
+output. Replace them with sanitized captures (success, auth failure, tool/MCP
+failure, resume, cancellation) before enabling the harness. Strings that look
+like credentials in them (`sk-ant-…`, `la_…`) are fake and exist to prove redaction.
