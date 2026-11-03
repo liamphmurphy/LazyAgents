@@ -113,10 +113,10 @@ func TestOpenCodeModelAndCredentialMapping(t *testing.T) {
 			t.Fatalf("invocation accepted model %q", bad)
 		}
 	}
-	if CheckOpenCodeVersion("2.2.1\n") != nil || CheckOpenCodeVersion("v2.2.1") != nil {
+	if CheckOpenCodeVersion("2.2.1\n") != nil || CheckOpenCodeVersion("v2.2.1") != nil || CheckOpenCodeVersion("opencode v2.2.1\n") != nil {
 		t.Fatal("pinned version rejected")
 	}
-	if CheckOpenCodeVersion("2.2.3") == nil || CheckOpenCodeVersion("") == nil {
+	if CheckOpenCodeVersion("2.2.3") == nil || CheckOpenCodeVersion("opencode v2.2.10") == nil || CheckOpenCodeVersion("opencode v2.2.1-rc1") == nil || CheckOpenCodeVersion("") == nil {
 		t.Fatal("unpinned version accepted")
 	}
 }

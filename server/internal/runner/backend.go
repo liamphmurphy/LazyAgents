@@ -66,6 +66,10 @@ type Local struct {
 	// Running on the host is not isolation by itself, so it is off unless an
 	// operator (or a test with a fake CLI) says otherwise.
 	OpenCodeIsolated bool
+	// ExtraHostEnv names host variables OpenCode may inherit besides the
+	// minimal allowlist. It is a test hook (the fake CLI reads its script
+	// mode from the environment); production never sets it.
+	ExtraHostEnv []string
 }
 
 // ConfigIsolator is implemented by backends that can attest OpenCode's config
@@ -77,10 +81,10 @@ func (l *Local) OpenCodeConfigIsolated() bool { return l.OpenCodeIsolated }
 // opencodeHostEnv is the only host environment OpenCode inherits locally:
 // no provider keys, no HOME or XDG roots (the adapter supplies isolated ones).
 // Run-injected secrets arrive through ExecSpec.Env.
-func opencodeHostEnv() []string {
+func opencodeHostEnv(extra ...string) []string {
 	var out []string
-	for _, k := range []string{"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TZ", "USER", "LOGNAME", "SHELL",
-		"SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE"} {
+	for _, k := range append([]string{"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TZ", "USER", "LOGNAME", "SHELL",
+		"SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE"}, extra...) {
 		if v, ok := os.LookupEnv(k); ok {
 			out = append(out, k+"="+v)
 		}
@@ -148,7 +152,7 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
 	if program == "opencode" {
-		cmd.Env = opencodeHostEnv()
+		cmd.Env = opencodeHostEnv(l.ExtraHostEnv...)
 	}
 	// Desktop-launched local runners may omit Homebrew from PATH. Preserve
 	// configured tool precedence while making installed tools such as gh visible.

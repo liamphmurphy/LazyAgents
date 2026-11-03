@@ -75,9 +75,12 @@ func opencodeProvider(model string) (string, error) {
 	return p, nil
 }
 
-// CheckOpenCodeVersion accepts `opencode --version` output only for the pin.
+// CheckOpenCodeVersion accepts `opencode --version` output ("opencode v2.2.1",
+// "v2.2.1" or "2.2.1") only for the pin.
 func CheckOpenCodeVersion(out string) error {
-	if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(out), "v")) != OpenCodeVersion {
+	// The real binary prints "opencode v2.2.1".
+	v := strings.TrimPrefix(strings.TrimSpace(out), "opencode")
+	if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(v), "v")) != OpenCodeVersion {
 		return fmt.Errorf("harness: opencode %s is required", OpenCodeVersion)
 	}
 	return nil

@@ -31,7 +31,7 @@ func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) err
 		return err
 	}
 	if NeedsHarnessKey(r.Cfg.RequireHarnessKey, c.spec) && !hasSecret(plan, key.Secret) {
-		return fmt.Errorf("%s: %w", next.Harness, ErrNoHarnessKey)
+		return fmt.Errorf("%s (%s): %w", next.Harness, key.Secret, ErrNoHarnessKey)
 	}
 	turns, err := r.q().ListTurns(ctx, c.run.ID)
 	if err != nil {
