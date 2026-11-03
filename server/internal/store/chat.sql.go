@@ -212,6 +212,17 @@ func (q *Queries) ChatTurnCitations(ctx context.Context, arg ChatTurnCitationsPa
 	return items, nil
 }
 
+const countChatHistory = `-- name: CountChatHistory :one
+SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('user', 'assistant')
+`
+
+func (q *Queries) CountChatHistory(ctx context.Context, sessionID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countChatHistory, sessionID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createChatSession = `-- name: CreateChatSession :one
 INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
@@ -433,6 +444,53 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 	return items, nil
 }
 
+const listRecentChatMessages = `-- name: ListRecentChatMessages :many
+SELECT seq, role, harness, model, left(body_md, $1::int)::text AS body_md
+FROM chat_messages WHERE session_id = $2 AND role IN ('user', 'assistant')
+ORDER BY seq DESC LIMIT $3
+`
+
+type ListRecentChatMessagesParams struct {
+	MaxChars  int32
+	SessionID uuid.UUID
+	RowLimit  int32
+}
+
+type ListRecentChatMessagesRow struct {
+	Seq     int64
+	Role    string
+	Harness *string
+	Model   *string
+	BodyMd  string
+}
+
+// Newest rows first, bounded by limit; bodies are clipped so the read stays small.
+func (q *Queries) ListRecentChatMessages(ctx context.Context, arg ListRecentChatMessagesParams) ([]ListRecentChatMessagesRow, error) {
+	rows, err := q.db.Query(ctx, listRecentChatMessages, arg.MaxChars, arg.SessionID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentChatMessagesRow{}
+	for rows.Next() {
+		var i ListRecentChatMessagesRow
+		if err := rows.Scan(
+			&i.Seq,
+			&i.Role,
+			&i.Harness,
+			&i.Model,
+			&i.BodyMd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockChatSession = `-- name: LockChatSession :one
 SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
 `
@@ -544,6 +602,42 @@ type SetChatRunStateParams struct {
 
 func (q *Queries) SetChatRunState(ctx context.Context, arg SetChatRunStateParams) (ChatSession, error) {
 	row := q.db.QueryRow(ctx, setChatRunState, arg.ID, arg.CurrentRunID, arg.State)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
+const setChatSelection = `-- name: SetChatSelection :one
+UPDATE chat_sessions SET harness = $2, model = $3, revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+`
+
+type SetChatSelectionParams struct {
+	ID      uuid.UUID
+	Harness string
+	Model   string
+}
+
+// Stores the harness/model the next segment turn should use. Callers validate
+// the pair and hold the chat row lock; the runner applies it on the next message.
+func (q *Queries) SetChatSelection(ctx context.Context, arg SetChatSelectionParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, setChatSelection, arg.ID, arg.Harness, arg.Model)
 	var i ChatSession
 	err := row.Scan(
 		&i.ID,

@@ -1111,6 +1111,23 @@ func (q *Queries) SetApprovalResult(ctx context.Context, arg SetApprovalResultPa
 	return err
 }
 
+const setRunModel = `-- name: SetRunModel :exec
+UPDATE runs SET model = $1::text,
+  resolved_spec = jsonb_set(resolved_spec, '{model}', to_jsonb($1::text))
+WHERE id = $2
+`
+
+type SetRunModelParams struct {
+	Model string
+	ID    uuid.UUID
+}
+
+// Same-harness model switch: keeps the session id and workspace.
+func (q *Queries) SetRunModel(ctx context.Context, arg SetRunModelParams) error {
+	_, err := q.db.Exec(ctx, setRunModel, arg.Model, arg.ID)
+	return err
+}
+
 const setRunState = `-- name: SetRunState :one
 UPDATE runs SET state = $2, wait_reason = $3,
   ended_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN now() ELSE ended_at END,
