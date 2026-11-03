@@ -33,7 +33,8 @@ const (
 type OpenCode struct {
 	// ConfigIsolated attests that the runner suppresses system, ancestor and
 	// repository config (managed config plus OS/container isolation). Without
-	// it read-only modes are rejected: XDG roots alone do not protect policy.
+	// it every run (ticket and read-only) is rejected before launch: XDG roots
+	// alone do not protect the generated policy from other config layers.
 	ConfigIsolated bool
 	// SessionOwned reports whether a session id exists and belongs to this
 	// run's project. Resuming without it is rejected, because `--session`
@@ -152,8 +153,8 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		return Invocation{}, fmt.Errorf("harness: invalid MCP URL")
 	}
 	readonly := spec.HarnessOptions["readonly"] == "true"
-	if readonly && !o.ConfigIsolated {
-		return Invocation{}, fmt.Errorf("harness: opencode read-only mode needs isolated managed config, which this runner does not provide")
+	if !o.ConfigIsolated {
+		return Invocation{}, fmt.Errorf("harness: opencode runs need isolated managed config (system, ancestor and repo config suppressed), which this runner does not provide")
 	}
 	if readonly && len(spec.MCPServers) > 0 {
 		return Invocation{}, fmt.Errorf("harness: opencode read-only runs cannot use external MCP servers")

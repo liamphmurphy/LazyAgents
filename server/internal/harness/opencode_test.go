@@ -65,7 +65,7 @@ func globMatch(pat, s string) bool {
 
 // Criterion 1: fresh and resumed argv/env.
 func TestOpenCodeInvocationFreshAndResumed(t *testing.T) {
-	h := OpenCode{SessionOwned: ocOwned}
+	h := OpenCode{ConfigIsolated: true, SessionOwned: ocOwned}
 	spec := ocSpec("openai/gpt-5#high", nil, ocScope("tests:run", agentdef.Allowed))
 	inv, err := h.Invocation(ocWS(), Turn{Spec: spec, Prompt: "do the thing"})
 	if err != nil {
@@ -109,7 +109,7 @@ func TestOpenCodeModelAndCredentialMapping(t *testing.T) {
 		if _, _, err := OpenCodeCredentialEnv(bad); err == nil {
 			t.Fatalf("model %q accepted", bad)
 		}
-		if _, err := (OpenCode{}).Invocation(ocWS(), Turn{Spec: ocSpec(bad, nil), Prompt: "x"}); err == nil {
+		if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: ocSpec(bad, nil), Prompt: "x"}); err == nil {
 			t.Fatalf("invocation accepted model %q", bad)
 		}
 	}
@@ -128,11 +128,11 @@ func TestOpenCodeResumeRejected(t *testing.T) {
 		h  OpenCode
 		id string
 	}{
-		"no ownership check": {OpenCode{}, "ses_1"},
-		"missing or foreign": {OpenCode{SessionOwned: func(string) bool { return false }}, "ses_1"},
-		"flag-shaped id":     {OpenCode{SessionOwned: ocOwned}, "--fork"},
-		"whitespace id":      {OpenCode{SessionOwned: ocOwned}, "a b"},
-		"overlong id":        {OpenCode{SessionOwned: ocOwned}, strings.Repeat("a", 200)},
+		"no ownership check": {OpenCode{ConfigIsolated: true}, "ses_1"},
+		"missing or foreign": {OpenCode{ConfigIsolated: true, SessionOwned: func(string) bool { return false }}, "ses_1"},
+		"flag-shaped id":     {OpenCode{ConfigIsolated: true, SessionOwned: ocOwned}, "--fork"},
+		"whitespace id":      {OpenCode{ConfigIsolated: true, SessionOwned: ocOwned}, "a b"},
+		"overlong id":        {OpenCode{ConfigIsolated: true, SessionOwned: ocOwned}, strings.Repeat("a", 200)},
 	}
 	for name, c := range cases {
 		if _, err := c.h.Invocation(ocWS(), Turn{Spec: spec, Prompt: "x", SessionID: c.id}); err == nil {
@@ -146,7 +146,7 @@ func TestOpenCodeFilesAndSecrets(t *testing.T) {
 	spec := ocSpec("openai/gpt-5", nil, ocScope("repo:write", agentdef.Allowed))
 	spec.Skills = []agentdef.Skill{{Name: "go-testing", Description: "d", Body: "body"}}
 	spec.MCPServers = []agentdef.MCPServer{{Name: "docs", URL: "https://docs.example/mcp"}}
-	inv, err := (OpenCode{}).Invocation(ocWS(), Turn{Spec: spec, Prompt: "p"})
+	inv, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: spec, Prompt: "p"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,6 +217,17 @@ func TestOpenCodeFilesAndSecrets(t *testing.T) {
 	}
 }
 
+func TestOpenCodeTicketModeRejectedWithoutIsolatedConfig(t *testing.T) {
+	spec := ocSpec("anthropic/claude-sonnet-5-5", nil)
+	_, err := (OpenCode{}).Invocation(ocWS(), Turn{Spec: spec, Prompt: "p"})
+	if err == nil || !strings.Contains(err.Error(), "isolated managed config") {
+		t.Fatalf("ticket-mode run accepted without isolated config: %v", err)
+	}
+	if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: spec, Prompt: "p"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Criterion 4: read-only enforcement or rejection; ticket scope handling.
 func TestOpenCodeReadonlyPolicyOrRejection(t *testing.T) {
 	spec := ocSpec("anthropic/claude-sonnet-5-5", map[string]string{"readonly": "true"})
@@ -249,7 +260,7 @@ func TestOpenCodeReadonlyPolicyOrRejection(t *testing.T) {
 }
 
 func TestOpenCodeTicketScopes(t *testing.T) {
-	h := OpenCode{}
+	h := OpenCode{ConfigIsolated: true}
 	run := func(scopes ...agentdef.ResolvedScope) (ocCfg, error) {
 		inv, err := h.Invocation(ocWS(), Turn{Spec: ocSpec("openai/gpt-5", nil, scopes...), Prompt: "p"})
 		if err != nil {
@@ -282,7 +293,7 @@ func TestOpenCodeTicketScopes(t *testing.T) {
 
 func TestOpenCodeRejectsUnsupportedOptionsAndPolicy(t *testing.T) {
 	for _, k := range []string{"mcp.use", "skill.use", "plugin.use", "integration.connect", "permission_mode", "sandbox", "auto", "bogus"} {
-		if _, err := (OpenCode{}).Invocation(ocWS(), Turn{Spec: ocSpec("openai/gpt-5", map[string]string{k: "true"}), Prompt: "p"}); err == nil {
+		if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: ocSpec("openai/gpt-5", map[string]string{k: "true"}), Prompt: "p"}); err == nil {
 			t.Errorf("option %s accepted", k)
 		}
 	}
@@ -292,21 +303,21 @@ func TestOpenCodeRejectsUnsupportedOptionsAndPolicy(t *testing.T) {
 		}
 	}
 	for _, p := range []string{"", "  ", "-p evil"} {
-		if _, err := (OpenCode{}).Invocation(ocWS(), Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: p}); err == nil {
+		if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: p}); err == nil {
 			t.Errorf("prompt %q accepted", p)
 		}
 	}
 	bad := ocSpec("openai/gpt-5", nil)
 	bad.MCPServers = []agentdef.MCPServer{{Name: "lazyagents", URL: "https://x.test"}}
-	if _, err := (OpenCode{}).Invocation(ocWS(), Turn{Spec: bad, Prompt: "p"}); err == nil {
+	if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: bad, Prompt: "p"}); err == nil {
 		t.Error("shadowing the reserved MCP server accepted")
 	}
 	bad = ocSpec("openai/gpt-5", nil)
 	bad.Skills = []agentdef.Skill{{Name: "../evil"}}
-	if _, err := (OpenCode{}).Invocation(ocWS(), Turn{Spec: bad, Prompt: "p"}); err == nil {
+	if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: bad, Prompt: "p"}); err == nil {
 		t.Error("path-traversing skill accepted")
 	}
-	if _, err := (OpenCode{}).Invocation(Workspace{Dir: "rel", MCPURL: "http://x/mcp"}, Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: "p"}); err == nil {
+	if _, err := (OpenCode{ConfigIsolated: true}).Invocation(Workspace{Dir: "rel", MCPURL: "http://x/mcp"}, Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: "p"}); err == nil {
 		t.Error("relative workspace accepted")
 	}
 }

@@ -33,7 +33,7 @@ func TestOpenCodeCancelKillsProcessGroup(t *testing.T) {
 	}
 	ws := harness.Workspace{Dir: l.WorkspaceDir("r1"), MCPURL: "http://mcp.test/mcp", Token: "la_TESTTOKEN12345"}
 	spec := agentdef.Resolved{Harness: harness.HarnessOpenCode, Model: "openai/gpt-5"}
-	inv, err := harness.OpenCode{}.Invocation(ws, harness.Turn{Spec: spec, Prompt: "work"})
+	inv, err := harness.OpenCode{ConfigIsolated: true}.Invocation(ws, harness.Turn{Spec: spec, Prompt: "work"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestOpenCodeCancelKillsProcessGroup(t *testing.T) {
 	// The stream is live and parsed before cancellation.
 	buf := make([]byte, 128)
 	n, _ := proc.Stdout().Read(buf)
-	p := harness.OpenCode{}.NewParser(spec.Model)
+	p := harness.OpenCode{ConfigIsolated: true}.NewParser(spec.Model)
 	p.Line([]byte(strings.TrimSpace(string(buf[:n]))))
 	if p.Result().SessionID != "ses_stub" {
 		t.Fatalf("session not read from live stream: %q", buf[:n])
