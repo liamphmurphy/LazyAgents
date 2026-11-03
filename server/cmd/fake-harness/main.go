@@ -247,7 +247,18 @@ func main() {
 	defer sess.Close()
 
 	n := 0
-	call := func(name string, a map[string]any) map[string]any {
+	var call func(string, map[string]any) map[string]any
+	call = func(name string, a map[string]any) map[string]any {
+		// Simulate successful verification for main-run lifecycle fixtures.
+		// Delegated fixtures report only their assigned task to the parent.
+		if name == "complete_run" && a["status"] != "todo" && !strings.Contains(prompt, "delegated part of") {
+			tk := call("get_ticket", map[string]any{"ticket": os.Getenv("LAZYAGENTS_TICKET")})
+			if criteria, ok := tk["criteria"].([]any); ok {
+				for i := range criteria {
+					call("check_criterion", map[string]any{"n": i + 1, "done": true})
+				}
+			}
+		}
 		n++
 		id := fmt.Sprintf("toolu_%02d", n)
 		if codex {

@@ -1825,6 +1825,8 @@ export interface components {
         };
         RunDetail: {
             run: components["schemas"]["Run"];
+            /** @description Direct delegated runs, including active and finished runs. Fetch each run for its own events and cursor. */
+            child_runs: components["schemas"]["Run"][];
             turns: components["schemas"]["RunTurn"][];
             approvals: components["schemas"]["Approval"][];
             events: components["schemas"]["RunEvent"][];

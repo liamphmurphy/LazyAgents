@@ -388,7 +388,7 @@ type SignalIn struct {
 type CompleteIn struct {
 	TicketArg
 	Outcome string `json:"outcome" jsonschema:"One or two sentences on what you did"`
-	Status  string `json:"status,omitempty" jsonschema:"in_review (default), done, or todo to hand the ticket back. done is accepted only after a delegated reviewer or QA agent gave the all clear"`
+	Status  string `json:"status,omitempty" jsonschema:"in_review (default) or done require every acceptance criterion checked after verification; todo explicitly hands unfinished work back. done is accepted only after a delegated reviewer or QA agent gave the all clear"`
 	Verdict string `json:"verdict,omitempty" jsonschema:"Reviewer/QA sub agents only: approved (all clear) or changes_requested"`
 }
 
@@ -836,7 +836,7 @@ var Tools = []Tool{
 			return map[string]any{"state": "delegated", "agent": dg.Agent.Handle, "run_id": dg.Run.ID,
 				"message": "@" + dg.Agent.Handle + " is working on it. End your turn now: you'll be resumed with its result."}, nil
 		}),
-	define("complete_run", "Finish the run: the ticket moves to In Review (or todo). Use status=done only when every reviewer/QA sub agent you delegated to completed with verdict=approved. If you were delegated a task, this reports your summary back to the main agent instead and leaves the ticket alone; a reviewer/QA agent sets verdict=approved or changes_requested.",
+	define("complete_run", "Finish the run: In Review and Done require all acceptance criteria verified and checked. Implement or delegate remaining work before finishing; use todo only to explicitly hand unfinished work back. Use status=done only when every reviewer/QA sub agent you delegated to completed with verdict=approved. If you were delegated a task, this reports your summary back to the main agent instead and leaves the ticket alone; a reviewer/QA agent sets verdict=approved or changes_requested.",
 		func(ctx context.Context, d Deps, c agents.Caller, in CompleteIn) (any, error) {
 			return ok(nil), d.Runs.Complete(ctx, c, in.Ticket, in.Outcome, in.Status, in.Verdict)
 		}),

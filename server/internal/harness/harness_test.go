@@ -189,6 +189,11 @@ func TestAgentsMD(t *testing.T) {
 		!strings.Contains(md, ".lazyagents/context/adr-postgres.md") {
 		t.Fatalf("AGENTS.md:\n%s", md)
 	}
+	for _, want := range []string{"verify every acceptance criterion", "implement it yourself or delegate", "Commit and push", "status=done"} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("missing completion instruction %q", want)
+		}
+	}
 	// Re-rendering replaces our section and keeps the repo's.
 	again := string(AgentsMD(md, spec(), nil, "PAY-215"))
 	if strings.Count(again, sectionStart) != 1 || !strings.Contains(again, "PAY-215") || strings.Contains(again, "PAY-214") || !strings.Contains(again, "Use gofmt.") {

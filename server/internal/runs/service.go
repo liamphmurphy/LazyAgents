@@ -280,7 +280,8 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 func StartPrompt(key string) string {
 	return "You've been dispatched to work on " + key + ". Follow AGENTS.md: call claim_ticket(\"" + key +
 		"\") first, read the memory and context it gives you, post_plan, then work. When you need a person, " +
-		"call request_approval or await_human and end your turn. Finish with complete_run."
+		"call request_approval or await_human and end your turn. Verify every acceptance criterion; implement or delegate any gaps. " +
+		"Once all criteria are verified and checked, commit and push any changes within your authorized scopes, record the PR, obtain delegated reviewer/QA approval, and finish with complete_run(status=done)."
 }
 
 // Active resolves which run a tool call acts on: the token's run, the run on
@@ -683,6 +684,21 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, 
 		t = tk
 		if verdict != "" {
 			return apperr.Invalid("verdict", "only a delegated reviewer or QA run reports a verdict")
+		}
+		if status == "in_review" || status == "done" {
+			criteria, err := q.ListCriteria(ctx, tk.ID)
+			if err != nil {
+				return err
+			}
+			var unfinished []string
+			for i, criterion := range criteria {
+				if !criterion.Done {
+					unfinished = append(unfinished, fmt.Sprintf("%d", i+1))
+				}
+			}
+			if len(unfinished) > 0 {
+				return apperr.Conflict("acceptance criteria %s are unchecked; verify each criterion and call check_criterion only when satisfied. Implement missing work yourself or delegate it, then retry complete_run. If blocked on a person, use await_human or request_approval; use status=todo only to explicitly hand back unfinished work", strings.Join(unfinished, ", "))
+			}
 		}
 		if status == "done" {
 			if err := ReviewClear(ctx, q, run); err != nil {

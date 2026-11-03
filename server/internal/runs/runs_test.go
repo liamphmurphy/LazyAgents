@@ -221,6 +221,27 @@ func TestRunLifecycle(t *testing.T) {
 	if err := svc.SetPR(ctx, atlas, "", "https://github.com/northwind/payments/pull/491", true); err != nil {
 		t.Fatal(err)
 	}
+	// Rejection leaves the lead running so it can implement or delegate the gaps.
+	for _, status := range []string{"", "in_review", "done"} {
+		if err := svc.Complete(ctx, atlas, "", "Partial implementation", status, ""); !isConflict(err) {
+			t.Fatalf("completion with unchecked criteria (%q): %v", status, err)
+		}
+	}
+	if r, err := q.GetRun(ctx, store.GetRunParams{ID: run.ID, WorkspaceID: ws}); err != nil || r.State != "running" {
+		t.Fatalf("rejected completion ended run: %+v %v", r, err)
+	}
+	if ticket, err := tracker.Get(ctx, q, ws, "PAY-214"); err != nil || ticket.Status != "in_progress" {
+		t.Fatalf("rejected completion moved ticket: %+v %v", ticket, err)
+	}
+	criteria, err := q.ListCriteria(ctx, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range criteria {
+		if err := svc.CheckCriterion(ctx, atlas, "", i+1, true); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := svc.CheckCriterion(ctx, atlas, "", 4, true); err != nil {
 		t.Fatal(err)
 	}

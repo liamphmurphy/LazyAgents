@@ -122,7 +122,10 @@ For planning runs, follow the planner instructions returned by whoami: read cont
 For ticket execution, start with whoami, then claim_ticket and get_ticket. Read attached artifacts with read_artifact before
 planning, then post_plan before editing anything and keep steps current with update_step.
 Scopes marked requires_approval need request_approval first; brokered ones (like db:migrate) run via
-run_gated after approval. When you need a person, comment and call await_human. Finish with complete_run.`
+run_gated after approval. When you need a person, comment and call await_human.
+Verify every acceptance criterion and check it only with evidence. Implement or delegate any gaps.
+Once all criteria are satisfied, commit and push changes within your authorized scopes, record the PR with set_pr,
+obtain delegated reviewer/QA approval, and finish with complete_run(status=done).`
 
 // MCPHandler serves the Agent API over streamable HTTP at /mcp.
 func MCPHandler(d Deps, version string, log *slog.Logger) http.Handler {

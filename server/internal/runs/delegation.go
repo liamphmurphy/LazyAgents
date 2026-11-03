@@ -189,7 +189,7 @@ func WakeParent(ctx context.Context, q *store.Queries, child store.Run, state, o
 		msg = handle + "'s delegated run failed: " + outcome
 	}
 	msg += "\n\nCheck the result in the workspace (git status, git diff, tests) before relying on it, then continue: " +
-		"delegate again, fix it yourself, or finish with complete_run."
+		"read get_ticket, verify the acceptance criteria, and delegate again or fix any remaining work yourself. When every criterion is verified and checked, commit and push any changes, record the PR with set_pr, obtain delegated reviewer/QA approval, and finish with complete_run status=done."
 	return resume(ctx, q, parent, "delegation", msg)
 }
 

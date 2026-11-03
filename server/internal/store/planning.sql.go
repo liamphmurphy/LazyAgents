@@ -297,6 +297,20 @@ func (q *Queries) ReadyPlanningTickets(ctx context.Context, arg ReadyPlanningTic
 	return items, nil
 }
 
+const setPlanningSessionEpic = `-- name: SetPlanningSessionEpic :exec
+UPDATE planning_sessions SET epic_id=$2 WHERE id=$1
+`
+
+type SetPlanningSessionEpicParams struct {
+	ID     uuid.UUID
+	EpicID *uuid.UUID
+}
+
+func (q *Queries) SetPlanningSessionEpic(ctx context.Context, arg SetPlanningSessionEpicParams) error {
+	_, err := q.db.Exec(ctx, setPlanningSessionEpic, arg.ID, arg.EpicID)
+	return err
+}
+
 const updatePlanningSession = `-- name: UpdatePlanningSession :one
 UPDATE planning_sessions SET proposals=$2,state=$3,ticket_keys=$4,revision=revision+1,updated_at=now() WHERE id=$1 RETURNING id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at
 `

@@ -235,6 +235,11 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
             Dependent tickets can be dispatched too: they queue and start
             once their blockers are Done.
           </p>
+          {plan.epic_id && (
+            <ButtonLink variant="outline" href={`/epics?epic=${plan.epic_id}`}>
+              View epic
+            </ButtonLink>
+          )}
           {plan.ticket_keys.map((key, i) => (
             <Link
               key={key}
@@ -437,7 +442,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
           disabled={review.isPending || !items.length}
           onClick={() => review.mutate("accept")}
         >
-          Accept & create {items.length} tickets
+          Accept & create {items.length} tickets{plan.epic_id ? "" : " + epic"}
         </Button>
       </div>
     </div>

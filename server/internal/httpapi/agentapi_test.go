@@ -195,6 +195,12 @@ func TestAgentAPIOverMCP(t *testing.T) {
 	if hits := call("search_knowledge", map[string]any{"q": "partition", "kinds": []string{"note"}}); len(hits["results"].([]any)) == 0 {
 		t.Fatalf("search_knowledge = %v", hits)
 	}
+	if msg := callErr("complete_run", map[string]any{"outcome": "Partial work"}); !strings.Contains(msg, "unchecked") {
+		t.Fatalf("unchecked criteria completion: %s", msg)
+	}
+	for i := range tk["criteria"].([]any) {
+		call("check_criterion", map[string]any{"n": i + 1, "done": true})
+	}
 	call("complete_run", map[string]any{"outcome": "Applied to staging"})
 
 	// The human view reflects it all.

@@ -313,6 +313,25 @@ func (s *Service) ReviewPlanning(ctx context.Context, ws, user, id uuid.UUID, re
 				if err != nil {
 					return err
 				}
+				// Create the grouping only on acceptance, in the ticket transaction.
+				// Plans for existing epics extend that epic instead.
+				if plan.EpicID == nil {
+					name := []rune(plan.Goal)
+					if len(name) > 120 {
+						name = append(name[:119], '…')
+					}
+					epic, err := q.CreateEpic(ctx, store.CreateEpicParams{
+						WorkspaceID: ws, ProjectID: plan.ProjectID, Name: string(name),
+						Objective: plan.Goal, OwnerUserID: &user, Health: "on_track",
+					})
+					if err != nil {
+						return err
+					}
+					plan.EpicID = &epic.ID
+					if err := q.SetPlanningSessionEpic(ctx, store.SetPlanningSessionEpicParams{ID: plan.ID, EpicID: plan.EpicID}); err != nil {
+						return err
+					}
+				}
 				created := []store.Ticket{}
 				for _, item := range items {
 					t, err := tracker.CreateInTx(ctx, q, ws, tracker.UserActor(user), tracker.NewTicket{ProjectKey: p.Key, Title: item.Title, DescriptionMd: item.Description, Criteria: item.Criteria, AssigneeAgentID: item.AgentID, EpicID: plan.EpicID})

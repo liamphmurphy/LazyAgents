@@ -61,6 +61,14 @@ func TestPlanningWorkflow(t *testing.T) {
 		}
 		return n
 	}
+	epicCount := func() int {
+		var n int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM epics").Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	beforeEpics := epicCount()
 	var source uuid.UUID
 	if err := pool.QueryRow(ctx, "SELECT id FROM artifacts WHERE type='prd' AND project_id=(SELECT id FROM projects WHERE key='PAY') LIMIT 1").Scan(&source); err != nil {
 		t.Fatal(err)
@@ -154,8 +162,8 @@ func TestPlanningWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	requireStatus(request("PATCH", "/api/v1/planning-sessions/"+plan.Id.String(), map[string]any{"revision": plan.Revision, "action": "accept", "proposals": proposals}, ""), 500)
-	if count() != before {
-		t.Fatal("acceptance partially committed")
+	if count() != before || epicCount() != beforeEpics {
+		t.Fatal("acceptance partially committed tickets or epic")
 	}
 	if _, err = pool.Exec(ctx, "DROP TRIGGER reject_planning_test ON tickets; DROP FUNCTION reject_planning_test()"); err != nil {
 		t.Fatal(err)
@@ -182,6 +190,19 @@ func TestPlanningWorkflow(t *testing.T) {
 	p, err := q.GetPlanningSession(ctx, store.GetPlanningSessionParams{ID: plan.Id, WorkspaceID: me.WorkspaceID})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if p.EpicID == nil || epicCount() != beforeEpics+1 {
+		t.Fatalf("acceptance should create exactly one epic: %+v", p)
+	}
+	epic, err := q.GetEpic(ctx, store.GetEpicParams{ID: *p.EpicID, WorkspaceID: me.WorkspaceID})
+	if err != nil || epic.Name != p.Goal || epic.Objective != p.Goal || epic.ProjectID != p.ProjectID {
+		t.Fatalf("epic context lost: %+v %v", epic, err)
+	}
+	for _, key := range p.TicketKeys {
+		ticket, err := tracker.Get(ctx, q, me.WorkspaceID, key)
+		if err != nil || ticket.EpicID == nil || *ticket.EpicID != epic.ID {
+			t.Fatalf("ticket not linked to plan epic: %+v %v", ticket, err)
+		}
 	}
 	if len(p.TicketKeys) != 2 {
 		t.Fatal("missing created keys")
@@ -222,6 +243,25 @@ func TestPlanningWorkflow(t *testing.T) {
 	}
 	if _, err := rs.ReviewPlanning(ctx, me.WorkspaceID, me.ID, draft.ID, discarded.Revision, "accept", proposals); err == nil {
 		t.Fatal("accepted a dismissed plan")
+	}
+	if epicCount() != beforeEpics+1 {
+		t.Fatal("dismissal created an epic")
+	}
+	// Extending an existing epic must reuse it.
+	extension, err := rs.StartPlanning(ctx, me.WorkspaceID, me.ID, runs.PlanningInput{Project: "PAY", AgentID: a.ID, EpicID: p.EpicID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: extension.RunID, State: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	extension, err = rs.ProposeTickets(ctx, agents.Caller{Agent: a, RunID: &extension.RunID}, proposals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extension, err = rs.ReviewPlanning(ctx, me.WorkspaceID, me.ID, extension.ID, extension.Revision, "accept", proposals)
+	if err != nil || extension.EpicID == nil || *extension.EpicID != epic.ID || epicCount() != beforeEpics+1 {
+		t.Fatalf("existing epic not reused: %+v %v", extension, err)
 	}
 	// Standalone cancellation leaves no phantom ticket and can be logged normally.
 	cancel, err := rs.StartPlanning(ctx, me.WorkspaceID, me.ID, runs.PlanningInput{Project: "PAY", AgentID: a.ID, Goal: "Another plan"})

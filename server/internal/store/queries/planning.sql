@@ -30,3 +30,6 @@ AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
 AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
 AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
 ORDER BY t.key;
+
+-- name: SetPlanningSessionEpic :exec
+UPDATE planning_sessions SET epic_id=$2 WHERE id=$1;

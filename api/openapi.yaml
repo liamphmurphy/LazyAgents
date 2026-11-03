@@ -2227,9 +2227,13 @@ components:
         at: { type: string, format: date-time }
     RunDetail:
       type: object
-      required: [run, turns, approvals, events]
+      required: [run, turns, approvals, events, child_runs]
       properties:
         run: { $ref: "#/components/schemas/Run" }
+        child_runs:
+          type: array
+          description: Direct delegated runs, including active and finished runs. Fetch each run for its own events and cursor.
+          items: { $ref: "#/components/schemas/Run" }
         turns: { type: array, items: { $ref: "#/components/schemas/RunTurn" } }
         approvals: { type: array, items: { $ref: "#/components/schemas/Approval" } }
         events: { type: array, items: { $ref: "#/components/schemas/RunEvent" } }

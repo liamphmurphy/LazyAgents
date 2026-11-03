@@ -185,7 +185,21 @@ func (s *Server) GetRun(ctx context.Context, req api.GetRunRequestObject) (api.G
 	if err != nil {
 		return nil, err
 	}
-	out := api.GetRun200JSONResponse{Run: run, Turns: []api.RunTurn{}, Approvals: []api.Approval{}, Events: []api.RunEvent{}}
+	out := api.GetRun200JSONResponse{Run: run, Turns: []api.RunTurn{}, Approvals: []api.Approval{}, Events: []api.RunEvent{}, ChildRuns: []api.Run{}}
+	children, err := s.Q.ChildRuns(ctx, &r.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, child := range children {
+		if child.WorkspaceID != ws {
+			continue
+		}
+		cr, err := s.toRun(ctx, child)
+		if err != nil {
+			return nil, err
+		}
+		out.ChildRuns = append(out.ChildRuns, cr)
+	}
 	turns, err := s.Q.ListTurns(ctx, r.ID)
 	if err != nil {
 		return nil, err
