@@ -1,7 +1,9 @@
 package agentdef
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -199,5 +201,116 @@ func TestSkillValidation(t *testing.T) {
 		if s.Normalize() == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+func sk(name string) Skill {
+	return Skill{Name: name, Description: "Use when " + name, Body: "body " + name}
+}
+
+func skillNames(r Resolved) []string {
+	out := []string{}
+	for _, k := range r.Skills {
+		out = append(out, k.Name)
+	}
+	return out
+}
+
+func withSkills(names ...string) Spec {
+	s := base()
+	for _, n := range names {
+		s.Skills = append(s.Skills, sk(n))
+	}
+	return s
+}
+
+func TestSkillOverrides(t *testing.T) {
+	s := withSkills("a", "b", "c")
+	cases := []struct {
+		name     string
+		o        Override
+		want     []string
+		provence bool
+	}{
+		{"add", Override{SkillsAdd: []Skill{sk("x"), sk("y")}}, []string{"a", "b", "c", "x", "y"}, true},
+		{"remove", Override{SkillsRemove: []string{"b"}}, []string{"a", "c"}, true},
+		{"unknown remove", Override{SkillsRemove: []string{"zzz"}}, []string{"a", "b", "c"}, false},
+		{"collision skipped", Override{SkillsAdd: []Skill{{Name: "a", Description: "d", Body: "other"}}}, []string{"a", "b", "c"}, false},
+		{"replace goes last", Override{SkillsRemove: []string{"a"}, SkillsAdd: []Skill{{Name: "a", Description: "d", Body: "new"}}}, []string{"b", "c", "a"}, true},
+	}
+	for _, c := range cases {
+		o := c.o
+		if err := o.Normalize(); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		r := Resolve(s, &o)
+		if got := skillNames(r); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: skills = %v, want %v", c.name, got, c.want)
+		}
+		if got := r.Provenance["skills"] == FromProject; got != c.provence {
+			t.Errorf("%s: provenance project = %v, want %v", c.name, got, c.provence)
+		}
+	}
+	// The replacement carries the new content.
+	o := Override{SkillsRemove: []string{"a"}, SkillsAdd: []Skill{{Name: "a", Description: "d", Body: "new"}}}
+	if r := Resolve(s, &o); r.Skills[2].Body != "new" {
+		t.Fatalf("replacement body = %q", r.Skills[2].Body)
+	}
+	// Resolve must not mutate the agent's skills.
+	if len(s.Skills) != 3 || s.Skills[0].Name != "a" {
+		t.Fatalf("agent skills mutated: %+v", s.Skills)
+	}
+}
+
+func TestSkillOverrideCap(t *testing.T) {
+	var names []string
+	for i := 0; i < MaxSkills-1; i++ {
+		names = append(names, "agent"+itoa(i))
+	}
+	s := withSkills(names...)
+	o := Override{SkillsAdd: []Skill{sk("p1"), sk("p2"), sk("p3")}}
+	r := Resolve(s, &o)
+	if len(r.Skills) != MaxSkills || r.Skills[MaxSkills-1].Name != "p1" || r.Skills[0].Name != "agent0" {
+		t.Fatalf("cap: len=%d last=%s", len(r.Skills), r.Skills[len(r.Skills)-1].Name)
+	}
+	// Adds that are all truncated leave the list unchanged: no provenance.
+	full := withSkills(append(names, "last")...)
+	if r := Resolve(full, &o); len(r.Skills) != MaxSkills || r.Provenance["skills"] == FromProject {
+		t.Fatalf("full list: len=%d prov=%v", len(r.Skills), r.Provenance)
+	}
+}
+
+func TestSkillOverrideNormalizeAndEmpty(t *testing.T) {
+	for name, o := range map[string]Override{
+		"bad add":       {SkillsAdd: []Skill{{Name: "Bad Name", Description: "d", Body: "b"}}},
+		"bad remove":    {SkillsRemove: []string{"../x"}},
+		"dup remove":    {SkillsRemove: []string{"a", "a"}},
+		"empty remove":  {SkillsRemove: []string{""}},
+		"too many adds": {SkillsAdd: make([]Skill, MaxSkills+1)},
+	} {
+		err := o.Normalize()
+		var ve *ValidationError
+		if !errors.As(err, &ve) {
+			t.Errorf("%s: err = %v", name, err)
+			continue
+		}
+		want := "skills_add"
+		if strings.Contains(name, "remove") {
+			want = "skills_remove"
+		}
+		if ve.Field != want {
+			t.Errorf("%s: field = %s, want %s", name, ve.Field, want)
+		}
+	}
+	if (Override{SkillsAdd: []Skill{sk("x")}}).Empty() || (Override{SkillsRemove: []string{"x"}}).Empty() || !(Override{}).Empty() {
+		t.Fatal("Empty ignores skills")
+	}
+}
+
+func TestSkillChanges(t *testing.T) {
+	o := Override{SkillsRemove: []string{"a", "b"}, SkillsAdd: []Skill{sk("x")}}
+	want := []string{"− skill a", "− skill b", "+ skill x"}
+	if got := o.Changes(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Changes = %q", got)
 	}
 }

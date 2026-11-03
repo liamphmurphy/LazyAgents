@@ -1,6 +1,7 @@
 package agentdef
 
 import (
+	"slices"
 	"strings"
 	"time"
 )
@@ -107,7 +108,13 @@ func minPositive(a, b int) int {
 //   - instructions_append and mcp_servers_add append;
 //   - scopes merge key by key and can only tighten; wildcard denials apply
 //     to every matching scope;
-//   - budget takes the lower of each limit.
+//   - budget takes the lower of each limit;
+//   - skills_remove drops agent skills by name (unknown names are a no-op),
+//     then skills_add appends in override order. An added name still among the
+//     remaining agent skills is skipped, so a project can't redefine an agent
+//     skill; remove + add of the same name replaces it, placed at the end.
+//     The result is capped at MaxSkills: agent skills are kept first and
+//     trailing added skills are dropped (Resolve can't reject).
 //
 // Both inputs must be normalized. o may be nil.
 func Resolve(s Spec, o *Override) Resolved {
@@ -141,6 +148,12 @@ func Resolve(s Spec, o *Override) Resolved {
 			}
 		}
 		r.Provenance["mcp_servers"] = FromProject
+	}
+	if len(o.SkillsRemove) > 0 || len(o.SkillsAdd) > 0 {
+		r.Skills = resolveSkills(s.Skills, o)
+		if !slices.Equal(r.Skills, s.Skills) {
+			r.Provenance["skills"] = FromProject
+		}
 	}
 	if b := (Budget{MaxRuntime: minDuration(s.Budget.MaxRuntime, o.Budget.MaxRuntime), MaxTurns: minPositive(s.Budget.MaxTurns, o.Budget.MaxTurns)}); b != s.Budget {
 		r.Budget, r.Provenance["budget"] = b, FromProject
@@ -188,6 +201,31 @@ func Resolve(s Spec, o *Override) Resolved {
 	return r
 }
 
+func resolveSkills(agent []Skill, o *Override) []Skill {
+	drop := map[string]bool{}
+	for _, n := range o.SkillsRemove {
+		drop[n] = true
+	}
+	out := make([]Skill, 0, len(agent)+len(o.SkillsAdd))
+	have := map[string]bool{}
+	for _, k := range agent {
+		if !drop[k.Name] {
+			out = append(out, k)
+			have[k.Name] = true
+		}
+	}
+	for _, k := range o.SkillsAdd {
+		if !have[k.Name] {
+			out = append(out, k)
+			have[k.Name] = true
+		}
+	}
+	if len(out) > MaxSkills {
+		out = out[:MaxSkills]
+	}
+	return out
+}
+
 func sortScopes(s []ResolvedScope) {
 	for i := 1; i < len(s); i++ {
 		for j := i; j > 0 && s[j].Scope < s[j-1].Scope; j-- {
@@ -224,6 +262,12 @@ func (o Override) Changes() []string {
 	}
 	for _, m := range o.MCPServersAdd {
 		out = append(out, "+ MCP server "+m.Name)
+	}
+	for _, n := range o.SkillsRemove {
+		out = append(out, "− skill "+n)
+	}
+	for _, k := range o.SkillsAdd {
+		out = append(out, "+ skill "+k.Name)
 	}
 	if o.Budget.MaxRuntime != "" {
 		out = append(out, "max runtime ≤ "+o.Budget.MaxRuntime)
