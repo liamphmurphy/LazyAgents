@@ -19,8 +19,17 @@ type Chat = {
 type Message = {
   id: string; seq: number; role: "user" | "assistant" | "system"; body_md: string;
   harness?: Harness; model?: string; created_at: string;
+  context_refs?: unknown[]; citations?: unknown[];
 };
 
+// What the [[ picker can offer (api: GET /knowledge/suggest). OTHER-9 lives in another project.
+const PLAN = { kind: "artifact", id: "11111111-1111-4111-8111-111111111111", title: "Plan", artifact_type: "note", path: "Eng/Plan", href: "/wiki/Eng/Plan" };
+const REPORT = { kind: "artifact", id: "22222222-2222-4222-8222-222222222222", title: "Q3 report", artifact_type: "report", href: "/artifacts/22222222-2222-4222-8222-222222222222" };
+const TICKET = { kind: "ticket", id: "33333333-3333-4333-8333-333333333333", title: "Fix payouts", display_id: "WEB-3", href: "/tickets/WEB-3", status: "todo" };
+const OTHER = { kind: "ticket", id: "44444444-4444-4444-8444-444444444444", title: "Elsewhere", display_id: "OTHER-9", href: "/tickets/OTHER-9", status: "todo" };
+const TARGETS: Array<{ title: string; path?: string; display_id?: string }> = [PLAN, REPORT, TICKET, OTHER];
+
+export type Posted = { chat: string; body: Record<string, unknown> };
 export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number };
 
 const catalog = (codexAvailable: boolean) => [
@@ -50,6 +59,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const messages = new Map<string, Message[]>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const unhandled: string[] = [];
+  const posted: Posted[] = [];
+  const artifactForms: string[] = [];
+  const wikiPages: Array<{ path: string; body_md: string; project_key?: string }> = [];
   let n = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
   const now = () => new Date().toISOString();
@@ -80,7 +92,16 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
 
   function finishTurn(c: Chat, prompt: string) {
     c.state = "idle";
-    add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model });
+    // "cite:" prompts get citations (one duplicate, one versioned section, one ticket).
+    const citations = prompt.startsWith("cite:")
+      ? [
+          { target: REPORT, artifact_id: REPORT.id, title: REPORT.title, version_id: "55555555-5555-4555-8555-555555555555", version: "v2", section: "risks" },
+          { target: REPORT, artifact_id: REPORT.id, title: REPORT.title, version_id: "55555555-5555-4555-8555-555555555555", version: "v2", section: "risks" },
+          { target: PLAN, artifact_id: PLAN.id, title: PLAN.title, path: PLAN.path },
+          { target: TICKET, title: TICKET.title },
+        ]
+      : undefined;
+    add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, ...(citations ? { citations } : {}) });
     void emit(c);
   }
   function ref(c: Chat) {
@@ -110,6 +131,25 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       });
     }
     if (path === "/knowledge/resolve") return json({ links: [] });
+    if (path === "/knowledge/suggest") {
+      const q = (url.searchParams.get("q") ?? "").toLowerCase();
+      return json({ targets: TARGETS.filter((t) => !q || `${t.title} ${t.path ?? ""} ${t.display_id ?? ""}`.toLowerCase().includes(q)) });
+    }
+    if (path === "/wiki/pages" && method === "GET") {
+      return json({ pages: [], suggestions: 0 });
+    }
+    if (path === "/wiki/pages" && method === "POST") {
+      const b = body() as { path: string; body_md: string; project_key?: string };
+      if (wikiPages.some((p) => p.path === b.path)) return fail(err(409, "conflict", "A page already exists at that path.", "path"));
+      wikiPages.push(b);
+      return json({ id: uuid(), type: "note", path: b.path, title: b.path.split("/").pop(), body_md: b.body_md }, 201);
+    }
+    if (path === "/artifacts" && method === "POST") {
+      const raw = req.postData() ?? "";
+      artifactForms.push(raw);
+      const title = /name="title"\r\n\r\n([^\r]*)/.exec(raw)?.[1] ?? "";
+      return json({ id: "66666666-6666-4666-8666-666666666666", type: "report", title }, 201);
+    }
     if (path === "/chat-models") return json(catalog(codexAvailable));
 
     if (path === "/chats" && method === "GET") {
@@ -168,7 +208,10 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
           add(c, "system", `Switched to ${label(harness, model)}`);
         }
         if (c.title === "New chat") c.title = text.slice(0, 40);
-        const user = add(c, "user", text);
+        posted.push({ chat: c.id, body: b });
+        const refs = (b.context_refs as Array<{ key?: string }> | undefined) ?? [];
+        if (refs.some((r) => r.key === "OTHER-9")) return fail(err(422, "invalid", "OTHER-9 is not in this chat's project", "context_refs"));
+        const user = add(c, "user", text, refs.length ? { context_refs: refs } : {});
         c.state = "running";
         c.error = undefined;
         c.current_run_id = c.current_run_id ?? uuid();
@@ -217,6 +260,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { unhandled };
+    return { unhandled, posted, wikiPages, artifactForms };
   })();
 }

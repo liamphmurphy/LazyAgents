@@ -19,6 +19,7 @@ import { StatusGlyph } from "@/components/domain/glyphs";
 import { DocTypeTag } from "@/components/domain/labels";
 import { Markdown } from "@/components/domain/markdown";
 import { wikiHref } from "@/lib/wikilinks";
+import { StartChatButton } from "@/components/domain/start-chat";
 import { TopBar } from "@/components/shell/topbar";
 
 /** Body of an older version, fetched as raw text. */
@@ -86,13 +87,14 @@ function SummaryEditor({ a }: { a: Artifact }) {
 
 export function ArtifactScreen({ id }: { id: string }) {
   const { data: a, isError, error } = useArtifact(id);
-  const [versionId, setVersionId] = useState<string | null>(null);
+  const search = useSearchParams();
+  // ?version=<id> deep-links to one version (chat Sources use it).
+  const [versionId, setVersionId] = useState<string | null>(search.get("version"));
   const [versioning, setVersioning] = useState(false);
   const viewing = a?.versions.find((v) => v.id === versionId) ?? a?.current_version;
   const old = useVersionBody(a, versionId);
   const isOld = !!a && !!viewing && viewing.id !== a.current_version.id;
   const router = useRouter();
-  const search = useSearchParams();
 
   // Wiki pages live at /wiki/<path>; this screen still serves their full
   // version history (?versions=1).
@@ -141,6 +143,7 @@ export function ArtifactScreen({ id }: { id: string }) {
         actions={
           a && (
             <>
+              <StartChatButton attach={{ kind: a.type === "note" ? "page" : "artifact", id: a.id }} title={artifactTitle(a)} project={a.project?.key} />
               <ButtonLink href={contentUrl(a.id, (viewing ?? a.current_version).id, true)} variant="outline" icon="download">
                 Download
               </ButtonLink>

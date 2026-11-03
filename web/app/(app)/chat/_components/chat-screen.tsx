@@ -83,7 +83,12 @@ export function ChatScreen({ id }: { id?: string }) {
   const create = useCreateChat();
 
   function newChat() {
-    create.mutate({ project }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
+    // /chat?attach=… (from a Start chat link) carries over to the new chat.
+    const q = new URLSearchParams({ project });
+    for (const v of search.getAll("attach")) q.append("attach", v);
+    const t = search.get("attach_title");
+    if (t) q.set("attach_title", t);
+    create.mutate({ project }, { onSuccess: (c) => router.push(`/chat/${c.id}?${q.toString()}`) });
   }
   const list = chats.data?.chats;
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, type Schemas } from "@/lib/api/client";
@@ -12,10 +13,15 @@ import {
   useChatRunEvents,
   useSendChatMessage,
 } from "@/lib/api/hooks";
+import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
-import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
+import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { LinkEditor } from "@/components/domain/link-editor";
 import { ChatMarkdown } from "./chat-markdown";
+import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
+import { SaveActions } from "./save-actions";
+import { Sources } from "./sources";
 import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
 
 type Message = Schemas["ChatMessage"];
@@ -43,7 +49,9 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
   );
 }
 
-function Bubble({ m, groups }: { m: Message; groups: Groups }) {
+type ChatInfo = { id: string; title: string; project: string };
+
+function Bubble({ m, groups, chat, saveable, names }: { m: Message; groups: Groups; chat: ChatInfo; saveable: boolean; names: Map<string, string> }) {
   if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
   const mine = m.role === "user";
   return (
@@ -61,6 +69,9 @@ function Bubble({ m, groups }: { m: Message; groups: Groups }) {
       >
         <ChatMarkdown>{m.body_md}</ChatMarkdown>
       </div>
+      {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
+      {!mine && <Sources citations={m.citations} />}
+      {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
     </li>
   );
 }
@@ -113,6 +124,10 @@ export function Conversation({ id }: { id: string }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
   const [picked, setPicked] = useState<Selection | null>(null);
+  const router = useRouter();
+  const search = useSearchParams();
+  // "Start chat" links arrive with ?attach=kind:id; seed once, then drop it from the URL.
+  const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
   const area = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLLIElement>(null);
 
@@ -126,6 +141,20 @@ export function Conversation({ id }: { id: string }) {
   const pending = !!(picked && current && !sameSelection(picked, current));
   const list = messages.data?.messages;
   const lastUser = list?.findLast((m) => m.role === "user");
+
+  useEffect(() => {
+    if (!search.has("attach")) return;
+    const q = new URLSearchParams(search.toString());
+    q.delete("attach");
+    q.delete("attach_title");
+    router.replace(`/chat/${id}?${q.toString()}`);
+  }, [search, router, id]);
+  // Refs only carry ids; remember what the chips were called so sent messages can show it.
+  const [names, setNames] = useState(() => new Map<string, string>());
+  const attach = (t: Parameters<typeof chipFromTarget>[0]) => {
+    const chip = chipFromTarget(t);
+    if (chip) setChips((cs) => addChip(cs, chip));
+  };
 
   // Refetch the transcript when the chat changes (also covers polling without SSE).
   const stamp = c && `${c.state}:${c.message_count}:${c.revision}`;
@@ -143,12 +172,15 @@ export function Conversation({ id }: { id: string }) {
   function submit(body: string) {
     if (!body.trim() || locked) return;
     cancel.reset();
+    const context_refs = toContextRefs(chips);
+    setNames((n) => new Map([...n, ...chips.map((c): [string, string] => [c.key, c.label])]));
     send.mutate(
-      pending && picked ? { body, harness: picked.harness, model: picked.model } : { body },
+      { body, ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}), ...(context_refs ? { context_refs } : {}) },
       {
         onSuccess: () => {
           setText("");
           setPicked(null);
+          setChips([]);
         },
       },
     );
@@ -196,7 +228,7 @@ export function Conversation({ id }: { id: string }) {
           <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
             {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
             {list.map((m) => (
-              <Bubble key={m.id} m={m} groups={groups} />
+              <Bubble key={m.id} m={m} groups={groups} chat={c} saveable={!running} names={names} />
             ))}
             {pending && selection && (
               <Divider testId="pending-switch">
@@ -246,14 +278,20 @@ export function Conversation({ id }: { id: string }) {
             }}
             className="flex flex-col gap-2"
           >
-            <TextArea
-              ref={area}
+            <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
+            <LinkEditor
+              inputRef={(el) => {
+                area.current = el;
+              }}
+              mono={false}
               aria-label="Message"
               rows={3}
               value={text}
+              onChange={setText}
+              onPick={attach}
+              accept={acceptTarget}
               disabled={locked}
-              placeholder={locked ? "Waiting for the reply…" : "Message the assistant. Enter sends, Shift+Enter adds a line."}
-              onChange={(e) => setText(e.target.value)}
+              placeholder={locked ? "Waiting for the reply…" : "Message the assistant. Type [[ to attach context. Enter sends, Shift+Enter adds a line."}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
@@ -262,6 +300,7 @@ export function Conversation({ id }: { id: string }) {
               }}
             />
             <div className="flex flex-wrap items-center gap-2">
+              <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
               {selection && <ModelPicker groups={groups} value={selection} onChange={setPicked} disabled={locked} />}
               <span className="flex-1" />
               {running && (

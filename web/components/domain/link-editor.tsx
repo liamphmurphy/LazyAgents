@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type ComponentProps, type KeyboardEvent, type Ref } from "react";
+import { useId, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useLinkSuggest } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -92,7 +92,7 @@ export function LinkEditor({
   onPick?: (t: LinkTarget) => void;
   /** Limits which suggestions are offered. */
   accept?: (t: LinkTarget) => boolean;
-  inputRef?: Ref<HTMLTextAreaElement>;
+  inputRef?: (el: HTMLTextAreaElement | null) => void;
 } & Omit<ComponentProps<"textarea">, "value" | "onChange">) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const listId = useId();
@@ -163,8 +163,7 @@ export function LinkEditor({
       <TextArea
         ref={(el) => {
           ref.current = el;
-          if (typeof inputRef === "function") inputRef(el);
-          else if (inputRef) inputRef.current = el;
+          inputRef?.(el);
         }}
         mono={mono}
         value={value}

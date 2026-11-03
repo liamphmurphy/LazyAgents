@@ -54,8 +54,8 @@ export function toContextRefs(chips: Chip[]): ContextRef[] | undefined {
 }
 
 /** Read-only chip for a ref echoed back on a sent message. */
-export function chipFromRef(r: ContextRef): Chip {
-  const label = r.key ?? (r.anchor ? `${r.kind} #${r.anchor}` : `${r.kind} ${(r.id ?? "").slice(0, 8)}`);
+export function chipFromRef(r: ContextRef, names?: Map<string, string>): Chip {
+  const label = names?.get(refKey(r)) ?? r.key ?? (r.anchor ? `${r.kind} #${r.anchor}` : `${r.kind} ${(r.id ?? "").slice(0, 8)}`);
   return { key: refKey(r), ref: r, label };
 }
 
