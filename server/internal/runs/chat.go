@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/links"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
@@ -32,17 +34,32 @@ func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
 }
 
 // ChatInput opens an idle conversation; its first message creates the segment run.
-// Harness/model selection is resolved from the agent and project in this version.
+// AgentID may be the zero UUID, which picks the default agent (see DefaultChatAgent).
+// An empty Harness/Model keeps what the agent and project resolve to.
 type ChatInput struct {
 	Project string
 	AgentID uuid.UUID
 	Title   string
+	Harness string
+	Model   string
 	Message *ChatMessageInput
 }
 
-// ChatMessageInput is a single human prompt. Context attachment delivery is handled
-// by the REST/context integration, which must validate project membership first.
-type ChatMessageInput struct{ Body string }
+// ChatMessageInput is a single human prompt. A non-empty Harness/Model is
+// validated against the catalog and stored on the chat; the runner applies it
+// in LAZYAGENTS-10, so an existing segment keeps running its own harness/model.
+// ContextRefs are resolved inside the chat's project and delivered to the turn.
+type ChatMessageInput struct {
+	Body        string
+	Harness     string
+	Model       string
+	ContextRefs []ChatContextRef
+}
+
+// ChatCatalog is the harness/model catalog chats validate against.
+func (s *Service) ChatCatalog() chatmodels.Catalog {
+	return chatmodels.Catalog{RequireKey: s.RequireHarnessKey}
+}
 
 // StartChat creates a chat and optionally queues its first message atomically.
 func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInput) (store.ChatSession, error) {
@@ -62,9 +79,17 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if p.Archived {
 			return apperr.Conflict("restore the archived project before starting a chat")
 		}
-		a, err := q.GetAgent(ctx, store.GetAgentParams{ID: in.AgentID, WorkspaceID: ws})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return apperr.Invalid("agent_id", "unknown agent")
+		var a store.Agent
+		if in.AgentID == uuid.Nil {
+			a, err = q.DefaultChatAgent(ctx, ws)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return apperr.Invalid("agent_id", "the workspace has no main agent to chat with")
+			}
+		} else {
+			a, err = q.GetAgent(ctx, store.GetAgentParams{ID: in.AgentID, WorkspaceID: ws})
+			if errors.Is(err, pgx.ErrNoRows) {
+				return apperr.Invalid("agent_id", "unknown agent")
+			}
 		}
 		if err != nil {
 			return err
@@ -76,12 +101,20 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if err != nil {
 			return err
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: in.Title, CreatedBy: user, AgentID: a.ID, Harness: spec.Harness, Model: spec.Model})
+		h, m, err := s.ChatCatalog().Resolve(ctx, q, ws, spec.Harness, spec.Model, in.Harness, in.Model)
+		if err != nil {
+			return err
+		}
+		title := in.Title
+		if title == "" && in.Message != nil {
+			title = firstLine(in.Message.Body, 80)
+		}
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: h, Model: m})
 		if err != nil {
 			return err
 		}
 		if in.Message != nil {
-			out, _, err = postChatMessage(ctx, q, out, *in.Message, s.HandoffChars)
+			out, _, err = postChatMessage(ctx, q, s.ChatCatalog(), out, *in.Message, s.HandoffChars)
 		}
 		return err
 	})
@@ -97,7 +130,7 @@ func (s *Service) PostChatMessage(ctx context.Context, ws, user, id uuid.UUID, i
 		if err != nil {
 			return err
 		}
-		_, out, err = postChatMessage(ctx, q, chat, in, s.HandoffChars)
+		_, out, err = postChatMessage(ctx, q, s.ChatCatalog(), chat, in, s.HandoffChars)
 		return err
 	})
 	return out, err
@@ -111,7 +144,7 @@ func lockChat(ctx context.Context, q *store.Queries, ws, user, id uuid.UUID) (st
 	return chat, err
 }
 
-func postChatMessage(ctx context.Context, q *store.Queries, chat store.ChatSession, in ChatMessageInput, handoffChars int) (store.ChatSession, store.ChatMessage, error) {
+func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catalog, chat store.ChatSession, in ChatMessageInput, handoffChars int) (store.ChatSession, store.ChatMessage, error) {
 	var msg store.ChatMessage
 	body := strings.TrimSpace(in.Body)
 	if body == "" || len([]rune(body)) > 100000 {
@@ -126,6 +159,29 @@ func postChatMessage(ctx context.Context, q *store.Queries, chat store.ChatSessi
 	}
 	if p.Archived {
 		return chat, msg, apperr.Conflict("restore the archived project before chatting")
+	}
+	// Validate the selection and the refs before anything is written; a 422
+	// leaves the stored selection unchanged (the whole transaction rolls back).
+	h, m, err := cat.Resolve(ctx, q, chat.WorkspaceID, chat.Harness, chat.Model, in.Harness, in.Model)
+	if err != nil {
+		return chat, msg, err
+	}
+	docs, err := ResolveChatRefs(ctx, q, chat.WorkspaceID, chat.ProjectID, in.ContextRefs)
+	if err != nil {
+		return chat, msg, err
+	}
+	refs := make([]ChatContextRef, len(docs))
+	for i, d := range docs {
+		refs[i] = d.Ref
+	}
+	rawRefs, err := json.Marshal(refs)
+	if err != nil {
+		return chat, msg, err
+	}
+	if h != chat.Harness || m != chat.Model {
+		if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: h, Model: m}); err != nil {
+			return chat, msg, err
+		}
 	}
 	var run store.Run
 	prompt := body
@@ -211,7 +267,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, chat store.ChatSessi
 	if err != nil {
 		return chat, msg, err
 	}
-	appended, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "user", BodyMd: body, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")})
+	appended, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "user", BodyMd: body, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: rawRefs, Citations: []byte("[]")})
 	if err != nil {
 		return chat, msg, err
 	}
@@ -234,7 +290,7 @@ func (s *Service) CancelChat(ctx context.Context, ws, user, id uuid.UUID) (store
 		}
 		out = chat
 		if chat.State != "running" || chat.CurrentRunID == nil {
-			return nil
+			return apperr.Conflict("no turn is running")
 		}
 		run, err := q.LockRun(ctx, *chat.CurrentRunID)
 		if err != nil {
@@ -293,4 +349,116 @@ func ChatCitations(ctx context.Context, q *store.Queries, runID uuid.UUID, since
 		})
 	}
 	return json.Marshal(out)
+}
+
+func firstLine(body string, max int) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
+	r := []rune(strings.TrimSpace(line))
+	if len(r) > max {
+		return string(r[:max-1]) + "…"
+	}
+	return string(r)
+}
+
+// ChatPatchInput is a revision-checked rename and/or archive change.
+type ChatPatchInput struct {
+	Revision int32
+	Title    *string
+	Archived *bool
+}
+
+// UpdateChat renames, archives or restores a chat. Archiving ends the chat's
+// current run (the runner sweeps its workspace); a restored chat starts a new
+// segment on its next message. 409 on a stale revision or while a turn runs.
+func (s *Service) UpdateChat(ctx context.Context, ws, user, id uuid.UUID, in ChatPatchInput) (store.ChatSession, error) {
+	var out store.ChatSession
+	err := s.tx(ctx, func(q *store.Queries) error {
+		chat, err := lockChat(ctx, q, ws, user, id)
+		if err != nil {
+			return err
+		}
+		title, archived := chat.Title, chat.Archived
+		if in.Title != nil {
+			title = strings.TrimSpace(*in.Title)
+			if title == "" || len([]rune(title)) > 200 {
+				return apperr.Invalid("title", "must be 1–200 characters")
+			}
+		}
+		if in.Archived != nil {
+			archived = *in.Archived
+		}
+		if in.Title == nil && in.Archived == nil {
+			return apperr.Invalid("title", "provide a title or archived")
+		}
+		if chat.Revision != in.Revision {
+			return apperr.Conflict("the chat changed; reload and try again")
+		}
+		if chat.State == "running" {
+			return apperr.Conflict("a turn is still running")
+		}
+		if archived && !chat.Archived && chat.CurrentRunID != nil {
+			run, err := q.LockRun(ctx, *chat.CurrentRunID)
+			if err != nil {
+				return err
+			}
+			if !slices.Contains(Terminal, run.State) {
+				outcome := "The chat was archived."
+				if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
+					return err
+				}
+				if err = q.ExpireRunApprovals(ctx, run.ID); err != nil {
+					return err
+				}
+				if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "completed", "outcome": outcome}); err != nil {
+					return err
+				}
+				if err = RecomputeAgentStatus(ctx, q, run.AgentID); err != nil {
+					return err
+				}
+			}
+			if _, err = q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: chat.ID, State: chat.State}); err != nil {
+				return err
+			}
+		}
+		out, err = q.UpdateChatTitleArchived(ctx, store.UpdateChatTitleArchivedParams{ID: chat.ID, Title: title, Archived: archived})
+		return err
+	})
+	return out, err
+}
+
+// DeleteChat removes a chat and its messages. A running turn is cancelled
+// first; the chat's runs stay for cost history.
+func (s *Service) DeleteChat(ctx context.Context, ws, user, id uuid.UUID) error {
+	return s.tx(ctx, func(q *store.Queries) error {
+		chat, err := lockChat(ctx, q, ws, user, id)
+		if err != nil {
+			return err
+		}
+		if chat.CurrentRunID != nil {
+			run, err := q.LockRun(ctx, *chat.CurrentRunID)
+			if err != nil {
+				return err
+			}
+			if !slices.Contains(Terminal, run.State) {
+				if err = q.DropPendingTurns(ctx, run.ID); err != nil {
+					return err
+				}
+				outcome := "The chat was deleted."
+				if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "cancelled", Outcome: &outcome}); err != nil {
+					return err
+				}
+				_ = q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](143)})
+				if err = q.ExpireRunApprovals(ctx, run.ID); err != nil {
+					return err
+				}
+				if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "cancelled", "outcome": outcome}); err != nil {
+					return err
+				}
+				if err = RecomputeAgentStatus(ctx, q, run.AgentID); err != nil {
+					return err
+				}
+			}
+		}
+		return q.DeleteChatSession(ctx, chat.ID)
+	})
 }

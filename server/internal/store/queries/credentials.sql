@@ -49,3 +49,7 @@ DELETE FROM secrets WHERE id = $1 AND workspace_id = $2;
 
 -- name: TouchSecret :exec
 UPDATE secrets SET last_used_at = now() WHERE id = $1;
+
+-- name: SecretExists :one
+-- Metadata only: whether any secret of this name is stored; never reads the value.
+SELECT EXISTS (SELECT 1 FROM secrets WHERE workspace_id = $1 AND name = $2)::bool;

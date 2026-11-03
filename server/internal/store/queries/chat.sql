@@ -110,3 +110,45 @@ ORDER BY seq DESC LIMIT sqlc.arg(row_limit);
 
 -- name: CountChatHistory :one
 SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('user', 'assistant');
+
+-- name: ListChatsForUser :many
+-- One page of a person's chats: archived or not, optionally one project.
+SELECT c.* FROM chat_sessions c JOIN projects p ON p.id = c.project_id
+WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = sqlc.arg(archived)
+  AND (sqlc.narg(project_key)::text IS NULL OR p.key = sqlc.narg(project_key)::text)
+ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
+LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
+
+-- name: ChatMessageCounts :many
+SELECT session_id, count(*)::int AS n FROM chat_messages WHERE session_id = ANY(sqlc.arg(ids)::uuid[]) GROUP BY session_id;
+
+-- name: ChatLastErrors :many
+-- The newest system message of each chat; the API shows it as `error` while the chat is failed.
+SELECT DISTINCT ON (session_id) session_id, body_md FROM chat_messages
+WHERE session_id = ANY(sqlc.arg(ids)::uuid[]) AND role = 'system'
+ORDER BY session_id, seq DESC;
+
+-- name: PageChatMessages :many
+-- Messages with after < seq < before (either bound optional). newest_first pages
+-- back through history; the caller reverses the rows to oldest first.
+SELECT * FROM chat_messages
+WHERE session_id = sqlc.arg(session_id)
+  AND (sqlc.narg(after_seq)::bigint IS NULL OR seq > sqlc.narg(after_seq)::bigint)
+  AND (sqlc.narg(before_seq)::bigint IS NULL OR seq < sqlc.narg(before_seq)::bigint)
+ORDER BY CASE WHEN sqlc.arg(newest_first)::bool THEN -seq ELSE seq END
+LIMIT sqlc.arg(row_limit);
+
+-- name: ChatMessageForTurn :one
+SELECT * FROM chat_messages WHERE run_turn_id = $1 AND role = 'user';
+
+-- name: UpdateChatTitleArchived :one
+UPDATE chat_sessions SET title = $2, archived = $3, revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING *;
+
+-- name: DeleteChatSession :exec
+DELETE FROM chat_sessions WHERE id = $1;
+
+-- name: DefaultChatAgent :one
+-- The default agent for a chat that names none: the oldest main (non-sub) agent,
+-- ties broken by name then id so the choice is deterministic.
+SELECT * FROM agents WHERE workspace_id = $1 AND kind <> 'sub' ORDER BY created_at, name, id LIMIT 1;

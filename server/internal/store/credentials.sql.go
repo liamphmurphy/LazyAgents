@@ -262,6 +262,23 @@ func (q *Queries) RevokeAgentToken(ctx context.Context, arg RevokeAgentTokenPara
 	return result.RowsAffected(), nil
 }
 
+const secretExists = `-- name: SecretExists :one
+SELECT EXISTS (SELECT 1 FROM secrets WHERE workspace_id = $1 AND name = $2)::bool
+`
+
+type SecretExistsParams struct {
+	WorkspaceID uuid.UUID
+	Name        string
+}
+
+// Metadata only: whether any secret of this name is stored; never reads the value.
+func (q *Queries) SecretExists(ctx context.Context, arg SecretExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, secretExists, arg.WorkspaceID, arg.Name)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const touchAgentToken = `-- name: TouchAgentToken :exec
 UPDATE agent_tokens SET last_used_at = now() WHERE id = $1
 `
