@@ -21,6 +21,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
@@ -58,6 +59,8 @@ type Service struct {
 	// RequireHarnessKey mirrors the runner's setting: chats can't select a
 	// harness whose API-key secret is missing.
 	RequireHarnessKey bool
+	// ModelDiscovery overrides live provider discovery for embedded backends and tests.
+	ModelDiscovery func(context.Context, string, string) ([]chatmodels.Model, error)
 	// Poll is how often waits re-check state (tests shorten it).
 	Poll time.Duration
 	// HandoffChars bounds the prior transcript handed to a chat segment started

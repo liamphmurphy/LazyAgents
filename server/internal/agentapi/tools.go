@@ -351,9 +351,10 @@ type CommentIn struct {
 
 type NewTicketIn struct {
 	TicketArg
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Priority    string `json:"priority,omitempty" jsonschema:"none, low, medium, high or urgent"`
+	EpicID      *uuid.UUID `json:"epic_id,omitempty"`
+	Title       string     `json:"title"`
+	Description string     `json:"description,omitempty"`
+	Priority    string     `json:"priority,omitempty" jsonschema:"none, low, medium, high or urgent"`
 }
 
 type ApprovalIn struct {
@@ -721,8 +722,21 @@ var Tools = []Tool{
 			_, err := d.Runs.Comment(ctx, c, in.Ticket, in.Body)
 			return ok(nil), err
 		}),
+	define("list_epics", "List epics in the current chat project.", listChatEpics),
+	define("create_epic", "Create an epic in the current chat project.", createChatEpic),
 	define("create_ticket", "Open a follow-up ticket in the same project (unassigned, in the backlog).",
 		func(ctx context.Context, d Deps, c agents.Caller, in NewTicketIn) (any, error) {
+			scope, err := chatScopeFor(ctx, d, c)
+			if err != nil {
+				return nil, err
+			}
+			if scope != nil {
+				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: scope.ProjectKey, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID})
+				if err != nil {
+					return nil, err
+				}
+				return ok(map[string]any{"ticket": nt.Key}), nil
+			}
 			_, t, err := d.Runs.Active(ctx, d.Q, c, in.Ticket)
 			if err != nil {
 				return nil, err

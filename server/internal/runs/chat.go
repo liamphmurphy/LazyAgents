@@ -18,7 +18,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
-// ChatSpec freezes a conversation's read-only capabilities after project overrides.
+// ChatSpec freezes a conversation's capabilities after project overrides.
 func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
 	r.Scopes = append([]agentdef.ResolvedScope{}, r.Scopes...)
 	for i := range r.Scopes {
@@ -29,7 +29,7 @@ func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
 	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
-	r.Instructions = "You are chatting with a person. Answer directly, use context tools to look things up, and cite sources with [[…]]. Do not claim tickets, execute project work, or write memory.\n\n" + r.Instructions
+	r.Instructions = "You are chatting with a person. Answer directly, use context tools to look things up, and cite sources with [[…]]. Use create_ticket, create_epic and list_epics for requested project changes. Do not claim tickets, execute project work, or write memory.\n\n" + r.Instructions
 	return r
 }
 
@@ -58,7 +58,7 @@ type ChatMessageInput struct {
 
 // ChatCatalog is the harness/model catalog chats validate against.
 func (s *Service) ChatCatalog() chatmodels.Catalog {
-	return chatmodels.Catalog{RequireKey: s.RequireHarnessKey}
+	return chatmodels.Catalog{RequireKey: s.RequireHarnessKey, Secrets: s.Secrets, Discover: s.ModelDiscovery}
 }
 
 // StartChat creates a chat and optionally queues its first message atomically.

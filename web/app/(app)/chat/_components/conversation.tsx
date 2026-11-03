@@ -134,6 +134,7 @@ export function Conversation({ id }: { id: string }) {
   const c = chat.data;
   const loaded = !!c;
   const running = c?.state === "running";
+  const stopping = running && (cancel.isPending || cancel.isSuccess);
   const locked = running || send.isPending;
   const groups: Groups = models.data;
   const current: Selection | undefined = c && { harness: c.harness, model: c.model };
@@ -237,7 +238,7 @@ export function Conversation({ id }: { id: string }) {
             )}
             {running && (
               <li className="flex flex-col gap-2" data-testid="thinking">
-                <span role="status" className="text-[13px] text-fg-secondary">Thinking…</span>
+                <span role="status" className="text-[13px] text-fg-secondary">{stopping ? "Stopping…" : "Thinking…"}</span>
                 <ToolCalls runId={c.current_run_id} since={lastUser?.created_at} />
               </li>
             )}
@@ -304,8 +305,8 @@ export function Conversation({ id }: { id: string }) {
               {selection && <ModelPicker groups={groups} value={selection} onChange={setPicked} disabled={locked} />}
               <span className="flex-1" />
               {running && (
-                <Button variant="outline" icon="pause" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
-                  Stop
+                <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
+                  {stopping ? "Stopping…" : "Stop"}
                 </Button>
               )}
               <Button type="submit" variant="primary" disabled={locked || !text.trim()}>

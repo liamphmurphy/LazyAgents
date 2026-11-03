@@ -59,10 +59,14 @@ WHERE run_id = $1 AND status IN ('pending', 'running');
 
 -- name: RecoverChatCancellations :exec
 -- Cancel may have marked the run paused just before its runner stopped.
--- RequeueInterrupted has already made its interrupted turn pending.
+-- A replacement runner has a new id. Also recover cancelled turns whose
+-- owner no longer has a live heartbeat, including still-running turn records.
 WITH locked AS MATERIALIZED (
  SELECT c.id, c.current_run_id FROM chat_sessions c JOIN runs r ON r.id = c.current_run_id
- WHERE r.purpose = 'chat' AND r.state = 'paused' AND (r.runner_id = $1 OR r.runner_id IS NULL)
+ WHERE r.purpose = 'chat' AND r.state = 'paused' AND (r.runner_id = $1 OR r.runner_id IS NULL OR NOT EXISTS (
+   SELECT 1 FROM runners owner WHERE owner.id = r.runner_id
+     AND owner.heartbeat_at > now() - interval '45 seconds'
+ ))
  ORDER BY c.id FOR UPDATE OF c
 ), cancelled AS (
  UPDATE runs SET state = 'waiting', wait_reason = 'human_reply'
@@ -70,7 +74,7 @@ WITH locked AS MATERIALIZED (
  RETURNING id
 ), turns AS (
  UPDATE run_turns SET status = 'done', ended_at = coalesce(ended_at, now()), exit_code = 130
- WHERE run_id IN (SELECT id FROM cancelled) AND status = 'pending'
+ WHERE run_id IN (SELECT id FROM cancelled) AND status IN ('pending', 'running')
 )
 UPDATE chat_sessions SET state = 'idle', revision = revision + 1, updated_at = now()
 WHERE current_run_id IN (SELECT id FROM cancelled);

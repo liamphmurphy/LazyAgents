@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/realtime"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/seed"
@@ -56,7 +57,7 @@ func newChatEnv(t *testing.T) *chatEnv {
 	done := make(chan struct{})
 	go func() { defer close(done); hub.Run(hctx, pool) }()
 	t.Cleanup(func() { cancel(); <-done })
-	s := &Server{Events: hub, Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts},
+	s := &Server{Events: hub, Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts, ModelDiscovery: testChatModels},
 		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
@@ -167,7 +168,7 @@ func TestChatModelsCatalog(t *testing.T) {
 func TestChatModelsUnavailableWithoutKey(t *testing.T) {
 	e := newChatEnv(t)
 	ctx := context.Background()
-	cat := (&runs.Service{Pool: e.pool, RequireHarnessKey: true}).ChatCatalog()
+	cat := (&runs.Service{Pool: e.pool, RequireHarnessKey: true, ModelDiscovery: testChatModels}).ChatCatalog()
 	list, err := cat.List(ctx, e.q, e.me.WorkspaceID)
 	if err != nil {
 		t.Fatal(err)
@@ -575,4 +576,34 @@ func TestChatMessageCitationFields(t *testing.T) {
 	if c["version"] != "v2" || c["section"] != "retries" || c["version_id"] != e.payArt.String() || c["artifact_id"] != e.payArt.String() || c["target"].(map[string]any)["anchor"] != "retries" {
 		t.Fatalf("citation %v", c)
 	}
+}
+
+func TestChatRunDetail(t *testing.T) {
+	e := newChatEnv(t)
+	created := e.newChat(map[string]any{"message": map[string]any{"body": "hello"}})
+	runID, ok := created["current_run_id"].(string)
+	if !ok {
+		t.Fatalf("chat has no run: %v", created)
+	}
+	detail := e.want("GET", "/runs/"+runID, nil, 200)
+	run := detail["run"].(map[string]any)
+	if run["id"] != runID {
+		t.Fatalf("wrong run: %v", detail)
+	}
+	if _, ok := run["planning_id"]; ok {
+		t.Fatalf("chat treated as a planning run: %v", run)
+	}
+}
+
+// Model selection tests use a provider fixture instead of live credentials.
+func testChatModels(_ context.Context, harness, _ string) ([]chatmodels.Model, error) {
+	ids := []string{"opus-5.5", "sonnet-5.5", "haiku-5.5"}
+	if harness == "codex" {
+		ids = []string{"gpt-5-codex", "gpt-5-mini"}
+	}
+	models := []chatmodels.Model{}
+	for i, id := range ids {
+		models = append(models, chatmodels.Model{ID: id, Label: id, Default: i == 0})
+	}
+	return models, nil
 }

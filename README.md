@@ -23,6 +23,9 @@ who is working on it, what they know, and what needs your decision. Tickets,
 plans, conversations, and project knowledge stay connected, so you can pick up
 where you left off without piecing together terminal sessions.
 
+One goal was to provide a consistent interface, shared knowledge base, and
+reusable agent definitions across different models and underlying harnesses.
+
 The idea behind it is simple: spend less time coordinating agents and more time
 deciding what is worth building. Give agents useful context and clear tasks,
 then come back to a place that shows what happened and where you are needed.

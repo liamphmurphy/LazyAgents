@@ -478,6 +478,16 @@ export function RunLogScreen({ id }: { id: string }) {
           </p>
         </section>
       </div>
+      <Button
+        variant="secondary"
+        className="fixed bottom-6 right-6 z-20 shadow-md"
+        onClick={() => {
+          setFollow(false);
+          window.scrollTo({ top: 0, behavior: "instant" });
+        }}
+      >
+        <span aria-hidden="true">↑</span> Back to top
+      </Button>
     </>
   );
 }

@@ -51,6 +51,11 @@ export function ModelPicker({
             <DropdownMenu.Group key={g.harness} aria-label={g.label}>
               {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
               <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
+              {!g.available && (
+                <div role="status" className="px-2 py-1 text-xs text-fg-tertiary">
+                  {g.unavailable_reason ?? "Model discovery unavailable"}
+                </div>
+              )}
               {g.models.map((m) => {
                 const on = value.harness === g.harness && value.model === m.id;
                 return (

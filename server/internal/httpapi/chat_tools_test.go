@@ -20,7 +20,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
 )
 
-// A chat run's token reaches only the read-only context tools, and only for its own project.
+// A chat run's token reaches context and tracker tools, and only for its own project.
 func TestChatRunToolAuthorization(t *testing.T) {
 	pool := testdb.New(t)
 	ctx := context.Background()
@@ -105,6 +105,9 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"whoami": map[string]any{}, "search_knowledge": map[string]any{"q": word}, "read_page": map[string]any{"ref": *note.Note.Path},
 		"read_artifact": map[string]any{"artifact": payDoc.ID.String()}, "get_ticket": map[string]any{"ticket": "PAY-214"},
 		"get_backlinks": map[string]any{"ref": payDoc.ID.String()},
+		"create_ticket": map[string]any{"title": "Chat-created ticket"},
+		"create_epic":   map[string]any{"name": "Chat-created epic"},
+		"list_epics":    map[string]any{},
 	}
 	seen := 0
 	for _, tool := range listed.Tools {
@@ -123,6 +126,28 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	}
 	if seen != len(allowed) {
 		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed))
+	}
+
+	// Writes use the chat project, without needing an execution ticket.
+	code, created := call(token, "create_epic", map[string]any{"name": "Chat planning"})
+	if code != 200 {
+		t.Fatalf("create epic = %d %v", code, created)
+	}
+	epicID := created["epic_id"]
+	code, created = call(token, "create_ticket", map[string]any{"title": "Planned in chat", "epic_id": epicID})
+	if code != 200 {
+		t.Fatalf("create ticket = %d %v", code, created)
+	}
+	key := fmt.Sprint(created["ticket"])
+	if !strings.HasPrefix(key, "PAY-") {
+		t.Fatalf("wrong project: %v", created)
+	}
+	foreignEpic, err := q.CreateEpic(ctx, store.CreateEpicParams{WorkspaceID: ws, ProjectID: mt.ProjectID, Name: "Foreign epic", Health: "on_track"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Wrong project", "epic_id": foreignEpic.ID}); code != 422 {
+		t.Fatalf("foreign epic = %d %v", code, out)
 	}
 
 	// whoami is chat-specific: no ticket queue, project and chat named.

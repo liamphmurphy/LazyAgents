@@ -35,7 +35,7 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		CostUsd: float32(r.CostUsdMicros) / 1e6, CostSource: r.CostSource,
 		Plan: []api.PlanStep{}, Scopes: []string{}, ApprovalScopes: []string{},
 	}
-	if r.TicketID == nil {
+	if r.TicketID == nil && r.Purpose == "planning" {
 		p, err := s.Q.PlanningSessionForRun(ctx, r.ID)
 		if err != nil {
 			return out, err

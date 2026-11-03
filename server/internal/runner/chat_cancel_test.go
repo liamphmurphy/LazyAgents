@@ -203,3 +203,87 @@ func TestChatCancelWaitsForClaimCommit(t *testing.T) {
 	_, err = e.runs.PostChatMessage(ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Busy"})
 	requireConflict(t, err)
 }
+
+// A harness that ignores SIGINT must still stop promptly, independently of
+// the much longer ticket execution grace period.
+type ignoreInterruptProcess struct{ runner.Process }
+
+func (ignoreInterruptProcess) Interrupt() error { return nil }
+
+type ignoreInterruptBackend struct{ runner.Backend }
+
+func (b ignoreInterruptBackend) Start(ctx context.Context, id string, spec runner.ExecSpec) (runner.Process, error) {
+	p, err := b.Backend.Start(ctx, id, spec)
+	if err != nil {
+		return nil, err
+	}
+	return ignoreInterruptProcess{p}, nil
+}
+
+func TestChatStopDoesNotWaitForTicketGrace(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	e.runner.Cfg.Grace = time.Minute
+	e.runner.Backend = ignoreInterruptBackend{e.runner.Backend}
+	chat := e.startChat("slow")
+	deadline := time.Now().Add(15 * time.Second)
+	for e.chatRun(chat.ID).HarnessSessionID == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("harness did not start")
+		}
+		e.runner.Tick(e.ctx)
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := e.runs.CancelChat(e.ctx, e.ws, e.me.ID, chat.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { e.runner.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("Stop waited for the ticket grace period")
+	}
+	if e.chat(chat.ID).State != "idle" {
+		t.Fatal("Stop did not make chat usable")
+	}
+}
+
+func TestRecoverCancelledChatFromDeadRunner(t *testing.T) {
+	for _, live := range []bool{false, true} {
+		t.Run(map[bool]string{false: "dead", true: "live"}[live], func(t *testing.T) {
+			e := setup(t)
+			chat := e.startChat("never execute")
+			run := e.chatRun(chat.ID)
+			_, err := e.pool.Exec(e.ctx, `UPDATE runs SET state='paused', runner_id='previous-runner' WHERE id=$1`, run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = e.pool.Exec(e.ctx, `UPDATE run_turns SET status='running',process_started_at=now() WHERE run_id=$1`, run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if live {
+				if err := e.q.Heartbeat(e.ctx, store.HeartbeatParams{ID: "previous-runner", Backend: "local", MaxConcurrent: 1, Version: "test"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := e.runner.Recover(e.ctx); err != nil {
+				t.Fatal(err)
+			}
+			if live {
+				if e.chat(chat.ID).State != "running" {
+					t.Fatal("recovered a live runner's chat")
+				}
+				return
+			}
+			if e.chat(chat.ID).State != "idle" || e.chatRun(chat.ID).State != "waiting" {
+				t.Fatal("cancelled chat stranded on dead owner")
+			}
+			active, err := e.q.HasRunningChatTurn(e.ctx, run.ID)
+			if err != nil || active {
+				t.Fatalf("orphan running turn remains: %v %v", active, err)
+			}
+		})
+	}
+}

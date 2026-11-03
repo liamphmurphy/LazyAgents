@@ -3,6 +3,7 @@ package agentapi
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -12,9 +13,9 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
-// chatTools is the whole MCP surface of a chat run: read-only context lookups.
+// chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
-var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks"}
+var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics"}
 
 // chatScope is the project a chat run may read from.
 type chatScope struct {
@@ -59,7 +60,7 @@ func (s *chatScope) allowsTicket(t store.Ticket) bool { return s == nil || t.Pro
 
 const chatInstructions = `You are answering a person in a chat about project %s (chat %s). Answer directly.
 Look things up with search_knowledge, read_page, read_artifact, get_ticket and get_backlinks, and cite what you used with [[…]] links.
-Never claim tickets, plan, delegate, or edit or write anything: this chat is read-only, and its other tools are unavailable.`
+Use create_ticket, create_epic and list_epics to manage work in this project when asked. Never claim tickets, execute project work, or delegate. Return links or identifiers for anything you create.`
 
 // sourceVisible reports whether a link target or backlink source of this kind
 // (artifact, ticket, comment) is in the chat's project or workspace-wide.
@@ -74,4 +75,56 @@ func (s *chatScope) sourceVisible(ctx context.Context, d Deps, kind string, id u
 		kind = "artifact"
 	}
 	return d.Q.LinkSourceInProject(ctx, store.LinkSourceInProjectParams{SourceKind: kind, SourceID: id, ProjectID: s.ProjectID})
+}
+
+type NewEpicIn struct {
+	Name      string `json:"name"`
+	Objective string `json:"objective,omitempty"`
+}
+
+func listChatEpics(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
+	s, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil {
+		return nil, apperr.Conflict("this tool requires a chat")
+	}
+	rows, err := d.Q.ListEpics(ctx, c.Agent.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	out := []store.Epic{}
+	for _, e := range rows {
+		if e.ProjectID == s.ProjectID {
+			out = append(out, e)
+		}
+	}
+	return map[string]any{"epics": out}, nil
+}
+
+func createChatEpic(ctx context.Context, d Deps, c agents.Caller, in NewEpicIn) (any, error) {
+	s, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil {
+		return nil, apperr.Conflict("this tool requires a chat")
+	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" || len([]rune(name)) > 200 {
+		return nil, apperr.Invalid("name", "must be 1–200 characters")
+	}
+	p, err := d.Q.GetProject(ctx, store.GetProjectParams{ID: s.ProjectID, WorkspaceID: c.Agent.WorkspaceID})
+	if err != nil {
+		return nil, err
+	}
+	if p.Archived {
+		return nil, apperr.Conflict("restore the archived project before creating an epic")
+	}
+	e, err := d.Q.CreateEpic(ctx, store.CreateEpicParams{WorkspaceID: c.Agent.WorkspaceID, ProjectID: s.ProjectID, Name: name, Objective: in.Objective, Health: "on_track"})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"epic_id": e.ID, "name": e.Name}, nil
 }

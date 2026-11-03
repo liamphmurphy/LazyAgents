@@ -894,6 +894,10 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 				switch {
 				case run.State == "cancelled" || run.State == "failed":
 					_ = proc.Kill()
+				case run.State == "paused" && c.run.Purpose == "chat":
+					// Chat Stop cancels this reply; do not wait through the
+					// ticket shutdown grace period for an unresponsive CLI.
+					_ = proc.Kill()
 				case run.State == "paused" && interrupted.IsZero():
 					// Let the harness close the turn cleanly (§6.4).
 					interrupted = time.Now()
