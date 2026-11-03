@@ -151,3 +151,61 @@ Validation for this configuration-only change:
   Docker missing-key gating; no shared development DB migration was run.
 - `git diff --check`: PASS. No live API/runner process, credentials, acceptance
   checks, deployment or push changed. Lead owns review/push and real smoke.
+
+## Refreshed-runtime genuine smoke (2026-11-03, 09:16–09:17 PST)
+
+Resumed in a fresh Codex session with clean checkout at `50ceea9`; preserved all
+prior commits and evidence. Inspected ticket, context, current parent run and
+runner status before posting a three-step continuation plan. The parent run's
+saved plan has diagnostic/docs/review steps done, runtime refresh/smoke current,
+and criterion 2/final QA pending; earlier verification plans are documented above. Criteria
+1/3/4 remain checked and criterion 2 unchecked; no criterion checks were changed.
+Lead reports PR13 merged and exact-head CI 41674257079 passed; this delegation did
+not independently repeat CI or the prior full suites.
+
+Both live `/api/v1/chat-models` entries now advertise `available=true`. Used the
+current Claude `sonnet` alias; Codex default is `gpt-6.1-sol`. Availability proves
+catalog policy only, not remaining provider quota. `/api/v1/runner` showed two
+local workers: PID4622 (running=0) and PID6580 (running=1), four total slots and
+no queued runs. No process was interrupted or reconfigured.
+
+Read-only `lsof` and `go version -m` established PID4622 executes
+`/private/tmp/lazyagents-chat-stop`, VCS base
+`8af6fb7b7cf21491e93eccc1637b01f968928b5e`, modified=true. PID6580 executes a Go
+build-cache binary with no VCS metadata. Exact running source is therefore not
+proven. Actual lifecycle events below establish that the claiming worker can
+load chat purpose, create its workspace and launch the real Claude CLI; the old
+pre-provider `load run/no rows` failure did not recur for this attempt. No
+credentials, auth files, process environments or secret values were inspected.
+
+### Sanitized transcript and lifecycle
+
+- Project: `LAZYAGENTS`; chat: `01a1a26a-016b-7b81-bbb0-bed240790fc8`.
+- Claude segment: `01a1a26a-0179-7c00-8978-0d4da45c26b2`.
+- POST chat: 201; POST message: 202 at 09:16:58 PST, model `sonnet`.
+- User message: “Remember this unique marker for our next turn:
+  cedar-comet-14-0917. Using LazyAgents MCP, read the project wiki page
+  Architecture/ADR - Project chat sessions. Reply briefly with the marker,
+  one fact from that page and a [[wiki page]] citation. Do not modify anything.”
+- Lifecycle seq4551: local runner `Liams-MacBook-Pro.local-4622` claimed it;
+  seq4552 workspace_ready; seq4554 turn_started; seq4555 harness_started with
+  actual model `claude-sonnet-5-5`.
+- Provider output/error seq4556/4558: “You've hit your session limit · resets
+  11:40am (America/Los_Angeles)”. Persisted as a system message, not a genuine
+  assistant answer. Turn exited 1 at 09:17:00 PST; zero input/output tokens,
+  tool calls and reported cost. Chat state failed; run waiting/human_reply.
+- No MCP wiki read, wiki version/citation, genuine Claude reply, Codex segment,
+  cross-provider recall or second genuine reply exists. Did not spend further
+  turns switching aliases after an explicit account session-limit response.
+- Cleanup: deleted only this newly created failed fixture using normal DELETE
+  (204); GET run confirmed cancelled with outcome `The chat was deleted.`
+  Existing unrelated chat histories were left untouched.
+
+**QA verdict: changes requested; criterion 2 remains unverified.** This attempt
+establishes provider startup readiness for the claiming worker, then a real
+provider quota blocker. Lead should retry after the reported 11:40am Pacific
+reset (or once the owner confirms quota restored), using the then-current
+catalog. Preserve two genuine replies, correct Codex marker recall, actual MCP
+wiki citation/version and both segment IDs before approving criterion 2. No
+feature fix was identified or made; no migrations, deployments, push or repeated
+full suites. Documentation validation: `git diff --check`.
