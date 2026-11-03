@@ -693,6 +693,17 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			ctxFiles = append(ctxFiles, *source)
 		}
 	}
+	prompt := turn.InputMessage
+	if c.run.Purpose == "chat" {
+		// The files this turn's message attached, listed in its prompt.
+		refFiles, refPrompt, err := ChatTurnContext(ctx, q, c.run, c.project.ID, turn)
+		if err != nil {
+			r.failChat(ctx, c, "Could not load the message's attached context.")
+			return
+		}
+		ctxFiles = append(ctxFiles, refFiles...)
+		prompt += refPrompt
+	}
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}
 	for i, f := range ctxFiles {
@@ -705,7 +716,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	inv, err := h.Invocation(harness.Workspace{
 		Dir: r.Backend.WorkspaceDir(wsID(c.run)), MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
-	}, harness.Turn{Spec: c.spec, Prompt: turn.InputMessage, SessionID: session})
+	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
 		return

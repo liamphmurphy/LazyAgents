@@ -55,6 +55,9 @@ type Service struct {
 	Secrets   *secrets.Service
 	Artifacts *artifacts.Service
 	Tracker   *tracker.Service
+	// RequireHarnessKey mirrors the runner's setting: chats can't select a
+	// harness whose API-key secret is missing.
+	RequireHarnessKey bool
 	// Poll is how often waits re-check state (tests shorten it).
 	Poll time.Duration
 }

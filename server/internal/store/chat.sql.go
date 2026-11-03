@@ -125,6 +125,92 @@ func (q *Queries) ArchiveChatSession(ctx context.Context, arg ArchiveChatSession
 	return i, err
 }
 
+const chatLastErrors = `-- name: ChatLastErrors :many
+SELECT DISTINCT ON (session_id) session_id, body_md FROM chat_messages
+WHERE session_id = ANY($1::uuid[]) AND role = 'system'
+ORDER BY session_id, seq DESC
+`
+
+type ChatLastErrorsRow struct {
+	SessionID uuid.UUID
+	BodyMd    string
+}
+
+// The newest system message of each chat; the API shows it as `error` while the chat is failed.
+func (q *Queries) ChatLastErrors(ctx context.Context, ids []uuid.UUID) ([]ChatLastErrorsRow, error) {
+	rows, err := q.db.Query(ctx, chatLastErrors, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatLastErrorsRow{}
+	for rows.Next() {
+		var i ChatLastErrorsRow
+		if err := rows.Scan(&i.SessionID, &i.BodyMd); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const chatMessageCounts = `-- name: ChatMessageCounts :many
+SELECT session_id, count(*)::int AS n FROM chat_messages WHERE session_id = ANY($1::uuid[]) GROUP BY session_id
+`
+
+type ChatMessageCountsRow struct {
+	SessionID uuid.UUID
+	N         int32
+}
+
+func (q *Queries) ChatMessageCounts(ctx context.Context, ids []uuid.UUID) ([]ChatMessageCountsRow, error) {
+	rows, err := q.db.Query(ctx, chatMessageCounts, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatMessageCountsRow{}
+	for rows.Next() {
+		var i ChatMessageCountsRow
+		if err := rows.Scan(&i.SessionID, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const chatMessageForTurn = `-- name: ChatMessageForTurn :one
+SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at FROM chat_messages WHERE run_turn_id = $1 AND role = 'user'
+`
+
+func (q *Queries) ChatMessageForTurn(ctx context.Context, runTurnID *uuid.UUID) (ChatMessage, error) {
+	row := q.db.QueryRow(ctx, chatMessageForTurn, runTurnID)
+	var i ChatMessage
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.Seq,
+		&i.Role,
+		&i.BodyMd,
+		&i.Harness,
+		&i.Model,
+		&i.RunID,
+		&i.RunTurnID,
+		&i.ContextRefs,
+		&i.Citations,
+		&i.Usage,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const chatSessionForRun = `-- name: ChatSessionForRun :one
 SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE current_run_id = $1
 `
@@ -196,6 +282,43 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 		&i.LastMessageAt,
 	)
 	return i, err
+}
+
+const defaultChatAgent = `-- name: DefaultChatAgent :one
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE workspace_id = $1 AND kind <> 'sub' ORDER BY created_at, name, id LIMIT 1
+`
+
+// The default agent for a chat that names none: the oldest main (non-sub) agent,
+// ties broken by name then id so the choice is deterministic.
+func (q *Queries) DefaultChatAgent(ctx context.Context, workspaceID uuid.UUID) (Agent, error) {
+	row := q.db.QueryRow(ctx, defaultChatAgent, workspaceID)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Handle,
+		&i.ColorIndex,
+		&i.Role,
+		&i.Specialty,
+		&i.Model,
+		&i.Status,
+		&i.MaxConcurrency,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentDefinitionVersionID,
+		&i.Kind,
+	)
+	return i, err
+}
+
+const deleteChatSession = `-- name: DeleteChatSession :exec
+DELETE FROM chat_sessions WHERE id = $1
+`
+
+func (q *Queries) DeleteChatSession(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteChatSession, id)
+	return err
 }
 
 const finishUnfinishedChatTurns = `-- name: FinishUnfinishedChatTurns :exec
@@ -350,6 +473,67 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 	return items, nil
 }
 
+const listChatsForUser = `-- name: ListChatsForUser :many
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at FROM chat_sessions c JOIN projects p ON p.id = c.project_id
+WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = $3
+  AND ($4::text IS NULL OR p.key = $4::text)
+ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
+LIMIT $6 OFFSET $5
+`
+
+type ListChatsForUserParams struct {
+	WorkspaceID uuid.UUID
+	CreatedBy   uuid.UUID
+	Archived    bool
+	ProjectKey  *string
+	RowOffset   int32
+	RowLimit    int32
+}
+
+// One page of a person's chats: archived or not, optionally one project.
+func (q *Queries) ListChatsForUser(ctx context.Context, arg ListChatsForUserParams) ([]ChatSession, error) {
+	rows, err := q.db.Query(ctx, listChatsForUser,
+		arg.WorkspaceID,
+		arg.CreatedBy,
+		arg.Archived,
+		arg.ProjectKey,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatSession{}
+	for rows.Next() {
+		var i ChatSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ProjectID,
+			&i.Title,
+			&i.CreatedBy,
+			&i.AgentID,
+			&i.Harness,
+			&i.Model,
+			&i.CurrentRunID,
+			&i.State,
+			&i.Archived,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LastMessageAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockChatSession = `-- name: LockChatSession :one
 SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
 `
@@ -380,6 +564,65 @@ func (q *Queries) LockChatSession(ctx context.Context, arg LockChatSessionParams
 		&i.LastMessageAt,
 	)
 	return i, err
+}
+
+const pageChatMessages = `-- name: PageChatMessages :many
+SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at FROM chat_messages
+WHERE session_id = $1
+  AND ($2::bigint IS NULL OR seq > $2::bigint)
+  AND ($3::bigint IS NULL OR seq < $3::bigint)
+ORDER BY CASE WHEN $4::bool THEN -seq ELSE seq END
+LIMIT $5
+`
+
+type PageChatMessagesParams struct {
+	SessionID   uuid.UUID
+	AfterSeq    *int64
+	BeforeSeq   *int64
+	NewestFirst bool
+	RowLimit    int32
+}
+
+// Messages with after < seq < before (either bound optional). newest_first pages
+// back through history; the caller reverses the rows to oldest first.
+func (q *Queries) PageChatMessages(ctx context.Context, arg PageChatMessagesParams) ([]ChatMessage, error) {
+	rows, err := q.db.Query(ctx, pageChatMessages,
+		arg.SessionID,
+		arg.AfterSeq,
+		arg.BeforeSeq,
+		arg.NewestFirst,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatMessage{}
+	for rows.Next() {
+		var i ChatMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.Seq,
+			&i.Role,
+			&i.BodyMd,
+			&i.Harness,
+			&i.Model,
+			&i.RunID,
+			&i.RunTurnID,
+			&i.ContextRefs,
+			&i.Citations,
+			&i.Usage,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const recoverChatCancellations = `-- name: RecoverChatCancellations :exec
@@ -461,6 +704,74 @@ type SetChatRunStateParams struct {
 
 func (q *Queries) SetChatRunState(ctx context.Context, arg SetChatRunStateParams) (ChatSession, error) {
 	row := q.db.QueryRow(ctx, setChatRunState, arg.ID, arg.CurrentRunID, arg.State)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
+const setChatSelection = `-- name: SetChatSelection :one
+UPDATE chat_sessions SET harness = $2, model = $3, revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+`
+
+type SetChatSelectionParams struct {
+	ID      uuid.UUID
+	Harness string
+	Model   string
+}
+
+func (q *Queries) SetChatSelection(ctx context.Context, arg SetChatSelectionParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, setChatSelection, arg.ID, arg.Harness, arg.Model)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
+const updateChatTitleArchived = `-- name: UpdateChatTitleArchived :one
+UPDATE chat_sessions SET title = $2, archived = $3, revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+`
+
+type UpdateChatTitleArchivedParams struct {
+	ID       uuid.UUID
+	Title    string
+	Archived bool
+}
+
+func (q *Queries) UpdateChatTitleArchived(ctx context.Context, arg UpdateChatTitleArchivedParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, updateChatTitleArchived, arg.ID, arg.Title, arg.Archived)
 	var i ChatSession
 	err := row.Scan(
 		&i.ID,
