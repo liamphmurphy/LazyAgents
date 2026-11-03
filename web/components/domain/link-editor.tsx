@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type ComponentProps, type KeyboardEvent, type Ref } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useLinkSuggest } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -20,9 +20,54 @@ function openLink(text: string, caret: number): { start: number; query: string }
   return { start: lineStart + at + 2, query };
 }
 
-function kindLabel(t: LinkTarget) {
+export function kindLabel(t: LinkTarget) {
   if (t.kind === "artifact") return t.artifact_type === "note" ? "Page" : (t.artifact_type ?? "").toUpperCase();
   return t.kind === "ticket" ? "Ticket" : t.kind === "agent" ? "Agent" : "Epic";
+}
+
+/** The suggestion listbox, shared by the [[ autocomplete and the "Add context" picker. */
+export function SuggestionList({
+  id,
+  items,
+  active,
+  onActive,
+  onPick,
+  className,
+  label = "Link to",
+}: {
+  id: string;
+  items: LinkTarget[];
+  active: number;
+  onActive: (i: number) => void;
+  onPick: (t: LinkTarget) => void;
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <div id={id} role="listbox" aria-label={label} hidden={items.length === 0} className={cx(floatPanel, "max-h-72 overflow-y-auto", className)}>
+      {items.map((t, i) => (
+        <div
+          key={`${t.kind}:${t.id}:${t.anchor ?? ""}`}
+          id={`${id}-${i}`}
+          role="option"
+          aria-selected={i === active}
+          onMouseEnter={() => onActive(i)}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onPick(t);
+          }}
+          className={cx("flex h-9 cursor-default items-center gap-2.5 rounded-md px-2", i === active && "bg-hover")}
+        >
+          <TargetMark t={t} size={13} />
+          <span className="min-w-0 flex-1 truncate">
+            {t.display_id && <span className="mr-1.5 font-mono text-xs text-fg-secondary">{t.display_id}</span>}
+            {t.kind === "artifact" && t.artifact_type === "note" ? t.path : t.title}
+          </span>
+          <span className="text-[11px] text-fg-tertiary">{kindLabel(t)}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -34,14 +79,27 @@ export function LinkEditor({
   onChange,
   onKeyDown,
   className,
+  mono = true,
+  onPick,
+  accept,
+  inputRef,
   ...rest
-}: { value: string; onChange: (v: string) => void } & Omit<ComponentProps<"textarea">, "value" | "onChange">) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  mono?: boolean;
+  /** Pick a suggestion as a chip instead of inserting [[link]] text: the "[[query" is removed. */
+  onPick?: (t: LinkTarget) => void;
+  /** Limits which suggestions are offered. */
+  accept?: (t: LinkTarget) => boolean;
+  inputRef?: Ref<HTMLTextAreaElement>;
+} & Omit<ComponentProps<"textarea">, "value" | "onChange">) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
   const listId = useId();
   const [open, setOpen] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
   const suggest = useLinkSuggest(open?.query ?? "", !!open);
-  const items = open ? (suggest.data ?? []) : [];
+  const items = open ? (suggest.data ?? []).filter((t) => !accept || accept(t)) : [];
   const shown = open && items.length > 0;
 
   const sync = (text: string, caret: number) => {
@@ -56,6 +114,17 @@ export function LinkEditor({
     const caret = el.selectionStart;
     const after = value.slice(caret);
     const closing = after.startsWith("]]") ? 2 : 0;
+    if (onPick) {
+      const cut = open.start - 2;
+      onChange(value.slice(0, cut) + after.slice(closing));
+      setOpen(null);
+      onPick(t);
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(cut, cut);
+      });
+      return;
+    }
     const link = linkTextFor(t);
     const next = value.slice(0, open.start) + link + "]]" + after.slice(closing);
     onChange(next);
@@ -92,8 +161,12 @@ export function LinkEditor({
   return (
     <div className="relative">
       <TextArea
-        ref={ref}
-        mono
+        ref={(el) => {
+          ref.current = el;
+          if (typeof inputRef === "function") inputRef(el);
+          else if (inputRef) inputRef.current = el;
+        }}
+        mono={mono}
         value={value}
         role="combobox"
         aria-expanded={!!shown}
@@ -113,36 +186,14 @@ export function LinkEditor({
         className={className}
         {...rest}
       />
-      <div
+      <SuggestionList
         id={listId}
-        role="listbox"
-        aria-label="Link to"
-        hidden={!shown}
-        className={cx(floatPanel, "absolute inset-x-2 bottom-2 max-h-72 overflow-y-auto")}
-      >
-        {shown &&
-          items.map((t, i) => (
-            <div
-              key={`${t.kind}:${t.id}`}
-              id={`${listId}-${i}`}
-              role="option"
-              aria-selected={i === active}
-              onMouseEnter={() => setActive(i)}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                insert(t);
-              }}
-              className={cx("flex h-9 cursor-default items-center gap-2.5 rounded-md px-2", i === active && "bg-hover")}
-            >
-              <TargetMark t={t} size={13} />
-              <span className="min-w-0 flex-1 truncate">
-                {t.display_id && <span className="mr-1.5 font-mono text-xs text-fg-secondary">{t.display_id}</span>}
-                {t.kind === "artifact" && t.artifact_type === "note" ? t.path : t.title}
-              </span>
-              <span className="text-[11px] text-fg-tertiary">{kindLabel(t)}</span>
-            </div>
-          ))}
-      </div>
+        items={shown ? items : []}
+        active={active}
+        onActive={setActive}
+        onPick={insert}
+        className="absolute inset-x-2 bottom-2"
+      />
     </div>
   );
 }
