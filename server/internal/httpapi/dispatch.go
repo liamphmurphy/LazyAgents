@@ -122,7 +122,10 @@ func (s *Server) GetDispatchPreview(ctx context.Context, req api.GetDispatchPrev
 	if err != nil {
 		return nil, err
 	}
-	key := runner.HarnessKeys[resolved.Harness]
+	key, err := runner.HarnessKey(resolved)
+	if err != nil {
+		return nil, apperr.Invalid("model", "%s", err.Error())
+	}
 	out.HarnessKey.Secret = key.Secret
 	for _, d := range plan {
 		sec := api.DispatchSecret{Name: d.Name, Injected: d.Injected, Reason: d.Reason}

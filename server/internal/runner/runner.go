@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -330,12 +331,16 @@ func (r *Runner) startChild(ctx context.Context, c runCtx) {
 		fail("The main agent's workspace is gone, so the delegated run can't start.")
 		return
 	}
+	if err := r.checkSpec(c.spec); err != nil {
+		fail(err.Error())
+		return
+	}
 	plan, err := PlanSecrets(ctx, r.q(), run.WorkspaceID, &c.project.ID, c.spec)
 	if err != nil {
 		fail("Couldn't read secrets: " + err.Error())
 		return
 	}
-	if key := HarnessKeys[c.spec.Harness]; r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
+	if key, _ := HarnessKey(c.spec); NeedsHarnessKey(r.Cfg.RequireHarnessKey, c.spec) && !hasSecret(plan, key.Secret) {
 		fail(fmt.Sprintf("No %s secret: add an API key in Settings → Connections & secrets.", key.Secret))
 		return
 	}
@@ -396,13 +401,17 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			return
 		}
 	}
+	if err := r.checkSpec(c.spec); err != nil {
+		fail(err.Error())
+		return
+	}
 	plan, err := PlanSecrets(ctx, r.q(), run.WorkspaceID, &c.project.ID, c.spec)
 	if err != nil {
 		fail("Couldn't read secrets: " + err.Error())
 		return
 	}
-	key := HarnessKeys[c.spec.Harness]
-	if r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
+	key, _ := HarnessKey(c.spec)
+	if NeedsHarnessKey(r.Cfg.RequireHarnessKey, c.spec) && !hasSecret(plan, key.Secret) {
 		fail(fmt.Sprintf("No %s secret: add an API key in Settings → Connections & secrets, then dispatch again.", key.Secret))
 		return
 	}
@@ -619,6 +628,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 
 	h, err := harness.For(c.spec.Harness)
+	if c.spec.Harness == agentdef.HarnessOpenCode {
+		if err := r.checkSpec(c.spec); err != nil {
+			_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
+			r.failTurnSetup(ctx, c, err.Error())
+			return
+		}
+		h = r.openCode(c)
+	}
 	if c.spec.Harness == agentdef.HarnessCodex {
 		baseline := harness.Usage{}
 		if c.run.HarnessSessionID != nil {
@@ -665,6 +682,21 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if err != nil {
 		r.end(ctx, c, "failed", "Couldn't decrypt secrets: "+err.Error(), runs.VerbRunFailed)
 		return
+	}
+	if c.spec.Harness == agentdef.HarnessOpenCode {
+		// SecretEnv skips what it cannot reveal; OpenCode has no host login to
+		// fall back on, so a missing key is a failure here, not at the provider.
+		key, _ := HarnessKey(c.spec)
+		if len(key.Env) == 0 || env[key.Env[0]] == "" {
+			_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
+			r.failTurnSetup(ctx, c, fmt.Sprintf("No usable %s secret for %s: add the API key in Settings → Connections & secrets (and set SECRETS_KEY).", key.Secret, c.spec.Model))
+			return
+		}
+		if msg := r.opencodePreflight(ctx, c, turn); msg != "" {
+			_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
+			r.failTurnSetup(ctx, c, msg)
+			return
+		}
 	}
 	// A token for this turn only; revoked when the process exits.
 	expires := time.Now().Add(24 * time.Hour)
@@ -915,6 +947,9 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 	}
 	close(done)
 	watchdog.Wait()
+	if o, ok := p.(harness.ExitObserver); ok {
+		o.Exited(code) // after the stream: the verdict needs both
+	}
 	return p.Result(), raw.Bytes(), code, err
 }
 
@@ -1045,4 +1080,99 @@ func runnerRecord(ctx context.Context, q *store.Queries, ws, ticket uuid.UUID, e
 		return nil
 	}
 	return tracker.Record(ctx, q, ws, ticket, epic, actor, verb, payload, at)
+}
+
+// ---------------------------------------------------------------- opencode
+
+// checkSpec refuses specs the runner cannot execute safely, before any
+// credential or workspace is touched: an invalid frozen target, or OpenCode
+// (as primary or fallback) on a backend that cannot attest isolated config.
+func (r *Runner) checkSpec(spec agentdef.Resolved) error {
+	if err := spec.Validate(); err != nil {
+		return fmt.Errorf("Invalid run definition: %w", err)
+	}
+	uses := spec.Harness == agentdef.HarnessOpenCode
+	for _, f := range spec.Fallbacks {
+		uses = uses || f.Harness == agentdef.HarnessOpenCode
+	}
+	if uses && !r.opencodeIsolated() {
+		return errors.New("OpenCode needs isolated config (managed config, no ambient ~/.config/opencode), which this backend does not attest. Set RUNNER_OPENCODE_ISOLATED=true only where it holds, or pick another harness.")
+	}
+	return nil
+}
+
+func (r *Runner) opencodeIsolated() bool {
+	i, ok := r.Backend.(ConfigIsolator)
+	return ok && i.OpenCodeConfigIsolated()
+}
+
+// openCode is the adapter for one run: ownership of a session is the run's own
+// recorded session (set from its stream, cleared by a fallback), and prices
+// are only the operator's exact provider/model entries.
+func (r *Runner) openCode(c runCtx) harness.OpenCode {
+	owned := ""
+	if c.run.HarnessSessionID != nil {
+		owned = *c.run.HarnessSessionID
+	}
+	return harness.OpenCode{
+		ConfigIsolated: r.opencodeIsolated(),
+		SessionOwned:   func(id string) bool { return owned != "" && id == owned },
+		Prices:         r.Cfg.ModelPrices,
+	}
+}
+
+// opencodePreflight checks the executable and the pinned version through the
+// same backend a turn runs on. It returns a user-facing failure or "". Output
+// is bounded and the environment carries no secrets.
+func (r *Runner) opencodePreflight(ctx context.Context, c runCtx, turn store.RunTurn) string {
+	const missing = "OpenCode is not available: install @opencode/cli@" + harness.OpenCodeVersion + " (the agent-base image pins it) or set RUNNER_OPENCODE_BIN."
+	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
+		Name: fmt.Sprintf("lazyagents-preflight-%s-%d", c.run.ID, turn.Seq), Argv: []string{"opencode", "--version"}, Env: map[string]string{},
+	})
+	if err != nil {
+		r.Log.Warn("opencode preflight", "run", c.run.ID, "err", err)
+		return missing
+	}
+	var out []byte
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		out, _ = io.ReadAll(io.LimitReader(proc.Stdout(), 4096))
+		_, _ = io.Copy(io.Discard, proc.Stdout())
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(io.Discard, proc.Stderr())
+	}()
+	code, err := proc.Wait()
+	wg.Wait()
+	if cl, ok := proc.(io.Closer); ok {
+		_ = cl.Close()
+	}
+	if err != nil || code != 0 {
+		return missing
+	}
+	if err := harness.CheckOpenCodeVersion(string(out)); err != nil {
+		return fmt.Sprintf("OpenCode %s is required; this runner has %s.", harness.OpenCodeVersion, clipLine(string(out), 40))
+	}
+	return ""
+}
+
+func clipLine(s string, n int) string {
+	s = strings.TrimSpace(strings.SplitN(strings.TrimSpace(s), "\n", 2)[0])
+	if len(s) > n {
+		s = s[:n] + "…"
+	}
+	return strconv.Quote(s)
+}
+
+// failTurnSetup ends a turn that cannot start its harness: chats stay usable
+// with a visible notice, other runs fail with the reason.
+func (r *Runner) failTurnSetup(ctx context.Context, c runCtx, msg string) {
+	if c.run.Purpose == "chat" {
+		r.failChat(ctx, c, msg)
+		return
+	}
+	r.end(ctx, c, "failed", msg, runs.VerbRunFailed)
 }
