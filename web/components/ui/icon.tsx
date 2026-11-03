@@ -77,17 +77,11 @@ export function Icon({
   );
 }
 
-/** The placeholder workspace mark (logo deferred, see PLAN.md §11). */
+/** Shared LazyAgents brand asset, also used in the README and browser icon. */
 export function Mark({ size = 22 }: { size?: number }) {
   return (
-    <span
-      aria-hidden
-      className="grid flex-none place-items-center bg-accent"
-      style={{ width: size, height: size, borderRadius: size * 0.27 }}
-    >
-      <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 16 16" fill="none">
-        <path d="M5 3v10h7" stroke="var(--text-on-accent)" strokeWidth="2.2" strokeLinecap="round" />
-      </svg>
-    </span>
+    // A plain image keeps the small vector mark identical on every surface.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/logo.svg" alt="" aria-hidden width={size} height={size} className="flex-none" />
   );
 }
