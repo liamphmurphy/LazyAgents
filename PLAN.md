@@ -549,3 +549,18 @@ There's a new scope, `wiki:write`, using the usual modes (§6.3). Enforcement is
 - `knowledge_links` as in §12.2, indexed on (target_kind, target_id) for backlinks.
 - `artifact_versions.state` (`published|suggested|rejected`) for agent suggestions, and `agent_definition.spec.memory` (§6.1).
 
+
+---
+
+## 13. Chat (planned)
+
+A ChatGPT/Claude-style chat per project: a person talks to a model that can read the project's artifacts, wiki and tickets through the LazyAgents MCP, keeps a history, and can switch harness or model mid-chat. Decision record: wiki `[[Architecture/ADR - Project chat sessions]]` (LAZYAGENTS-6). Contract: `api/openapi.yaml`, tag `chats`.
+
+- **Data:** `chat_sessions` (project, title, creator, agent, current harness/model, state `idle|running|failed`, archived) and `chat_messages` (seq, role `user|assistant|system`, body, harness, model, run/turn, context refs, citations, usage). `runs.purpose` (`ticket|planning|chat`) replaces "ticket-less means planning" in the runner (§6.4).
+- **Runs:** one ticket-less run per *harness segment*. Each message is a turn that resumes the segment's session (§6.4). Between messages the run waits (wait reason `chat`). Chat runs ignore `max_turns` and don't take the agent's ticket slot (§6.6).
+- **Identity and scopes:** the chat runs as a main agent (picked by the person, with a server default; still open). `ChatSpec` is read-only like `PlanningSpec`: every scope denied, no setup or extra MCP servers, read-only sandbox. Only the context tools are allowed (`search_knowledge`, `read_page`, `read_artifact`, `get_backlinks`, `get_ticket`, `whoami`), and ticket tools are rejected for chat tokens.
+- **Switching:** a new model on the same harness resumes the same session with the new `--model`. A new harness ends the segment and starts a new session with a transcript handoff: the latest messages within about 6k tokens, plus a header. The old harness's hidden reasoning and tool state are lost. A failed resume or idle cleanup uses the same handoff.
+- **Workspace:** no repo checkout. A scratch workspace per segment (AGENTS.md, MCP config, `.lazyagents/context/`) is kept between turns so the session resumes. It's removed when the segment ends, or after 7 idle days (§6.5).
+- **Realtime:** message-level only. SSE `chat.updated` with the chat id (§5.3), and the client refetches `GET /chats/{id}/messages?after=`. Token streaming is a non-goal for v1.
+- **Models:** a code catalog (`agentdef.Models`: Claude aliases, plus Codex models that have a price in `harness.Prices`) served by `GET /chat-models`. Requests outside it get 422.
+- **Non-goals (v1):** chats that edit code, push or write the wiki or memory; multi-user shared chats; repo-aware chats.
