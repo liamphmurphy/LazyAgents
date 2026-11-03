@@ -125,6 +125,33 @@ func (q *Queries) ArchiveChatSession(ctx context.Context, arg ArchiveChatSession
 	return i, err
 }
 
+const chatSessionForRun = `-- name: ChatSessionForRun :one
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE current_run_id = $1
+`
+
+func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, chatSessionForRun, currentRunID)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
 const createChatSession = `-- name: CreateChatSession :one
 INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
@@ -171,6 +198,16 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 	return i, err
 }
 
+const finishUnfinishedChatTurns = `-- name: FinishUnfinishedChatTurns :exec
+UPDATE run_turns SET status = 'done', ended_at = coalesce(ended_at, now()), exit_code = 1
+WHERE run_id = $1 AND status IN ('pending', 'running')
+`
+
+func (q *Queries) FinishUnfinishedChatTurns(ctx context.Context, runID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, finishUnfinishedChatTurns, runID)
+	return err
+}
+
 const getChatSession = `-- name: GetChatSession :one
 SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 AND workspace_id = $2
 `
@@ -201,6 +238,17 @@ func (q *Queries) GetChatSession(ctx context.Context, arg GetChatSessionParams) 
 		&i.LastMessageAt,
 	)
 	return i, err
+}
+
+const hasRunningChatTurn = `-- name: HasRunningChatTurn :one
+SELECT EXISTS (SELECT 1 FROM run_turns WHERE run_id = $1 AND status = 'running')::bool
+`
+
+func (q *Queries) HasRunningChatTurn(ctx context.Context, runID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasRunningChatTurn, runID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const listChatMessages = `-- name: ListChatMessages :many
@@ -302,6 +350,62 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 	return items, nil
 }
 
+const lockChatSession = `-- name: LockChatSession :one
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
+`
+
+type LockChatSessionParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) LockChatSession(ctx context.Context, arg LockChatSessionParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, lockChatSession, arg.ID, arg.WorkspaceID)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
+const recoverChatCancellations = `-- name: RecoverChatCancellations :exec
+WITH locked AS MATERIALIZED (
+ SELECT c.id, c.current_run_id FROM chat_sessions c JOIN runs r ON r.id = c.current_run_id
+ WHERE r.purpose = 'chat' AND r.state = 'paused' AND (r.runner_id = $1 OR r.runner_id IS NULL)
+ ORDER BY c.id FOR UPDATE OF c
+), cancelled AS (
+ UPDATE runs SET state = 'waiting', wait_reason = 'human_reply'
+ WHERE id IN (SELECT current_run_id FROM locked) AND state = 'paused'
+ RETURNING id
+), turns AS (
+ UPDATE run_turns SET status = 'done', ended_at = coalesce(ended_at, now()), exit_code = 130
+ WHERE run_id IN (SELECT id FROM cancelled) AND status = 'pending'
+)
+UPDATE chat_sessions SET state = 'idle', revision = revision + 1, updated_at = now()
+WHERE current_run_id IN (SELECT id FROM cancelled)
+`
+
+// Cancel may have marked the run paused just before its runner stopped.
+// RequeueInterrupted has already made its interrupted turn pending.
+func (q *Queries) RecoverChatCancellations(ctx context.Context, runnerID *string) error {
+	_, err := q.db.Exec(ctx, recoverChatCancellations, runnerID)
+	return err
+}
+
 const renameChatSession = `-- name: RenameChatSession :one
 UPDATE chat_sessions SET title = $3, revision = revision + 1, updated_at = now()
 WHERE id = $1 AND workspace_id = $2 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
@@ -322,6 +426,41 @@ func (q *Queries) RenameChatSession(ctx context.Context, arg RenameChatSessionPa
 		arg.Title,
 		arg.Revision,
 	)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
+const setChatRunState = `-- name: SetChatRunState :one
+UPDATE chat_sessions SET current_run_id = $2, state = $3,
+ revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+`
+
+type SetChatRunStateParams struct {
+	ID           uuid.UUID
+	CurrentRunID *uuid.UUID
+	State        string
+}
+
+func (q *Queries) SetChatRunState(ctx context.Context, arg SetChatRunStateParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, setChatRunState, arg.ID, arg.CurrentRunID, arg.State)
 	var i ChatSession
 	err := row.Scan(
 		&i.ID,

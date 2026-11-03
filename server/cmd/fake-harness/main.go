@@ -155,6 +155,21 @@ func main() {
 		emit(map[string]any{"type": "system", "subtype": "init", "model": "fake", "mcp_servers": []any{map[string]any{"name": "lazyagents", "status": "connected"}}})
 	}
 
+	// A chat can answer successfully without connecting to MCP or calling tools.
+	if os.Getenv("FAKE_HARNESS_MODE") == "chat" {
+		if prompt == "slow" && resume == "" {
+			time.Sleep(60 * time.Second)
+		}
+		if prompt == "quota" {
+			result(true, "You have hit your usage limit")
+			os.Exit(1)
+		}
+		answer := fmt.Sprintf("Chat reply (resumed=%v, session=%s): %s", resume != "", session, prompt)
+		text(answer)
+		result(false, answer)
+		return
+	}
+
 	var cfg struct {
 		MCPServers map[string]struct {
 			URL     string            `json:"url"`

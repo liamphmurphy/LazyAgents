@@ -333,8 +333,29 @@ func resume(ctx context.Context, q *store.Queries, run store.Run, trigger, msg s
 
 // SetRunControl handles Pause, Resume and Cancel from people.
 func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID, action string) (store.Run, error) {
+	// Chat cancellation is turn-scoped and uses session-before-run lock order.
+	run, err := store.New(s.Pool).GetRun(ctx, store.GetRunParams{ID: runID, WorkspaceID: ws})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return store.Run{}, apperr.ErrNotFound
+		}
+		return store.Run{}, err
+	}
+	if run.Purpose == "chat" {
+		if action != "cancel" {
+			return store.Run{}, apperr.Conflict("chat runs resume through messages; only cancel is supported")
+		}
+		chat, err := store.New(s.Pool).ChatSessionForRun(ctx, &runID)
+		if err != nil {
+			return store.Run{}, err
+		}
+		if _, err = s.CancelChat(ctx, ws, userID, chat.ID); err != nil {
+			return store.Run{}, err
+		}
+		return store.New(s.Pool).GetRun(ctx, store.GetRunParams{ID: runID, WorkspaceID: ws})
+	}
 	var out store.Run
-	err := s.tx(ctx, func(q *store.Queries) error {
+	err = s.tx(ctx, func(q *store.Queries) error {
 		run, err := q.LockRun(ctx, runID)
 		if err != nil || run.WorkspaceID != ws {
 			return apperr.ErrNotFound
