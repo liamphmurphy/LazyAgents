@@ -201,10 +201,10 @@ func demo(ctx context.Context, pool *pgxpool.Pool, arts *artifacts.Service) (Res
 		}
 
 		for _, p := range []struct{ key, name, color, repo string }{
-			{"PAY", "Payments Platform", "#8B8FFF", "https://github.com/northwind/payments"},
-			{"MOB", "Mobile App v3", "#F0BF4C", "https://github.com/northwind/mobile"},
-			{"DOC", "Developer Docs", "#3FC1B0", "https://github.com/northwind/docs"},
-			{"BIL", "Billing Migration", "#F27A8A", "https://github.com/northwind/billing"},
+			{"PAY", "Payments Platform", "#8B8FFF", "git@github.com:northwind/payments.git"},
+			{"MOB", "Mobile App v3", "#F0BF4C", "git@github.com:northwind/mobile.git"},
+			{"DOC", "Developer Docs", "#3FC1B0", "git@github.com:northwind/docs.git"},
+			{"BIL", "Billing Migration", "#F27A8A", "git@github.com:northwind/billing.git"},
 		} {
 			if ids.projects[p.key], err = q.CreateProject(ctx, store.CreateProjectParams{
 				WorkspaceID: ws, Key: p.key, Name: p.name, Color: p.color, RepoUrl: &p.repo,

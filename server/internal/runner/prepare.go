@@ -83,7 +83,14 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 		if baseBranch != "" {
 			cloneBranch = "--branch " + shellQuote(baseBranch) + " -- "
 		}
-		b.WriteString(`  if [ -n "${GH_TOKEN:-}" ]; then git -c credential.helper= -c "credential.helper=$helper" clone --quiet ` + cloneBranch + shellQuote(repoURL) + " .; else git clone --quiet " + cloneBranch + shellQuote(repoURL) + " .; fi\n")
+		// .lazyagents/ already exists (ssh setup), so clone beside it and move .git in.
+		const dest = ".lazyagents/clone"
+		q := shellQuote(repoURL)
+		b.WriteString("  rm -rf " + dest + "\n")
+		b.WriteString(`  if [ -n "${GH_TOKEN:-}" ]; then git -c credential.helper= -c "credential.helper=$helper" clone --quiet --no-checkout ` + cloneBranch + q + " " + dest + "; else git clone --quiet --no-checkout " + cloneBranch + q + " " + dest + "; fi\n")
+		b.WriteString("  mv " + dest + "/.git .git\n")
+		b.WriteString("  rm -rf " + dest + "\n")
+		b.WriteString("  if git rev-parse -q --verify HEAD >/dev/null 2>&1; then git reset -q --hard; fi\n")
 	} else {
 		b.WriteString("  echo '→ no repository configured for this project: starting an empty one'\n")
 		b.WriteString("  git init --quiet -b main .\n")

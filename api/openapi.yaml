@@ -1403,7 +1403,7 @@ components:
         key: { type: string }
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string }
+        repo_url: { type: string, description: "SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
@@ -2509,7 +2509,7 @@ components:
         key: { type: string }
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string }
+        repo_url: { type: string, description: "SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
     ProjectUpdate:
       type: object
@@ -2517,7 +2517,7 @@ components:
       properties:
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string }
+        repo_url: { type: string, description: "SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
