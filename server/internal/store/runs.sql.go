@@ -1083,6 +1083,18 @@ func (q *Queries) ReleaseApprovalExecution(ctx context.Context, id uuid.UUID) er
 	return err
 }
 
+const runVerdict = `-- name: RunVerdict :one
+SELECT coalesce(payload->>'verdict', '')::text AS verdict FROM run_events WHERE run_id = $1 AND type = 'lifecycle' AND payload->>'state' = 'completed' ORDER BY seq DESC LIMIT 1
+`
+
+// The review verdict ("" if none) a delegated run reported when it completed.
+func (q *Queries) RunVerdict(ctx context.Context, runID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, runVerdict, runID)
+	var verdict string
+	err := row.Scan(&verdict)
+	return verdict, err
+}
+
 const setAgentStatus = `-- name: SetAgentStatus :exec
 UPDATE agents SET status = $2 WHERE id = $1
 `

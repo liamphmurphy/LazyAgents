@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 
-.PHONY: help up down dev dev-infra api web runner gen gen-check test lint build reset
+.PHONY: help up down stop-dev dev dev-infra api web runner gen gen-check test lint build reset
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -16,7 +16,20 @@ down: ## Stop the full stack
 dev-infra: ## Start postgres + seaweedfs only
 	$(COMPOSE_DEV) up -d --wait
 
-dev: dev-infra ## Infra in Docker, API (hot reload) + Next dev on the host → http://localhost:3000
+API_PORT ?= 8000
+WEB_PORT ?= 3000
+
+stop-dev: ## Kill whatever is listening on the API and web dev ports (left over from an earlier run)
+	@for port in $(API_PORT) $(WEB_PORT); do \
+	  pids=$$(lsof -nP -tiTCP:$$port -sTCP:LISTEN 2>/dev/null); \
+	  [ -z "$$pids" ] && continue; \
+	  for pid in $$pids; do echo "stopping existing process on :$$port — $$(ps -o command= -p $$pid)"; done; \
+	  kill $$pids 2>/dev/null; \
+	  for i in 1 2 3 4 5 6 7 8 9 10; do lsof -nP -tiTCP:$$port -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 0.3; done; \
+	  kill -9 $$(lsof -nP -tiTCP:$$port -sTCP:LISTEN 2>/dev/null) 2>/dev/null || true; \
+	done
+
+dev: dev-infra stop-dev ## Infra in Docker, API (hot reload) + Next dev on the host → http://localhost:3000 (replaces any API/web already on those ports)
 	@trap 'kill 0' EXIT; \
 	  $(MAKE) --no-print-directory api & \
 	  $(MAKE) --no-print-directory web & \

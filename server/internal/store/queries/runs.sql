@@ -141,3 +141,7 @@ UPDATE approval_requests SET executed_at = NULL WHERE id = $1 AND result IS NULL
 UPDATE runs SET model = sqlc.arg(model)::text,
   resolved_spec = jsonb_set(resolved_spec, '{model}', to_jsonb(sqlc.arg(model)::text))
 WHERE id = sqlc.arg(id);
+
+-- name: RunVerdict :one
+-- The review verdict ("" if none) a delegated run reported when it completed.
+SELECT coalesce(payload->>'verdict', '')::text AS verdict FROM run_events WHERE run_id = $1 AND type = 'lifecycle' AND payload->>'state' = 'completed' ORDER BY seq DESC LIMIT 1;

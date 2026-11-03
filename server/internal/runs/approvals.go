@@ -332,6 +332,27 @@ func resume(ctx context.Context, q *store.Queries, run store.Run, trigger, msg s
 }
 
 // SetRunControl handles Pause, Resume and Cancel from people.
+// retry dispatches a fresh run for the ticket of a failed or cancelled run, as
+// the person pressing Retry on the run log. The ticket's current assignee runs
+// it, and the usual dispatch checks apply (blockers queue it).
+func (s *Service) retry(ctx context.Context, ws, userID uuid.UUID, run store.Run) (store.Run, error) {
+	if run.Purpose != "ticket" || run.TicketID == nil || run.ParentRunID != nil {
+		return store.Run{}, apperr.Conflict("only a ticket run can be retried")
+	}
+	if run.State != "failed" && run.State != "cancelled" {
+		return store.Run{}, apperr.Conflict("only a failed or cancelled run can be retried")
+	}
+	t, err := store.New(s.Pool).GetTicketByID(ctx, *run.TicketID)
+	if err != nil {
+		return store.Run{}, err
+	}
+	out, err := s.Dispatch(ctx, ws, userID, []string{t.Key})
+	if err != nil {
+		return store.Run{}, err
+	}
+	return out[0], nil
+}
+
 func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID, action string) (store.Run, error) {
 	// Chat cancellation is turn-scoped and uses session-before-run lock order.
 	run, err := store.New(s.Pool).GetRun(ctx, store.GetRunParams{ID: runID, WorkspaceID: ws})
@@ -340,6 +361,9 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			return store.Run{}, apperr.ErrNotFound
 		}
 		return store.Run{}, err
+	}
+	if action == "retry" {
+		return s.retry(ctx, ws, userID, run)
 	}
 	if run.Purpose == "chat" {
 		if action != "cancel" {

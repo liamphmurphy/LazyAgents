@@ -467,7 +467,7 @@ export function useRunLog(id: string) {
 export function useControlRunById(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (action: "pause" | "resume" | "cancel") => unwrap(api.POST("/runs/{id}/{action}", { params: { path: { id, action } } })),
+    mutationFn: (action: "pause" | "resume" | "cancel" | "retry") => unwrap(api.POST("/runs/{id}/{action}", { params: { path: { id, action } } })),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["runs", id] });
       qc.invalidateQueries({ queryKey: keys.tickets });

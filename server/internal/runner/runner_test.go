@@ -553,14 +553,17 @@ func TestQueuedRunRechecksDependencies(t *testing.T) {
 	if _, err := e.tr.Update(e.ctx, e.ws, tracker.UserActor(e.me.ID), blocker.Key, tracker.Patch{Status: &todo}); err != nil {
 		t.Fatal(err)
 	}
-	e.until("queued dependency rejected", e.state(tk.Key+"=failed"))
+	// The run stays queued while its blocker is reopened, and starts once Done.
+	time.Sleep(2 * time.Second)
 	run := e.run(tk.Key)
-	if run.HarnessSessionID != nil || run.ToolCalls != 0 || !strings.Contains(deref(run.Outcome), blocker.Key) {
-		t.Fatalf("blocked run started a harness: %+v", run)
+	if run.State != "queued" || run.HarnessSessionID != nil || run.ToolCalls != 0 || strings.Contains(e.eventTypes(run.ID), "harness_started") {
+		t.Fatalf("blocked run started: %+v", run)
 	}
-	if strings.Contains(e.eventTypes(run.ID), "harness_started") {
-		t.Fatal("reopened blocker was ignored")
+	done := "done"
+	if _, err := e.tr.Update(e.ctx, e.ws, tracker.UserActor(e.me.ID), blocker.Key, tracker.Patch{Status: &done}); err != nil {
+		t.Fatal(err)
 	}
+	e.until("queued run starts after the blocker is done", e.state(tk.Key+"=completed"))
 }
 
 func TestApprovedRepositoryAndBaseBranchAreFrozen(t *testing.T) {

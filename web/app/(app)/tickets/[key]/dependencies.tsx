@@ -74,7 +74,7 @@ export function Dependencies({ ticket: t }: { ticket: Ticket }) {
         </Button>
       </div>
       <p className="text-xs text-fg-tertiary">
-        Blockers must be Done before this ticket can be dispatched. Runs always
+        A dispatched ticket queues until its blockers are Done. Runs always
         require human approval.
       </p>
       {editing ? (

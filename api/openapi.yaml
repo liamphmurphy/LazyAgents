@@ -916,10 +916,10 @@ paths:
       - name: action
         in: path
         required: true
-        schema: { type: string, enum: [pause, resume, cancel] }
+        schema: { type: string, enum: [pause, resume, cancel, retry] }
     post:
       operationId: controlRun
-      summary: Pause, resume or cancel a run
+      summary: Pause, resume or cancel a run, or retry a failed one (returns the new run)
       tags: [runs]
       responses:
         "200":
@@ -2442,7 +2442,7 @@ components:
         path: { type: string, description: Where it's written in the workspace }
     DispatchPreview:
       type: object
-      required: [ticket_key, agent, resolved, branch, setup, context, scopes, secrets, harness_key, runner, blockers]
+      required: [ticket_key, agent, resolved, branch, setup, context, scopes, secrets, harness_key, runner, blockers, queued_behind]
       properties:
         ticket_key: { type: string }
         agent: { $ref: "#/components/schemas/AgentRef" }
@@ -2466,6 +2466,10 @@ components:
         blockers:
           type: array
           description: Why dispatch would be refused right now (no agent, a live run, done)
+          items: { type: string }
+        queued_behind:
+          type: array
+          description: Unfinished blocker tickets; the run is queued and starts once they are all Done
           items: { type: string }
 
     InboxItem:

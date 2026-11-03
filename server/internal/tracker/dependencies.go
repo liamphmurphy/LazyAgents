@@ -12,9 +12,20 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
-// DispatchBlockers is shared by previews, dispatch, unmanaged claims and the
-// runner. Dependencies are satisfied only by Done, including after reopening.
+// DispatchBlockers is shared by unmanaged claims and the runner. Dependencies
+// are satisfied only by Done, including after reopening.
 func DispatchBlockers(ctx context.Context, q *store.Queries, t store.Ticket) ([]string, error) {
+	out, err := HardBlockers(ctx, q, t)
+	if err != nil {
+		return nil, err
+	}
+	deps, err := QueuedBehind(ctx, q, t)
+	return append(out, deps...), err
+}
+
+// HardBlockers are reasons a ticket can't be dispatched at all. Unfinished
+// dependencies aren't among them: a managed run queues until they're Done.
+func HardBlockers(ctx context.Context, q *store.Queries, t store.Ticket) ([]string, error) {
 	out := []string{}
 	p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: t.WorkspaceID})
 	if err != nil {
@@ -23,10 +34,16 @@ func DispatchBlockers(ctx context.Context, q *store.Queries, t store.Ticket) ([]
 	if p.Archived {
 		out = append(out, "Project "+p.Key+" is archived; restore it before starting work")
 	}
+	return out, nil
+}
+
+// QueuedBehind describes the unfinished dependencies a dispatched run waits on.
+func QueuedBehind(ctx context.Context, q *store.Queries, t store.Ticket) ([]string, error) {
 	deps, err := q.UnmetDependencies(ctx, t.ID)
 	if err != nil {
 		return nil, err
 	}
+	out := []string{}
 	for _, d := range deps {
 		out = append(out, "Blocked by "+d.Key+" — "+d.Title+" ("+d.Status+"); it must be Done")
 	}

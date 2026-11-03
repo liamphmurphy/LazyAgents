@@ -129,7 +129,7 @@ func TestDelegationToSubagents(t *testing.T) {
 
 	// Finishing reports to the parent and leaves the ticket where it was.
 	before, _ := tracker.Get(ctx, q, ws, st)
-	if err := svc.Complete(ctx, sub, "", "Wrote docs/migrations.md", ""); err != nil {
+	if err := svc.Complete(ctx, sub, "", "Wrote docs/migrations.md", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := tracker.Get(ctx, q, ws, st)
@@ -145,6 +145,26 @@ func TestDelegationToSubagents(t *testing.T) {
 	last := turns[len(turns)-1]
 	if last.Trigger != "delegation" || !strings.Contains(last.InputMessage, "Wrote docs/migrations.md") || !strings.Contains(last.InputMessage, "@scribe") {
 		t.Fatalf("parent turn = %+v", last)
+	}
+
+	// Done needs a reviewer's all clear: none yet, then a rejection, then approval.
+	if err := svc.Complete(ctx, main, "", "all good", "done", ""); !isConflict(err) {
+		t.Fatalf("done without a verdict: %v", err)
+	}
+	if err := runs.ReviewClear(ctx, q, parent); !isConflict(err) {
+		t.Fatalf("clear without a verdict: %v", err)
+	}
+	if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: child.ID, Type: "lifecycle", Payload: []byte(`{"state":"completed","verdict":"` + runs.VerdictChangesRequested + `"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runs.ReviewClear(ctx, q, parent); !isConflict(err) {
+		t.Fatalf("clear after changes requested: %v", err)
+	}
+	if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: child.ID, Type: "lifecycle", Payload: []byte(`{"state":"completed","verdict":"` + runs.VerdictApproved + `"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runs.ReviewClear(ctx, q, parent); err != nil {
+		t.Fatalf("clear after approval: %v", err)
 	}
 
 	// A failed child tells the parent; cancelling a parent takes its child down.
@@ -176,5 +196,17 @@ func TestDelegationToSubagents(t *testing.T) {
 	c3, _ := q.GetRun(ctx, store.GetRunParams{ID: d3.Run.ID, WorkspaceID: ws})
 	if c3.State != "cancelled" {
 		t.Fatalf("child of a cancelled parent = %s", c3.State)
+	}
+
+	// A person can retry the cancelled run straight from its log; delegated runs can't be.
+	if _, err := svc.SetRunControl(ctx, ws, me.ID, c3.ID, "retry"); !isConflict(err) {
+		t.Fatalf("retried a delegated run: %v", err)
+	}
+	again, err := svc.SetRunControl(ctx, ws, me.ID, parent.ID, "retry")
+	if err != nil || again.ID == parent.ID || again.State != "queued" || *again.TicketID != tk.ID {
+		t.Fatalf("retry = %+v, %v", again, err)
+	}
+	if _, err := svc.SetRunControl(ctx, ws, me.ID, parent.ID, "retry"); !isConflict(err) {
+		t.Fatalf("second retry while one is live: %v", err)
 	}
 }

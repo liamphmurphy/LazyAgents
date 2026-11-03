@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/google/uuid"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -113,18 +114,28 @@ func TestProjectManagementAndDependencies(t *testing.T) {
 	}
 	var preview api.DispatchPreview
 	call("GET", "/api/v1/tickets/"+b.Key+"/dispatch", nil, 200, &preview)
-	if len(preview.Blockers) == 0 || !strings.Contains(strings.Join(preview.Blockers, " "), a.Key) || preview.BaseBranch == nil || *preview.BaseBranch != "develop" {
+	if len(preview.Blockers) != 0 || !strings.Contains(strings.Join(preview.QueuedBehind, " "), a.Key) || preview.BaseBranch == nil || *preview.BaseBranch != "develop" {
 		t.Fatalf("preview %+v", preview)
 	}
-	if _, err := rs.Dispatch(ctx, me.WorkspaceID, me.ID, []string{a.Key, b.Key}); err == nil {
-		t.Fatal("bulk dispatch ignored blockers")
+	if _, err := rs.Dispatch(ctx, me.WorkspaceID, me.ID, []string{a.Key, b.Key}); err != nil {
+		t.Fatalf("blocked ticket should queue: %v", err)
 	}
-	aid := a.Id
-	if _, err := q.ActiveRunForTicket(ctx, &aid); err == nil {
-		t.Fatal("bulk dispatch partially committed")
+	bid := b.Id
+	if r, err := q.ActiveRunForTicket(ctx, &bid); err != nil || r.State != "queued" {
+		t.Fatalf("blocked ticket run = %+v, %v", r, err)
 	}
 	if _, err := rs.Claim(ctx, agents.Caller{Agent: agent, Kind: "unmanaged"}, b.Key); err == nil {
 		t.Fatal("unmanaged claim bypassed dependencies")
+	}
+	for _, id := range []uuid.UUID{a.Id, b.Id} {
+		id := id
+		r, err := q.ActiveRunForTicket(ctx, &id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := rs.SetRunControl(ctx, me.WorkspaceID, me.ID, r.ID, "cancel"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	done := "done"
 	if _, err := tr.Update(ctx, me.WorkspaceID, tracker.UserActor(me.ID), a.Key, tracker.Patch{Status: &done}); err != nil {

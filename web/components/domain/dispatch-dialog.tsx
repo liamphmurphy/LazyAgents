@@ -195,6 +195,8 @@ function BulkPreview({ previews }: { previews: Array<Preview | undefined> }) {
               <span className="ml-auto text-xs">
                 {p.blockers.length ? (
                   <span className="text-pill-blocked-fg">{p.blockers.join("; ")}</span>
+                ) : (p.queued_behind ?? []).length ? (
+                  <span className="text-pill-human-fg">Queues until blockers are Done</span>
                 ) : !p.harness_key.present ? (
                   <span className="text-pill-human-fg">No {p.harness_key.secret} key</span>
                 ) : (
@@ -290,7 +292,14 @@ export function DispatchDialog({ keys, open, onOpenChange, onDone }: { keys: str
                   {p.blockers.join(". ")}.
                 </Banner>
               ) : (
-                <SinglePreview p={p} />
+                <>
+                  {(p.queued_behind ?? []).length > 0 && (
+                    <Banner tone="human" title="Queued behind blockers">
+                      {(p.queued_behind ?? []).join(". ")}. The run starts automatically once they are Done.
+                    </Banner>
+                  )}
+                  <SinglePreview p={p} />
+                </>
               )
             ) : (
               <BulkPreview previews={previews} />

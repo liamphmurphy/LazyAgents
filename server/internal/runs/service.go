@@ -230,7 +230,9 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			if err != nil {
 				return err
 			}
-			blockers, err := tracker.DispatchBlockers(ctx, q, t)
+			// Unfinished dependencies don't refuse the dispatch: the run stays
+			// queued until its blockers are Done (see ClaimQueuedRun).
+			blockers, err := tracker.HardBlockers(ctx, q, t)
 			if err != nil {
 				return err
 			}
@@ -607,13 +609,55 @@ func (s *Service) Comment(ctx context.Context, c Caller, key, body string) (stor
 
 // ---------------------------------------------------------------- finishing
 
-// Complete ends the run and moves the ticket (default: In Review).
-func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status string) error {
+// Review verdicts a delegated reviewer or QA run reports with complete_run.
+const (
+	VerdictApproved         = "approved"
+	VerdictChangesRequested = "changes_requested"
+)
+
+// ReviewClear is nil when a main run may mark its ticket Done: at least one
+// delegated reviewer/QA run reported a verdict, and each such agent's latest
+// verdict is an all clear.
+func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
+	children, err := q.ChildRuns(ctx, &run.ID)
+	if err != nil {
+		return err
+	}
+	latest := map[uuid.UUID]string{}
+	for _, ch := range children {
+		if ch.State != "completed" {
+			continue
+		}
+		v, err := q.RunVerdict(ctx, ch.ID)
+		if errors.Is(err, pgx.ErrNoRows) || v == "" {
+			continue
+		} else if err != nil {
+			return err
+		}
+		latest[ch.AgentID] = v
+	}
+	if len(latest) == 0 {
+		return apperr.Conflict("a ticket can only be marked done after a delegated reviewer or QA agent gives the all clear (complete_run with verdict=approved). Delegate a review first, or finish with status in_review")
+	}
+	for _, v := range latest {
+		if v != VerdictApproved {
+			return apperr.Conflict("a reviewer requested changes; address them and have it re-review, or finish with status in_review")
+		}
+	}
+	return nil
+}
+
+// Complete ends the run and moves the ticket (default: In Review). Done needs
+// the reviewers' all clear; verdict is only for delegated reviewer/QA runs.
+func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, verdict string) error {
 	if status == "" {
 		status = "in_review"
 	}
 	if status != "in_review" && status != "done" && status != "todo" {
 		return apperr.Invalid("status", "must be in_review, done, or todo (to hand back)")
+	}
+	if verdict != "" && verdict != VerdictApproved && verdict != VerdictChangesRequested {
+		return apperr.Invalid("verdict", "must be approved or changes_requested")
 	}
 	outcome = strings.TrimSpace(outcome)
 	if c.RunID != nil {
@@ -627,7 +671,7 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status s
 			return err
 		}
 		if delegated {
-			return s.completeChild(ctx, c, key, outcome)
+			return s.completeChild(ctx, c, key, outcome, verdict)
 		}
 	}
 	var t store.Ticket
@@ -637,6 +681,14 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status s
 			return err
 		}
 		t = tk
+		if verdict != "" {
+			return apperr.Invalid("verdict", "only a delegated reviewer or QA run reports a verdict")
+		}
+		if status == "done" {
+			if err := ReviewClear(ctx, q, run); err != nil {
+				return err
+			}
+		}
 		if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
 			return err
 		}

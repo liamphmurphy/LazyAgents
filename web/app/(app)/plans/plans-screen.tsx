@@ -231,9 +231,9 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
       <Card title="Tickets created">
         <div className="space-y-4">
           <p className="text-sm text-fg-secondary">
-            Only assigned tickets whose blockers are Done are ready for
-            dispatch. Dependent tickets remain available for later human
-            approval.
+            Assigned tickets whose blockers are Done are ready now.
+            Dependent tickets can be dispatched too: they queue and start
+            once their blockers are Done.
           </p>
           {plan.ticket_keys.map((key, i) => (
             <Link

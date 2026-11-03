@@ -2,11 +2,15 @@
 
 -- name: ClaimQueuedRun :one
 -- The oldest queued run whose agent has a free slot (max_concurrency from
--- the frozen definition; waiting runs don't hold a slot).
+-- the frozen definition; waiting runs don't hold a slot). A ticket run whose
+-- blocker tickets aren't Done stays queued.
 UPDATE runs SET state = 'starting', runner_id = sqlc.arg(runner_id)
 WHERE id = (
   SELECT r.id FROM runs r
   WHERE r.state = 'queued'
+    AND (r.parent_run_id IS NOT NULL OR NOT EXISTS (
+      SELECT 1 FROM ticket_dependencies d JOIN tickets bt ON bt.id = d.blocker_id
+      WHERE d.ticket_id = r.ticket_id AND bt.status <> 'done'))
     AND (r.purpose = 'chat' OR (SELECT count(*) FROM runs o WHERE o.agent_id = r.agent_id AND o.purpose <> 'chat' AND o.state IN ('starting', 'running'))
         < greatest(coalesce((r.resolved_spec->>'max_concurrency')::int, 1), 1))
   ORDER BY r.started_at

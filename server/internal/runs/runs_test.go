@@ -227,7 +227,7 @@ func TestRunLifecycle(t *testing.T) {
 	if _, err := svc.CreateReport(ctx, atlas, "", "Staging migration report", "# Staging migration report\n\nApplied in 140ms.\n"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Complete(ctx, atlas, "", "Migration applied to staging; PR #491 ready", ""); err != nil {
+	if err := svc.Complete(ctx, atlas, "", "Migration applied to staging; PR #491 ready", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	tk, _ = tracker.Get(ctx, q, ws, "PAY-214")

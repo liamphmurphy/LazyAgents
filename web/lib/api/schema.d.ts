@@ -713,13 +713,13 @@ export interface paths {
             header?: never;
             path: {
                 id: string;
-                action: "pause" | "resume" | "cancel";
+                action: "pause" | "resume" | "cancel" | "retry";
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Pause, resume or cancel a run */
+        /** Pause, resume or cancel a run, or retry a failed one (returns the new run) */
         post: operations["controlRun"];
         delete?: never;
         options?: never;
@@ -2040,6 +2040,8 @@ export interface components {
             runner: components["schemas"]["RunnerStatus"];
             /** @description Why dispatch would be refused right now (no agent, a live run, done) */
             blockers: string[];
+            /** @description Unfinished blocker tickets; the run is queued and starts once they are all Done */
+            queued_behind: string[];
         };
         InboxItem: {
             id: string;
@@ -3643,7 +3645,7 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
-                action: "pause" | "resume" | "cancel";
+                action: "pause" | "resume" | "cancel" | "retry";
             };
             cookie?: never;
         };

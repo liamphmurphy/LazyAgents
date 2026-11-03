@@ -232,7 +232,7 @@ func truncate(s string, n int) string {
 
 // completeChild ends a delegated run: no ticket status change, and the parent
 // is resumed with the summary.
-func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome string) error {
+func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, verdict string) error {
 	return s.tx(ctx, func(q *store.Queries) error {
 		run, t, err := s.running(ctx, q, c, key)
 		if err != nil {
@@ -251,10 +251,14 @@ func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome stri
 		if err := q.ExpireRunApprovals(ctx, run.ID); err != nil {
 			return err
 		}
-		if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "completed", "outcome": outcome}); err != nil {
+		life := map[string]any{"state": "completed", "outcome": outcome}
+		if verdict != "" {
+			life["verdict"] = verdict
+		}
+		if err := event(ctx, q, run.ID, "lifecycle", life); err != nil {
 			return err
 		}
-		if err := tracker.Record(ctx, q, run.WorkspaceID, t.ID, t.EpicID, agentActor(c), VerbRunCompleted, map[string]any{"run_id": run.ID, "outcome": outcome, "delegated": true}, nil); err != nil {
+		if err := tracker.Record(ctx, q, run.WorkspaceID, t.ID, t.EpicID, agentActor(c), VerbRunCompleted, map[string]any{"run_id": run.ID, "outcome": outcome, "delegated": true, "verdict": verdict}, nil); err != nil {
 			return err
 		}
 		if err := RecomputeAgentStatus(ctx, q, c.Agent.ID); err != nil {

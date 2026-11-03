@@ -2,6 +2,7 @@
 
 import { runCost } from "@/lib/format";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useControlRunById, useRunLog } from "@/lib/api/hooks";
@@ -304,6 +305,7 @@ function rowText(r: Row) {
 
 export function RunLogScreen({ id }: { id: string }) {
   const { data: d, isError, error } = useRunLog(id);
+  const router = useRouter();
   const control = useControlRunById(id);
   const [tab, setTab] = useState("all");
   const [filter, setFilter] = useState("");
@@ -367,6 +369,16 @@ export function RunLogScreen({ id }: { id: string }) {
                 </Button>
               )
             )}
+            {(run.state === "failed" || run.state === "cancelled") && run.ticket_key && !run.parent_run_id && (
+              <Button
+                variant="approve"
+                icon="refresh"
+                disabled={control.isPending}
+                onClick={() => control.mutate("retry", { onSuccess: (r) => router.push(`/runs/${r.id}`) })}
+              >
+                Retry run
+              </Button>
+            )}
             {live && (
               <Button variant="outline" icon="x" className="text-pill-blocked-fg" disabled={control.isPending} onClick={() => control.mutate("cancel")}>
                 Cancel run
@@ -402,7 +414,7 @@ export function RunLogScreen({ id }: { id: string }) {
       </div>
       {control.isError && (
         <div className="px-6 pt-3">
-          <Banner tone="blocked" title="Couldn't change the run">
+          <Banner tone="blocked" title={control.variables === "retry" ? "Couldn't retry the run" : "Couldn't change the run"}>
             {control.error.message}
           </Banner>
         </div>

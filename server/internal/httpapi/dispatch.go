@@ -52,15 +52,18 @@ func (s *Server) GetDispatchPreview(ctx context.Context, req api.GetDispatchPrev
 		return nil, err
 	}
 	out := api.GetDispatchPreview200JSONResponse{TicketKey: t.Key, Setup: []string{}, Context: []api.DispatchContext{},
-		Scopes: []api.DispatchScope{}, Secrets: []api.DispatchSecret{}, Blockers: []string{}}
+		Scopes: []api.DispatchScope{}, Secrets: []api.DispatchSecret{}, Blockers: []string{}, QueuedBehind: []string{}}
 	if out.Runner, err = s.runnerStatus(ctx); err != nil {
 		return nil, err
 	}
-	blockers, err := tracker.DispatchBlockers(ctx, s.Q, t)
+	blockers, err := tracker.HardBlockers(ctx, s.Q, t)
 	if err != nil {
 		return nil, err
 	}
 	out.Blockers = append(out.Blockers, blockers...)
+	if out.QueuedBehind, err = tracker.QueuedBehind(ctx, s.Q, t); err != nil {
+		return nil, err
+	}
 	if t.Status == "done" {
 		out.Blockers = append(out.Blockers, t.Key+" is done")
 	}
