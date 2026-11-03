@@ -77,3 +77,77 @@ Metadata-only read queries against the existing development database showed this
 Deleted only this continuation's chat through normal DELETE (204); read-only SQL confirmed segment `cancelled`, outcome `The chat was deleted.` The rejected Codex creation produced no fixture. No shared database writes outside normal app operations, migration, deployment, provider credential reads, push or unrelated process changes occurred.
 
 **QA verdict remains changes requested; criterion 2 remains unchecked.** Lead should arrange a coordinated refresh/drain of all old runner binaries without interrupting active work, align the API catalog backend with local CLI mode, then retry the real Claude → Codex smoke. Route startup evidence to LAZYAGENTS-19 and catalog/configuration behavior to backend ownership. Do not ask for app secrets as the local-runner prerequisite. Require two genuine assistant replies, correct Codex recall, wiki citation/version and both segment IDs before acceptance. These are runtime/configuration findings; no feature fix was made in this QA task.
+
+## Development startup alignment continuation
+
+Resumed from clean `5e15651`; preserved previous commits and criteria. The minimal
+fix makes `make api` (including Air children), `make dev` and `make runner` share
+an overridable `RUNNER_BACKEND`, default `local`. Both environment and make
+command-line overrides can select Docker. No API code/schema, global config
+default, Docker Compose config, key validation or migration changed. Direct
+binary startup still defaults to Docker. README now distinguishes local CLI
+logins from Docker application secrets and explains mixed-pool limitations.
+
+Source comparison confirms current `runner.load` calls `ChatSessionForRun` for
+`purpose=chat`; recorded base `af84e546` instead calls `PlanningSessionForRun`
+for all non-ticket runs. The recorded executable was modified, so its exact
+source remains unproven; correlated load errors support the stale-build diagnosis.
+Refreshing only the API cannot fix an old runner's load path.
+
+### Coordinated refresh procedure
+
+These are human maintenance steps, **not executed by this delegation**:
+
+1. Coordinate with every owner of the shared local runner pool. Stop submitting
+   new work and chat messages for the maintenance window. Let existing work
+   finish, including waiting runs that owners expect to resume. Check current
+   heartbeat/ownership and active runs; the five PIDs in earlier evidence are
+   historical and must be re-identified, not blindly signalled.
+2. Confirm each old runner has zero active work and no queued/pending work can
+   race to it. There is no non-interrupting drain command in this implementation.
+   `Runner.Run` waits on shutdown, but SIGINT/SIGTERM cancels the context passed
+   to active work; do not use a signal as a drain mechanism. If the pool cannot
+   be made idle, defer refresh with its owners rather than interrupting work.
+3. Only after those checks, owners stop their identified old runner processes
+   from their owning terminal/supervisor and verify they exited. Do not use
+   broad process-name kills. Do not start an additional competing worker while
+   old workers remain eligible. Preserve the runner account and existing data
+   directories so resumable CLI sessions keep their paths.
+4. From the reviewed checkout, build a fresh binary without starting a worker:
+   `cd server && go build -o /private/tmp/lazyagents-chat-refresh ./cmd/lazyagents`.
+   Record `git rev-parse HEAD` and
+   `go version -m /private/tmp/lazyagents-chat-refresh`. Review any local diff;
+   build metadata with modified=true alone does not prove exact source identity.
+5. During the agreed API maintenance window, stop only the owned API/reloader,
+   then start `RUNNER_BACKEND=local make api` from the repository root (or use
+   `make api` with this change). Preserve existing non-secret startup settings.
+   Avoid `make dev` unless replacing both API/web listeners is intended.
+   `GET /api/v1/chat-models` should advertise both harnesses available in local
+   mode; this checks policy configuration, not CLI authentication.
+6. Once all old workers are gone, owners start the reviewed binary with
+   `RUNNER_BACKEND=local /private/tmp/lazyagents-chat-refresh runner`, preserving
+   their existing runner data/MCP settings. Alternatively `make runner` builds
+   current source. Verify local startup logs/heartbeats and binary provenance
+   for every eligible worker before allowing queued work again. Do not mix in
+   stale workers or Docker workers for this smoke: the catalog does not route
+   turns by backend or capability. No app provider keys are required locally.
+7. Retry a new real-project Claude → Codex chat with an earlier marker and a
+   requested wiki read. Retain both actual assistant replies, Codex recall,
+   wiki citation/version and both segment IDs. Confirm there is no pre-provider
+   load error. Criterion 2 stays unchecked until this succeeds; fake tests and
+   catalog availability cannot substitute. Track run-detail HTTP 500 separately
+   under LAZYAGENTS-15.
+
+Validation for this configuration-only change:
+
+- Asserted `make -n api` / `make -n runner` commands select local by default,
+  and Docker via either environment or make argument; all six combinations pass.
+  API export precedes both Air and direct Go startup. No worker was launched.
+- `GOCACHE=/private/tmp/la14-gocache go test -count=1 ./internal/config ./internal/chatmodels`
+  in `server`: PASS.
+- Existing `TestChatModelsCatalog` and `TestChatModelsUnavailableWithoutKey`:
+  PASS with `TEST_DATABASE_URL` targeting the previously established disposable
+  Postgres fixture on 55441. These exercise local catalog availability and
+  Docker missing-key gating; no shared development DB migration was run.
+- `git diff --check`: PASS. No live API/runner process, credentials, acceptance
+  checks, deployment or push changed. Lead owns review/push and real smoke.
