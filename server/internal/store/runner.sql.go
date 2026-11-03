@@ -56,8 +56,8 @@ UPDATE runs SET state = 'starting', runner_id = $1
 WHERE id = (
   SELECT r.id FROM runs r
   WHERE r.state = 'queued'
-    AND (SELECT count(*) FROM runs o WHERE o.agent_id = r.agent_id AND o.state IN ('starting', 'running'))
-        < greatest(coalesce((r.resolved_spec->>'max_concurrency')::int, 1), 1)
+    AND (r.purpose = 'chat' OR (SELECT count(*) FROM runs o WHERE o.agent_id = r.agent_id AND o.purpose <> 'chat' AND o.state IN ('starting', 'running'))
+        < greatest(coalesce((r.resolved_spec->>'max_concurrency')::int, 1), 1))
   ORDER BY r.started_at
   FOR UPDATE SKIP LOCKED
   LIMIT 1

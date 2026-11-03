@@ -108,7 +108,10 @@ func (r *Runner) Recover(ctx context.Context) error {
 	if err := q.RequeueStarting(ctx); err != nil {
 		return err
 	}
-	return q.RequeueInterrupted(ctx, &r.Cfg.ID)
+	if err := q.RequeueInterrupted(ctx, &r.Cfg.ID); err != nil {
+		return err
+	}
+	return q.RecoverChatCancellations(ctx, &r.Cfg.ID)
 }
 
 func (r *Runner) heartbeat(ctx context.Context) {
@@ -202,6 +205,12 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 		if c.ticket, err = q.GetTicketByID(ctx, *c.run.TicketID); err != nil {
 			return c, err
 		}
+	} else if c.run.Purpose == "chat" {
+		chat, err := q.ChatSessionForRun(ctx, &c.run.ID)
+		if err != nil {
+			return c, err
+		}
+		c.ticket = store.Ticket{WorkspaceID: chat.WorkspaceID, ProjectID: chat.ProjectID, Key: "CHAT-" + chat.ID.String()[:8], Title: chat.Title}
 	} else {
 		plan, err := q.PlanningSessionForRun(ctx, c.run.ID)
 		if err != nil {
@@ -233,6 +242,10 @@ func (r *Runner) event(ctx context.Context, runID uuid.UUID, typ string, payload
 // end finishes a run the runner had to stop (failure or a guard), with a
 // timeline entry and the workspace removed.
 func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string) {
+	if c.run.Purpose == "chat" {
+		r.failChat(ctx, c, outcome)
+		return
+	}
 	err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
 		run, err := q.LockRun(ctx, c.run.ID)
@@ -427,6 +440,9 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		base = c.project.DefaultBranch
 	}
 	script := SetupScriptForBranch(repo, base, branch, c.agent.Name+" (LazyAgents)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
+	if c.run.Purpose == "chat" {
+		script = "mkdir -p .lazyagents/context"
+	}
 	r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "starting", "runner": r.Cfg.ID, "backend": r.Backend.Name(), "branch": branch})
 	proc, err := r.Backend.Start(ctx, run.ID.String(), ExecSpec{
 		Name: "lazyagents-setup-" + run.ID.String(), Argv: []string{"sh", "-c", script}, Env: env,
@@ -462,9 +478,24 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 
 	err = pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
+		var chat store.ChatSession
+		if c.run.Purpose == "chat" {
+			var err error
+			chat, err = lockRunChat(ctx, q, c.run)
+			if err != nil {
+				return err
+			}
+		}
 		cur, err := q.LockRun(ctx, run.ID)
 		if err != nil {
 			return err
+		}
+		if c.run.Purpose == "chat" && cur.State == "paused" {
+			vol := run.ID.String()
+			if err := q.SetRunWorkspace(ctx, store.SetRunWorkspaceParams{ID: run.ID, WorkspaceVolume: &vol}); err != nil {
+				return err
+			}
+			return idleChat(ctx, q, chat, cur, "idle")
 		}
 		if cur.State != "starting" {
 			return nil // cancelled while setting up
@@ -553,30 +584,38 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	q := r.q()
 	log := r.Log.With("run", c.run.ID, "ticket", c.ticket.Key, "turn", turn.Seq)
 	if c.run.State != "running" {
+		if c.run.Purpose == "chat" && c.run.State == "paused" {
+			r.finishChatTurn(ctx, c, turn, harness.Result{}, 130, nil, nil)
+			return
+		}
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
 		return
 	}
 
-	// Run guards (§6.1 budget): counted on harness time, not waits.
-	act, err := q.RunActiveSeconds(ctx, c.run.ID)
-	if err != nil {
-		log.Error("budget", "err", err)
-		return
-	}
-	if mt := c.spec.Budget.MaxTurns; mt > 0 && int(act.Turns) > mt {
-		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
-		r.end(ctx, c, "cancelled", fmt.Sprintf("Stopped: reached the %d-turn limit.", mt), runs.VerbRunCancelled)
-		return
-	}
+	// Ticket/planning budgets accumulate harness time. Chat runtime is per
+	// invocation, and long conversations have no cumulative turn limit.
 	var maxRuntime time.Duration
 	if c.spec.Budget.MaxRuntime != "" {
 		maxRuntime, _ = time.ParseDuration(c.spec.Budget.MaxRuntime)
 	}
-	used := time.Duration(act.Seconds * float64(time.Second))
-	if maxRuntime > 0 && used >= maxRuntime {
-		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
-		r.end(ctx, c, "cancelled", "Stopped: reached the "+c.spec.Budget.MaxRuntime+" runtime limit.", runs.VerbRunCancelled)
-		return
+	var used time.Duration
+	if c.run.Purpose != "chat" {
+		act, err := q.RunActiveSeconds(ctx, c.run.ID)
+		if err != nil {
+			log.Error("budget", "err", err)
+			return
+		}
+		if mt := c.spec.Budget.MaxTurns; mt > 0 && int(act.Turns) > mt {
+			_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
+			r.end(ctx, c, "cancelled", fmt.Sprintf("Stopped: reached the %d-turn limit.", mt), runs.VerbRunCancelled)
+			return
+		}
+		used = time.Duration(act.Seconds * float64(time.Second))
+		if maxRuntime > 0 && used >= maxRuntime {
+			_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
+			r.end(ctx, c, "cancelled", "Stopped: reached the "+c.spec.Budget.MaxRuntime+" runtime limit.", runs.VerbRunCancelled)
+			return
+		}
 	}
 
 	h, err := harness.For(c.spec.Harness)
@@ -615,6 +654,10 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	plan, err := PlanSecrets(ctx, q, c.run.WorkspaceID, &c.project.ID, c.spec)
 	if err != nil {
+		if c.run.Purpose == "chat" {
+			r.failChat(ctx, c, "Could not load chat credentials.")
+			return
+		}
 		log.Error("secrets", "err", err)
 		return
 	}
@@ -627,6 +670,10 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	expires := time.Now().Add(24 * time.Hour)
 	token, tok, err := agents.IssueToken(ctx, q, c.agent.ID, "run", "run "+c.run.ID.String()[:8]+" turn "+fmt.Sprint(turn.Seq), &c.run.ID, nil, &expires)
 	if err != nil {
+		if c.run.Purpose == "chat" {
+			r.failChat(ctx, c, "Could not issue a chat turn token.")
+			return
+		}
 		log.Error("token", "err", err)
 		return
 	}
@@ -670,6 +717,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.run.ParentRunID != nil {
 		files[".lazyagents/agents-section.md"] = harness.SubagentAgentsMD("", c.spec, paths, c.ticket.Key)
 	}
+	if c.run.Purpose == "chat" {
+		files[".lazyagents/agents-section.md"] = harness.ChatAgentsMD(c.spec, paths, c.project.Key)
+	}
 	if c.run.Purpose == "planning" {
 		files[".lazyagents/agents-section.md"] = []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n"))
 	}
@@ -697,7 +747,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		return
 	}
 	// The first turn delivers context files: each counts as one read (§6.5).
-	if turn.Trigger == "start" {
+	if turn.Trigger == "start" || (c.run.Purpose == "chat" && turn.Seq == 1) {
 		now := time.Now()
 		for _, f := range ctxFiles {
 			if a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: c.run.WorkspaceID}); err == nil {
@@ -720,6 +770,12 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 	}
 	logKey := r.saveLog(c.run.ID, turn.Seq, raw)
+	if c.run.Purpose == "chat" {
+		if ctx.Err() == nil {
+			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey)
+		}
+		return
+	}
 	usage, _ := json.Marshal(res.Usage)
 	exit := int32(code)
 	if err := q.FinishTurn(context.Background(), store.FinishTurnParams{ID: turn.ID, ExitCode: &exit, LogKey: logKey, Usage: usage}); err != nil {
@@ -788,7 +844,10 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 	}()
 
 	// Watchdog: people pause or cancel through the API; we act on it here.
+	var watchdog sync.WaitGroup
+	watchdog.Add(1)
 	go func() {
+		defer watchdog.Done()
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		var deadline <-chan time.Time
@@ -804,6 +863,10 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 				_ = proc.Kill()
 				return
 			case <-deadline:
+				if c.run.Purpose == "chat" {
+					_ = proc.Kill()
+					return
+				}
 				r.end(context.Background(), c, "cancelled", "Stopped: reached the "+c.spec.Budget.MaxRuntime+" runtime limit.", runs.VerbRunCancelled)
 				_ = proc.Kill()
 				return
@@ -831,6 +894,7 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 		_ = c.Close()
 	}
 	close(done)
+	watchdog.Wait()
 	return p.Result(), raw.Bytes(), code, err
 }
 

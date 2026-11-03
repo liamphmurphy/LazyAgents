@@ -81,6 +81,9 @@ func RecomputeAgentStatus(ctx context.Context, q *store.Queries, agentID uuid.UU
 	status := "idle"
 	rank := map[string]int{"idle": 0, "waiting": 1, "blocked": 2, "running": 3}
 	for _, r := range live {
+		if r.Purpose == "chat" && r.State == "waiting" {
+			continue // idle chats do not make the ticket agent busy
+		}
 		st := "running"
 		switch r.State {
 		case "queued":

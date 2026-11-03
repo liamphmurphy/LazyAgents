@@ -129,6 +129,27 @@ func SubagentAgentsMD(existing string, spec agentdef.Resolved, contextFiles []st
 	return agentsMD(existing, spec, contextFiles, ticket, true)
 }
 
+// ChatAgentsMD renders conversation instructions without ticket workflow sections.
+func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project string) []byte {
+	var b strings.Builder
+	b.WriteString(sectionStart + "\n# LazyAgents chat: project " + project + "\n\n")
+	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
+	b.WriteString("Use search_knowledge, read_page, read_artifact, get_ticket and get_backlinks to look up project context. Cite sources with [[…]].\n")
+	b.WriteString("Do not call claim_ticket, complete_run or propose_tickets. Do not modify files, run shell commands, delegate work, or write memory.\n\n")
+	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
+	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode {
+		b.WriteString(skillsIndex(spec.Skills))
+	}
+	if len(contextFiles) > 0 {
+		b.WriteString("## Context\n\n")
+		for _, path := range contextFiles {
+			b.WriteString("- `" + path + "`\n")
+		}
+	}
+	b.WriteString(sectionEnd + "\n")
+	return []byte(b.String())
+}
+
 func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string, delegated bool) []byte {
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n")

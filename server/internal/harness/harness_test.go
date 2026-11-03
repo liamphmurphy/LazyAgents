@@ -274,6 +274,18 @@ func TestAgentsMDGitHubSection(t *testing.T) {
 	}
 }
 
+func TestChatAgentsMD(t *testing.T) {
+	spec := agentdef.Resolved{Harness: agentdef.HarnessCodex, Instructions: "Agent persona", Skills: []agentdef.Skill{{Name: "context", Description: "Read context"}}}
+	got := string(ChatAgentsMD(spec, []string{".lazyagents/context/memory.md"}, "PAY"))
+	for _, want := range []string{"project PAY", "conversation with a person", "Answer directly", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "Do not call claim_ticket, complete_run or propose_tickets", "Agent persona", ".lazyagents/context/memory.md", "context"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %s", want, got)
+		}
+	}
+	for _, bad := range []string{"claim_ticket first", "## Git", "git push", "delegate`", "## Delegation", "Keep notes worth remembering", "write_note"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("ticket workflow %q in %s", bad, got)
+		}
 func TestCodexMCPPolicyOnResumeAndPlanning(t *testing.T) {
 	for _, session := range []string{"", "thread-existing"} {
 		t.Run(session, func(t *testing.T) {
