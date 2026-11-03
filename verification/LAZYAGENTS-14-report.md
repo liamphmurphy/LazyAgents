@@ -2,6 +2,16 @@
 
 ## Verdict
 
+Latest retry (2026-11-03, 09:17 PST): both live harness catalogs are available.
+The local claiming worker loaded the chat and launched real Claude Sonnet, which
+returned an account session-limit error (reset 11:40am America/Los_Angeles).
+No genuine reply or MCP wiki read occurred; no Codex switch was attempted after
+that quota failure. Criterion 2 remains UNVERIFIED and QA changes requested.
+The failed own fixture was deleted normally and its segment confirmed cancelled;
+prior history and evidence were preserved. See the refreshed-runtime section in
+[runtime evidence](LAZYAGENTS-14-runtime-evidence.md) for IDs and transcript.
+
+
 Local-runner correction (2026-11-03): application provider secrets are required
 only for Docker mode. The local retry failed before provider startup: an older
 runner binary logged `load run` / `no rows in result set`; the API independently
