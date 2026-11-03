@@ -107,11 +107,14 @@ function ProjectForm({
       </Field>
       <Field
         label="GitHub repository"
-        hint="Optional HTTPS URL. Leave empty for an empty run workspace. Store access tokens in Connections & secrets."
+        hint="Optional SSH URL, like git@github.com:owner/repo.git. Leave empty for an empty run workspace. Store the SSH key and a GitHub token (for gh) in Connections & secrets."
       >
         <TextInput
           aria-label="GitHub repository"
-          type="url"
+          type="text"
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
           placeholder="git@github.com:your-team/repository.git"
           value={repo}
           onChange={(e) => setRepo(e.target.value)}
