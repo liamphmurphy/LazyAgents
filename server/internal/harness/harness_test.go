@@ -146,7 +146,7 @@ func TestCodexInvocation(t *testing.T) {
 	inv, _ := Codex{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
 	a := strings.Join(inv.Argv, " ")
 	for _, want := range []string{"codex exec --json", `mcp_servers.lazyagents.url="http://api:8000/mcp"`, `bearer_token_env_var="LAZYAGENTS_TOKEN"`,
-		`approval_policy="never"`, `mcp_servers.lazyagents.default_tools_approval_mode="approve"`, `mcp_servers.lazyagents.required=true`, "network_access=true", "-m gpt-5-codex"} {
+		`approval_policy="never"`, `mcp_servers.lazyagents.default_tools_approval_mode="approve"`, `mcp_servers.lazyagents.required=true`, `network={enabled=true}`, `filesystem={":workspace_roots"={".git"="write"}}`, "-m gpt-5-codex"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("missing %q in %s", want, a)
 		}
@@ -158,6 +158,27 @@ func TestCodexInvocation(t *testing.T) {
 	n := len(inv.Argv)
 	if inv.Argv[4] != "resume" || inv.Argv[n-2] != "th1" || inv.Argv[n-1] != "next" || strings.Contains(strings.Join(inv.Argv, " "), "network_access") {
 		t.Fatalf("resume argv %v", inv.Argv)
+	}
+}
+
+func TestCodexGitPermissions(t *testing.T) {
+	for _, session := range []string{"", "existing-thread"} {
+		for _, mode := range []string{"allowed", "denied", "requires_approval"} {
+			t.Run(session+"/"+mode, func(t *testing.T) {
+				inv, err := (Codex{}).Invocation(ws, Turn{Spec: spec("repo:write", mode), SessionID: session, Prompt: "go"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				args := strings.Join(inv.Argv, " ")
+				grant := strings.Contains(args, `filesystem={":workspace_roots"={".git"="write"}}`)
+				if grant != (mode == "allowed") {
+					t.Fatalf("unexpected Git permission: %s", args)
+				}
+				if grant && (strings.Contains(args, "sandbox_mode=") || strings.Contains(args, "sandbox_workspace_write.")) {
+					t.Fatalf("legacy sandbox overrides permission profile: %s", args)
+				}
+			})
+		}
 	}
 }
 

@@ -155,6 +155,12 @@ malicious program; Docker remains the isolation boundary. Local runners inherit
 the host's environment and logins. `python3` is required by both adapters and is
 included in the runner image.
 
+Repository-authorized Codex turns use a workspace permission profile that also
+allows writes to `.git`, so staging and committing work headlessly. Planning
+and runs without repository write authorization retain their sandbox settings.
+Local macOS runners append Homebrew's binary directories to PATH so installed
+tools such as `gh` are available even when launched from a desktop application.
+
 Skills use native discovery on both CLIs: `.claude/skills/<name>/SKILL.md` for
 Claude Code and `.agents/skills/<name>/SKILL.md` for Codex. Generated skill files
 are excluded from git. Cross-harness fallbacks include a bounded transcript of

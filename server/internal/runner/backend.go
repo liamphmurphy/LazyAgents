@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 )
@@ -119,6 +120,12 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
+	// Desktop-launched local runners may omit Homebrew from PATH. Preserve
+	// configured tool precedence while making installed tools such as gh visible.
+	// OnlyBins tests intentionally isolate PATH from real logged-in tools.
+	if runtime.GOOS == "darwin" && !l.OnlyBins {
+		cmd.Env = append(cmd.Env, "PATH="+os.Getenv("PATH")+":/opt/homebrew/bin:/usr/local/bin")
+	}
 	for k, v := range spec.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

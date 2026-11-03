@@ -41,7 +41,6 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		"features.multi_agent=false", // delegation stays in the run-scoped service
 		`hooks.PreToolUse=[{matcher="*",hooks=[{type="command",command=` + tomlString(command) + `,timeout=20}]}]`,
 		"approval_policy=" + tomlString("never"), // nobody answers prompts headless
-		"sandbox_mode=" + tomlString(sandbox),
 		"mcp_servers." + lazyagentsServer + ".url=" + tomlString(ws.MCPURL),
 		"mcp_servers." + lazyagentsServer + ".bearer_token_env_var=" + tomlString(ws.TokenEnv),
 		// These are the service's own authenticated workflow tools. MCP's
@@ -54,10 +53,18 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	for _, m := range spec.MCPServers {
 		cfg = append(cfg, "mcp_servers."+m.Name+".url="+tomlString(m.URL), "mcp_servers."+m.Name+".default_tools_approval_mode="+tomlString("approve"))
 	}
-	// Pushing and opening PRs needs the network, which workspace-write
-	// blocks by default.
+	// Legacy workspace-write protects .git even when the workspace is writable.
+	// Headless turns cannot request an exception, so explicitly grant Git writes
+	// to repository writers while retaining the other workspace protections.
 	if sandbox == "workspace-write" && allowed(spec, "repo:write") {
-		cfg = append(cfg, "sandbox_workspace_write.network_access=true")
+		cfg = append(cfg,
+			`default_permissions="lazyagents-repo-write"`,
+			// One TOML table preserves quoted path keys; dotted -c keys split
+			// the dot in ".git" and produce an invalid filesystem rule.
+			`permissions.lazyagents-repo-write={extends=":workspace",filesystem={":workspace_roots"={".git"="write"}},network={enabled=true}}`,
+		)
+	} else {
+		cfg = append(cfg, "sandbox_mode="+tomlString(sandbox))
 	}
 	for _, c := range cfg {
 		opts = append(opts, "-c", c)
