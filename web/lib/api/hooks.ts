@@ -649,3 +649,98 @@ export function useAgentOverviews() {
 export function useAgentRuns(handle:string,offset=0) {
  return useQuery({queryKey:["agent-overviews","runs",handle,offset],queryFn:()=>unwrap(api.GET("/agents/{handle}/runs",{params:{path:{handle},query:{offset}}}))});
 }
+
+// ---- Chats (ADR: Project chat sessions). SSE `chat.updated` invalidates ["chats"].
+
+export const chatKeys = {
+  all: ["chats"] as const,
+  list: (project: string, archived = false) => ["chats", "list", project, archived] as const,
+  detail: (id: string) => ["chats", "detail", id] as const,
+  messages: (id: string) => ["chats", "messages", id] as const,
+  models: ["chats", "models"] as const,
+};
+
+// Slow fallback while a turn runs and the realtime connection is unavailable.
+const CHAT_POLL_MS = 3000;
+
+export function useChats(project: string, archived = false) {
+  return useQuery({
+    enabled: !!project,
+    queryKey: chatKeys.list(project, archived),
+    queryFn: () => unwrap(api.GET("/chats", { params: { query: { project, archived } } })),
+  });
+}
+
+export function useChat(id?: string) {
+  return useQuery({
+    enabled: !!id,
+    queryKey: chatKeys.detail(id ?? ""),
+    queryFn: () => unwrap(api.GET("/chats/{id}", { params: { path: { id: id! } } })),
+    refetchInterval: (q) => (q.state.data?.state === "running" ? CHAT_POLL_MS : false),
+  });
+}
+
+export function useChatMessages(id?: string) {
+  return useQuery({
+    enabled: !!id,
+    queryKey: chatKeys.messages(id ?? ""),
+    queryFn: () => unwrap(api.GET("/chats/{id}/messages", { params: { path: { id: id! }, query: { limit: 200 } } })),
+  });
+}
+
+export function useChatModels() {
+  return useQuery({
+    queryKey: chatKeys.models,
+    queryFn: () => unwrap(api.GET("/chat-models")),
+    staleTime: 60_000,
+  });
+}
+
+function useChatInvalidate() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: chatKeys.all });
+}
+
+export function useCreateChat() {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: (body: Schemas["NewChat"]) => unwrap(api.POST("/chats", { body })),
+    onSettled: done,
+  });
+}
+
+export function useUpdateChat() {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: (v: { id: string; patch: Schemas["ChatPatch"] }) =>
+      unwrap(api.PATCH("/chats/{id}", { params: { path: { id: v.id } }, body: v.patch })),
+    onSettled: done,
+  });
+}
+
+export function useSendChatMessage(id: string) {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: (body: Schemas["NewChatMessage"]) =>
+      unwrap(api.POST("/chats/{id}/messages", { params: { path: { id } }, body })),
+    onSettled: done,
+  });
+}
+
+export function useCancelChat(id: string) {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/chats/{id}/cancel", { params: { path: { id } } })),
+    onSettled: done,
+  });
+}
+
+/** The current turn's tool calls/results, read from the segment run's events. */
+export function useChatRunEvents(runId?: string, enabled = true) {
+  return useQuery({
+    enabled: !!runId && enabled,
+    queryKey: ["runs", "chat", runId ?? ""] as const,
+    queryFn: () => unwrap(api.GET("/runs/{id}", { params: { path: { id: runId! } } })).then((d) => d.events),
+    refetchInterval: 2_000,
+  });
+}

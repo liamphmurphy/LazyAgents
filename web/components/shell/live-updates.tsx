@@ -15,6 +15,7 @@ const prefixes: Record<string, string[]> = {
   knowledge: ["knowledge", "wiki"],
   project: ["projects", "planning", "bootstrap", "tickets", "inbox", "search"],
   inbox: ["inbox", "bootstrap"],
+  chat: ["chats"],
 };
 
 /** One stream per shell. Coalesce bursts from harness logs before refetching. */
