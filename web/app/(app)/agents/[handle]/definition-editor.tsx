@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { DropdownMenu } from "radix-ui";
 import { useState, type ReactNode } from "react";
-import type { AgentDetail, AgentSpec, Harness, ScopeMode } from "@/lib/api/client";
+import type { AgentDetail, AgentKind, AgentSpec, Harness, ScopeMode } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
 import { enforcementFor, MODE_LABEL } from "@/lib/enforcement";
 import { Button, IconButton } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { AGENT_HUES, AgentAvatar } from "@/components/domain/avatars";
 import { EnforcementChip, MonoChip } from "@/components/domain/labels";
 import { floatPanel } from "@/components/domain/pickers";
 
-export type Draft = { name: string; role: string; specialty: string; color_index: number; spec: AgentSpec };
+export type Draft = { name: string; role: string; specialty: string; color_index: number; kind: AgentKind; spec: AgentSpec };
 
 export function draftOf(d: AgentDetail): Draft {
   return {
@@ -22,6 +22,7 @@ export function draftOf(d: AgentDetail): Draft {
     role: d.agent.role,
     specialty: d.specialty,
     color_index: d.agent.color_index,
+    kind: d.agent.kind,
     spec: structuredClone(d.spec),
   };
 }
@@ -35,6 +36,7 @@ const MODES: Array<{ value: ScopeMode; label: string }> = (["allowed", "requires
 export function describeChanges(a: Draft, b: Draft): string {
   const out: string[] = [];
   if (a.name !== b.name || a.role !== b.role || a.specialty !== b.specialty || a.color_index !== b.color_index) out.push("Updated identity");
+  if (a.kind !== b.kind) out.push(`Kind ${a.kind} → ${b.kind}`);
   if (a.spec.harness !== b.spec.harness) out.push(`Harness ${a.spec.harness} → ${b.spec.harness}`);
   if (a.spec.model !== b.spec.model) out.push(`Model ${a.spec.model} → ${b.spec.model}`);
   if (a.spec.instructions !== b.spec.instructions) out.push("Edited instructions");
@@ -223,6 +225,23 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
         <Field label="Specialty" htmlFor="ag-spec" hint="Shown in the agent picker next to the model">
           <TextInput id="ag-spec" value={draft.specialty} onChange={(e) => onChange({ ...draft, specialty: e.target.value })} />
         </Field>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[12.5px] font-medium text-fg-2">Kind</span>
+          <Segmented
+            label="Agent kind"
+            value={draft.kind}
+            onChange={(kind) => onChange({ ...draft, kind })}
+            options={[
+              { value: "main", label: "Main" },
+              { value: "sub", label: "Sub" },
+            ]}
+          />
+          <p className="text-xs text-fg-tertiary">
+            {draft.kind === "main"
+              ? "Takes tickets, and can delegate parts of them to sub agents."
+              : "Can't be assigned tickets. Runs only when a main agent delegates a task to it."}
+          </p>
+        </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-[12.5px] font-medium text-fg-2">Identity color</span>
           <div role="radiogroup" aria-label="Identity color" className="flex gap-1.5">

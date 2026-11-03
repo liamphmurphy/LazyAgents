@@ -109,6 +109,16 @@ func (r refs) agent(ctx context.Context, id *uuid.UUID) (store.Agent, error) {
 	return a, err
 }
 
+// assignee is agent for a ticket's assignee: sub agents only run when a main
+// agent delegates to them, so they can't hold tickets.
+func (r refs) assignee(ctx context.Context, id *uuid.UUID) (store.Agent, error) {
+	a, err := r.agent(ctx, id)
+	if err == nil && a.Kind == "sub" {
+		return a, invalid("assignee_agent_id", "@%s is a sub agent and can't be assigned tickets; assign a main agent, which can delegate to it", a.Handle)
+	}
+	return a, err
+}
+
 func (r refs) user(ctx context.Context, id *uuid.UUID) (store.User, error) {
 	u, err := r.q.GetUser(ctx, store.GetUserParams{ID: *id, WorkspaceID: r.ws})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -194,7 +204,7 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		}
 		var agent *store.Agent
 		if in.AssigneeAgentID != nil {
-			a, err := r.agent(ctx, in.AssigneeAgentID)
+			a, err := r.assignee(ctx, in.AssigneeAgentID)
 			if err != nil {
 				return err
 			}
@@ -384,7 +394,7 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			add(VerbUnassigned, map[string]any{"agent_id": old.ID, "agent_name": old.Name})
 		}
 		if p.AssigneeAgentID.Value != nil {
-			a, err := r.agent(ctx, p.AssigneeAgentID.Value)
+			a, err := r.assignee(ctx, p.AssigneeAgentID.Value)
 			if err != nil {
 				return cur, err
 			}

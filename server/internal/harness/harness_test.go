@@ -177,13 +177,16 @@ func TestAgentsMD(t *testing.T) {
 
 func TestPlanningInvocationsAreReadOnly(t *testing.T) {
 	s := spec("repo:write", "denied", "tests:run", "denied")
-	s.HarnessOptions = map[string]string{"permission_mode": "plan", "sandbox": "read-only"}
+	s.HarnessOptions = map[string]string{"readonly": "true", "sandbox": "read-only"}
 	claude, err := (ClaudeCode{}).Invocation(Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}, Turn{Spec: s, Prompt: "Plan"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if flag(claude.Argv, "--permission-mode") != "plan" {
-		t.Fatal("planning permission mode missing")
+	if m := flag(claude.Argv, "--permission-mode"); m == "plan" || m == "acceptEdits" {
+		t.Fatalf("planning permission mode %q; plan mode blocks propose_tickets", m)
+	}
+	if !slices.Contains(strings.Split(flag(claude.Argv, "--allowedTools"), ","), "mcp__"+lazyagentsServer) {
+		t.Fatal("planning must allow the lazyagents MCP tools")
 	}
 	allowed := strings.Split(flag(claude.Argv, "--allowedTools"), ",")
 	for _, tool := range []string{"Edit", "Write", "Bash", "Agent"} {

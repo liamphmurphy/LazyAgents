@@ -32,7 +32,7 @@ export function BulkBar({ keys, agents, onClear }: { keys: string[]; agents: Sch
       <ArtifactPicker onPick={(a) => bulk.mutate({ keys, patch: {}, attach_artifact_id: a.id })}>
         <Button variant="ghost">Attach artifact</Button>
       </ArtifactPicker>
-      <AgentPicker agents={agents} onChange={(id) => apply({ assignee_agent_id: id })}>
+      <AgentPicker agents={agents.filter((a) => a.kind === "main")} onChange={(id) => apply({ assignee_agent_id: id })}>
         <Button variant="secondary" icon="agents">
           Assign agent
         </Button>

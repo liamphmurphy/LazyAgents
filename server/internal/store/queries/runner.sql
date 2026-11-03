@@ -24,6 +24,8 @@ WHERE id = (
   SELECT t.id FROM run_turns t JOIN runs r ON r.id = t.run_id
   WHERE t.status = 'pending' AND r.mode = 'managed' AND r.state = 'running'
     AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = t.run_id AND b.status = 'running')
+    -- A delegated run shares its parent's checkout: wait for the parent's process to exit.
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND b.status = 'running')
   ORDER BY t.seq
   FOR UPDATE OF t SKIP LOCKED
   LIMIT 1

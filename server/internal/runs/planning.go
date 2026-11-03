@@ -41,7 +41,7 @@ func PlanningSpec(r agentdef.Resolved) agentdef.Resolved {
 	r.Scopes = []agentdef.ResolvedScope{{Scope: "repo:*", Mode: agentdef.Denied}, {Scope: "tests:run", Mode: agentdef.Denied}}
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
-	r.HarnessOptions = map[string]string{"sandbox": "read-only", "permission_mode": "plan"}
+	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
 	r.Instructions = "You are a planner. Read the supplied goal, source documents, linked tickets and wiki. Propose a small, actionable set of tickets with acceptance criteria using propose_tickets. Give each a stable ref and suggest depends_on proposal refs or blocked_by existing ticket keys where work must finish first. Do not create tickets, modify files, run shell commands, or execute project work. Calling propose_tickets ends this planning run; a person edits and accepts the draft.\n"
 	return r
 }
@@ -160,8 +160,12 @@ func validateProposals(ctx context.Context, q *store.Queries, ws uuid.UUID, item
 		}
 		p.Criteria = criteria
 		if p.AgentID != nil {
-			if _, err := q.GetAgent(ctx, store.GetAgentParams{ID: *p.AgentID, WorkspaceID: ws}); err != nil {
+			sa, err := q.GetAgent(ctx, store.GetAgentParams{ID: *p.AgentID, WorkspaceID: ws})
+			if err != nil {
 				return apperr.Invalid("agent_id", "unknown suggested agent")
+			}
+			if sa.Kind == "sub" {
+				return apperr.Invalid("agent_id", "@%s is a sub agent; suggest a main agent, which can delegate to it", sa.Handle)
 			}
 		}
 	}

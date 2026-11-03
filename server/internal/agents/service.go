@@ -30,7 +30,15 @@ type Identity struct {
 	Role       string
 	Specialty  string
 	ColorIndex int
+	// Kind is "main" (takes tickets) or "sub" (only runs when a main agent
+	// delegates to it). Empty keeps the current kind, or "main" for a new agent.
+	Kind string
 }
+
+const (
+	KindMain = "main"
+	KindSub  = "sub"
+)
 
 var handleRe = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
 
@@ -40,6 +48,9 @@ func (id *Identity) normalize() error {
 	id.Specialty = strings.TrimSpace(id.Specialty)
 	if id.Name == "" || utf8.RuneCountInString(id.Name) > 40 {
 		return apperr.Invalid("name", "is required (at most 40 characters)")
+	}
+	if id.Kind != "" && id.Kind != KindMain && id.Kind != KindSub {
+		return apperr.Invalid("kind", "must be main or sub")
 	}
 	if id.ColorIndex < 0 || id.ColorIndex > 7 {
 		return apperr.Invalid("color_index", "must be 0–7 (the fixed identity palette)")
@@ -91,6 +102,13 @@ func DefaultSpec() agentdef.Spec {
 	return s
 }
 
+func kindPtr(k string) *string {
+	if k == "" {
+		return nil
+	}
+	return &k
+}
+
 // WriteVersion appends a definition version and makes it current. at
 // backdates it (seeding only).
 func WriteVersion(ctx context.Context, q *store.Queries, a store.Agent, id Identity, spec agentdef.Spec, note string, by *uuid.UUID, at *time.Time) (store.Agent, error) {
@@ -106,7 +124,7 @@ func WriteVersion(ctx context.Context, q *store.Queries, a store.Agent, id Ident
 	}
 	return q.UpdateAgentFromDefinition(ctx, store.UpdateAgentFromDefinitionParams{
 		ID: a.ID, Name: id.Name, Role: id.Role, Specialty: id.Specialty, ColorIndex: int32(id.ColorIndex),
-		Model: spec.Model, MaxConcurrency: int32(spec.MaxConcurrency), CurrentDefinitionVersionID: &v.ID,
+		Model: spec.Model, MaxConcurrency: int32(spec.MaxConcurrency), CurrentDefinitionVersionID: &v.ID, Kind: kindPtr(id.Kind),
 	})
 }
 
@@ -135,7 +153,7 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, by uuid.UUID, handle
 		var err error
 		a, err = q.CreateAgent(ctx, store.CreateAgentParams{
 			WorkspaceID: ws, Name: id.Name, Handle: handle, ColorIndex: int32(id.ColorIndex),
-			Role: id.Role, Specialty: id.Specialty, Model: sp.Model, Status: "idle",
+			Role: id.Role, Specialty: id.Specialty, Model: sp.Model, Status: "idle", Kind: kindPtr(id.Kind),
 		})
 		if err != nil {
 			return err
@@ -161,6 +179,16 @@ func (s *Service) SaveDefinition(ctx context.Context, ws uuid.UUID, by uuid.UUID
 		cur, err := q.LockAgentByHandle(ctx, store.LockAgentByHandleParams{WorkspaceID: ws, Handle: handle})
 		if err != nil {
 			return notFound(err)
+		}
+		if id.Kind == KindSub && cur.Kind != KindSub {
+			// Sub agents can't hold tickets: hand the open ones to someone else first.
+			n, err := q.CountOpenTicketsForAgent(ctx, &cur.ID)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return apperr.Conflict("@%s is assigned %d open ticket(s); reassign them before making it a sub agent", cur.Handle, n)
+			}
 		}
 		a, err = WriteVersion(ctx, q, cur, id, spec, note, &by, nil)
 		return err

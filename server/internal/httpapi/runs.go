@@ -46,6 +46,7 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		w := api.RunWaitReason(*r.WaitReason)
 		out.WaitReason = &w
 	}
+	out.ParentRunId = r.ParentRunID
 	out.SessionId = r.HarnessSessionID
 	if r.DispatchedByUserID != nil {
 		if u, err := s.Q.GetUser(ctx, store.GetUserParams{ID: *r.DispatchedByUserID, WorkspaceID: r.WorkspaceID}); err == nil {

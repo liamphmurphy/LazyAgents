@@ -201,7 +201,7 @@ func (q *Queries) ListSecrets(ctx context.Context, workspaceID uuid.UUID) ([]Lis
 }
 
 const resolveAgentToken = `-- name: ResolveAgentToken :one
-SELECT agents.id, agents.workspace_id, agents.name, agents.handle, agents.color_index, agents.role, agents.specialty, agents.model, agents.status, agents.max_concurrency, agents.created_at, agents.updated_at, agents.current_definition_version_id, agent_tokens.id AS token_id, agent_tokens.kind AS token_kind,
+SELECT agents.id, agents.workspace_id, agents.name, agents.handle, agents.color_index, agents.role, agents.specialty, agents.model, agents.status, agents.max_concurrency, agents.created_at, agents.updated_at, agents.current_definition_version_id, agents.kind, agent_tokens.id AS token_id, agent_tokens.kind AS token_kind,
        agent_tokens.run_id AS token_run_id, agent_tokens.last_used_at AS token_last_used_at
 FROM agent_tokens JOIN agents ON agents.id = agent_tokens.agent_id
 WHERE agent_tokens.token_hash = $1
@@ -235,6 +235,7 @@ func (q *Queries) ResolveAgentToken(ctx context.Context, tokenHash []byte) (Reso
 		&i.Agent.CreatedAt,
 		&i.Agent.UpdatedAt,
 		&i.Agent.CurrentDefinitionVersionID,
+		&i.Agent.Kind,
 		&i.TokenID,
 		&i.TokenKind,
 		&i.TokenRunID,

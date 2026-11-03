@@ -38,6 +38,7 @@ type Agent struct {
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time
 	CurrentDefinitionVersionID *uuid.UUID
+	Kind                       string
 }
 
 type AgentDefinitionVersion struct {
@@ -303,6 +304,7 @@ type Run struct {
 	RunnerID            *string
 	WorkspaceVolume     *string
 	IdleTurns           int32
+	ParentRunID         *uuid.UUID
 }
 
 type RunEvent struct {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -257,12 +258,21 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 			map[string]any{"run_id": run.ID, "reason": outcome}, nil); err != nil {
 			return err
 		}
-		return runs.RecomputeAgentStatus(ctx, q, run.AgentID)
+		// A delegated run reports to its parent; a parent takes its delegated runs down with it.
+		if err := runs.CancelChildren(ctx, q, run.ID, "The main agent's run ended: "+outcome); err != nil {
+			return err
+		}
+		if err := runs.RecomputeAgentStatus(ctx, q, run.AgentID); err != nil {
+			return err
+		}
+		return runs.WakeParent(ctx, q, run, state, outcome)
 	})
 	if err != nil {
 		r.Log.Error("end run", "run", c.run.ID, "err", err)
 	}
-	r.cleanup(context.Background(), c.run.ID)
+	if c.run.ParentRunID == nil {
+		r.cleanup(context.Background(), c.run.ID) // a delegated run has no workspace of its own
+	}
 }
 
 func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
@@ -284,6 +294,64 @@ func (r *Runner) Sweep(ctx context.Context) {
 	}
 }
 
+// wsID names the workspace a run executes in: a delegated run uses its
+// parent's checkout.
+func wsID(run store.Run) string {
+	if run.ParentRunID != nil {
+		return run.ParentRunID.String()
+	}
+	return run.ID.String()
+}
+
+// startChild readies a delegated run. There's no clone or setup: it works in
+// the parent's workspace, which the parent left on its ticket branch.
+func (r *Runner) startChild(ctx context.Context, c runCtx) {
+	run := c.run
+	fail := func(msg string) {
+		r.Log.Warn("delegated run failed to start", "run", run.ID, "reason", msg)
+		r.end(ctx, c, "failed", msg, runs.VerbRunFailed)
+	}
+	parent, err := r.q().GetRun(ctx, store.GetRunParams{ID: *run.ParentRunID, WorkspaceID: run.WorkspaceID})
+	if err != nil || parent.WorkspaceVolume == nil || slices.Contains(runs.Terminal, parent.State) {
+		fail("The main agent's workspace is gone, so the delegated run can't start.")
+		return
+	}
+	plan, err := PlanSecrets(ctx, r.q(), run.WorkspaceID, &c.project.ID, c.spec)
+	if err != nil {
+		fail("Couldn't read secrets: " + err.Error())
+		return
+	}
+	if key := HarnessKeys[c.spec.Harness]; r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
+		fail(fmt.Sprintf("No %s secret: add an API key in Settings → Connections & secrets.", key.Secret))
+		return
+	}
+	err = pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		cur, err := q.LockRun(ctx, run.ID)
+		if err != nil {
+			return err
+		}
+		if cur.State != "starting" {
+			return nil // cancelled while queued
+		}
+		if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "running"}); err != nil {
+			return err
+		}
+		b, _ := json.Marshal(map[string]any{"state": "running", "mode": "managed", "parent_run_id": parent.ID})
+		if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: run.ID, Type: "lifecycle", Payload: b}); err != nil {
+			return err
+		}
+		if err := runnerRecord(ctx, q, run.WorkspaceID, c.ticket.ID, c.ticket.EpicID, tracker.AgentActor(c.agent.ID), runs.VerbRunStarted,
+			map[string]any{"run_id": run.ID, "mode": "managed", "harness": c.spec.Harness, "delegated": true}, nil); err != nil {
+			return err
+		}
+		return runs.RecomputeAgentStatus(ctx, q, c.agent.ID)
+	})
+	if err != nil {
+		r.Log.Error("mark delegated run running", "run", run.ID, "err", err)
+	}
+}
+
 // ---------------------------------------------------------------- start
 
 // start prepares a queued run's workspace and marks it running; its first
@@ -292,6 +360,10 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	c, err := r.load(ctx, run.ID)
 	if err != nil {
 		r.Log.Error("load run", "run", run.ID, "err", err)
+		return
+	}
+	if c.run.ParentRunID != nil {
+		r.startChild(ctx, c)
 		return
 	}
 	log := r.Log.With("run", run.ID, "ticket", c.ticket.Key)
@@ -549,7 +621,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		session = *c.run.HarnessSessionID
 	}
 	inv, err := h.Invocation(harness.Workspace{
-		Dir: r.Backend.WorkspaceDir(c.run.ID.String()), MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
+		Dir: r.Backend.WorkspaceDir(wsID(c.run)), MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
 	}, harness.Turn{Spec: c.spec, Prompt: turn.InputMessage, SessionID: session})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
@@ -559,6 +631,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		files[k] = v
 	}
 	files[".lazyagents/agents-section.md"] = harness.AgentsMD("", c.spec, paths, c.ticket.Key)
+	if c.run.ParentRunID != nil {
+		files[".lazyagents/agents-section.md"] = harness.SubagentAgentsMD("", c.spec, paths, c.ticket.Key)
+	}
 	if c.run.TicketID == nil {
 		files[".lazyagents/agents-section.md"] = []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n"))
 	}
@@ -577,7 +652,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
-	proc, err := r.Backend.Start(ctx, c.run.ID.String(), ExecSpec{
+	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
 		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Files: files,
 	})
 	if err != nil {
@@ -748,7 +823,9 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	q := r.q()
 	switch c.run.State {
 	case "completed", "failed", "cancelled":
-		r.cleanup(ctx, runID)
+		if c.run.ParentRunID == nil {
+			r.cleanup(ctx, runID)
+		}
 		return
 	case "waiting", "paused":
 		_ = q.SetIdleTurns(ctx, store.SetIdleTurnsParams{ID: runID, IdleTurns: 0})
@@ -793,6 +870,11 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	}
 	if c.run.TicketID == nil {
 		r.end(ctx, c, "failed", "The planner stopped without submitting proposals. Start a new plan to retry.", runs.VerbRunFailed)
+		return
+	}
+	if c.run.ParentRunID != nil {
+		// Nobody to hand it to but the main agent, which gets told it didn't finish.
+		r.end(ctx, c, "failed", "The sub agent stopped without calling complete_run. Last message: "+lastLines(res.Final, 8), runs.VerbRunFailed)
 		return
 	}
 	// Second idle turn: hand it to a person; an @mention resumes it.

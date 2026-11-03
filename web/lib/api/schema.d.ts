@@ -1089,7 +1089,13 @@ export interface components {
             archived: boolean;
             revision: number;
         };
+        /**
+         * @description main agents are assigned tickets and may delegate parts of them; sub agents only run when a main agent delegates to them
+         * @enum {string}
+         */
+        AgentKind: "main" | "sub";
         Agent: {
+            kind: components["schemas"]["AgentKind"];
             /** Format: uuid */
             id: string;
             name: string;
@@ -1591,8 +1597,16 @@ export interface components {
             /** @description The harness session turns resume */
             session_id?: string;
             dispatched_by?: components["schemas"]["UserRef"];
-            /** @enum {string} */
-            wait_reason?: "approval" | "human_reply" | "pause";
+            /**
+             * @description delegation: waiting for a sub agent the run delegated to
+             * @enum {string}
+             */
+            wait_reason?: "approval" | "human_reply" | "pause" | "delegation";
+            /**
+             * Format: uuid
+             * @description Set on a run a main agent delegated to a sub agent; it works in the parent's checkout
+             */
+            parent_run_id?: string;
             harness: string;
             model: string;
             outcome?: string;
@@ -1646,7 +1660,7 @@ export interface components {
         RunTurn: {
             seq: number;
             /** @enum {string} */
-            trigger: "start" | "approval" | "comment" | "resume";
+            trigger: "start" | "approval" | "comment" | "resume" | "delegation";
             input_message: string;
             /** Format: date-time */
             started_at: string;
@@ -2883,6 +2897,7 @@ export interface operations {
                     role?: string;
                     specialty?: string;
                     color_index?: number;
+                    kind?: components["schemas"]["AgentKind"];
                 };
             };
         };
@@ -2938,6 +2953,8 @@ export interface operations {
                     role: string;
                     specialty: string;
                     color_index: number;
+                    /** @description Omit to keep the current kind. A sub agent can't have open tickets assigned. */
+                    kind?: components["schemas"]["AgentKind"];
                     spec: components["schemas"]["AgentSpec"];
                     /** @description What changed, for the version list */
                     note?: string;

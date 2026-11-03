@@ -9,6 +9,8 @@ import {
   useAgentOverviews,
 } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/controls";
+import type { AgentKind } from "@/lib/api/client";
 import {
   Banner,
   EmptyState,
@@ -57,7 +59,10 @@ export function AgentCard({ overview: o }: { overview: AgentOverview }) {
           >
             {a.name}
           </Link>
-          <p className="truncate text-xs text-fg-secondary">{a.role}</p>
+          <p className="truncate text-xs text-fg-secondary">
+            {a.kind === "sub" ? "Sub agent · " : ""}
+            {a.role}
+          </p>
         </div>
         <AgentStatus status={a.status} />
       </div>
@@ -180,7 +185,7 @@ export function AgentsScreen() {
   const router = useRouter();
   const create = useCreateAgent();
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: "", handle: "" });
+  const [form, setForm] = useState<{ name: string; handle: string; kind: AgentKind }>({ name: "", handle: "", kind: "main" });
   const agents = roster.data?.agents ?? [];
   const visible = agents.filter(
     (o) => status === "all" || o.agent.status === status,
@@ -221,6 +226,7 @@ export function AgentsScreen() {
                     name: form.name.trim(),
                     handle,
                     color_index: agents.length % 8,
+                    kind: form.kind,
                   },
                   {
                     onSuccess: (d) => router.push(`/agents/${d.agent.handle}`),
@@ -247,6 +253,18 @@ export function AgentsScreen() {
                   placeholder={handleFrom(form.name) || "scout"}
                 />
               </Field>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[12.5px] font-medium text-fg-2">Kind</span>
+                <Segmented
+                  label="Agent kind"
+                  value={form.kind}
+                  onChange={(kind) => setForm({ ...form, kind })}
+                  options={[
+                    { value: "main", label: "Main" },
+                    { value: "sub", label: "Sub" },
+                  ]}
+                />
+              </div>
               <Button
                 type="submit"
                 variant="primary"

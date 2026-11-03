@@ -37,9 +37,16 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		return Invocation{}, err
 	}
 
+	// "readonly" (planning runs) is enforced by the tool allow/deny lists
+	// below. It must not use Claude's own "plan" permission mode: that mode
+	// withholds approval for MCP tools, so propose_tickets is denied headless.
+	readonly := spec.HarnessOptions["readonly"] == "true"
 	mode := spec.HarnessOptions["permission_mode"]
-	if mode == "" {
+	if mode == "" || mode == "plan" {
 		mode = "acceptEdits"
+		if readonly {
+			mode = "default"
+		}
 	}
 	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite"}
 	for _, m := range spec.MCPServers {
@@ -50,7 +57,7 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		allow = append(allow, "Bash")
 	}
 	var deny []string
-	if spec.HarnessOptions["permission_mode"] == "plan" {
+	if readonly {
 		allow = []string{"mcp__" + lazyagentsServer, "Read", "Glob", "Grep"}
 		deny = append(deny, "Edit", "Write", "NotebookEdit", "Bash", "Agent")
 	}

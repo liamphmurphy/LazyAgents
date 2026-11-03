@@ -122,7 +122,7 @@ func (s *Server) GetAgent(ctx context.Context, req api.GetAgentRequestObject) (a
 func (s *Server) CreateAgent(ctx context.Context, req api.CreateAgentRequestObject) (api.CreateAgentResponseObject, error) {
 	u, _, ws := me(ctx)
 	b := req.Body
-	id := agents.Identity{Name: b.Name, Role: deref(b.Role), Specialty: deref(b.Specialty), ColorIndex: deref(b.ColorIndex)}
+	id := agents.Identity{Name: b.Name, Role: deref(b.Role), Specialty: deref(b.Specialty), ColorIndex: deref(b.ColorIndex), Kind: string(deref(b.Kind))}
 	a, err := s.Agents.Create(ctx, ws, u.ID, b.Handle, id, nil)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func (s *Server) SaveAgentDefinition(ctx context.Context, req api.SaveAgentDefin
 		return nil, apperr.Invalid("spec", "malformed definition")
 	}
 	a, err := s.Agents.SaveDefinition(ctx, ws, u.ID, req.Handle,
-		agents.Identity{Name: b.Name, Role: b.Role, Specialty: b.Specialty, ColorIndex: b.ColorIndex}, spec, deref(b.Note))
+		agents.Identity{Name: b.Name, Role: b.Role, Specialty: b.Specialty, ColorIndex: b.ColorIndex, Kind: string(deref(b.Kind))}, spec, deref(b.Note))
 	if err != nil {
 		return nil, err
 	}

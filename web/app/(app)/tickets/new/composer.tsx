@@ -214,7 +214,7 @@ export function Composer() {
                     {epic?.name ?? <span className="text-fg-tertiary">Epic</span>}
                   </Chip>
                 </EpicMenu>
-                <AgentPicker agents={boot.data.agents} value={agentId} onChange={setAgentId}>
+                <AgentPicker agents={boot.data.agents.filter((a) => a.kind === "main")} value={agentId} onChange={setAgentId}>
                   <Chip aria-label="Agent">
                     {agent ? <AgentAvatar name={agent.name} colorIndex={agent.color_index} label={false} /> : <Icon name="agents" size={13} className="text-fg-tertiary" />}
                     {agent?.name ?? <span className="text-fg-tertiary">Agent</span>}

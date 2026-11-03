@@ -67,7 +67,7 @@ func (q *Queries) DeleteOverride(ctx context.Context, arg DeleteOverrideParams) 
 }
 
 const getAgentByHandle = `-- name: GetAgentByHandle :one
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id FROM agents WHERE workspace_id = $1 AND handle = $2
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE workspace_id = $1 AND handle = $2
 `
 
 type GetAgentByHandleParams struct {
@@ -92,6 +92,7 @@ func (q *Queries) GetAgentByHandle(ctx context.Context, arg GetAgentByHandlePara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
+		&i.Kind,
 	)
 	return i, err
 }
@@ -226,7 +227,7 @@ func (q *Queries) ListOverrides(ctx context.Context, agentID uuid.UUID) ([]ListO
 }
 
 const lockAgentByHandle = `-- name: LockAgentByHandle :one
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id FROM agents WHERE workspace_id = $1 AND handle = $2 FOR UPDATE
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE workspace_id = $1 AND handle = $2 FOR UPDATE
 `
 
 type LockAgentByHandleParams struct {
@@ -251,14 +252,15 @@ func (q *Queries) LockAgentByHandle(ctx context.Context, arg LockAgentByHandlePa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
+		&i.Kind,
 	)
 	return i, err
 }
 
 const updateAgentFromDefinition = `-- name: UpdateAgentFromDefinition :one
 UPDATE agents SET name = $2, role = $3, specialty = $4, color_index = $5, model = $6,
-  max_concurrency = $7, current_definition_version_id = $8
-WHERE id = $1 RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id
+  max_concurrency = $7, current_definition_version_id = $8, kind = coalesce($9, kind)
+WHERE id = $1 RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind
 `
 
 type UpdateAgentFromDefinitionParams struct {
@@ -270,6 +272,7 @@ type UpdateAgentFromDefinitionParams struct {
 	Model                      string
 	MaxConcurrency             int32
 	CurrentDefinitionVersionID *uuid.UUID
+	Kind                       *string
 }
 
 // Identity lives on the agent row; model and concurrency are denormalized
@@ -284,6 +287,7 @@ func (q *Queries) UpdateAgentFromDefinition(ctx context.Context, arg UpdateAgent
 		arg.Model,
 		arg.MaxConcurrency,
 		arg.CurrentDefinitionVersionID,
+		arg.Kind,
 	)
 	var i Agent
 	err := row.Scan(
@@ -300,6 +304,7 @@ func (q *Queries) UpdateAgentFromDefinition(ctx context.Context, arg UpdateAgent
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
+		&i.Kind,
 	)
 	return i, err
 }

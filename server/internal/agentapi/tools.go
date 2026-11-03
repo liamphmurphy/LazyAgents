@@ -361,6 +361,12 @@ type CompleteIn struct {
 	Status  string `json:"status,omitempty" jsonschema:"in_review (default), done, or todo to hand the ticket back"`
 }
 
+type DelegateIn struct {
+	TicketArg
+	Agent string `json:"agent" jsonschema:"Handle of a sub agent from list_subagents, e.g. docs-writer"`
+	Task  string `json:"task" jsonschema:"What it should do, with the context it needs: it can't see your conversation. Name files, constraints and the done condition."`
+}
+
 type SearchIn struct {
 	Q       string   `json:"q" jsonschema:"What to look for; web-search syntax (quotes, OR, -word)"`
 	Kinds   []string `json:"kinds,omitempty" jsonschema:"Limit to note, prd, spec, adr, report, design or ticket"`
@@ -745,7 +751,28 @@ var Tools = []Tool{
 	define("read_page", "Read a wiki page or any document by title, path, ADR id or [[Page#Section]]. Lists the page's outgoing [[links]]; reads count as citations.", readPage),
 	define("write_note", "Write a wiki note. Your memory (agents/<your handle>/…) is always writable; other pages follow your wiki:write scope (allowed edits directly, requires_approval saves a suggestion). Link what it's about with [[…]].", writeNote),
 	define("get_backlinks", "What links to a page, document, ticket, epic or agent, with the sentence around each link.", getBacklinks),
-	define("complete_run", "Finish the run: the ticket moves to In Review (or done/todo).",
+	define("list_subagents", "Sub agents you can delegate part of a ticket to with delegate: handle, role and specialty. Main agents only.",
+		func(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
+			subs, err := d.Runs.ListSubagents(ctx, c)
+			if err != nil {
+				return nil, err
+			}
+			items := make([]map[string]any, len(subs))
+			for i, a := range subs {
+				items[i] = map[string]any{"handle": a.Handle, "name": a.Name, "role": a.Role, "specialty": a.Specialty}
+			}
+			return map[string]any{"subagents": items}, nil
+		}),
+	define("delegate", "Hand a self-contained part of your ticket (implementation, docs, tests) to a sub agent. It works in your checkout on your branch while you wait: end your turn after calling this and you'll be resumed with its summary. One delegation at a time. Review its diff before relying on it.",
+		func(ctx context.Context, d Deps, c agents.Caller, in DelegateIn) (any, error) {
+			dg, err := d.Runs.Delegate(ctx, c, in.Ticket, in.Agent, in.Task)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"state": "delegated", "agent": dg.Agent.Handle, "run_id": dg.Run.ID,
+				"message": "@" + dg.Agent.Handle + " is working on it. End your turn now: you'll be resumed with its result."}, nil
+		}),
+	define("complete_run", "Finish the run: the ticket moves to In Review (or done/todo). If you were delegated a task, this reports your summary back to the main agent instead and leaves the ticket alone.",
 		func(ctx context.Context, d Deps, c agents.Caller, in CompleteIn) (any, error) {
 			return ok(nil), d.Runs.Complete(ctx, c, in.Ticket, in.Outcome, in.Status)
 		}),

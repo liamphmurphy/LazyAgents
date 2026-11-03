@@ -1,6 +1,6 @@
 -- name: CreateRun :one
-INSERT INTO runs (workspace_id, ticket_id, agent_id, mode, state, resolved_spec, definition_version_id, harness, model)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;
+INSERT INTO runs (workspace_id, ticket_id, agent_id, mode, state, resolved_spec, definition_version_id, harness, model, parent_run_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, sqlc.narg(parent_run_id)) RETURNING *;
 
 -- name: GetRun :one
 SELECT * FROM runs WHERE id = $1 AND workspace_id = $2;
@@ -9,10 +9,20 @@ SELECT * FROM runs WHERE id = $1 AND workspace_id = $2;
 SELECT * FROM runs WHERE id = $1 FOR UPDATE;
 
 -- name: ActiveRunForTicket :one
-SELECT * FROM runs WHERE ticket_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled');
+-- The ticket's top-level run; delegated runs belong to it.
+SELECT * FROM runs WHERE ticket_id = $1 AND parent_run_id IS NULL AND state NOT IN ('completed', 'failed', 'cancelled');
+
+-- name: ActiveChildRun :one
+SELECT * FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled');
+
+-- name: CountChildRuns :one
+SELECT count(*) FROM runs WHERE parent_run_id = $1;
+
+-- name: ChildRuns :many
+SELECT * FROM runs WHERE parent_run_id = $1 ORDER BY started_at;
 
 -- name: LatestRunForTicket :one
-SELECT * FROM runs WHERE ticket_id = $1 ORDER BY started_at DESC LIMIT 1;
+SELECT * FROM runs WHERE ticket_id = $1 AND parent_run_id IS NULL ORDER BY started_at DESC LIMIT 1;
 
 -- name: ActiveRunsForAgent :many
 SELECT r.*, coalesce(t.key, 'Planning')::text AS ticket_key FROM runs r LEFT JOIN tickets t ON t.id = r.ticket_id
@@ -121,3 +131,4 @@ SELECT * FROM approval_requests WHERE run_id = $1 ORDER BY created_at;
 -- name: ReleaseApprovalExecution :exec
 -- Nothing ran (e.g. the secret was missing): the approval can be used again.
 UPDATE approval_requests SET executed_at = NULL WHERE id = $1 AND result IS NULL;
+

@@ -613,3 +613,36 @@ func TestApprovedRepositoryAndBaseBranchAreFrozen(t *testing.T) {
 	}
 	e.runner.Sweep(e.ctx)
 }
+
+func TestDelegatedRunSharesParentWorkspace(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "delegate")
+	if _, err := (&agents.Service{Pool: e.pool}).Create(e.ctx, e.ws, e.me.ID, "scribe", agents.Identity{Name: "Scribe", Role: "Docs", Kind: agents.KindSub}, nil); err != nil {
+		t.Fatal(err)
+	}
+	e.dispatch("PAY-214")
+	e.until("completed", e.state("PAY-214=completed"))
+	parent := e.run("PAY-214")
+	if parent.ParentRunID != nil || !strings.Contains(deref(parent.Outcome), "child.txt present=true") {
+		t.Fatalf("parent outcome %q", deref(parent.Outcome))
+	}
+	kids, _ := e.q.ChildRuns(e.ctx, &parent.ID)
+	if len(kids) != 1 || kids[0].State != "completed" || deref(kids[0].Outcome) != "Wrote child.txt" || kids[0].WorkspaceVolume != nil {
+		t.Fatalf("children %+v", kids)
+	}
+	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
+	if len(turns) != 2 || turns[1].Trigger != "delegation" {
+		t.Fatalf("parent turns %+v", turns)
+	}
+	tk, _ := tracker.Get(e.ctx, e.q, e.ws, "PAY-214")
+	if tk.Status != "in_review" {
+		t.Fatalf("ticket %s", tk.Status)
+	}
+	// The shared workspace goes once, with the parent.
+	if _, err := os.Stat(filepath.Join(e.dir, "work", "runs", parent.ID.String(), "workspace")); !os.IsNotExist(err) {
+		t.Fatal("workspace not removed")
+	}
+	if _, err := os.Stat(filepath.Join(e.dir, "work", "runs", kids[0].ID.String())); !os.IsNotExist(err) {
+		t.Fatal("the delegated run got its own workspace")
+	}
+}

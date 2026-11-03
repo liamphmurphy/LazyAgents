@@ -293,7 +293,7 @@ queued → starting (workspace + container) → running (turn 1)
 
 ### 6.6 Dispatch and scheduling
 
-- **A ticket has one agent in v1.** No handoffs, no reviewer agents, no parallel agents on the same ticket. Agents can still create follow-up tickets.
+- **A ticket has one main agent in v1.** Only *main* agents can be assigned tickets. A main agent may delegate parts of its ticket to *sub* agents (§6.8), one at a time. There are no reviewer agents and no parallel agents on the same ticket. Agents can still create follow-up tickets.
 - **Assigning doesn't start work.** Assigning a ticket puts it in the agent's queue as *assigned*. A human then **dispatches** it (the "Approve & dispatch" action on the ticket, or in bulk from the list), which moves it to *queued*. Any human can dispatch. This puts a human check in front of every run, along with the approval gates inside it.
 - A River job picks up queued tickets for each agent, up to `max_concurrency`. The global limit comes from `RUNNER_MAX_CONCURRENT`, and the dashboard's "agent capacity" segments are these slots.
 - An agent's queue length in the UI counts both assigned and queued tickets, with queued ones listed first.
@@ -304,6 +304,18 @@ A River periodic job (about every 60s, plus right away when an agent calls `set_
 - PR state (draft, open, merged or closed) and +/− diff stats go into the ticket's Code section. This replaces the agent's own reported numbers.
 - **When the PR merges, the ticket moves to Done** (logged as an activity event by the system). When it's closed without merging, the ticket gets a *Blocked* flag for a human to look at.
 - No webhooks, which suits a laptop with no public URL. We'd switch to webhooks along with the GitHub App.
+
+### 6.8 Main agents, sub agents and delegation
+
+Every agent has a **kind**: `main` (the default) or `sub`. This is identity, not part of the versioned definition.
+
+- **Main agents take tickets.** People assign and dispatch tickets to them as in §6.6. Assigning (or proposing in a plan) a sub agent is rejected, and an agent with open assigned tickets can't be switched to `sub`.
+- **Sub agents never start from a ticket.** They run only when a main agent calls `delegate(agent, task)`. `list_subagents` shows who is available. Sub agents can't delegate.
+- **A delegated run is a child run** (`runs.parent_run_id`): same ticket, resolved with the sub agent's own definition and the project's override, so its scopes, approvals, budget and cost are its own. It uses the **parent's workspace and branch**, with no clone or setup, and commits to the ticket's branch. The ticket keeps its one top-level run (§6.6), and the unique index applies to runs with no parent.
+- **Delegation is sequential.** `delegate` parks the parent (`waiting`, wait reason `delegation`) and ends its turn. When the child calls `complete_run`, its summary resumes the parent as a new turn (trigger `delegation`). A child that fails, is cancelled or stops without finishing also wakes the parent, with that reason. Only one child is live per parent, so only one process edits the checkout at a time. At most 8 delegations per parent run.
+- **`complete_run` in a child reports back and leaves the ticket alone.** The main agent stays responsible for it: it reviews the diff, then continues or finishes the ticket.
+- **Cancelling the parent cancels its live child.** A person can also pause, cancel or answer (`@sub-handle` comment) a child directly.
+- *Planned, not built:* **parallel delegation.** Several sub agents working at once would need a worktree or branch per child and a merge step, and a way for the parent to collect results rather than wait.
 
 ---
 

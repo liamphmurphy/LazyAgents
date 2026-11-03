@@ -103,7 +103,7 @@ export function Properties({ t, boot }: { t: Ticket; boot: Bootstrap }) {
           {PRIORITY_NAME[t.priority]}
         </PropButton>
       </PriorityMenu>
-      <AgentPicker agents={boot.agents} value={t.assignee?.id} onChange={(id) => update.mutate({ assignee_agent_id: id })}>
+      <AgentPicker agents={boot.agents.filter((a) => a.kind === "main")} value={t.assignee?.id} onChange={(id) => update.mutate({ assignee_agent_id: id })}>
         <PropButton label="Agent">
           {t.assignee ? (
             <>

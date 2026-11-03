@@ -7,6 +7,7 @@ import {
   postForm,
   unwrap,
   type AgentDetail,
+  type AgentKind,
   type AgentOverride,
   type AgentSpec,
   type Artifact,
@@ -316,7 +317,7 @@ export function useSetOverride(handle: string) {
 export function useCreateAgent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { handle: string; name: string; role?: string; color_index?: number }) =>
+    mutationFn: (body: { handle: string; name: string; role?: string; color_index?: number; kind?: AgentKind }) =>
       unwrap(api.POST("/agents", { body })),
     onSuccess: (d) => {
       qc.setQueryData(keys.agent(d.agent.handle), d);

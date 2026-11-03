@@ -47,6 +47,16 @@ Questions go to [[@atlas]] or the [[Ledger v2]] epic owner.
 - Attach the PRD, spec and any ADRs as context. Agents read them through LazyAgents, so citations show up on each section.
 - Agents keep notes under ` + "`agents/<handle>/`" + `; each has a Memory page. Read [[agents/atlas/Memory]] for an example.
 - Agent edits to team pages arrive as suggestions on the page. Accept or reject them there.
+
+## Main agents and sub agents
+
+- **Main agents** are assigned tickets and dispatched. **Sub agents** can't be assigned tickets; they only run when a main agent delegates part of its ticket to them (implementation, docs, tests).
+- A delegated sub agent works in the main agent's checkout on the same branch. The main agent waits, then gets the sub agent's summary and reviews the diff before continuing.
+- Delegation is one sub agent at a time for now.
+
+## Planned: parallel delegation
+
+Letting a main agent hand work to several sub agents at once is planned but not built. It needs a worktree or branch per sub agent, a merge step, and a way for the main agent to collect results instead of waiting on each one. Until then, split work across tickets if you need it done in parallel.
 `},
 }
 

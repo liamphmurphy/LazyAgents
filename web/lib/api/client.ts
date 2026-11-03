@@ -14,6 +14,7 @@ export type ArtifactSummary = Schemas["ArtifactSummary"];
 export type Artifact = Schemas["Artifact"];
 export type DocCardData = Schemas["DocCard"];
 export type AgentDetail = Schemas["AgentDetail"];
+export type AgentKind = Schemas["AgentKind"];
 export type AgentSpec = Schemas["AgentSpec"];
 export type AgentOverride = Schemas["AgentOverride"];
 export type ScopeMode = Schemas["ScopeMode"];

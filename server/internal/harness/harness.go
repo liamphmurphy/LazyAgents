@@ -114,13 +114,31 @@ func AnthropicModel(m string) string {
 // AgentsMD renders the instructions file for every harness (PLAN.md §6.2).
 // existing is the repo's own AGENTS.md, kept outside our marked section.
 func AgentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string) []byte {
+	return agentsMD(existing, spec, contextFiles, ticket, false)
+}
+
+// SubagentAgentsMD is AgentsMD for a run delegated by a main agent: it works
+// in the parent's checkout, doesn't claim the ticket, and reports through
+// complete_run.
+func SubagentAgentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string) []byte {
+	return agentsMD(existing, spec, contextFiles, ticket, true)
+}
+
+func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string, delegated bool) []byte {
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n")
 	b.WriteString("# LazyAgents run: " + ticket + "\n\n")
-	b.WriteString("You're running headless for LazyAgents. Use the `lazyagents` MCP tools to report progress: claim_ticket first, ")
-	b.WriteString("post_plan before editing, update_step as you go, request_approval before any scope that needs it, and complete_run at the end. ")
-	b.WriteString("When you need a person (an approval, an answer), call request_approval or await_human and then end your turn: ")
-	b.WriteString("you'll be resumed with their reply.\n\n")
+	if delegated {
+		b.WriteString("You're a sub agent running headless for LazyAgents. A main agent delegated one task to you and is waiting. ")
+		b.WriteString("Don't call claim_ticket. Work in this checkout on the current branch, commit what you change, and call complete_run ")
+		b.WriteString("with a short summary when you're done (or blocked). If you need a person, call request_approval or await_human and end your turn.\n\n")
+	} else {
+		b.WriteString("You're running headless for LazyAgents. Use the `lazyagents` MCP tools to report progress: claim_ticket first, ")
+		b.WriteString("post_plan before editing, update_step as you go, request_approval before any scope that needs it, and complete_run at the end. ")
+		b.WriteString("When you need a person (an approval, an answer), call request_approval or await_human and then end your turn: ")
+		b.WriteString("you'll be resumed with their reply.\n\n")
+		b.WriteString(delegationSection(spec))
+	}
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
 	if len(spec.Scopes) > 0 {
 		b.WriteString("## Scopes\n\n")
@@ -173,4 +191,11 @@ func denied(spec agentdef.Resolved, scope string) bool {
 		}
 	}
 	return true // unknown scopes are denied (agentdef.ModeFor)
+}
+
+// delegationSection tells a main agent it can hand work to sub agents.
+func delegationSection(agentdef.Resolved) string {
+	return "If sub agents exist (`list_subagents`), you may hand them self-contained parts of the ticket such as implementation or documentation with " +
+		"`delegate`. You wait while one works in this same checkout, then get its summary; review the diff before relying on it. " +
+		"You stay responsible for the ticket: only you call claim_ticket and complete_run for it.\n\n"
 }

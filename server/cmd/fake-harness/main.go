@@ -12,6 +12,8 @@
 //	idle                end the turn without saying what's next
 //	crash               exit 3 with an error result
 //	slow                wait for SIGINT (pause), then end the turn
+//	delegate            claim, delegate to @scribe, end the turn; the delegated run
+//	                    writes child.txt in the shared checkout and completes
 //
 // Resumed turns (--resume) finish the run with complete_run, unless
 // FAKE_HARNESS_RESUME=idle.
@@ -240,7 +242,23 @@ func main() {
 		result(false, "Still looking around.")
 		return
 	}
+	if os.Getenv("FAKE_HARNESS_MODE") == "delegate" && strings.Contains(prompt, "delegated part of") {
+		// A delegated run: no claim; work in the parent's checkout and report back.
+		if err := os.WriteFile("child.txt", []byte("from the sub agent\n"), 0o644); err != nil {
+			result(true, err.Error())
+			os.Exit(2)
+		}
+		call("complete_run", map[string]any{"outcome": "Wrote child.txt"})
+		result(false, "Done.")
+		return
+	}
 	if resume != "" {
+		if os.Getenv("FAKE_HARNESS_MODE") == "delegate" {
+			_, statErr := os.Stat("child.txt")
+			call("complete_run", map[string]any{"outcome": fmt.Sprintf("Reviewed: child.txt present=%v; %s", statErr == nil, firstLine(prompt))})
+			result(false, "Done.")
+			return
+		}
 		text("Resumed: " + firstLine(prompt))
 		status := "in_review"
 		if strings.HasPrefix(prompt, "Denied") {
@@ -276,6 +294,12 @@ func main() {
 	}
 
 	call("claim_ticket", map[string]any{"ticket": ticket})
+	if os.Getenv("FAKE_HARNESS_MODE") == "delegate" {
+		call("delegate", map[string]any{"agent": "scribe", "task": "Write child.txt"})
+		text("Delegated to @scribe. Ending my turn until it reports back.")
+		result(false, "Waiting for the sub agent.")
+		return
+	}
 	call("post_plan", map[string]any{"steps": []string{"Read context", "Make the change", "Apply to staging"}})
 	if os.Getenv("FAKE_HARNESS_MODE") == "complete" {
 		call("complete_run", map[string]any{"outcome": "Done in one turn"})

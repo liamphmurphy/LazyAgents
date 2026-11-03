@@ -113,6 +113,9 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		} else if err != nil {
 			return err
 		}
+		if c.Agent.Kind == agents.KindSub {
+			return apperr.Conflict("@%s is a sub agent: it runs when a main agent delegates to it, not from a ticket", c.Agent.Handle)
+		}
 		if t.AssigneeAgentID == nil || *t.AssigneeAgentID != c.Agent.ID {
 			return apperr.Conflict("%s isn't assigned to @%s. A person assigns tickets; ask for it in a comment.", t.Key, c.Agent.Handle)
 		}
@@ -210,6 +213,9 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			agent, err := q.GetAgent(ctx, store.GetAgentParams{ID: *t.AssigneeAgentID, WorkspaceID: ws})
 			if err != nil {
 				return err
+			}
+			if agent.Kind == agents.KindSub {
+				return apperr.Conflict("%s is assigned to @%s, a sub agent; assign a main agent, which can delegate to it", t.Key, agent.Handle)
 			}
 			p, err := q.LockProject(ctx, store.LockProjectParams{ID: t.ProjectID, WorkspaceID: ws})
 			if err != nil {
@@ -601,6 +607,20 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status s
 		return apperr.Invalid("status", "must be in_review, done, or todo (to hand back)")
 	}
 	outcome = strings.TrimSpace(outcome)
+	if c.RunID != nil {
+		// A delegated run reports back to its parent instead of moving the ticket.
+		var delegated bool
+		if err := s.tx(ctx, func(q *store.Queries) error {
+			r, err := q.GetRun(ctx, store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID})
+			delegated = err == nil && r.ParentRunID != nil
+			return nil
+		}); err != nil {
+			return err
+		}
+		if delegated {
+			return s.completeChild(ctx, c, key, outcome)
+		}
+	}
 	var t store.Ticket
 	err := s.tx(ctx, func(q *store.Queries) error {
 		run, tk, err := s.running(ctx, q, c, key)

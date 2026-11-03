@@ -368,6 +368,14 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			if err := runRecord(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunResumed, map[string]any{"run_id": run.ID}, nil); err != nil {
 				return err
 			}
+			if _, err := q.ActiveChildRun(ctx, &run.ID); err == nil {
+				wait := "delegation" // the delegated run is still going; its result resumes the parent
+				if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &wait}); err != nil {
+					return err
+				}
+				out, err = q.GetRun(ctx, store.GetRunParams{ID: run.ID, WorkspaceID: ws})
+				return err
+			}
 			if err := resume(ctx, q, run, "resume", "You were paused; continue."); err != nil {
 				return err
 			}
@@ -390,7 +398,13 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			if err := runRecord(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunCancelled, map[string]any{"run_id": run.ID}, nil); err != nil {
 				return err
 			}
-			return RecomputeAgentStatus(ctx, q, run.AgentID)
+			if err := CancelChildren(ctx, q, run.ID, "The main agent's run was cancelled."); err != nil {
+				return err
+			}
+			if err := RecomputeAgentStatus(ctx, q, run.AgentID); err != nil {
+				return err
+			}
+			return WakeParent(ctx, q, out, "cancelled", "a person cancelled it")
 		}
 		return apperr.Invalid("action", "must be pause, resume or cancel")
 	})
@@ -410,6 +424,12 @@ func (s *Service) OnHumanComment(ctx context.Context, ws uuid.UUID, ticketKey, b
 			return nil
 		} else if err != nil {
 			return err
+		}
+		if run.State == "waiting" && deref(run.WaitReason) == "delegation" {
+			// The ticket's live work is the sub agent's; @mention it to answer.
+			if child, err := q.ActiveChildRun(ctx, &run.ID); err == nil {
+				run = child
+			}
 		}
 		if run.State != "waiting" || deref(run.WaitReason) != "human_reply" {
 			return nil

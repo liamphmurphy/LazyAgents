@@ -551,6 +551,7 @@ paths:
                 role: { type: string }
                 specialty: { type: string }
                 color_index: { type: integer }
+                kind: { $ref: "#/components/schemas/AgentKind" }
       responses:
         "201":
           description: Created
@@ -593,6 +594,7 @@ paths:
                 role: { type: string }
                 specialty: { type: string }
                 color_index: { type: integer }
+                kind: { $ref: "#/components/schemas/AgentKind", description: "Omit to keep the current kind. A sub agent can't have open tickets assigned." }
                 spec: { $ref: "#/components/schemas/AgentSpec" }
                 note: { type: string, description: "What changed, for the version list" }
       responses:
@@ -1405,10 +1407,15 @@ components:
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
+    AgentKind:
+      type: string
+      enum: [main, sub]
+      description: "main agents are assigned tickets and may delegate parts of them; sub agents only run when a main agent delegates to them"
     Agent:
       type: object
-      required: [id, name, handle, color_index, role, specialty, model, status]
+      required: [id, name, handle, kind, color_index, role, specialty, model, status]
       properties:
+        kind: { $ref: "#/components/schemas/AgentKind" }
         id: { type: string, format: uuid }
         name: { type: string }
         handle: { type: string }
@@ -1944,7 +1951,8 @@ components:
         state: { type: string, enum: [queued, starting, running, waiting, paused, blocked, completed, failed, cancelled] }
         session_id: { type: string, description: The harness session turns resume }
         dispatched_by: { $ref: "#/components/schemas/UserRef" }
-        wait_reason: { type: string, enum: [approval, human_reply, pause] }
+        wait_reason: { type: string, enum: [approval, human_reply, pause, delegation], description: "delegation: waiting for a sub agent the run delegated to" }
+        parent_run_id: { type: string, format: uuid, description: "Set on a run a main agent delegated to a sub agent; it works in the parent's checkout" }
         harness: { type: string }
         model: { type: string }
         outcome: { type: string }
@@ -1994,7 +2002,7 @@ components:
       required: [seq, trigger, input_message, started_at, status, has_log]
       properties:
         seq: { type: integer }
-        trigger: { type: string, enum: [start, approval, comment, resume] }
+        trigger: { type: string, enum: [start, approval, comment, resume, delegation] }
         input_message: { type: string }
         started_at: { type: string, format: date-time }
         ended_at: { type: string, format: date-time }

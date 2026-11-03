@@ -20,7 +20,7 @@ func toUserRef(u store.User) *api.UserRef {
 
 func toAgent(a store.Agent) api.Agent {
 	return api.Agent{
-		Id: a.ID, Name: a.Name, Handle: a.Handle, ColorIndex: int(a.ColorIndex),
+		Id: a.ID, Name: a.Name, Handle: a.Handle, Kind: api.AgentKind(a.Kind), ColorIndex: int(a.ColorIndex),
 		Role: a.Role, Specialty: a.Specialty, Model: a.Model, Status: api.AgentStatus(a.Status),
 	}
 }

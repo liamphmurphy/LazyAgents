@@ -257,6 +257,12 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
           is waiting for a reply: <span className="text-pill-human-fg">{str(p.reason)}</span>
         </>
       );
+    case "delegated":
+      return (
+        <>
+          delegated to <span className="font-medium">{str(p.agent_name)}</span>: {str(p.task)}
+        </>
+      );
     case "run_paused":
       return "paused the run";
     case "run_resumed":

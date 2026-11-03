@@ -31,7 +31,7 @@ const STATE: Record<string, { tone: PillTone; label: string }> = {
   failed: { tone: "blocked", label: "Failed" },
   cancelled: { tone: "neutral", label: "Cancelled" },
 };
-const WAIT: Record<string, string> = { approval: "approval", human_reply: "reply", pause: "paused" };
+const WAIT: Record<string, string> = { approval: "approval", human_reply: "reply", pause: "paused", delegation: "sub agent" };
 const ENDED = ["completed", "failed", "cancelled"];
 
 const TRIGGER: Record<Turn["trigger"], string> = {
@@ -39,6 +39,7 @@ const TRIGGER: Record<Turn["trigger"], string> = {
   approval: "Resumed: a person decided",
   comment: "Resumed: a person replied",
   resume: "Resumed",
+  delegation: "Resumed: a sub agent finished",
 };
 
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });

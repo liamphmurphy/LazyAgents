@@ -573,8 +573,26 @@ export function PlansScreen() {
                 bootstrap.data.projects.some((p) => !p.archived) ? (
                 <NewPlan key={search.toString()} data={bootstrap.data} />
               ) : (
-                <EmptyState icon="epics" title="Add a project and agent first">
-                  Planning needs a project and an agent definition.
+                <EmptyState
+                  icon="epics"
+                  title={
+                    bootstrap.data.projects.some((p) => !p.archived)
+                      ? "Create an agent first"
+                      : "Create a project first"
+                  }
+                  actions={
+                    bootstrap.data.projects.some((p) => !p.archived) ? (
+                      <ButtonLink href="/agents" variant="outline">
+                        Go to agents
+                      </ButtonLink>
+                    ) : (
+                      <ButtonLink href="/settings/projects" variant="outline">
+                        Create a project
+                      </ButtonLink>
+                    )
+                  }
+                >
+                  Planning needs an active project and at least one agent.
                 </EmptyState>
               ))}
           </main>
