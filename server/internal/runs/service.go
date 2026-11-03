@@ -160,7 +160,7 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		}
 		run, err = q.CreateRun(ctx, store.CreateRunParams{
 			WorkspaceID: ws, TicketID: &t.ID, AgentID: c.Agent.ID, Mode: mode, State: "running",
-			ResolvedSpec: raw, DefinitionVersionID: c.Agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model,
+			ResolvedSpec: raw, DefinitionVersionID: c.Agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model, Purpose: "ticket",
 		})
 		if err != nil {
 			return err
@@ -236,7 +236,7 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			raw, _ := json.Marshal(resolved)
 			run, err := q.CreateRun(ctx, store.CreateRunParams{
 				WorkspaceID: ws, TicketID: &t.ID, AgentID: agent.ID, Mode: "managed", State: "queued",
-				ResolvedSpec: raw, DefinitionVersionID: agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model,
+				ResolvedSpec: raw, DefinitionVersionID: agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model, Purpose: "ticket",
 			})
 			if err != nil {
 				return err

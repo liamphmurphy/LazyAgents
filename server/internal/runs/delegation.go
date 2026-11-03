@@ -106,7 +106,7 @@ func (s *Service) Delegate(ctx context.Context, c Caller, ticketKey, handle, tas
 		}
 		child, err := q.CreateRun(ctx, store.CreateRunParams{
 			WorkspaceID: ws, TicketID: &t.ID, AgentID: sub.ID, Mode: "managed", State: "queued",
-			ResolvedSpec: raw, DefinitionVersionID: sub.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model,
+			ResolvedSpec: raw, DefinitionVersionID: sub.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model, Purpose: "ticket",
 			ParentRunID: &run.ID,
 		})
 		if err != nil {

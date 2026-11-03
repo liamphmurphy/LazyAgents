@@ -114,7 +114,7 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 		}
 		resolved = PlanningSpec(resolved)
 		raw, _ := json.Marshal(resolved)
-		run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, AgentID: a.ID, Mode: "managed", State: "queued", ResolvedSpec: raw, DefinitionVersionID: a.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model})
+		run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, AgentID: a.ID, Mode: "managed", State: "queued", ResolvedSpec: raw, DefinitionVersionID: a.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model, Purpose: "planning"})
 		if err != nil {
 			return err
 		}

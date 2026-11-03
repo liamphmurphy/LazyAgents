@@ -410,7 +410,7 @@ func TestLegacyRunRepositoryFreezesBeforeProjectEdit(t *testing.T) {
 	a, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: me.WorkspaceID, Handle: "atlas"})
 	tk, _ := tracker.Get(ctx, q, me.WorkspaceID, "PAY-224")
 	p, _ := q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: me.WorkspaceID, Key: "PAY"})
-	legacy, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: me.WorkspaceID, TicketID: &tk.ID, AgentID: a.ID, Mode: "managed", State: "queued", Harness: "claude-code", Model: "test", ResolvedSpec: json.RawMessage(`{}`)})
+	legacy, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: me.WorkspaceID, TicketID: &tk.ID, AgentID: a.ID, Mode: "managed", State: "queued", Harness: "claude-code", Model: "test", ResolvedSpec: json.RawMessage(`{}`), Purpose: "ticket"})
 	if err != nil {
 		t.Fatal(err)
 	}
