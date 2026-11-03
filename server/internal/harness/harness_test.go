@@ -307,6 +307,9 @@ func TestChatAgentsMD(t *testing.T) {
 		if strings.Contains(got, bad) {
 			t.Errorf("ticket workflow %q in %s", bad, got)
 		}
+	}
+}
+
 func TestCodexMCPPolicyOnResumeAndPlanning(t *testing.T) {
 	for _, session := range []string{"", "thread-existing"} {
 		t.Run(session, func(t *testing.T) {
