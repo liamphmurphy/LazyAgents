@@ -46,3 +46,34 @@ No Claude assistant turn completed. A Claude-to-Codex switch with context recall
 - ADR implementation gaps confirmed by inspection: handoff entries carry only message role/model/body (no title/attached context refs), SQL pre-clipping at 8000 characters can hide the clipping marker, and `Runner.Sweep` only cleans ended workspaces (no seven-day idle segmentation). Same-harness resume-failure handoff fallback remains unverified and was already recorded as open in tech-lead memory.
 
 Token-level streaming, shared chats, and repository-editing chats are ADR non-goals; absence is not a runtime regression. README Chat instructions, final REPORT artifact, and follow-up ticket filing remain owned by the lead. No acceptance criteria were checked by this delegation.
+
+## Local-runner continuation (2026-11-03, 08:19–08:20 PST)
+
+Resumed clean at `65b3a1e` on the existing branch; preserved all earlier commits. Read the supplied context, current ticket and prior verification plan/evidence, then posted a three-step continuation plan. No feature code or full-suite rerun was needed for this diagnostic task.
+
+**Correction to the earlier prerequisite claim:** app provider secrets are not required for the local backend. `make runner` explicitly sets `RUNNER_BACKEND=local`; `runRunner` uses host CLI logins and sets `RequireHarnessKey` only for Docker. Missing app secrets alone do not establish a provider/authentication blocker. Earlier evidence/report and memory claiming both secrets must be supplied are superseded by this finding. This attempt never reached a provider, so it establishes neither login validity nor invalidity.
+
+### Catalog and HTTP selection
+
+- API `GET /api/v1/chat-models` still returns both harnesses unavailable for missing app secrets. Source wiring in `server/cmd/lazyagents/main.go` initializes the API service's `RequireHarnessKey` from its own `cfg.Runner.Backend`, default `docker`, separately from each runner process. `make api` does not set local mode, whereas `make runner` does. Thus the normal split startup can advertise Docker key requirements while actual local runners use CLI logins. No environment dumps or auth files were inspected.
+- A new Claude chat with `sonnet-5.5` returned 201 despite the unavailable catalog, because `Catalog.Resolve` gates availability on changing harness from the resolved default. The default agent resolved to Claude. This is not a general local-mode API bypass.
+- Explicit creation selecting Codex `gpt-5-codex` returned 422, field `harness`: `Codex is unavailable: no harness:openai secret`. The API provides no per-request local-mode override in the inspected selection path. A switch attempted while the Claude turn was stalled returned 409 (`the chat is archived or a turn is still running`), before selection could succeed. Real cross-harness smoke remains blocked by API/runner configuration mismatch even after stale-runner resolution unless server catalog settings are aligned.
+
+### Actual retry and startup provenance
+
+At 08:19:37 PST, created chat `01a1a235-7fe1-7a28-8924-0bc18152989b`; POST message returned 202 with message `01a1a235-7fef-7494-a849-9abd48d6a8dd` and Claude segment `01a1a235-7fe9-748d-ad39-7813550a95f9`. Prompt asked to remember `amber-otter-local-14`, read `Architecture/ADR - Project chat sessions` using MCP, and cite it. Repeated history reads contained only the user message, with empty citations.
+
+Metadata-only read queries against the existing development database showed this segment `purpose=chat`, `state=starting`, owned by runner `Liams-MacBook-Pro.local-46686`. Its only turn was pending, with no process start timestamp; one run event existed. No assistant reply, actual wiki read/version, Codex segment or recall evidence exists. Run-detail GET again returned HTTP 500, consistent with the already recorded LAZYAGENTS-15 defect.
+
+`lsof` established PID 46686 executes `/private/tmp/lazyagents-git-permissions-live` with stdout/stderr in `/private/tmp/lazyagents-live-runner-git-permissions-38180.log`. That log identifies a local backend and records both:
+
+- 08:04:49.619212: `load run`, old smoke segment `01a1a227-f1ba-7b14-8c44-5e82797c7a46`, `no rows in result set`.
+- 08:19:37.626125: `load run`, new segment `01a1a235-7fe9-748d-ad39-7813550a95f9`, `no rows in result set`.
+
+`go version -m` identifies that executable's VCS base as `af84e546e50c33af194c67e30c1fb2028323caba`, modified=true. At that recorded base, `runner.load` handles ticket purpose and otherwise calls `PlanningSessionForRun`; this checkout explicitly handles chat purpose. The modified build flag means exact binary source is not reproducible from the SHA alone, but executable provenance, correlated errors and old source strongly indicate a stale runner without chat support. This is a concrete pre-provider load failure, not evidence of absent API keys. Current heartbeats show five local runners (46683–46686 and 88997), so starting another runner cannot guarantee chat-capable ownership. PID 46686 also serves existing work (running=1); none were killed, restarted or reconfigured. `ps` was sandbox-denied; `lsof`, build metadata, heartbeat rows and correlated log lines supplied the provenance instead.
+
+### Cleanup, verdict and lead action
+
+Deleted only this continuation's chat through normal DELETE (204); read-only SQL confirmed segment `cancelled`, outcome `The chat was deleted.` The rejected Codex creation produced no fixture. No shared database writes outside normal app operations, migration, deployment, provider credential reads, push or unrelated process changes occurred.
+
+**QA verdict remains changes requested; criterion 2 remains unchecked.** Lead should arrange a coordinated refresh/drain of all old runner binaries without interrupting active work, align the API catalog backend with local CLI mode, then retry the real Claude → Codex smoke. Route startup evidence to LAZYAGENTS-19 and catalog/configuration behavior to backend ownership. Do not ask for app secrets as the local-runner prerequisite. Require two genuine assistant replies, correct Codex recall, wiki citation/version and both segment IDs before acceptance. These are runtime/configuration findings; no feature fix was made in this QA task.
