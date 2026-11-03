@@ -74,3 +74,24 @@ WITH locked AS MATERIALIZED (
 )
 UPDATE chat_sessions SET state = 'idle', revision = revision + 1, updated_at = now()
 WHERE current_run_id IN (SELECT id FROM cancelled);
+
+-- name: ChatTurnCitations :many
+-- What a chat run read since a turn began, one row per (artifact, version, section).
+SELECT a.id AS artifact_id, a.type, a.title, a.path, a.number,
+       v.id AS version_id, v.label AS version, s.anchor AS section, max(r.read_at)::timestamptz AS read_at
+FROM artifact_reads r
+JOIN artifact_versions v ON v.id = r.version_id
+JOIN artifacts a ON a.id = v.artifact_id
+LEFT JOIN artifact_sections s ON s.id = r.section_id
+WHERE r.run_id = sqlc.arg(run_id) AND r.read_at >= sqlc.arg(since)
+GROUP BY a.id, v.id, s.anchor
+ORDER BY min(r.read_at), a.id, s.anchor NULLS FIRST;
+
+-- name: LinkSourceInProject :one
+-- Whether a backlink source (artifact, ticket or comment) is visible to a chat on this project:
+-- project-less artifacts are workspace-wide.
+SELECT CASE sqlc.arg(source_kind)::text
+  WHEN 'artifact' THEN EXISTS (SELECT 1 FROM artifacts x WHERE x.id = sqlc.arg(source_id) AND (x.project_id IS NULL OR x.project_id = sqlc.arg(project_id)))
+  WHEN 'ticket' THEN EXISTS (SELECT 1 FROM tickets x WHERE x.id = sqlc.arg(source_id) AND x.project_id = sqlc.arg(project_id))
+  WHEN 'comment' THEN EXISTS (SELECT 1 FROM comments c JOIN tickets t ON t.id = c.ticket_id WHERE c.id = sqlc.arg(source_id) AND t.project_id = sqlc.arg(project_id))
+  ELSE false END::bool AS visible;

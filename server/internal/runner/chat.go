@@ -71,7 +71,13 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 					body = fmt.Sprintf("The chat turn stopped (exit %d). Send another message to retry.", code)
 				}
 			}
-			if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: body, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]"), Usage: usage}); err != nil {
+			citations := []byte("[]")
+			if role == "assistant" {
+				if citations, err = runs.ChatCitations(ctx, q, run.ID, turn.StartedAt); err != nil {
+					return err
+				}
+			}
+			if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: body, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: citations, Usage: usage}); err != nil {
 				return err
 			}
 		}

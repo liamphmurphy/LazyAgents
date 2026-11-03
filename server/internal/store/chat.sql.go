@@ -152,6 +152,66 @@ func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID
 	return i, err
 }
 
+const chatTurnCitations = `-- name: ChatTurnCitations :many
+SELECT a.id AS artifact_id, a.type, a.title, a.path, a.number,
+       v.id AS version_id, v.label AS version, s.anchor AS section, max(r.read_at)::timestamptz AS read_at
+FROM artifact_reads r
+JOIN artifact_versions v ON v.id = r.version_id
+JOIN artifacts a ON a.id = v.artifact_id
+LEFT JOIN artifact_sections s ON s.id = r.section_id
+WHERE r.run_id = $1 AND r.read_at >= $2
+GROUP BY a.id, v.id, s.anchor
+ORDER BY min(r.read_at), a.id, s.anchor NULLS FIRST
+`
+
+type ChatTurnCitationsParams struct {
+	RunID *uuid.UUID
+	Since time.Time
+}
+
+type ChatTurnCitationsRow struct {
+	ArtifactID uuid.UUID
+	Type       string
+	Title      string
+	Path       *string
+	Number     *int32
+	VersionID  uuid.UUID
+	Version    string
+	Section    *string
+	ReadAt     time.Time
+}
+
+// What a chat run read since a turn began, one row per (artifact, version, section).
+func (q *Queries) ChatTurnCitations(ctx context.Context, arg ChatTurnCitationsParams) ([]ChatTurnCitationsRow, error) {
+	rows, err := q.db.Query(ctx, chatTurnCitations, arg.RunID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatTurnCitationsRow{}
+	for rows.Next() {
+		var i ChatTurnCitationsRow
+		if err := rows.Scan(
+			&i.ArtifactID,
+			&i.Type,
+			&i.Title,
+			&i.Path,
+			&i.Number,
+			&i.VersionID,
+			&i.Version,
+			&i.Section,
+			&i.ReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createChatSession = `-- name: CreateChatSession :one
 INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
@@ -249,6 +309,29 @@ func (q *Queries) HasRunningChatTurn(ctx context.Context, runID uuid.UUID) (bool
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const linkSourceInProject = `-- name: LinkSourceInProject :one
+SELECT CASE $1::text
+  WHEN 'artifact' THEN EXISTS (SELECT 1 FROM artifacts x WHERE x.id = $2 AND (x.project_id IS NULL OR x.project_id = $3))
+  WHEN 'ticket' THEN EXISTS (SELECT 1 FROM tickets x WHERE x.id = $2 AND x.project_id = $3)
+  WHEN 'comment' THEN EXISTS (SELECT 1 FROM comments c JOIN tickets t ON t.id = c.ticket_id WHERE c.id = $2 AND t.project_id = $3)
+  ELSE false END::bool AS visible
+`
+
+type LinkSourceInProjectParams struct {
+	SourceKind string
+	SourceID   uuid.UUID
+	ProjectID  uuid.UUID
+}
+
+// Whether a backlink source (artifact, ticket or comment) is visible to a chat on this project:
+// project-less artifacts are workspace-wide.
+func (q *Queries) LinkSourceInProject(ctx context.Context, arg LinkSourceInProjectParams) (bool, error) {
+	row := q.db.QueryRow(ctx, linkSourceInProject, arg.SourceKind, arg.SourceID, arg.ProjectID)
+	var visible bool
+	err := row.Scan(&visible)
+	return visible, err
 }
 
 const listChatMessages = `-- name: ListChatMessages :many

@@ -409,3 +409,53 @@ func TestChatRunnerRecovery(t *testing.T) {
 		})
 	}
 }
+
+// A turn's citations are what that turn read; a turn without reads cites nothing.
+func TestChatTurnCitations(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat-read")
+	var art uuid.UUID
+	var anchor, label string
+	err := e.pool.QueryRow(e.ctx, `SELECT a.id, s.anchor, v.label FROM artifacts a JOIN artifact_versions v ON v.id = a.current_version_id
+		JOIN artifact_sections s ON s.version_id = v.id
+		WHERE a.type = 'prd' AND a.project_id = (SELECT id FROM projects WHERE key = 'PAY') ORDER BY a.id, s.position LIMIT 1`).Scan(&art, &anchor, &label)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A read from before the turn (e.g. an earlier segment) must not be cited.
+	if _, err := e.pool.Exec(e.ctx, `INSERT INTO artifact_reads (version_id, agent_id, run_id, read_at)
+		SELECT current_version_id, $2, NULL, now() - interval '1 hour' FROM artifacts WHERE id = $1`, art, e.atlas.ID); err != nil {
+		t.Fatal(err)
+	}
+	chat := e.startChat("read " + art.String() + " " + anchor)
+	e.until("first reply", func() bool { return e.chat(chat.ID).State == "idle" })
+	// Same artifact twice in one turn is cited once; the next turn reads nothing.
+	if _, err := e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "no reads here"}); err != nil {
+		t.Fatal(err)
+	}
+	e.until("second reply", func() bool {
+		m, _ := e.q.ListChatMessages(e.ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 20})
+		return len(m) == 4 && e.chat(chat.ID).State == "idle"
+	})
+	msgs, err := e.q.ListChatMessages(e.ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 20})
+	if err != nil || len(msgs) != 4 {
+		t.Fatalf("messages %+v %v", msgs, err)
+	}
+	var cites []struct {
+		Target     struct{ Kind, Anchor, Title string }
+		ArtifactID uuid.UUID `json:"artifact_id"`
+		VersionID  uuid.UUID `json:"version_id"`
+		Version    string
+		Section    *string
+	}
+	if err := json.Unmarshal(msgs[1].Citations, &cites); err != nil || len(cites) != 1 {
+		t.Fatalf("first turn citations %s: %v", msgs[1].Citations, err)
+	}
+	c := cites[0]
+	if c.ArtifactID != art || c.Version != label || c.VersionID == uuid.Nil || c.Section == nil || *c.Section != anchor || c.Target.Kind != "section" || c.Target.Anchor != anchor {
+		t.Fatalf("citation %s", msgs[1].Citations)
+	}
+	if string(msgs[3].Citations) != "[]" || string(msgs[0].Citations) != "[]" {
+		t.Fatalf("citations bled: user=%s second=%s", msgs[0].Citations, msgs[3].Citations)
+	}
+}

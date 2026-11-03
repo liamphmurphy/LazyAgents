@@ -749,6 +749,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	// The first turn delivers context files: each counts as one read (§6.5).
 	if turn.Trigger == "start" || (c.run.Purpose == "chat" && turn.Seq == 1) {
 		now := time.Now()
+		if c.run.Purpose == "chat" {
+			// Delivered context still counts as a read, but sits just before the turn so
+			// it isn't cited as something the assistant looked up (see runs.ChatCitations).
+			now = turn.StartedAt.Add(-time.Millisecond)
+		}
 		for _, f := range ctxFiles {
 			if a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: c.run.WorkspaceID}); err == nil {
 				if f.VersionID != nil {

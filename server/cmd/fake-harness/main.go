@@ -9,6 +9,7 @@
 //
 //	approval (default)  claim, plan, request db:migrate approval, end turn
 //	complete            claim, plan, complete_run
+//	chat-read           chat turn; a prompt "read <artifact id> [section]" reads it through MCP
 //	idle                end the turn without saying what's next
 //	crash               exit 3 with an error result
 //	slow                wait for SIGINT (pause), then end the turn
@@ -278,6 +279,20 @@ func main() {
 		return out
 	}
 	ticket := os.Getenv("LAZYAGENTS_TICKET")
+	// chat-read: a prompt of "read <artifact id> [section]" reads it through MCP; any other prompt reads nothing.
+	if os.Getenv("FAKE_HARNESS_MODE") == "chat-read" {
+		if f := strings.Fields(prompt); len(f) >= 2 && f[0] == "read" {
+			args := map[string]any{"artifact": f[1]}
+			if len(f) > 2 {
+				args["section"] = f[2]
+			}
+			call("read_artifact", args)
+		}
+		answer := "Chat reply: " + prompt
+		text(answer)
+		result(false, answer)
+		return
+	}
 	if os.Getenv("FAKE_HARNESS_MODE") == "planning" {
 		who := call("whoami", map[string]any{})
 		call("get_ticket", map[string]any{"ticket": "PAY-214"})

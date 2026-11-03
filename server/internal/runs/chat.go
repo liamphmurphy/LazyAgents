@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/lazyagents/server/internal/links"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
@@ -228,4 +230,27 @@ func (s *Service) CancelChat(ctx context.Context, ws, user, id uuid.UUID) (store
 		return event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_turn_cancelled"})
 	})
 	return out, err
+}
+
+// ChatCitations is the JSON for a chat message's citations: what the run read
+// since the turn began (the ChatCitation schema's target, plus the exact version
+// and section). Reads are deduplicated by artifact, version and section.
+func ChatCitations(ctx context.Context, q *store.Queries, runID uuid.UUID, since time.Time) ([]byte, error) {
+	rows, err := q.ChatTurnCitations(ctx, store.ChatTurnCitationsParams{RunID: &runID, Since: since})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		anchor := ""
+		if r.Section != nil {
+			anchor = *r.Section
+		}
+		a := store.Artifact{ID: r.ArtifactID, Type: r.Type, Title: r.Title, Path: r.Path, Number: r.Number}
+		out = append(out, map[string]any{
+			"target": links.ArtifactTarget(a, anchor), "artifact_id": r.ArtifactID, "title": r.Title, "path": r.Path,
+			"version_id": r.VersionID, "version": r.Version, "section": r.Section,
+		})
+	}
+	return json.Marshal(out)
 }
