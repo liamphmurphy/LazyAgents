@@ -225,7 +225,6 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		if err != nil {
 			return chat, msg, err
 		}
-		// Selection is frozen at chat creation. Switching belongs to LAZYAGENTS-10.
 		spec.Harness, spec.Model = chat.Harness, chat.Model
 		spec = ChatSpec(spec)
 		raw, err := json.Marshal(spec)

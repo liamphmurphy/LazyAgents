@@ -26,6 +26,7 @@ import { LinkEditor } from "@/components/domain/link-editor";
 import { LocalGraph } from "@/components/domain/local-graph";
 import { Markdown } from "@/components/domain/markdown";
 import { TargetMark } from "@/components/domain/wikilink";
+import { StartChatButton } from "@/components/domain/start-chat";
 import { TopBar, type Crumb } from "@/components/shell/topbar";
 import { PageTree } from "./page-tree";
 import { SuggestionCard } from "./suggestions";
@@ -420,6 +421,9 @@ function PageView({ path }: { path: string }) {
           <Button variant="outline" icon="plus" onClick={() => setCreating(true)}>
             New page
           </Button>
+          {page && !editing && (
+            <StartChatButton attach={{ kind: "page", id: page.id }} title={page.title} project={page.project?.key} />
+          )}
           {page && !editing && (
             <Button variant="secondary" icon="edit" hint="E" onClick={() => setEditing(true)}>
               Edit

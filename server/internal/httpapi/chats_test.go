@@ -390,8 +390,8 @@ func TestChatSelectionValidation(t *testing.T) {
 	if m := res["chat"].(map[string]any)["model"]; m != "gpt-5-mini" {
 		t.Fatalf("model-only change %v", res)
 	}
-	// The segment run is created with the stored selection at the first post; a
-	// model-only change on the same harness is applied to it on the next message.
+	// The segment run is created on the stored harness; a same-harness model
+	// change keeps the run and records the last model used (LAZYAGENTS-10).
 	var h, m string
 	if err := e.pool.QueryRow(context.Background(), "SELECT harness, model FROM runs WHERE id=(SELECT current_run_id FROM chat_sessions WHERE id=$1)", id).Scan(&h, &m); err != nil || h != "codex" || m != "gpt-5-mini" {
 		t.Fatalf("segment run %s/%s %v", h, m, err)
@@ -556,5 +556,23 @@ func TestChatUpdatedReachesSSE(t *testing.T) {
 	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hello"}, http.StatusAccepted)
 	if !waitChat(events, id, time.Second) {
 		t.Fatal("posting a message produced no chat.updated with the chat id within 1s")
+	}
+}
+
+// Citation fields beyond target (version and section) survive the API so the
+// Sources footer can link to the exact version that was read (LAZYAGENTS-13).
+func TestChatMessageCitationFields(t *testing.T) {
+	e := newChatEnv(t)
+	id := e.newChat(nil)["id"].(string)
+	cite := `[{"target":{"kind":"section","title":"Spec","anchor":"retries"},"artifact_id":"` + e.payArt.String() +
+		`","title":"Spec","version_id":"` + e.payArt.String() + `","version":"v2","section":"retries"}]`
+	if _, err := e.pool.Exec(context.Background(), `INSERT INTO chat_messages (session_id, seq, role, body_md, context_refs, citations)
+		VALUES ($1, 1, 'assistant', 'answer', '[]', $2)`, id, cite); err != nil {
+		t.Fatal(err)
+	}
+	got := e.want("GET", "/chats/"+id+"/messages", nil, 200)
+	c := got["messages"].([]any)[0].(map[string]any)["citations"].([]any)[0].(map[string]any)
+	if c["version"] != "v2" || c["section"] != "retries" || c["version_id"] != e.payArt.String() || c["artifact_id"] != e.payArt.String() || c["target"].(map[string]any)["anchor"] != "retries" {
+		t.Fatalf("citation %v", c)
 	}
 }

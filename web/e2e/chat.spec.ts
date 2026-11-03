@@ -1,8 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installChatApi } from "./mock-chat-api";
 
-const composer = (page: Page) => page.getByRole("textbox", { name: "Message" });
+const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const picker = (page: Page) => page.getByRole("button", { name: /Model for the next message/ });
+
+const chips = (page: Page) => page.getByTestId("context-chip");
 
 async function newChat(page: Page) {
   await page.getByRole("button", { name: "New chat" }).first().click();
@@ -91,4 +93,139 @@ test("rename and archive from the history list", async ({ page }) => {
   await page.getByRole("button", { name: "Archive Roadmap" }).click();
   await expect(page).toHaveURL(/\/chat\?project=WEB/);
   await expect(page.getByRole("navigation", { name: "Chats" }).getByText("No chats yet")).toBeVisible();
+});
+
+test("[[ picks context as removable chips and sends them as context_refs", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat");
+  await newChat(page);
+
+  // Typing [[ offers pages, artifacts and tickets; picking adds a chip, not text.
+  await composer(page).fill("see [[Pla");
+  const list = page.getByRole("listbox", { name: "Link to" });
+  await expect(list.getByRole("option")).toHaveCount(1);
+  await list.getByRole("option", { name: /Eng\/Plan/ }).click();
+  await expect(chips(page)).toHaveCount(1);
+  await expect(chips(page).first()).toContainText("Eng/Plan");
+  await expect(composer(page)).toHaveValue("see ");
+
+  // Enter on the highlighted suggestion picks it with the keyboard.
+  await composer(page).pressSequentially("[[WEB-");
+  await expect(page.getByRole("option", { name: /WEB-3/ })).toBeVisible();
+  await composer(page).press("Enter");
+  await expect(chips(page)).toHaveCount(2);
+
+  // "Add context" opens the same picker.
+  await page.getByRole("button", { name: "Add context" }).click();
+  await page.getByRole("combobox", { name: "Search pages, artifacts and tickets" }).fill("Q3");
+  await page.getByRole("option", { name: /Q3 report/ }).click();
+  await expect(chips(page)).toHaveCount(3);
+
+  // Picking the same thing twice doesn't duplicate; chips can be removed.
+  await composer(page).pressSequentially("[[WEB-");
+  await composer(page).press("Enter");
+  await expect(chips(page)).toHaveCount(3);
+  await page.getByRole("button", { name: "Remove Q3 report" }).click();
+  await expect(chips(page)).toHaveCount(2);
+
+  await composer(page).press("Enter");
+  await expect(page.getByTestId("assistant-message").first()).toContainText("Echo: see");
+  expect(mock.posted.at(-1)?.body.context_refs).toEqual([
+    { kind: "page", id: "11111111-1111-4111-8111-111111111111" },
+    { kind: "ticket", key: "WEB-3" },
+  ]);
+  // Sent messages show read-only chips; the composer's chips are cleared.
+  await expect(chips(page)).toHaveCount(0);
+  await expect(page.getByTestId("user-message").getByTestId("sent-chip")).toHaveText(["Eng/Plan", "WEB-3"]);
+
+  // Without attachments no context_refs are sent.
+  await send(page, "plain");
+  await expect(page.getByTestId("assistant-message").nth(1)).toContainText("Echo: plain");
+  expect(mock.posted.at(-1)?.body).not.toHaveProperty("context_refs");
+});
+
+test("a rejected attachment shows the server error and keeps the chips", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat");
+  await newChat(page);
+  await page.goto(page.url() + "&attach=ticket:OTHER-9&attach_title=Elsewhere");
+  await expect(chips(page)).toHaveCount(1);
+  await send(page, "hi");
+  await expect(page.getByRole("alert").filter({ hasText: "OTHER-9" })).toContainText("is not in this chat's project");
+  await expect(chips(page)).toHaveCount(1);
+  await expect(composer(page)).toHaveValue("hi");
+});
+
+test("Start chat links pre-attach the item and drop the query param", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat?project=WEB&attach=page:11111111-1111-4111-8111-111111111111&attach_title=Plan");
+  await page.getByRole("button", { name: "New chat" }).first().click();
+  await expect(chips(page)).toHaveCount(1);
+  await expect(chips(page).first()).toContainText("Plan");
+  await expect(page).not.toHaveURL(/attach/);
+  await send(page, "summarise");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: summarise");
+  expect(mock.posted.at(-1)?.body.context_refs).toEqual([{ kind: "page", id: "11111111-1111-4111-8111-111111111111" }]);
+});
+
+test("assistant messages list deduplicated Sources with version and section", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat");
+  await newChat(page);
+  await send(page, "plain");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
+  await expect(page.getByTestId("sources")).toHaveCount(0);
+
+  await send(page, "cite: risks");
+  const sources = page.getByTestId("assistant-message").nth(1).getByTestId("sources");
+  await expect(sources.getByTestId("source")).toHaveCount(3);
+  const report = sources.getByRole("link", { name: /Q3 report/ });
+  await expect(report).toContainText("v2");
+  await expect(report).toContainText("risks");
+  await expect(report).toHaveAttribute("href", "/artifacts/22222222-2222-4222-8222-222222222222?version=55555555-5555-4555-8555-555555555555#risks");
+  await expect(sources.getByRole("link", { name: /Eng\/Plan/ })).toHaveAttribute("href", "/wiki/Eng/Plan");
+  await expect(sources.getByRole("link", { name: /WEB-3/ })).toHaveAttribute("href", "/tickets/WEB-3");
+});
+
+test("save a reply to the wiki with a link back to the chat", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat");
+  await newChat(page);
+  await send(page, "plain");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
+
+  await page.getByRole("button", { name: "Save to wiki" }).click();
+  const path = page.getByRole("textbox", { name: "Page path" });
+  await expect(path).toHaveValue("Chats/plain");
+  await path.fill("Notes/From chat");
+  await page.getByRole("button", { name: "Save page" }).click();
+  await expect(page.getByRole("link", { name: "Open Notes/From chat" })).toHaveAttribute("href", "/wiki/Notes/From%20chat");
+  const chatId = mock.posted[0].chat;
+  expect(mock.wikiPages).toHaveLength(1);
+  expect(mock.wikiPages[0].project_key).toBe("WEB");
+  expect(mock.wikiPages[0].body_md).toContain("Echo: plain");
+  expect(mock.wikiPages[0].body_md).toContain(`(/chat/${chatId})`);
+  await page.getByRole("button", { name: "Done" }).click();
+
+  // A taken path shows the server's error and keeps the dialog open.
+  await page.getByRole("button", { name: "Save to wiki" }).click();
+  await page.getByRole("textbox", { name: "Page path" }).fill("Notes/From chat");
+  await page.getByRole("button", { name: "Save page" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "already exists" })).toBeVisible();
+});
+
+test("save a reply as a report artifact with a link back to the chat", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat");
+  await newChat(page);
+  await send(page, "plain");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
+  await page.getByRole("button", { name: "Save as artifact" }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill("Plain answer");
+  await page.getByRole("button", { name: "Save report" }).click();
+  await expect(page.getByRole("link", { name: "Open Plain answer" })).toHaveAttribute("href", "/artifacts/66666666-6666-4666-8666-666666666666");
+  const form = mock.artifactForms[0];
+  expect(form).toContain("report");
+  expect(form).toContain("Echo: plain");
+  expect(form).toContain(`(/chat/${mock.posted[0].chat})`);
 });
