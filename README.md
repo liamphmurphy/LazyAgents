@@ -41,9 +41,11 @@ compose, with Claude Code and Codex installed). Before dispatching:
 Select a project, open **Chat** in the sidebar, and choose **New chat**. Select
 a harness/model, type a message, and send with Enter (Shift+Enter adds a newline).
 Chats appear in the history panel so you can return to the conversation later.
-Configure `harness:anthropic` for Claude Code and `harness:openai` for Codex in
-**Settings → Connections & secrets**, and keep a runner online. Unavailable
-models are disabled in the picker.
+Keep a runner online. Docker mode requires `harness:anthropic` for Claude Code
+and `harness:openai` for Codex in **Settings → Connections & secrets**. Local
+mode uses the runner account’s host CLI logins; no application provider keys are
+needed. The API must use the same `RUNNER_BACKEND` mode as the runners.
+Unavailable models are disabled in the picker.
 
 Change the picker before sending to use a different model or harness for the
 next reply. Model changes on the same harness resume its session. A harness
@@ -59,8 +61,8 @@ Chats use a scratch workspace and read-only context tools.
 
 Verification status and known gaps are recorded in
 [`verification/LAZYAGENTS-14-report.md`](verification/LAZYAGENTS-14-report.md).
-The real Claude Code → Codex smoke is still pending provider configuration and
-a working runner; automated fake-harness coverage does not establish provider parity.
+The real Claude Code → Codex smoke is still pending API/runner mode alignment and
+a chat-capable runner; automated fake-harness coverage does not establish provider parity.
 
 ### Skills
 
@@ -114,6 +116,22 @@ make gen     # after editing api/openapi.yaml or server/internal/store/queries (
 make test
 make help    # everything else
 ```
+
+`make api`, `make dev` and `make runner` default to `RUNNER_BACKEND=local`.
+The API inherits this setting through hot reload too. Local execution has no
+isolation and uses the runner account's installed CLIs and logins. To develop
+with Docker runners, use `RUNNER_BACKEND=docker make api` (or `make dev`) and
+`RUNNER_BACKEND=docker make runner` in their respective terminals. Direct
+`lazyagents serve` / `runner` commands and the full Docker stack still default
+to Docker. Set `RUNNER_BACKEND=local` explicitly for direct local commands.
+
+The API catalog uses its own configured backend; it does not discover runner
+capabilities. Mixed local/Docker pools have no backend-aware chat routing, so
+catalog availability cannot guarantee which runner claims a turn. Use a
+coordinated, consistent pool for chat verification. See the
+[runtime refresh procedure](verification/LAZYAGENTS-14-runtime-evidence.md#coordinated-refresh-procedure)
+before replacing existing runners with active work. `make dev` replaces API/web
+listeners; use it only during a coordinated maintenance window.
 
 Go integration tests need a Postgres they can create databases on:
 
