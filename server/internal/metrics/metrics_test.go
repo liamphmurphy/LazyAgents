@@ -82,7 +82,7 @@ func TestRecordedMetricsAndWindows(t *testing.T) {
 	}
 	for i, at := range []time.Time{now.Add(-2 * 24 * time.Hour), now.Add(-40 * 24 * time.Hour), now.Add(-time.Hour)} {
 		costs := []int{4500000, 9000000, 1000000}
-		if _, err = pool.Exec(ctx, `INSERT INTO runs(workspace_id,ticket_id,agent_id,mode,state,resolved_spec,harness,model,started_at,ended_at,cost_usd_micros) VALUES($1,$2,$3,'managed','completed','{}','codex','fake',$4,$4,$5)`, ws, a, agent.ID, at, costs[i]); err != nil {
+		if _, err = pool.Exec(ctx, `INSERT INTO runs(workspace_id,ticket_id,agent_id,mode,state,resolved_spec,harness,model,started_at,ended_at,cost_usd_micros,purpose) VALUES($1,$2,$3,'managed','completed','{}','codex','fake',$4,$4,$5,'ticket')`, ws, a, agent.ID, at, costs[i]); err != nil {
 			t.Fatal(err)
 		}
 	}

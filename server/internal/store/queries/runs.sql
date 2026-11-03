@@ -1,6 +1,6 @@
 -- name: CreateRun :one
-INSERT INTO runs (workspace_id, ticket_id, agent_id, mode, state, resolved_spec, definition_version_id, harness, model, parent_run_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, sqlc.narg(parent_run_id)) RETURNING *;
+INSERT INTO runs (workspace_id, ticket_id, agent_id, mode, state, resolved_spec, definition_version_id, harness, model, parent_run_id, purpose)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, sqlc.narg(parent_run_id), sqlc.arg(purpose)) RETURNING *;
 
 -- name: GetRun :one
 SELECT * FROM runs WHERE id = $1 AND workspace_id = $2;

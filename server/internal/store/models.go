@@ -160,6 +160,40 @@ type ArtifactVersion struct {
 	DecidedAt        *time.Time
 }
 
+type ChatMessage struct {
+	ID          uuid.UUID
+	SessionID   uuid.UUID
+	Seq         int64
+	Role        string
+	BodyMd      string
+	Harness     *string
+	Model       *string
+	RunID       *uuid.UUID
+	RunTurnID   *uuid.UUID
+	ContextRefs json.RawMessage
+	Citations   json.RawMessage
+	Usage       []byte
+	CreatedAt   time.Time
+}
+
+type ChatSession struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	ProjectID     uuid.UUID
+	Title         string
+	CreatedBy     uuid.UUID
+	AgentID       uuid.UUID
+	Harness       string
+	Model         string
+	CurrentRunID  *uuid.UUID
+	State         string
+	Archived      bool
+	Revision      int32
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	LastMessageAt *time.Time
+}
+
 type Comment struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
@@ -305,6 +339,7 @@ type Run struct {
 	WorkspaceVolume     *string
 	IdleTurns           int32
 	ParentRunID         *uuid.UUID
+	Purpose             string
 }
 
 type RunEvent struct {

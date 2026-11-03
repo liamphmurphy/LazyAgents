@@ -92,7 +92,7 @@ func TestPhaseSevenOverviews(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: user.WorkspaceID, TicketID: &ticket.ID, AgentID: atlas.ID, Mode: "managed", State: "queued", ResolvedSpec: json.RawMessage(`{}`), Harness: "codex", Model: "project-model"})
+	run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: user.WorkspaceID, TicketID: &ticket.ID, AgentID: atlas.ID, Mode: "managed", State: "queued", ResolvedSpec: json.RawMessage(`{}`), Harness: "codex", Model: "project-model", Purpose: "ticket"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestPhaseSevenOverviews(t *testing.T) {
 	get("/api/v1/agents/atlas/runs?offset=-1", nil, 422)
 	get("/api/v1/agents/missing/runs", nil, 404)
 	// Pagination has a stable tie-breaker even when every start timestamp matches.
-	if _, err = pool.Exec(ctx, `INSERT INTO runs(workspace_id,ticket_id,agent_id,mode,state,resolved_spec,harness,model,started_at) SELECT $1,$2,$3,'managed','completed','{}','codex','fake','2026-01-01'::timestamptz FROM generate_series(1,52)`, user.WorkspaceID, ticket.ID, atlas.ID); err != nil {
+	if _, err = pool.Exec(ctx, `INSERT INTO runs(workspace_id,ticket_id,agent_id,mode,state,resolved_spec,harness,model,started_at,purpose) SELECT $1,$2,$3,'managed','completed','{}','codex','fake','2026-01-01'::timestamptz,'ticket' FROM generate_series(1,52)`, user.WorkspaceID, ticket.ID, atlas.ID); err != nil {
 		t.Fatal(err)
 	}
 	get("/api/v1/agents/atlas/runs", &history, 200)
