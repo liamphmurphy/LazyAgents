@@ -1,3 +1,4 @@
 .env
 .DS_Store
 server/tmp/
+server/.lazyagents/runs/

@@ -34,6 +34,32 @@ func BranchName(handle, key, title string) string {
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
+// SSHKeyEnv is the env var the git:ssh secret is injected as. It is not
+// GIT_SSH, which git itself reads as the path of an ssh program.
+const SSHKeyEnv = "LAZYAGENTS_SSH_KEY"
+
+// githubHostKeys pins GitHub's published SSH host keys so clones never
+// trust-on-first-use (docs.github.com: GitHub's SSH key fingerprints).
+const githubHostKeys = `github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
+`
+
+// sshSetup writes the pinned known_hosts (and the key when injected) under
+// .lazyagents/ssh, which stays out of git, and points git at them. Without an
+// injected key ssh falls back to the machine's own keys or agent, so a local
+// runner keeps working with the user's login.
+var sshSetup = `mkdir -p .lazyagents/ssh
+chmod 700 .lazyagents/ssh
+cat > .lazyagents/ssh/known_hosts <<'LAZYAGENTS_KNOWN_HOSTS'
+` + githubHostKeys + `LAZYAGENTS_KNOWN_HOSTS
+sshopts="-o UserKnownHostsFile=$PWD/.lazyagents/ssh/known_hosts -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519,ecdsa-sha2-nistp256 -o BatchMode=yes"
+if [ -n "${` + SSHKeyEnv + `:-}" ]; then
+  (umask 077; printf '%s\n' "$` + SSHKeyEnv + `" > .lazyagents/ssh/id)
+  sshopts="$sshopts -i $PWD/.lazyagents/ssh/id -o IdentitiesOnly=yes"
+fi
+export GIT_SSH_COMMAND="ssh $sshopts"
+`
+
 // SetupScript prepares a fresh workspace (§6.5): clone the project's repo
 // (or start an empty one), create the run's branch, keep LazyAgents' files
 // out of git, and run the project's setup commands. The working directory
@@ -49,6 +75,7 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 	// Everything is repo-local: on the local backend this is the user's own
 	// machine, and their global git config must not change.
 	b.WriteString(`helper='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'` + "\n")
+	b.WriteString(sshSetup)
 	b.WriteString("if [ ! -d .git ]; then\n")
 	if repoURL != "" {
 		b.WriteString("  echo '→ cloning " + strings.ReplaceAll(repoURL, "'", "") + "'\n")
@@ -64,6 +91,7 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 	b.WriteString("  git config user.name " + shellQuote(authorName) + "\n")
 	b.WriteString("  git config user.email " + shellQuote(authorEmail) + "\n")
 	b.WriteString(`  if [ -n "${GH_TOKEN:-}" ]; then git config credential.helper "$helper"; fi` + "\n")
+	b.WriteString(`  git config core.sshCommand "$GIT_SSH_COMMAND"` + "\n")
 	b.WriteString("  git checkout --quiet -B " + shellQuote(branch) + "\n")
 	b.WriteString("fi\n")
 	// Our files never get committed: .lazyagents/ is excluded and a tracked
@@ -204,6 +232,9 @@ func PlanSecrets(ctx context.Context, q *store.Queries, ws uuid.UUID, project *u
 			switch {
 			case ok && mode == agentdef.Allowed:
 				d.Injected, d.Env = true, []string{envName(r.Name)}
+				if r.Name == "git:ssh" {
+					d.Env = []string{SSHKeyEnv}
+				}
 				if r.Name == "git:pat" {
 					d.Env = append(d.Env, "GH_TOKEN", "GITHUB_TOKEN")
 				}

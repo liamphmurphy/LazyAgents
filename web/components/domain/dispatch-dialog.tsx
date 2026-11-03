@@ -82,7 +82,7 @@ function SinglePreview({ p }: { p: Preview }) {
           {p.repo_url ? (
             <span className="flex items-center gap-1.5 font-mono text-[12.5px]">
               <Icon name="github" size={13} />
-              {p.repo_url.replace(/^https:\/\/github\.com\//, "")}
+              {p.repo_url.replace(/^(?:ssh:\/\/)?git@github\.com[:/]/, "").replace(/\.git$/, "")}
             </span>
           ) : (
             <span className="text-fg-tertiary">None set for this project: the run starts from an empty repository</span>
@@ -237,7 +237,10 @@ export function DispatchDialog({ keys, open, onOpenChange, onDone }: { keys: str
   const previews = single ? [one.data] : many.map((q) => q.data);
   const loaded = previews.every(Boolean);
   const blocked = previews.some((p) => p && p.blockers.length > 0);
-  const noKey = previews.some((p) => p && p.blockers.length === 0 && !p.harness_key.present);
+  // Only Docker runs need a stored key; a local runner uses the machine's own CLI login.
+  const needsKey = (p: NonNullable<(typeof previews)[number]>) =>
+    p.runner.runners.length === 0 || p.runner.runners.some((r) => r.backend === "docker");
+  const noKey = previews.some((p) => p && p.blockers.length === 0 && !p.harness_key.present && needsKey(p));
   const p = one.data;
 
   return (

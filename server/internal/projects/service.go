@@ -27,7 +27,7 @@ type Config struct {
 
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
-var repoPattern = regexp.MustCompile(`^https://github\.com/[A-Za-z0-9][A-Za-z0-9-]{0,99}/[A-Za-z0-9._-]+$`)
+var repoPattern = regexp.MustCompile(`^(?:git@github\.com:|ssh://git@github\.com/)[A-Za-z0-9][A-Za-z0-9-]{0,99}/[A-Za-z0-9._-]+$`)
 var branchPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}$`)
 
 func normalize(in *Config) error {
@@ -42,7 +42,7 @@ func normalize(in *Config) error {
 		return apperr.Invalid("color", "use a six-digit hex color")
 	}
 	if in.RepoURL != "" && (!repoPattern.MatchString(in.RepoURL) || strings.HasSuffix(in.RepoURL, "/..") || strings.HasSuffix(in.RepoURL, "/.")) {
-		return apperr.Invalid("repo_url", "use an HTTPS GitHub repository URL without credentials, query or fragment")
+		return apperr.Invalid("repo_url", "use an SSH GitHub repository URL like git@github.com:owner/repo.git")
 	}
 	if in.DefaultBranch == "" {
 		in.DefaultBranch = "main"

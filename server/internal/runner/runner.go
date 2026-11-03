@@ -403,6 +403,12 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			env["GH_TOKEN"] = v
 		}
 	}
+	// Same for the SSH key: setup clones over SSH even when the agent only reads.
+	if env[SSHKeyEnv] == "" && (allowedScope(c.spec, "repo:read") || allowedScope(c.spec, "repo:write")) {
+		if v, err := r.Secrets.Reveal(ctx, run.WorkspaceID, &c.project.ID, "git:ssh"); err == nil {
+			env[SSHKeyEnv] = v
+		}
+	}
 	if err := r.Backend.EnsureWorkspace(ctx, run.ID.String()); err != nil {
 		fail("Couldn't create the workspace: " + err.Error())
 		return

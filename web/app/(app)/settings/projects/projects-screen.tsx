@@ -112,7 +112,7 @@ function ProjectForm({
         <TextInput
           aria-label="GitHub repository"
           type="url"
-          placeholder="https://github.com/your-team/repository"
+          placeholder="git@github.com:your-team/repository.git"
           value={repo}
           onChange={(e) => setRepo(e.target.value)}
         />

@@ -81,6 +81,7 @@ var nameRe = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9-]*$`)
 // secret with a grant is injected only when that scope is allowed (§6.3).
 var DefaultGrants = map[string]string{
 	"git:pat":             "repo:write",
+	"git:ssh":             "repo:write",
 	"db:staging":          "db:migrate",
 	"db:staging-readonly": "db:read-staging",
 	"deploy:staging":      "deploy:staging",

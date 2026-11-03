@@ -140,6 +140,9 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		b.WriteString(delegationSection(spec))
 	}
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
+	if !delegated {
+		b.WriteString(gitSection(spec))
+	}
 	if len(spec.Scopes) > 0 {
 		b.WriteString("## Scopes\n\n")
 		for _, s := range spec.Scopes {
@@ -191,6 +194,31 @@ func denied(spec agentdef.Resolved, scope string) bool {
 		}
 	}
 	return true // unknown scopes are denied (agentdef.ModeFor)
+}
+
+// gitSection tells an agent how to publish its work. The checkout's remote is
+// SSH and `gh` authenticates with the injected token, so both just work; what
+// the agent needs is to be told to use them. Planning (read-only) runs get none.
+func gitSection(spec agentdef.Resolved) string {
+	if spec.HarnessOptions["readonly"] == "true" || denied(spec, "repo:write") {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Git and GitHub\n\n")
+	b.WriteString("You're on your own branch of the project's repository. Commit your work in small, clear commits. ")
+	b.WriteString("Use the `gh` CLI for everything on GitHub (pull requests, reviews, checks, issues); it is installed and already authenticated through `GH_TOKEN`, ")
+	b.WriteString("and `origin` is an SSH remote that `git push` uses directly. Never print or store the token, and never force-push.\n\n")
+	step := "When the work is done and tests pass"
+	if !allowed(spec, "repo:write") {
+		step = "`repo:write` needs a person's approval: call request_approval for it, end your turn, and once you're resumed with a yes"
+	}
+	b.WriteString(step + ":\n\n")
+	b.WriteString("1. `git push -u origin HEAD`\n")
+	b.WriteString("2. `gh pr create --title \"<ticket key>: <summary>\" --body \"<what changed, how you tested it, link to the ticket>\"` (add `--draft` if anything is unfinished)\n")
+	b.WriteString("3. Record the PR URL it prints with the `set_pr` tool.\n\n")
+	b.WriteString("If a PR for the branch already exists (`gh pr view`), push to update it instead of opening another. ")
+	b.WriteString("Use `gh pr checks` and `gh run view --log-failed` to find out why CI is red before asking for help.\n\n")
+	return b.String()
 }
 
 // delegationSection tells a main agent it can hand work to sub agents.

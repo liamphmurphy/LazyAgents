@@ -250,3 +250,26 @@ func TestSkillsDeliveredPerHarness(t *testing.T) {
 		t.Fatal("no skills, no exclude file")
 	}
 }
+
+func TestAgentsMDGitHubSection(t *testing.T) {
+	allowed := string(AgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
+	for _, want := range []string{"`gh` CLI", "git push -u origin HEAD", "gh pr create", "`set_pr`"} {
+		if !strings.Contains(allowed, want) {
+			t.Fatalf("allowed repo:write missing %q:\n%s", want, allowed)
+		}
+	}
+	if gated := string(AgentsMD("", spec("repo:write", "requires_approval"), nil, "PAY-1")); !strings.Contains(gated, "request_approval for it") {
+		t.Fatalf("gated section should ask for approval:\n%s", gated)
+	}
+	if denied := string(AgentsMD("", spec("repo:write", "denied"), nil, "PAY-1")); strings.Contains(denied, "gh pr create") {
+		t.Fatal("denied repo:write must not be told to open PRs")
+	}
+	ro := spec("repo:write", "allowed")
+	ro.HarnessOptions = map[string]string{"readonly": "true"}
+	if strings.Contains(string(AgentsMD("", ro, nil, "PAY-1")), "gh pr create") {
+		t.Fatal("planning runs must not be told to open PRs")
+	}
+	if sub := string(SubagentAgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1")); strings.Contains(sub, "gh pr create") {
+		t.Fatal("sub agents leave PRs to the main agent")
+	}
+}

@@ -14,6 +14,7 @@ import { floatPanel } from "@/components/domain/pickers";
 const CONNECTIONS = [
   { name: "harness:anthropic", label: "Anthropic", what: "Claude Code runs" },
   { name: "harness:openai", label: "OpenAI", what: "Codex runs" },
+  { name: "git:ssh", label: "GitHub SSH key", what: "Clone and push over SSH" },
   { name: "git:pat", label: "GitHub", what: "Clone, push and open PRs" },
 ];
 

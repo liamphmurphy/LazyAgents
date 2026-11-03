@@ -49,14 +49,14 @@ func TestProjectManagementAndDependencies(t *testing.T) {
 			}
 		}
 	}
-	create := api.NewProject{Key: "ops", Name: "Operations", Color: "#7c8aff", RepoUrl: "https://github.com/example/operations.git", DefaultBranch: "develop"}
+	create := api.NewProject{Key: "ops", Name: "Operations", Color: "#7c8aff", RepoUrl: "git@github.com:example/operations.git", DefaultBranch: "develop"}
 	var project api.Project
 	call("POST", "/api/v1/projects", create, 201, &project)
 	if project.Key != "OPS" || project.DefaultBranch != "develop" || project.Archived || project.Revision != 1 {
 		t.Fatalf("project %+v", project)
 	}
 	call("POST", "/api/v1/projects", create, 409, nil)
-	for _, url := range []string{"https://token@github.com/example/operations", "file:///tmp/project", "https://github.com/example/repo?token=secret"} {
+	for _, url := range []string{"https://github.com/example/operations", "https://token@github.com/example/operations", "file:///tmp/project", "git@github.com:example/repo.git?token=secret", "git@gitlab.com:example/repo.git"} {
 		bad := create
 		bad.Key = "BAD"
 		bad.RepoUrl = url
@@ -174,7 +174,7 @@ func TestProjectManagementAndDependencies(t *testing.T) {
 	deps(&b, []string{}, 409)
 	update = edit(false)
 	update.DefaultBranch = "release"
-	update.RepoUrl = "https://github.com/example/next-repository"
+	update.RepoUrl = "git@github.com:example/next-repository.git"
 	call("PUT", "/api/v1/projects/OPS", update, 200, &project)
 	persisted, _ := q.GetRun(ctx, store.GetRunParams{ID: dispatched[0].ID, WorkspaceID: me.WorkspaceID})
 	snapshot, _ := runs.Spec(persisted)
@@ -414,7 +414,7 @@ func TestLegacyRunRepositoryFreezesBeforeProjectEdit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = (projects.Service{Pool: pool}).Update(ctx, me.WorkspaceID, p.Key, projects.Config{Name: p.Name, Color: p.Color, RepoURL: "https://github.com/example/changed", DefaultBranch: "release", Revision: p.Revision})
+	_, err = (projects.Service{Pool: pool}).Update(ctx, me.WorkspaceID, p.Key, projects.Config{Name: p.Name, Color: p.Color, RepoURL: "git@github.com:example/changed.git", DefaultBranch: "release", Revision: p.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
