@@ -2752,6 +2752,12 @@ components:
       description: Something the assistant read while answering (from read_artifact / read_page / get_ticket)
       properties:
         target: { $ref: "#/components/schemas/LinkTarget" }
+        artifact_id: { type: string, format: uuid, description: The artifact (or wiki page) that was read }
+        title: { type: string }
+        path: { type: string, description: Wiki path, for pages }
+        version_id: { type: string, format: uuid, description: The exact version that was read }
+        version: { type: string, description: "Version label, e.g. v3" }
+        section: { type: string, description: Section anchor, when only one section was read }
     ChatSession:
       type: object
       required: [id, project, title, agent, harness, model, state, archived, revision, message_count, created_at, updated_at]

@@ -2302,6 +2302,23 @@ export interface components {
         /** @description Something the assistant read while answering (from read_artifact / read_page / get_ticket) */
         ChatCitation: {
             target: components["schemas"]["LinkTarget"];
+            /**
+             * Format: uuid
+             * @description The artifact (or wiki page) that was read
+             */
+            artifact_id?: string;
+            title?: string;
+            /** @description Wiki path */
+            path?: string;
+            /**
+             * Format: uuid
+             * @description The exact version that was read
+             */
+            version_id?: string;
+            /** @description Version label, e.g. v3 */
+            version?: string;
+            /** @description Section anchor */
+            section?: string;
         };
         ChatSession: {
             /** Format: uuid */
