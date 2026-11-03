@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, type Schemas } from "@/lib/api/client";
 import {
+  chatKeys,
   useCancelChat,
   useChat,
   useChatMessages,
@@ -12,7 +14,6 @@ import {
 } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
 import { ChatMarkdown } from "./chat-markdown";
 import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
@@ -109,12 +110,14 @@ export function Conversation({ id }: { id: string }) {
   const models = useChatModels();
   const send = useSendChatMessage(id);
   const cancel = useCancelChat(id);
+  const qc = useQueryClient();
   const [text, setText] = useState("");
   const [picked, setPicked] = useState<Selection | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLLIElement>(null);
 
   const c = chat.data;
+  const loaded = !!c;
   const running = c?.state === "running";
   const locked = running || send.isPending;
   const groups: Groups = models.data;
@@ -124,10 +127,15 @@ export function Conversation({ id }: { id: string }) {
   const list = messages.data?.messages;
   const lastUser = list?.findLast((m) => m.role === "user");
 
+  // Refetch the transcript when the chat changes (also covers polling without SSE).
+  const stamp = c && `${c.state}:${c.message_count}:${c.revision}`;
+  useEffect(() => {
+    if (stamp) void qc.invalidateQueries({ queryKey: chatKeys.messages(id) });
+  }, [stamp, id, qc]);
   // Focus returns to the composer on load and whenever a turn ends.
   useEffect(() => {
-    if (c && !locked) area.current?.focus();
-  }, [locked, c]);
+    if (loaded && !locked) area.current?.focus();
+  }, [locked, loaded]);
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "end" });
   }, [list?.length, running]);

@@ -23,7 +23,8 @@ function ChatRow({ chat, active, project, onArchived }: { chat: Chat; active: bo
     e.preventDefault();
     const t = title.trim();
     if (!t || t === chat.title) return setEditing(false);
-    update.mutate({ id: chat.id, patch: { revision: chat.revision, title: t } }, { onSuccess: () => setEditing(false) });
+    // mutateAsync: the row may unmount on refetch before mutate-level callbacks run.
+    update.mutateAsync({ id: chat.id, patch: { revision: chat.revision, title: t } }).then(() => setEditing(false), () => undefined);
   }
   return (
     <li className="flex flex-col">
@@ -57,7 +58,7 @@ function ChatRow({ chat, active, project, onArchived }: { chat: Chat; active: bo
             label={`Archive ${chat.title}`}
             disabled={update.isPending}
             onClick={() =>
-              update.mutate({ id: chat.id, patch: { revision: chat.revision, archived: true } }, { onSuccess: onArchived })
+              update.mutateAsync({ id: chat.id, patch: { revision: chat.revision, archived: true } }).then(onArchived, () => undefined)
             }
           />
         </div>
