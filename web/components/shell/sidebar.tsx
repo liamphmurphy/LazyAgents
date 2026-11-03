@@ -23,6 +23,7 @@ const NAV: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/", label: "Dashboard", icon: "dashboard" },
   { href: "/inbox", label: "Inbox", icon: "inbox" },
   { href: "/tickets", label: "Tickets", icon: "tickets" },
+  { href: "/chat", label: "Chat", icon: "msg" },
   { href: "/plans", label: "Plans", icon: "epics" },
   { href: "/epics", label: "Epics", icon: "epics" },
   { href: "/agents", label: "Agents", icon: "agents" },
