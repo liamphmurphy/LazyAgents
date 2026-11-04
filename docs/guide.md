@@ -24,7 +24,9 @@ compose, with Claude Code and Codex installed). Before dispatching:
 
 - set `SECRETS_KEY` in `.env` (`openssl rand -base64 32`);
 - add the harness key in **Settings → Connections & secrets**: `harness:anthropic`
-  for Claude Code, `harness:openai` for Codex. Runs bill that key;
+  for Claude Code, `harness:openai` for Codex. Runs bill that key. OpenCode
+  (opt-in, pinned CLI 2.2.1) uses the key of its model's provider; see
+  [OpenCode harness](opencode.md);
 - add `git:pat` (a GitHub token) and a repo URL for the project, if agents should
   clone, push and open PRs. Open PRs are polled every 60s: merged → Done.
 
@@ -41,7 +43,8 @@ Keep a runner online. Docker mode requires `harness:anthropic` for Claude Code
 and `harness:openai` for Codex in **Settings → Connections & secrets**. Local
 mode uses the runner account’s host CLI logins; no application provider keys are
 needed. The API must use the same `RUNNER_BACKEND` mode as the runners.
-Unavailable models are disabled in the picker.
+Unavailable models are disabled in the picker. OpenCode is opt-in and off by
+default; see [OpenCode harness](opencode.md).
 
 Change the picker before sending to use a different model or harness for the
 next reply. Model changes on the same harness resume its session. A harness
