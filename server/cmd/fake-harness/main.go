@@ -20,6 +20,9 @@
 //	delegate_contract   delegate with a contract (allowed_paths docs/, a passing
 //	                    test_command); the resumed parent reports the checks it was given
 //
+// The mode can also come from a fake-harness.mode file in the binary's
+// directory when the variable is unset (OpenCode runs get a scrubbed env).
+//
 // Resumed turns (--resume) finish the run with complete_run, unless
 // FAKE_HARNESS_RESUME=idle.
 package main
@@ -34,6 +37,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -117,7 +121,22 @@ func newUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
+// modeFromFile lets a harness that scrubs its environment (the local OpenCode
+// runner passes no custom variables) still pick a script: with FAKE_HARNESS_MODE
+// unset, the first line of fake-harness.mode next to the invoked binary is used.
+// Absent file, nothing changes.
+func modeFromFile() {
+	if os.Getenv("FAKE_HARNESS_MODE") != "" || len(os.Args) == 0 {
+		return
+	}
+	if b, err := os.ReadFile(filepath.Join(filepath.Dir(os.Args[0]), "fake-harness.mode")); err == nil {
+		mode, _, _ := strings.Cut(string(b), "\n")
+		os.Setenv("FAKE_HARNESS_MODE", strings.TrimSpace(mode))
+	}
+}
+
 func main() {
+	modeFromFile()
 	var prompt, resume, cfgPath, model string
 	var mcpURL, tokenEnv, mcpApproval string
 	args := os.Args[1:]
