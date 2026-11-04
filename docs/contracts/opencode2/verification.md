@@ -91,3 +91,71 @@ The preceding contract commit recorded the same focused Go/type checks, parsed e
 synthetic normalized examples, and regenerated pre-existing /chat-models description
 drift in Go/TS. Its identity and policy questions are superseded by the owner's reply
 and this follow-up; those earlier blockers are no longer current requirements.
+
+## LAZYAGENTS-22 runtime wiring and wire capture (2026-11-03)
+
+Public ID `opencode` is in the API enum (`api/openapi.yaml`, regenerated Go and
+`web/lib/api/schema.d.ts`), `agentdef.Harnesses`, `harness.For`, runner dispatch,
+the local and Docker backends and `deploy/agent-base/Dockerfile`
+(`@opencode/cli@2.2.1`; npm `dist.integrity` sha512-U8UIdEOh…G3Vug==). Chat:
+LAZYAGENTS-23 lists OpenCode in `chatmodels.chatHarnesses`, available only with
+RUNNER_OPENCODE_ISOLATED and a revealable provider key (fake-CLI coverage in
+`runner/chat_opencode_test.go`); the picker UI is LAZYAGENTS-24.
+
+Fail-closed gates in the runner:
+
+- `RUNNER_OPENCODE_ISOLATED=true` is an operator attestation that no system,
+  ancestor or repository OpenCode config exists on the backend. Without it every
+  OpenCode run (primary or fallback target) fails before setup and credentials.
+  The runner cannot verify this itself: effective-denial probes need a model.
+  The local backend is not isolation, so it stays off by default.
+- Provider-scoped credentials: `anthropic/…` → `harness:anthropic` →
+  `ANTHROPIC_API_KEY`, `openai/…` → `harness:openai` → `OPENAI_API_KEY`, nothing
+  else; an unmapped provider or harness is an error, never another key. OpenCode
+  always requires its key (it has no host login under its isolated HOME).
+- The local backend gives OpenCode an allowlisted host environment (PATH, locale,
+  TLS roots) plus the run's injected variables: no inherited provider keys, HOME
+  or XDG roots.
+- A preflight `opencode --version` runs before the first turn of a segment:
+  missing executable or any version other than 2.2.1 fails the run with a bounded
+  message (no environment or secret values).
+- `Parser.Exited` is wired through the optional `harness.ExitObserver`; Claude
+  and Codex parsers do not implement it and are unchanged.
+- Session ownership for `--session` is the run's own recorded session id. It does
+  not prove the session still exists in the workspace state (see gaps).
+
+### Wire capture without a paid call
+
+Against the installed 2.2.1 (`~/.nix-profile/bin/opencode`), with four fresh
+temporary XDG roots and `env -i`:
+
+1. No credentials, `run --standalone --format json --model anthropic/claude-sonnet-5-5 "say hi"`
+   exit 1, one stdout line (stderr empty):
+   `{"type":"error","timestamp":…,"sessionID":"ses_…","error":{"type":"provider.no-route","message":"Model unavailable: anthropic/claude-sonnet-5-5"}}`
+2. Same with `ANTHROPIC_API_KEY=sk-ant-invalid-fake-key-000000` (one 401 from the
+   provider, no model usage): exit 1,
+   `{"type":"error",…,"error":{"type":"provider.auth","message":"invalid x-api-key","status":401,"response":{"body":"…"}}}`
+3. `--session ses_doesnotexist1` on a missing session was accepted and created it
+   (reported `sessionID":"ses_doesnotexist1"`), confirming `--session` silently
+   creates sessions.
+4. Garbage `opencode.json` in the cwd, parent, XDG config or `.opencode/`, and
+   `OPENCODE_CONFIG`, changed nothing observable before model routing, so config
+   layering could not be probed without a model.
+
+Both error captures are stored as `server/internal/harness/testdata/opencode-real-*.jsonl`
+and the parser now reads this envelope (`sessionID`, nested `error.type/message`).
+It differs from the synthetic fixtures (flat `message`, snake_case `session_id`),
+which are kept for the unverified success/tool/quota/resume shapes.
+
+### Not verified (needs a paid model call or a real deployment)
+
+- Success, tool/MCP, resume, quota and cancellation event shapes, the completion
+  marker, and whether usage is per turn or cumulative: fixtures stay SYNTHETIC.
+- Whether the generated `opencode.json` policy is effective (denials, MCP
+  allowlist) and config-layer isolation; native cost semantics.
+- Session existence on resume (a lost session is silently recreated by the CLI).
+- Docker backend runs against a real image; only the local backend with the fake
+  CLI was exercised.
+- Computed cost: operator prices from `RUNNER_MODEL_PRICES` keyed by the exact
+  model id (e.g. `openai/gpt-5#high`) are applied to the assumed token fields; the
+  accounting units are unverified.

@@ -19,12 +19,19 @@ func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) err
 	c.spec.Harness, c.spec.Model = next.Harness, next.Model
 	c.spec.HarnessOptions = next.HarnessOptions
 	c.spec.Fallbacks = c.spec.Fallbacks[1:]
+	if err := r.checkSpec(c.spec); err != nil {
+		return err
+	}
 	plan, err := PlanSecrets(ctx, r.q(), c.run.WorkspaceID, &c.project.ID, c.spec)
 	if err != nil {
 		return err
 	}
-	if r.Cfg.RequireHarnessKey && !hasSecret(plan, HarnessKeys[next.Harness].Secret) {
-		return fmt.Errorf("%s: %w", next.Harness, ErrNoHarnessKey)
+	key, err := HarnessKey(c.spec)
+	if err != nil {
+		return err
+	}
+	if NeedsHarnessKey(r.Cfg.RequireHarnessKey, c.spec) && !hasSecret(plan, key.Secret) {
+		return fmt.Errorf("%s (%s): %w", next.Harness, key.Secret, ErrNoHarnessKey)
 	}
 	turns, err := r.q().ListTurns(ctx, c.run.ID)
 	if err != nil {

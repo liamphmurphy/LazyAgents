@@ -1554,7 +1554,7 @@ export interface components {
         /** @enum {string} */
         ScopeMode: "allowed" | "requires_approval" | "denied";
         /** @enum {string} */
-        Harness: "claude-code" | "codex";
+        Harness: "claude-code" | "codex" | "opencode";
         Budget: {
             /** @description Go duration, e.g. 2h */
             max_runtime?: string;

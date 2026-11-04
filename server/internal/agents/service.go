@@ -215,6 +215,13 @@ func (s *Service) SetOverride(ctx context.Context, ws uuid.UUID, by uuid.UUID, h
 			_, err = q.DeleteOverride(ctx, store.DeleteOverrideParams{AgentID: a.ID, ProjectID: p.ID})
 			return err
 		}
+		spec, _, err := CurrentSpec(ctx, q, a)
+		if err != nil {
+			return err
+		}
+		if err := agentdef.ValidateOverride(spec, o); err != nil {
+			return toAppErr(err)
+		}
 		raw, err := json.Marshal(o)
 		if err != nil {
 			return err
@@ -262,4 +269,18 @@ func Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, a store.Agent,
 		return agentdef.Resolved{}, err
 	}
 	return agentdef.Resolve(sp, &o), nil
+}
+
+// ResolveRunnable is Resolve for callers that are about to start work: a
+// target the runner cannot execute (such as an OpenCode model without a
+// provider) fails here with a field error instead of in the queue.
+func ResolveRunnable(ctx context.Context, q *store.Queries, ws uuid.UUID, a store.Agent, projectKey string) (agentdef.Resolved, error) {
+	r, err := Resolve(ctx, q, ws, a, projectKey)
+	if err != nil {
+		return r, err
+	}
+	if err := r.Validate(); err != nil {
+		return r, apperr.Invalid("model", "%s", err.Error())
+	}
+	return r, nil
 }

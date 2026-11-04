@@ -15,6 +15,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
+	"github.com/liamphmurphy/lazyagents/server/internal/harness"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
@@ -200,6 +201,39 @@ var HarnessKeys = map[string]struct {
 	agentdef.HarnessCodex:      {chatmodels.KeySecret[agentdef.HarnessCodex], []string{"CODEX_API_KEY", "OPENAI_API_KEY"}},
 }
 
+// HarnessKey is the API-key secret and env vars a resolved spec authenticates
+// with. OpenCode resolves by the model's provider, so only that provider's key
+// is ever injected. A harness or provider with no mapping is an error: there
+// is no fallback to another harness's key.
+func HarnessKey(spec agentdef.Resolved) (struct {
+	Secret string
+	Env    []string
+}, error) {
+	var out struct {
+		Secret string
+		Env    []string
+	}
+	if spec.Harness == agentdef.HarnessOpenCode {
+		secret, env, err := harness.OpenCodeCredentialEnv(spec.Model)
+		if err != nil {
+			return out, err
+		}
+		out.Secret, out.Env = secret, []string{env}
+		return out, nil
+	}
+	k, ok := HarnessKeys[spec.Harness]
+	if !ok {
+		return out, fmt.Errorf("runner: no credential mapping for harness %q", spec.Harness)
+	}
+	return k, nil
+}
+
+// NeedsHarnessKey reports whether a run must have its harness key. OpenCode
+// always does: it runs with an isolated HOME, so it has no host login to use.
+func NeedsHarnessKey(requireKey bool, spec agentdef.Resolved) bool {
+	return requireKey || spec.Harness == agentdef.HarnessOpenCode
+}
+
 // Revealer decrypts secrets (secrets.Service).
 type Revealer interface {
 	Reveal(ctx context.Context, ws uuid.UUID, project *uuid.UUID, name string) (string, error)
@@ -226,7 +260,10 @@ func PlanSecrets(ctx context.Context, q *store.Queries, ws uuid.UUID, project *u
 	for _, s := range spec.Scopes {
 		modes[s.Scope] = s.Mode
 	}
-	key := HarnessKeys[spec.Harness]
+	key, err := HarnessKey(spec)
+	if err != nil {
+		return nil, err
+	}
 	var out []SecretDecision
 	for _, r := range rows {
 		d := SecretDecision{Name: r.Name}

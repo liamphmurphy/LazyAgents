@@ -8,10 +8,13 @@ type Caps struct {
 	Resume           bool `json:"resume"`            // resume a session by id
 }
 
-// Both harnesses use run-scoped PreToolUse hooks for service tool policy.
+// Claude Code and Codex use run-scoped PreToolUse hooks for service tool policy.
 var Capabilities = map[string]Caps{
 	HarnessClaudeCode: {ToolGating: true, PermissionPrompt: true, NativeCost: true, Resume: true},
 	HarnessCodex:      {ToolGating: true, PermissionPrompt: true, NativeCost: false, Resume: true},
+	// OpenCode enforces nothing through hooks: its generated policy is not an
+	// authenticated pre-tool bridge, so gating and prompts stay false until verified.
+	HarnessOpenCode: {Resume: true},
 }
 
 // Enforcement is how strongly a scope holds (§6.3), strongest first:

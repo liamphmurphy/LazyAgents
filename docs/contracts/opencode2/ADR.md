@@ -249,6 +249,12 @@ and discovery together. LAZYAGENTS-23 verifies chat segment behavior;
 LAZYAGENTS-24 updates consumers to the exact `opencode` enum/label and qualified
 model IDs. LAZYAGENTS-25 verifies enforcement/parity before runtime advertisement.
 Keep adapter/capability/catalog availability disabled until those gates pass.
+Amendment (LAZYAGENTS-23): the chat catalog lists OpenCode, but it is available
+only where the operator attests isolation (RUNNER_OPENCODE_ISOLATED, default
+false) and a provider key is revealable, the same gate the runner enforces.
+Default deployments therefore still report it unavailable. Capability
+advertisement and real-CLI parity (including cross-provider session resume,
+so far proven only against the fake CLI) remain LAZYAGENTS-25 gates.
 No alias, new endpoint, default harness change or historical value rewrite.
 Unknown selections remain existing 422 field errors. No new endpoint is required.
 Existing optional cost_source and free-form usage/event payloads carry normalized

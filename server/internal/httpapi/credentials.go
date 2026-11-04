@@ -80,8 +80,8 @@ func (s *Server) RevokeAgentToken(ctx context.Context, req api.RevokeAgentTokenR
 var knownSecrets = []struct{ name, grants, desc string }{
 	{"git:pat", "repo:write", "GitHub personal access token for clone, push and PRs"},
 	{"git:ssh", "repo:write", "SSH private key for cloning and pushing over git@github.com"},
-	{"harness:anthropic", "", "API key for Claude Code runs"},
-	{"harness:openai", "", "API key for Codex runs"},
+	{"harness:anthropic", "", "API key for Claude Code runs and OpenCode anthropic/… models"},
+	{"harness:openai", "", "API key for Codex runs and OpenCode openai/… models"},
 	{"db:staging", "db:migrate", "Staging database URL, used by the db:migrate broker"},
 	{"db:staging-readonly", "db:read-staging", "Read-only staging database URL"},
 	{"deploy:staging", "deploy:staging", "Token for triggering staging deploys"},
