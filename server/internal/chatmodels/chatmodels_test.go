@@ -52,12 +52,16 @@ func TestLocalCatalogWithoutAppSecretUsesDiscovery(t *testing.T) {
 		return []Model{{ID: harness + "-live", Default: true}}, nil
 	}}
 	list, err := catalog.List(context.Background(), nil, uuid.New())
-	if err != nil || calls != len(chatHarnesses) {
+	if err != nil || calls != 2 {
 		t.Fatalf("calls=%d err=%v", calls, err)
 	}
 	for _, h := range list {
 		if h.Harness == agentdef.HarnessOpenCode {
-			t.Fatal("opencode is not a chat harness until LAZYAGENTS-23/24")
+			// Never reached via local login: unattested isolation, no discovery.
+			if h.Available || len(h.Models) != 0 {
+				t.Fatalf("opencode %+v", h)
+			}
+			continue
 		}
 		if !h.Available || len(h.Models) != 1 {
 			t.Fatalf("unexpected harness: %+v", h)

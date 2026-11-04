@@ -35,20 +35,32 @@ type Harness struct {
 	Models            []Model
 }
 
-var labels = map[string]string{agentdef.HarnessClaudeCode: "Claude Code", agentdef.HarnessCodex: "Codex"}
+var labels = map[string]string{agentdef.HarnessClaudeCode: "Claude Code", agentdef.HarnessCodex: "Codex", agentdef.HarnessOpenCode: "OpenCode"}
 
-// chatHarnesses are the harnesses a chat can use. OpenCode runs tickets and
-// planning only; chat segments, discovery and the picker follow in
-// LAZYAGENTS-23/24 (docs/contracts/opencode2/ADR.md), so it stays out.
-var chatHarnesses = []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex}
+// chatHarnesses are the harnesses a chat can use, in picker order.
+var chatHarnesses = []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex, agentdef.HarnessOpenCode}
+
+// openCodeKeySecret and openCodeDiscoverAs map each OpenCode provider to its
+// API-key secret and to the harness whose provider discovery lists its models.
+var (
+	openCodeKeySecret  = map[string]string{"anthropic": "harness:anthropic", "openai": "harness:openai"}
+	openCodeDiscoverAs = map[string]string{"anthropic": agentdef.HarnessClaudeCode, "openai": agentdef.HarnessCodex}
+)
+
+// OpenCodeUnisolated is the unavailable reason (and the runner's refusal) when
+// the deployment does not attest isolated OpenCode config.
+const OpenCodeUnisolated = "OpenCode needs isolated config (managed config, no ambient ~/.config/opencode), which this backend does not attest. Set RUNNER_OPENCODE_ISOLATED=true only where it holds, or pick another harness."
 
 // Catalog lists and validates chat selections.
 type Catalog struct {
 	// RequireKey mirrors the runner: a harness without its API-key secret
 	// can't run (docker backend), so it is reported unavailable.
 	RequireKey bool
-	Secrets    *secrets.Service
-	Discover   func(context.Context, string, string) ([]Model, error)
+	// OpenCodeIsolated is the runner's attestation of isolated OpenCode config
+	// (RUNNER_OPENCODE_ISOLATED); without it OpenCode is unavailable.
+	OpenCodeIsolated bool
+	Secrets          *secrets.Service
+	Discover         func(context.Context, string, string) ([]Model, error)
 }
 
 // List returns live harness models in display order. Credentials stay
@@ -57,6 +69,13 @@ func (c Catalog) List(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]Ha
 	out := make([]Harness, 0, len(chatHarnesses))
 	for _, name := range chatHarnesses {
 		h := Harness{Harness: name, Label: labels[name], Available: true, Models: []Model{}}
+		if name == agentdef.HarnessOpenCode {
+			if err := c.listOpenCode(ctx, q, ws, &h); err != nil {
+				return nil, err
+			}
+			out = append(out, h)
+			continue
+		}
 		if c.RequireKey {
 			ok, err := q.SecretExists(ctx, store.SecretExistsParams{WorkspaceID: ws, Name: KeySecret[name]})
 			if err != nil {
@@ -151,4 +170,71 @@ func (c Catalog) Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, cu
 		}
 	}
 	return "", "", apperr.Invalid("model", "unknown model %q for %s", model, h.Label)
+}
+
+// listOpenCode fills the OpenCode entry. It always needs an API-key secret,
+// even on the local backend (there is no host login to fall back on), so
+// RequireKey is ignored. Each provider with a revealable secret contributes its
+// discovered models, qualified as provider/model; a provider whose secret is
+// missing or whose discovery fails is skipped.
+func (c Catalog) listOpenCode(ctx context.Context, q *store.Queries, ws uuid.UUID, h *Harness) error {
+	if !c.OpenCodeIsolated {
+		h.Available, h.UnavailableReason = false, OpenCodeUnisolated
+		return nil
+	}
+	discover := c.Discover
+	if discover == nil {
+		discover = Discover
+	}
+	var anthropicDefault, openaiDefault, first string
+	for _, provider := range agentdef.OpenCodeProviders {
+		secret := openCodeKeySecret[provider]
+		ok, err := q.SecretExists(ctx, store.SecretExistsParams{WorkspaceID: ws, Name: secret})
+		if err != nil {
+			return err
+		}
+		if !ok || c.Secrets == nil {
+			continue
+		}
+		key, err := c.Secrets.Reveal(ctx, ws, nil, secret)
+		if err != nil || key == "" {
+			continue
+		}
+		discovered, err := discover(ctx, openCodeDiscoverAs[provider], key)
+		if err != nil {
+			continue
+		}
+		for _, m := range discovered {
+			id := provider + "/" + m.ID
+			if _, err := agentdef.OpenCodeProvider(id); err != nil {
+				continue
+			}
+			if first == "" {
+				first = id
+			}
+			if m.Default && provider == "anthropic" && anthropicDefault == "" {
+				anthropicDefault = id
+			}
+			if m.Default && provider == "openai" && openaiDefault == "" {
+				openaiDefault = id
+			}
+			h.Models = append(h.Models, Model{ID: id, Label: m.Label})
+		}
+	}
+	if len(h.Models) == 0 {
+		h.Available = false
+		h.UnavailableReason = "OpenCode needs a usable harness:anthropic or harness:openai secret (and a reachable provider) to list models"
+		return nil
+	}
+	def := anthropicDefault
+	if def == "" {
+		def = openaiDefault
+	}
+	if def == "" {
+		def = first
+	}
+	for i := range h.Models {
+		h.Models[i].Default = h.Models[i].ID == def
+	}
+	return nil
 }

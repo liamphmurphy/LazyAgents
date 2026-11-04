@@ -58,7 +58,7 @@ type ChatMessageInput struct {
 
 // ChatCatalog is the harness/model catalog chats validate against.
 func (s *Service) ChatCatalog() chatmodels.Catalog {
-	return chatmodels.Catalog{RequireKey: s.RequireHarnessKey, Secrets: s.Secrets, Discover: s.ModelDiscovery}
+	return chatmodels.Catalog{RequireKey: s.RequireHarnessKey, OpenCodeIsolated: s.OpenCodeIsolated, Secrets: s.Secrets, Discover: s.ModelDiscovery}
 }
 
 // StartChat creates a chat and optionally queues its first message atomically.

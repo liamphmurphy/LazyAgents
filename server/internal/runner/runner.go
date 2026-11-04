@@ -22,6 +22,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/harness"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
@@ -1096,7 +1097,7 @@ func (r *Runner) checkSpec(spec agentdef.Resolved) error {
 		uses = uses || f.Harness == agentdef.HarnessOpenCode
 	}
 	if uses && !r.opencodeIsolated() {
-		return errors.New("OpenCode needs isolated config (managed config, no ambient ~/.config/opencode), which this backend does not attest. Set RUNNER_OPENCODE_ISOLATED=true only where it holds, or pick another harness.")
+		return errors.New(chatmodels.OpenCodeUnisolated)
 	}
 	return nil
 }

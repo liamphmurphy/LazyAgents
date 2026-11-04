@@ -157,7 +157,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Artifacts:      arts,
 		Agents:         &agents.Service{Pool: pool},
 		Secrets:        secretsSvc,
-		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc, RequireHarnessKey: cfg.Runner.Backend == "docker"},
+		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc, RequireHarnessKey: cfg.Runner.Backend == "docker", OpenCodeIsolated: cfg.Runner.OpenCodeIsolated},
 		Wiki:           &wiki.Service{Pool: pool, Artifacts: arts, Tracker: trackerSvc},
 		PublicURL:      cfg.PublicURL,
 		Blobs:          blobs,
