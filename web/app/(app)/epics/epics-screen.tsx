@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { useEpicOverviews } from "@/lib/api/hooks";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { api, unwrap } from "@/lib/api/client";
+import { hasLiveRun, keys, useBootstrap, useBulkUpdate, useDispatch, useEpicOverviews, useTickets } from "@/lib/api/hooks";
 import { dueDate } from "@/lib/format";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
@@ -161,6 +163,71 @@ function Timeline({
     </Card>
   );
 }
+function EpicDispatch({ epic }: { epic: EpicOverview }) {
+  const [agentId, setAgentId] = useState("");
+  const bootstrap = useBootstrap();
+  const agents = (bootstrap.data?.agents ?? []).filter((a) => a.kind === "main");
+  const selectedAgent = agents.find((a) => a.id === agentId) ?? agents[0];
+  const bulk = useBulkUpdate();
+  const dispatch = useDispatch();
+  const qc = useQueryClient();
+  const start = useMutation({
+    mutationFn: async ({ ticketKeys, unassignedKeys, assignee }: { ticketKeys: string[]; unassignedKeys: string[]; assignee?: string }) => {
+      if (unassignedKeys.length) {
+        if (!assignee) throw new Error("Choose a main agent for unassigned tickets.");
+        await bulk.mutateAsync({ keys: unassignedKeys, patch: { assignee_agent_id: assignee } });
+      }
+      return dispatch.mutateAsync(ticketKeys);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["epics"] }),
+  });
+  // The overview only contains a sample of tickets. Fetch the whole epic.
+  const list = useTickets({ epic: epic.epic.id, view: "all" });
+  const remaining = (list.data ?? []).filter((t) => t.status !== "done");
+  const details = useQueries({ queries: remaining.map((t) => ({
+    queryKey: keys.ticket(t.key),
+    queryFn: () => unwrap(api.GET("/tickets/{key}", { params: { path: { key: t.key } } })),
+  })) });
+  const loading = list.isPending || details.some((q) => q.isPending);
+  const failed = list.isError || details.some((q) => q.isError);
+  const incomplete = !!list.data && list.data.length < epic.counts.total;
+  const candidates = details.flatMap((q) => q.data && q.data.status !== "done" && !hasLiveRun(q.data) ? [q.data] : []);
+  const dispatchKeys = candidates.map((t) => t.key);
+  const unassignedKeys = candidates.filter((t) => !t.assignee).map((t) => t.key);
+  const unassigned = unassignedKeys.length;
+  return (
+    <div className="space-y-2 border-t border-border-subtle px-5 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        {unassigned > 0 && (
+          <label className="flex items-center gap-2 text-xs text-fg-secondary">
+            Agent for unassigned tickets
+            <select aria-label="Agent for unassigned tickets" value={selectedAgent?.id ?? ""}
+              disabled={start.isPending || bootstrap.isPending}
+              onChange={(e) => { setAgentId(e.target.value); start.reset(); }}
+              className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-fg">
+              {!agents.length && <option value="">No main agents available</option>}
+              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+        )}
+        <Button variant="approve" disabled={loading || failed || incomplete || !dispatchKeys.length || start.isPending || (unassigned > 0 && !selectedAgent)}
+          onClick={() => start.mutate({ ticketKeys: dispatchKeys, unassignedKeys, assignee: selectedAgent?.id })}>
+          {start.isPending ? "Dispatching…" : loading ? "Loading tickets…" : `${unassigned ? "Assign & dispatch epic" : "Dispatch epic"} (${dispatchKeys.length})`}
+        </Button>
+        <p className="text-xs text-fg-secondary">
+          Queue all remaining tickets. Existing agent assignments are kept. Runs start automatically as dependencies finish and runner slots become available.
+        </p>
+      </div>
+      {unassigned > 0 && <p className="text-xs text-fg-secondary">{unassigned} tickets will be assigned to {selectedAgent?.name ?? "the agent you choose"} before dispatch.</p>}
+      {unassigned > 0 && !bootstrap.isPending && !agents.length && <p role="alert" className="text-xs text-pill-blocked-fg">{bootstrap.isError ? "Couldn’t load agents. Refresh to try again." : "Create a main agent to assign and dispatch these tickets."}</p>}
+      {start.isError && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t dispatch the epic: {start.error.message}{bulk.isSuccess && " Agent assignments were saved; retry to dispatch."}</p>}
+      {failed && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load all ticket details. Refresh to try again.</p>}
+      {incomplete && <p role="alert" className="text-xs text-pill-blocked-fg">The ticket list is incomplete. Open the ticket list to dispatch in smaller batches.</p>}
+      {start.isSuccess && <p role="status" className="text-xs text-fg-secondary">{start.data} epic tickets queued. Follow their progress below.</p>}
+    </div>
+  );
+}
+
 function Featured({ epic: e }: { epic: EpicOverview }) {
   return (
     <Card bodyClassName="p-0" className="overflow-hidden rounded-[14px]">
@@ -239,6 +306,7 @@ function Featured({ epic: e }: { epic: EpicOverview }) {
           <dd className="font-mono">{(e.agent_seconds / 3600).toFixed(1)}h</dd>
         </dl>
       </div>
+      <EpicDispatch key={e.epic.id} epic={e} />
       <div className="flex items-center justify-between border-t border-border-subtle bg-surface-sunken px-5 py-3">
         <h3 className="text-xs font-medium text-fg-secondary">Tickets</h3>
         <Link

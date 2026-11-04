@@ -65,7 +65,7 @@ WHERE id = (
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
-RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose
+RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks
 `
 
 // The runner (PLAN.md §6.4–6.6): queue, turns, heartbeats, PR sync.
@@ -104,6 +104,8 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, runnerID *string) (Run, er
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }
@@ -273,7 +275,7 @@ func (q *Queries) LiveRunners(ctx context.Context) ([]Runner, error) {
 }
 
 const lockRunNoWait = `-- name: LockRunNoWait :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose FROM runs WHERE id = $1
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks FROM runs WHERE id = $1
 `
 
 // Plain read used by the runner (it locks inside its own transactions).
@@ -309,6 +311,8 @@ func (q *Queries) LockRunNoWait(ctx context.Context, id uuid.UUID) (Run, error) 
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }

@@ -145,3 +145,27 @@ WHERE id = sqlc.arg(id);
 -- name: RunVerdict :one
 -- The review verdict ("" if none) a delegated run reported when it completed.
 SELECT coalesce(payload->>'verdict', '')::text AS verdict FROM run_events WHERE run_id = $1 AND type = 'lifecycle' AND payload->>'state' = 'completed' ORDER BY seq DESC LIMIT 1;
+
+-- name: SetRunContract :one
+UPDATE runs SET contract = $2 WHERE id = $1 RETURNING *;
+
+-- name: SetRunChecks :exec
+UPDATE runs SET checks = $2 WHERE id = $1;
+
+-- name: DelegationEfficiency :many
+-- Per sub agent: what delegating to it costs and how often its first attempt
+-- passes the runner's checks. A repair loop is a later delegation to the same
+-- agent under the same parent run.
+WITH kids AS (
+  SELECT r.*, lead(r.id) OVER (PARTITION BY r.parent_run_id, r.agent_id ORDER BY r.started_at) AS repaired_by
+  FROM runs r
+  WHERE r.workspace_id = $1 AND r.parent_run_id IS NOT NULL AND r.state IN ('completed', 'failed', 'cancelled')
+)
+SELECT k.agent_id,
+  count(*)::bigint AS delegations,
+  count(*) FILTER (WHERE k.checks->>'passed' = 'true' AND k.repaired_by IS NULL)::bigint AS first_pass,
+  count(*) FILTER (WHERE k.repaired_by IS NOT NULL)::bigint AS repair_loops,
+  coalesce(sum(k.cost_usd_micros), 0)::bigint AS child_cost_usd_micros,
+  coalesce((SELECT sum(p.cost_usd_micros) FROM runs p WHERE p.id IN (SELECT parent_run_id FROM kids k2 WHERE k2.agent_id = k.agent_id)), 0)::bigint AS parent_cost_usd_micros,
+  coalesce(sum(extract(epoch FROM (k.ended_at - k.started_at))), 0)::float8 AS child_seconds
+FROM kids k GROUP BY k.agent_id;

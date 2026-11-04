@@ -252,6 +252,8 @@ func gitSection(spec agentdef.Resolved) string {
 func delegationSection(agentdef.Resolved) string {
 	return "If sub agents exist (`list_subagents`), you may hand them self-contained parts of the ticket such as implementation or documentation with " +
 		"`delegate`. You wait while one works in this same checkout, then get its summary; review the diff before relying on it. " +
+		"Delegating costs a fresh agent startup, a handoff and a verification pass: do small or tightly coupled changes yourself, and delegate substantial work. " +
+		"Give `delegate` acceptance_criteria, allowed_paths and a test_command; the server runs those checks and hands you the results, so you don't repeat them. " +
 		"You stay responsible for the ticket: only you call claim_ticket and complete_run for it. Before finishing, read get_ticket and verify every acceptance criterion against evidence; use check_criterion only for verified criteria. If any criterion is unmet, implement it yourself or delegate it to a suitable agent and inspect the result. Continue until all criteria are satisfied. Commit and push any changes, record the PR with set_pr, obtain an approved verdict from a delegated reviewer or QA agent, then call complete_run with status=done. Do not stop at In Review when you can finish this workflow. If you need a person, use await_human or request_approval; status=todo explicitly hands back unfinished work.\n\n"
 }
 

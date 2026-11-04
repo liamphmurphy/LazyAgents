@@ -14,7 +14,7 @@ import (
 )
 
 const activeChildRun = `-- name: ActiveChildRun :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled')
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled')
 `
 
 func (q *Queries) ActiveChildRun(ctx context.Context, parentRunID *uuid.UUID) (Run, error) {
@@ -49,12 +49,14 @@ func (q *Queries) ActiveChildRun(ctx context.Context, parentRunID *uuid.UUID) (R
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }
 
 const activeRunForTicket = `-- name: ActiveRunForTicket :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose FROM runs WHERE ticket_id = $1 AND parent_run_id IS NULL AND state NOT IN ('completed', 'failed', 'cancelled')
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks FROM runs WHERE ticket_id = $1 AND parent_run_id IS NULL AND state NOT IN ('completed', 'failed', 'cancelled')
 `
 
 // The ticket's top-level run; delegated runs belong to it.
@@ -90,12 +92,14 @@ func (q *Queries) ActiveRunForTicket(ctx context.Context, ticketID *uuid.UUID) (
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }
 
 const activeRunsForAgent = `-- name: ActiveRunsForAgent :many
-SELECT r.id, r.workspace_id, r.ticket_id, r.agent_id, r.mode, r.state, r.wait_reason, r.resolved_spec, r.definition_version_id, r.harness, r.model, r.harness_session_id, r.outcome, r.tool_calls, r.input_tokens, r.output_tokens, r.cost_usd_micros, r.cost_source, r.started_at, r.ended_at, r.created_at, r.updated_at, r.dispatched_by_user_id, r.runner_id, r.workspace_volume, r.idle_turns, r.parent_run_id, r.purpose, coalesce(t.key, 'Planning')::text AS ticket_key FROM runs r LEFT JOIN tickets t ON t.id = r.ticket_id
+SELECT r.id, r.workspace_id, r.ticket_id, r.agent_id, r.mode, r.state, r.wait_reason, r.resolved_spec, r.definition_version_id, r.harness, r.model, r.harness_session_id, r.outcome, r.tool_calls, r.input_tokens, r.output_tokens, r.cost_usd_micros, r.cost_source, r.started_at, r.ended_at, r.created_at, r.updated_at, r.dispatched_by_user_id, r.runner_id, r.workspace_volume, r.idle_turns, r.parent_run_id, r.purpose, r.contract, r.checks, coalesce(t.key, 'Planning')::text AS ticket_key FROM runs r LEFT JOIN tickets t ON t.id = r.ticket_id
 WHERE r.agent_id = $1 AND r.state NOT IN ('completed', 'failed', 'cancelled')
 ORDER BY r.started_at
 `
@@ -129,6 +133,8 @@ type ActiveRunsForAgentRow struct {
 	IdleTurns           int32
 	ParentRunID         *uuid.UUID
 	Purpose             string
+	Contract            []byte
+	Checks              []byte
 	TicketKey           string
 }
 
@@ -170,6 +176,8 @@ func (q *Queries) ActiveRunsForAgent(ctx context.Context, agentID uuid.UUID) ([]
 			&i.IdleTurns,
 			&i.ParentRunID,
 			&i.Purpose,
+			&i.Contract,
+			&i.Checks,
 			&i.TicketKey,
 		); err != nil {
 			return nil, err
@@ -203,7 +211,7 @@ UPDATE runs SET tool_calls = tool_calls + $2, input_tokens = input_tokens + $3, 
   cost_source = CASE WHEN cost_source IN ('unknown','partial') OR $6::text = 'unknown' THEN
     CASE WHEN cost_usd_micros + $5 > 0 THEN 'partial' ELSE 'unknown' END
     ELSE coalesce(cost_source, $6) END
-WHERE id = $1 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose
+WHERE id = $1 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks
 `
 
 type AddRunUsageParams struct {
@@ -254,12 +262,14 @@ func (q *Queries) AddRunUsage(ctx context.Context, arg AddRunUsageParams) (Run, 
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }
 
 const childRuns = `-- name: ChildRuns :many
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose FROM runs WHERE parent_run_id = $1 ORDER BY started_at
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks FROM runs WHERE parent_run_id = $1 ORDER BY started_at
 `
 
 func (q *Queries) ChildRuns(ctx context.Context, parentRunID *uuid.UUID) ([]Run, error) {
@@ -300,6 +310,8 @@ func (q *Queries) ChildRuns(ctx context.Context, parentRunID *uuid.UUID) ([]Run,
 			&i.IdleTurns,
 			&i.ParentRunID,
 			&i.Purpose,
+			&i.Contract,
+			&i.Checks,
 		); err != nil {
 			return nil, err
 		}
@@ -434,7 +446,7 @@ func (q *Queries) CreateApproval(ctx context.Context, arg CreateApprovalParams) 
 
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (workspace_id, ticket_id, agent_id, mode, state, resolved_spec, definition_version_id, harness, model, parent_run_id, purpose)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks
 `
 
 type CreateRunParams struct {
@@ -495,6 +507,8 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }
@@ -575,6 +589,63 @@ func (q *Queries) DecidedApprovalsSince(ctx context.Context, arg DecidedApproval
 			&i.ExecutedAt,
 			&i.Result,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const delegationEfficiency = `-- name: DelegationEfficiency :many
+WITH kids AS (
+  SELECT r.id, r.workspace_id, r.ticket_id, r.agent_id, r.mode, r.state, r.wait_reason, r.resolved_spec, r.definition_version_id, r.harness, r.model, r.harness_session_id, r.outcome, r.tool_calls, r.input_tokens, r.output_tokens, r.cost_usd_micros, r.cost_source, r.started_at, r.ended_at, r.created_at, r.updated_at, r.dispatched_by_user_id, r.runner_id, r.workspace_volume, r.idle_turns, r.parent_run_id, r.purpose, r.contract, r.checks, lead(r.id) OVER (PARTITION BY r.parent_run_id, r.agent_id ORDER BY r.started_at) AS repaired_by
+  FROM runs r
+  WHERE r.workspace_id = $1 AND r.parent_run_id IS NOT NULL AND r.state IN ('completed', 'failed', 'cancelled')
+)
+SELECT k.agent_id,
+  count(*)::bigint AS delegations,
+  count(*) FILTER (WHERE k.checks->>'passed' = 'true' AND k.repaired_by IS NULL)::bigint AS first_pass,
+  count(*) FILTER (WHERE k.repaired_by IS NOT NULL)::bigint AS repair_loops,
+  coalesce(sum(k.cost_usd_micros), 0)::bigint AS child_cost_usd_micros,
+  coalesce((SELECT sum(p.cost_usd_micros) FROM runs p WHERE p.id IN (SELECT parent_run_id FROM kids k2 WHERE k2.agent_id = k.agent_id)), 0)::bigint AS parent_cost_usd_micros,
+  coalesce(sum(extract(epoch FROM (k.ended_at - k.started_at))), 0)::float8 AS child_seconds
+FROM kids k GROUP BY k.agent_id
+`
+
+type DelegationEfficiencyRow struct {
+	AgentID             uuid.UUID
+	Delegations         int64
+	FirstPass           int64
+	RepairLoops         int64
+	ChildCostUsdMicros  int64
+	ParentCostUsdMicros int64
+	ChildSeconds        float64
+}
+
+// Per sub agent: what delegating to it costs and how often its first attempt
+// passes the runner's checks. A repair loop is a later delegation to the same
+// agent under the same parent run.
+func (q *Queries) DelegationEfficiency(ctx context.Context, workspaceID uuid.UUID) ([]DelegationEfficiencyRow, error) {
+	rows, err := q.db.Query(ctx, delegationEfficiency, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DelegationEfficiencyRow{}
+	for rows.Next() {
+		var i DelegationEfficiencyRow
+		if err := rows.Scan(
+			&i.AgentID,
+			&i.Delegations,
+			&i.FirstPass,
+			&i.RepairLoops,
+			&i.ChildCostUsdMicros,
+			&i.ParentCostUsdMicros,
+			&i.ChildSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -676,7 +747,7 @@ func (q *Queries) GetCriterionByPosition(ctx context.Context, arg GetCriterionBy
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose FROM runs WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks FROM runs WHERE id = $1 AND workspace_id = $2
 `
 
 type GetRunParams struct {
@@ -716,6 +787,8 @@ func (q *Queries) GetRun(ctx context.Context, arg GetRunParams) (Run, error) {
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }
@@ -742,7 +815,7 @@ func (q *Queries) InsertPlanStep(ctx context.Context, arg InsertPlanStepParams) 
 }
 
 const latestRunForTicket = `-- name: LatestRunForTicket :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose FROM runs WHERE ticket_id = $1 AND parent_run_id IS NULL ORDER BY started_at DESC LIMIT 1
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks FROM runs WHERE ticket_id = $1 AND parent_run_id IS NULL ORDER BY started_at DESC LIMIT 1
 `
 
 func (q *Queries) LatestRunForTicket(ctx context.Context, ticketID *uuid.UUID) (Run, error) {
@@ -777,6 +850,8 @@ func (q *Queries) LatestRunForTicket(ctx context.Context, ticketID *uuid.UUID) (
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }
@@ -959,7 +1034,7 @@ func (q *Queries) LockApproval(ctx context.Context, arg LockApprovalParams) (App
 }
 
 const lockRun = `-- name: LockRun :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose FROM runs WHERE id = $1 FOR UPDATE
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks FROM runs WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockRun(ctx context.Context, id uuid.UUID) (Run, error) {
@@ -994,6 +1069,8 @@ func (q *Queries) LockRun(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }
@@ -1123,6 +1200,67 @@ func (q *Queries) SetApprovalResult(ctx context.Context, arg SetApprovalResultPa
 	return err
 }
 
+const setRunChecks = `-- name: SetRunChecks :exec
+UPDATE runs SET checks = $2 WHERE id = $1
+`
+
+type SetRunChecksParams struct {
+	ID     uuid.UUID
+	Checks []byte
+}
+
+func (q *Queries) SetRunChecks(ctx context.Context, arg SetRunChecksParams) error {
+	_, err := q.db.Exec(ctx, setRunChecks, arg.ID, arg.Checks)
+	return err
+}
+
+const setRunContract = `-- name: SetRunContract :one
+UPDATE runs SET contract = $2 WHERE id = $1 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks
+`
+
+type SetRunContractParams struct {
+	ID       uuid.UUID
+	Contract []byte
+}
+
+func (q *Queries) SetRunContract(ctx context.Context, arg SetRunContractParams) (Run, error) {
+	row := q.db.QueryRow(ctx, setRunContract, arg.ID, arg.Contract)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TicketID,
+		&i.AgentID,
+		&i.Mode,
+		&i.State,
+		&i.WaitReason,
+		&i.ResolvedSpec,
+		&i.DefinitionVersionID,
+		&i.Harness,
+		&i.Model,
+		&i.HarnessSessionID,
+		&i.Outcome,
+		&i.ToolCalls,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.CostUsdMicros,
+		&i.CostSource,
+		&i.StartedAt,
+		&i.EndedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DispatchedByUserID,
+		&i.RunnerID,
+		&i.WorkspaceVolume,
+		&i.IdleTurns,
+		&i.ParentRunID,
+		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
+	)
+	return i, err
+}
+
 const setRunModel = `-- name: SetRunModel :exec
 UPDATE runs SET model = $1::text,
   resolved_spec = jsonb_set(resolved_spec, '{model}', to_jsonb($1::text))
@@ -1144,7 +1282,7 @@ const setRunState = `-- name: SetRunState :one
 UPDATE runs SET state = $2, wait_reason = $3,
   ended_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN now() ELSE ended_at END,
   outcome = coalesce($4, outcome)
-WHERE id = $1 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose
+WHERE id = $1 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks
 `
 
 type SetRunStateParams struct {
@@ -1191,6 +1329,8 @@ func (q *Queries) SetRunState(ctx context.Context, arg SetRunStateParams) (Run, 
 		&i.IdleTurns,
 		&i.ParentRunID,
 		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
 	)
 	return i, err
 }

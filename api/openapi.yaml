@@ -80,6 +80,17 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AgentOverviewList" }
         default: { $ref: "#/components/responses/Error" }
+  /delegation-efficiency:
+    get:
+      operationId: listDelegationEfficiency
+      summary: What delegating to each sub agent costs, and how often its first attempt passes the runner's checks
+      responses:
+        "200":
+          description: Per sub agent efficiency
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DelegationEfficiencyList" }
+        default: { $ref: "#/components/responses/Error" }
   /inbox:
     get:
       operationId: listInbox
@@ -2587,6 +2598,28 @@ components:
         queue_count: { type: integer }
         stats: { $ref: "#/components/schemas/PerformanceStats" }
         scopes: { type: array, items: { $ref: "#/components/schemas/AgentScopeSummary" } }
+
+    DelegationEfficiency:
+      type: object
+      required: [agent_id, handle, name, delegations, first_pass, first_pass_rate, repair_loops, child_cost_usd_micros, parent_cost_usd_micros, total_cost_usd_micros, avg_seconds]
+      properties:
+        agent_id: { type: string, format: uuid }
+        handle: { type: string }
+        name: { type: string }
+        delegations: { type: integer, description: "Finished delegated runs" }
+        first_pass: { type: integer, description: "Runs whose result passed the runner's checks and needed no repeat delegation to the same agent" }
+        first_pass_rate: { type: number, format: double, description: "first_pass / delegations, 0 to 1" }
+        repair_loops: { type: integer, description: "Runs followed by another delegation to the same agent under the same parent run" }
+        child_cost_usd_micros: { type: integer, format: int64 }
+        parent_cost_usd_micros: { type: integer, format: int64, description: "Cost of the distinct main-agent runs that delegated to this agent" }
+        total_cost_usd_micros: { type: integer, format: int64 }
+        avg_seconds: { type: number, format: double, description: "Mean elapsed time of a delegated run" }
+
+    DelegationEfficiencyList:
+      type: object
+      required: [agents]
+      properties:
+        agents: { type: array, items: { $ref: "#/components/schemas/DelegationEfficiency" } }
 
     AgentOverviewList:
       type: object

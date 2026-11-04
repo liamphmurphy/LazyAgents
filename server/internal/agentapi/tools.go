@@ -395,8 +395,11 @@ type CompleteIn struct {
 
 type DelegateIn struct {
 	TicketArg
-	Agent string `json:"agent" jsonschema:"Handle of a sub agent from list_subagents, e.g. docs-writer"`
-	Task  string `json:"task" jsonschema:"What it should do, with the context it needs: it can't see your conversation. Name files, constraints and the done condition."`
+	Agent              string   `json:"agent" jsonschema:"Handle of a sub agent from list_subagents, e.g. docs-writer"`
+	Task               string   `json:"task" jsonschema:"What it should do, with the context it needs: it can't see your conversation. Name files, constraints and the done condition."`
+	AcceptanceCriteria []string `json:"acceptance_criteria,omitempty" jsonschema:"Checkable conditions that make the task done. Shown to the sub agent; you verify them against the automated check results."`
+	AllowedPaths       []string `json:"allowed_paths,omitempty" jsonschema:"Repo-relative files, directories (trailing slash) or globs the sub agent may change. Changes outside them fail the automated checks."`
+	TestCommand        string   `json:"test_command,omitempty" jsonschema:"Command that must exit 0 in the checkout, e.g. go test ./internal/runs/. The server runs it when the sub agent finishes and reports the result to you."`
 }
 
 type SearchIn struct {
@@ -841,9 +844,10 @@ var Tools = []Tool{
 			}
 			return map[string]any{"subagents": items}, nil
 		}),
-	define("delegate", "Hand a self-contained part of your ticket (implementation, docs, tests) to a sub agent. It works in your checkout on your branch while you wait: end your turn after calling this and you'll be resumed with its summary. One delegation at a time. Review its diff before relying on it.",
+	define("delegate", "Hand a self-contained part of your ticket (implementation, docs, tests) to a sub agent. It works in your checkout on your branch while you wait: end your turn after calling this and you'll be resumed with its summary. One delegation at a time. Delegating costs a fresh agent startup, a handoff and a verification pass, so keep small or tightly coupled changes (a few lines, one file) to yourself and delegate work that is substantial or needs a specialist. Pass acceptance_criteria, allowed_paths and test_command so the server can check the result for you: you're resumed with those results and a diff summary, and should read the diff only for what they can't judge.",
 		func(ctx context.Context, d Deps, c agents.Caller, in DelegateIn) (any, error) {
-			dg, err := d.Runs.Delegate(ctx, c, in.Ticket, in.Agent, in.Task)
+			dg, err := d.Runs.DelegateWithContract(ctx, c, in.Ticket, in.Agent, in.Task, runs.Contract{
+				AcceptanceCriteria: in.AcceptanceCriteria, AllowedPaths: in.AllowedPaths, TestCommand: in.TestCommand})
 			if err != nil {
 				return nil, err
 			}

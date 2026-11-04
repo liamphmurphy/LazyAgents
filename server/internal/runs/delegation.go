@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 
@@ -33,11 +34,110 @@ const (
 	maxTaskRunes   = 20000
 )
 
+// Contract is what a main agent asks of a sub agent beyond the task text. The
+// runner checks the result against it before waking the main agent.
+type Contract struct {
+	AcceptanceCriteria []string `json:"acceptance_criteria,omitempty"`
+	// AllowedPaths are repo-relative files, directories (trailing "/") or
+	// globs the sub agent may change. Empty means unrestricted.
+	AllowedPaths []string `json:"allowed_paths,omitempty"`
+	// TestCommand must exit 0 in the checkout for the result to pass.
+	TestCommand string `json:"test_command,omitempty"`
+	// BaseSHA is the checkout's HEAD when the sub agent started; the runner sets it.
+	BaseSHA string `json:"base_sha,omitempty"`
+	// BaseUncommitted are files already dirty at that point; they aren't the sub agent's.
+	BaseUncommitted []string `json:"base_uncommitted,omitempty"`
+}
+
+const (
+	maxContractItems = 20
+	maxContractRunes = 500
+)
+
+// Normalize trims the contract and rejects what can't be checked or rendered.
+func (c Contract) Normalize() (Contract, error) {
+	clean := func(field string, in []string) ([]string, error) {
+		var out []string
+		for _, v := range in {
+			if v = strings.TrimSpace(v); v != "" {
+				if len([]rune(v)) > maxContractRunes {
+					return nil, apperr.Invalid(field, "each entry must be at most %d characters", maxContractRunes)
+				}
+				out = append(out, v)
+			}
+		}
+		if len(out) > maxContractItems {
+			return nil, apperr.Invalid(field, "at most %d entries", maxContractItems)
+		}
+		return out, nil
+	}
+	var err error
+	if c.AcceptanceCriteria, err = clean("acceptance_criteria", c.AcceptanceCriteria); err != nil {
+		return c, err
+	}
+	if c.AllowedPaths, err = clean("allowed_paths", c.AllowedPaths); err != nil {
+		return c, err
+	}
+	for _, p := range c.AllowedPaths {
+		if strings.HasPrefix(p, "/") || strings.Contains(p, "..") {
+			return c, apperr.Invalid("allowed_paths", "%q must be a repo-relative path without ..", p)
+		}
+		if _, err := path.Match(p, "x"); err != nil {
+			return c, apperr.Invalid("allowed_paths", "%q is not a valid glob", p)
+		}
+	}
+	if c.TestCommand = strings.TrimSpace(c.TestCommand); len([]rune(c.TestCommand)) > maxContractRunes {
+		return c, apperr.Invalid("test_command", "must be at most %d characters", maxContractRunes)
+	}
+	c.BaseSHA, c.BaseUncommitted = "", nil
+	return c, nil
+}
+
+// Empty reports whether the contract adds nothing to the task.
+func (c Contract) Empty() bool {
+	return len(c.AcceptanceCriteria) == 0 && len(c.AllowedPaths) == 0 && c.TestCommand == ""
+}
+
+// PathAllowed reports whether a changed file is inside the contract's
+// boundaries. A pattern matches a file exactly, as a directory prefix
+// ("internal/runs/" or "internal/runs"), or as a path.Match glob on the whole
+// path or its base name.
+func (c Contract) PathAllowed(file string) bool {
+	if len(c.AllowedPaths) == 0 {
+		return true
+	}
+	for _, p := range c.AllowedPaths {
+		if file == p || strings.HasPrefix(file, strings.TrimSuffix(p, "/")+"/") {
+			return true
+		}
+		if ok, _ := path.Match(p, file); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // ChildPrompt is the first message of a delegated run.
-func ChildPrompt(ticket, parentHandle, task string) string {
-	return "@" + parentHandle + " delegated part of " + ticket + " to you. You work in the same checkout and branch; " +
+func ChildPrompt(ticket, parentHandle, task string, contract Contract) string {
+	p := "@" + parentHandle + " delegated part of " + ticket + " to you. You work in the same checkout and branch; " +
 		"do not call claim_ticket. Do only what the task says, commit your work to the current branch, then call complete_run " +
 		"with a short summary of what you did and anything the main agent must check. If you're blocked, call complete_run and say why.\n\n## Task\n\n" + task
+	if len(contract.AcceptanceCriteria) > 0 {
+		p += "\n\n## Acceptance criteria\n\nThe task is done only when all of these hold:\n"
+		for _, a := range contract.AcceptanceCriteria {
+			p += "- " + a + "\n"
+		}
+	}
+	if len(contract.AllowedPaths) > 0 {
+		p += "\n\n## Allowed files\n\nChange only these paths. The server rejects work that touches anything else; if the task needs more, say so in complete_run instead:\n"
+		for _, a := range contract.AllowedPaths {
+			p += "- " + a + "\n"
+		}
+	}
+	if contract.TestCommand != "" {
+		p += "\n\n## Tests\n\nThis must exit 0 before you finish (the server runs it again after you): `" + contract.TestCommand + "`\n"
+	}
+	return strings.TrimRight(p, "\n")
 }
 
 type Delegation struct {
@@ -48,6 +148,12 @@ type Delegation struct {
 // Delegate starts a sub agent's run under the caller's run and parks the
 // caller until it finishes.
 func (s *Service) Delegate(ctx context.Context, c Caller, ticketKey, handle, task string) (Delegation, error) {
+	return s.DelegateWithContract(ctx, c, ticketKey, handle, task, Contract{})
+}
+
+// DelegateWithContract is Delegate with acceptance criteria, file boundaries
+// and a test command the runner checks the result against.
+func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey, handle, task string, contract Contract) (Delegation, error) {
 	var out Delegation
 	task = strings.TrimSpace(task)
 	if task == "" {
@@ -56,8 +162,12 @@ func (s *Service) Delegate(ctx context.Context, c Caller, ticketKey, handle, tas
 	if len([]rune(task)) > maxTaskRunes {
 		return out, apperr.Invalid("task", "must be at most %d characters", maxTaskRunes)
 	}
+	contract, err := contract.Normalize()
+	if err != nil {
+		return out, err
+	}
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
-	err := s.tx(ctx, func(q *store.Queries) error {
+	err = s.tx(ctx, func(q *store.Queries) error {
 		if c.Agent.Kind == agents.KindSub {
 			return apperr.Conflict("sub agents can't delegate")
 		}
@@ -117,8 +227,17 @@ func (s *Service) Delegate(ctx context.Context, c Caller, ticketKey, handle, tas
 				return err
 			}
 		}
-		if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: child.ID, Trigger: "start", InputMessage: ChildPrompt(t.Key, c.Agent.Handle, task)}); err != nil {
+		if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: child.ID, Trigger: "start", InputMessage: ChildPrompt(t.Key, c.Agent.Handle, task, contract)}); err != nil {
 			return err
+		}
+		if !contract.Empty() {
+			raw, err := json.Marshal(contract)
+			if err != nil {
+				return err
+			}
+			if child, err = q.SetRunContract(ctx, store.SetRunContractParams{ID: child.ID, Contract: raw}); err != nil {
+				return err
+			}
 		}
 		if err := event(ctx, q, child.ID, "lifecycle", map[string]any{"state": "queued", "mode": "managed", "parent_run_id": run.ID, "delegated_by": c.Agent.Handle}); err != nil {
 			return err
@@ -134,7 +253,7 @@ func (s *Service) Delegate(ctx context.Context, c Caller, ticketKey, handle, tas
 			return err
 		}
 		if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, agentActor(c), VerbDelegated, map[string]any{
-			"run_id": run.ID, "child_run_id": child.ID, "agent_id": sub.ID, "agent_name": sub.Name, "task": truncate(task, 300),
+			"run_id": run.ID, "child_run_id": child.ID, "agent_id": sub.ID, "agent_name": sub.Name, "task": truncate(task, 300), "has_contract": !contract.Empty(),
 		}, nil); err != nil {
 			return err
 		}
@@ -188,8 +307,9 @@ func WakeParent(ctx context.Context, q *store.Queries, child store.Run, state, o
 	default:
 		msg = handle + "'s delegated run failed: " + outcome
 	}
-	msg += "\n\nCheck the result in the workspace (git status, git diff, tests) before relying on it, then continue: " +
-		"read get_ticket, verify the acceptance criteria, and delegate again or fix any remaining work yourself. When every criterion is verified and checked, commit and push any changes, record the PR with set_pr, obtain delegated reviewer/QA approval, and finish with complete_run status=done."
+	msg += "\n\nThe server checks the workspace against the delegation contract (changed files, allowed paths, test command) before you resume; those results follow. " +
+		"Don't repeat checks that already ran. Read the diff for what they can't judge, read get_ticket, verify the acceptance criteria, and delegate again or fix any remaining work yourself. " +
+		"When every criterion is verified and checked, commit and push any changes, record the PR with set_pr, obtain delegated reviewer/QA approval, and finish with complete_run status=done."
 	return resume(ctx, q, parent, "delegation", msg)
 }
 

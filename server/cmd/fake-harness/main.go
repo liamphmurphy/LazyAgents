@@ -15,6 +15,8 @@
 //	slow                wait for SIGINT (pause), then end the turn
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
 //	                    writes child.txt in the shared checkout and completes
+//	delegate_contract   delegate with a contract (allowed_paths docs/, a passing
+//	                    test_command); the resumed parent reports the checks it was given
 //
 // Resumed turns (--resume) finish the run with complete_run, unless
 // FAKE_HARNESS_RESUME=idle.
@@ -342,7 +344,7 @@ func main() {
 		result(false, "Still looking around.")
 		return
 	}
-	if os.Getenv("FAKE_HARNESS_MODE") == "delegate" && strings.Contains(prompt, "delegated part of") {
+	if strings.HasPrefix(os.Getenv("FAKE_HARNESS_MODE"), "delegate") && strings.Contains(prompt, "delegated part of") {
 		// A delegated run: no claim; work in the parent's checkout and report back.
 		if err := os.WriteFile("child.txt", []byte("from the sub agent\n"), 0o644); err != nil {
 			result(true, err.Error())
@@ -353,6 +355,13 @@ func main() {
 		return
 	}
 	if resume != "" {
+		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_contract" {
+			call("complete_run", map[string]any{"outcome": fmt.Sprintf("checks failed=%v outside=%v test_passed=%v criteria=%v",
+				strings.Contains(prompt, "**FAILED**"), strings.Contains(prompt, "Changed outside the allowed paths:\n- child.txt"),
+				strings.Contains(prompt, "passed."), strings.Contains(prompt, "Automated checks"))})
+			result(false, "Done.")
+			return
+		}
 		if os.Getenv("FAKE_HARNESS_MODE") == "delegate" {
 			_, statErr := os.Stat("child.txt")
 			call("complete_run", map[string]any{"outcome": fmt.Sprintf("Reviewed: child.txt present=%v; %s", statErr == nil, firstLine(prompt))})
@@ -413,6 +422,13 @@ func main() {
 	}
 
 	call("claim_ticket", map[string]any{"ticket": ticket})
+	if os.Getenv("FAKE_HARNESS_MODE") == "delegate_contract" {
+		call("delegate", map[string]any{"agent": "scribe", "task": "Write child.txt", "acceptance_criteria": []string{"child.txt exists"},
+			"allowed_paths": []string{"docs/"}, "test_command": "test -f child.txt"})
+		text("Delegated to @scribe. Ending my turn until it reports back.")
+		result(false, "Waiting for the sub agent.")
+		return
+	}
 	if os.Getenv("FAKE_HARNESS_MODE") == "delegate" {
 		call("delegate", map[string]any{"agent": "scribe", "task": "Write child.txt"})
 		text("Delegated to @scribe. Ending my turn until it reports back.")

@@ -348,6 +348,8 @@ type Run struct {
 	IdleTurns           int32
 	ParentRunID         *uuid.UUID
 	Purpose             string
+	Contract            []byte
+	Checks              []byte
 }
 
 type RunEvent struct {

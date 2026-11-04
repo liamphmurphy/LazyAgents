@@ -2,6 +2,7 @@ package runs_test
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -186,9 +187,17 @@ func TestDelegationToSubagents(t *testing.T) {
 	if m := turns[len(turns)-1].InputMessage; !strings.Contains(m, "cancelled") {
 		t.Fatalf("parent told %q", m)
 	}
-	d3, err := svc.Delegate(ctx, callerFor(atlas, &parent.ID), "", "scribe", "Third task")
+	d3, err := svc.DelegateWithContract(ctx, callerFor(atlas, &parent.ID), "", "scribe", "Third task",
+		runs.Contract{AcceptanceCriteria: []string{"docs updated"}, AllowedPaths: []string{"docs/"}, TestCommand: "make test"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	var stored runs.Contract
+	if err := json.Unmarshal(d3.Run.Contract, &stored); err != nil || len(stored.AllowedPaths) != 1 || stored.AllowedPaths[0] != "docs/" || stored.TestCommand != "make test" {
+		t.Fatalf("contract not stored: %s (%v)", d3.Run.Contract, err)
+	}
+	if kidTurns, _ := q.ListTurns(ctx, d3.Run.ID); len(kidTurns) != 1 || !strings.Contains(kidTurns[0].InputMessage, "- docs updated") || !strings.Contains(kidTurns[0].InputMessage, "`make test`") {
+		t.Fatalf("child prompt %+v", kidTurns)
 	}
 	if _, err := svc.SetRunControl(ctx, ws, me.ID, parent.ID, "cancel"); err != nil {
 		t.Fatal(err)
@@ -196,6 +205,12 @@ func TestDelegationToSubagents(t *testing.T) {
 	c3, _ := q.GetRun(ctx, store.GetRunParams{ID: d3.Run.ID, WorkspaceID: ws})
 	if c3.State != "cancelled" {
 		t.Fatalf("child of a cancelled parent = %s", c3.State)
+	}
+
+	// Three finished delegations to one agent under one parent: the first two were followed by a repeat.
+	eff, err := q.DelegationEfficiency(ctx, ws)
+	if err != nil || len(eff) != 1 || eff[0].AgentID != scribe.ID || eff[0].Delegations != 3 || eff[0].RepairLoops != 2 || eff[0].FirstPass != 0 {
+		t.Fatalf("efficiency %+v (%v)", eff, err)
 	}
 
 	// A person can retry the cancelled run straight from its log; delegated runs can't be.

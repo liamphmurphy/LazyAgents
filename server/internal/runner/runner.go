@@ -339,6 +339,7 @@ func (r *Runner) startChild(ctx context.Context, c runCtx) {
 		fail(fmt.Sprintf("No %s secret: add an API key in Settings → Connections & secrets.", key.Secret))
 		return
 	}
+	r.recordBaseline(ctx, c, map[string]string{})
 	err = pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
 		cur, err := q.LockRun(ctx, run.ID)
@@ -694,6 +695,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 	}
 	prompt := turn.InputMessage
+	if turn.Trigger == "delegation" {
+		prompt += r.delegationReport(ctx, c, env)
+	}
 	if c.run.Purpose == "chat" {
 		// The files this turn's message attached, listed in its prompt.
 		refFiles, refPrompt, err := ChatTurnContext(ctx, q, c.run, c.project.ID, turn)

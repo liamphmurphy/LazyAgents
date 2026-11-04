@@ -650,6 +650,38 @@ func TestDelegatedRunSharesParentWorkspace(t *testing.T) {
 	}
 }
 
+func TestDelegationChecksRunBeforeParentResumes(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_contract")
+	if _, err := (&agents.Service{Pool: e.pool}).Create(e.ctx, e.ws, e.me.ID, "scribe", agents.Identity{Name: "Scribe", Role: "Docs", Kind: agents.KindSub}, nil); err != nil {
+		t.Fatal(err)
+	}
+	e.dispatch("PAY-214")
+	e.until("completed", e.state("PAY-214=completed"))
+	parent := e.run("PAY-214")
+	// child.txt is outside the docs/ boundary, so the checks fail, but the test command passes.
+	if want := "checks failed=true outside=true test_passed=true criteria=true"; deref(parent.Outcome) != want {
+		kk, _ := e.q.ChildRuns(e.ctx, &parent.ID)
+		t.Fatalf("parent outcome %q, want %q; checks %s", deref(parent.Outcome), want, kk[0].Checks)
+	}
+	kids, _ := e.q.ChildRuns(e.ctx, &parent.ID)
+	if len(kids) != 1 {
+		t.Fatalf("children %+v", kids)
+	}
+	var contract runs.Contract
+	if err := json.Unmarshal(kids[0].Contract, &contract); err != nil || contract.BaseSHA == "" || contract.TestCommand != "test -f child.txt" || len(contract.AllowedPaths) != 1 {
+		t.Fatalf("contract %s (%v)", kids[0].Contract, err)
+	}
+	var checks runs.Checks
+	if err := json.Unmarshal(kids[0].Checks, &checks); err != nil || !checks.Ran || checks.Passed || len(checks.OutOfBounds) != 1 || checks.TestExit == nil || *checks.TestExit != 0 {
+		t.Fatalf("checks %s (%v)", kids[0].Checks, err)
+	}
+	rows, err := e.q.DelegationEfficiency(e.ctx, e.ws)
+	if err != nil || len(rows) != 1 || rows[0].Delegations != 1 || rows[0].FirstPass != 0 || rows[0].RepairLoops != 0 {
+		t.Fatalf("efficiency %+v (%v)", rows, err)
+	}
+}
+
 func TestUsageFallbackPreservesWorkspace(t *testing.T) {
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "quota")

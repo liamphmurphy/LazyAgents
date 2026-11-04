@@ -71,6 +71,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/delegation-efficiency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What delegating to each sub agent costs, and how often its first attempt passes the runner's checks */
+        get: operations["listDelegationEfficiency"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inbox": {
         parameters: {
             query?: never;
@@ -2140,6 +2157,40 @@ export interface components {
             stats: components["schemas"]["PerformanceStats"];
             scopes: components["schemas"]["AgentScopeSummary"][];
         };
+        DelegationEfficiency: {
+            /** Format: uuid */
+            agent_id: string;
+            handle: string;
+            name: string;
+            /** @description Finished delegated runs */
+            delegations: number;
+            /** @description Runs whose result passed the runner's checks and needed no repeat delegation to the same agent */
+            first_pass: number;
+            /**
+             * Format: double
+             * @description first_pass / delegations, 0 to 1
+             */
+            first_pass_rate: number;
+            /** @description Runs followed by another delegation to the same agent under the same parent run */
+            repair_loops: number;
+            /** Format: int64 */
+            child_cost_usd_micros: number;
+            /**
+             * Format: int64
+             * @description Cost of the distinct main-agent runs that delegated to this agent
+             */
+            parent_cost_usd_micros: number;
+            /** Format: int64 */
+            total_cost_usd_micros: number;
+            /**
+             * Format: double
+             * @description Mean elapsed time of a delegated run
+             */
+            avg_seconds: number;
+        };
+        DelegationEfficiencyList: {
+            agents: components["schemas"]["DelegationEfficiency"][];
+        };
         AgentOverviewList: {
             agents: components["schemas"]["AgentOverview"][];
             /** Format: date-time */
@@ -2536,6 +2587,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentOverviewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listDelegationEfficiency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per sub agent efficiency */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationEfficiencyList"];
                 };
             };
             default: components["responses"]["Error"];
