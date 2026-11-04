@@ -201,7 +201,7 @@ function EventRow({ row, source }: { row: Row; source?: Schemas["Run"] }) {
       body = (
         <span className="font-mono text-[12px] text-fg-secondary">
           turn total · {compact(Number(p.input_tokens ?? 0))} in · {compact(Number(p.output_tokens ?? 0))} out
-          {` · ${runCost(Number(p.cost_usd ?? 0), p.cost_source === "harness" || p.cost_source === "computed" ? String(p.cost_source) : p.cost_known === true ? "harness" : "unknown")}`}
+          {` · ${runCost(Number(p.cost_usd ?? 0), p.cost_source === "harness" || p.cost_source === "computed" ? String(p.cost_source) : p.cost_known === true || (p.cost_known === undefined && Number(p.cost_usd ?? 0) > 0) ? "harness" : "unknown")}`}
         </span>
       );
       break;
