@@ -137,7 +137,7 @@ function SkillsCard({ spec, set }: { spec: AgentSpec; set: (p: Partial<AgentSpec
     <Card title="Skills" bodyClassName="p-0" action={<span className="text-xs text-fg-tertiary">{skills.length} attached</span>}>
       <p className="px-[18px] pt-3 text-xs text-fg-tertiary">
         Reusable playbooks. The agent sees each <em>description</em> and reads the full instructions only when a task matches, so keep descriptions specific. On Claude Code they are
-        native skills; Codex loads the same playbooks from <code className="inline">.agents/skills</code>.
+        native skills; Codex and OpenCode load the same playbooks via <code className="inline">AGENTS.md</code> / <code className="inline">.agents/skills</code>.
       </p>
       <ul className="mt-2">
         {skills.map((k, i) => {
@@ -475,7 +475,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           </div>
         ))}
         <Button type="button" variant="outline" disabled={(spec.fallbacks?.length ?? 0) >= 8}
-          onClick={() => set({ fallbacks: [...(spec.fallbacks ?? []), { harness: spec.harness === "claude-code" ? "codex" : "claude-code", model: "" }] })}>Add fallback</Button>
+          onClick={() => set({ fallbacks: [...(spec.fallbacks ?? []), { harness: detail.harnesses.find((h) => h.name !== spec.harness)?.name ?? spec.harness, model: "" }] })}>Add fallback</Button>
       </SectionCard>
 
       <Card title="Harness options" bodyClassName="flex flex-col gap-2 px-[18px] py-4">

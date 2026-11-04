@@ -229,3 +229,61 @@ test("save a reply as a report artifact with a link back to the chat", async ({ 
   expect(form).toContain("Echo: plain");
   expect(form).toContain(`(/chat/${mock.posted[0].chat})`);
 });
+
+test("OpenCode model is chosen with the keyboard, posted, and survives reload", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat");
+  await newChat(page);
+  await picker(page).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menu")).toBeVisible();
+  const target = page.getByRole("menuitem", { name: /OpenCode openai\/gpt-5/ });
+  // Walk down the menu until the target item has focus.
+  for (let i = 0; i < 8 && !(await target.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(50);
+  }
+  await expect(target).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(picker(page)).toHaveAttribute("aria-label", /OpenCode, openai\/gpt-5/);
+  await send(page, "hello opencode");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello opencode");
+  expect(mock.posted.at(-1)?.body).toMatchObject({ harness: "opencode", model: "openai/gpt-5" });
+  await expect(page.getByTestId("model-tag")).toHaveText("OpenCode · openai/gpt-5");
+
+  await page.reload();
+  await expect(picker(page)).toHaveAttribute("aria-label", /OpenCode, openai\/gpt-5/);
+  await expect(page.getByTestId("model-tag")).toHaveText("OpenCode · openai/gpt-5");
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("unavailable OpenCode shows its reason and can't be selected", async ({ page }) => {
+  await installChatApi(page, { opencodeAvailable: false });
+  await page.goto("/chat");
+  await newChat(page);
+  await picker(page).click();
+  const item = page.getByRole("menuitem", { name: /OpenCode anthropic\/claude-sonnet-4-5/ });
+  await expect(item).toHaveAttribute("aria-disabled", "true");
+  await expect(item).toContainText("OpenCode is not installed");
+  await item.click({ force: true });
+  await page.keyboard.press("Escape");
+  await expect(picker(page)).toHaveAttribute("aria-label", /Claude Code/);
+});
+
+test("a rejected OpenCode post shows the error and keeps the selection", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat");
+  await newChat(page);
+  await page.route("**/api/v1/chats/*/messages", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({ status: 422, json: { code: "invalid", message: "Unknown or unavailable harness/model", field: "model" } })
+      : route.fallback(),
+  );
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /OpenCode anthropic\/claude-sonnet-4-5/ }).click();
+  await send(page, "will fail");
+  await expect(page.getByRole("alert").filter({ hasText: "Unknown or unavailable" })).toBeVisible();
+  await expect(picker(page)).toHaveAttribute("aria-label", /OpenCode, anthropic\/claude-sonnet-4-5/);
+  await expect(composer(page)).toHaveValue("will fail");
+  expect(mock.posted).toEqual([]);
+});
