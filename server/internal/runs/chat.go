@@ -27,6 +27,10 @@ func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
 	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
+	if r.Harness == agentdef.HarnessOpenCode {
+		// OpenCode honors only readonly and rejects any other option.
+		r.HarnessOptions = map[string]string{"readonly": "true"}
+	}
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
 	r.Instructions = "You are chatting with a person. Answer directly, use context tools to look things up, and cite sources with [[…]]. Use create_ticket, create_epic and list_epics for requested project changes. Do not claim tickets, execute project work, or write memory.\n\n" + r.Instructions
