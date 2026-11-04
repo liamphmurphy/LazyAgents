@@ -241,7 +241,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	var backend runner.Backend
 	switch rc.Backend {
 	case "docker":
-		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network}
+		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network, OpenCodeIsolated: rc.OpenCodeIsolated}
 		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := d.Ping(pctx)
 		cancel()
@@ -258,7 +258,10 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		if rc.CodexBin != "" {
 			bins["codex"] = rc.CodexBin
 		}
-		backend = &runner.Local{Dir: rc.DataDir, Bins: bins}
+		if rc.OpenCodeBin != "" {
+			bins["opencode"] = rc.OpenCodeBin
+		}
+		backend = &runner.Local{Dir: rc.DataDir, Bins: bins, OpenCodeIsolated: rc.OpenCodeIsolated}
 	}
 	host, _ := os.Hostname()
 	r := &runner.Runner{

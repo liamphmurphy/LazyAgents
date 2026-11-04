@@ -45,6 +45,11 @@ type Runner struct {
 	DataDir       string // local: run workspaces
 	ClaudeBin     string // local: path to `claude`
 	CodexBin      string // local: path to `codex`
+	OpenCodeBin   string // local: path to `opencode` (pinned 2.2.1)
+	// OpenCodeIsolated attests the backend has no ambient OpenCode config
+	// (managed config, no ~/.config/opencode, no repo/ancestor config).
+	// Without it every OpenCode run is rejected before setup.
+	OpenCodeIsolated bool
 }
 
 type S3 struct {
@@ -90,6 +95,10 @@ func Load() (Config, error) {
 		DataDir:      env("RUNNER_DATA_DIR", ".lazyagents/runs"),
 		ClaudeBin:    env("RUNNER_CLAUDE_BIN", ""),
 		CodexBin:     env("RUNNER_CODEX_BIN", ""),
+		OpenCodeBin:  env("RUNNER_OPENCODE_BIN", ""),
+	}
+	if r.OpenCodeIsolated, err = boolEnv("RUNNER_OPENCODE_ISOLATED", false); err != nil {
+		return c, err
 	}
 	if r.Backend != "docker" && r.Backend != "local" {
 		return c, fmt.Errorf("config: RUNNER_BACKEND=%q must be docker or local", r.Backend)
