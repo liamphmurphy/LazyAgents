@@ -18,9 +18,9 @@ import (
 // Discover asks the provider behind each supported harness for its current models.
 // Credentials and provider response bodies never leave this server.
 func Discover(ctx context.Context, harness, key string) ([]Model, error) {
-	endpoint := "https://api.openai.com/v1/models"
+	endpoint := discoveryEndpoint("openai", "https://api.openai.com/v1/models")
 	if harness == agentdef.HarnessClaudeCode {
-		endpoint = "https://api.anthropic.com/v1/models?limit=1000"
+		endpoint = discoveryEndpoint("anthropic", "https://api.anthropic.com/v1/models?limit=1000")
 		if key == "" {
 			key = os.Getenv("ANTHROPIC_API_KEY")
 		}
@@ -38,6 +38,24 @@ func Discover(ctx context.Context, harness, key string) ([]Model, error) {
 		return nil, fmt.Errorf("missing provider credential")
 	}
 	return discoverHTTP(ctx, &http.Client{Timeout: 10 * time.Second}, endpoint, harness, key)
+}
+
+// DiscoveryURLEnv is a TEST-ONLY seam, off by default. When set to a base URL
+// (e.g. http://127.0.0.1:9000) Discover queries <base>/anthropic/v1/models and
+// <base>/openai/v1/models instead of the real provider endpoints, so the
+// real-stack e2e suite (web/e2e-stack) can serve a fixed model list from a
+// local stub and never reach a provider. Never set it in a real deployment.
+const DiscoveryURLEnv = "LAZYAGENTS_TEST_DISCOVERY_URL"
+
+func discoveryEndpoint(provider, def string) string {
+	base := strings.TrimRight(os.Getenv(DiscoveryURLEnv), "/")
+	if base == "" {
+		return def
+	}
+	if provider == "anthropic" {
+		return base + "/anthropic/v1/models?limit=1000"
+	}
+	return base + "/openai/v1/models"
 }
 
 func discoverHTTP(ctx context.Context, client *http.Client, endpoint, harness, key string) ([]Model, error) {

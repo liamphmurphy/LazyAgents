@@ -121,6 +121,25 @@ func main() {
 	var prompt, resume, cfgPath, model string
 	var mcpURL, tokenEnv, mcpApproval string
 	args := os.Args[1:]
+	// Chat model discovery for `claude` (chatmodels.DiscoverLocal): answer the
+	// initialize control request with one model, then wait for EOF.
+	for _, a := range args {
+		if a == "--input-format" {
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				var request struct {
+					Type      string `json:"type"`
+					RequestID string `json:"request_id"`
+				}
+				if json.Unmarshal(scanner.Bytes(), &request) == nil && request.Type == "control_request" {
+					b, _ := json.Marshal(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": request.RequestID,
+						"response": map[string]any{"models": []any{map[string]any{"value": "sonnet", "displayName": "Claude Sonnet (fake)"}}}}})
+					fmt.Println(string(b))
+				}
+			}
+			return
+		}
+	}
 	if len(args) > 0 && args[0] == "app-server" {
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
@@ -132,6 +151,10 @@ func main() {
 				continue
 			}
 			result := any(map[string]any{})
+			if request.Method == "model/list" {
+				// Chat model discovery (chatmodels.DiscoverLocal).
+				result = map[string]any{"data": []any{map[string]any{"model": "gpt-5-codex", "displayName": "GPT-5 Codex (fake)", "isDefault": true}}}
+			}
 			if request.Method == "hooks/list" {
 				result = map[string]any{"data": []any{map[string]any{"errors": []any{}, "hooks": []any{map[string]any{"enabled": true, "source": "sessionFlags", "handlerType": "command", "command": os.Getenv("LAZYAGENTS_POLICY_HOOK_COMMAND"), "eventName": "preToolUse", "matcher": "*", "trustStatus": "untrusted"}}}}}
 			}

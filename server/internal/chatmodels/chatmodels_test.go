@@ -68,3 +68,35 @@ func TestLocalCatalogWithoutAppSecretUsesDiscovery(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoveryEndpointSeamIsOptIn(t *testing.T) {
+	t.Setenv(DiscoveryURLEnv, "")
+	if got := discoveryEndpoint("openai", "https://api.openai.com/v1/models"); got != "https://api.openai.com/v1/models" {
+		t.Fatalf("unset seam changed the endpoint: %s", got)
+	}
+	if got := discoveryEndpoint("anthropic", "https://api.anthropic.com/v1/models?limit=1000"); got != "https://api.anthropic.com/v1/models?limit=1000" {
+		t.Fatalf("unset seam changed the endpoint: %s", got)
+	}
+	t.Setenv(DiscoveryURLEnv, "http://127.0.0.1:9/")
+	if got := discoveryEndpoint("anthropic", "x"); got != "http://127.0.0.1:9/anthropic/v1/models?limit=1000" {
+		t.Fatal(got)
+	}
+	if got := discoveryEndpoint("openai", "x"); got != "http://127.0.0.1:9/openai/v1/models" {
+		t.Fatal(got)
+	}
+}
+
+func TestDiscoverUsesSeamEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/anthropic/v1/models" || r.Header.Get("x-api-key") != "dummy" {
+			t.Errorf("unexpected request %s", r.URL)
+		}
+		w.Write([]byte(`{"data":[{"id":"claude-sonnet-5-5"}],"has_more":false}`))
+	}))
+	defer srv.Close()
+	t.Setenv(DiscoveryURLEnv, srv.URL)
+	models, err := Discover(context.Background(), agentdef.HarnessClaudeCode, "dummy")
+	if err != nil || len(models) != 1 || models[0].ID != "claude-sonnet-5-5" {
+		t.Fatalf("models=%+v err=%v", models, err)
+	}
+}
