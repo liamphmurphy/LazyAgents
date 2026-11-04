@@ -65,6 +65,13 @@ export function describeChanges(a: Draft, b: Draft): string {
   return out.join("; ") || "No changes";
 }
 
+const MODEL_SUGGESTIONS: Record<Harness, string[]> = {
+  "claude-code": ["opus-5.5", "sonnet-5.5", "haiku-5.5", "fable-5.1"],
+  codex: ["gpt-5-codex", "gpt-5"],
+  opencode: ["anthropic/claude-sonnet-5-5", "anthropic/claude-opus-5-5", "openai/gpt-5"],
+};
+const OPENCODE_HINT = "Use provider/model, e.g. anthropic/claude-sonnet-5-5";
+
 const DEFAULT_MEMORY: NonNullable<AgentSpec["memory"]> = { enabled: true, inject: "linked", max_tokens: 4000 };
 const INJECT_HELP = {
   index: "Only the agent's Memory page.",
@@ -290,10 +297,10 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           )}
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
-          <Field label="Model" htmlFor="ag-model">
+          <Field label="Model" htmlFor="ag-model" hint={spec.harness === "opencode" ? OPENCODE_HINT : undefined}>
             <TextInput id="ag-model" mono list="ag-models" value={spec.model} onChange={(e) => set({ model: e.target.value })} />
             <datalist id="ag-models">
-              {["opus-5.5", "sonnet-5.5", "haiku-5.5", "fable-5.1"].map((m) => (
+              {MODEL_SUGGESTIONS[spec.harness].map((m) => (
                 <option key={m} value={m} />
               ))}
             </datalist>
@@ -469,8 +476,13 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
             <span className="text-xs text-fg-tertiary">{i + 1}.</span>
             <Segmented label={`Fallback ${i + 1} harness`} value={f.harness} options={detail.harnesses.map((h) => ({ value: h.name, label: h.label }))}
               onChange={(harness) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, harness, harness_options: {} } : v) })} />
-            <TextInput aria-label={`Fallback ${i + 1} model`} placeholder="Model" value={f.model}
+            <TextInput aria-label={`Fallback ${i + 1} model`} placeholder={f.harness === "opencode" ? "provider/model" : "Model"} list={`ag-fb-models-${i}`} value={f.model}
               onChange={(e) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, model: e.target.value } : v) })} />
+            <datalist id={`ag-fb-models-${i}`}>
+              {MODEL_SUGGESTIONS[f.harness].map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
             <IconButton icon="trash" label={`Remove fallback ${i + 1}`} onClick={() => set({ fallbacks: spec.fallbacks!.filter((_, j) => j !== i) })} />
           </div>
         ))}
