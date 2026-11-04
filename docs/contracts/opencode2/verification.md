@@ -97,8 +97,10 @@ and this follow-up; those earlier blockers are no longer current requirements.
 Public ID `opencode` is in the API enum (`api/openapi.yaml`, regenerated Go and
 `web/lib/api/schema.d.ts`), `agentdef.Harnesses`, `harness.For`, runner dispatch,
 the local and Docker backends and `deploy/agent-base/Dockerfile`
-(`@opencode/cli@2.2.1`; npm `dist.integrity` sha512-U8UIdEOh…G3Vug==). Chat stays
-off (`chatmodels.chatHarnesses`): LAZYAGENTS-23/24.
+(`@opencode/cli@2.2.1`; npm `dist.integrity` sha512-U8UIdEOh…G3Vug==). Chat:
+LAZYAGENTS-23 lists OpenCode in `chatmodels.chatHarnesses`, available only with
+RUNNER_OPENCODE_ISOLATED and a revealable provider key (fake-CLI coverage in
+`runner/chat_opencode_test.go`); the picker UI is LAZYAGENTS-24.
 
 Fail-closed gates in the runner:
 
