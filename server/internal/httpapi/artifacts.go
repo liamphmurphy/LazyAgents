@@ -129,10 +129,21 @@ func extOf(name string) string {
 
 func contentOf(isMarkdown bool, ct *string, size *int64, filename *string, sections int32) api.ArtifactContent {
 	c := api.ArtifactContent{Kind: api.File, ContentType: deref(ct), SizeBytes: deref(size), Filename: filename, Sections: int(sections)}
-	if isMarkdown {
+	switch {
+	case isMarkdown && deref(ct) == artifacts.MockupContentType:
+		c.Kind = api.Svg
+	case isMarkdown:
 		c.Kind = api.Markdown
 	}
 	return c
+}
+
+func reviewState(s *string) *api.MockupReviewState {
+	if s == nil {
+		return nil
+	}
+	r := api.MockupReviewState(*s)
+	return &r
 }
 
 func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artifact) (api.Artifact, error) {
@@ -190,7 +201,7 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 		return out, err
 	}
 	for _, v := range versions {
-		isMD := v.ContentType == "text/markdown" && v.Filename == nil
+		isMD := (v.ContentType == "text/markdown" || v.ContentType == artifacts.MockupContentType) && v.Filename == nil
 		nSections := int32(0)
 		if v.ID == cur.ID {
 			nSections = int32(len(sections))
@@ -199,6 +210,14 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 			Id: v.ID, Seq: int(v.Seq), Label: v.Label, Note: v.Note, CreatedAt: v.CreatedAt,
 			CreatedBy: dir.actor(v.CreatedByType, &v.CreatedByID),
 			Content:   contentOf(isMD, &v.ContentType, &v.SizeBytes, v.Filename, nSections),
+		}
+		if v.ReviewState != nil {
+			av.Review = &api.MockupReview{State: api.MockupReviewState(*v.ReviewState), Note: v.ReviewNote, ReviewedAt: v.ReviewedAt}
+			if v.ReviewedByUserID != nil {
+				if u, err := s.Q.GetUser(ctx, store.GetUserParams{ID: *v.ReviewedByUserID, WorkspaceID: ws}); err == nil {
+					av.Review.ReviewedBy = toUserRef(u)
+				}
+			}
 		}
 		out.Versions = append(out.Versions, av)
 		if v.ID == cur.ID {
@@ -238,7 +257,7 @@ func (s *Server) docCards(ctx context.Context, ws uuid.UUID, t store.Ticket) ([]
 	for _, r := range rows {
 		out = append(out, api.DocCard{
 			Id: r.ID, Type: api.ArtifactType(r.Type), Title: r.Title, DisplayId: artifacts.DisplayID(r.Type, r.Number),
-			VersionLabel: r.VersionLabel, Relation: api.ArtifactRelation(r.Relation),
+			VersionLabel: r.VersionLabel, Relation: api.ArtifactRelation(r.Relation), ReviewState: reviewState(r.ReviewState),
 			Author: dir.actor(r.AuthorType, &r.AuthorID), ReadByAssignee: r.ReadByAssignee,
 		})
 	}
@@ -303,6 +322,8 @@ func (s *Server) ListArtifacts(ctx context.Context, req api.ListArtifactsRequest
 			out.Counts.Report = int(c.N)
 		case "design":
 			out.Counts.Design = int(c.N)
+		case "mockup":
+			out.Counts.Mockup = int(c.N)
 		}
 	}
 	for _, r := range rows {
@@ -311,7 +332,7 @@ func (s *Server) ListArtifacts(ctx context.Context, req api.ListArtifactsRequest
 			Summary: r.Summary, Path: r.Path,
 			Author: dir.actor(r.AuthorType, &r.AuthorID), VersionLabel: &r.VersionLabel,
 			Content:     contentOf(r.IsMarkdown, &r.ContentType, &r.SizeBytes, r.Filename, r.SectionCount),
-			TicketCount: int(r.TicketCount), UpdatedAt: r.UpdatedAt,
+			TicketCount: int(r.TicketCount), UpdatedAt: r.UpdatedAt, ReviewState: reviewState(r.ReviewState),
 		}
 		if r.ProjectKey != nil {
 			a.Project = &api.Project{Key: *r.ProjectKey, Name: deref(r.ProjectName), Color: deref(r.ProjectColor)}
@@ -469,6 +490,12 @@ func (s *Server) GetArtifactContent(ctx context.Context, req api.GetArtifactCont
 		if err != nil {
 			return nil, err
 		}
+		if a.Type == "mockup" {
+			// Not inlineSafe: served sandboxed as an attachment; <img> still renders it.
+			name := artifacts.Slug(a.Title) + "-" + artifacts.Slug(v.Label) + ".svg"
+			return contentResponse{body: strings.NewReader(*v.BodyMd), contentType: artifacts.MockupContentType + "; charset=utf-8",
+				length: int64(len(*v.BodyMd)), filename: name, inline: inline}, nil
+		}
 		name := artifacts.Slug(a.Title) + "-" + artifacts.Slug(v.Label) + ".md"
 		return contentResponse{body: strings.NewReader(*v.BodyMd), contentType: "text/markdown; charset=utf-8",
 			length: int64(len(*v.BodyMd)), filename: name, inline: inline}, nil
@@ -500,6 +527,11 @@ func (s *Server) DetachArtifact(ctx context.Context, req api.DetachArtifactReque
 	_, actor, ws := me(ctx)
 	if err := s.Tracker.DetachArtifact(ctx, ws, actor, req.Key, req.ArtifactId); err != nil {
 		return nil, err
+	}
+	if a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.ArtifactId, WorkspaceID: ws}); err == nil && a.Type == "mockup" {
+		if err := s.Runs.ReleaseMockupWaiters(ctx, ws, []string{req.Key}, nil, a.Title); err != nil {
+			return nil, err
+		}
 	}
 	t, err := s.reloadTicket(ctx, ws, req.Key)
 	return api.DetachArtifact200JSONResponse(t), err

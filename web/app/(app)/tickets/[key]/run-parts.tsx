@@ -141,6 +141,9 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
       {run.state === "waiting" && run.wait_reason === "human_reply" && (
         <p className="text-xs text-pill-human-fg">Waiting for a reply. Mention @{run.agent.handle} in a comment to resume.</p>
       )}
+      {run.state === "waiting" && run.wait_reason === "mockup_review" && (
+        <p className="text-xs text-pill-human-fg">Waiting for mockup review. The run resumes once a person reviews the mockup.</p>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Stat label="Run time" value={duration(run.started_at, run.ended_at)} />
         <Stat label="Tool calls" value={run.tool_calls} />

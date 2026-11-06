@@ -33,6 +33,11 @@ const (
 	VerbCommented          = "commented"         // {comment_id, body_md, parent_comment_id?}
 	VerbArtifactAttached   = "artifact_attached" // {artifact_id, title, type, relation}
 	VerbArtifactDetached   = "artifact_detached" // {artifact_id, title, type}
+
+	VerbMockupRequirementChanged = "mockup_requirement_changed" // {from, to} (booleans)
+	VerbMockupReviewRequested    = "mockup_review_requested"    // {run_id, artifact_id, title, version} (agent drafted a mockup; its run waits)
+	VerbMockupApproved           = "mockup_approved"            // {artifact_id, title, version, note} (person)
+	VerbMockupChangesRequested   = "mockup_changes_requested"   // {artifact_id, title, version, note} (person)
 )
 
 // Actor is who caused a change.

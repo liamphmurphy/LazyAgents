@@ -49,6 +49,7 @@ export function Composer() {
   const [estimate, setEstimate] = useState("");
   const [due, setDue] = useState("");
   const [createMore, setCreateMore] = useState(false);
+  const [requiresMockup, setRequiresMockup] = useState(false);
 
   const close = () => router.push(`/tickets${project ? `?project=${project.key}` : ""}`);
   const agent = boot.data?.agents.find((a) => a.id === agentId);
@@ -73,6 +74,7 @@ export function Composer() {
         estimate: estimate || undefined,
         due_date: due || undefined,
         criteria: criteria.filter((c) => c.trim()),
+        requires_mockup: requiresMockup || undefined,
       },
       {
         onSuccess: (t) => {
@@ -255,6 +257,14 @@ export function Composer() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
+            {epic?.requires_mockup ? (
+              <span className="text-xs text-fg-secondary">Mockup required by epic {epic.name}</span>
+            ) : (
+              <label className="inline-flex items-center gap-2 text-[12.5px] text-fg-secondary">
+                <input type="checkbox" checked={requiresMockup} onChange={(e) => setRequiresMockup(e.target.checked)} className="size-3.5 accent-[var(--accent)]" />
+                Requires mockup
+              </label>
+            )}
             <Toggle checked={createMore} onChange={setCreateMore} label="Create more" />
             <span className="flex min-w-[200px] flex-1 items-center gap-1.5 text-xs text-fg-tertiary">
               <Icon name="lock" size={12} />

@@ -114,3 +114,7 @@ func (d actorDirectory) event(e store.ActivityEvent) api.ActivityEvent {
 	_ = json.Unmarshal(e.Payload, &payload)
 	return api.ActivityEvent{Id: e.ID, Actor: d.actor(e.ActorType, e.ActorID), Verb: e.Verb, Payload: payload, CreatedAt: e.CreatedAt}
 }
+
+func toEpic(e store.Epic) api.Epic {
+	return api.Epic{Id: e.ID, ProjectId: e.ProjectID, Name: e.Name, Health: api.EpicHealth(e.Health), RequiresMockup: e.RequiresMockup}
+}

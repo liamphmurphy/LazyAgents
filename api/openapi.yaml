@@ -69,6 +69,33 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/EpicOverviewList" }
         default: { $ref: "#/components/responses/Error" }
+  /epics/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateEpic
+      summary: Change an epic. Omitted fields are untouched.
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                requires_mockup:
+                  type: boolean
+                  description: Every ticket in the epic needs a person-approved UI mockup before it can be finished
+      responses:
+        "200":
+          description: The updated epic
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Epic" }
+        default: { $ref: "#/components/responses/Error" }
   /agent-overviews:
     get:
       operationId: listAgentOverviews
@@ -513,7 +540,7 @@ paths:
       - $ref: "#/components/parameters/ArtifactId"
     post:
       operationId: createArtifactVersion
-      summary: Add a version (markdown or file); it becomes current
+      summary: Add a version (markdown, SVG source in body_md for mockups, or file); it becomes current
       tags: [artifacts]
       requestBody:
         required: true
@@ -523,6 +550,35 @@ paths:
       responses:
         "201":
           description: The artifact at its new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /artifacts/{id}/versions/{versionId}/review:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+      - name: versionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: reviewArtifactVersion
+      summary: Approve a mockup version or request changes. Only the current version can be reviewed; waiting agent runs resume with the decision.
+      tags: [artifacts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approved, changes_requested] }
+                note: { type: string, maxLength: 2000, description: Required when requesting changes }
+      responses:
+        "200":
+          description: The reviewed mockup
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Artifact" }
@@ -541,7 +597,7 @@ paths:
         schema: { type: boolean }
     get:
       operationId: getArtifactContent
-      summary: The raw content of one version (markdown text or the stored file)
+      summary: The raw content of one version (markdown text, mockup SVG as image/svg+xml, or the stored file)
       tags: [artifacts]
       responses:
         "200":
@@ -1664,12 +1720,13 @@ components:
         status: { type: string, enum: [running, waiting, blocked, idle] }
     Epic:
       type: object
-      required: [id, project_id, name, health]
+      required: [id, project_id, name, health, requires_mockup]
       properties:
         id: { type: string, format: uuid }
         project_id: { type: string, format: uuid }
         name: { type: string }
         health: { type: string, enum: [on_track, at_risk, off_track] }
+        requires_mockup: { type: boolean, description: Tickets in this epic need a person-approved UI mockup }
     Label:
       type: object
       required: [id, name, color]
@@ -1764,7 +1821,7 @@ components:
           items: { $ref: "#/components/schemas/TicketSummary" }
     Ticket:
       type: object
-      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, blocked_by, blocks, dependency_revision, created_at, updated_at]
+      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, blocked_by, blocks, dependency_revision, requires_mockup, mockup_gate, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         key: { type: string }
@@ -1792,8 +1849,43 @@ components:
         due_date: { type: string, format: date }
         branch: { type: string }
         pr: { $ref: "#/components/schemas/PullRequest" }
+        requires_mockup: { type: boolean, description: This ticket itself is flagged (its epic may also require one) }
+        mockup_gate: { $ref: "#/components/schemas/MockupGate" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    MockupRef:
+      type: object
+      required: [id, title, version_id, version_label, review_state, review_note]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        version_id: { type: string, format: uuid }
+        version_label: { type: string }
+        review_state: { $ref: "#/components/schemas/MockupReviewState" }
+        review_note: { type: string }
+    MockupGate:
+      type: object
+      description: Whether the ticket needs a person-approved UI mockup before implementation can finish
+      required: [required, from_epic, approved, mockups]
+      properties:
+        required: { type: boolean }
+        from_epic: { type: boolean, description: Required only because the ticket's epic says so }
+        approved: { type: boolean, description: A candidate mockup's current version is approved }
+        mockups:
+          type: array
+          description: Mockups attached to the ticket or in its epic (current versions)
+          items: { $ref: "#/components/schemas/MockupRef" }
+    MockupReviewState:
+      type: string
+      enum: [pending, approved, changes_requested]
+    MockupReview:
+      type: object
+      required: [state, note]
+      properties:
+        state: { $ref: "#/components/schemas/MockupReviewState" }
+        note: { type: string }
+        reviewed_by: { $ref: "#/components/schemas/UserRef" }
+        reviewed_at: { type: string, format: date-time }
     Criterion:
       type: object
       required: [id, position, text, done]
@@ -1819,6 +1911,7 @@ components:
         estimate: { type: string }
         due_date: { type: string, format: date }
         criteria: { type: array, items: { type: string } }
+        requires_mockup: { type: boolean }
     TicketPatch:
       type: object
       properties:
@@ -1832,6 +1925,7 @@ components:
         estimate: { type: string, nullable: true }
         due_date: { type: string, format: date, nullable: true }
         label_ids: { type: array, items: { type: string, format: uuid } }
+        requires_mockup: { type: boolean }
     BulkUpdate:
       type: object
       required: [keys, patch]
@@ -1849,7 +1943,7 @@ components:
 
     ArtifactType:
       type: string
-      enum: [prd, spec, adr, report, design, note]
+      enum: [prd, spec, adr, report, design, note, mockup]
     ArtifactRelation:
       type: string
       enum: [context, generated]
@@ -1857,7 +1951,7 @@ components:
       type: object
       required: [kind, content_type, size_bytes, sections]
       properties:
-        kind: { type: string, enum: [markdown, file] }
+        kind: { type: string, enum: [markdown, svg, file] }
         content_type: { type: string }
         size_bytes: { type: integer, format: int64 }
         filename: { type: string }
@@ -1877,11 +1971,12 @@ components:
         author: { $ref: "#/components/schemas/Actor" }
         version_label: { type: string }
         content: { $ref: "#/components/schemas/ArtifactContent" }
+        review_state: { $ref: "#/components/schemas/MockupReviewState" }
         ticket_count: { type: integer }
         updated_at: { type: string, format: date-time }
     ArtifactCounts:
       type: object
-      required: [all, prd, spec, adr, report, design, note]
+      required: [all, prd, spec, adr, report, design, note, mockup]
       properties:
         all: { type: integer, description: Everything except notes }
         note: { type: integer }
@@ -1890,6 +1985,7 @@ components:
         adr: { type: integer }
         report: { type: integer }
         design: { type: integer }
+        mockup: { type: integer }
     ArtifactList:
       type: object
       required: [artifacts, counts]
@@ -1905,6 +2001,7 @@ components:
         label: { type: string }
         note: { type: string }
         content: { $ref: "#/components/schemas/ArtifactContent" }
+        review: { $ref: "#/components/schemas/MockupReview" }
         created_by: { $ref: "#/components/schemas/Actor" }
         created_at: { type: string, format: date-time }
     OutlineSection:
@@ -1949,7 +2046,7 @@ components:
         body_md:
           type: string
           nullable: true
-          description: Markdown of the current version; null for files
+          description: Markdown, or SVG source for mockups; null for files
         outline: { type: array, items: { $ref: "#/components/schemas/OutlineSection" } }
         read_by: { type: array, items: { $ref: "#/components/schemas/ArtifactReader" } }
         versions: { type: array, items: { $ref: "#/components/schemas/ArtifactVersion" } }
@@ -1968,6 +2065,7 @@ components:
         relation: { $ref: "#/components/schemas/ArtifactRelation" }
         author: { $ref: "#/components/schemas/Actor" }
         read_by_assignee: { type: boolean, description: "The ticket's agent has read it (\"Read by Atlas\")" }
+        review_state: { $ref: "#/components/schemas/MockupReviewState" }
     NewArtifact:
       type: object
       required: [project_key, type]
@@ -1978,14 +2076,14 @@ components:
         summary: { type: string }
         epic_id: { type: string, format: uuid }
         version_label: { type: string }
-        body_md: { type: string }
-        file: { type: string, format: binary }
+        body_md: { type: string, description: "Markdown text, or SVG source for type mockup (self-contained: no scripts or external references)" }
+        file: { type: string, format: binary, description: "Mockups accept an .svg file, which is stored as text" }
     NewArtifactVersion:
       type: object
       properties:
         version_label: { type: string }
         note: { type: string }
-        body_md: { type: string }
+        body_md: { type: string, description: "Markdown text, or SVG source for a mockup" }
         file: { type: string, format: binary }
 
     ScopeMode:
@@ -2200,7 +2298,7 @@ components:
         state: { type: string, enum: [queued, starting, running, waiting, paused, blocked, completed, failed, cancelled] }
         session_id: { type: string, description: The harness session turns resume }
         dispatched_by: { $ref: "#/components/schemas/UserRef" }
-        wait_reason: { type: string, enum: [approval, human_reply, pause, delegation], description: "delegation: waiting for a sub agent the run delegated to" }
+        wait_reason: { type: string, enum: [approval, human_reply, pause, delegation, mockup_review], description: "delegation: waiting for a sub agent the run delegated to; mockup_review: waiting for a person to review a UI mockup" }
         parent_run_id: { type: string, format: uuid, description: "Set on a run a main agent delegated to a sub agent; it works in the parent's checkout" }
         harness: { type: string }
         model: { type: string }
@@ -2542,7 +2640,7 @@ components:
       required: [id, kind, title, summary, href, project, ticket_key, created_at, resolved, read]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [approval, dispatch, mention, review, blocked, suggestion, planning] }
+        kind: { type: string, enum: [approval, dispatch, mention, review, blocked, suggestion, planning, mockup] }
         title: { type: string }
         summary: { type: string }
         href: { type: string }

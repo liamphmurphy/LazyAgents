@@ -85,7 +85,7 @@ WHERE target_id = sqlc.arg(target_id) AND target_kind IN ('artifact', 'section')
 -- Markdown artifacts whose text mentions a phrase (for unlinked mentions).
 SELECT ar.id, ar.type, ar.title, ar.path, ar.number, v.body_md
 FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL AND ar.id <> sqlc.arg(exclude_id)
+WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL AND ar.type <> 'mockup' AND ar.id <> sqlc.arg(exclude_id)
   AND (ar.search @@ phraseto_tsquery('english', sqlc.arg(phrase)) OR v.body_md ILIKE '%' || sqlc.arg(phrase) || '%')
 LIMIT 50;
 

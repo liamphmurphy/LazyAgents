@@ -65,7 +65,7 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 		}
 	}
 	for _, x := range epics {
-		out.Epics = append(out.Epics, api.Epic{Id: x.ID, ProjectId: x.ProjectID, Name: x.Name, Health: api.EpicHealth(x.Health)})
+		out.Epics = append(out.Epics, toEpic(x))
 	}
 	for _, x := range labels {
 		out.Labels = append(out.Labels, toLabel(x))

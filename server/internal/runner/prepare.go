@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -134,7 +136,11 @@ func contextName(typ, title string) string {
 	if len(s) > 60 {
 		s = strings.TrimRight(s[:60], "-")
 	}
-	return ".lazyagents/context/" + typ + "-" + s + ".md"
+	ext := ".md"
+	if typ == "mockup" {
+		ext = ".svg"
+	}
+	return ".lazyagents/context/" + typ + "-" + s + ext
 }
 
 // ContextFile is one file delivered into the workspace.
@@ -151,8 +157,10 @@ func ContextFiles(ctx context.Context, q *store.Queries, agent store.Agent, t st
 	var out []ContextFile
 	seen := map[string]bool{}
 	add := func(path string, body string, id uuid.UUID) {
+		ext := filepath.Ext(path)
+		base := strings.TrimSuffix(path, ext)
 		for n := 2; seen[path]; n++ {
-			path = strings.TrimSuffix(path, ".md") + fmt.Sprintf("-%d.md", n)
+			path = base + fmt.Sprintf("-%d", n) + ext
 		}
 		seen[path] = true
 		out = append(out, ContextFile{Path: path, Body: []byte(body), ArtifactID: id})
@@ -161,8 +169,20 @@ func ContextFiles(ctx context.Context, q *store.Queries, agent store.Agent, t st
 	if err != nil {
 		return nil, err
 	}
+	ids := make([]uuid.UUID, 0, len(docs))
 	for _, d := range docs {
-		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: d.ID, WorkspaceID: t.WorkspaceID})
+		ids = append(ids, d.ID)
+	}
+	// Epic-level mockups gate this ticket too, so deliver them with the attached ones.
+	if gate, err := artifacts.MockupGate(ctx, q, t); err == nil {
+		for _, m := range gate.Mockups {
+			if !slices.Contains(ids, m.ID) {
+				ids = append(ids, m.ID)
+			}
+		}
+	}
+	for _, id := range ids {
+		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: t.WorkspaceID})
 		if err != nil || a.CurrentVersionID == nil {
 			continue
 		}

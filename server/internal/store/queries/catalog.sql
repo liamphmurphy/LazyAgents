@@ -41,8 +41,11 @@ SELECT * FROM agents WHERE workspace_id = $1 ORDER BY color_index, name;
 SELECT * FROM agents WHERE id = $1 AND workspace_id = $2;
 
 -- name: CreateEpic :one
-INSERT INTO epics (workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;
+INSERT INTO epics (workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, requires_mockup)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;
+
+-- name: SetEpicRequiresMockup :one
+UPDATE epics SET requires_mockup = $2, updated_at = now() WHERE id = $1 RETURNING *;
 
 -- name: ListEpics :many
 SELECT * FROM epics WHERE workspace_id = $1 ORDER BY name;

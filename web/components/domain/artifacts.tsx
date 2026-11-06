@@ -9,6 +9,7 @@ import { cx } from "@/lib/cx";
 import { fileKind, formatBytes } from "@/lib/files";
 import { Icon } from "@/components/ui/icon";
 import { DocTypeTag } from "./labels";
+import { ReviewChip } from "./mockup";
 import { floatPanel } from "./pickers";
 
 /** "ADR-012 · Postgres declarative partitioning" for numbered types. */
@@ -37,7 +38,10 @@ export function DocCard({ doc, assignee, onRemove }: { doc: DocCardData; assigne
   return (
     <div className="group relative flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 hover:border-border-hover">
       <div className="flex items-center justify-between gap-2">
-        <DocTypeTag type={doc.type} />
+        <span className="flex items-center gap-1.5">
+          <DocTypeTag type={doc.type} />
+          {doc.review_state && <ReviewChip state={doc.review_state} />}
+        </span>
         <span className="font-mono text-[11px] text-fg-tertiary">{doc.display_id?.replace(/^ADR-/, "") ?? doc.version_label}</span>
       </div>
       <Link href={`/artifacts/${doc.id}`} className="font-medium leading-snug text-fg after:absolute after:inset-0">

@@ -540,6 +540,9 @@ func (s *Service) SetPR(ctx context.Context, c Caller, key, url string, draft bo
 		if err != nil {
 			return err
 		}
+		if err := requireMockup(ctx, q, run, t); err != nil {
+			return err
+		}
 		u := m[0]
 		if err := q.SetTicketPR(ctx, store.SetTicketPRParams{ID: t.ID, PrNumber: &num, PrUrl: &u, PrState: &state}); err != nil {
 			return err
@@ -552,9 +555,14 @@ func (s *Service) SetPR(ctx context.Context, c Caller, key, url string, draft bo
 func (s *Service) CheckCriterion(ctx context.Context, c Caller, key string, n int, done bool) error {
 	var id uuid.UUID
 	err := s.tx(ctx, func(q *store.Queries) error {
-		_, t, err := s.running(ctx, q, c, key)
+		run, t, err := s.running(ctx, q, c, key)
 		if err != nil {
 			return err
+		}
+		if done {
+			if err := requireMockup(ctx, q, run, t); err != nil {
+				return err
+			}
 		}
 		if n < 1 {
 			return apperr.Invalid("n", "criteria are numbered from 1")
@@ -692,6 +700,9 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, 
 			return apperr.Invalid("verdict", "only a delegated reviewer or QA run reports a verdict")
 		}
 		if status == "in_review" || status == "done" {
+			if err := requireMockup(ctx, q, run, tk); err != nil {
+				return err
+			}
 			criteria, err := q.ListCriteria(ctx, tk.ID)
 			if err != nil {
 				return err

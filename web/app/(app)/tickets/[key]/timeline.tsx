@@ -271,6 +271,32 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
       return p.reason ? <>stopped the run: {str(p.reason)}</> : "cancelled the run";
     case "run_completed":
       return p.outcome ? <>finished the run: {str(p.outcome)}</> : "finished the run";
+    case "mockup_requirement_changed":
+      return p.to ? "made an approved UI mockup required" : "no longer requires a UI mockup";
+    case "mockup_review_requested":
+      return (
+        <>
+          drafted mockup{" "}
+          <Link href={`/artifacts/${str(p.artifact_id)}`} className="font-medium text-doc-mockup hover:underline">
+            {str(p.title)}
+          </Link>{" "}
+          {str(p.version)} and is waiting for a review
+        </>
+      );
+    case "mockup_approved":
+    case "mockup_changes_requested": {
+      const ok = e.verb === "mockup_approved";
+      return (
+        <>
+          {ok ? "approved" : "requested changes to"} mockup{" "}
+          <Link href={`/artifacts/${str(p.artifact_id)}`} className="font-medium text-doc-mockup hover:underline">
+            {str(p.title)}
+          </Link>{" "}
+          {str(p.version)}
+          {p.note ? <>: “{str(p.note)}”</> : null}
+        </>
+      );
+    }
     default:
       return <span className="font-mono text-xs">{e.verb}</span>;
   }

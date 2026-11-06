@@ -48,7 +48,7 @@ export function MonoChip({ children, variant = "fill" }: { children: ReactNode; 
   );
 }
 
-export type DocType = "prd" | "spec" | "adr" | "report" | "design" | "note";
+export type DocType = "prd" | "spec" | "adr" | "report" | "design" | "note" | "mockup";
 const DOC_CLASS: Record<DocType, string> = {
   note: "bg-doc-note-bg text-doc-note",
   prd: "bg-doc-prd-bg text-doc-prd",
@@ -56,6 +56,7 @@ const DOC_CLASS: Record<DocType, string> = {
   adr: "bg-doc-adr-bg text-doc-adr",
   report: "bg-doc-report-bg text-doc-report",
   design: "bg-doc-design-bg text-doc-design",
+  mockup: "bg-doc-mockup-bg text-doc-mockup",
 };
 
 export function DocTypeTag({ type, className }: { type: DocType; className?: string }) {

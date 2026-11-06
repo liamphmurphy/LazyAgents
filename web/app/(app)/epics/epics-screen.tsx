@@ -5,10 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
-import { hasLiveRun, keys, useBootstrap, useBulkUpdate, useDispatch, useEpicOverviews, useTickets } from "@/lib/api/hooks";
+import { hasLiveRun, keys, useBootstrap, useBulkUpdate, useDispatch, useEpicOverviews, useTickets, useUpdateEpic } from "@/lib/api/hooks";
 import { dueDate } from "@/lib/format";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Content, TopBar } from "@/components/shell/topbar";
 import {
@@ -229,6 +230,7 @@ function EpicDispatch({ epic }: { epic: EpicOverview }) {
 }
 
 function Featured({ epic: e }: { epic: EpicOverview }) {
+  const updateEpic = useUpdateEpic(e.epic.id);
   return (
     <Card bodyClassName="p-0" className="overflow-hidden rounded-[14px]">
       <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -301,6 +303,17 @@ function Featured({ epic: e }: { epic: EpicOverview }) {
             ) : (
               <span className="text-fg-tertiary">No linked PRD</span>
             )}
+          </dd>
+          <dt className="text-fg-tertiary">Mockup</dt>
+          <dd className="space-y-1">
+            <Toggle
+              checked={e.epic.requires_mockup}
+              disabled={updateEpic.isPending}
+              onChange={(v) => updateEpic.mutate({ requires_mockup: v })}
+              label="Requires mockup"
+            />
+            <span className="block text-fg-tertiary">Tickets need an approved UI mockup before an agent can finish.</span>
+            {updateEpic.isError && <span role="alert" className="block text-pill-blocked-fg">{updateEpic.error.message}</span>}
           </dd>
           <dt className="text-fg-tertiary">Agent hours</dt>
           <dd className="font-mono">{(e.agent_seconds / 3600).toFixed(1)}h</dd>

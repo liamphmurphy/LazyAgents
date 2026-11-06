@@ -37,6 +37,15 @@ WITH items AS (
  SELECT 'suggestion:'||v.id,'suggestion',ar.title,v.note,'/wiki/'||ar.path,coalesce(p.key,''),'',v.created_at,v.state<>'suggested'
  FROM artifact_versions v JOIN artifacts ar ON ar.id=v.artifact_id LEFT JOIN projects p ON p.id=ar.project_id
  WHERE ar.workspace_id=sqlc.arg(workspace_id) AND v.state IN ('suggested','published','rejected') AND v.based_on_version_id IS NOT NULL
+ UNION ALL
+ SELECT 'mockup:'||v.id,'mockup',ar.title,
+ CASE v.review_state WHEN 'pending' THEN 'Mockup '||v.label||' is waiting for your approval'
+ WHEN 'approved' THEN 'Mockup '||v.label||' approved' ELSE 'Changes requested on mockup '||v.label END,
+ '/artifacts/'||ar.id,coalesce(p.key,''),
+ coalesce((SELECT t.key FROM ticket_artifacts ta JOIN tickets t ON t.id=ta.ticket_id WHERE ta.artifact_id=ar.id ORDER BY ta.created_at,t.key LIMIT 1),''),
+ v.created_at,(v.review_state<>'pending' OR v.id<>ar.current_version_id)
+ FROM artifact_versions v JOIN artifacts ar ON ar.id=v.artifact_id LEFT JOIN projects p ON p.id=ar.project_id
+ WHERE ar.workspace_id=sqlc.arg(workspace_id) AND ar.type='mockup' AND v.review_state IS NOT NULL
 )
 SELECT items.*, (rd.read_at IS NOT NULL AND rd.read_at>=items.created_at)::boolean AS read,
  (count(*) FILTER (WHERE NOT items.resolved AND NOT coalesce(rd.read_at>=items.created_at,false)) OVER ())::int AS unread_count

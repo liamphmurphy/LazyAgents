@@ -12,8 +12,9 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { AgentAvatar, HumanAvatar } from "@/components/domain/avatars";
 import { artifactMeta, artifactTitle } from "@/components/domain/artifacts";
-import { UploadDialog } from "@/components/domain/artifact-dialogs";
+import { NewMockupDialog, UploadDialog } from "@/components/domain/artifact-dialogs";
 import { DocTypeTag } from "@/components/domain/labels";
+import { ReviewChip } from "@/components/domain/mockup";
 import { TopBar } from "@/components/shell/topbar";
 import { ArtifactPreview } from "./preview";
 
@@ -24,6 +25,7 @@ const TABS: Array<{ key: "all" | ArtifactType; label: string }> = [
   { key: "adr", label: "ADRs" },
   { key: "report", label: "Agent reports" },
   { key: "design", label: "Designs" },
+  { key: "mockup", label: "Mockups" },
   { key: "note", label: "Wiki pages" },
 ];
 
@@ -63,6 +65,7 @@ export function ArtifactsScreen() {
   const [search, setSearch] = useState(q);
   const [upload, setUpload] = useState<{ files: File[] } | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [mockup, setMockup] = useState(false);
 
   const boot = useBootstrap();
   const list = useArtifacts({ type, q: q || undefined, project });
@@ -98,9 +101,14 @@ export function ArtifactsScreen() {
       <TopBar
         crumbs={[{ label: boot.data?.workspace.name ?? "Workspace" }, { label: "Artifacts" }]}
         actions={
-          <Button variant="primary" icon="upload" onClick={() => setUpload({ files: [] })}>
-            Upload
-          </Button>
+          <>
+            <Button variant="outline" icon="plus" onClick={() => setMockup(true)}>
+              New mockup
+            </Button>
+            <Button variant="primary" icon="upload" onClick={() => setUpload({ files: [] })}>
+              Upload
+            </Button>
+          </>
         }
       />
       <div className="flex flex-1 flex-wrap">
@@ -211,7 +219,10 @@ export function ArtifactsScreen() {
                                 >
                                   {artifactTitle(a)}
                                 </button>
-                                <span className="text-xs text-fg-tertiary">{a.path ?? artifactMeta(a)}</span>
+                                <span className="flex items-center gap-2 text-xs text-fg-tertiary">
+                                  {a.path ?? artifactMeta(a)}
+                                  {a.review_state && <ReviewChip state={a.review_state} />}
+                                </span>
                               </span>
                             </div>
                           </td>
@@ -249,6 +260,7 @@ export function ArtifactsScreen() {
         )}
       </div>
 
+      {mockup && <NewMockupDialog open defaultProject={project} onOpenChange={(o) => !o && setMockup(false)} />}
       {upload && (
         <UploadDialog
           open

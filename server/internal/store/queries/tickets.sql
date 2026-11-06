@@ -1,10 +1,10 @@
 -- name: CreateTicket :one
 INSERT INTO tickets (
   workspace_id, project_id, number, key, title, description_md, status, priority,
-  epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, sort_order
+  epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, sort_order, requires_mockup
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-  (SELECT coalesce(max(sort_order), 0) + 1 FROM tickets WHERE project_id = $2)
+  (SELECT coalesce(max(sort_order), 0) + 1 FROM tickets WHERE project_id = $2), $15
 ) RETURNING *;
 
 -- name: GetTicketByKey :one
@@ -17,7 +17,7 @@ SELECT * FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE;
 -- Callers load the row, apply the patch in Go and write every field back.
 UPDATE tickets SET
   title = $2, description_md = $3, status = $4, priority = $5, epic_id = $6,
-  assignee_agent_id = $7, reviewer_user_id = $8, estimate = $9, due_date = $10
+  assignee_agent_id = $7, reviewer_user_id = $8, estimate = $9, due_date = $10, requires_mockup = $11
 WHERE id = $1
 RETURNING *;
 

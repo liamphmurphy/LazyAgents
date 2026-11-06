@@ -35,7 +35,7 @@ const STATE: Record<string, { tone: PillTone; label: string }> = {
   failed: { tone: "blocked", label: "Failed" },
   cancelled: { tone: "neutral", label: "Cancelled" },
 };
-const WAIT: Record<string, string> = { approval: "approval", human_reply: "reply", pause: "paused", delegation: "sub agent" };
+const WAIT: Record<string, string> = { approval: "approval", human_reply: "reply", pause: "paused", delegation: "sub agent", mockup_review: "mockup review" };
 const ENDED = ["completed", "failed", "cancelled"];
 
 const TRIGGER: Record<Turn["trigger"], string> = {
@@ -280,11 +280,11 @@ function TurnsRail({ d }: { d: RunDetail }) {
       {run.state === "waiting" && (
         <div className="mt-1 flex flex-col gap-1 rounded-lg border border-dashed border-state-human/40 px-3 py-2.5 text-xs">
           <span className="font-medium text-pill-human-fg">
-            {run.wait_reason === "delegation" ? "Next turn starts when the delegated agent finishes" : run.wait_reason === "approval" ? "Next turn starts when someone decides" : "Next turn starts when someone replies"}
+            {run.wait_reason === "delegation" ? "Next turn starts when the delegated agent finishes" : run.wait_reason === "mockup_review" ? "Waiting for mockup review. The next turn starts when a person reviews it" : run.wait_reason === "approval" ? "Next turn starts when someone decides" : "Next turn starts when someone replies"}
           </span>
           <span className="text-fg-secondary">{run.wait_reason === "delegation" ? "Follow the delegated agent’s activity in the event timeline." : "Nothing is running. The workspace and session are kept."}</span>
           {run.wait_reason !== "delegation" && <Link href={`/tickets/${run.ticket_key}`} className="text-accent hover:underline">
-            {pending ? "Review the request" : `Reply with @${run.agent.handle}`}
+            {run.wait_reason === "mockup_review" ? "Review the mockup on the ticket" : pending ? "Review the request" : `Reply with @${run.agent.handle}`}
           </Link>}
         </div>
       )}

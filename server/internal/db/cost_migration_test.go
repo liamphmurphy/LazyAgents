@@ -18,6 +18,9 @@ func TestCostAndCumulativeUsageMigration(t *testing.T) {
 	gooseTo(t, pool, false, 16)
 	// The seed uses current queries, which read agents.archived_at (migration 19).
 	mustExec(t, pool, `ALTER TABLE agents ADD COLUMN archived_at timestamptz`)
+	// ...and tickets/epics.requires_mockup (migration 24).
+	mustExec(t, pool, `ALTER TABLE tickets ADD COLUMN requires_mockup boolean NOT NULL DEFAULT false`)
+	mustExec(t, pool, `ALTER TABLE epics ADD COLUMN requires_mockup boolean NOT NULL DEFAULT false`)
 	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
 		t.Fatal(err)
 	}

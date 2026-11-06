@@ -215,7 +215,7 @@ func (s *Server) overview(ctx context.Context, ws uuid.UUID) (overview, error) {
 		if !activeProjects[e.ProjectID] {
 			continue
 		}
-		o := api.EpicOverview{Epic: api.Epic{Id: e.ID, ProjectId: e.ProjectID, Name: e.Name, Health: api.EpicHealth(e.Health)}, Objective: e.Objective, StartDate: toDate(e.StartDate), TargetDate: toDate(e.TargetDate), Agents: []api.AgentRef{}, Tickets: []api.WorkTicket{}}
+		o := api.EpicOverview{Epic: toEpic(e), Objective: e.Objective, StartDate: toDate(e.StartDate), TargetDate: toDate(e.TargetDate), Agents: []api.AgentRef{}, Tickets: []api.WorkTicket{}}
 		for _, p := range projects {
 			if p.ID == e.ProjectID {
 				o.Project = toProject(p)

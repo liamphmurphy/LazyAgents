@@ -24,7 +24,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
-var Types = []string{"prd", "spec", "adr", "report", "design", "note"}
+var Types = []string{"prd", "spec", "adr", "report", "design", "note", "mockup"}
 
 // Version states. Suggested versions are agent edits to shared notes waiting
 // for a person (PLAN.md §12.5); they never become current on their own.
@@ -118,14 +118,18 @@ type resolved struct {
 // resolve validates content, reads markdown files into text and uploads other
 // files. The returned cleanup deletes an uploaded blob if the caller's
 // transaction fails.
-func (s *Service) resolve(ctx context.Context, ws uuid.UUID, c Content) (resolved, func(), error) {
+func (s *Service) resolve(ctx context.Context, ws uuid.UUID, typ string, c Content) (resolved, func(), error) {
 	noop := func() {}
 	if (c.BodyMD == nil) == (c.File == nil) {
 		return resolved{}, noop, apperr.Invalid("content", "send exactly one of body_md or file")
 	}
-	if c.File != nil && IsMarkdown(c.File.Name, c.File.ContentType) {
+	mockup := typ == "mockup"
+	if mockup && c.File != nil && !IsSVG(c.File.Name, c.File.ContentType) {
+		return resolved{}, noop, apperr.Invalid("file", "mockups are SVG files")
+	}
+	if c.File != nil && (mockup || IsMarkdown(c.File.Name, c.File.ContentType)) {
 		if c.File.Size > MaxMarkdownBytes {
-			return resolved{}, noop, apperr.Invalid("file", "markdown files are limited to 2 MB")
+			return resolved{}, noop, apperr.Invalid("file", "text files are limited to 2 MB")
 		}
 		b, err := io.ReadAll(io.LimitReader(c.File.Body, MaxMarkdownBytes+1))
 		if err != nil {
@@ -144,6 +148,12 @@ func (s *Service) resolve(ctx context.Context, ws uuid.UUID, c Content) (resolve
 		}
 		if !utf8.ValidString(body) {
 			return resolved{}, noop, apperr.Invalid("body_md", "must be UTF-8 text")
+		}
+		if mockup {
+			if err := ValidSVG(body); err != nil {
+				return resolved{}, noop, err
+			}
+			return resolved{body: &body, contentType: MockupContentType, size: int64(len(body))}, noop, nil
 		}
 		return resolved{body: &body, contentType: "text/markdown", size: int64(len(body))}, noop, nil
 	}
@@ -190,7 +200,7 @@ func defaultTitle(r resolved, given string, fileName string) string {
 	if t := strings.TrimSpace(given); t != "" {
 		return t
 	}
-	if r.body != nil {
+	if r.body != nil && r.contentType != MockupContentType {
 		for _, s := range Outline(*r.body) {
 			if s.Level == 1 {
 				return s.Heading
@@ -220,15 +230,20 @@ func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r res
 	if state == "" {
 		state = Published
 	}
+	var review *string
+	if a.Type == "mockup" {
+		pending := ReviewPending
+		review = &pending
+	}
 	v, err := q.CreateArtifactVersion(ctx, store.CreateArtifactVersionParams{
 		ArtifactID: a.ID, Label: label, BodyMd: r.body, BlobKey: r.blobKey, Filename: r.filename,
 		ContentType: r.contentType, SizeBytes: r.size, Note: note, CreatedByType: by.Type, CreatedByID: by.ID,
-		State: state, BasedOnVersionID: basedOn,
+		State: state, BasedOnVersionID: basedOn, ReviewState: review,
 	})
 	if err != nil {
 		return v, err
 	}
-	if r.body != nil {
+	if r.body != nil && a.Type != "mockup" {
 		for i, sec := range Outline(*r.body) {
 			if err := q.InsertSection(ctx, store.InsertSectionParams{
 				VersionID: v.ID, Position: int32(i + 1), Level: int32(sec.Level), Anchor: sec.Anchor, Heading: sec.Heading,
@@ -247,7 +262,10 @@ func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r res
 // and summary, and re-indexes the links it contains.
 func makeCurrent(ctx context.Context, q *store.Queries, a store.Artifact, v store.ArtifactVersion, summary string) error {
 	search := ""
-	if v.BodyMd != nil {
+	mockup := a.Type == "mockup"
+	if mockup && v.BodyMd != nil {
+		search = SVGText(*v.BodyMd)
+	} else if v.BodyMd != nil {
 		search = PlainText(*v.BodyMd)
 		if summary == "" || a.Type == "note" {
 			summary = Summary(*v.BodyMd)
@@ -261,7 +279,7 @@ func makeCurrent(ctx context.Context, q *store.Queries, a store.Artifact, v stor
 		return err
 	}
 	body := ""
-	if v.BodyMd != nil {
+	if v.BodyMd != nil && !mockup {
 		body = *v.BodyMd
 	}
 	return links.Index(ctx, q, a.WorkspaceID, links.Source{Kind: links.SourceArtifact, ID: a.ID, VersionID: &v.ID}, body)
@@ -284,7 +302,7 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, by Actor, in NewArti
 	if in.Type == "note" && in.Content.File != nil && !IsMarkdown(in.Content.File.Name, in.Content.File.ContentType) {
 		return store.Artifact{}, apperr.Invalid("file", "notes are markdown")
 	}
-	r, cleanup, err := s.resolve(ctx, ws, in.Content)
+	r, cleanup, err := s.resolve(ctx, ws, in.Type, in.Content)
 	if err != nil {
 		return store.Artifact{}, err
 	}
@@ -303,7 +321,17 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, by Actor, in NewArti
 // CreateNoteTx creates a markdown note inside the caller's transaction.
 func (s *Service) CreateNoteTx(ctx context.Context, q *store.Queries, ws uuid.UUID, by Actor, path, projectKey, body, state string) (store.Artifact, error) {
 	in := NewArtifact{Type: "note", Path: path, ProjectKey: projectKey, Content: Content{BodyMD: &body}, State: state}
-	r, _, err := s.resolve(ctx, ws, in.Content) // markdown: nothing to clean up
+	r, _, err := s.resolve(ctx, ws, "note", in.Content) // markdown: nothing to clean up
+	if err != nil {
+		return store.Artifact{}, err
+	}
+	return s.create(ctx, q, ws, by, in, r)
+}
+
+// CreateMockupTx creates a mockup from SVG source inside the caller's transaction.
+func (s *Service) CreateMockupTx(ctx context.Context, q *store.Queries, ws uuid.UUID, by Actor, projectKey, title string, epicID *uuid.UUID, svg string) (store.Artifact, error) {
+	in := NewArtifact{Type: "mockup", ProjectKey: projectKey, Title: title, EpicID: epicID, Content: Content{BodyMD: &svg}}
+	r, _, err := s.resolve(ctx, ws, "mockup", in.Content) // text: nothing to clean up
 	if err != nil {
 		return store.Artifact{}, err
 	}
@@ -414,7 +442,13 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 
 // AddVersion makes new content current. Labels default to v<seq>.
 func (s *Service) AddVersion(ctx context.Context, ws uuid.UUID, by Actor, id uuid.UUID, in NewVersion) (store.Artifact, error) {
-	r, cleanup, err := s.resolve(ctx, ws, in.Content)
+	cur, err := store.New(s.Pool).GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.Artifact{}, apperr.ErrNotFound
+	} else if err != nil {
+		return store.Artifact{}, err
+	}
+	r, cleanup, err := s.resolve(ctx, ws, cur.Type, in.Content)
 	if err != nil {
 		return store.Artifact{}, err
 	}
@@ -444,6 +478,9 @@ func AddVersionTx(ctx context.Context, q *store.Queries, a store.Artifact, r res
 	if a.Type == "note" && r.body == nil {
 		return store.ArtifactVersion{}, apperr.Invalid("file", "notes are markdown")
 	}
+	if a.Type == "mockup" && (r.body == nil || r.contentType != MockupContentType) {
+		return store.ArtifactVersion{}, apperr.Invalid("content", "mockups take SVG text")
+	}
 	label := strings.TrimSpace(in.Label)
 	if label == "" {
 		n, err := q.CountPublishedVersions(ctx, a.ID)
@@ -461,7 +498,14 @@ func AddVersionTx(ctx context.Context, q *store.Queries, a store.Artifact, r res
 // Markdown validates a markdown body for AddVersionTx.
 func Markdown(body string) (resolved, error) {
 	var s Service
-	r, _, err := s.resolve(context.Background(), uuid.Nil, Content{BodyMD: &body})
+	r, _, err := s.resolve(context.Background(), uuid.Nil, "", Content{BodyMD: &body})
+	return r, err
+}
+
+// Mockup validates SVG source for AddVersionTx.
+func Mockup(body string) (resolved, error) {
+	var s Service
+	r, _, err := s.resolve(context.Background(), uuid.Nil, "mockup", Content{BodyMD: &body})
 	return r, err
 }
 

@@ -634,3 +634,29 @@ The user explicitly authorized the first two recommended additions: project/repo
 - New integration tests cover project validation/uniqueness/stale revisions, archive/restore/history, execution and planning archive guards, workspace isolation, dependency and proposal cycles (including concurrent inverse edits), duplicate blockers, ready filtering/Inbox unread state, atomic bulk rejection, unmanaged-claim enforcement, stable proposal refs, next-wave readiness without auto-dispatch, and legacy/new repository snapshots. Guarded runner tests verify reopened queued blockers launch no harness and a local Git checkout uses the approved repository/base branch despite later settings changes.
 - No real harness or provider key was used. No commit was made. Agent runner remains off. Browser QA was skipped as requested.
 - Local preview refreshed with migration 00014 applied: `http://localhost:8080/settings/projects` and `http://localhost:8080/tickets?view=all&ready=true`. API/web are healthy. Caddy returned 200 for project list, ready tickets, ticket dependency fields, dispatch preview, planning list, Dashboard and the new HTML routes. The persistent demo still has its original four projects; all mutation/runner checks used throwaway databases. Only API/Caddy/Postgres/S3/web are running; runner remains off.
+
+## UI mockups and the mockup approval gate (2026-11-06)
+
+- **Storage:** artifact type `mockup` (migration `00024_mockups.sql`). SVG source lives in `artifact_versions.body_md` with `content_type = image/svg+xml`, so mockups are versioned and editable as text. `artifacts.ValidSVG` rejects anything active or external:
+  - scripts, `foreignObject`, and XHTML/MathML elements
+  - `on*` handlers and scriptable URLs
+  - non-`#` hrefs, and `src`/`action`/`formaction` attributes
+  - external CSS `url()`/`@import`, CSS escapes, and DOCTYPE/entities
+
+  Inkscape metadata namespaces are allowed. The content endpoint serves mockups as an attachment with `CSP: sandbox`. The web renders them only through `<img>` with a `data:` URL, never as inline markup.
+- **Review:** every mockup version starts `pending`. A person approves or requests changes on the current version only: `POST /artifacts/{id}/versions/{versionId}/review`, in `runs.ReviewMockup`.
+- **Gate:**
+  - `tickets.requires_mockup` or `epics.requires_mockup` (`PATCH /epics/{id}`) makes `artifacts.MockupGate` required.
+  - The gate is satisfied when a mockup attached to the ticket, or one a person put on its epic, has an approved current version.
+  - While it isn't satisfied, `set_pr`, `check_criterion(done)` and `complete_run(in_review|done)` are refused. Delegated child runs are exempt.
+- **Agents:**
+  - `create_mockup` attaches the new mockup to the ticket, not the epic. On a gated ticket it puts the run in `waiting` with `wait_reason = mockup_review`; child runs never wait.
+  - Approving a mockup resumes every waiting run it now satisfies. Changes requested resumes only runs on the tickets the mockup is attached to.
+  - Unmanaged sessions see decisions in `await_signal` as `mockup_reviews`.
+  - Clearing the requirement or detaching a mockup releases stranded waiters (`runs.ReleaseMockupWaiters`).
+  - Mockups reach runs as `.lazyagents/context/mockup-*.svg`, and `read_artifact` returns `svg`.
+- **Web:**
+  - Mockup view, review banner, and a split SVG source/live preview editor (`/artifacts/{id}?edit=1`, Save version / Save & approve).
+  - A New mockup dialog with a blank wireframe template.
+  - The ticket "Mockup" property and gate banner, the epic toggle, and inbox `mockup` items.
+- **Not done:** no browser QA yet. There's no visual (drag/drop) editor, only source plus live preview, and no `requires_mockup` field on planning drafts.

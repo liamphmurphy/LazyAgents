@@ -213,7 +213,9 @@ type Signal struct {
 	WaitReason string
 	Comments   []store.HumanCommentsSinceRow
 	Decisions  []store.ApprovalRequest
-	Cursor     time.Time
+	// Mockup reviews on the ticket's gate candidates, oldest first.
+	MockupReviews []store.MockupReviewsSinceRow
+	Cursor        time.Time
 }
 
 // AwaitSignal long-polls for anything a person did: a decision, a comment,
@@ -239,6 +241,10 @@ func (s *Service) AwaitSignal(ctx context.Context, c Caller, key string, since t
 		if err != nil {
 			return Signal{}, err
 		}
+		reviews, err := q.MockupReviewsSince(ctx, store.MockupReviewsSinceParams{WorkspaceID: t.WorkspaceID, Since: since, TicketID: t.ID, EpicID: t.EpicID})
+		if err != nil {
+			return Signal{}, err
+		}
 		// The cursor only advances to timestamps the database wrote. A host
 		// clock would drift from Postgres's (Docker Desktop runs it in a VM)
 		// and a reply stamped just behind it would be skipped forever.
@@ -253,8 +259,13 @@ func (s *Service) AwaitSignal(ctx context.Context, c Caller, key string, since t
 				cursor = *ap.DecidedAt
 			}
 		}
-		sig := Signal{State: run.State, WaitReason: deref(run.WaitReason), Comments: comments, Decisions: decided, Cursor: cursor}
-		changed := len(comments) > 0 || len(decided) > 0 || run.State == "running" || run.State == "cancelled"
+		for _, rv := range reviews {
+			if rv.ReviewedAt != nil && rv.ReviewedAt.After(cursor) {
+				cursor = *rv.ReviewedAt
+			}
+		}
+		sig := Signal{State: run.State, WaitReason: deref(run.WaitReason), Comments: comments, Decisions: decided, MockupReviews: reviews, Cursor: cursor}
+		changed := len(comments) > 0 || len(decided) > 0 || len(reviews) > 0 || run.State == "running" || run.State == "cancelled"
 		if changed || now.After(deadline) {
 			return sig, nil
 		}

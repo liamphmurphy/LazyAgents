@@ -159,6 +159,10 @@ type ArtifactVersion struct {
 	BasedOnVersionID *uuid.UUID
 	DecidedByID      *uuid.UUID
 	DecidedAt        *time.Time
+	ReviewState      *string
+	ReviewedByUserID *uuid.UUID
+	ReviewedAt       *time.Time
+	ReviewNote       string
 }
 
 type ChatMessage struct {
@@ -218,18 +222,19 @@ type Criterion struct {
 }
 
 type Epic struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	ProjectID   uuid.UUID
-	Name        string
-	Objective   string
-	OwnerUserID *uuid.UUID
-	StartDate   *time.Time
-	TargetDate  *time.Time
-	Health      string
-	Icon        *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID             uuid.UUID
+	WorkspaceID    uuid.UUID
+	ProjectID      uuid.UUID
+	Name           string
+	Objective      string
+	OwnerUserID    *uuid.UUID
+	StartDate      *time.Time
+	TargetDate     *time.Time
+	Health         string
+	Icon           *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	RequiresMockup bool
 }
 
 type InboxRead struct {
@@ -442,6 +447,7 @@ type Ticket struct {
 	PrSyncedAt         *time.Time
 	PrClosedUnmerged   bool
 	DependencyRevision int32
+	RequiresMockup     bool
 }
 
 type TicketArtifact struct {

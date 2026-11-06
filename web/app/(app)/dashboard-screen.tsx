@@ -39,6 +39,7 @@ function AttentionRow({ item }: { item: Schemas["InboxItem"] }) {
     mention: "Mention",
     planning: "Review plan",
     suggestion: "Wiki edit",
+    mockup: "Mockup",
   };
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-[18px] py-3 last:border-0">
@@ -72,13 +73,15 @@ function AttentionRow({ item }: { item: Schemas["InboxItem"] }) {
         ) : (
           <ButtonLink
             href={item.href}
-            variant={item.kind === "approval" ? "approve" : "outline"}
+            variant={item.kind === "approval" || item.kind === "mockup" ? "approve" : "outline"}
           >
             {item.kind === "approval"
               ? "Review request"
               : item.kind === "suggestion"
                 ? "Review edit"
-                : "Open"}
+                : item.kind === "mockup"
+                  ? "Review mockup"
+                  : "Open"}
           </ButtonLink>
         )}
         <ButtonLink href="/inbox" variant="ghost">

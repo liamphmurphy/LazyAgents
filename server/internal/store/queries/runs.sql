@@ -190,3 +190,8 @@ SELECT k.agent_id,
   (coalesce(avg(k.harness_ms), 0) / 1000)::float8 AS avg_harness_seconds,
   (coalesce(avg(k.checks_ms), 0) / 1000)::float8 AS avg_checks_seconds
 FROM kids k LEFT JOIN runs p ON p.id = k.parent_run_id GROUP BY k.agent_id;
+
+-- name: ListMockupWaitingRuns :many
+-- Top-level runs parked on a mockup review, with their ticket.
+SELECT r.* FROM runs r
+WHERE r.workspace_id = $1 AND r.parent_run_id IS NULL AND r.state = 'waiting' AND r.wait_reason = 'mockup_review';

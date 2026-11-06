@@ -154,9 +154,9 @@ func (q *Queries) CreateArtifact(ctx context.Context, arg CreateArtifactParams) 
 }
 
 const createArtifactVersion = `-- name: CreateArtifactVersion :one
-INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id)
-VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at
+INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id, review_state)
+VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note
 `
 
 type CreateArtifactVersionParams struct {
@@ -172,6 +172,7 @@ type CreateArtifactVersionParams struct {
 	CreatedByID      uuid.UUID
 	State            string
 	BasedOnVersionID *uuid.UUID
+	ReviewState      *string
 }
 
 func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactVersionParams) (ArtifactVersion, error) {
@@ -188,6 +189,7 @@ func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactV
 		arg.CreatedByID,
 		arg.State,
 		arg.BasedOnVersionID,
+		arg.ReviewState,
 	)
 	var i ArtifactVersion
 	err := row.Scan(
@@ -208,6 +210,10 @@ func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactV
 		&i.BasedOnVersionID,
 		&i.DecidedByID,
 		&i.DecidedAt,
+		&i.ReviewState,
+		&i.ReviewedByUserID,
+		&i.ReviewedAt,
+		&i.ReviewNote,
 	)
 	return i, err
 }
@@ -296,7 +302,7 @@ func (q *Queries) GetArtifact(ctx context.Context, arg GetArtifactParams) (Artif
 }
 
 const getArtifactVersion = `-- name: GetArtifactVersion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
 WHERE v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3
 `
 
@@ -327,6 +333,10 @@ func (q *Queries) GetArtifactVersion(ctx context.Context, arg GetArtifactVersion
 		&i.BasedOnVersionID,
 		&i.DecidedByID,
 		&i.DecidedAt,
+		&i.ReviewState,
+		&i.ReviewedByUserID,
+		&i.ReviewedAt,
+		&i.ReviewNote,
 	)
 	return i, err
 }
@@ -486,22 +496,27 @@ func (q *Queries) ListArtifactTickets(ctx context.Context, artifactID uuid.UUID)
 }
 
 const listArtifactVersions = `-- name: ListArtifactVersions :many
-SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at
+SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at,
+  review_state, reviewed_by_user_id, reviewed_at, review_note
 FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' ORDER BY seq DESC
 `
 
 type ListArtifactVersionsRow struct {
-	ID            uuid.UUID
-	ArtifactID    uuid.UUID
-	Seq           int32
-	Label         string
-	Filename      *string
-	ContentType   string
-	SizeBytes     int64
-	Note          string
-	CreatedByType string
-	CreatedByID   uuid.UUID
-	CreatedAt     time.Time
+	ID               uuid.UUID
+	ArtifactID       uuid.UUID
+	Seq              int32
+	Label            string
+	Filename         *string
+	ContentType      string
+	SizeBytes        int64
+	Note             string
+	CreatedByType    string
+	CreatedByID      uuid.UUID
+	CreatedAt        time.Time
+	ReviewState      *string
+	ReviewedByUserID *uuid.UUID
+	ReviewedAt       *time.Time
+	ReviewNote       string
 }
 
 func (q *Queries) ListArtifactVersions(ctx context.Context, artifactID uuid.UUID) ([]ListArtifactVersionsRow, error) {
@@ -525,6 +540,10 @@ func (q *Queries) ListArtifactVersions(ctx context.Context, artifactID uuid.UUID
 			&i.CreatedByType,
 			&i.CreatedByID,
 			&i.CreatedAt,
+			&i.ReviewState,
+			&i.ReviewedByUserID,
+			&i.ReviewedAt,
+			&i.ReviewNote,
 		); err != nil {
 			return nil, err
 		}
@@ -541,7 +560,7 @@ SELECT
   ar.id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.updated_at, ar.created_at, ar.path,
   p.key AS project_key, p.name AS project_name, p.color AS project_color,
   e.id AS epic_id, e.name AS epic_name,
-  v.label AS version_label, v.seq AS version_seq, v.content_type, v.size_bytes, v.filename,
+  v.label AS version_label, v.seq AS version_seq, v.content_type, v.size_bytes, v.filename, v.review_state,
   (v.body_md IS NOT NULL)::bool AS is_markdown,
   (SELECT count(*) FROM artifact_sections s WHERE s.version_id = v.id)::int AS section_count,
   (SELECT count(*) FROM ticket_artifacts ta WHERE ta.artifact_id = ar.id)::int AS ticket_count
@@ -588,6 +607,7 @@ type ListArtifactsRow struct {
 	ContentType  string
 	SizeBytes    int64
 	Filename     *string
+	ReviewState  *string
 	IsMarkdown   bool
 	SectionCount int32
 	TicketCount  int32
@@ -628,6 +648,7 @@ func (q *Queries) ListArtifacts(ctx context.Context, arg ListArtifactsParams) ([
 			&i.ContentType,
 			&i.SizeBytes,
 			&i.Filename,
+			&i.ReviewState,
 			&i.IsMarkdown,
 			&i.SectionCount,
 			&i.TicketCount,
@@ -698,7 +719,7 @@ func (q *Queries) ListSectionsWithCitations(ctx context.Context, arg ListSection
 
 const listTicketArtifacts = `-- name: ListTicketArtifacts :many
 SELECT ar.id, ar.type, ar.title, ar.number, ar.author_type, ar.author_id, ta.relation,
-  v.label AS version_label,
+  v.label AS version_label, v.review_state,
   EXISTS (
     SELECT 1 FROM artifact_reads r JOIN artifact_versions v2 ON v2.id = r.version_id
     WHERE v2.artifact_id = ar.id AND r.agent_id = $1
@@ -724,6 +745,7 @@ type ListTicketArtifactsRow struct {
 	AuthorID       uuid.UUID
 	Relation       string
 	VersionLabel   *string
+	ReviewState    *string
 	ReadByAssignee bool
 }
 
@@ -746,7 +768,57 @@ func (q *Queries) ListTicketArtifacts(ctx context.Context, arg ListTicketArtifac
 			&i.AuthorID,
 			&i.Relation,
 			&i.VersionLabel,
+			&i.ReviewState,
 			&i.ReadByAssignee,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTicketsGatedByMockup = `-- name: ListTicketsGatedByMockup :many
+SELECT t.id, t.key, t.epic_id,
+  EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.ticket_id = t.id AND ta.artifact_id = $1)::bool AS attached
+FROM tickets t
+WHERE t.workspace_id = $2
+  AND (EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.ticket_id = t.id AND ta.artifact_id = $1)
+       OR ($3::uuid IS NOT NULL AND t.epic_id = $3))
+ORDER BY t.key
+`
+
+type ListTicketsGatedByMockupParams struct {
+	ArtifactID  uuid.UUID
+	WorkspaceID uuid.UUID
+	EpicID      *uuid.UUID
+}
+
+type ListTicketsGatedByMockupRow struct {
+	ID       uuid.UUID
+	Key      string
+	EpicID   *uuid.UUID
+	Attached bool
+}
+
+// Tickets a mockup can satisfy: attached to it, or in its epic.
+func (q *Queries) ListTicketsGatedByMockup(ctx context.Context, arg ListTicketsGatedByMockupParams) ([]ListTicketsGatedByMockupRow, error) {
+	rows, err := q.db.Query(ctx, listTicketsGatedByMockup, arg.ArtifactID, arg.WorkspaceID, arg.EpicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTicketsGatedByMockupRow{}
+	for rows.Next() {
+		var i ListTicketsGatedByMockupRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Key,
+			&i.EpicID,
+			&i.Attached,
 		); err != nil {
 			return nil, err
 		}
@@ -800,6 +872,117 @@ func (q *Queries) LockArtifactNumbering(ctx context.Context, dollar_1 uuid.UUID)
 	return err
 }
 
+const mockupGateCandidates = `-- name: MockupGateCandidates :many
+SELECT ar.id, ar.title, v.id AS version_id, v.label AS version_label, v.review_state, v.review_note
+FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
+WHERE ar.type = 'mockup' AND ar.workspace_id = $1
+  AND (EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.artifact_id = ar.id AND ta.ticket_id = $2)
+       OR ($3::uuid IS NOT NULL AND ar.epic_id = $3))
+ORDER BY ar.created_at, ar.id
+`
+
+type MockupGateCandidatesParams struct {
+	WorkspaceID uuid.UUID
+	TicketID    uuid.UUID
+	EpicID      *uuid.UUID
+}
+
+type MockupGateCandidatesRow struct {
+	ID           uuid.UUID
+	Title        string
+	VersionID    uuid.UUID
+	VersionLabel string
+	ReviewState  *string
+	ReviewNote   string
+}
+
+// Mockups that can satisfy a ticket's gate: attached to it, or in its epic.
+func (q *Queries) MockupGateCandidates(ctx context.Context, arg MockupGateCandidatesParams) ([]MockupGateCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, mockupGateCandidates, arg.WorkspaceID, arg.TicketID, arg.EpicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MockupGateCandidatesRow{}
+	for rows.Next() {
+		var i MockupGateCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.VersionID,
+			&i.VersionLabel,
+			&i.ReviewState,
+			&i.ReviewNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const mockupReviewsSince = `-- name: MockupReviewsSince :many
+SELECT ar.id AS artifact_id, ar.title, v.label AS version_label, v.review_state, v.review_note, v.reviewed_at
+FROM artifacts ar JOIN artifact_versions v ON v.artifact_id = ar.id
+WHERE ar.type = 'mockup' AND ar.workspace_id = $1
+  AND v.reviewed_at > $2::timestamptz AND v.review_state IN ('approved', 'changes_requested')
+  AND (EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.artifact_id = ar.id AND ta.ticket_id = $3)
+       OR ($4::uuid IS NOT NULL AND ar.epic_id = $4))
+ORDER BY v.reviewed_at, v.id
+`
+
+type MockupReviewsSinceParams struct {
+	WorkspaceID uuid.UUID
+	Since       time.Time
+	TicketID    uuid.UUID
+	EpicID      *uuid.UUID
+}
+
+type MockupReviewsSinceRow struct {
+	ArtifactID   uuid.UUID
+	Title        string
+	VersionLabel string
+	ReviewState  *string
+	ReviewNote   string
+	ReviewedAt   *time.Time
+}
+
+// Decisions on any version of the ticket's gate candidates, for await_signal.
+func (q *Queries) MockupReviewsSince(ctx context.Context, arg MockupReviewsSinceParams) ([]MockupReviewsSinceRow, error) {
+	rows, err := q.db.Query(ctx, mockupReviewsSince,
+		arg.WorkspaceID,
+		arg.Since,
+		arg.TicketID,
+		arg.EpicID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MockupReviewsSinceRow{}
+	for rows.Next() {
+		var i MockupReviewsSinceRow
+		if err := rows.Scan(
+			&i.ArtifactID,
+			&i.Title,
+			&i.VersionLabel,
+			&i.ReviewState,
+			&i.ReviewNote,
+			&i.ReviewedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextADRNumber = `-- name: NextADRNumber :one
 SELECT (coalesce(max(number), 0) + 1)::int FROM artifacts WHERE workspace_id = $1 AND type = 'adr'
 `
@@ -810,6 +993,52 @@ func (q *Queries) NextADRNumber(ctx context.Context, workspaceID uuid.UUID) (int
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const reviewArtifactVersion = `-- name: ReviewArtifactVersion :one
+UPDATE artifact_versions SET review_state = $2, reviewed_by_user_id = $3, reviewed_at = now(), review_note = $4
+WHERE id = $1 RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note
+`
+
+type ReviewArtifactVersionParams struct {
+	ID               uuid.UUID
+	ReviewState      *string
+	ReviewedByUserID *uuid.UUID
+	ReviewNote       string
+}
+
+func (q *Queries) ReviewArtifactVersion(ctx context.Context, arg ReviewArtifactVersionParams) (ArtifactVersion, error) {
+	row := q.db.QueryRow(ctx, reviewArtifactVersion,
+		arg.ID,
+		arg.ReviewState,
+		arg.ReviewedByUserID,
+		arg.ReviewNote,
+	)
+	var i ArtifactVersion
+	err := row.Scan(
+		&i.ID,
+		&i.ArtifactID,
+		&i.Seq,
+		&i.Label,
+		&i.BodyMd,
+		&i.BlobKey,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.Note,
+		&i.CreatedByType,
+		&i.CreatedByID,
+		&i.CreatedAt,
+		&i.State,
+		&i.BasedOnVersionID,
+		&i.DecidedByID,
+		&i.DecidedAt,
+		&i.ReviewState,
+		&i.ReviewedByUserID,
+		&i.ReviewedAt,
+		&i.ReviewNote,
+	)
+	return i, err
 }
 
 const setArtifactCurrentVersion = `-- name: SetArtifactCurrentVersion :exec

@@ -107,6 +107,7 @@ export function useUpdateTicket(key: string) {
         if (patch.description_md !== undefined) next.description_md = patch.description_md;
         if (patch.status !== undefined) next.status = patch.status;
         if (patch.priority !== undefined) next.priority = patch.priority;
+        if (patch.requires_mockup !== undefined) next.requires_mockup = patch.requires_mockup;
         qc.setQueryData(keys.ticket(key), next);
       }
       return { prev };
@@ -247,6 +248,27 @@ export function useUpdateArtifact(id: string) {
     onSuccess: (a) => {
       qc.setQueryData(keys.artifact(a.id), a);
       qc.invalidateQueries({ queryKey: ["artifacts", "list"] });
+    },
+  });
+}
+
+/** Person review of a mockup version (current version only). */
+export function useReviewMockup(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { versionId: string; decision: "approved" | "changes_requested"; note?: string }) =>
+      unwrap(
+        api.POST("/artifacts/{id}/versions/{versionId}/review", {
+          params: { path: { id, versionId: v.versionId } },
+          body: { decision: v.decision, note: v.note },
+        }),
+      ),
+    onSuccess: (a) => {
+      qc.setQueryData(keys.artifact(a.id), a);
+      qc.invalidateQueries({ queryKey: ["artifacts", "list"] });
+      qc.invalidateQueries({ queryKey: keys.tickets });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: keys.bootstrap });
     },
   });
 }
@@ -665,6 +687,18 @@ export function useDashboard(range: DashboardRange) {
 }
 export function useEpicOverviews() {
  return useQuery({queryKey:["epics"],queryFn:()=>unwrap(api.GET("/epics")).then(d=>d.epics)});
+}
+/** Toggle an epic's "requires mockup" flag. */
+export function useUpdateEpic(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { requires_mockup: boolean }) => unwrap(api.PATCH("/epics/{id}", { params: { path: { id } }, body })),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: keys.bootstrap });
+      qc.invalidateQueries({ queryKey: ["epics"] });
+      qc.invalidateQueries({ queryKey: keys.tickets });
+    },
+  });
 }
 export function useAgentOverviews() {
  return useQuery({queryKey:["agent-overviews"],queryFn:()=>unwrap(api.GET("/agent-overviews")),refetchInterval:30_000});

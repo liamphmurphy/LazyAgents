@@ -26,8 +26,8 @@ UPDATE artifacts SET current_version_id = $2, search_text = $3, summary = $4 WHE
 UPDATE artifacts SET title = $2, summary = $3, epic_id = $4 WHERE id = $1 RETURNING *;
 
 -- name: CreateArtifactVersion :one
-INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id)
-VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id, review_state)
+VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, sqlc.narg(review_state))
 RETURNING *;
 
 -- name: GetArtifactVersion :one
@@ -35,7 +35,8 @@ SELECT v.* FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
 WHERE v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3;
 
 -- name: ListArtifactVersions :many
-SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at
+SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at,
+  review_state, reviewed_by_user_id, reviewed_at, review_note
 FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' ORDER BY seq DESC;
 
 -- name: CountPublishedVersions :one
@@ -76,7 +77,7 @@ SELECT
   ar.id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.updated_at, ar.created_at, ar.path,
   p.key AS project_key, p.name AS project_name, p.color AS project_color,
   e.id AS epic_id, e.name AS epic_name,
-  v.label AS version_label, v.seq AS version_seq, v.content_type, v.size_bytes, v.filename,
+  v.label AS version_label, v.seq AS version_seq, v.content_type, v.size_bytes, v.filename, v.review_state,
   (v.body_md IS NOT NULL)::bool AS is_markdown,
   (SELECT count(*) FROM artifact_sections s WHERE s.version_id = v.id)::int AS section_count,
   (SELECT count(*) FROM ticket_artifacts ta WHERE ta.artifact_id = ar.id)::int AS ticket_count
@@ -113,7 +114,7 @@ DELETE FROM ticket_artifacts WHERE ticket_id = $1 AND artifact_id = $2;
 -- name: ListTicketArtifacts :many
 -- Doc cards on a ticket. read_by_assignee: has the ticket's agent read any version?
 SELECT ar.id, ar.type, ar.title, ar.number, ar.author_type, ar.author_id, ta.relation,
-  v.label AS version_label,
+  v.label AS version_label, v.review_state,
   EXISTS (
     SELECT 1 FROM artifact_reads r JOIN artifact_versions v2 ON v2.id = r.version_id
     WHERE v2.artifact_id = ar.id AND r.agent_id = sqlc.narg(assignee_agent_id)
@@ -132,3 +133,36 @@ ORDER BY t.updated_at DESC;
 
 -- name: GetADRByNumber :one
 SELECT * FROM artifacts WHERE workspace_id = $1 AND type = 'adr' AND number = $2;
+
+-- name: ReviewArtifactVersion :one
+UPDATE artifact_versions SET review_state = $2, reviewed_by_user_id = $3, reviewed_at = now(), review_note = $4
+WHERE id = $1 RETURNING *;
+
+-- name: MockupGateCandidates :many
+-- Mockups that can satisfy a ticket's gate: attached to it, or in its epic.
+SELECT ar.id, ar.title, v.id AS version_id, v.label AS version_label, v.review_state, v.review_note
+FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
+WHERE ar.type = 'mockup' AND ar.workspace_id = sqlc.arg(workspace_id)
+  AND (EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.artifact_id = ar.id AND ta.ticket_id = sqlc.arg(ticket_id))
+       OR (sqlc.narg(epic_id)::uuid IS NOT NULL AND ar.epic_id = sqlc.narg(epic_id)))
+ORDER BY ar.created_at, ar.id;
+
+-- name: ListTicketsGatedByMockup :many
+-- Tickets a mockup can satisfy: attached to it, or in its epic.
+SELECT t.id, t.key, t.epic_id,
+  EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.ticket_id = t.id AND ta.artifact_id = sqlc.arg(artifact_id))::bool AS attached
+FROM tickets t
+WHERE t.workspace_id = sqlc.arg(workspace_id)
+  AND (EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.ticket_id = t.id AND ta.artifact_id = sqlc.arg(artifact_id))
+       OR (sqlc.narg(epic_id)::uuid IS NOT NULL AND t.epic_id = sqlc.narg(epic_id)))
+ORDER BY t.key;
+
+-- name: MockupReviewsSince :many
+-- Decisions on any version of the ticket's gate candidates, for await_signal.
+SELECT ar.id AS artifact_id, ar.title, v.label AS version_label, v.review_state, v.review_note, v.reviewed_at
+FROM artifacts ar JOIN artifact_versions v ON v.artifact_id = ar.id
+WHERE ar.type = 'mockup' AND ar.workspace_id = sqlc.arg(workspace_id)
+  AND v.reviewed_at > sqlc.arg(since)::timestamptz AND v.review_state IN ('approved', 'changes_requested')
+  AND (EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.artifact_id = ar.id AND ta.ticket_id = sqlc.arg(ticket_id))
+       OR (sqlc.narg(epic_id)::uuid IS NOT NULL AND ar.epic_id = sqlc.narg(epic_id)))
+ORDER BY v.reviewed_at, v.id;

@@ -14,6 +14,7 @@ import { AgentAvatar } from "@/components/domain/avatars";
 import { artifactTitle } from "@/components/domain/artifacts";
 import { NewVersionDialog } from "@/components/domain/artifact-dialogs";
 import { DocTypeTag } from "@/components/domain/labels";
+import { ReviewChip } from "@/components/domain/mockup";
 
 /** Outline sections shown: H2s when the doc has a single H1 title, else top level. */
 export function visibleOutline(a: Artifact) {
@@ -25,7 +26,7 @@ export function visibleOutline(a: Artifact) {
 /** Abstract page thumbnail (decorative); real images preview as themselves. */
 function Thumbnail({ a }: { a: Artifact }) {
   const c = a.current_version.content;
-  if (c.kind === "file" && c.content_type.startsWith("image/")) {
+  if (a.type === "mockup" || (c.kind === "file" && c.content_type.startsWith("image/"))) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- user uploads, served by the API
       <img
@@ -104,9 +105,14 @@ export function ArtifactPreview({ id, onClose }: { id: string; onClose: () => vo
             {a.current_version.label} · {shortAgo(a.current_version.created_at)}
           </span>
         </Meta>
-        <Meta label={c.kind === "file" ? "File" : "Length"}>
-          {c.kind === "file" ? `${fileKind(c.content_type, c.filename)} · ${formatBytes(c.size_bytes)}` : `${a.outline.length} sections`}
+        <Meta label={c.kind === "markdown" ? "Length" : "File"}>
+          {c.kind === "markdown" ? `${a.outline.length} sections` : `${fileKind(c.content_type, c.filename)} · ${formatBytes(c.size_bytes)}`}
         </Meta>
+        {a.current_version.review && (
+          <Meta label="Review">
+            <ReviewChip state={a.current_version.review.state} />
+          </Meta>
+        )}
         <Meta label="Epic">{a.epic ? <span className="text-accent">{a.epic.name}</span> : <span className="text-fg-tertiary">None</span>}</Meta>
       </div>
 
@@ -161,6 +167,11 @@ export function ArtifactPreview({ id, onClose }: { id: string; onClose: () => vo
       )}
 
       <div className="grid grid-cols-2 gap-2">
+        {a.type === "mockup" && (
+          <ButtonLink variant="primary" icon="edit" className="justify-center" href={`/artifacts/${a.id}?edit=1`}>
+            Edit
+          </ButtonLink>
+        )}
         <Button variant="outline" className="justify-center" onClick={() => setVersioning(true)}>
           New version
         </Button>

@@ -18,6 +18,9 @@ import { BacklinksPanel } from "@/components/domain/backlinks";
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { DocTypeTag } from "@/components/domain/labels";
 import { Markdown } from "@/components/domain/markdown";
+import { ReviewChip } from "@/components/domain/mockup";
+import { MockupEditor } from "./mockup-editor";
+import { MockupReviewBanner, MockupViewer } from "./mockup-parts";
 import { wikiHref } from "@/lib/wikilinks";
 import { StartChatButton } from "@/components/domain/start-chat";
 import { TopBar } from "@/components/shell/topbar";
@@ -27,7 +30,7 @@ function useVersionBody(a: Artifact | undefined, versionId: string | null) {
   const v = a?.versions.find((x) => x.id === versionId);
   return useQuery({
     queryKey: ["artifacts", "content", a?.id, versionId],
-    enabled: !!a && !!v && v.content.kind === "markdown" && v.id !== a.current_version.id,
+    enabled: !!a && !!v && (v.content.kind === "markdown" || v.content.kind === "svg") && v.id !== a.current_version.id,
     queryFn: async () => {
       const res = await fetch(contentUrl(a!.id, v!.id));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -95,6 +98,9 @@ export function ArtifactScreen({ id }: { id: string }) {
   const old = useVersionBody(a, versionId);
   const isOld = !!a && !!viewing && viewing.id !== a.current_version.id;
   const router = useRouter();
+  const isMockup = a?.type === "mockup";
+  const editing = isMockup && search.get("edit") === "1";
+  const setEditing = (on: boolean) => router.push(on ? `/artifacts/${id}?edit=1` : `/artifacts/${id}`);
 
   // Wiki pages live at /wiki/<path>; this screen still serves their full
   // version history (?versions=1).
@@ -136,18 +142,24 @@ export function ArtifactScreen({ id }: { id: string }) {
                 a.type === "note" && a.path
                   ? { label: "Wiki", href: wikiHref(a.path) }
                   : { label: "Artifacts", href: "/artifacts" },
-                { label: artifactTitle(a) },
+                editing ? { label: artifactTitle(a), href: `/artifacts/${a.id}` } : { label: artifactTitle(a) },
+                ...(editing ? [{ label: "Edit" }] : []),
               ]
             : [{ label: "Artifacts", href: "/artifacts" }, { label: "…" }]
         }
         actions={
-          a && (
+          a && !editing && (
             <>
+              {isMockup && (
+                <Button variant="primary" icon="edit" onClick={() => setEditing(true)}>
+                  Edit
+                </Button>
+              )}
               <StartChatButton attach={{ kind: a.type === "note" ? "page" : "artifact", id: a.id }} title={artifactTitle(a)} project={a.project?.key} />
               <ButtonLink href={contentUrl(a.id, (viewing ?? a.current_version).id, true)} variant="outline" icon="download">
                 Download
               </ButtonLink>
-              <Button variant="secondary" icon="history" onClick={() => setVersioning(true)}>
+              <Button variant={isMockup ? "outline" : "secondary"} icon={isMockup ? "upload" : "history"} onClick={() => setVersioning(true)}>
                 New version
               </Button>
             </>
@@ -160,6 +172,8 @@ export function ArtifactScreen({ id }: { id: string }) {
           <Skeleton className="h-3 w-full" />
           <Skeleton className="h-3 w-5/6" />
         </div>
+      ) : editing ? (
+        <MockupEditor key={a.id} a={a} onDone={() => setEditing(false)} />
       ) : (
         <div className="flex flex-1 flex-wrap">
           <article className="flex min-w-0 flex-[999_1_480px] justify-center px-7 py-8 max-sm:px-4">
@@ -177,8 +191,11 @@ export function ArtifactScreen({ id }: { id: string }) {
                   Agents always read the current version ({a.current_version.label}).
                 </Banner>
               )}
+              {isMockup && <MockupReviewBanner a={a} versionId={viewing.id} isOld={isOld} />}
               <div className="border-t border-border-subtle pt-5">
-                {viewing.content.kind === "file" ? (
+                {isMockup ? (
+                  <MockupViewer title={a.title} source={body ?? undefined} />
+                ) : viewing.content.kind === "file" ? (
                   <FileView a={a} versionId={viewing.id} />
                 ) : body == null ? (
                   <Skeleton className="h-3 w-1/2" />
@@ -190,7 +207,7 @@ export function ArtifactScreen({ id }: { id: string }) {
           </article>
 
           <aside aria-label="Artifact details" className="flex flex-[1_1_300px] flex-col gap-6 border-l border-border-subtle bg-panel px-5 py-6 lg:max-w-[340px]">
-            {a.outline.length > 0 && !isOld && (
+            {!isMockup && a.outline.length > 0 && !isOld && (
               <section className="flex flex-col gap-1">
                 <h2 className="text-[12.5px] text-fg-tertiary">Outline · citations</h2>
                 <ol>
@@ -263,6 +280,7 @@ export function ArtifactScreen({ id }: { id: string }) {
                         <span className="flex items-center gap-2 text-[13px]">
                           <span className="font-mono text-xs">{v.label}</span>
                           {v.id === a.current_version.id && <span className="text-[11px] text-pill-done-fg">current</span>}
+                          {v.review && <ReviewChip state={v.review.state} />}
                           <span className="ml-auto text-xs text-fg-tertiary" title={absoluteTime(v.created_at)}>{timelineTime(v.created_at)}</span>
                         </span>
                         <span className="truncate text-xs text-fg-tertiary">

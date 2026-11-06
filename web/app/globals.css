@@ -90,6 +90,8 @@
   --color-doc-report-bg: var(--doc-report-bg);
   --color-doc-design: var(--doc-design);
   --color-doc-design-bg: var(--doc-design-bg);
+  --color-doc-mockup: var(--doc-mockup);
+  --color-doc-mockup-bg: var(--doc-mockup-bg);
   --color-doc-note: var(--doc-note);
   --color-doc-note-bg: var(--doc-note-bg);
 

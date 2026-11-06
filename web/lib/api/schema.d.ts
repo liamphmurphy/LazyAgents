@@ -54,6 +54,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/epics/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change an epic. Omitted fields are untouched. */
+        patch: operations["updateEpic"];
+        trace?: never;
+    };
     "/agent-overviews": {
         parameters: {
             query?: never;
@@ -404,8 +423,28 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add a version (markdown or file); it becomes current */
+        /** Add a version (markdown, SVG source in body_md for mockups, or file); it becomes current */
         post: operations["createArtifactVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/artifacts/{id}/versions/{versionId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a mockup version or request changes. Only the current version can be reviewed; waiting agent runs resume with the decision. */
+        post: operations["reviewArtifactVersion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -425,7 +464,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** The raw content of one version (markdown text or the stored file) */
+        /** The raw content of one version (markdown text, mockup SVG as image/svg+xml, or the stored file) */
         get: operations["getArtifactContent"];
         put?: never;
         post?: never;
@@ -1272,6 +1311,8 @@ export interface components {
             name: string;
             /** @enum {string} */
             health: "on_track" | "at_risk" | "off_track";
+            /** @description Tickets in this epic need a person-approved UI mockup */
+            requires_mockup: boolean;
         };
         Label: {
             /** Format: uuid */
@@ -1378,10 +1419,42 @@ export interface components {
             due_date?: string;
             branch?: string;
             pr?: components["schemas"]["PullRequest"];
+            /** @description This ticket itself is flagged (its epic may also require one) */
+            requires_mockup: boolean;
+            mockup_gate: components["schemas"]["MockupGate"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        MockupRef: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: uuid */
+            version_id: string;
+            version_label: string;
+            review_state: components["schemas"]["MockupReviewState"];
+            review_note: string;
+        };
+        /** @description Whether the ticket needs a person-approved UI mockup before implementation can finish */
+        MockupGate: {
+            required: boolean;
+            /** @description Required only because the ticket's epic says so */
+            from_epic: boolean;
+            /** @description A candidate mockup's current version is approved */
+            approved: boolean;
+            /** @description Mockups attached to the ticket or in its epic (current versions) */
+            mockups: components["schemas"]["MockupRef"][];
+        };
+        /** @enum {string} */
+        MockupReviewState: "pending" | "approved" | "changes_requested";
+        MockupReview: {
+            state: components["schemas"]["MockupReviewState"];
+            note: string;
+            reviewed_by?: components["schemas"]["UserRef"];
+            /** Format: date-time */
+            reviewed_at?: string;
         };
         Criterion: {
             /** Format: uuid */
@@ -1407,6 +1480,7 @@ export interface components {
             /** Format: date */
             due_date?: string;
             criteria?: string[];
+            requires_mockup?: boolean;
         };
         TicketPatch: {
             title?: string;
@@ -1423,6 +1497,7 @@ export interface components {
             /** Format: date */
             due_date?: string | null;
             label_ids?: string[];
+            requires_mockup?: boolean;
         };
         BulkUpdate: {
             keys: string[];
@@ -1434,12 +1509,12 @@ export interface components {
             attach_artifact_id?: string;
         };
         /** @enum {string} */
-        ArtifactType: "prd" | "spec" | "adr" | "report" | "design" | "note";
+        ArtifactType: "prd" | "spec" | "adr" | "report" | "design" | "note" | "mockup";
         /** @enum {string} */
         ArtifactRelation: "context" | "generated";
         ArtifactContent: {
             /** @enum {string} */
-            kind: "markdown" | "file";
+            kind: "markdown" | "svg" | "file";
             content_type: string;
             /** Format: int64 */
             size_bytes: number;
@@ -1462,6 +1537,7 @@ export interface components {
             author: components["schemas"]["Actor"];
             version_label?: string;
             content: components["schemas"]["ArtifactContent"];
+            review_state?: components["schemas"]["MockupReviewState"];
             ticket_count: number;
             /** Format: date-time */
             updated_at: string;
@@ -1475,6 +1551,7 @@ export interface components {
             adr: number;
             report: number;
             design: number;
+            mockup: number;
         };
         ArtifactList: {
             artifacts: components["schemas"]["ArtifactSummary"][];
@@ -1487,6 +1564,7 @@ export interface components {
             label: string;
             note: string;
             content: components["schemas"]["ArtifactContent"];
+            review?: components["schemas"]["MockupReview"];
             created_by: components["schemas"]["Actor"];
             /** Format: date-time */
             created_at: string;
@@ -1527,7 +1605,7 @@ export interface components {
             epic?: components["schemas"]["EpicRef"];
             author: components["schemas"]["Actor"];
             current_version: components["schemas"]["ArtifactVersion"];
-            /** @description Markdown of the current version; null for files */
+            /** @description Markdown, or SVG source for mockups; null for files */
             body_md: string | null;
             outline: components["schemas"]["OutlineSection"][];
             read_by: components["schemas"]["ArtifactReader"][];
@@ -1549,6 +1627,7 @@ export interface components {
             author: components["schemas"]["Actor"];
             /** @description The ticket's agent has read it ("Read by Atlas") */
             read_by_assignee: boolean;
+            review_state?: components["schemas"]["MockupReviewState"];
         };
         NewArtifact: {
             project_key: string;
@@ -1558,13 +1637,18 @@ export interface components {
             /** Format: uuid */
             epic_id?: string;
             version_label?: string;
+            /** @description Markdown text, or SVG source for type mockup (self-contained: no scripts or external references) */
             body_md?: string;
-            /** Format: binary */
+            /**
+             * Format: binary
+             * @description Mockups accept an .svg file, which is stored as text
+             */
             file?: string;
         };
         NewArtifactVersion: {
             version_label?: string;
             note?: string;
+            /** @description Markdown text, or SVG source for a mockup */
             body_md?: string;
             /** Format: binary */
             file?: string;
@@ -1764,10 +1848,10 @@ export interface components {
             session_id?: string;
             dispatched_by?: components["schemas"]["UserRef"];
             /**
-             * @description delegation: waiting for a sub agent the run delegated to
+             * @description delegation: waiting for a sub agent the run delegated to; mockup_review: waiting for a person to review a UI mockup
              * @enum {string}
              */
-            wait_reason?: "approval" | "human_reply" | "pause" | "delegation";
+            wait_reason?: "approval" | "human_reply" | "pause" | "delegation" | "mockup_review";
             /**
              * Format: uuid
              * @description Set on a run a main agent delegated to a sub agent; it works in the parent's checkout
@@ -2109,7 +2193,7 @@ export interface components {
         InboxItem: {
             id: string;
             /** @enum {string} */
-            kind: "approval" | "dispatch" | "mention" | "review" | "blocked" | "suggestion" | "planning";
+            kind: "approval" | "dispatch" | "mention" | "review" | "blocked" | "suggestion" | "planning" | "mockup";
             title: string;
             summary: string;
             href: string;
@@ -2627,6 +2711,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EpicOverviewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateEpic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Every ticket in the epic needs a person-approved UI mockup before it can be finished */
+                    requires_mockup?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated epic */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Epic"];
                 };
             };
             default: components["responses"]["Error"];
@@ -3257,6 +3371,39 @@ export interface operations {
         responses: {
             /** @description The artifact at its new version */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    reviewArtifactVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "approved" | "changes_requested";
+                    /** @description Required when requesting changes */
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The reviewed mockup */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

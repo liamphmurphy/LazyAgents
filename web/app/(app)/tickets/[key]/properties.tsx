@@ -5,6 +5,7 @@ import type { Bootstrap, Ticket } from "@/lib/api/client";
 import { useUpdateTicket } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { absoluteTime, ago, dueDate } from "@/lib/format";
+import { Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { AgentAvatar, HumanAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
@@ -152,6 +153,20 @@ export function Properties({ t, boot }: { t: Ticket; boot: Bootstrap }) {
         <span className="flex items-center gap-2 text-[13px]">
           <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: t.project.color }} />
           {t.project.name}
+        </span>
+      </div>
+      <div className="flex min-h-[34px] items-center gap-2.5 px-2">
+        <span className="w-[88px] flex-none text-[12.5px] text-fg-tertiary">Mockup</span>
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[13px]">
+          {t.mockup_gate.from_epic ? (
+            <span className="text-fg-secondary">Required by epic {t.epic?.name ?? ""}</span>
+          ) : (
+            <Toggle
+              checked={t.requires_mockup}
+              onChange={(v) => update.mutate({ requires_mockup: v })}
+              label={t.requires_mockup ? "Required" : "Not required"}
+            />
+          )}
         </span>
       </div>
       <InlineProp

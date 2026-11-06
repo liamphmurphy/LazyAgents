@@ -78,8 +78,9 @@ func (s *chatScope) sourceVisible(ctx context.Context, d Deps, kind string, id u
 }
 
 type NewEpicIn struct {
-	Name      string `json:"name"`
-	Objective string `json:"objective,omitempty"`
+	Name           string `json:"name"`
+	Objective      string `json:"objective,omitempty"`
+	RequiresMockup bool   `json:"requires_mockup,omitempty" jsonschema:"Tickets in the epic need a person-approved UI mockup before they can be finished"`
 }
 
 func listChatEpics(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
@@ -122,7 +123,7 @@ func createChatEpic(ctx context.Context, d Deps, c agents.Caller, in NewEpicIn) 
 	if p.Archived {
 		return nil, apperr.Conflict("restore the archived project before creating an epic")
 	}
-	e, err := d.Q.CreateEpic(ctx, store.CreateEpicParams{WorkspaceID: c.Agent.WorkspaceID, ProjectID: s.ProjectID, Name: name, Objective: in.Objective, Health: "on_track"})
+	e, err := d.Q.CreateEpic(ctx, store.CreateEpicParams{WorkspaceID: c.Agent.WorkspaceID, ProjectID: s.ProjectID, Name: name, Objective: in.Objective, Health: "on_track", RequiresMockup: in.RequiresMockup})
 	if err != nil {
 		return nil, err
 	}

@@ -378,7 +378,7 @@ func (q *Queries) FindArtifactByTitle(ctx context.Context, arg FindArtifactByTit
 }
 
 const findEpicByName = `-- name: FindEpicByName :one
-SELECT id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at FROM epics WHERE workspace_id = $1 AND lower(name) = lower($2) LIMIT 1
+SELECT id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup FROM epics WHERE workspace_id = $1 AND lower(name) = lower($2) LIMIT 1
 `
 
 type FindEpicByNameParams struct {
@@ -402,6 +402,7 @@ func (q *Queries) FindEpicByName(ctx context.Context, arg FindEpicByNameParams) 
 		&i.Icon,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RequiresMockup,
 	)
 	return i, err
 }
@@ -899,7 +900,7 @@ func (q *Queries) ListSuggestions(ctx context.Context, arg ListSuggestionsParams
 }
 
 const lockSuggestion = `-- name: LockSuggestion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
 WHERE v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v
 `
 
@@ -929,6 +930,10 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 		&i.BasedOnVersionID,
 		&i.DecidedByID,
 		&i.DecidedAt,
+		&i.ReviewState,
+		&i.ReviewedByUserID,
+		&i.ReviewedAt,
+		&i.ReviewNote,
 	)
 	return i, err
 }
@@ -936,7 +941,7 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 const mentionCandidatesArtifacts = `-- name: MentionCandidatesArtifacts :many
 SELECT ar.id, ar.type, ar.title, ar.path, ar.number, v.body_md
 FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL AND ar.id <> $2
+WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL AND ar.type <> 'mockup' AND ar.id <> $2
   AND (ar.search @@ phraseto_tsquery('english', $3) OR v.body_md ILIKE '%' || $3 || '%')
 LIMIT 50
 `

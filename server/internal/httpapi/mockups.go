@@ -1,0 +1,61 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/liamphmurphy/lazyagents/server/internal/api"
+	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
+)
+
+// mockupGate is the ticket's mockup gate for the API.
+func (s *Server) mockupGate(ctx context.Context, t store.Ticket) (api.MockupGate, error) {
+	g, err := artifacts.MockupGate(ctx, s.Q, t)
+	if err != nil {
+		return api.MockupGate{}, err
+	}
+	out := api.MockupGate{Required: g.Required, FromEpic: g.FromEpic, Approved: g.Approved, Mockups: make([]api.MockupRef, 0, len(g.Mockups))}
+	for _, m := range g.Mockups {
+		out.Mockups = append(out.Mockups, api.MockupRef{
+			Id: m.ID, Title: m.Title, VersionId: m.VersionID, VersionLabel: m.VersionLabel,
+			ReviewState: api.MockupReviewState(m.ReviewState), ReviewNote: m.ReviewNote,
+		})
+	}
+	return out, nil
+}
+
+func (s *Server) ReviewArtifactVersion(ctx context.Context, req api.ReviewArtifactVersionRequestObject) (api.ReviewArtifactVersionResponseObject, error) {
+	u, _, ws := me(ctx)
+	a, err := s.Runs.ReviewMockup(ctx, ws, u.ID, req.Id, req.VersionId, string(req.Body.Decision), deref(req.Body.Note))
+	if err != nil {
+		return nil, err
+	}
+	d, err := s.artifactDetail(ctx, ws, a)
+	return api.ReviewArtifactVersion200JSONResponse(d), err
+}
+
+func (s *Server) UpdateEpic(ctx context.Context, req api.UpdateEpicRequestObject) (api.UpdateEpicResponseObject, error) {
+	_, _, ws := me(ctx)
+	e, err := s.Q.GetEpic(ctx, store.GetEpicParams{ID: req.Id, WorkspaceID: ws})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperr.ErrNotFound
+		}
+		return nil, err
+	}
+	if req.Body.RequiresMockup != nil {
+		if e, err = s.Tracker.SetEpicRequiresMockup(ctx, ws, e.ID, *req.Body.RequiresMockup); err != nil {
+			return nil, err
+		}
+		if !*req.Body.RequiresMockup {
+			if err := s.Runs.ReleaseMockupWaiters(ctx, ws, nil, &e.ID, ""); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return api.UpdateEpic200JSONResponse(toEpic(e)), nil
+}

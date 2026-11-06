@@ -59,6 +59,7 @@ type NewTicket struct {
 	Estimate        *string
 	DueDate         *time.Time
 	Criteria        []string
+	RequiresMockup  bool
 	// CreatedAt backdates the "created" event (seeding only).
 	CreatedAt *time.Time
 }
@@ -74,6 +75,7 @@ type Patch struct {
 	Estimate        Opt[string]
 	DueDate         Opt[time.Time]
 	LabelIDs        *[]uuid.UUID
+	RequiresMockup  *bool
 }
 
 func validTitle(t string) (string, error) {
@@ -230,6 +232,7 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			Title: title, DescriptionMd: in.DescriptionMd, Status: in.Status, Priority: in.Priority,
 			EpicID: in.EpicID, AssigneeAgentID: in.AssigneeAgentID, ReviewerUserID: in.ReviewerUserID,
 			CreatedByUserID: userID(actor), Estimate: emptyToNil(in.Estimate), DueDate: in.DueDate,
+			RequiresMockup: in.RequiresMockup,
 		})
 		if err != nil {
 			return err
@@ -256,6 +259,12 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		at := in.CreatedAt
 		if err := record(ctx, q, ws, t.ID, t.EpicID, actor, event{verb: VerbCreated, at: at}); err != nil {
 			return err
+		}
+		if in.RequiresMockup {
+			if err := record(ctx, q, ws, t.ID, t.EpicID, actor, event{verb: VerbMockupRequirementChanged, at: at,
+				payload: map[string]any{"from": false, "to": true}}); err != nil {
+				return err
+			}
 		}
 		if agent != nil {
 			if err := record(ctx, q, ws, t.ID, t.EpicID, actor, event{verb: VerbAssigned, at: at,
@@ -353,7 +362,7 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 	next := store.UpdateTicketParams{
 		ID: cur.ID, Title: cur.Title, DescriptionMd: cur.DescriptionMd, Status: cur.Status, Priority: cur.Priority,
 		EpicID: cur.EpicID, AssigneeAgentID: cur.AssigneeAgentID, ReviewerUserID: cur.ReviewerUserID,
-		Estimate: cur.Estimate, DueDate: cur.DueDate,
+		Estimate: cur.Estimate, DueDate: cur.DueDate, RequiresMockup: cur.RequiresMockup,
 	}
 	var events []event
 	add := func(verb string, payload map[string]any) {
@@ -443,6 +452,10 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			to = p.DueDate.Value.Format(time.DateOnly)
 		}
 		add(VerbDueChanged, map[string]any{"to": to})
+	}
+	if p.RequiresMockup != nil && *p.RequiresMockup != cur.RequiresMockup {
+		next.RequiresMockup = *p.RequiresMockup
+		add(VerbMockupRequirementChanged, map[string]any{"from": cur.RequiresMockup, "to": *p.RequiresMockup})
 	}
 
 	t := cur
@@ -571,4 +584,18 @@ func (s *Service) DetachArtifact(ctx context.Context, ws uuid.UUID, actor Actor,
 		return record(ctx, q, ws, t.ID, t.EpicID, actor, event{verb: VerbArtifactDetached,
 			payload: map[string]any{"artifact_id": a.ID, "title": a.Title, "type": a.Type}})
 	})
+}
+
+// SetEpicRequiresMockup flags (or clears) the whole epic as needing person-approved mockups.
+func (s *Service) SetEpicRequiresMockup(ctx context.Context, ws, epicID uuid.UUID, requires bool) (store.Epic, error) {
+	var out store.Epic
+	err := s.tx(ctx, func(q *store.Queries) error {
+		if _, err := q.GetEpic(ctx, store.GetEpicParams{ID: epicID, WorkspaceID: ws}); err != nil {
+			return notFound(err)
+		}
+		var err error
+		out, err = q.SetEpicRequiresMockup(ctx, store.SetEpicRequiresMockupParams{ID: epicID, RequiresMockup: requires})
+		return err
+	})
+	return out, err
 }

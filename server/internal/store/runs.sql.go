@@ -979,6 +979,66 @@ func (q *Queries) ListApprovalsForRun(ctx context.Context, runID uuid.UUID) ([]A
 	return items, nil
 }
 
+const listMockupWaitingRuns = `-- name: ListMockupWaitingRuns :many
+SELECT r.id, r.workspace_id, r.ticket_id, r.agent_id, r.mode, r.state, r.wait_reason, r.resolved_spec, r.definition_version_id, r.harness, r.model, r.harness_session_id, r.outcome, r.tool_calls, r.input_tokens, r.output_tokens, r.cost_usd_micros, r.cost_source, r.started_at, r.ended_at, r.created_at, r.updated_at, r.dispatched_by_user_id, r.runner_id, r.workspace_volume, r.idle_turns, r.parent_run_id, r.purpose, r.contract, r.checks, r.setup_ms, r.harness_ms, r.checks_ms FROM runs r
+WHERE r.workspace_id = $1 AND r.parent_run_id IS NULL AND r.state = 'waiting' AND r.wait_reason = 'mockup_review'
+`
+
+// Top-level runs parked on a mockup review, with their ticket.
+func (q *Queries) ListMockupWaitingRuns(ctx context.Context, workspaceID uuid.UUID) ([]Run, error) {
+	rows, err := q.db.Query(ctx, listMockupWaitingRuns, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.TicketID,
+			&i.AgentID,
+			&i.Mode,
+			&i.State,
+			&i.WaitReason,
+			&i.ResolvedSpec,
+			&i.DefinitionVersionID,
+			&i.Harness,
+			&i.Model,
+			&i.HarnessSessionID,
+			&i.Outcome,
+			&i.ToolCalls,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CostUsdMicros,
+			&i.CostSource,
+			&i.StartedAt,
+			&i.EndedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DispatchedByUserID,
+			&i.RunnerID,
+			&i.WorkspaceVolume,
+			&i.IdleTurns,
+			&i.ParentRunID,
+			&i.Purpose,
+			&i.Contract,
+			&i.Checks,
+			&i.SetupMs,
+			&i.HarnessMs,
+			&i.ChecksMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlan = `-- name: ListPlan :many
 SELECT id, run_id, position, text, state FROM plan_steps WHERE run_id = $1 ORDER BY position
 `

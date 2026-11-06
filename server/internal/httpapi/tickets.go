@@ -137,7 +137,7 @@ func (s *Server) ticketDetail(ctx context.Context, ws uuid.UUID, t store.Ticket)
 		Status: api.TicketStatus(t.Status), Priority: api.Priority(t.Priority),
 		Estimate: t.Estimate, DueDate: toDate(t.DueDate), Branch: t.Branch,
 		Pr:        withSync(toPR(t.PrNumber, t.PrState, t.PrUrl, t.PrAdditions, t.PrDeletions), t),
-		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, RequiresMockup: t.RequiresMockup,
 	}
 	out.DependencyRevision = int(t.DependencyRevision)
 	out.BlockedBy = []api.TicketDependency{}
@@ -192,6 +192,9 @@ func (s *Server) ticketDetail(ctx context.Context, ws uuid.UUID, t store.Ticket)
 	if out.Artifacts, err = s.docCards(ctx, ws, t); err != nil {
 		return api.Ticket{}, err
 	}
+	if out.MockupGate, err = s.mockupGate(ctx, t); err != nil {
+		return api.Ticket{}, err
+	}
 	if err := s.runParts(ctx, ws, t, &out); err != nil {
 		return api.Ticket{}, err
 	}
@@ -222,7 +225,7 @@ func (s *Server) CreateTicket(ctx context.Context, req api.CreateTicketRequestOb
 	in := tracker.NewTicket{
 		ProjectKey: b.ProjectKey, Title: b.Title, DescriptionMd: deref(b.DescriptionMd),
 		EpicID: b.EpicId, AssigneeAgentID: b.AssigneeAgentId, ReviewerUserID: b.ReviewerUserId,
-		Estimate: b.Estimate,
+		Estimate: b.Estimate, RequiresMockup: deref(b.RequiresMockup),
 	}
 	if b.Status != nil {
 		in.Status = string(*b.Status)
@@ -261,7 +264,7 @@ func toPatch(b api.TicketPatch) tracker.Patch {
 	p := tracker.Patch{
 		Title: b.Title, DescriptionMd: b.DescriptionMd,
 		EpicID: optUUID(b.EpicId), AssigneeAgentID: optUUID(b.AssigneeAgentId), ReviewerUserID: optUUID(b.ReviewerUserId),
-		LabelIDs: b.LabelIds,
+		LabelIDs: b.LabelIds, RequiresMockup: b.RequiresMockup,
 	}
 	if b.Status != nil {
 		v := string(*b.Status)
@@ -294,6 +297,11 @@ func (s *Server) UpdateTicket(ctx context.Context, req api.UpdateTicketRequestOb
 	if err != nil {
 		return nil, err
 	}
+	if req.Body.RequiresMockup != nil && !*req.Body.RequiresMockup {
+		if err := s.Runs.ReleaseMockupWaiters(ctx, ws, []string{req.Key}, nil, ""); err != nil {
+			return nil, err
+		}
+	}
 	d, err := s.ticketDetail(ctx, ws, t)
 	return api.UpdateTicket200JSONResponse(d), err
 }
@@ -303,6 +311,11 @@ func (s *Server) BulkUpdateTickets(ctx context.Context, req api.BulkUpdateTicket
 	n, err := s.Tracker.Bulk(ctx, ws, actor, req.Body.Keys, toPatch(req.Body.Patch), req.Body.AttachArtifactId)
 	if err != nil {
 		return nil, err
+	}
+	if req.Body.Patch.RequiresMockup != nil && !*req.Body.Patch.RequiresMockup {
+		if err := s.Runs.ReleaseMockupWaiters(ctx, ws, req.Body.Keys, nil, ""); err != nil {
+			return nil, err
+		}
 	}
 	return api.BulkUpdateTickets200JSONResponse{Updated: n}, nil
 }

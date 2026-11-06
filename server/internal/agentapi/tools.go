@@ -120,6 +120,24 @@ func whoami(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) 
 	return out, nil
 }
 
+// mockupInfo is the ticket's mockup gate as the agent sees it: what exists, what
+// a person approved, and (while it blocks finishing) what to do about it.
+func mockupInfo(ctx context.Context, d Deps, t store.Ticket) (map[string]any, error) {
+	g, err := artifacts.MockupGate(ctx, d.Q, t)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, len(g.Mockups))
+	for i, m := range g.Mockups {
+		items[i] = map[string]any{"id": m.ID, "title": m.Title, "version": m.VersionLabel, "review_state": m.ReviewState, "review_note": m.ReviewNote}
+	}
+	out := map[string]any{"required": g.Required, "approved": g.Approved, "mockups": items}
+	if g.Required && !g.Approved {
+		out["instruction"] = "This ticket needs a person-approved UI mockup before implementation. Read an existing one with read_artifact, or draft one with create_mockup; your run pauses until a person reviews it. You can't call set_pr, check_criterion or complete_run until one is approved."
+	}
+	return out, nil
+}
+
 type ClaimIn struct {
 	Ticket string `json:"ticket" jsonschema:"Ticket key to start working on, e.g. PAY-214"`
 }
@@ -145,7 +163,7 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 			return nil, err
 		}
 	}
-	return map[string]any{
+	out := map[string]any{
 		"run_id": run.ID, "ticket": strings.ToUpper(in.Ticket), "state": run.State, "scopes": scopes,
 		"instructions": spec.Instructions,
 		"memory":       memory,
@@ -153,7 +171,14 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 			"Before implementing, look up conventions with find_pattern (e.g. find_pattern({q: \"error wrapping\"})) and follow what it returns. " +
 			"Don't log what you did. Only write_note under " + wiki.MemoryRoot(c.Agent.Handle) + " for a durable lesson that would help a future run on this codebase, linked with [[…]] to the tickets and documents it's about. " +
 			"A general lesson that applies beyond this codebase (an architecture pattern or coding style) goes through propose_pattern instead. Project-specific decisions belong in ADR/Architecture notes.",
-	}, nil
+	}
+	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil {
+		out["requires_mockup"] = t.RequiresMockup
+		if out["mockup"], err = mockupInfo(ctx, d, t); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 type GetTicketIn struct {
@@ -219,6 +244,10 @@ func getTicket(ctx context.Context, d Deps, c agents.Caller, in GetTicketIn) (an
 	if t.PrUrl != nil {
 		out["pr_url"] = *t.PrUrl
 	}
+	out["requires_mockup"] = t.RequiresMockup
+	if out["mockup"], err = mockupInfo(ctx, d, t); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -274,6 +303,18 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
 	if err != nil {
 		return nil, err
+	}
+	if a.Type == "mockup" && v.BodyMd != nil {
+		runID := readRunID(ctx, d, c, in.Ticket)
+		if err := artifacts.RecordRead(ctx, d.Q, a, c.Agent.ID, runID, "", nil); err != nil {
+			return nil, err
+		}
+		reviewState := ""
+		if v.ReviewState != nil {
+			reviewState = *v.ReviewState
+		}
+		return map[string]any{"title": a.Title, "type": a.Type, "version": v.Label, "svg": *v.BodyMd,
+			"review_state": reviewState, "review_note": v.ReviewNote}, nil
 	}
 	if v.BodyMd == nil {
 		return nil, apperr.Invalid("artifact", "%s is a %s file, not text; ask a person to describe it", a.Title, v.ContentType)
@@ -353,10 +394,19 @@ type CommentIn struct {
 
 type NewTicketIn struct {
 	TicketArg
-	EpicID      *uuid.UUID `json:"epic_id,omitempty"`
-	Title       string     `json:"title"`
-	Description string     `json:"description,omitempty"`
-	Priority    string     `json:"priority,omitempty" jsonschema:"none, low, medium, high or urgent"`
+	EpicID         *uuid.UUID `json:"epic_id,omitempty"`
+	Title          string     `json:"title"`
+	Description    string     `json:"description,omitempty"`
+	Priority       string     `json:"priority,omitempty" jsonschema:"none, low, medium, high or urgent"`
+	RequiresMockup bool       `json:"requires_mockup,omitempty" jsonschema:"The ticket needs a person-approved UI mockup before it can be finished"`
+}
+
+type MockupIn struct {
+	TicketArg
+	Title    string `json:"title,omitempty" jsonschema:"Mockup title, e.g. Checkout screen. Required for a new mockup."`
+	SVG      string `json:"svg" jsonschema:"The complete SVG document: self-contained, no scripts, no external images or links. Wireframe the screen at its real size."`
+	MockupID string `json:"mockup_id,omitempty" jsonschema:"Revise this existing mockup (id from get_ticket) instead of creating a new one"`
+	Note     string `json:"note,omitempty" jsonschema:"One line on what changed in this revision"`
 }
 
 type ApprovalIn struct {
@@ -545,6 +595,9 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 	}
 	if v.BodyMd == nil {
 		return nil, apperr.Invalid("ref", "%s is a %s file, not text", a.Title, v.ContentType)
+	}
+	if a.Type == "mockup" {
+		return nil, apperr.Invalid("ref", "%s is a UI mockup (SVG): use read_artifact", a.Title)
 	}
 	body := *v.BodyMd
 	anchor := t.Anchor
@@ -806,7 +859,7 @@ var Tools = []Tool{
 		}),
 	define("claim_ticket", "Start (or reconnect to) a run on a ticket assigned to you. Returns your scopes for this project.", claim),
 	define("get_ticket", "A ticket: description, numbered acceptance criteria, attached artifacts and recent comments.", getTicket),
-	define("read_artifact", "Read a PRD, spec, ADR or report attached to a ticket, optionally one section. Reads are recorded as citations.", readArtifact),
+	define("read_artifact", "Read a PRD, spec, ADR, report or UI mockup (SVG) attached to a ticket, optionally one section. Reads are recorded as citations.", readArtifact),
 	define("post_plan", "Post (or replace) your execution plan. Do this before editing anything.",
 		func(ctx context.Context, d Deps, c agents.Caller, in PlanIn) (any, error) {
 			steps, err := d.Runs.PostPlan(ctx, c, in.Ticket, in.Steps)
@@ -862,7 +915,7 @@ var Tools = []Tool{
 				return nil, err
 			}
 			if scope != nil {
-				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: scope.ProjectKey, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID})
+				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: scope.ProjectKey, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID, RequiresMockup: in.RequiresMockup})
 				if err != nil {
 					return nil, err
 				}
@@ -878,12 +931,37 @@ var Tools = []Tool{
 			}
 			nt, err := d.Tracker.Create(ctx, t.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{
 				ProjectKey: p.Key, Title: in.Title, DescriptionMd: in.Description + "\n\nOpened by @" + c.Agent.Handle + " from " + t.Key + ".",
-				Priority: in.Priority, EpicID: t.EpicID,
+				Priority: in.Priority, EpicID: t.EpicID, RequiresMockup: in.RequiresMockup,
 			})
 			if err != nil {
 				return nil, err
 			}
 			return ok(map[string]any{"ticket": nt.Key}), nil
+		}),
+	define("create_mockup", "Draft or revise a UI mockup as SVG (self-contained: no scripts, no external images). Wireframe the screen at its real size.",
+		func(ctx context.Context, d Deps, c agents.Caller, in MockupIn) (any, error) {
+			var id *uuid.UUID
+			if strings.TrimSpace(in.MockupID) != "" {
+				u, err := parseUUID("mockup_id", in.MockupID)
+				if err != nil {
+					return nil, err
+				}
+				id = &u
+			} else if strings.TrimSpace(in.Title) == "" {
+				return nil, apperr.Invalid("title", "is required for a new mockup")
+			}
+			out, err := d.Runs.CreateMockup(ctx, c, in.Ticket, strings.TrimSpace(in.Title), in.SVG, strings.TrimSpace(in.Note), id)
+			if err != nil {
+				return nil, err
+			}
+			res := map[string]any{"artifact_id": out.Artifact.ID, "version": out.Version.Label, "review_state": artifacts.ReviewPending, "state": "created"}
+			if out.Waiting {
+				res["state"] = "waiting_for_review"
+				res["message"] = "A person has been asked to review this version. The run waits for that review even if another mockup is already approved, because this new version needs a decision. End your turn now (managed), or call await_signal to wait for the decision (unmanaged)."
+			} else if out.ChildRun {
+				res["message"] = "Mockup saved. Delegated runs don't wait: the main agent owns the review of this mockup."
+			}
+			return res, nil
 		}),
 	define("request_approval", "Ask a person before using a scope that requires approval. If it returns pending, your turn should end: call wait_for_approval (or stop, if you're managed).",
 		func(ctx context.Context, d Deps, c agents.Caller, in ApprovalIn) (any, error) {
@@ -953,7 +1031,16 @@ var Tools = []Tool{
 			for i, ap := range sig.Decisions {
 				decisions[i] = map[string]any{"approval_id": ap.ID, "state": ap.State, "note": ap.DecisionNote}
 			}
-			return map[string]any{"run_state": sig.State, "wait_reason": sig.WaitReason, "comments": comments, "decisions": decisions,
+			mockups := make([]map[string]any, len(sig.MockupReviews))
+			for i, rv := range sig.MockupReviews {
+				state := ""
+				if rv.ReviewState != nil {
+					state = *rv.ReviewState
+				}
+				mockups[i] = map[string]any{"artifact_id": rv.ArtifactID, "title": rv.Title, "version": rv.VersionLabel,
+					"state": state, "note": rv.ReviewNote, "reviewed_at": rv.ReviewedAt}
+			}
+			return map[string]any{"run_state": sig.State, "wait_reason": sig.WaitReason, "comments": comments, "decisions": decisions, "mockup_reviews": mockups,
 				"cursor": sig.Cursor.Format(time.RFC3339Nano)}, nil
 		}),
 	define("search_knowledge", "Search the wiki, agent memory, documents and tickets. Well-linked pages rank higher. For conventions use find_pattern.", searchKnowledge),
