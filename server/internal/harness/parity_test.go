@@ -1,6 +1,9 @@
 package harness
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestCodexUnknownCostAndConfiguredPrice(t *testing.T) {
 	line := []byte(`{"type":"turn.completed","usage":{"input_tokens":1000000,"cached_input_tokens":250000,"output_tokens":100000}}`)
@@ -94,5 +97,31 @@ func TestCodexHookTrustNoticeIsNotAnError(t *testing.T) {
 	events = p.Line([]byte(`{"type":"error","message":"Actual hook execution failed"}`))
 	if len(events) != 1 || events[0].Type != "error" || p.Result().Error != "Actual hook execution failed" {
 		t.Fatal("real errors must remain visible")
+	}
+}
+
+func TestClaudeResumeCostUsesDeltas(t *testing.T) {
+	baseline := Usage{SessionID: "same", SessionCostUSD: 0.88}
+	p := (ClaudeCode{Baseline: baseline}).NewParser("")
+	p.Line([]byte(`{"type":"system","subtype":"init","session_id":"same"}`))
+	ev := p.Line([]byte(`{"type":"result","is_error":false,"total_cost_usd":1.04,"usage":{"input_tokens":10,"cache_read_input_tokens":200,"output_tokens":5}}`))
+	u := p.Result().Usage
+	if math.Abs(u.CostUSD-0.16) > 1e-9 || u.SessionCostUSD != 1.04 || u.SessionID != "same" || u.InputTokens != 210 {
+		t.Fatalf("session cost counted twice: %+v", u)
+	}
+	if c, _ := ev[0].Payload["cost_usd"].(float64); math.Abs(c-0.16) > 1e-9 {
+		t.Fatalf("usage event shows session total: %v", ev[0].Payload)
+	}
+	// A fresh session (or a lower total) must not subtract the previous session's cost.
+	for _, init := range []string{
+		`{"type":"system","subtype":"init","session_id":"new"}`,
+		`{"type":"system","subtype":"init","session_id":"same"}`,
+	} {
+		p = (ClaudeCode{Baseline: baseline}).NewParser("")
+		p.Line([]byte(init))
+		p.Line([]byte(`{"type":"result","is_error":false,"total_cost_usd":0.5}`))
+		if got := p.Result().Usage; got.CostUSD != 0.5 {
+			t.Fatalf("baseline wrongly applied after %s: %+v", init, got)
+		}
 	}
 }

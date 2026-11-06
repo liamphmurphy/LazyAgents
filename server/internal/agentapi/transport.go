@@ -42,11 +42,16 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 					return nil, apperr.Conflict("chat run is %s", run.State)
 				}
 			case run.TicketID == nil:
-				if !slices.Contains([]string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}, name) {
+				if !slices.Contains(planningTools, name) {
 					return nil, apperr.Conflict("planning runs can read context and propose tickets only")
 				}
 				if run.State != "running" {
 					return nil, apperr.Conflict("planning run is %s", run.State)
+				}
+			case run.ParentRunID != nil:
+				// Delegated runs are served subagentTools only; refuse the rest by name.
+				if !slices.Contains(subagentTools, name) {
+					return nil, apperr.Conflict("%s isn't available to delegated runs", name)
 				}
 			}
 		}
@@ -117,7 +122,79 @@ func verifier(d Deps) auth.TokenVerifier {
 	}
 }
 
-const instructions = `You are working through LazyAgents, the tracker your team uses to supervise agents.
+// Profiles: each caller kind gets its own tool set and instructions, so
+// sub agents and planners don't pay tokens for tools and bookkeeping they
+// must not use.
+const (
+	profileChat     = "chat"
+	profilePlanning = "planning"
+	profileSubagent = "subagent"
+	profileLead     = "lead"
+	profileFull     = "full"
+)
+
+// planningTools is the whole MCP surface of a planning run.
+var planningTools = []string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}
+
+// subagentTools is the whole MCP surface of a delegated run: its brief is
+// already in hand, so no claiming, planning or step bookkeeping.
+var subagentTools = []string{"get_ticket", "read_artifact", "create_artifact", "comment", "request_approval", "wait_for_approval", "run_gated", "await_human", "search_knowledge", "find_pattern", "propose_pattern", "list_proposed_patterns", "read_page", "write_note", "get_backlinks", "complete_run"}
+
+// leadHidden are the tools a managed ticket run never needs: usage is reported
+// by the runner and the ticket is already assigned.
+var leadHidden = []string{"report_usage", "next_ticket"}
+
+// profileFor must stay consistent with the checks in define().
+func profileFor(run store.Run) string {
+	switch {
+	case run.Purpose == "chat":
+		return profileChat
+	case run.TicketID == nil:
+		return profilePlanning
+	case run.ParentRunID != nil:
+		return profileSubagent
+	}
+	return profileLead
+}
+
+func profileTools(profile string) []Tool {
+	var out []Tool
+	for _, t := range Tools {
+		var ok bool
+		switch profile {
+		case profileChat:
+			ok = slices.Contains(chatTools, t.Name)
+		case profilePlanning:
+			ok = slices.Contains(planningTools, t.Name)
+		case profileSubagent:
+			ok = slices.Contains(subagentTools, t.Name)
+		case profileLead:
+			ok = !slices.Contains(leadHidden, t.Name)
+		default:
+			ok = true
+		}
+		if ok {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+var profileInstructions = map[string]string{
+	profileChat:     `You are answering a person in a LazyAgents chat. Your instructions are in AGENTS.md. Use the LazyAgents tools to look up project context and manage tickets when asked.`,
+	profilePlanning: `This is a LazyAgents planning run. Follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.`,
+	profileSubagent: `You are a sub agent: a main agent delegated one task to you through LazyAgents. Your task brief and AGENTS.md are your instructions; don't call claim_ticket.
+Call get_ticket only if the brief lacks context you need. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval.
+When you need a person, call request_approval or await_human and end your turn. Finish with complete_run and a short summary.`,
+	profileLead: `You are working through LazyAgents, the tracker your team uses to supervise agents.
+Your run instructions are in AGENTS.md, so you don't need whoami. Call claim_ticket, then get_ticket once; read attached artifacts with read_artifact before
+planning. post_plan once before editing and call update_step when a step finishes.
+Scopes marked requires_approval need request_approval first; brokered ones (like db:migrate) run via
+run_gated after approval. When you need a person, comment and call await_human.
+Verify every acceptance criterion and check it only with evidence. Implement or delegate any gaps.
+Once all criteria are satisfied, commit and push changes within your authorized scopes, record the PR with set_pr,
+and finish with complete_run(status=done). Delegate a review only when the change is risky or large.`,
+	profileFull: `You are working through LazyAgents, the tracker your team uses to supervise agents.
 For planning runs, follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.
 For ticket execution, start with whoami, then claim_ticket and get_ticket. Read attached artifacts with read_artifact before
 planning, then post_plan before editing anything and keep steps current with update_step.
@@ -125,18 +202,38 @@ Scopes marked requires_approval need request_approval first; brokered ones (like
 run_gated after approval. When you need a person, comment and call await_human.
 Verify every acceptance criterion and check it only with evidence. Implement or delegate any gaps.
 Once all criteria are satisfied, commit and push changes within your authorized scopes, record the PR with set_pr,
-obtain delegated reviewer/QA approval, and finish with complete_run(status=done).`
+and finish with complete_run(status=done).`,
+}
 
 // MCPHandler serves the Agent API over streamable HTTP at /mcp.
 func MCPHandler(d Deps, version string, log *slog.Logger) http.Handler {
 	if log != nil {
 		logger = log
 	}
-	srv := mcp.NewServer(&mcp.Implementation{Name: "lazyagents", Version: version}, &mcp.ServerOptions{Instructions: instructions})
-	for _, t := range Tools {
-		t.addMCP(srv, d)
+	servers := map[string]*mcp.Server{}
+	for profile, text := range profileInstructions {
+		srv := mcp.NewServer(&mcp.Implementation{Name: "lazyagents", Version: version}, &mcp.ServerOptions{Instructions: text})
+		for _, t := range profileTools(profile) {
+			t.addMCP(srv, d)
+		}
+		servers[profile] = srv
 	}
-	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, &mcp.StreamableHTTPOptions{
+	// The SDK calls this on every request, so keep it to one primary-key lookup.
+	h := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		info := auth.TokenInfoFromContext(r.Context())
+		if info == nil {
+			return nil
+		}
+		c, _ := info.Extra[callerKey].(agents.Caller)
+		if c.RunID == nil {
+			return servers[profileFull]
+		}
+		run, err := d.Q.GetRun(r.Context(), store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID})
+		if err != nil {
+			return nil // fail closed: the SDK answers 400
+		}
+		return servers[profileFor(run)]
+	}, &mcp.StreamableHTTPOptions{
 		// Off, by the user's decision (2026-11-02). The SDK rejects non-localhost
 		// Host headers on loopback connections (DNS rebinding), but run
 		// containers reach an API on the host as host.docker.internal, which

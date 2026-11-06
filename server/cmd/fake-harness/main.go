@@ -31,7 +31,7 @@
 // FAKE_HARNESS_SYNC=<dir> makes delegated runs wait until FAKE_HARNESS_SYNC_N (2) of
 // them are running at once; FAKE_HARNESS_HOLD=<file> writes <file>.started and waits
 // for <file> before working; FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
-// that lost the session.
+// that lost the session. The log line also names the harness (claude or codex).
 //
 // The mode can also come from a fake-harness.mode file in the binary's
 // directory when the variable is unset (OpenCode runs get a scrubbed env).
@@ -122,8 +122,15 @@ func result(isError bool, msg string) {
 		emit(map[string]any{"type": "turn.completed", "usage": map[string]any{"input_tokens": 1000 * count, "cached_input_tokens": 500 * count, "output_tokens": 200 * count}})
 		return
 	}
+	// Like the real CLI: tokens are this process's, total_cost_usd is the session's so far.
+	counts := map[string]int{}
+	raw, _ := os.ReadFile(".lazyagents/fake-claude-usage.json")
+	_ = json.Unmarshal(raw, &counts)
+	counts[session]++
+	raw, _ = json.Marshal(counts)
+	_ = os.WriteFile(".lazyagents/fake-claude-usage.json", raw, 0600)
 	emit(map[string]any{"type": "result", "subtype": "success", "is_error": isError, "result": msg, "num_turns": 3,
-		"total_cost_usd": 0.0125, "usage": map[string]any{"input_tokens": 1000, "output_tokens": 200, "cache_read_input_tokens": 500}})
+		"total_cost_usd": 0.0125 * float64(counts[session]), "usage": map[string]any{"input_tokens": 1000, "output_tokens": 200, "cache_read_input_tokens": 500}})
 }
 
 func newUUID() string {
@@ -301,7 +308,7 @@ func main() {
 	}
 	if path := os.Getenv("FAKE_HARNESS_LOG"); path != "" {
 		wd, _ := os.Getwd()
-		line, _ := json.Marshal(map[string]any{"cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE")})
+		line, _ := json.Marshal(map[string]any{"cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE"), "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
 		if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			_, _ = f.Write(append(line, '\n'))
 			f.Close()

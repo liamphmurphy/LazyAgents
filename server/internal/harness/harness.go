@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
@@ -50,6 +52,7 @@ type Usage struct {
 	SessionInputTokens  int64   `json:"session_input_tokens,omitempty"`
 	SessionOutputTokens int64   `json:"session_output_tokens,omitempty"`
 	SessionCachedTokens int64   `json:"session_cached_tokens,omitempty"`
+	SessionCostUSD      float64 `json:"session_cost_usd,omitempty"` // claude-code: session total so far
 	InputTokens         int64   `json:"input_tokens"`
 	OutputTokens        int64   `json:"output_tokens"`
 	CachedTokens        int64   `json:"cached_tokens"`
@@ -162,10 +165,12 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 	if delegated {
 		b.WriteString("You're a sub agent running headless for LazyAgents. A main agent delegated one task to you and is waiting. ")
 		b.WriteString("Don't call claim_ticket. Work in this checkout on the current branch, commit what you change, and call complete_run ")
-		b.WriteString("with a short summary when you're done (or blocked). If you need a person, call request_approval or await_human and end your turn.\n\n")
+		b.WriteString("with a short summary when you're done (or blocked). If you need a person, call request_approval or await_human and end your turn. ")
+		b.WriteString("Your task brief is self-contained: call get_ticket only if it lacks context you need, and don't post plans or step updates.\n\n")
 	} else {
-		b.WriteString("You're running headless for LazyAgents. Use the `lazyagents` MCP tools to report progress: claim_ticket first, ")
-		b.WriteString("post_plan before editing, update_step as you go, request_approval before any scope that needs it, and complete_run at the end. ")
+		b.WriteString("You're running headless for LazyAgents. Use the `lazyagents` MCP tools to report progress: claim_ticket first, then get_ticket once; ")
+		b.WriteString("post_plan once before editing, update_step when a step finishes, request_approval before any scope that needs it, and complete_run at the end. ")
+		b.WriteString("Every tool call re-reads your whole context, so skip calls that don't add information. ")
 		b.WriteString("When you need a person (an approval, an answer), call request_approval or await_human and then end your turn: ")
 		b.WriteString("you'll be resumed with their reply.\n\n")
 		b.WriteString(delegationSection(spec))
@@ -192,7 +197,10 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("Before implementing, look up team conventions with `find_pattern`. Don't log what you did: use `write_note` under your memory folder only for durable lessons that would help a future run on this codebase, linked with [[…]] to what they're about. Reusable, general lessons go through `propose_pattern`; project-specific decisions belong in ADR/Architecture notes.\n")
+	if !delegated {
+		b.WriteString("For non-trivial work, look up team conventions once with `find_pattern` and name the relevant ones in sub agents' briefs. ")
+	}
+	b.WriteString("Don't log what you did: use `write_note` under your memory folder only for durable lessons that would help a future run on this codebase, linked with [[…]] to what they're about. Reusable, general lessons go through `propose_pattern`; project-specific decisions belong in ADR/Architecture notes.\n")
 	b.WriteString(sectionEnd + "\n")
 	ours := b.String()
 	if i, j := strings.Index(existing, sectionStart), strings.Index(existing, sectionEnd); i >= 0 && j > i {
@@ -259,18 +267,57 @@ func delegationSection(agentdef.Resolved) string {
 		"`delegate`. Commit your work first: a delegated run fails to start if your checkout has uncommitted changes. Each sub agent works in its own git worktree and branch, and the server merges the branch into yours when its checks pass; "+
 		"you may run up to %d in parallel if their allowed_paths don't overlap (call `delegate` once per sub agent, then end your turn), and you're resumed once when all have finished. "+
 		"Review the diff before relying on it, and send fixes back to the same sub agent with continue_run_id. "+
-		"Delegating costs a fresh agent startup, a handoff and a verification pass: do small or tightly coupled changes yourself, and delegate substantial work. "+
+		"Delegating costs a fresh agent that re-reads the code, a handoff, a verification pass, and a resume that re-reads your whole context: do small, few-file or tightly coupled changes yourself, and delegate only substantial, separable work. "+
 		"Give `delegate` acceptance_criteria, allowed_paths and a test_command; the server runs those checks and hands you the results, so you don't repeat them. "+
-		"You stay responsible for the ticket: only you call claim_ticket and complete_run for it. Before finishing, read get_ticket and verify every acceptance criterion against evidence; use check_criterion only for verified criteria. If any criterion is unmet, implement it yourself or delegate it to a suitable agent and inspect the result. Continue until all criteria are satisfied. Commit and push any changes, record the PR with set_pr, obtain an approved verdict from a delegated reviewer or QA agent, then call complete_run with status=done. Do not stop at In Review when you can finish this workflow. If you need a person, use await_human or request_approval; status=todo explicitly hands back unfinished work.\n\n", runs.MaxParallelDelegations)
+		"You stay responsible for the ticket: only you call claim_ticket and complete_run for it. Before finishing, verify every acceptance criterion against evidence; use check_criterion only for verified criteria. If any criterion is unmet, implement it yourself or delegate it to a suitable agent and inspect the result. Continue until all criteria are satisfied. "+
+		"Delegate a review only when the change is risky (security, auth, concurrency, data migrations, broad public APIs) or large; otherwise your own review of the diff is enough. "+
+		"Commit and push any changes, record the PR with set_pr, then call complete_run with status=done. Do not stop at In Review when you can finish this workflow. If you need a person, use await_human or request_approval; status=todo explicitly hands back unfinished work.\n\n", runs.MaxParallelDelegations)
 }
 
 // UsageLimit reports provider exhaustion from an error, never ordinary tool output.
 func UsageLimit(message string) bool {
 	s := strings.ToLower(message)
-	for _, marker := range []string{"rate_limit", "usage_limit_reached", "insufficient_quota", "usage limit", "rate limit", "rate-limit", "quota exceeded", "exceeded your quota", "credit balance is too low", "out of extra usage", "you've hit your limit", "you have hit your limit"} {
+	for _, marker := range []string{"rate_limit", "usage_limit_reached", "insufficient_quota", "usage limit", "rate limit", "rate-limit", "quota exceeded", "exceeded your quota", "credit balance is too low", "out of extra usage", "you've hit your limit", "you have hit your limit", "hit your session limit"} {
 		if strings.Contains(s, marker) {
 			return true
 		}
 	}
 	return false
+}
+
+var limitResetRE = regexp.MustCompile(`(?i)(?:resets|try again at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s*\(([^)]+)\))?`)
+
+// LimitReset reads when a usage limit lifts from the CLI's message, e.g.
+// Claude's "resets 9:20pm (America/Los_Angeles)" or Codex's "try again at
+// 11:32 PM". It returns the next such clock time strictly after now; a zone
+// that is missing or unknown falls back to now's location.
+func LimitReset(msg string, now time.Time) (time.Time, bool) {
+	m := limitResetRE.FindStringSubmatch(msg)
+	if m == nil {
+		return time.Time{}, false
+	}
+	hour, _ := strconv.Atoi(m[1])
+	min := 0
+	if m[2] != "" {
+		min, _ = strconv.Atoi(m[2])
+	}
+	if hour < 1 || hour > 12 || min > 59 {
+		return time.Time{}, false
+	}
+	hour %= 12
+	if strings.EqualFold(m[3], "pm") {
+		hour += 12
+	}
+	loc := now.Location()
+	if m[4] != "" {
+		if l, err := time.LoadLocation(strings.TrimSpace(m[4])); err == nil {
+			loc = l
+		}
+	}
+	local := now.In(loc)
+	t := time.Date(local.Year(), local.Month(), local.Day(), hour, min, 0, 0, loc)
+	if !t.After(now) {
+		t = time.Date(local.Year(), local.Month(), local.Day()+1, hour, min, 0, 0, loc)
+	}
+	return t, true
 }
