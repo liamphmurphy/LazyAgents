@@ -149,6 +149,8 @@ which are kept for the unverified success/tool/quota/resume shapes.
 
 ### Not verified (needs a paid model call or a real deployment)
 
+Superseded in part on 2026-11-05: success, tool, resume, cancel and policy/isolation behaviour were later captured with the real CLI against a localhost stub provider (next sections and the "Real CLI against a localhost stub" section below). The list is kept as written; read the stub section for what changed. Real-provider behaviour stays unverified.
+
 - Success, tool/MCP, resume, quota and cancellation event shapes, the completion
   marker, and whether usage is per turn or cumulative: fixtures stay SYNTHETIC.
 - Whether the generated `opencode.json` policy is effective (denials, MCP
@@ -159,6 +161,188 @@ which are kept for the unverified success/tool/quota/resume shapes.
 - Computed cost: operator prices from `RUNNER_MODEL_PRICES` keyed by the exact
   model id (e.g. `openai/gpt-5#high`) are applied to the assumed token fields; the
   accounting units are unverified.
+
+## Real CLI against a localhost stub (2026-11-05)
+
+Evidence level: **real CLI + stub provider**. The real installed 2.2.1
+(`~/.nix-profile/bin/opencode`, `opencode --version` prints `opencode v2.2.1`) ran
+with the exact `opencode.json` that `harness.OpenCode.Invocation` generates, plus
+one added key that routes the model to `127.0.0.1`. The owner authorized running
+the real CLI locally with no paid run. No real provider, key, `claude` or `codex`
+was involved. Not evidence for a real provider: token counts, cost and model
+behaviour come from a scripted stub.
+
+Safety setup, every run: `env -i` with a fresh `HOME` and four `XDG_*` roots and a
+fresh temp cwd (no `~/.config/opencode`, `~/.local/share/opencode` or host auth
+store touched), `ANTHROPIC_API_KEY=sk-fake-000`, and
+`HTTP(S)_PROXY=http://127.0.0.1:9` (dead) with `NO_PROXY=127.0.0.1,localhost`.
+The stub was the only reachable endpoint: its log shows only the model and MCP
+traffic and the dead proxy made the CLI's own `models.opencode.ai` catalog fetch
+fail (`Failed to fetch models.dev`; it falls back to its bundled catalog, which is
+why `claude-sonnet-5-5` resolved). A first attempt with only `ANTHROPIC_BASE_URL`
+did **not** route (the CLI ignores it and tried `api.anthropic.com`; the dead proxy
+stopped it before any bytes left the machine). That is the reason the proxy
+guard stays.
+
+Routing that worked: the legacy-but-honored key
+`provider.anthropic.options.baseURL = http://127.0.0.1:<port>/v1` in `opencode.json`
+(the v2 `providers.<id>.settings` object has no `baseURL` field). The CLI then POSTs
+`/v1/messages?beta=true` (Anthropic messages SSE), a second request to
+`claude-haiku-5-5` for the session title, and talks MCP (streamable HTTP, JSON
+responses accepted) to the `lazyagents` server URL.
+
+Invocation, exactly as the adapter: `opencode run --standalone --format json --model
+anthropic/claude-sonnet-5-5 [--session ses_…] <prompt>` with **stdin closed**
+(`/dev/null`). Throwaway tooling lives outside the repo (`/tmp/la25-capture/`:
+`stub.js`, `run.sh`, `cancel.sh`, `amb.sh`). Sanitized captures are
+`server/internal/harness/testdata/opencode-real-stub-*.jsonl`.
+
+### Wire shape (replaces the synthetic assumptions)
+
+| Event | Shape |
+| --- | --- |
+| all | `{"type":…,"timestamp":ms,"sessionID":"ses_…","part":{…}}` (errors carry `error` instead of `part`) |
+| `step_start` | one per model step; `part.type = "step-start"` |
+| `text` | `part.text` (one per text part) |
+| `tool_use` | call **and** result in one line: `part.id` (the model's call id), `part.tool`, `part.state.{status: completed\|error, input, output\|error, metadata}` |
+| `step_finish` | `part.reason` (`tool-calls`), `part.cost`, `part.tokens.{input,output,reasoning,cache.{read,write}}` |
+| `error` | `error.{type,message,status?,response?}` |
+
+Findings (a to g):
+
+- **a. Success, completion, usage.** A plain turn is `step_start`, `text`, exit 0.
+  There is **no completion marker and no `completed`/`session` event**. The
+  **final step never gets a `step_finish`** (reproduced 6/6, with 20ms to 300ms
+  stub latency): a one-step turn has no usage on stdout; a tool turn has
+  `step_finish` only for the `tool-calls` steps. `tokens` are per model step (each
+  equals that request's own usage, exactly what the stub sent), not cumulative
+  across steps or turns; `tokens.input` excludes cache reads/writes. The CLI
+  prices steps itself from its bundled catalog (`cost` 0.002488 for 1090 in /
+  29 out / 5 cache read / 7 cache write on `claude-sonnet-5-5`, i.e. $2 and $10
+  per million), so even native cost is a catalog estimate. Complete numbers exist
+  only in the session store: `opencode session export <id>` returns session
+  cumulative `info.tokens`/`info.cost` (includes the title request), usable as a
+  follow-up for exact accounting.
+- **b. Resume.** `--session <id>` on a second invocation sends the full prior
+  history (the stub saw the first user message, the first assistant reply, then
+  the new user message). Each invocation spawns a private `serve --stdio` child.
+  Tokens in the resumed turn are its own steps only.
+- **c. Tools.** Advertised tool list with the generated policy:
+  `edit glob grep opencode_worktree_remove read skill write` (baseline without
+  policy: `edit glob grep question read shell skill subagent webfetch websearch
+  write execute`). Findings:
+  1. **The generated tool allowlist blocks the tools it allows.** `read`, `glob`,
+     `grep`, `edit`, `write` all return `Blocked by configuration policy` (and
+     `opencode_worktree_remove` likewise); only the MCP `lazyagents_*` call
+     executed. In 2.2.1 a `tool.use` policy resource is matched against
+     `<permission-action>:<resource>` (for example `write:/path/file`,
+     `shell:git push origin x`), so the exact names `read`, `write`, … never match
+     and the preceding `tool.use * deny` wins. Verified fix (stub run): resources
+     `read:*`, `glob:*`, `grep:*`, `edit:*`, `write:*`, `shell:*` make those tools
+     complete.
+  2. **`bash` is not a 2.2.1 tool name; the shell tool is `shell`.** The adapter's
+     `bash` allow rules (permissions and policies) match nothing, so ticket runs
+     with `tests:run`/`repo:write` never get a shell (calls return `No tool named
+     "bash"/"shell" is currently available`). With `shell` in both lists a shell
+     call executes, and the adapter's `git push*` / `gh pr create*` deny rules do
+     work (`Permission denied: shell`; `echo hi` ran).
+  3. **MCP tools are not advertised on the first model request of a turn**
+     (reproduced in every run, also with no policy at all, also on resumed turns,
+     even when the MCP `tools/list` completed before the request). They appear
+     from step 2. A model cannot call `lazyagents_claim_ticket` as its first
+     action; a first step that answers in text ends the turn (the runner's idle
+     nudge covers it).
+  4. A tool name that is not advertised (`bash`, `evil_probe`, `ambient_ping`,
+     `execute`) returns `No tool named … is currently available` and nothing runs;
+     no process or file was created for any denied or unknown call (proof files
+     checked).
+  5. `opencode_worktree_remove` is gated by the edit permission; allowing `edit`
+     allows it (it validated its own arguments and refused a non-project path in
+     the stub run).
+- **d. Cancellation.** Mid-stream SIGINT and SIGTERM (to the CLI pid): exit **130**,
+  stdout `step_start` then `error {"type":"unknown","message":"Transport: The socket
+  connection was closed unexpectedly…"}`; SIGKILL: exit 137, no further event. In
+  all three cases the `serve --stdio` child exited and the stub saw the connection
+  close: **no lingering descendants** (the pre-existing `serve --service` background
+  process on this machine is not ours and was left alone). The runner's
+  process-group SIGINT therefore works.
+- **e. Config isolation: ambient config can override the LazyAgents policy.**
+  An ambient config that allows everything, adds an MCP server (`ambient`) and an
+  instructions file was tried in each layer, with the generated `opencode.json` in
+  the cwd:
+
+  | Layer | Policy/MCP loosened? | Instructions injected? |
+  | --- | --- | --- |
+  | `$XDG_CONFIG_HOME/opencode/opencode.json` | **yes** (write executed, ambient MCP server connected) | yes |
+  | ancestor directory `opencode.json` | **yes** (same) | yes |
+  | `OPENCODE_CONFIG=<file>` | **yes** (same) | yes |
+  | `$HOME/.config/opencode/opencode.json` (with `XDG_CONFIG_HOME` set) | no (not read) | no |
+  | `<cwd>/.opencode/opencode.json` | no (LazyAgents deny still wins, MCP server dropped) | **yes** |
+  | `OPENCODE_CONFIG_CONTENT` | no | **yes** |
+
+  `--model` on the command line always won over an ambient `model`. Because the
+  adapter's own `XDG_CONFIG_HOME` is `<workspace>/.lazyagents/opencode/config`,
+  **an agent that is allowed to `write` can drop `opencode/opencode.json` there and
+  the next (resumed) turn loads it**: with the corrected allowlist from c.1, a stub
+  turn wrote that file and the next turn connected the extra MCP server.
+  Denying `edit`/`write` on `*/.lazyagents/*` and `*/opencode.json` with `tool.use`
+  policy resources (`write:*/.lazyagents/*`, after the allows) blocked it while
+  normal writes still worked. Managed/system config (`/Library/Application
+  Support/opencode`) was not tested. So `RUNNER_OPENCODE_ISOLATED=true` remains a
+  claim the runner cannot verify, and the per-run state directory is writable by
+  the agent.
+- **f. Provider errors.** A 400 `invalid_request_error` "credit balance is too
+  low" surfaces as `error {"type":"provider.invalid-request","status":400,…}`, exit
+  1 (the parser marks it usage-limited through its existing message markers).
+  **A 429 (with or without `retry-after`) and a 529 never produce an error
+  event**: the CLI retries with growing backoff (8 attempts in 60s observed, one
+  `step_start` each) until killed. A rate-limited run therefore hangs until the
+  runtime limit or cancel, and falls back only on a run-level timeout, not on a
+  quota envelope.
+- **g. Instructions.** `AGENTS.md` in the cwd is injected into the system prompt
+  as `Instructions from: <abs path>/AGENTS.md` followed by its content (the
+  adapter's file is therefore read). An ancestor `AGENTS.md` was not.
+- **Other quirks.** `opencode run` hangs after database bootstrap (no output, no
+  model request) when stdin is an open pipe that never closes; the runner starts it
+  with no stdin so it is unaffected, but any wrapper must close stdin. A
+  multi-word prompt argument reaches the model wrapped in literal double quotes
+  (`"go do it"`). `--session` on a missing id still creates it (earlier finding).
+
+Parser: the real events were not read by the old assumptions. `opencode_parser.go`
+now parses `step_start`/`text`/`tool_use`/`step_finish` and the nested `error`;
+success on the real wire is exit 0 after real events without an error event;
+usage is summed from `step_finish` and always reported as a lower bound
+(`usage_partial`, cost `unknown`), never as a bill. The synthetic envelope is still
+accepted. Tests: `opencode_real_stub_test.go` (`TestOpenCodeRealStub*`).
+
+### Local runner end to end (opt-in)
+
+`server/internal/runner/opencode_real_test.go` drives the real runner (local
+backend, `OnlyBins`, `OpenCodeIsolated`) with the real CLI and an in-test stub
+provider. Without a production base-URL knob, the test builds a tiny launcher and
+registers it as the `opencode` binary; it merges the `baseURL` into the adapter's
+`opencode.json`, points the proxy variables at a dead port and execs the real
+binary. Skipped unless `LAZYAGENTS_REAL_OPENCODE=1`:
+
+```
+cd server && LAZYAGENTS_REAL_OPENCODE=1 TEST_DATABASE_URL=… \
+  go test ./internal/runner -run TestRealOpenCodeAgainstStub -count=1 -v
+```
+
+Result on 2026-11-05 (real 2.2.1, Go 1.26, darwin/arm64): all three pass:
+a ticket turn (policy-blocked `read`, real MCP `claim_ticket`, `post_plan`,
+`complete_run status=todo`, session id, lower-bound usage with unknown cost, only
+the run's own fake provider key seen by the stub, AGENTS.md in the prompt, MCP tool
+list absent on step 1 and present on step 2), a two-turn chat resuming one session
+with first-turn history reaching the model, and a SIGINT cancel that ends the
+provider connection, exits non-zero and leaves the run `cancelled`.
+
+### Still not verified
+
+Everything about a real provider: real token units and billing, model tool-call
+behaviour, real quota/rate-limit envelopes beyond the stub's, OAuth/subscription
+auth, Docker image runs, managed/system config layers, the `session export`
+accounting path, Windows, and any CLI version other than 2.2.1.
 
 ## LAZYAGENTS-25 requirements matrix
 

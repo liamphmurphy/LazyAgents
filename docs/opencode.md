@@ -4,9 +4,18 @@ OpenCode is a third harness next to Claude Code and Codex: public ID `opencode`,
 official CLI `@opencode/cli`, executable `opencode`. It is **opt-in and off by
 default** (see [Isolation](#isolation-attestation)).
 
-> **Status:** wired end to end, but verified only against a fake CLI and two
-> real *error* captures. Real-provider parity is **not yet verified**; see
-> [Limitations](#limitations). Requirement-by-requirement evidence:
+> **Status:** three evidence levels, kept apart. (1) **Fake CLI**: the product
+> plumbing, against a scripted binary with a synthetic envelope. (2) **Real CLI +
+> stub provider** (2026-11-05): the real `opencode` 2.2.1 against a localhost stub,
+> no paid call: real wire shapes, resume, cancel and policy/isolation behaviour,
+> with **open policy defects** listed in [Limitations](#limitations). (3) **Real
+> provider**: still **unverified** (owner directed no paid runs).
+>
+> ⚠️ **Do not set `RUNNER_OPENCODE_ISOLATED=true` on a shared runner yet.** The
+> stub capture showed that ambient or agent-written `opencode.json` overrides the
+> generated policy. Ticket runs also can't read or edit files under the current
+> allowlist. Both are open follow-ups (see Limitations).
+> See [Limitations](#limitations). Requirement-by-requirement evidence:
 > [`verification/LAZYAGENTS-25-requirements-matrix.md`](../verification/LAZYAGENTS-25-requirements-matrix.md).
 
 Design and evidence: [`docs/contracts/opencode2/`](contracts/opencode2/ADR.md)
@@ -98,20 +107,39 @@ natural place for the claim to hold; on local, only if you have verified it.
 
 ## Limitations
 
-- **Real-provider parity is not verified.** No paid model call has been made.
-  Success, tool/MCP, resume, quota and cancel event shapes, the completion
-  marker and whether usage is per-turn or cumulative are **unverified**; the
-  parser's fixtures for them are synthetic. Wire was captured only for two
-  errors (`provider.no-route`, `provider.auth` 401), which the parser reads.
-- **Cost:** a native cost from the CLI is used (`cost_source=harness`, including
-  zero). Otherwise cost is computed only from an operator price in
+- **Real-provider parity is not verified (UNVERIFIED, no paid runs).** Nothing
+  here has run against a real provider: real token units, billing, model
+  behaviour and real quota envelopes are unknown. What *has* been captured with
+  the real CLI and a localhost stub provider
+  ([verification.md](contracts/opencode2/verification.md#real-cli-against-a-localhost-stub-2026-11-05)):
+  the success, tool, resume, cancel and quota-error wire shapes (the parser reads
+  them), session resume with history, SIGINT cancellation without lingering
+  children, and the policy/config behaviour below.
+- **Policy defects found by the stub capture (not fixed here):** (1) the generated
+  `tool.use` allowlist uses bare tool names, but 2.2.1 matches
+  `<action>:<resource>`, so `read`/`glob`/`grep`/`edit`/`write` are all
+  **blocked** (only `lazyagents_*` MCP calls work); (2) the shell tool is named
+  `shell`, not `bash`, so shell is never granted; (3) ambient config in
+  `$XDG_CONFIG_HOME/opencode`, an ancestor directory or `OPENCODE_CONFIG`
+  **overrides** the generated policy (the per-run XDG root sits inside the
+  workspace and is writable by an agent that may `write`); (4) MCP tools are not
+  advertised on the first model step of a turn. Until fixed, ticket runs cannot
+  read or edit files through OpenCode and `RUNNER_OPENCODE_ISOLATED` guards
+  only what the operator can attest.
+- **Usage is a lower bound:** the real stream has no completion marker and omits
+  the final step's `step_finish`, so tokens are partial and cost is `unknown`
+  (success is a zero exit with no error event). A provider 429 or 529 is retried
+  by the CLI indefinitely instead of producing an error.
+- **Cost:** on the synthetic envelope a native cost is used (`cost_source=harness`,
+  including zero); the real wire has none that is complete (see above). Otherwise cost is computed only from an operator price in
   `RUNNER_MODEL_PRICES` for the exact model id (e.g. `openai/gpt-5#high`), with
   unverified token units. With neither, it is `unknown` (`cost_known=false`)
   and shown as unknown/partial, never as free. Unknown cost can't show a budget
   is unspent; runtime and turn limits still apply.
 - **Policy:** the generated `opencode.json` targets the 2.2.1 `integration.use`
-  contract. Whether its denials and MCP allowlist are effective, and config-layer
-  isolation, are unverified (they need a model call). Newer `mcp.use`,
+  contract. Denials (unknown tools, non-`lazyagents` MCP, skills) were observed to
+  hold against the stub; the allowlist and config-layer isolation are defective
+  as listed above. Newer `mcp.use`,
   `skill.use`, `plugin.use`, `integration.connect` options are rejected.
   OpenCode permission rules are not a security boundary for shell access.
 - **No approvals:** with no authenticated pre-tool bridge, scopes set to
@@ -119,8 +147,8 @@ natural place for the claim to hold; on local, only if you have verified it.
   not LazyAgents approval. No sandbox guarantees; no `permission_mode`.
 - **No unmanaged mode:** OpenCode never runs without the attestation and a key.
 - **Chat is read-only** (scratch workspace, project-scoped context tools).
-- Docker backend runs against a real image are unexercised; only local with
-  the fake CLI was.
+- Docker backend runs against a real image are unexercised; only the local backend
+  (fake CLI, and the real CLI against a stub) was.
 
 ## Troubleshooting
 
@@ -141,6 +169,12 @@ the last two rows are the captured CLI error envelopes
 (`server/internal/harness/testdata/opencode-real-*.jsonl`).
 
 ## Testing
+
+`LAZYAGENTS_REAL_OPENCODE=1 TEST_DATABASE_URL=… go test ./internal/runner -run
+TestRealOpenCodeAgainstStub` (opt-in, in `server/`) drives the real runner with the
+**real `opencode` binary** against a localhost stub provider (no paid call; a
+launcher routes the model to the stub, there is no production base-URL setting).
+It is evidence of the real wire and runner plumbing, not of a real provider.
 
 `npm run e2e:stack` (in `web/`) drives a real API, runner and Postgres with
 fake `opencode`/`claude`/`codex` binaries; see

@@ -8,15 +8,26 @@ import (
 	"strings"
 )
 
-// Only the error envelope of the OpenCode 2.2.1 wire has been captured (a run
-// without credentials and one with an invalid key; docs/contracts/opencode2/
-// verification.md):
+// REAL wire (OpenCode 2.2.1 `run --format json`, captured against the real CLI
+// with a localhost stub provider, no paid call; docs/contracts/opencode2/
+// verification.md, testdata/opencode-real-*.jsonl). Every event carries
+// sessionID and a part:
 //
-//	{"type":"error","timestamp":n,"sessionID":"ses_…","error":{"type":"provider.auth","message":"…","status":401}}
+//	{"type":"step_start","sessionID":"ses_…","part":{"type":"step-start",…}}
+//	{"type":"text","sessionID":"ses_…","part":{"type":"text","text":"…"}}
+//	{"type":"tool_use","sessionID":"ses_…","part":{"id":"<call id>","tool":"…","state":{"status":"completed|error","input":{…},"output":"…"|"error":"…"}}}
+//	{"type":"step_finish","sessionID":"ses_…","part":{"reason":"tool-calls","cost":x,"tokens":{"input":n,"output":n,"reasoning":n,"cache":{"read":n,"write":n}}}}
+//	{"type":"error","sessionID":"ses_…","error":{"type":"provider.auth","message":"…","status":401}}
 //
-// Success events have NOT been captured without a paid model call, so the rest
-// of this parser reads an assumed JSON-lines envelope, kept in one place so a
-// real capture can replace it:
+// A tool_use event is the call and its result together. step_finish is per
+// model step, not cumulative, and is NOT emitted for the final step of a turn,
+// so usage seen on the stream is a lower bound (a one-step turn has none). There
+// is no completion marker: a turn succeeded when the process exits 0 after at
+// least one step_start and without an error event.
+//
+// The rest of this parser (session, tool_start, tool_result, completed, flat
+// error) reads an assumed SYNTHETIC envelope, kept so the synthetic fixtures
+// still parse; the real CLI never emits it:
 //
 //	{"type":"session","session_id":"…"}
 //	{"type":"text","text":"…"}                              assistant text
@@ -25,9 +36,9 @@ import (
 //	{"type":"completed","usage":{"input_tokens":n,"output_tokens":n,"cached_tokens":n,"cost":x}}
 //	{"type":"error","message":"…"}
 //
-// Success needs the "completed" marker AND a zero process exit (Exited);
-// EOF alone is a failure. Unknown event types are ignored, never read as
-// completion.
+// On the synthetic path success needs the "completed" marker AND a zero process
+// exit (Exited); EOF alone is a failure. Unknown event types are ignored, never
+// read as completion.
 
 const (
 	opencodeMaxLine   = 1 << 20
@@ -43,15 +54,17 @@ func (o OpenCode) NewParser(model string) Parser {
 type ExitObserver interface{ Exited(code int) }
 
 type opencodeParser struct {
-	model     string
-	prices    map[string]Price
-	started   bool
-	res       Result
-	tools     map[string]string
-	completed bool
-	exited    bool
-	exitCode  int
-	failed    bool
+	model       string
+	prices      map[string]Price
+	started     bool
+	res         Result
+	tools       map[string]string
+	completed   bool
+	real        bool // saw a real-wire event
+	partialCost float64
+	exited      bool
+	exitCode    int
+	failed      bool
 }
 
 type opencodeLine struct {
@@ -66,12 +79,36 @@ type opencodeLine struct {
 	Output    json.RawMessage `json:"output"`
 	IsError   bool            `json:"is_error"`
 	Message   string          `json:"message"`
+	Part      *opencodePart   `json:"part"` // real 2.2.1 envelope
 	Usage     *struct {
 		Input  *int64   `json:"input_tokens"`
 		Output *int64   `json:"output_tokens"`
 		Cached *int64   `json:"cached_tokens"`
 		Cost   *float64 `json:"cost"`
 	} `json:"usage"`
+}
+
+// opencodePart is the real 2.2.1 `part` payload (fields used by this parser).
+type opencodePart struct {
+	ID     string   `json:"id"`
+	Text   string   `json:"text"`
+	Tool   string   `json:"tool"`
+	Reason string   `json:"reason"`
+	Cost   *float64 `json:"cost"`
+	Tokens *struct {
+		Input     *int64 `json:"input"`
+		Output    *int64 `json:"output"`
+		Reasoning *int64 `json:"reasoning"`
+		Cache     *struct {
+			Read *int64 `json:"read"`
+		} `json:"cache"`
+	} `json:"tokens"`
+	State *struct {
+		Status string          `json:"status"`
+		Input  json.RawMessage `json:"input"`
+		Output json.RawMessage `json:"output"`
+		Error  json.RawMessage `json:"error"`
+	} `json:"state"`
 }
 
 var opencodeSecrets = regexp.MustCompile(`(?i)(bearer\s+\S+|\bsk-[A-Za-z0-9_-]{8,}|\bla_[A-Za-z0-9_-]{8,}|(api[_-]?key|token|authorization)["':= ]+[^\s"',}]+)`)
@@ -121,12 +158,23 @@ func (p *opencodeParser) event(l opencodeLine) []Event {
 	switch l.Type {
 	case "session":
 		return nil
+	case "step_start":
+		p.real = true
+		return nil
 	case "text":
-		if strings.TrimSpace(l.Text) == "" {
+		text := l.Text
+		if l.Part != nil {
+			p.real, text = true, l.Part.Text
+		}
+		if strings.TrimSpace(text) == "" {
 			return nil
 		}
-		p.res.Final = l.Text
-		return []Event{{"message", map[string]any{"role": "assistant", "text": l.Text}}}
+		p.res.Final = text
+		return []Event{{"message", map[string]any{"role": "assistant", "text": text}}}
+	case "tool_use":
+		return p.realTool(l.Part)
+	case "step_finish":
+		return p.realStep(l.Part)
 	case "tool_start":
 		p.tools[l.CallID] = l.Tool
 		p.res.Usage.ToolCalls++
@@ -179,6 +227,65 @@ func (p *opencodeParser) event(l opencodeLine) []Event {
 		return p.usage(l)
 	}
 	return nil
+}
+
+// realTool maps a real tool_use event (call and result in one line). Any status
+// other than "completed" (a failure or a policy denial such as "Blocked by
+// configuration policy") is a tool error, not a provider failure.
+func (p *opencodeParser) realTool(pt *opencodePart) []Event {
+	if pt == nil || pt.State == nil {
+		return nil
+	}
+	p.real = true
+	p.res.Usage.ToolCalls++
+	var input any
+	_ = json.Unmarshal(pt.State.Input, &input)
+	out := pt.State.Output
+	if pt.State.Status != "completed" {
+		out = pt.State.Error
+	}
+	return []Event{
+		{"tool_call", map[string]any{"id": pt.ID, "tool": pt.Tool, "input": input}},
+		{"tool_result", map[string]any{
+			"id": pt.ID, "tool": pt.Tool, "is_error": pt.State.Status != "completed",
+			"output": clip(redactSecrets(blockText(out)), 4000),
+		}},
+	}
+}
+
+// realStep adds one step_finish to the turn's usage. The stream omits the final
+// step of every turn, so the totals are a lower bound: the cost stays unknown
+// (never a partial figure presented as the bill) and the payload says so.
+func (p *opencodeParser) realStep(pt *opencodePart) []Event {
+	if pt == nil || pt.Tokens == nil {
+		return nil
+	}
+	p.real = true
+	t := pt.Tokens
+	add := func(dst *int64, vs ...*int64) {
+		for _, v := range vs {
+			if v != nil && *v >= 0 {
+				*dst += *v
+			}
+		}
+	}
+	add(&p.res.Usage.InputTokens, t.Input)
+	add(&p.res.Usage.OutputTokens, t.Output, t.Reasoning)
+	if t.Cache != nil {
+		add(&p.res.Usage.CachedTokens, t.Cache.Read)
+	}
+	if pt.Cost != nil && *pt.Cost >= 0 && !math.IsInf(*pt.Cost, 0) && !math.IsNaN(*pt.Cost) {
+		p.partialCost += *pt.Cost
+	}
+	if p.res.Usage.CostSource == "" {
+		p.res.Usage.CostSource = "unknown"
+	}
+	return []Event{{"usage", map[string]any{
+		"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens,
+		"cached_tokens": p.res.Usage.CachedTokens, "tool_calls": p.res.Usage.ToolCalls,
+		"cost_source": "unknown", "cost_known": false, "usage_partial": true,
+		"partial_native_cost_usd": p.partialCost,
+	}}}
 }
 
 func (p *opencodeParser) usage(l opencodeLine) []Event {
@@ -247,7 +354,9 @@ func (p *opencodeParser) Result() Result {
 		switch {
 		case p.exited && p.exitCode != 0:
 			r.IsError, r.Error = true, fmt.Sprintf("Harness exited with code %d.", p.exitCode)
-		case !p.completed || !p.exited:
+		case !(p.completed || p.real) || !p.exited:
+			// The real wire has no completion marker: a zero exit after real
+			// events, without an error event, is the success signal.
 			r.IsError, r.Error = true, "Harness ended without completion."
 		}
 	}

@@ -1,0 +1,2 @@
+{"type":"step_start","timestamp":1793926229537,"sessionID":"ses_e51aa1c02ffeC9JiBVW4rT6khw","part":{"id":"prt_1ae55ee21001jbgtGCG7BZXIGu","sessionID":"ses_e51aa1c02ffeC9JiBVW4rT6khw","messageID":"msg_1ae55edb80011RKrDBUPIgBMcp","type":"step-start"}}
+{"type":"text","timestamp":1793926229740,"sessionID":"ses_e51aa1c02ffeC9JiBVW4rT6khw","part":{"id":"prt_1ae55ee220017C3EFLoPIG1sZl","sessionID":"ses_e51aa1c02ffeC9JiBVW4rT6khw","messageID":"msg_1ae55edb80011RKrDBUPIgBMcp","type":"text","text":"STUB_REPLY_21 ok","time":{"start":1793926229538,"end":1793926229740}}}
