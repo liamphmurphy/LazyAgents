@@ -1644,6 +1644,8 @@ export interface components {
              * @description Mockups accept an .svg file, which is stored as text
              */
             file?: string;
+            /** @description Also attach the new artifact to this ticket (relation context) in the same transaction. The ticket must be in the artifact's project; nothing is created on failure. */
+            ticket_key?: string;
         };
         NewArtifactVersion: {
             version_label?: string;
@@ -2416,6 +2418,8 @@ export interface components {
             criteria: string[];
             /** Format: uuid */
             agent_id?: string;
+            /** @description The ticket changes UI: a person must approve a mockup before implementation */
+            requires_mockup?: boolean;
         };
         PlanningInput: {
             project: string;

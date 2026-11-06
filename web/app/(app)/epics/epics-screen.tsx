@@ -229,6 +229,30 @@ function EpicDispatch({ epic }: { epic: EpicOverview }) {
   );
 }
 
+function CardMockupToggle({ epic: e }: { epic: EpicOverview }) {
+  const updateEpic = useUpdateEpic(e.epic.id);
+  return (
+    <div className="flex items-center gap-2" onClick={(ev) => ev.stopPropagation()}>
+      <Toggle
+        checked={e.epic.requires_mockup}
+        disabled={updateEpic.isPending}
+        onChange={(v) => updateEpic.mutate({ requires_mockup: v })}
+        label={
+          <>
+            <span aria-hidden>Mockup</span>
+            <span className="sr-only">Requires mockup for {e.epic.name}</span>
+          </>
+        }
+      />
+      {updateEpic.isError && (
+        <span role="alert" className="text-xs text-pill-blocked-fg">
+          {updateEpic.error.message}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function Featured({ epic: e }: { epic: EpicOverview }) {
   const updateEpic = useUpdateEpic(e.epic.id);
   return (
@@ -462,6 +486,7 @@ export function EpicsScreen() {
                           %
                         </p>
                       </div>
+                      <CardMockupToggle epic={e} />
                       <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-3">
                         <AgentStack agents={e.agents} />
                         <span className="text-xs text-fg-tertiary">

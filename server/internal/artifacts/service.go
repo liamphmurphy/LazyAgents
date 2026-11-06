@@ -293,6 +293,13 @@ func Publish(ctx context.Context, q *store.Queries, a store.Artifact, v store.Ar
 
 // Create stores a new artifact and its first version.
 func (s *Service) Create(ctx context.Context, ws uuid.UUID, by Actor, in NewArtifact) (store.Artifact, error) {
+	return s.CreateThen(ctx, ws, by, in, nil)
+}
+
+// CreateThen is Create plus a step that runs in the same transaction (for
+// example attaching the new artifact to a ticket). If it fails, nothing is
+// created and an uploaded blob is cleaned up.
+func (s *Service) CreateThen(ctx context.Context, ws uuid.UUID, by Actor, in NewArtifact, then func(q *store.Queries, a store.Artifact) error) (store.Artifact, error) {
 	if !slices.Contains(Types, in.Type) {
 		return store.Artifact{}, apperr.Invalid("type", "must be one of %s", strings.Join(Types, ", "))
 	}
@@ -309,7 +316,11 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, by Actor, in NewArti
 	var a store.Artifact
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		a, err = s.create(ctx, store.New(tx), ws, by, in, r)
+		q := store.New(tx)
+		a, err = s.create(ctx, q, ws, by, in, r)
+		if err == nil && then != nil {
+			err = then(q, a)
+		}
 		return err
 	})
 	if err != nil {

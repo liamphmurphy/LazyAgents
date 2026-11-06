@@ -153,6 +153,7 @@ func TestPlanningWorkflow(t *testing.T) {
 		t.Fatal("draft missing from Inbox")
 	}
 	proposals[0].Title = "Edited core implementation"
+	proposals[0].RequiresMockup = true
 	w = request("PATCH", "/api/v1/planning-sessions/"+plan.Id.String(), map[string]any{"revision": plan.Revision, "action": "save", "proposals": proposals}, "")
 	requireStatus(w, 200)
 	staleRevision := plan.Revision
@@ -216,6 +217,12 @@ func TestPlanningWorkflow(t *testing.T) {
 	docs, _ := q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: tk.ID})
 	if tk.Title != proposals[0].Title || tk.Status != "backlog" || tk.AssigneeAgentID == nil || *tk.AssigneeAgentID != a.ID || len(cr) != 1 || len(docs) != 1 || docs[0].ID != source {
 		t.Fatalf("ticket context lost: %+v, criteria=%v docs=%v", tk, cr, docs)
+	}
+	if !tk.RequiresMockup {
+		t.Fatal("requires_mockup was not carried onto the accepted ticket")
+	}
+	if other, err := tracker.Get(ctx, q, me.WorkspaceID, p.TicketKeys[1]); err != nil || other.RequiresMockup {
+		t.Fatalf("unflagged proposal became gated: %+v %v", other, err)
 	}
 	if _, err := q.ActiveRunForTicket(ctx, &tk.ID); err == nil {
 		t.Fatal("acceptance dispatched work")

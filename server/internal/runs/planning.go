@@ -19,13 +19,14 @@ import (
 
 // Proposal is deliberately separate from a ticket. Only a person can accept it.
 type Proposal struct {
-	Ref         string     `json:"ref,omitempty"`
-	DependsOn   []string   `json:"depends_on,omitempty"`
-	BlockedBy   []string   `json:"blocked_by,omitempty"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	Criteria    []string   `json:"criteria"`
-	AgentID     *uuid.UUID `json:"agent_id,omitempty"`
+	Ref            string     `json:"ref,omitempty"`
+	DependsOn      []string   `json:"depends_on,omitempty"`
+	BlockedBy      []string   `json:"blocked_by,omitempty"`
+	Title          string     `json:"title"`
+	Description    string     `json:"description"`
+	Criteria       []string   `json:"criteria"`
+	AgentID        *uuid.UUID `json:"agent_id,omitempty"`
+	RequiresMockup bool       `json:"requires_mockup,omitempty"`
 }
 
 type PlanningInput struct {
@@ -55,7 +56,7 @@ func PlanningSpec(r agentdef.Resolved) agentdef.Resolved {
 	for i := range r.Fallbacks {
 		r.Fallbacks[i].HarnessOptions = planningOptions(r.Fallbacks[i].Harness)
 	}
-	r.Instructions = "You are a planner. Read the supplied goal, source documents, linked tickets and wiki. Propose a small, actionable set of tickets with acceptance criteria using propose_tickets. Give each a stable ref and suggest depends_on proposal refs or blocked_by existing ticket keys where work must finish first. Do not create tickets, modify files, or execute project work. Read supplied context with file tools or simple read-only shell commands. Calling propose_tickets ends this planning run; a person edits and accepts the draft.\n"
+	r.Instructions = "You are a planner. Read the supplied goal, source documents, linked tickets and wiki. Propose a small, actionable set of tickets with acceptance criteria using propose_tickets. Give each a stable ref and suggest depends_on proposal refs or blocked_by existing ticket keys where work must finish first. Do not create tickets, modify files, or execute project work. Read supplied context with file tools or simple read-only shell commands. Calling propose_tickets ends this planning run; a person edits and accepts the draft. Set requires_mockup on tickets that change the UI, so a person approves a mockup before implementation.\n"
 	return r
 }
 
@@ -346,7 +347,7 @@ func (s *Service) ReviewPlanning(ctx context.Context, ws, user, id uuid.UUID, re
 				}
 				created := []store.Ticket{}
 				for _, item := range items {
-					t, err := tracker.CreateInTx(ctx, q, ws, tracker.UserActor(user), tracker.NewTicket{ProjectKey: p.Key, Title: item.Title, DescriptionMd: item.Description, Criteria: item.Criteria, AssigneeAgentID: item.AgentID, EpicID: plan.EpicID})
+					t, err := tracker.CreateInTx(ctx, q, ws, tracker.UserActor(user), tracker.NewTicket{ProjectKey: p.Key, Title: item.Title, DescriptionMd: item.Description, Criteria: item.Criteria, AssigneeAgentID: item.AgentID, EpicID: plan.EpicID, RequiresMockup: item.RequiresMockup})
 					if err != nil {
 						return err
 					}

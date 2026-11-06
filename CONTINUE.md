@@ -659,4 +659,9 @@ The user explicitly authorized the first two recommended additions: project/repo
   - Mockup view, review banner, and a split SVG source/live preview editor (`/artifacts/{id}?edit=1`, Save version / Save & approve).
   - A New mockup dialog with a blank wireframe template.
   - The ticket "Mockup" property and gate banner, the epic toggle, and inbox `mockup` items.
-- **Not done:** no browser QA yet. There's no visual (drag/drop) editor, only source plus live preview, and no `requires_mockup` field on planning drafts.
+- **Follow-ups (same day):**
+  - **Visual editor:** the mockup editor has Visual | Source | Split modes. Visual renders a client-side whitelist-sanitized tree (`lib/svg-sanitize.ts`) via React elements, with ids prefixed, never innerHTML. It edits the parsed source by node path (`lib/svg-edit.ts`), so elements it can't show stay in the source. You can select, drag, nudge, edit text, add, duplicate, delete, reorder, undo/redo, and use the inspector.
+  - **Planning:** proposals carry `requires_mockup` into accepted tickets.
+  - **Create and attach:** `POST /artifacts` accepts `ticket_key` and attaches in the same transaction, so there are no orphan duplicates.
+  - **Bulk and epics:** the bulk bar has a Mockup action, and every epic card has a mockup toggle.
+- **Not done:** no browser QA of the mockup screens or the visual canvas yet.

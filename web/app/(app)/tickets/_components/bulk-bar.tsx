@@ -6,7 +6,7 @@ import { useBulkUpdate } from "@/lib/api/hooks";
 import { Button, IconButton } from "@/components/ui/button";
 import { ArtifactPicker } from "@/components/domain/artifacts";
 import { DispatchDialog } from "@/components/domain/dispatch-dialog";
-import { AgentPicker, PriorityMenu, StatusMenu } from "@/components/domain/pickers";
+import { AgentPicker, MockupRequirementMenu, PriorityMenu, StatusMenu } from "@/components/domain/pickers";
 
 /** Floating bulk-action bar (DESIGN.md §4). */
 export function BulkBar({ keys, agents, onClear }: { keys: string[]; agents: Schemas["Agent"][]; onClear: () => void }) {
@@ -29,6 +29,9 @@ export function BulkBar({ keys, agents, onClear }: { keys: string[]; agents: Sch
       <PriorityMenu onChange={(priority) => apply({ priority })} align="end">
         <Button variant="ghost">Priority</Button>
       </PriorityMenu>
+      <MockupRequirementMenu onChange={(requires_mockup) => apply({ requires_mockup })} align="end">
+        <Button variant="ghost">Mockup</Button>
+      </MockupRequirementMenu>
       <ArtifactPicker onPick={(a) => bulk.mutate({ keys, patch: {}, attach_artifact_id: a.id })}>
         <Button variant="ghost">Attach artifact</Button>
       </ArtifactPicker>

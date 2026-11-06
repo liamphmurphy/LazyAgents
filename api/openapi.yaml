@@ -2078,6 +2078,7 @@ components:
         version_label: { type: string }
         body_md: { type: string, description: "Markdown text, or SVG source for type mockup (self-contained: no scripts or external references)" }
         file: { type: string, format: binary, description: "Mockups accept an .svg file, which is stored as text" }
+        ticket_key: { type: string, description: "Also attach the new artifact to this ticket (relation context) in the same transaction. The ticket must be in the artifact's project; nothing is created on failure." }
     NewArtifactVersion:
       type: object
       properties:
@@ -2863,6 +2864,7 @@ components:
           type: array
           items: { type: string }
         agent_id: { type: string, format: uuid }
+        requires_mockup: { type: boolean, description: "The ticket changes UI: a person must approve a mockup before implementation" }
     PlanningInput:
       type: object
       required: [project, agent_id, goal]

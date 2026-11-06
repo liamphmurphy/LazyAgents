@@ -19,6 +19,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/blob"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
 
 // ---------------------------------------------------------------- forms ---
@@ -346,7 +347,7 @@ func (s *Server) ListArtifacts(ctx context.Context, req api.ListArtifactsRequest
 }
 
 func (s *Server) CreateArtifact(ctx context.Context, req api.CreateArtifactRequestObject) (api.CreateArtifactResponseObject, error) {
-	_, _, ws := me(ctx)
+	_, trackerActor, ws := me(ctx)
 	f, err := readForm(req.Body)
 	if err != nil {
 		return nil, err
@@ -363,7 +364,22 @@ func (s *Server) CreateArtifact(ctx context.Context, req api.CreateArtifactReque
 		}
 		in.EpicID = &id
 	}
-	a, err := s.Artifacts.Create(ctx, ws, actorOf(ctx), in)
+	var then func(q *store.Queries, a store.Artifact) error
+	if key := f.str("ticket_key"); key != "" {
+		then = func(q *store.Queries, a store.Artifact) error {
+			t, err := tracker.Get(ctx, q, ws, key)
+			if errors.Is(err, apperr.ErrNotFound) {
+				return apperr.Invalid("ticket_key", "unknown ticket")
+			} else if err != nil {
+				return err
+			}
+			if a.ProjectID == nil || *a.ProjectID != t.ProjectID {
+				return apperr.Invalid("ticket_key", "ticket is in a different project")
+			}
+			return tracker.AttachArtifactInTx(ctx, q, ws, trackerActor, key, a.ID, "context")
+		}
+	}
+	a, err := s.Artifacts.CreateThen(ctx, ws, actorOf(ctx), in, then)
 	if err != nil {
 		return nil, err
 	}

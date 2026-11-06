@@ -258,3 +258,61 @@ func TestMockupAgentTools(t *testing.T) {
 		t.Fatalf("get_ticket after approval = %d %v", code, out)
 	}
 }
+
+func TestCreateArtifactWithTicketKey(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	arts := &artifacts.Service{Pool: pool}
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true, Artifacts: arts}); err != nil {
+		t.Fatal(err)
+	}
+	q := store.New(pool)
+	tr := &tracker.Service{Pool: pool}
+	h := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}, Artifacts: arts}).Handler()
+	create := func(project, ticket string) *httptest.ResponseRecorder {
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		for k, v := range map[string]string{"project_key": project, "type": "mockup", "title": "Attached", "body_md": httpSVG, "ticket_key": ticket} {
+			_ = mw.WriteField(k, v)
+		}
+		_ = mw.Close()
+		req := httptest.NewRequest("POST", "/api/v1/artifacts", &buf)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	count := func() (n int) {
+		_ = pool.QueryRow(ctx, "SELECT count(*) FROM artifacts").Scan(&n)
+		return
+	}
+	before := count()
+	rec := create("PAY", "PAY-214")
+	if rec.Code != 201 {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var art api.Artifact
+	_ = json.Unmarshal(rec.Body.Bytes(), &art)
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM ticket_artifacts ta JOIN tickets t ON t.id = ta.ticket_id WHERE t.key = 'PAY-214' AND ta.artifact_id = $1 AND ta.relation = 'context'", art.Id).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("not attached: %d %v", n, err)
+	}
+	if count() != before+1 {
+		t.Fatal("expected exactly one new artifact")
+	}
+	// Unknown ticket, or one in another project: 422 and nothing created.
+	before = count()
+	if rec := create("PAY", "PAY-99999"); rec.Code != 422 {
+		t.Fatalf("unknown ticket status %d: %s", rec.Code, rec.Body.String())
+	}
+	var other string
+	if err := pool.QueryRow(ctx, "SELECT key FROM projects WHERE key <> 'PAY' LIMIT 1").Scan(&other); err != nil {
+		t.Fatal(err)
+	}
+	if rec := create(other, "PAY-214"); rec.Code != 422 {
+		t.Fatalf("cross-project status %d: %s", rec.Code, rec.Body.String())
+	}
+	if count() != before {
+		t.Fatal("failed create left an artifact behind")
+	}
+}

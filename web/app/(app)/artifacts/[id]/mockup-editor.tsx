@@ -7,11 +7,21 @@ import { useNewVersion, useReviewMockup } from "@/lib/api/hooks";
 import { insertIndent, svgError, type Zoom } from "@/lib/mockup";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput } from "@/components/ui/primitives";
+import { Segmented } from "@/components/ui/controls";
 import { MockupImage } from "@/components/domain/mockup";
+import { MockupCanvas, useSourceHistory } from "@/components/domain/mockup-canvas";
 import { ZoomControl } from "./mockup-parts";
 
+type Mode = "visual" | "source" | "split";
+const MODES = [
+  { value: "visual", label: "Visual" },
+  { value: "source", label: "Source" },
+  { value: "split", label: "Split" },
+] as const;
+
 /**
- * Split-view SVG editor: source on the left, live preview on the right.
+ * SVG editor with Visual (direct manipulation), Source (text + live image preview)
+ * and Split modes. All of them edit the same `source` string.
  * Saving always creates a new version (pending review); "Save & approve"
  * also approves it.
  */
@@ -23,6 +33,8 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
   const [preview, setPreview] = useState(baseline);
   const [note, setNote] = useState("");
   const [zoom, setZoom] = useState<Zoom>("fit");
+  const [mode, setMode] = useState<Mode>(() => (svgError(baseline) ? "source" : "visual"));
+  const history = useSourceHistory(source, setSource);
   const [error, setError] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const caret = useRef<number | null>(null);
@@ -83,6 +95,61 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
     onDone();
   }
 
+  const canvas = (side: boolean) => (
+    <div
+      className="flex min-w-0 flex-1 flex-col"
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          void save(false);
+        }
+      }}
+    >
+    <MockupCanvas
+      source={source}
+      history={history}
+      zoom={zoom}
+      toolbarEnd={<ZoomControl value={zoom} onChange={setZoom} />}
+      alt={`Visual editor for ${a.title}`}
+      inspectorSide={side}
+    />
+    </div>
+  );
+  const sourcePane = (
+    <div className="flex min-h-[320px] flex-col gap-2">
+      <label htmlFor="mockup-source" className="text-[12.5px] font-medium text-fg-2">
+        SVG source <span className="font-normal text-fg-tertiary">· Tab indents, ⌘S saves</span>
+      </label>
+      <textarea
+        id="mockup-source"
+        ref={area}
+        value={source}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        aria-invalid={!!problem}
+        onChange={(e) => {
+          setSource(e.target.value);
+          setError(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Tab" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            e.preventDefault();
+            const t = e.currentTarget;
+            const r = insertIndent(t.value, t.selectionStart, t.selectionEnd);
+            caret.current = r.caret;
+            setSource(r.value);
+          }
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+            e.preventDefault();
+            void save(false);
+          }
+        }}
+        className="min-h-[320px] w-full flex-1 resize-none rounded-md border border-border-strong bg-surface-sunken p-3 font-mono text-[12.5px] leading-relaxed text-fg [tab-size:2] focus:border-accent focus:outline-none aria-[invalid=true]:border-pill-blocked-fg"
+      />
+    </div>
+  );
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="flex flex-wrap items-end gap-3 border-b border-border-subtle px-6 py-3">
@@ -108,47 +175,30 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
           {error ?? problem}
         </p>
       )}
-      <div className="grid min-h-[480px] flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-2 lg:p-6">
-        <div className="flex min-h-[320px] flex-col gap-2">
-          <label htmlFor="mockup-source" className="text-[12.5px] font-medium text-fg-2">
-            SVG source <span className="font-normal text-fg-tertiary">· Tab indents, ⌘S saves</span>
-          </label>
-          <textarea
-            id="mockup-source"
-            ref={area}
-            value={source}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            aria-invalid={!!problem}
-            onChange={(e) => {
-              setSource(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Tab" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
-                e.preventDefault();
-                const t = e.currentTarget;
-                const r = insertIndent(t.value, t.selectionStart, t.selectionEnd);
-                caret.current = r.caret;
-                setSource(r.value);
-              }
-              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-                e.preventDefault();
-                void save(false);
-              }
-            }}
-            className="min-h-[320px] w-full flex-1 resize-none rounded-md border border-border-strong bg-surface-sunken p-3 font-mono text-[12.5px] leading-relaxed text-fg [tab-size:2] focus:border-accent focus:outline-none aria-[invalid=true]:border-pill-blocked-fg"
-          />
-        </div>
-        <div className="flex min-h-[320px] min-w-0 flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-[12.5px] font-medium text-fg-2">Preview</h2>
-            <ZoomControl value={zoom} onChange={setZoom} />
-          </div>
-          <MockupImage source={preview} alt={`Preview of ${a.title}`} zoom={zoom} className="min-h-[320px] flex-1" />
-        </div>
+      <div className="flex items-center justify-between gap-2 px-6 pt-3">
+        <Segmented small label="Editor mode" value={mode} onChange={setMode} options={MODES} />
       </div>
+      {mode === "visual" && (
+        <div className="flex min-h-[480px] flex-1 p-4 lg:p-6">{canvas(true)}</div>
+      )}
+      {mode === "source" && (
+        <div className="grid min-h-[480px] flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-2 lg:p-6">
+          {sourcePane}
+          <div className="flex min-h-[320px] min-w-0 flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-[12.5px] font-medium text-fg-2">Preview</h2>
+              <ZoomControl value={zoom} onChange={setZoom} />
+            </div>
+            <MockupImage source={preview} alt={`Preview of ${a.title}`} zoom={zoom} className="min-h-[320px] flex-1" />
+          </div>
+        </div>
+      )}
+      {mode === "split" && (
+        <div className="grid min-h-[480px] flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-2 lg:p-6">
+          {canvas(false)}
+          {sourcePane}
+        </div>
+      )}
     </div>
   );
 }

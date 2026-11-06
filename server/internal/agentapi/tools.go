@@ -811,13 +811,14 @@ func ok(extra map[string]any) map[string]any {
 
 // Tools is the whole Agent API.
 type TicketProposalIn struct {
-	Ref         string   `json:"ref,omitempty" jsonschema:"Unique stable proposal reference, such as schema or api"`
-	DependsOn   []string `json:"depends_on,omitempty" jsonschema:"Other proposal refs that must finish first"`
-	BlockedBy   []string `json:"blocked_by,omitempty" jsonschema:"Existing ticket keys that must be Done first"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Criteria    []string `json:"criteria"`
-	AgentID     string   `json:"agent_id,omitempty" jsonschema:"Optional suggested agent UUID; omit for unassigned"`
+	Ref            string   `json:"ref,omitempty" jsonschema:"Unique stable proposal reference, such as schema or api"`
+	DependsOn      []string `json:"depends_on,omitempty" jsonschema:"Other proposal refs that must finish first"`
+	BlockedBy      []string `json:"blocked_by,omitempty" jsonschema:"Existing ticket keys that must be Done first"`
+	Title          string   `json:"title"`
+	Description    string   `json:"description"`
+	Criteria       []string `json:"criteria"`
+	AgentID        string   `json:"agent_id,omitempty" jsonschema:"Optional suggested agent UUID; omit for unassigned"`
+	RequiresMockup bool     `json:"requires_mockup,omitempty" jsonschema:"the ticket changes UI: a person must approve a mockup before implementation"`
 }
 
 type ProposeTicketsIn struct {
@@ -828,7 +829,7 @@ var Tools = []Tool{
 	define("propose_tickets", "Submit draft tickets for human review and finish this planning run. Creates no tickets.", func(ctx context.Context, d Deps, c agents.Caller, in ProposeTicketsIn) (any, error) {
 		items := make([]runs.Proposal, 0, len(in.Tickets))
 		for _, item := range in.Tickets {
-			p := runs.Proposal{Ref: item.Ref, DependsOn: item.DependsOn, BlockedBy: item.BlockedBy, Title: item.Title, Description: item.Description, Criteria: item.Criteria}
+			p := runs.Proposal{Ref: item.Ref, DependsOn: item.DependsOn, BlockedBy: item.BlockedBy, Title: item.Title, Description: item.Description, Criteria: item.Criteria, RequiresMockup: item.RequiresMockup}
 			if item.AgentID != "" {
 				id, err := parseUUID("agent_id", item.AgentID)
 				if err != nil {

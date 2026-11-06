@@ -2,9 +2,10 @@
 
 import { Dialog, DropdownMenu } from "radix-ui";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ReactNode } from "react";
 import type { Artifact, ArtifactType } from "@/lib/api/client";
-import { useAttachArtifact, useBootstrap, useCreateArtifact, useNewVersion } from "@/lib/api/hooks";
+import { keys, useBootstrap, useCreateArtifact, useNewVersion } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { formatBytes } from "@/lib/files";
 import { blankWireframe, isSvgFile } from "@/lib/mockup";
@@ -434,7 +435,7 @@ export function NewMockupDialog({
   const router = useRouter();
   const boot = useBootstrap();
   const create = useCreateArtifact();
-  const attach = useAttachArtifact(ticketKey ?? "");
+  const qc = useQueryClient();
   const [mode, setMode] = useState<"template" | "upload">("template");
   const [title, setTitle] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -455,12 +456,13 @@ export function NewMockupDialog({
     f.set("project_key", project.key);
     f.set("type", "mockup");
     if (epicId) f.set("epic_id", epicId);
+    if (ticketKey) f.set("ticket_key", ticketKey);
     if (title.trim()) f.set("title", title.trim());
     if (mode === "template") f.set("body_md", blankWireframe(title));
     else f.set("file", files[0]);
     try {
       const a = await create.mutateAsync(f);
-      if (ticketKey) await attach.mutateAsync(a.id);
+      if (ticketKey) void qc.invalidateQueries({ queryKey: keys.ticket(ticketKey) });
       onOpenChange(false);
       router.push(`/artifacts/${a.id}?edit=1`);
     } catch (e) {

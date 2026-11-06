@@ -396,6 +396,16 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
                 ))}
               </select>
             </Field>
+            <label className="flex items-center gap-2 text-sm text-fg-secondary">
+              <input
+                type="checkbox"
+                checked={!!item.requires_mockup}
+                onChange={(e) =>
+                  edit(index, { requires_mockup: e.target.checked })
+                }
+              />
+              Requires mockup
+            </label>
           </div>
         </Card>
       ))}

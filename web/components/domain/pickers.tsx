@@ -59,6 +59,25 @@ export function PriorityMenu({ value, onChange, children, align = "start" }: Men
   );
 }
 
+/** Choose whether tickets need a person-approved mockup (bulk edits). */
+export function MockupRequirementMenu({ onChange, children, align = "start" }: Omit<MenuProps<boolean>, "value">) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align={align} sideOffset={6} className={cx(floatPanel, "w-52")}>
+          <DropdownMenu.Item className={item} onSelect={() => onChange(true)}>
+            Require mockup
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className={item} onSelect={() => onChange(false)}>
+            Don’t require mockup
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 export function UserMenu({
   users,
   value,
