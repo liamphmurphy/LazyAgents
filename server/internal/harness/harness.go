@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
@@ -271,10 +273,47 @@ func delegationSection(agentdef.Resolved) string {
 // UsageLimit reports provider exhaustion from an error, never ordinary tool output.
 func UsageLimit(message string) bool {
 	s := strings.ToLower(message)
-	for _, marker := range []string{"rate_limit", "usage_limit_reached", "insufficient_quota", "usage limit", "rate limit", "rate-limit", "quota exceeded", "exceeded your quota", "credit balance is too low", "out of extra usage", "you've hit your limit", "you have hit your limit"} {
+	for _, marker := range []string{"rate_limit", "usage_limit_reached", "insufficient_quota", "usage limit", "rate limit", "rate-limit", "quota exceeded", "exceeded your quota", "credit balance is too low", "out of extra usage", "you've hit your limit", "you have hit your limit", "hit your session limit"} {
 		if strings.Contains(s, marker) {
 			return true
 		}
 	}
 	return false
+}
+
+var limitResetRE = regexp.MustCompile(`(?i)(?:resets|try again at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s*\(([^)]+)\))?`)
+
+// LimitReset reads when a usage limit lifts from the CLI's message, e.g.
+// Claude's "resets 9:20pm (America/Los_Angeles)" or Codex's "try again at
+// 11:32 PM". It returns the next such clock time strictly after now; a zone
+// that is missing or unknown falls back to now's location.
+func LimitReset(msg string, now time.Time) (time.Time, bool) {
+	m := limitResetRE.FindStringSubmatch(msg)
+	if m == nil {
+		return time.Time{}, false
+	}
+	hour, _ := strconv.Atoi(m[1])
+	min := 0
+	if m[2] != "" {
+		min, _ = strconv.Atoi(m[2])
+	}
+	if hour < 1 || hour > 12 || min > 59 {
+		return time.Time{}, false
+	}
+	hour %= 12
+	if strings.EqualFold(m[3], "pm") {
+		hour += 12
+	}
+	loc := now.Location()
+	if m[4] != "" {
+		if l, err := time.LoadLocation(strings.TrimSpace(m[4])); err == nil {
+			loc = l
+		}
+	}
+	local := now.In(loc)
+	t := time.Date(local.Year(), local.Month(), local.Day(), hour, min, 0, 0, loc)
+	if !t.After(now) {
+		t = time.Date(local.Year(), local.Month(), local.Day()+1, hour, min, 0, 0, loc)
+	}
+	return t, true
 }

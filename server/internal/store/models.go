@@ -320,6 +320,14 @@ type Project struct {
 	Revision      int32
 }
 
+type ProviderLimit struct {
+	WorkspaceID uuid.UUID
+	Harness     string
+	Until       time.Time
+	Reason      string
+	UpdatedAt   time.Time
+}
+
 type Run struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID

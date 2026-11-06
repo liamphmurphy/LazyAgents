@@ -662,6 +662,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 	}
 
+	// Skip a harness another run already found exhausted instead of burning a failing turn on it.
+	handoff, err := r.avoidLimitedHarness(ctx, &c, turn)
+	if err != nil {
+		log.Warn("avoid limited harness", "err", err)
+	}
 	h, err := harness.For(c.spec.Harness)
 	if c.spec.Harness == agentdef.HarnessCodex || c.spec.Harness == agentdef.HarnessClaudeCode {
 		// Both CLIs report some usage for the whole session when resumed;
@@ -749,6 +754,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 	}
 	prompt := turn.InputMessage
+	if handoff != "" {
+		prompt = handoff
+	}
 	if turn.Trigger == "delegation" {
 		parked, err := r.parkDelegation(ctx, c.run, turn)
 		if err != nil {
@@ -850,13 +858,18 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	res, raw, code, waitErr := r.watch(ctx, c, proc, h.NewParser(c.spec.Model), sensitive, maxRuntime-used)
 	r.addTiming(c.run.ID, 0, time.Since(harnessStart), 0)
 	// Some CLI failures only reach stderr, without a JSON error event.
+	limitMsg := res.Error + " " + res.Final
 	if code != 0 && !res.UsageLimited {
 		for _, line := range strings.Split(string(raw), "\n") {
 			if strings.HasPrefix(line, "[stderr] ") && harness.UsageLimit(line) {
 				res.UsageLimited = true
+				limitMsg = strings.TrimPrefix(line, "[stderr] ")
 				break
 			}
 		}
+	}
+	if res.UsageLimited {
+		r.markProviderLimited(context.Background(), c, limitMsg)
 	}
 	if code != 0 && res.Error == "" && c.run.ParentRunID != nil {
 		// A session the CLI can't resume is reported on stderr only.

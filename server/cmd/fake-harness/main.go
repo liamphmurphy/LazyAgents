@@ -29,7 +29,7 @@
 // FAKE_HARNESS_SYNC=<dir> makes delegated runs wait until FAKE_HARNESS_SYNC_N (2) of
 // them are running at once; FAKE_HARNESS_HOLD=<file> writes <file>.started and waits
 // for <file> before working; FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
-// that lost the session.
+// that lost the session. The log line also names the harness (claude or codex).
 //
 // Resumed turns (--resume) finish the run with complete_run, unless
 // FAKE_HARNESS_RESUME=idle.
@@ -214,7 +214,7 @@ func main() {
 	}
 	if path := os.Getenv("FAKE_HARNESS_LOG"); path != "" {
 		wd, _ := os.Getwd()
-		line, _ := json.Marshal(map[string]any{"cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE")})
+		line, _ := json.Marshal(map[string]any{"cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE"), "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
 		if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			_, _ = f.Write(append(line, '\n'))
 			f.Close()
