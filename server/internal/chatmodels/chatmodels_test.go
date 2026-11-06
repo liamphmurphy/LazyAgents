@@ -52,12 +52,51 @@ func TestLocalCatalogWithoutAppSecretUsesDiscovery(t *testing.T) {
 		return []Model{{ID: harness + "-live", Default: true}}, nil
 	}}
 	list, err := catalog.List(context.Background(), nil, uuid.New())
-	if err != nil || calls != len(agentdef.Harnesses) {
+	if err != nil || calls != 2 {
 		t.Fatalf("calls=%d err=%v", calls, err)
 	}
 	for _, h := range list {
+		if h.Harness == agentdef.HarnessOpenCode {
+			// Never reached via local login: unattested isolation, no discovery.
+			if h.Available || len(h.Models) != 0 {
+				t.Fatalf("opencode %+v", h)
+			}
+			continue
+		}
 		if !h.Available || len(h.Models) != 1 {
 			t.Fatalf("unexpected harness: %+v", h)
 		}
+	}
+}
+
+func TestDiscoveryEndpointSeamIsOptIn(t *testing.T) {
+	t.Setenv(DiscoveryURLEnv, "")
+	if got := discoveryEndpoint("openai", "https://api.openai.com/v1/models"); got != "https://api.openai.com/v1/models" {
+		t.Fatalf("unset seam changed the endpoint: %s", got)
+	}
+	if got := discoveryEndpoint("anthropic", "https://api.anthropic.com/v1/models?limit=1000"); got != "https://api.anthropic.com/v1/models?limit=1000" {
+		t.Fatalf("unset seam changed the endpoint: %s", got)
+	}
+	t.Setenv(DiscoveryURLEnv, "http://127.0.0.1:9/")
+	if got := discoveryEndpoint("anthropic", "x"); got != "http://127.0.0.1:9/anthropic/v1/models?limit=1000" {
+		t.Fatal(got)
+	}
+	if got := discoveryEndpoint("openai", "x"); got != "http://127.0.0.1:9/openai/v1/models" {
+		t.Fatal(got)
+	}
+}
+
+func TestDiscoverUsesSeamEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/anthropic/v1/models" || r.Header.Get("x-api-key") != "dummy" {
+			t.Errorf("unexpected request %s", r.URL)
+		}
+		w.Write([]byte(`{"data":[{"id":"claude-sonnet-5-5"}],"has_more":false}`))
+	}))
+	defer srv.Close()
+	t.Setenv(DiscoveryURLEnv, srv.URL)
+	models, err := Discover(context.Background(), agentdef.HarnessClaudeCode, "dummy")
+	if err != nil || len(models) != 1 || models[0].ID != "claude-sonnet-5-5" {
+		t.Fatalf("models=%+v err=%v", models, err)
 	}
 }

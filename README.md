@@ -75,6 +75,7 @@ configured providers and can incur model costs.
 ## Explore further
 
 - **[Running and developing](docs/guide.md)** — setup, skills, planning, dependencies, and development commands.
+- **[OpenCode harness](docs/opencode.md)** — install, auth, isolation and limits.
 - **[Example skills](examples/skills/)** — starter playbooks for your agents.
 - **[Project plan](PLAN.md)** — architecture and implementation details.
 - **[Design](lazyagents-design/)** — the app's design references.

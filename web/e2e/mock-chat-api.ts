@@ -9,7 +9,7 @@ import type { Page, Route } from "@playwright/test";
  * A message starting with "slow:" keeps the turn running until it is cancelled.
  */
 
-type Harness = "claude-code" | "codex";
+type Harness = "claude-code" | "codex" | "opencode";
 type State = "idle" | "running" | "failed";
 type Chat = {
   id: string; project: string; title: string; harness: Harness; model: string; state: State;
@@ -30,9 +30,9 @@ const OTHER = { kind: "ticket", id: "44444444-4444-4444-8444-444444444444", titl
 const TARGETS: Array<{ title: string; path?: string; display_id?: string }> = [PLAN, REPORT, TICKET, OTHER];
 
 export type Posted = { chat: string; body: Record<string, unknown> };
-export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number };
+export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number };
 
-const catalog = (codexAvailable: boolean) => [
+const catalog = (codexAvailable: boolean, opencodeAvailable = true) => [
   {
     harness: "claude-code", label: "Claude Code", available: true,
     models: [
@@ -45,6 +45,14 @@ const catalog = (codexAvailable: boolean) => [
     ...(codexAvailable ? {} : { unavailable_reason: "No harness:openai secret" }),
     models: [{ id: "gpt-5-codex", label: "gpt-5-codex", default: true }],
   },
+  {
+    harness: "opencode", label: "OpenCode", available: opencodeAvailable,
+    ...(opencodeAvailable ? {} : { unavailable_reason: "OpenCode is not installed" }),
+    models: [
+      { id: "anthropic/claude-sonnet-4-5", label: "anthropic/claude-sonnet-4-5", default: true },
+      { id: "openai/gpt-5", label: "openai/gpt-5", default: false },
+    ],
+  },
 ];
 
 const err = (status: number, code: string, message: string, field?: string) => ({
@@ -54,6 +62,7 @@ const err = (status: number, code: string, message: string, field?: string) => (
 
 export function installChatApi(page: Page, opts: MockOptions = {}) {
   const codexAvailable = opts.codexAvailable ?? true;
+  const opencodeAvailable = opts.opencodeAvailable ?? true;
   const delay = opts.replyDelayMs ?? 300;
   const chats: Chat[] = [];
   const messages = new Map<string, Message[]>();
@@ -66,7 +75,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
   const now = () => new Date().toISOString();
   const label = (h: Harness, m: string) => {
-    const g = catalog(true).find((x) => x.harness === h)!;
+    const g = catalog(true, true).find((x) => x.harness === h)!;
     return `${g.label} · ${g.models.find((x) => x.id === m)?.label ?? m}`;
   };
   const add = (c: Chat, role: Message["role"], body: string, extra: Partial<Message> = {}) => {
@@ -150,7 +159,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const title = /name="title"\r\n\r\n([^\r]*)/.exec(raw)?.[1] ?? "";
       return json({ id: "66666666-6666-4666-8666-666666666666", type: "report", title }, 201);
     }
-    if (path === "/chat-models") return json(catalog(codexAvailable));
+    if (path === "/chat-models") return json(catalog(codexAvailable, opencodeAvailable));
 
     if (path === "/chats" && method === "GET") {
       const archived = url.searchParams.get("archived") === "true";
@@ -197,8 +206,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         if (c.state === "running") return fail(err(409, "conflict", "A turn is already running."));
         if (!text.trim()) return fail(err(422, "invalid", "Message is empty", "body"));
         const harness = (b.harness as Harness | undefined) ?? c.harness;
-        const model = (b.model as string | undefined) ?? (harness === c.harness ? c.model : catalog(true).find((g) => g.harness === harness)!.models[0].id);
-        const g = catalog(codexAvailable).find((x) => x.harness === harness);
+        const model = (b.model as string | undefined) ?? (harness === c.harness ? c.model : catalog(true, true).find((g) => g.harness === harness)!.models[0].id);
+        const g = catalog(codexAvailable, opencodeAvailable).find((x) => x.harness === harness);
         if (!g || !g.models.some((x) => x.id === model) || !g.available) {
           return fail(err(422, "invalid", "Unknown or unavailable harness/model", "model"));
         }

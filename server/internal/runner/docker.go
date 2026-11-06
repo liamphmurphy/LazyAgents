@@ -28,8 +28,14 @@ type Docker struct {
 	Socket  string // /var/run/docker.sock
 	Image   string // lazyagents/agent-base:latest
 	Network string // where api:8000 resolves; "" = default bridge
-	client  *http.Client
+	// OpenCodeIsolated attests that the image carries no OpenCode config
+	// beyond the generated per-run files (the container has no host HOME,
+	// XDG roots or system config). Off unless the operator sets it.
+	OpenCodeIsolated bool
+	client           *http.Client
 }
+
+func (d *Docker) OpenCodeConfigIsolated() bool { return d.OpenCodeIsolated }
 
 const (
 	dockerAPI     = "http://docker/v1.43"

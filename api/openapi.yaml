@@ -1993,7 +1993,7 @@ components:
       enum: [allowed, requires_approval, denied]
     Harness:
       type: string
-      enum: [claude-code, codex]
+      enum: [claude-code, codex, opencode]
     Budget:
       type: object
       properties:

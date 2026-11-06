@@ -69,3 +69,47 @@ jobs:
           sqlc-version: "1.31.1"
       - run: cd web && npm ci
       - run: make gen-check
+
+  # Real-stack OpenCode chat e2e (no API mocks). Fake CLIs stand in for
+  # opencode/claude/codex, so this is NOT real-provider evidence; see
+  # web/e2e-stack/README.md. The script starts SeaweedFS itself via docker.
+  e2e-stack:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: lazyagents
+          POSTGRES_PASSWORD: lazyagents
+          POSTGRES_DB: lazyagents
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lazyagents" --health-interval 2s --health-retries 30
+    env:
+      E2E_DATABASE_URL: postgres://lazyagents:lazyagents@localhost:5432/lazyagents?sslmode=disable
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - run: npm run e2e:stack
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-stack-playwright
+          path: |
+            web/playwright-report/
+            web/test-results/
+          if-no-files-found: ignore
