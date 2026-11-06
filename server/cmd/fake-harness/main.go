@@ -104,8 +104,15 @@ func result(isError bool, msg string) {
 		emit(map[string]any{"type": "turn.completed", "usage": map[string]any{"input_tokens": 1000 * count, "cached_input_tokens": 500 * count, "output_tokens": 200 * count}})
 		return
 	}
+	// Like the real CLI: tokens are this process's, total_cost_usd is the session's so far.
+	counts := map[string]int{}
+	raw, _ := os.ReadFile(".lazyagents/fake-claude-usage.json")
+	_ = json.Unmarshal(raw, &counts)
+	counts[session]++
+	raw, _ = json.Marshal(counts)
+	_ = os.WriteFile(".lazyagents/fake-claude-usage.json", raw, 0600)
 	emit(map[string]any{"type": "result", "subtype": "success", "is_error": isError, "result": msg, "num_turns": 3,
-		"total_cost_usd": 0.0125, "usage": map[string]any{"input_tokens": 1000, "output_tokens": 200, "cache_read_input_tokens": 500}})
+		"total_cost_usd": 0.0125 * float64(counts[session]), "usage": map[string]any{"input_tokens": 1000, "output_tokens": 200, "cache_read_input_tokens": 500}})
 }
 
 func newUUID() string {

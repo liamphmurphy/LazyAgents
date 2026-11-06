@@ -663,7 +663,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 
 	h, err := harness.For(c.spec.Harness)
-	if c.spec.Harness == agentdef.HarnessCodex {
+	if c.spec.Harness == agentdef.HarnessCodex || c.spec.Harness == agentdef.HarnessClaudeCode {
+		// Both CLIs report some usage for the whole session when resumed;
+		// the parser subtracts the previous turn's session totals.
 		baseline := harness.Usage{}
 		if c.run.HarnessSessionID != nil {
 			turns, err := q.ListTurns(ctx, c.run.ID)
@@ -684,13 +686,22 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 					break
 				}
 				// Older Codex turns stored cumulative usage without a session marker.
-				if usage.SessionID == "" && usage.CostSource != "harness" && usage.InputTokens > 0 {
+				if c.spec.Harness == agentdef.HarnessCodex && usage.SessionID == "" && usage.CostSource != "harness" && usage.InputTokens > 0 {
 					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionInputTokens: usage.InputTokens, SessionOutputTokens: usage.OutputTokens, SessionCachedTokens: usage.CachedTokens}
+					break
+				}
+				// Older Claude turns stored the session's total_cost_usd as the turn's cost.
+				if c.spec.Harness == agentdef.HarnessClaudeCode && usage.SessionID == "" && usage.CostSource == "harness" && usage.CostUSD > 0 {
+					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionCostUSD: usage.CostUSD}
 					break
 				}
 			}
 		}
-		h = harness.Codex{Prices: r.Cfg.ModelPrices, Baseline: baseline}
+		if c.spec.Harness == agentdef.HarnessCodex {
+			h = harness.Codex{Prices: r.Cfg.ModelPrices, Baseline: baseline}
+		} else {
+			h = harness.ClaudeCode{Baseline: baseline}
+		}
 	}
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
