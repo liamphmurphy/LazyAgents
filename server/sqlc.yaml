@@ -12,6 +12,7 @@ sql:
         emit_empty_slices: true
         rename:
           acceptance_criterium: Criterion
+          epic_criterium: EpicCriterion
         overrides:
           - db_type: uuid
             go_type: github.com/google/uuid.UUID
