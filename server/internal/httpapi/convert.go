@@ -52,7 +52,7 @@ func toPR(number *int32, state, url *string, add, del *int32) *api.PullRequest {
 	if number == nil {
 		return nil
 	}
-	pr := api.PullRequest{Number: int(*number), State: api.Open, Url: url}
+	pr := api.PullRequest{Number: int(*number), State: api.PullRequestStateOpen, Url: url}
 	if state != nil {
 		pr.State = api.PullRequestState(*state)
 	}
@@ -116,5 +116,5 @@ func (d actorDirectory) event(e store.ActivityEvent) api.ActivityEvent {
 }
 
 func toEpic(e store.Epic) api.Epic {
-	return api.Epic{Id: e.ID, ProjectId: e.ProjectID, Name: e.Name, Health: api.EpicHealth(e.Health), RequiresMockup: e.RequiresMockup}
+	return api.Epic{Id: e.ID, ProjectId: e.ProjectID, Name: e.Name, Health: api.EpicHealth(e.Health), RequiresMockup: e.RequiresMockup, Status: api.EpicStatusOpen}
 }

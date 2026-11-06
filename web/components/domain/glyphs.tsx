@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { cx } from "@/lib/cx";
 
-export type TicketStatus = "backlog" | "todo" | "in_progress" | "in_review" | "done";
+export type TicketStatus = "backlog" | "todo" | "in_progress" | "in_review" | "done" | "canceled";
 export type GlyphState = TicketStatus | "human" | "blocked";
 export type Priority = "none" | "low" | "medium" | "high" | "urgent";
 
@@ -11,6 +11,7 @@ export const STATUS_LABEL: Record<GlyphState, string> = {
   in_progress: "In progress",
   in_review: "In review",
   done: "Done",
+  canceled: "Canceled",
   human: "Needs human",
   blocked: "Blocked",
 };
@@ -44,6 +45,11 @@ export function StatusGlyph({
     in_progress: pie("--state-progress", 50, surface),
     in_review: pie("--state-review", 75, surface),
     done: { background: "var(--state-done)" },
+    // Struck-through ring: distinct by shape, not only color.
+    canceled: {
+      border: "1.5px solid var(--state-backlog)",
+      background: "linear-gradient(135deg, transparent 44%, var(--state-backlog) 44% 56%, transparent 56%)",
+    },
     human: { background: "var(--state-human)" },
     blocked: { background: "var(--state-blocked)" },
   };

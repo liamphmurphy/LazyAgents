@@ -69,8 +69,57 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change an epic. Omitted fields are untouched. */
+        /**
+         * Change an epic. Omitted fields are untouched.
+         * @description Setting `status: done` is gated: every acceptance criterion must be
+         *     checked and every ticket in the epic must be `done` or `canceled`.
+         *     Otherwise 409, with a message naming the open tickets and the
+         *     unchecked criterion positions. Moving back to `open` is always allowed.
+         */
         patch: operations["updateEpic"];
+        trace?: never;
+    };
+    "/epics/{id}/criteria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** The epic's final acceptance criteria, in order */
+        get: operations["listEpicCriteria"];
+        put?: never;
+        /** Append an acceptance criterion to an epic (409 when the epic is done) */
+        post: operations["createEpicCriterion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/epic-criteria/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an epic acceptance criterion (later positions move up; 409 when the epic is done) */
+        delete: operations["deleteEpicCriterion"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit or tick an epic acceptance criterion
+         * @description Unticking or editing a criterion of a done epic is 409 (reopen the epic first).
+         */
+        patch: operations["updateEpicCriterion"];
         trace?: never;
     };
     "/agent-overviews": {
@@ -243,7 +292,18 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change ticket fields. Omitted fields are untouched; null clears. */
+        /**
+         * Change ticket fields. Omitted fields are untouched; null clears.
+         * @description Revision-checked: when `revision` is sent it must equal the ticket's
+         *     current `revision`, otherwise 409 (`conflict`) and nothing changes;
+         *     refetch and retry. The board and the edit modal always send it;
+         *     callers that omit it get last-write-wins. Every applied change bumps
+         *     `revision` by one (including runner, agent and PR-sync changes);
+         *     criteria edits through `/criteria` don't.
+         *     422 (`invalid`, with `field`) on an unknown status or priority, an
+         *     `estimate_points` value outside the scale, or an epic from another
+         *     project. Setting `canceled` while the ticket has a live run is 409.
+         */
         patch: operations["updateTicket"];
         trace?: never;
     };
@@ -1096,6 +1156,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{key}/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                key: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Kanban board for a project, optionally one epic
+         * @description One column per status in workflow order (backlog, todo, in_progress,
+         *     in_review, done; canceled only when `include_canceled`). Cards are
+         *     ordered by priority (urgent first), then `sort_order`, then ticket
+         *     number; there's no manual ranking in v1. The done and canceled
+         *     columns hold the 50 most recently updated cards (`truncated` says
+         *     when more exist). "Blocked" is not a column: cards with
+         *     `unmet_dependencies > 0` show a badge.
+         */
+        get: operations["getProjectBoard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tickets/{key}/dependencies": {
         parameters: {
             query?: never;
@@ -1313,6 +1402,70 @@ export interface components {
             health: "on_track" | "at_risk" | "off_track";
             /** @description Tickets in this epic need a person-approved UI mockup */
             requires_mockup: boolean;
+            status: components["schemas"]["EpicStatus"];
+            /** @description Epic acceptance criteria */
+            criteria_total: number;
+            criteria_done: number;
+            /** @description Sum of estimate_points over the epic's tickets */
+            points_total: number;
+            /** @description Sum of estimate_points over its done tickets */
+            points_done: number;
+            /** @description Tickets in the epic */
+            tickets_total: number;
+            /** @description Tickets not done or canceled */
+            tickets_open: number;
+        };
+        /**
+         * @description done is gated: all criteria checked and every ticket done or canceled (409 otherwise)
+         * @enum {string}
+         */
+        EpicStatus: "open" | "done";
+        EpicCriterion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            epic_id: string;
+            /** @description 1-based; agents address criteria by this number */
+            position: number;
+            text: string;
+            done: boolean;
+            checked_by?: components["schemas"]["Actor"];
+            /** Format: date-time */
+            checked_at?: string;
+        };
+        /**
+         * @description Story points. The server accepts only the configured scale (v1:
+         *     Fibonacci 1, 2, 3, 5, 8, 13) and answers 422 with field
+         *     `estimate_points` for anything else; the schema bound is wider so the
+         *     scale can change without a contract change.
+         */
+        EstimatePoints: number;
+        Board: {
+            project: components["schemas"]["Project"];
+            epic?: components["schemas"]["BoardEpic"];
+            columns: components["schemas"]["BoardColumn"][];
+        };
+        BoardColumn: {
+            status: components["schemas"]["TicketStatus"];
+            cards: components["schemas"]["TicketSummary"][];
+            /** @description All tickets in the column */
+            count: number;
+            /** @description Sum of estimate_points in the column */
+            points: number;
+            truncated: boolean;
+        };
+        /** @description Set when the board is filtered to one epic */
+        BoardEpic: {
+            epic: components["schemas"]["Epic"];
+            objective?: string;
+            criteria: components["schemas"]["EpicCriterion"][];
+            /** @description What stops the epic from moving to done; both empty means it can */
+            done_blockers: {
+                /** @description Ticket keys not done or canceled */
+                open_tickets: string[];
+                /** @description Criterion positions */
+                unchecked_criteria: number[];
+            };
         };
         Label: {
             /** Format: uuid */
@@ -1334,8 +1487,11 @@ export interface components {
                 live_agents: number;
             };
         };
-        /** @enum {string} */
-        TicketStatus: "backlog" | "todo" | "in_progress" | "in_review" | "done";
+        /**
+         * @description canceled is set by people only; it is excluded from the active, backlog and agent_owned views, from dispatch and from epic point totals
+         * @enum {string}
+         */
+        TicketStatus: "backlog" | "todo" | "in_progress" | "in_review" | "done" | "canceled";
         /** @enum {string} */
         Priority: "none" | "low" | "medium" | "high" | "urgent";
         AgentRef: {
@@ -1383,9 +1539,11 @@ export interface components {
             /** Format: date */
             due_date?: string;
             pr?: components["schemas"]["PullRequest"];
+            /** @description Blockers not done yet; > 0 shows the blocked badge */
             unmet_dependencies: number;
             criteria_total: number;
             criteria_done: number;
+            estimate_points?: components["schemas"]["EstimatePoints"];
             /** Format: date-time */
             updated_at: string;
         };
@@ -1399,6 +1557,8 @@ export interface components {
             project: components["schemas"]["Project"];
             title: string;
             description_md: string;
+            /** @description Bumped on every field change; send it back in TicketPatch.revision */
+            revision: number;
             dependency_revision: number;
             blocked_by: components["schemas"]["TicketDependency"][];
             blocks: components["schemas"]["TicketDependency"][];
@@ -1414,7 +1574,14 @@ export interface components {
             run?: components["schemas"]["Run"];
             /** @description Pending approval requests on this ticket */
             approvals: components["schemas"]["Approval"][];
+            /** @description Legacy free-text sizing note (e.g. "L · ~6h"); kept as is, superseded by estimate_points */
             estimate?: string;
+            estimate_points?: components["schemas"]["EstimatePoints"];
+            /** @description Why the estimator chose the points (agents give one; people may leave it empty) */
+            estimate_rationale?: string;
+            estimated_by?: components["schemas"]["Actor"];
+            /** Format: date-time */
+            estimated_at?: string;
             /** Format: date */
             due_date?: string;
             branch?: string;
@@ -1477,12 +1644,15 @@ export interface components {
             reviewer_user_id?: string;
             label_ids?: string[];
             estimate?: string;
+            estimate_points?: components["schemas"]["EstimatePoints"];
             /** Format: date */
             due_date?: string;
             criteria?: string[];
             requires_mockup?: boolean;
         };
         TicketPatch: {
+            /** @description Expected current Ticket.revision; stale → 409. Not allowed in BulkUpdate.patch (422). */
+            revision?: number;
             title?: string;
             description_md?: string;
             status?: components["schemas"]["TicketStatus"];
@@ -1494,6 +1664,8 @@ export interface components {
             /** Format: uuid */
             reviewer_user_id?: string | null;
             estimate?: string | null;
+            /** @description Same scale as EstimatePoints; null clears. Records the person as estimated_by and clears the rationale. */
+            estimate_points?: number | null;
             /** Format: date */
             due_date?: string | null;
             label_ids?: string[];
@@ -2420,6 +2592,8 @@ export interface components {
             agent_id?: string;
             /** @description The ticket changes UI: a person must approve a mockup before implementation */
             requires_mockup?: boolean;
+            estimate_points?: components["schemas"]["EstimatePoints"];
+            estimate_rationale?: string;
         };
         PlanningInput: {
             project: string;
@@ -2734,6 +2908,7 @@ export interface operations {
                 "application/json": {
                     /** @description Every ticket in the epic needs a person-approved UI mockup before it can be finished */
                     requires_mockup?: boolean;
+                    status?: components["schemas"]["EpicStatus"];
                 };
             };
         };
@@ -2745,6 +2920,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Epic"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listEpicCriteria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Criteria */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        criteria: components["schemas"]["EpicCriterion"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createEpicCriterion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpicCriterion"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteEpicCriterion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateEpicCriterion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text?: string;
+                    done?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpicCriterion"];
                 };
             };
             default: components["responses"]["Error"];
@@ -4513,6 +4793,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getProjectBoard: {
+        parameters: {
+            query?: {
+                /** @description Only tickets in this epic; also fills `epic` */
+                epic?: string;
+                /** @description Agent handle */
+                assignee?: string;
+                include_canceled?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Project key */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The board */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Board"];
                 };
             };
             default: components["responses"]["Error"];

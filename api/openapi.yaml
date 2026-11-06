@@ -12,9 +12,14 @@ info:
 
     Realtime: `GET /events` (outside /api/v1) is an SSE stream of
     invalidation hints `{"type": "...", "ids": [...]}`; clients refetch.
-    Types include `ticket.updated`, `activity.created`, `approval.created`,
-    `run.updated`, and `chat.updated` (ids: the chat id) when a chat's
-    messages, state, title, archive flag or harness/model change.
+    Types include `ticket.updated` (ids: the changed ticket ids),
+    `epic.updated` (ids: the changed epic ids, sent when an epic, its
+    criteria or its tickets' status/estimate change), `activity.created`,
+    `approval.created`, `run.updated`, and `chat.updated` (ids: the chat id)
+    when a chat's messages, state, title, archive flag or harness/model change.
+
+    Board, estimates and epic criteria: see the wiki page
+    `Architecture/ADR - Kanban board, estimates and epic criteria`.
 servers:
   - url: /api/v1
 tags:
@@ -78,6 +83,11 @@ paths:
     patch:
       operationId: updateEpic
       summary: Change an epic. Omitted fields are untouched.
+      description: |
+        Setting `status: done` is gated: every acceptance criterion must be
+        checked and every ticket in the epic must be `done` or `canceled`.
+        Otherwise 409, with a message naming the open tickets and the
+        unchecked criterion positions. Moving back to `open` is always allowed.
       tags: [tickets]
       requestBody:
         required: true
@@ -89,12 +99,89 @@ paths:
                 requires_mockup:
                   type: boolean
                   description: Every ticket in the epic needs a person-approved UI mockup before it can be finished
+                status: { $ref: "#/components/schemas/EpicStatus" }
       responses:
         "200":
           description: The updated epic
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Epic" }
+        default: { $ref: "#/components/responses/Error" }
+  /epics/{id}/criteria:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listEpicCriteria
+      summary: The epic's final acceptance criteria, in order
+      tags: [tickets]
+      responses:
+        "200":
+          description: Criteria
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [criteria]
+                properties:
+                  criteria: { type: array, items: { $ref: "#/components/schemas/EpicCriterion" } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createEpicCriterion
+      summary: Append an acceptance criterion to an epic (409 when the epic is done)
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EpicCriterion" }
+        default: { $ref: "#/components/responses/Error" }
+  /epic-criteria/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateEpicCriterion
+      summary: Edit or tick an epic acceptance criterion
+      description: Unticking or editing a criterion of a done epic is 409 (reopen the epic first).
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string, minLength: 1, maxLength: 1000 }
+                done: { type: boolean }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EpicCriterion" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteEpicCriterion
+      summary: Remove an epic acceptance criterion (later positions move up; 409 when the epic is done)
+      tags: [tickets]
+      responses:
+        "204":
+          description: Deleted
         default: { $ref: "#/components/responses/Error" }
   /agent-overviews:
     get:
@@ -295,6 +382,16 @@ paths:
     patch:
       operationId: updateTicket
       summary: Change ticket fields. Omitted fields are untouched; null clears.
+      description: |
+        Revision-checked: when `revision` is sent it must equal the ticket's
+        current `revision`, otherwise 409 (`conflict`) and nothing changes;
+        refetch and retry. The board and the edit modal always send it;
+        callers that omit it get last-write-wins. Every applied change bumps
+        `revision` by one (including runner, agent and PR-sync changes);
+        criteria edits through `/criteria` don't.
+        422 (`invalid`, with `field`) on an unknown status or priority, an
+        `estimate_points` value outside the scale, or an epic from another
+        project. Setting `canceled` while the ticket has a live run is 409.
       tags: [tickets]
       requestBody:
         required: true
@@ -1403,6 +1500,32 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Project' }
         default: { $ref: '#/components/responses/Error' }
+  /projects/{key}/board:
+    parameters:
+      - { name: key, in: path, required: true, description: Project key, e.g. PAY, schema: { type: string } }
+    get:
+      operationId: getProjectBoard
+      summary: Kanban board for a project, optionally one epic
+      description: |
+        One column per status in workflow order (backlog, todo, in_progress,
+        in_review, done; canceled only when `include_canceled`). Cards are
+        ordered by priority (urgent first), then `sort_order`, then ticket
+        number; there's no manual ranking in v1. The done and canceled
+        columns hold the 50 most recently updated cards (`truncated` says
+        when more exist). "Blocked" is not a column: cards with
+        `unmet_dependencies > 0` show a badge.
+      tags: [tickets]
+      parameters:
+        - { name: epic, in: query, description: Only tickets in this epic; also fills `epic`, schema: { type: string, format: uuid } }
+        - { name: assignee, in: query, description: Agent handle, schema: { type: string } }
+        - { name: include_canceled, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "200":
+          description: The board
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        default: { $ref: "#/components/responses/Error" }
   /tickets/{key}/dependencies:
     parameters:
       - { name: key, in: path, required: true, schema: { type: string } }
@@ -1720,13 +1843,75 @@ components:
         status: { type: string, enum: [running, waiting, blocked, idle] }
     Epic:
       type: object
-      required: [id, project_id, name, health, requires_mockup]
+      required: [id, project_id, name, health, requires_mockup, status, criteria_total, criteria_done, points_total, points_done, tickets_total, tickets_open]
       properties:
         id: { type: string, format: uuid }
         project_id: { type: string, format: uuid }
         name: { type: string }
         health: { type: string, enum: [on_track, at_risk, off_track] }
         requires_mockup: { type: boolean, description: Tickets in this epic need a person-approved UI mockup }
+        status: { $ref: "#/components/schemas/EpicStatus" }
+        criteria_total: { type: integer, description: Epic acceptance criteria }
+        criteria_done: { type: integer }
+        points_total: { type: integer, description: Sum of estimate_points over the epic's tickets, canceled excluded }
+        points_done: { type: integer, description: Sum of estimate_points over its done tickets }
+        tickets_total: { type: integer, description: Tickets in the epic, canceled excluded }
+        tickets_open: { type: integer, description: Tickets not done or canceled }
+    EpicStatus:
+      type: string
+      enum: [open, done]
+      description: "done is gated: all criteria checked and every ticket done or canceled (409 otherwise)"
+    EpicCriterion:
+      type: object
+      required: [id, epic_id, position, text, done]
+      properties:
+        id: { type: string, format: uuid }
+        epic_id: { type: string, format: uuid }
+        position: { type: integer, description: 1-based; agents address criteria by this number }
+        text: { type: string }
+        done: { type: boolean }
+        checked_by: { $ref: "#/components/schemas/Actor" }
+        checked_at: { type: string, format: date-time }
+    EstimatePoints:
+      type: integer
+      minimum: 0
+      maximum: 100
+      description: |
+        Story points. The server accepts only the configured scale (v1:
+        Fibonacci 1, 2, 3, 5, 8, 13) and answers 422 with field
+        `estimate_points` for anything else; the schema bound is wider so the
+        scale can change without a contract change.
+    Board:
+      type: object
+      required: [project, columns]
+      properties:
+        project: { $ref: "#/components/schemas/Project" }
+        epic: { $ref: "#/components/schemas/BoardEpic" }
+        columns: { type: array, items: { $ref: "#/components/schemas/BoardColumn" } }
+    BoardColumn:
+      type: object
+      required: [status, cards, count, points, truncated]
+      properties:
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        cards: { type: array, items: { $ref: "#/components/schemas/TicketSummary" } }
+        count: { type: integer, description: All tickets in the column, including ones cut by truncation }
+        points: { type: integer, description: Sum of estimate_points in the column }
+        truncated: { type: boolean }
+    BoardEpic:
+      type: object
+      description: Set when the board is filtered to one epic
+      required: [epic, criteria, done_blockers]
+      properties:
+        epic: { $ref: "#/components/schemas/Epic" }
+        objective: { type: string }
+        criteria: { type: array, items: { $ref: "#/components/schemas/EpicCriterion" } }
+        done_blockers:
+          type: object
+          description: What stops the epic from moving to done; both empty means it can
+          required: [open_tickets, unchecked_criteria]
+          properties:
+            open_tickets: { type: array, items: { type: string }, description: Ticket keys not done or canceled }
+            unchecked_criteria: { type: array, items: { type: integer }, description: Criterion positions }
     Label:
       type: object
       required: [id, name, color]
@@ -1755,7 +1940,8 @@ components:
 
     TicketStatus:
       type: string
-      enum: [backlog, todo, in_progress, in_review, done]
+      enum: [backlog, todo, in_progress, in_review, done, canceled]
+      description: "canceled is set by people only; it is excluded from the active, backlog and agent_owned views, from dispatch and from epic point totals"
     Priority:
       type: string
       enum: [none, low, medium, high, urgent]
@@ -1808,9 +1994,10 @@ components:
         labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
         due_date: { type: string, format: date }
         pr: { $ref: "#/components/schemas/PullRequest" }
-        unmet_dependencies: { type: integer }
+        unmet_dependencies: { type: integer, description: "Blockers not done yet; > 0 shows the blocked badge" }
         criteria_total: { type: integer }
         criteria_done: { type: integer }
+        estimate_points: { $ref: "#/components/schemas/EstimatePoints" }
         updated_at: { type: string, format: date-time }
     TicketList:
       type: object
@@ -1821,13 +2008,14 @@ components:
           items: { $ref: "#/components/schemas/TicketSummary" }
     Ticket:
       type: object
-      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, blocked_by, blocks, dependency_revision, requires_mockup, mockup_gate, created_at, updated_at]
+      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, blocked_by, blocks, revision, dependency_revision, requires_mockup, mockup_gate, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         key: { type: string }
         project: { $ref: "#/components/schemas/Project" }
         title: { type: string }
         description_md: { type: string }
+        revision: { type: integer, description: Bumped on every field change; send it back in TicketPatch.revision }
         dependency_revision: { type: integer }
         blocked_by: { type: array, items: { $ref: '#/components/schemas/TicketDependency' } }
         blocks: { type: array, items: { $ref: '#/components/schemas/TicketDependency' } }
@@ -1845,7 +2033,11 @@ components:
           type: array
           description: Pending approval requests on this ticket
           items: { $ref: "#/components/schemas/Approval" }
-        estimate: { type: string }
+        estimate: { type: string, description: "Legacy free-text sizing note (e.g. \"L · ~6h\"); kept as is, superseded by estimate_points" }
+        estimate_points: { $ref: "#/components/schemas/EstimatePoints" }
+        estimate_rationale: { type: string, description: Why the estimator chose the points (agents give one; people may leave it empty) }
+        estimated_by: { $ref: "#/components/schemas/Actor" }
+        estimated_at: { type: string, format: date-time }
         due_date: { type: string, format: date }
         branch: { type: string }
         pr: { $ref: "#/components/schemas/PullRequest" }
@@ -1909,12 +2101,16 @@ components:
         reviewer_user_id: { type: string, format: uuid }
         label_ids: { type: array, items: { type: string, format: uuid } }
         estimate: { type: string }
+        estimate_points: { $ref: "#/components/schemas/EstimatePoints" }
         due_date: { type: string, format: date }
         criteria: { type: array, items: { type: string } }
         requires_mockup: { type: boolean }
     TicketPatch:
       type: object
       properties:
+        revision:
+          type: integer
+          description: "Expected current Ticket.revision; stale → 409. Not allowed in BulkUpdate.patch (422)."
         title: { type: string, minLength: 1, maxLength: 300 }
         description_md: { type: string }
         status: { $ref: "#/components/schemas/TicketStatus" }
@@ -1923,6 +2119,12 @@ components:
         assignee_agent_id: { type: string, format: uuid, nullable: true }
         reviewer_user_id: { type: string, format: uuid, nullable: true }
         estimate: { type: string, nullable: true }
+        estimate_points:
+          type: integer
+          minimum: 0
+          maximum: 100
+          nullable: true
+          description: "Same scale as EstimatePoints; null clears. Records the person as estimated_by and clears the rationale."
         due_date: { type: string, format: date, nullable: true }
         label_ids: { type: array, items: { type: string, format: uuid } }
         requires_mockup: { type: boolean }
@@ -2865,6 +3067,8 @@ components:
           items: { type: string }
         agent_id: { type: string, format: uuid }
         requires_mockup: { type: boolean, description: "The ticket changes UI: a person must approve a mockup before implementation" }
+        estimate_points: { $ref: "#/components/schemas/EstimatePoints" }
+        estimate_rationale: { type: string, maxLength: 2000 }
     PlanningInput:
       type: object
       required: [project, agent_id, goal]
