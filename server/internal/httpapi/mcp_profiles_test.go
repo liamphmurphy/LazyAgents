@@ -1,0 +1,159 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/liamphmurphy/lazyagents/server/internal/agentapi"
+	"github.com/liamphmurphy/lazyagents/server/internal/agents"
+	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/runs"
+	"github.com/liamphmurphy/lazyagents/server/internal/seed"
+	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
+	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
+)
+
+// Each caller kind is served its own tool set and instructions.
+func TestMCPProfiles(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	arts := &artifacts.Service{Pool: pool}
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true, Artifacts: arts}); err != nil {
+		t.Fatal(err)
+	}
+	q := store.New(pool)
+	me, _ := q.GetLocalUser(ctx)
+	ws := me.WorkspaceID
+	atlas, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "atlas"})
+	tr := &tracker.Service{Pool: pool}
+	srv := &Server{
+		Version: "test", Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Agents: &agents.Service{Pool: pool},
+		Log:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts},
+		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr},
+	}
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	ticket, err := tr.Create(ctx, ws, tracker.UserActor(me.ID), tracker.NewTicket{ProjectKey: "PAY", Title: "Profiles"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mkRun := func(ticketID, parent *uuid.UUID, purpose string) string {
+		t.Helper()
+		run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, TicketID: ticketID, AgentID: atlas.ID, Mode: "managed", State: "running", ResolvedSpec: json.RawMessage(`{}`), Harness: "claude", Model: "test", ParentRunID: parent, Purpose: purpose})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tok, _, err := agents.IssueToken(ctx, q, atlas.ID, "run", "profiles", &run.ID, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+	lead, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, TicketID: &ticket.ID, AgentID: atlas.ID, Mode: "managed", State: "running", ResolvedSpec: json.RawMessage(`{}`), Harness: "claude", Model: "test", Purpose: "ticket"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	leadTok, _, _ := agents.IssueToken(ctx, q, atlas.ID, "run", "lead", &lead.ID, nil, nil)
+	unmanaged, _, _ := agents.IssueToken(ctx, q, atlas.ID, "unmanaged", "profiles", nil, nil, nil)
+
+	var all []string
+	for _, tl := range agentapi.Tools {
+		all = append(all, tl.Name)
+	}
+	without := func(hide ...string) []string {
+		return slices.DeleteFunc(slices.Clone(all), func(n string) bool { return slices.Contains(hide, n) })
+	}
+	subTools := []string{"get_ticket", "read_artifact", "create_artifact", "comment", "request_approval", "wait_for_approval", "run_gated", "await_human", "search_knowledge", "find_pattern", "propose_pattern", "list_proposed_patterns", "read_page", "write_note", "get_backlinks", "complete_run"}
+	chatTools := []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics"}
+	planTools := []string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}
+
+	connect := func(tok string) *mcp.ClientSession {
+		t.Helper()
+		client := mcp.NewClient(&mcp.Implementation{Name: "test-agent", Version: "1"}, nil)
+		sess, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+			Endpoint: ts.URL + "/mcp", HTTPClient: &http.Client{Transport: bearer{tok, http.DefaultTransport}}, DisableStandaloneSSE: true,
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = sess.Close() })
+		return sess
+	}
+	names := func(sess *mcp.ClientSession) []string {
+		t.Helper()
+		res, err := sess.ListTools(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, tl := range res.Tools {
+			out = append(out, tl.Name)
+		}
+		slices.Sort(out)
+		return out
+	}
+	check := func(label string, sess *mcp.ClientSession, want []string) {
+		t.Helper()
+		want = slices.Sorted(slices.Values(want))
+		if got := names(sess); !slices.Equal(got, want) {
+			t.Errorf("%s tools = %v, want %v", label, got, want)
+		}
+	}
+
+	sub := connect(mkRun(&ticket.ID, &lead.ID, "ticket"))
+	leadSess := connect(leadTok)
+	check("subagent", sub, subTools)
+	check("lead", leadSess, without("report_usage", "next_ticket"))
+	check("chat", connect(mkRun(nil, nil, "chat")), chatTools)
+	check("planning", connect(mkRun(nil, nil, "planning")), planTools)
+	check("unmanaged", connect(unmanaged), all)
+
+	subIns, leadIns := sub.InitializeResult().Instructions, leadSess.InitializeResult().Instructions
+	if subIns == leadIns || strings.Contains(subIns, "claim_ticket, then") || !strings.Contains(leadIns, "claim_ticket, then") {
+		t.Errorf("instructions not per profile:\nsub: %s\nlead: %s", subIns, leadIns)
+	}
+
+	// The profile check refuses hidden tools by name, and leaves allowed ones alone.
+	for _, name := range []string{"post_plan", "claim_ticket"} {
+		res, err := sub.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: map[string]any{}})
+		if err == nil && !res.IsError {
+			t.Errorf("delegated run called %s without error", name)
+		}
+	}
+	callRaw := func(tok, name string, args any) (int, string) {
+		raw, _ := json.Marshal(args)
+		req, _ := http.NewRequest("POST", ts.URL+"/api/v1/agent/tools/"+name, strings.NewReader(string(raw)))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(b)
+	}
+	subTok := mkRun(&ticket.ID, &lead.ID, "ticket")
+	if code, body := callRaw(subTok, "post_plan", map[string]any{}); code != 409 || !strings.Contains(body, "isn't available to delegated runs") {
+		t.Errorf("post_plan = %d %s", code, body)
+	}
+	if code, body := callRaw(subTok, "get_ticket", map[string]any{"ticket": ticket.Key}); code != 200 {
+		t.Errorf("get_ticket = %d %s", code, body)
+	}
+	if code, body := callRaw(subTok, "complete_run", map[string]any{"status": "done", "summary": "ok"}); strings.Contains(body, "isn't available") {
+		t.Errorf("complete_run blocked by profile: %d %s", code, body)
+	}
+}

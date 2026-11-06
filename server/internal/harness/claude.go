@@ -10,7 +10,12 @@ import (
 // ClaudeCode runs `claude -p --output-format stream-json` (checked against
 // Claude Code 2.1.316). Instructions come from AGENTS.md, MCP from a
 // generated --mcp-config, tool rules from scopes.
-type ClaudeCode struct{}
+// ClaudeCode runs the claude CLI. Baseline is the previous turn's usage in
+// the same session: a resumed session reports total_cost_usd for the whole
+// session, so the turn's cost is the difference.
+type ClaudeCode struct {
+	Baseline Usage
+}
 
 func (ClaudeCode) Name() string { return agentdef.HarnessClaudeCode }
 
@@ -103,11 +108,14 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}, nil
 }
 
-func (ClaudeCode) NewParser(string) Parser { return &claudeParser{tools: map[string]string{}} }
+func (c ClaudeCode) NewParser(string) Parser {
+	return &claudeParser{tools: map[string]string{}, baseline: c.Baseline}
+}
 
 type claudeParser struct {
-	res   Result
-	tools map[string]string // tool_use id → name
+	res      Result
+	tools    map[string]string // tool_use id → name
+	baseline Usage
 }
 
 type claudeLine struct {
@@ -226,12 +234,21 @@ func (p *claudeParser) Line(b []byte) []Event {
 			p.res.Usage.OutputTokens = l.Usage.OutputTokens
 		}
 		p.res.Usage.CostSource = "unknown"
+		var cost any
 		if l.TotalCost != nil {
-			p.res.Usage.CostUSD, p.res.Usage.CostSource = *l.TotalCost, "harness"
+			// Token counts are per process, but total_cost_usd covers the
+			// whole session, earlier resumed turns included.
+			base := p.baseline.SessionCostUSD
+			if p.baseline.SessionID != p.res.SessionID || *l.TotalCost < base {
+				base = 0
+			}
+			p.res.Usage.CostUSD, p.res.Usage.CostSource = *l.TotalCost-base, "harness"
+			p.res.Usage.SessionID, p.res.Usage.SessionCostUSD = p.res.SessionID, *l.TotalCost
+			cost = p.res.Usage.CostUSD
 		}
 		out := []Event{{"usage", map[string]any{
 			"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens, "cached_tokens": p.res.Usage.CachedTokens,
-			"cost_usd": l.TotalCost, "cost_source": p.res.Usage.CostSource, "cost_known": l.TotalCost != nil, "num_turns": l.NumTurns, "duration_ms": l.DurationMS,
+			"cost_usd": cost, "cost_source": p.res.Usage.CostSource, "cost_known": l.TotalCost != nil, "num_turns": l.NumTurns, "duration_ms": l.DurationMS,
 		}}}
 		for _, d := range l.Denials {
 			var den struct {

@@ -131,7 +131,8 @@ func TestPlanningWorkflow(t *testing.T) {
 	}
 	defer session.Close()
 	denied, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "comment", Arguments: map[string]any{"ticket": "PAY-214", "body": "A planner must not post this"}})
-	if err != nil || !denied.IsError {
+	// The planning server doesn't register comment at all, so the SDK answers "unknown tool" as a protocol error.
+	if err == nil && !denied.IsError {
 		t.Fatalf("MCP planning mutation allowed: %+v, %v", denied, err)
 	}
 	proposals := []runs.Proposal{{Title: "Build reconciliation", Description: "Implement the core", Criteria: []string{"Reconciles a ledger"}, AgentID: &a.ID}, {Title: "Test reconciliation", Description: "Cover edge cases", Criteria: []string{"Duplicate input is safe"}}}
