@@ -159,3 +159,10 @@ which are kept for the unverified success/tool/quota/resume shapes.
 - Computed cost: operator prices from `RUNNER_MODEL_PRICES` keyed by the exact
   model id (e.g. `openai/gpt-5#high`) are applied to the assumed token fields; the
   accounting units are unverified.
+
+## LAZYAGENTS-25 requirements matrix
+
+Every inventory surface and accepted ADR capability is mapped to its implementation,
+named tests and an honest status (fake-CLI vs real) in
+[`verification/LAZYAGENTS-25-requirements-matrix.md`](../../../verification/LAZYAGENTS-25-requirements-matrix.md).
+Items under "Not verified" above remain UNVERIFIED there.

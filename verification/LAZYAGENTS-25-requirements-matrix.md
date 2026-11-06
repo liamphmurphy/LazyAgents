@@ -1,0 +1,122 @@
+# LAZYAGENTS-25 OpenCode requirements matrix
+
+Documentation only. Compared against the working tree of the stacked branch (not
+origin/main). No real `claude`, `codex` or `opencode` run and no paid model call
+produced any evidence below.
+
+Evidence types: **fake-CLI** (Go test with `server/cmd/fake-harness`), **unit**,
+**real-stack e2e with fake CLI** (`npm run e2e:stack`, fake binaries), **real CLI
+error capture** (two credential-free 2.2.1 error envelopes), **static**, **docs**.
+Plain Playwright specs in `web/e2e/` run against mocked APIs and count as unit-level UI
+evidence.
+
+Status: VERIFIED (fake) = proven only against the fake CLI or synthetic fixtures;
+VERIFIED (real) = proven against real OpenCode 2.2.1; UNVERIFIED = needs a real
+provider call or deployment, see
+[verification.md "Not verified"](../docs/contracts/opencode2/verification.md#not-verified-needs-a-paid-model-call-or-a-real-deployment);
+UNMET = known requirement not implemented.
+
+Paths below are relative to the repo root. `S/` = `server/`, `W/` = `web/`.
+`S/internal/harness/testdata/opencode-*.jsonl` other than `opencode-real-*` are SYNTHETIC.
+
+## A. Surfaces in docs/contracts/opencode2/inventory.md
+
+| Requirement | Implementation | Evidence | Evidence type | Status |
+| --- | --- | --- | --- | --- |
+| 1. Definition, override and fallback validation (`opencode` ID, provider-qualified model, options, fallback) | `S/internal/agentdef/{spec,enforce,opencode}.go`, `S/internal/agents/service.go` | `TestOpenCodeSelectionValidation`, `TestOpenCodeFallbackValidation`, `TestOpenCodeOverrideAndResolved`, `TestOpenCodeCapabilitiesAreConservative` in `S/internal/agentdef/opencode_test.go`; `TestOpenCodeInvalidSelections` in `S/internal/runner/opencode_test.go`; `TestPlanningOpenCodeOptionsPassValidation` in `S/internal/runs/planning_fallback_test.go` | unit, fake-CLI | VERIFIED (fake) |
+| 2. API source and generated consumers (enum `claude-code,codex,opencode`) | `api/openapi.yaml`, `S/internal/api/api.gen.go`, `W/lib/api/schema.d.ts` | `make gen-check` result recorded in `docs/contracts/opencode2/verification.md` (LAZYAGENTS-20 section); not re-run here | static | UNVERIFIED (generation recorded by earlier tickets; re-run belongs in Regression results) |
+| 3. Agent catalog and resolved UI metadata (accurate capabilities) | `S/internal/httpapi/agents.go`, `S/internal/agentdef/enforce.go` | `TestOpenCodeCapabilitiesAreConservative`, `TestOpenCodeOverrideAndResolved` in `S/internal/agentdef/opencode_test.go` | unit | VERIFIED (fake) |
+| 4. Agent defaults and editable definitions (no new default; third harness in editor, fallback not two-way) | `W/app/(app)/agents/[handle]/definition-editor.tsx` | Playwright in `W/e2e/agent-editor.spec.ts`: `editor: choose OpenCode by keyboard, save, reload keeps it`, `editor: fallback offers OpenCode and its default harness is not hardcoded`, `editor: codex suggests codex models`, `editor: 422 shows the error and keeps the draft` | unit (mocked API) | VERIFIED (fake) |
+| 5. Adapter boundary (Invocation/Parser, policy bridge or rejection) | `S/internal/harness/{harness,opencode,opencode_parser}.go` | `TestOpenCodeInvocationFreshAndResumed`, `TestOpenCodeModelAndCredentialMapping`, `TestOpenCodeFilesAndSecrets`, `TestOpenCodeRegisteredFailClosed`, `TestOpenCodeTurn` in `S/internal/harness/opencode_test.go` | unit | VERIFIED (fake) |
+| 6. Dispatch and frozen specs (validate before setup; preserve frozen spec and fallback) | `S/internal/httpapi/dispatch.go`, `S/internal/runner/{runner,fallback}.go` | `TestOpenCodeFrozenSnapshot`, `TestOpenCodeFallbackAttribution`, `TestOpenCodeFallbackTargetRejected` in `S/internal/runner/opencode_test.go` | fake-CLI | VERIFIED (fake) |
+| 7. Backends and binary config (binary mapping, OnlyBins, version pin, local is not isolation) | `S/internal/runner/{backend,docker}.go`, `S/internal/config/config.go`, `S/cmd/lazyagents/main.go` | `TestLocalOpenCodeEnvironmentIsAllowlisted`, `TestOpenCodeMissingOrWrongBinary`, `TestOpenCodePreflightTimeout` in `S/internal/runner/opencode_test.go` | fake-CLI | VERIFIED (fake) |
+| 8. Image and lifecycle wrapper (pinned package, cwd/instructions, descendants terminated) | `deploy/agent-base/Dockerfile`, `S/internal/runner/prepare.go` | Pin: `@opencode/cli@2.2.1` in Dockerfile (static). Descendants: `TestOpenCodeCancelKillsProcessGroup` in `S/internal/harness/opencode_cancel_test.go`. No test builds or runs the image. | static, unit | UNVERIFIED (real Docker image run; verification.md "Not verified") |
+| 9. Credential injection (provider-scoped, no other keys, no missing-map fallthrough) | `S/internal/runner/prepare.go`, `S/internal/runner/fallback.go`, `S/internal/harness/opencode.go`, `S/internal/httpapi/credentials.go` | `TestHarnessKeyMapping`, `TestOpenCodeMissingAuth` in `S/internal/runner/opencode_test.go`; `TestOpenCodeModelAndCredentialMapping`, `TestOpenCodeRedactsSecretsInErrors` in `S/internal/harness/opencode_test.go`; `TestOpenCodeTicketRunWithResume` (host keys must not leak) | fake-CLI, unit | VERIFIED (fake) |
+| 10. Model catalog (live discovery, provider-qualified, bounded, sanitized reason) | `S/internal/chatmodels/{chatmodels,discovery}.go` | `TestLiveDiscovery`, `TestDiscoveryFailureDoesNotExposeProviderBody`, `TestLocalCatalogWithoutAppSecretUsesDiscovery`, `TestDiscoveryEndpointSeamIsOptIn`, `TestDiscoverUsesSeamEndpoint` in `S/internal/chatmodels/chatmodels_test.go`; `TestChatModelsOpenCodeAvailability` in `S/internal/httpapi/chats_test.go`. Discovery against real providers not run. | unit, fake-CLI | VERIFIED (fake) |
+| 11. Planning (PlanningSpec, no setup/repo/external servers, readonly fallbacks, propose_tickets) | `S/internal/runs/planning.go`, `S/internal/runner/{runner,fallback}.go` | `TestOpenCodePlanningRunWithResume` in `S/internal/runner/opencode_test.go`; `TestPlanningFallbacksStayReadOnly`, `TestPlanningOpenCodeOptionsPassValidation` in `S/internal/runs/planning_fallback_test.go` | fake-CLI, unit | VERIFIED (fake) |
+| 12. Ticket and delegation (parent ownership, frozen resolution, delegated run does not claim) | `S/internal/runs/{service,delegation}.go`, `S/internal/harness/harness.go`, `S/internal/runner/runner.go` | Ticket: `TestOpenCodeTicketRunWithResume`, `TestOpenCodeFrozenSnapshot`. Delegation: no OpenCode-specific test found; `TestDelegationToSubagents` in `S/internal/runs/delegation_test.go` is harness-generic (not verified to use `opencode`). | fake-CLI | VERIFIED (fake) for tickets; UNVERIFIED for OpenCode delegation (see C) |
+| 13. Chat segment, resume and handoff (segment per harness, same-harness model change, bounded handoff, one resume retry) | `S/internal/runs/{chat,handoff}.go`, `S/internal/runner/{chat,handoff,runner}.go`, `S/docs/chat-switching.md` | `TestOpenCodeChatTurnsResume`, `TestOpenCodeChatHarnessSwitches`, `TestOpenCodeChatModelChangeResumesSession` in `S/internal/runner/chat_opencode_test.go`; Playwright `OpenCode: pick model, reply, change model, switch harness, reload keeps both segments` in `W/e2e-stack/opencode-chat.spec.ts`. Missing-session retry is not covered for OpenCode (CLI silently recreates sessions). | fake-CLI, real-stack e2e with fake CLI | VERIFIED (fake) except lost-session retry (UNVERIFIED, see C) |
+| 14. MCP authorization (per-run purpose/project authorization, nine-tool chat policy) | `S/internal/agentapi/{transport,chat,tools}.go`, `S/internal/runs/approvals.go` | `TestChatRunToolAuthorization` in `S/internal/httpapi/chat_tools_test.go` (server side, harness-independent); `TestOpenCodeChatReadsThroughChatToken` in `S/internal/runner/chat_opencode_test.go` | fake-CLI, unit | VERIFIED (fake) for server enforcement; rendered OpenCode policy for all nine tools UNVERIFIED (see C) |
+| 15. Scopes and policy endpoint (fail closed, no portable hook assumed) | `S/internal/agentdef/enforce.go`, `S/internal/harness/{opencode,tool_hook}.go` | `TestOpenCodeTicketModeRejectedWithoutIsolatedConfig`, `TestOpenCodeReadonlyPolicyOrRejection`, `TestOpenCodeTicketScopes`, `TestOpenCodeRejectsUnsupportedOptionsAndPolicy` in `S/internal/harness/opencode_test.go` (generated-config inspection, not a real CLI) | unit, static | VERIFIED (fake); effective denial UNVERIFIED |
+| 16. Usage and pricing (unknown/partial, deltas, dedup, no unknown-as-free) | `S/internal/harness/{harness,opencode_parser}.go`, `S/internal/config/config.go`, `S/internal/runner/{runner,chat}.go` | `TestOpenCodeTurn`, `TestOpenCodeExplicitZeroCost`, `TestOpenCodeComputedAndUnknownCost` in `S/internal/harness/opencode_test.go`; `TestOpenCodeComputedCost` in `S/internal/runner/opencode_test.go`; Playwright `opencode run shows its harness and model; usage without cost source is unknown` in `W/e2e/run-log.spec.ts` | unit, fake-CLI | VERIFIED (fake); real token units and cost semantics UNVERIFIED |
+| 17. Persistence (no migration) | `S/migrations`, `S/internal/store` (unchanged) | `git diff main --stat` shows no migration file; `TestOpenCodeChatModelChangeResumesSession` and `TestOpenCodeChatHarnessSwitches` persist harness/model/session | static, fake-CLI | VERIFIED (fake) |
+| 18. UI chat and activity (live catalog labels, provider IDs, switching warning, cancellation, unknown cost) | `W/app/(app)/chat/_components/*`, `W/components/domain/start-chat.tsx`, `W/app/(app)/runs/[id]/run-log.tsx`, `W/app/(app)/settings/secrets-card.tsx` | `W/e2e/chat.spec.ts`: `OpenCode model is chosen with the keyboard, posted, and survives reload`, `unavailable OpenCode shows its reason and can't be selected`, `a rejected OpenCode post shows the error and keeps the selection`; `W/e2e-stack/opencode-chat.spec.ts`: `OpenCode: cancel a running turn, then repost and get a reply`; `W/e2e/run-log.spec.ts` title in row 16 | unit (mocked API), real-stack e2e with fake CLI | VERIFIED (fake) |
+| 19. Manual onboarding and docs | `docs/opencode.md`, `docs/guide.md`, `README.md`, `web/e2e-stack/README.md` | Files exist and cross-link (`README.md` line 78, `docs/guide.md` lines 27-47). Hand-written, no doc test. | docs | VERIFIED (fake) |
+| 20. Fixtures and verification (captured CLI envelopes) | `S/internal/harness/testdata/opencode-real-{auth-error,no-route}.jsonl` (real); `opencode-{turn,zero-cost,tool-error,quota-error,auth-error,malformed,truncated}.jsonl` (synthetic) | `TestOpenCodeRealErrorEnvelopes`, `TestOpenCodeFailuresNeverFabricateSuccess`, `TestOpenCodeOversizedLineFails` in `S/internal/harness/opencode_test.go` | real CLI error capture (2 errors), unit | VERIFIED (real) for `provider.no-route` and `provider.auth` only; success/tool/resume/quota/cancel shapes UNVERIFIED |
+| 21. Generation gate (gen-check, CI) | `Makefile`, `.github/workflows/ci.yml` | `make gen-check` (to be recorded in Regression results) | static | UNVERIFIED (not run by this matrix) |
+
+## B. Accepted capabilities in ADR.md / ADR-020
+
+| Requirement | Implementation | Evidence | Evidence type | Status |
+| --- | --- | --- | --- | --- |
+| Pinned 2.2.1 version preflight (missing, wrong, hung binary) | `S/internal/runner/runner.go`, `S/internal/runner/chat.go`, `docs/opencode.md` | `TestOpenCodeMissingOrWrongBinary`, `TestOpenCodePreflightTimeout` in `S/internal/runner/opencode_test.go`; `TestOpenCodeChatStartupFailures` in `S/internal/runner/chat_opencode_test.go` | fake-CLI | VERIFIED (fake) |
+| Isolation attestation fails closed (`RUNNER_OPENCODE_ISOLATED`) | `S/internal/runner/{backend,docker,runner}.go`, `S/internal/config/config.go`, `S/internal/chatmodels/chatmodels.go` | `TestOpenCodeFailClosedWithoutIsolation`, `TestOpenCodeFallbackTargetRejected` in `S/internal/runner/opencode_test.go`; `TestOpenCodeTicketModeRejectedWithoutIsolatedConfig`, `TestOpenCodeRegisteredFailClosed` in `S/internal/harness/opencode_test.go`; `TestChatModelsOpenCodeAvailability` in `S/internal/httpapi/chats_test.go`. The attestation itself is an operator claim and is not checked. | fake-CLI, unit | VERIFIED (fake) |
+| Config-layer isolation actually holds (ambient/system/repo config cannot override policy) | `docs/contracts/opencode2/policy-evidence.md` | Probes with garbage config changed nothing before model routing; needs a model call | real CLI error capture (inconclusive) | UNVERIFIED |
+| Provider-scoped credential mapping (anthropic and openai only, no cross-key) | `S/internal/harness/opencode.go` (`OpenCodeCredentialEnv`), `S/internal/runner/prepare.go` | `TestHarnessKeyMapping`, `TestOpenCodeMissingAuth` (subtests `no secret`, `only another provider's key exists`) in `S/internal/runner/opencode_test.go`; `TestOpenCodeModelAndCredentialMapping` in `S/internal/harness/opencode_test.go`; `TestOpenCodeChatStartupFailures` | fake-CLI, unit | VERIFIED (fake) |
+| Provider-qualified models (`provider/model#variant`, no aliasing) | `S/internal/agentdef/opencode.go`, `S/internal/harness/opencode.go` | `TestOpenCodeSelectionValidation` in `S/internal/agentdef/opencode_test.go`; `TestOpenCodeInvalidSelections`, `TestOpenCodeFrozenSnapshot` in `S/internal/runner/opencode_test.go` | unit, fake-CLI | VERIFIED (fake) |
+| Ticket runs (fresh and resumed) | `S/internal/runner/runner.go`, `S/internal/harness/opencode.go` | `TestOpenCodeTicketRunWithResume`, `TestOpenCodeProviderFailure` in `S/internal/runner/opencode_test.go` | fake-CLI | VERIFIED (fake); real success wire shape UNVERIFIED |
+| Planning runs and `propose_tickets` | `S/internal/runs/planning.go`, `S/internal/runner/runner.go` | `TestOpenCodePlanningRunWithResume` in `S/internal/runner/opencode_test.go` | fake-CLI | VERIFIED (fake) |
+| Delegation (parent ownership, no claim in delegated run, OpenCode as parent or child) | `S/internal/runs/delegation.go` | No OpenCode-specific delegation test found by grep of `*opencode*_test.go`, `delegation_test.go`, `runs_test.go` | none | UNVERIFIED |
+| Chat selection (catalog, 422 on bad selection, availability reason) | `S/internal/chatmodels/chatmodels.go`, `S/internal/runs/chat.go` | `TestChatSelectionOpenCode`, `TestChatModelsOpenCodeAvailability`, `TestChatModelsUnavailableWithoutKey` in `S/internal/httpapi/chats_test.go` | fake-CLI | VERIFIED (fake) |
+| Same-harness model change, including cross-provider (session kept, only new key injected) | `S/internal/runner/chat.go` | `TestOpenCodeChatModelChangeResumesSession` (subtests `same provider`, `cross provider`) in `S/internal/runner/chat_opencode_test.go`; Playwright `OpenCode: pick model, reply, change model, switch harness, reload keeps both segments` in `W/e2e-stack/opencode-chat.spec.ts`. Real cross-provider resume not run. | fake-CLI, real-stack e2e with fake CLI | VERIFIED (fake); real resume UNVERIFIED |
+| Harness switch with bounded handoff (to and from OpenCode, new segment, no stale session) | `S/internal/runs/{chat,handoff}.go`, `S/internal/runner/handoff.go` | `TestOpenCodeChatHarnessSwitches` in `S/internal/runner/chat_opencode_test.go`; same Playwright title as above | fake-CLI, real-stack e2e with fake CLI | VERIFIED (fake) |
+| Resume and session ownership (`--session` only with run's recorded id, never `--continue`) | `S/internal/harness/opencode.go`, `S/internal/runner/runner.go` | `TestOpenCodeInvocationFreshAndResumed`, `TestOpenCodeResumeRejected` in `S/internal/harness/opencode_test.go`; `TestOpenCodeTicketRunWithResume`, `TestOpenCodeChatTurnsResume` | unit, fake-CLI | VERIFIED (fake) |
+| Lost session detected and handed off once (ADR requirement) | `S/internal/runner/chat.go` | Documented gap: CLI silently recreates sessions and the runner does not check existence (`docs/opencode.md` Resume and switching) | docs | UNMET (known gap; cannot be probed without a real session store, see verification.md) |
+| Cancellation (interrupt, grace, kill, descendants, no late reply) | `S/internal/runner/runner.go`, `S/internal/harness/opencode.go` | `TestOpenCodeCancellation` in `S/internal/runner/opencode_test.go`; `TestOpenCodeChatCancelMidTurn` in `S/internal/runner/chat_opencode_test.go`; `TestOpenCodeCancelKillsProcessGroup` in `S/internal/harness/opencode_cancel_test.go`; Playwright `OpenCode: cancel a running turn, then repost and get a reply` | fake-CLI, unit, real-stack e2e with fake CLI | VERIFIED (fake); real cancel wire and standalone server descendants UNVERIFIED |
+| Usage/cost unknown handling (no unknown-as-free, explicit zero is harness cost, computed needs exact price) | `S/internal/harness/opencode_parser.go`, `S/internal/runner/runner.go` | `TestOpenCodeTurn`, `TestOpenCodeExplicitZeroCost`, `TestOpenCodeComputedAndUnknownCost` in `S/internal/harness/opencode_test.go`; `TestOpenCodeComputedCost` in `S/internal/runner/opencode_test.go`; Playwright run-log title in A.16 | unit, fake-CLI | VERIFIED (fake); cost units and per-turn vs cumulative usage UNVERIFIED |
+| Quota vs tool-error classification | `S/internal/harness/opencode_parser.go` | `TestOpenCodeToolErrorIsNotProviderFailure`, `TestOpenCodeFailuresNeverFabricateSuccess` (quota case uses synthetic `opencode-quota-error.jsonl`) in `S/internal/harness/opencode_test.go` | unit | VERIFIED (fake); real quota shape UNVERIFIED |
+| Policy config uses `integration.use`; newer actions rejected before launch | `S/internal/harness/opencode.go`, `S/internal/agentdef/opencode.go` | `TestOpenCodeRejectsUnsupportedOptionsAndPolicy` (covers `mcp.use`, `skill.use`, `plugin.use`, `integration.connect`), `TestOpenCodeFilesAndSecrets` (policy shape) in `S/internal/harness/opencode_test.go`; `docs/contracts/opencode2/policy-evidence.md` | unit, static | VERIFIED (fake) for rendering and rejection |
+| Effective policy denial (CLI really denies tools, skills, plugins, non-lazyagents MCP) | `docs/contracts/opencode2/policy-evidence.md` | No test; needs a model call | none | UNVERIFIED |
+| Approval-required scope rejection (non-brokered rejected, brokered accepted) | `S/internal/harness/opencode.go`, `S/internal/agentdef/enforce.go` | `TestOpenCodeTicketScopes` in `S/internal/harness/opencode_test.go` | unit | VERIFIED (fake) |
+| Nine-tool chat MCP authorization (whoami, search_knowledge, read_page, read_artifact, get_backlinks, get_ticket, create_ticket, create_epic, list_epics; memory writes, shell, delegation, complete_run denied) | `S/internal/agentapi/{chat,tools}.go`, `S/internal/harness/opencode.go` | Server side: `TestChatRunToolAuthorization` in `S/internal/httpapi/chat_tools_test.go`; OpenCode chat read through chat token: `TestOpenCodeChatReadsThroughChatToken`. No test asserts the rendered OpenCode chat policy allows exactly the nine tool names (`TestOpenCodeReadonlyPolicyOrRejection` checks one MCP tool). | unit, fake-CLI | VERIFIED (fake) for server authorization; UNVERIFIED for OpenCode-rendered nine-tool policy and effective enforcement |
+| Startup errors (isolation, key, binary, version, hang, provider, unqualified model) | `S/internal/runner/{runner,chat}.go`, `S/internal/chatmodels/chatmodels.go` | `TestOpenCodeChatStartupFailures`, `TestOpenCodeFailClosedWithoutIsolation`, `TestOpenCodeMissingAuth`, `TestOpenCodeMissingOrWrongBinary`, `TestOpenCodePreflightTimeout`; troubleshooting table in `docs/opencode.md` | fake-CLI, docs | VERIFIED (fake) |
+| Provider error envelopes parsed (`provider.no-route`, `provider.auth` 401) | `S/internal/harness/opencode_parser.go` | `TestOpenCodeRealErrorEnvelopes` using `S/internal/harness/testdata/opencode-real-no-route.jsonl` and `opencode-real-auth-error.jsonl` | real CLI error capture | VERIFIED (real) |
+| Malformed, truncated, oversized stream never reported as success | `S/internal/harness/opencode_parser.go` | `TestOpenCodeFailuresNeverFabricateSuccess`, `TestOpenCodeOversizedLineFails` (synthetic `opencode-malformed.jsonl`, `opencode-truncated.jsonl`) | unit | VERIFIED (fake) |
+| UI exposure: agent editor | `W/app/(app)/agents/[handle]/definition-editor.tsx` | `W/e2e/agent-editor.spec.ts` titles in A.4 | unit (mocked API) | VERIFIED (fake) |
+| UI exposure: ticket override dialog | `W/app/(app)/agents/[handle]/definition-editor.tsx` (override dialog) | `override dialog: offers OpenCode, saves it, reload shows it` in `W/e2e/agent-editor.spec.ts` | unit (mocked API) | VERIFIED (fake) |
+| UI exposure: chat picker | `W/app/(app)/chat/_components/model-picker.tsx` | `W/e2e/chat.spec.ts` titles in A.18; `W/e2e-stack/opencode-chat.spec.ts` | unit (mocked API), real-stack e2e with fake CLI | VERIFIED (fake) |
+| Real Docker image runs OpenCode | `deploy/agent-base/Dockerfile` | None (only local backend with fake CLI exercised) | none | UNVERIFIED |
+| Docs (`docs/opencode.md`, ADR, verification, inventory, guide, README) | `docs/opencode.md`, `docs/contracts/opencode2/*`, `docs/guide.md`, `README.md` | Files present and cross-linked; `docs/opencode.md` Status and Limitations state the fake-only evidence honestly | docs | VERIFIED (fake) |
+| Real-provider success, tool/MCP, resume, quota wire shapes and completion marker | `S/internal/harness/opencode_parser.go` | Fixtures are synthetic; verification.md "Not verified" | none | UNVERIFIED |
+| Cross-provider real resume | `S/internal/runner/chat.go` | Fake CLI only | none | UNVERIFIED |
+| Project-context citation in a real chat | `S/internal/agentapi/chat.go` | `TestOpenCodeChatReadsThroughChatToken` proves citation with the fake CLI only | fake-CLI | UNVERIFIED (real) |
+
+## C. Criterion 3 real-provider capture
+
+Each row needs a credentialed run of real OpenCode 2.2.1 and is not attempted here.
+
+| Requirement | Implementation | Evidence | Evidence type | Status |
+| --- | --- | --- | --- | --- |
+| Real ticket turn (fresh turn, tool call, completion, usage, cost, resume) | `S/internal/runner/runner.go`, `S/internal/harness/opencode_parser.go` | None yet. Replace synthetic `opencode-turn.jsonl` with a sanitized capture. | none | PENDING — awaiting owner decision |
+| Real planning draft (`propose_tickets` through the real CLI) | `S/internal/runs/planning.go` | None yet | none | PENDING — awaiting owner decision |
+| Real two-turn chat with model/harness switch, recall and project-context citation | `S/internal/runner/chat.go`, `S/internal/agentapi/chat.go` | None yet. Fake-CLI equivalents: `TestOpenCodeChatModelChangeResumesSession`, `TestOpenCodeChatHarnessSwitches`, `TestOpenCodeChatReadsThroughChatToken` | none | PENDING — awaiting owner decision |
+
+## D. Test names without evidence
+
+- OpenCode-specific delegation: no test found (row A.12 and B Delegation).
+- Rendered OpenCode chat policy for exactly the nine tools: no test found.
+- Lost-session detection or handoff for OpenCode: no test, and no implementation (UNMET).
+- Docker image build or run, config-layer isolation, effective denial: no test is possible without a real run.
+
+## Regression results
+
+Re-run by the tech lead on 2026-11-05 at branch head 0c6cf3f plus this docs commit, local darwin/arm64, Go 1.26. No real harness CLI or provider key was used.
+
+| Check | Result |
+| --- | --- |
+| `TEST_DATABASE_URL=… go test ./...` (server, disposable `postgres:17`) | All packages pass. 206 top-level tests pass, 0 fail. 2 skip: `TestRoundTrip`, which needs a real CLI, and `TestDockerBackend`, which needs Docker images. This includes the existing Claude Code/Codex harness, parity, fallback, runner and chat tests. |
+| `make gen-check` | Pass: no generated diff. |
+| `npm run lint` / `npm run typecheck` (web) | Pass. |
+| `npm run test:unit` (web) | 7/7 pass. |
+| PR #20 CI (`contract`, `server`, `web`, `e2e-stack`) | All green. `e2e-stack` runs the real-stack OpenCode suite (criterion 2). |
+
+These are fake-CLI and unit results. They show no regression to Claude Code or Codex. They are **not** real-provider evidence.
+
+## Remaining blockers
+
+- No real-provider capture (section C) is done, so success, tool, resume, quota and cancel wire shapes, completion marker, usage semantics and cost units stay UNVERIFIED. The owner must decide whether to fund the capture.
+- Effective policy denial and config-layer isolation are unproven; `RUNNER_OPENCODE_ISOLATED` stays an operator claim.
+- Lost-session handling is an acknowledged gap: `--session` silently creates a session, so context can be lost without a handoff.
+- No OpenCode-specific delegation test and no test pinning the nine-tool rendered chat policy. These can be closed with fake-CLI tests, with no real provider needed.
+- Real Docker image run and cross-provider real resume are unexercised.
+- LAZYAGENTS-17..19 are generic follow-ups, not prerequisites; no concrete blocker from them was found.

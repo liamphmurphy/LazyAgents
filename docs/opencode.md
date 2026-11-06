@@ -6,7 +6,8 @@ default** (see [Isolation](#isolation-attestation)).
 
 > **Status:** wired end to end, but verified only against a fake CLI and two
 > real *error* captures. Real-provider parity is **not yet verified**; see
-> [Limitations](#limitations).
+> [Limitations](#limitations). Requirement-by-requirement evidence:
+> [`verification/LAZYAGENTS-25-requirements-matrix.md`](../verification/LAZYAGENTS-25-requirements-matrix.md).
 
 Design and evidence: [`docs/contracts/opencode2/`](contracts/opencode2/ADR.md)
 (`ADR.md`, `verification.md`, `inventory.md`, `policy-evidence.md`).
