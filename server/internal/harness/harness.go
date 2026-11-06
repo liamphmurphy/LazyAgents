@@ -18,10 +18,11 @@ import (
 
 // Workspace is where a turn runs, as seen from inside its environment.
 type Workspace struct {
-	Dir      string // absolute path of the checkout, e.g. /workspace
-	MCPURL   string // the LazyAgents MCP endpoint, reachable from the turn
-	Token    string // the run's agent token (la_…)
-	TokenEnv string // env var that carries it, e.g. LAZYAGENTS_TOKEN
+	OpenCodeStateDir string // backend-owned persistent path outside the checkout; required by OpenCode
+	Dir              string // absolute path of the checkout, e.g. /workspace
+	MCPURL           string // the LazyAgents MCP endpoint, reachable from the turn
+	Token            string // the run's agent token (la_…)
+	TokenEnv         string // env var that carries it, e.g. LAZYAGENTS_TOKEN
 }
 
 // Turn is one headless invocation.
@@ -33,9 +34,10 @@ type Turn struct {
 
 // Invocation is what the runner executes.
 type Invocation struct {
-	Argv  []string
-	Env   map[string]string
-	Files map[string][]byte // relative to Workspace.Dir; written before the turn
+	Argv       []string
+	Env        map[string]string
+	Files      map[string][]byte // relative to Workspace.Dir; written before the turn
+	StateFiles map[string][]byte // relative to Workspace.OpenCodeStateDir; never staged in the checkout
 }
 
 // Event is a normalized run event (run_events.type + payload).
@@ -89,6 +91,8 @@ func For(name string) (Harness, error) {
 		return ClaudeCode{}, nil
 	case agentdef.HarnessCodex:
 		return Codex{}, nil
+	case agentdef.HarnessOpenCode:
+		return OpenCode{}, nil // fail-closed until the runner attests isolation
 	}
 	return nil, fmt.Errorf("harness: unknown harness %q", name)
 }

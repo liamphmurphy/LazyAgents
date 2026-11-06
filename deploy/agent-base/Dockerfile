@@ -14,13 +14,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Versions the adapters were checked against (server/internal/harness).
 ARG CLAUDE_CODE_VERSION=2.1.316
 ARG CODEX_VERSION=0.166.0
+# The only OpenCode release the adapter supports (docs/contracts/opencode2/ADR.md);
+# the runner refuses any other `opencode --version`.
+# npm dist.integrity: sha512-U8UIdEOhGSE8PX6iSxOnJroXYst8FC3atXXEcNw+wPe4W7ZWw2FKkhmSDM11ZGdR8WIsxvBkKV57gEmRMG3Vug==
+ARG OPENCODE_VERSION=2.2.1
 RUN npm install -g --no-fund --no-audit \
-      @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @openai/codex@${CODEX_VERSION} \
+      @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @openai/codex@${CODEX_VERSION} @opencode/cli@${OPENCODE_VERSION} \
  && npm cache clean --force
 
 # The node user (uid 1000) runs turns. A new named volume copies /workspace's
 # ownership from the image, so the agent can write to it.
-RUN mkdir -p /workspace && chown node:node /workspace
+RUN mkdir -p /workspace /.lazyagents/opencode /run/lazyagents-opencode && chown node:node /workspace /.lazyagents/opencode
 USER node
 ENV HOME=/home/node
 WORKDIR /workspace

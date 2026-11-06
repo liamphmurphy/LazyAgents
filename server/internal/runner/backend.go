@@ -24,8 +24,9 @@ type ExecSpec struct {
 	Env  map[string]string // only these are passed (plus PATH/HOME on local)
 	// Dir is the working directory, relative to the workspace root ("" = the
 	// root). A delegated run's git worktree is one.
-	Dir   string
-	Files map[string][]byte // written relative to the working directory before start
+	Dir        string
+	StateFiles map[string][]byte // OpenCode config staged in backend-owned external state
+	Files      map[string][]byte // written relative to the working directory before start
 }
 
 // Process is a running ExecSpec.
@@ -64,15 +65,50 @@ type Local struct {
 	// OnlyBins refuses to run a harness program that isn't in Bins, so a
 	// test can never fall through to a real, logged-in CLI on PATH.
 	OnlyBins bool
+	// OpenCodeIsolated attests an OS boundary preventing granted tools from
+	// modifying protected config/state or workspace ancestors, including races.
+	// A same-user local process alone is insufficient. Default is off.
+	OpenCodeIsolated bool
+	// ExtraHostEnv names host variables OpenCode may inherit besides the
+	// minimal allowlist. It is a test hook (the fake CLI reads its script
+	// mode from the environment); production never sets it.
+	ExtraHostEnv []string
+}
+
+// ConfigIsolator is implemented by backends that can attest OpenCode's config
+// is isolated. A backend without it never runs OpenCode (fail closed).
+type ConfigIsolator interface {
+	OpenCodeConfigIsolated() bool
+	OpenCodeStateDir(runID, dir string) string
+}
+
+func (l *Local) OpenCodeConfigIsolated() bool { return l.OpenCodeIsolated }
+
+// opencodeHostEnv is the only host environment OpenCode inherits locally:
+// no provider keys, no HOME or XDG roots (the adapter supplies isolated ones).
+// Run-injected secrets arrive through ExecSpec.Env.
+func opencodeHostEnv(extra ...string) []string {
+	var out []string
+	for _, k := range append([]string{"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TZ", "USER", "LOGNAME", "SHELL",
+		"SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE"}, extra...) {
+		if v, ok := os.LookupEnv(k); ok {
+			out = append(out, k+"="+v)
+		}
+	}
+	return out
 }
 
 // harnessPrograms are the CLIs adapters invoke.
-var harnessPrograms = map[string]bool{"claude": true, "codex": true}
+var harnessPrograms = map[string]bool{"claude": true, "codex": true, "opencode": true}
 
 func (l *Local) Name() string { return "local" }
 
 func (l *Local) WorkspaceDir(runID string) string {
-	return filepath.Join(l.Dir, "runs", runID, "workspace")
+	p := filepath.Join(l.Dir, "runs", runID, "workspace")
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p // OpenCode refuses non-absolute workspace paths.
 }
 
 func (l *Local) EnsureWorkspace(_ context.Context, runID string) error {
@@ -95,15 +131,23 @@ func subDir(root, rel string) (string, error) {
 }
 
 func writeFiles(root string, files map[string][]byte) error {
+	if len(files) == 0 {
+		return nil
+	}
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
 	for rel, data := range files {
 		p := filepath.Join(root, filepath.FromSlash(rel))
 		if !strings.HasPrefix(p, filepath.Clean(root)+string(filepath.Separator)) {
 			return fmt.Errorf("runner: file %q escapes the workspace", rel)
 		}
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		if err := r.MkdirAll(filepath.Dir(rel), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(p, data, 0o600); err != nil {
+		if err := r.WriteFile(rel, data, 0o600); err != nil {
 			return err
 		}
 	}
@@ -118,14 +162,23 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 			return nil, err
 		}
 	}
+	if isOpenCode(spec.Argv) {
+		var err error
+		spec, err = l.prepareOpenCode(runID, dir, spec)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err := writeFiles(dir, spec.Files); err != nil {
 		return nil, err
 	}
 	argv := append([]string{}, spec.Argv...)
+	program := ""
 	for i, a := range argv {
 		if !harnessPrograms[a] {
 			continue
 		}
+		program = a
 		b, ok := l.Bins[a]
 		if !ok && l.OnlyBins {
 			return nil, fmt.Errorf("runner: %q has no configured binary (OnlyBins)", a)
@@ -138,10 +191,13 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
+	if program == "opencode" {
+		cmd.Env = opencodeHostEnv(l.ExtraHostEnv...)
+	}
 	// Desktop-launched local runners may omit Homebrew from PATH. Preserve
 	// configured tool precedence while making installed tools such as gh visible.
 	// OnlyBins tests intentionally isolate PATH from real logged-in tools.
-	if runtime.GOOS == "darwin" && !l.OnlyBins {
+	if runtime.GOOS == "darwin" && !l.OnlyBins && program != "opencode" {
 		cmd.Env = append(cmd.Env, "PATH="+os.Getenv("PATH")+":/opt/homebrew/bin:/usr/local/bin")
 	}
 	for k, v := range spec.Env {

@@ -11,17 +11,17 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 )
 
-// HarnessOpenCode is the public harness id for the pinned OpenCode CLI. It is
-// deliberately not registered in For or agentdef: selection, dispatch and the
-// API enum land with LAZYAGENTS-22 (see docs/contracts/opencode2/ADR.md).
-const HarnessOpenCode = "opencode"
+// HarnessOpenCode is the public harness id for the pinned OpenCode CLI. For
+// returns a fail-closed adapter: the runner sets ConfigIsolated/SessionOwned
+// only when it can honor them (docs/contracts/opencode2/ADR.md).
+const HarnessOpenCode = agentdef.HarnessOpenCode
 
 // OpenCodeVersion is the only release the contract covers (ADR.md).
 const OpenCodeVersion = "2.2.1"
 
 const (
 	opencodeConfigFile = "opencode.json"
-	opencodeStateDir   = ".lazyagents/opencode"
+	opencodeStateDir   = ".lazyagents/opencode" // legacy checkout-local state (never reused)
 	opencodeSkillsDir  = ".opencode/skills"
 	opencodeTokenEnv   = "LAZYAGENTS_RUN_TOKEN"
 )
@@ -40,6 +40,10 @@ type OpenCode struct {
 	// run's project. Resuming without it is rejected, because `--session`
 	// silently creates a missing session.
 	SessionOwned func(id string) bool
+	// Prices are exact per-million-token prices keyed by the full model id
+	// (provider/model[#variant]). There is no built-in table: another
+	// provider's matching model name must never price this one.
+	Prices map[string]Price
 }
 
 func (OpenCode) Name() string { return HarnessOpenCode }
@@ -61,24 +65,22 @@ func OpenCodeCredentialEnv(model string) (secret, env string, err error) {
 	return "", "", fmt.Errorf("harness: unsupported opencode provider %q", provider)
 }
 
-var opencodeModel = regexp.MustCompile(`^([a-z][a-z0-9-]*)/([A-Za-z0-9][A-Za-z0-9._:/-]*)(#[A-Za-z0-9._-]+)?$`)
-
 // opencodeProvider validates provider/model#variant and returns the provider.
 // Models keep their provider and variant: no Claude or Codex aliasing applies.
 func opencodeProvider(model string) (string, error) {
-	m := opencodeModel.FindStringSubmatch(model)
-	if m == nil {
-		return "", fmt.Errorf("harness: opencode model must be provider/model[#variant], got %q", model)
+	p, err := agentdef.OpenCodeProvider(model)
+	if err != nil {
+		return "", fmt.Errorf("harness: %w", err)
 	}
-	if m[1] != "anthropic" && m[1] != "openai" {
-		return "", fmt.Errorf("harness: unsupported opencode provider %q (supported: anthropic, openai)", m[1])
-	}
-	return m[1], nil
+	return p, nil
 }
 
-// CheckOpenCodeVersion accepts `opencode --version` output only for the pin.
+// CheckOpenCodeVersion accepts `opencode --version` output ("opencode v2.2.1",
+// "v2.2.1" or "2.2.1") only for the pin.
 func CheckOpenCodeVersion(out string) error {
-	if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(out), "v")) != OpenCodeVersion {
+	// The real binary prints "opencode v2.2.1".
+	v := strings.TrimPrefix(strings.TrimSpace(out), "opencode")
+	if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(v), "v")) != OpenCodeVersion {
 		return fmt.Errorf("harness: opencode %s is required", OpenCodeVersion)
 	}
 	return nil
@@ -195,9 +197,13 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	argv = append(argv, t.Prompt)
 
-	state := filepath.Join(ws.Dir, opencodeStateDir)
+	state := filepath.Clean(ws.OpenCodeStateDir)
+	if !filepath.IsAbs(state) || state == filepath.Clean(ws.Dir) || strings.HasPrefix(state, filepath.Clean(ws.Dir)+string(filepath.Separator)) {
+		return Invocation{}, fmt.Errorf("harness: opencode needs backend-owned state outside the checkout")
+	}
 	env := map[string]string{
 		"PWD":             ws.Dir,
+		"OPENCODE_CONFIG": filepath.Join(state, opencodeConfigFile),
 		"HOME":            filepath.Join(state, "home"),
 		"XDG_CONFIG_HOME": filepath.Join(state, "config"),
 		"XDG_DATA_HOME":   filepath.Join(state, "data"),
@@ -207,7 +213,7 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		opencodeTokenEnv: ws.Token,
 	}
 
-	files := map[string][]byte{opencodeConfigFile: cfg}
+	files := map[string][]byte{}
 	exclude := []string{"/" + opencodeConfigFile, "/" + opencodeStateDir + "/", "/" + opencodeSkillsDir + "/"}
 	for _, s := range spec.Skills {
 		files[opencodeSkillsDir+"/"+s.Name+"/SKILL.md"] = RenderSkill(s)
@@ -217,7 +223,7 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	sort.Strings(exclude)
 	files[SkillsExcludeFile] = []byte(strings.Join(exclude, "\n") + "\n")
-	return Invocation{Argv: argv, Env: env, Files: files}, nil
+	return Invocation{Argv: argv, Env: env, Files: files, StateFiles: map[string][]byte{opencodeConfigFile: cfg}}, nil
 }
 
 // config renders the protected run-specific opencode.json.
@@ -268,7 +274,13 @@ func (OpenCode) config(ws Workspace, spec agentdef.Resolved, provider string, re
 			}
 		}
 	}
+	// Last match wins. Protect runner metadata after every tool allow.
 	policies = append(policies,
+		policyStatement{"tool.use", "write:*/.lazyagents/*", "deny"},
+		policyStatement{"tool.use", "edit:*/.lazyagents/*", "deny"},
+		// In-checkout paths are matched relative to the checkout root.
+		policyStatement{"tool.use", "write:.lazyagents/*", "deny"},
+		policyStatement{"tool.use", "edit:.lazyagents/*", "deny"},
 		policyStatement{"integration.use", "skill:*", "deny"},
 		policyStatement{"integration.use", "plugin:*", "deny"})
 	for _, s := range spec.Skills { // exact exceptions after the blanket deny

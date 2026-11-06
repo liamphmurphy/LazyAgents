@@ -65,3 +65,20 @@ test("parent timeline includes historical and live delegated logs with independe
   await page.reload();
   await expect(timeline.getByText("Later delegated update", { exact: true })).toBeVisible();
 });
+
+test("opencode run shows its harness and model; usage without cost source is unknown", async ({ page }) => {
+  await installChatApi(page);
+  const oc = { ...run(parentId, "Lead"), harness: "opencode" as const, model: "anthropic/claude-sonnet-4-5" };
+  await page.route("**/api/v1/runs/*", (route) =>
+    route.fulfill({ json: {
+      run: oc, child_runs: [], turns: [], approvals: [],
+      events: [event(1, "usage", { input_tokens: 10, output_tokens: 5, cost_usd: 0 }, 1)],
+    } }),
+  );
+  await page.goto(`/runs/${parentId}`);
+  await expect(page.getByText("opencode", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("anthropic/claude-sonnet-4-5").first()).toBeVisible();
+  const timeline = page.getByRole("region", { name: "Events" });
+  await expect(timeline.getByText(/turn total/)).toContainText("Unknown");
+  await expect(timeline.getByText("$0.00")).toHaveCount(0);
+});

@@ -45,9 +45,10 @@ func Stricter(a, b Mode) Mode {
 const (
 	HarnessClaudeCode = "claude-code"
 	HarnessCodex      = "codex"
+	HarnessOpenCode   = "opencode"
 )
 
-var Harnesses = []string{HarnessClaudeCode, HarnessCodex}
+var Harnesses = []string{HarnessClaudeCode, HarnessCodex, HarnessOpenCode}
 
 // Budget is an optional runaway guard (no spend caps in v1). Zero = unset.
 type Budget struct {
@@ -281,6 +282,14 @@ func (s *Spec) Normalize() error {
 	s.Model = strings.TrimSpace(s.Model)
 	if s.Model == "" {
 		return invalid("model", "is required")
+	}
+	if err := ValidateTarget(s.Harness, s.Model, s.HarnessOptions[s.Harness]); err != nil {
+		return invalid("model", "%s", err.Error())
+	}
+	for _, f := range s.Fallbacks {
+		if err := ValidateTarget(f.Harness, f.Model, f.HarnessOptions); err != nil {
+			return invalid("fallbacks", "%s", err.Error())
+		}
 	}
 	if s.MaxConcurrency == 0 {
 		s.MaxConcurrency = 1

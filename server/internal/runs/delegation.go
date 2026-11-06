@@ -293,7 +293,7 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if err != nil {
 			return err
 		}
-		resolved, err := agents.Resolve(ctx, q, ws, sub, p.Key)
+		resolved, err := agents.ResolveRunnable(ctx, q, ws, sub, p.Key)
 		if err != nil {
 			return err
 		}

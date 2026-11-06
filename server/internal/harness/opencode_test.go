@@ -13,7 +13,7 @@ import (
 const ocToken = "la_TESTTOKENSECRET9999"
 
 func ocWS() Workspace {
-	return Workspace{Dir: "/work/space", MCPURL: "http://mcp.test/mcp", Token: ocToken, TokenEnv: "LAZYAGENTS_TOKEN"}
+	return Workspace{OpenCodeStateDir: "/work/.lazyagents/opencode/main", Dir: "/work/space", MCPURL: "http://mcp.test/mcp", Token: ocToken, TokenEnv: "LAZYAGENTS_TOKEN"}
 }
 
 func ocSpec(model string, opts map[string]string, scopes ...agentdef.ResolvedScope) agentdef.Resolved {
@@ -36,7 +36,7 @@ type ocCfg struct {
 func ocConfig(t *testing.T, inv Invocation) ocCfg {
 	t.Helper()
 	var c ocCfg
-	if err := json.Unmarshal(inv.Files[opencodeConfigFile], &c); err != nil {
+	if err := json.Unmarshal(inv.StateFiles[opencodeConfigFile], &c); err != nil {
 		t.Fatal(err)
 	}
 	return c
@@ -75,8 +75,8 @@ func TestOpenCodeInvocationFreshAndResumed(t *testing.T) {
 	if got := strings.Join(inv.Argv, " "); got != want {
 		t.Fatalf("fresh argv\n got %s\nwant %s", got, want)
 	}
-	if inv.Env["PWD"] != "/work/space" || !strings.HasPrefix(inv.Env["HOME"], "/work/space/.lazyagents/opencode/") ||
-		!strings.HasPrefix(inv.Env["XDG_DATA_HOME"], "/work/space/.lazyagents/opencode/") || inv.Env[opencodeTokenEnv] != ocToken {
+	if inv.Env["PWD"] != "/work/space" || !strings.HasPrefix(inv.Env["HOME"], "/work/.lazyagents/opencode/") ||
+		!strings.HasPrefix(inv.Env["XDG_DATA_HOME"], "/work/.lazyagents/opencode/") || inv.Env[opencodeTokenEnv] != ocToken {
 		t.Fatalf("env %v", inv.Env)
 	}
 	inv, err = h.Invocation(ocWS(), Turn{Spec: spec, Prompt: "continue", SessionID: "ses_abc123"})
@@ -113,10 +113,10 @@ func TestOpenCodeModelAndCredentialMapping(t *testing.T) {
 			t.Fatalf("invocation accepted model %q", bad)
 		}
 	}
-	if CheckOpenCodeVersion("2.2.1\n") != nil || CheckOpenCodeVersion("v2.2.1") != nil {
+	if CheckOpenCodeVersion("2.2.1\n") != nil || CheckOpenCodeVersion("v2.2.1") != nil || CheckOpenCodeVersion("opencode v2.2.1\n") != nil {
 		t.Fatal("pinned version rejected")
 	}
-	if CheckOpenCodeVersion("2.2.3") == nil || CheckOpenCodeVersion("") == nil {
+	if CheckOpenCodeVersion("2.2.3") == nil || CheckOpenCodeVersion("opencode v2.2.10") == nil || CheckOpenCodeVersion("opencode v2.2.1-rc1") == nil || CheckOpenCodeVersion("") == nil {
 		t.Fatal("unpinned version accepted")
 	}
 }
@@ -150,7 +150,7 @@ func TestOpenCodeFilesAndSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{"opencode.json", ".opencode/skills/go-testing/SKILL.md", ".lazyagents/skills/go-testing/SKILL.md", SkillsExcludeFile} {
+	for _, p := range []string{".opencode/skills/go-testing/SKILL.md", ".lazyagents/skills/go-testing/SKILL.md", SkillsExcludeFile} {
 		if _, ok := inv.Files[p]; !ok {
 			t.Errorf("missing file %s", p)
 		}
@@ -175,7 +175,7 @@ func TestOpenCodeFilesAndSecrets(t *testing.T) {
 			t.Errorf("token written to %s", name)
 		}
 	}
-	if !strings.Contains(string(inv.Files["opencode.json"]), "{env:LAZYAGENTS_RUN_TOKEN}") {
+	if !strings.Contains(string(inv.StateFiles["opencode.json"]), "{env:LAZYAGENTS_RUN_TOKEN}") {
 		t.Error("config lacks token placeholder")
 	}
 	if strings.Contains(strings.Join(inv.Argv, " "), ocToken) {
@@ -448,11 +448,108 @@ func TestOpenCodeOversizedLineFails(t *testing.T) {
 	}
 }
 
-func TestOpenCodeNotRegistered(t *testing.T) {
-	if _, err := For(HarnessOpenCode); err == nil {
-		t.Fatal("opencode must not be selectable until LAZYAGENTS-22")
+// The adapter is registered, but For hands out the fail-closed zero value: it
+// rejects every run until the runner attests isolated config.
+func TestOpenCodeRegisteredFailClosed(t *testing.T) {
+	h, err := For(HarnessOpenCode)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := agentdef.Capabilities[HarnessOpenCode]; ok {
-		t.Fatal("capabilities advertised before enforcement gates pass")
+	_, err = h.Invocation(ocWS(), Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: "p"})
+	if err == nil || !strings.Contains(err.Error(), "isolated") {
+		t.Fatalf("zero-value adapter must reject runs for missing isolation, got %v", err)
+	}
+	c := agentdef.Capabilities[HarnessOpenCode]
+	if c.ToolGating || c.PermissionPrompt || c.NativeCost {
+		t.Fatalf("capabilities advertised before enforcement gates pass: %+v", c)
+	}
+}
+
+// Real 2.2.1 captures (no model call): the error envelope nests type/message
+// under "error" and carries sessionID in camel case.
+func TestOpenCodeRealErrorEnvelopes(t *testing.T) {
+	evs, res := ocRun(t, "opencode-real-auth-error.jsonl", 1)
+	if !res.IsError || res.UsageLimited || res.SessionID != "ses_e5cebef69ffe3F8OaMgPKkU2wR" ||
+		!strings.Contains(res.Error, "provider.auth") || !strings.Contains(res.Error, "authentication") {
+		t.Fatalf("%+v", res)
+	}
+	if len(evs) == 0 || evs[0].Type != "lifecycle" {
+		t.Fatalf("session start not emitted: %+v", evs)
+	}
+	_, res = ocRun(t, "opencode-real-no-route.jsonl", 1)
+	if !res.IsError || !strings.Contains(res.Error, "Model unavailable") {
+		t.Fatalf("%+v", res)
+	}
+}
+
+func TestOpenCodeComputedAndUnknownCost(t *testing.T) {
+	run := func(prices map[string]Price, usage string) Result {
+		p := (OpenCode{Prices: prices}).NewParser("openai/gpt-5#high")
+		p.Line([]byte(`{"type":"text","text":"ok"}`))
+		p.Line([]byte(`{"type":"completed","usage":` + usage + `}`))
+		p.(ExitObserver).Exited(0)
+		return p.Result()
+	}
+	exact := map[string]Price{"openai/gpt-5#high": {Input: 2, CachedInput: 1, Output: 10}}
+	r := run(exact, `{"input_tokens":1000000,"output_tokens":100000,"cached_tokens":500000}`)
+	if r.IsError || r.Usage.CostSource != "computed" || r.Usage.CostUSD != 0.5*2+0.5*1+1 {
+		t.Fatalf("%+v", r.Usage)
+	}
+	// Another provider's or a variant-less entry never prices this model.
+	for name, prices := range map[string]map[string]Price{
+		"none":       nil,
+		"no variant": {"openai/gpt-5": {Input: 2, CachedInput: 1, Output: 10}},
+		"bare model": {"gpt-5": {Input: 2, CachedInput: 1, Output: 10}},
+	} {
+		if r := run(prices, `{"input_tokens":10,"output_tokens":10}`); r.Usage.CostSource != "unknown" || r.Usage.CostUSD != 0 {
+			t.Errorf("%s: %+v", name, r.Usage)
+		}
+	}
+	// Missing counters are unavailable, not zero.
+	if r := run(exact, `{"input_tokens":10}`); r.Usage.CostSource != "unknown" {
+		t.Errorf("missing output counter priced: %+v", r.Usage)
+	}
+	if r := run(exact, `{"input_tokens":10,"output_tokens":10}`); r.Usage.CostSource != "unknown" {
+		t.Errorf("missing cached counter priced although cached input is cheaper: %+v", r.Usage)
+	}
+	// Native cost, even zero, wins over computed.
+	if r := run(exact, `{"input_tokens":10,"output_tokens":10,"cost":0}`); r.Usage.CostSource != "harness" {
+		t.Errorf("%+v", r.Usage)
+	}
+}
+
+func TestOpenCodeExternalStateRequiredAndProtectedRulesOrdered(t *testing.T) {
+	for _, state := range []string{"", "relative", "/work/space", "/work/space/state"} {
+		ws := ocWS()
+		ws.OpenCodeStateDir = state
+		if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ws, Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: "work"}); err == nil {
+			t.Fatalf("unsafe state accepted: %q", state)
+		}
+	}
+	inv, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: "work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := inv.Files["opencode.json"]; ok {
+		t.Fatal("config staged in checkout")
+	}
+	if inv.Env["OPENCODE_CONFIG"] != "/work/.lazyagents/opencode/main/opencode.json" {
+		t.Fatal(inv.Env)
+	}
+	cfg := ocConfig(t, inv)
+	for _, resource := range []string{"write:*/.lazyagents/*", "edit:*/.lazyagents/*", "write:.lazyagents/*", "edit:.lazyagents/*"} {
+		found := -1
+		lastAllow := -1
+		for i, p := range cfg.Policies {
+			if p.Action == "tool.use" && p.Effect == "allow" {
+				lastAllow = i
+			}
+			if p.Action == "tool.use" && p.Resource == resource && p.Effect == "deny" {
+				found = i
+			}
+		}
+		if found <= lastAllow {
+			t.Fatalf("protected rule missing or before allow: %s", resource)
+		}
 	}
 }
