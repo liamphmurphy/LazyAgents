@@ -807,8 +807,12 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if dir != "" {
 		wsDir = path.Join(wsDir, dir)
 	}
+	stateDir := ""
+	if c.spec.Harness == agentdef.HarnessOpenCode {
+		stateDir = r.Backend.(ConfigIsolator).OpenCodeStateDir(wsID(c.run), dir)
+	}
 	inv, err := h.Invocation(harness.Workspace{
-		Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
+		OpenCodeStateDir: stateDir, Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
 	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
@@ -843,7 +847,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
-		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Dir: dir, Files: files,
+		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Dir: dir, Files: files, StateFiles: inv.StateFiles,
 	})
 	if err != nil {
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})

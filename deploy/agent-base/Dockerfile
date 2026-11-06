@@ -24,7 +24,7 @@ RUN npm install -g --no-fund --no-audit \
 
 # The node user (uid 1000) runs turns. A new named volume copies /workspace's
 # ownership from the image, so the agent can write to it.
-RUN mkdir -p /workspace && chown node:node /workspace
+RUN mkdir -p /workspace /.lazyagents/opencode /run/lazyagents-opencode && chown node:node /workspace /.lazyagents/opencode
 USER node
 ENV HOME=/home/node
 WORKDIR /workspace

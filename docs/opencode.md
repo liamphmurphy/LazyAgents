@@ -12,9 +12,10 @@ default** (see [Isolation](#isolation-attestation)).
 > provider**: still **unverified** (owner directed no paid runs).
 >
 > ⚠️ **Do not set `RUNNER_OPENCODE_ISOLATED=true` on a shared runner yet.** The
-> stub capture showed that ambient or agent-written `opencode.json` overrides the
-> generated policy. Ticket runs also can't read or edit files under the current
-> allowlist. Both are open follow-ups (see Limitations).
+> generated config now lives outside the checkout and launch guards reject
+> ambient config, but the operator must still provide an OS boundary that stops
+> shell and MCP tools from modifying protected state or racing those guards.
+> Ticket file-tool policy remains blocked on LAZYAGENTS-26 (see Limitations).
 > Requirement-by-requirement evidence:
 > [`verification/LAZYAGENTS-25-requirements-matrix.md`](../verification/LAZYAGENTS-25-requirements-matrix.md).
 
@@ -37,7 +38,9 @@ fallback to a different release. Upgrading needs a new compatibility check.
 
 The local backend runs on your machine with whatever OpenCode config exists
 there, so it is not isolation and OpenCode stays off by default on it. Only set
-the attestation if you know the host has none.
+the attestation where an OS sandbox prevents all granted tools (including shell
+and MCP tools) from changing protected config, external state and workspace
+ancestors. An ordinary local same-user process does not meet this requirement.
 
 ## Authentication
 
@@ -109,9 +112,8 @@ natural place for the claim to hold; on local, only if you have verified it.
 
 - **Current usability (until LAZYAGENTS-26 lands):** OpenCode works only for
   read-only chat and runs that use nothing but MCP tools. Ticket runs can't read
-  or edit files. `RUNNER_OPENCODE_ISOLATED=true` is only an operator claim: an
-  ambient or agent-written `opencode.json` can still override the policy
-  (LAZYAGENTS-27), so setting the flag doesn't make isolation true.
+  or edit files. `RUNNER_OPENCODE_ISOLATED=true` remains an operator claim
+  about OS isolation; setting the flag alone does not create a sandbox.
 
 - **Real-provider parity is not verified (UNVERIFIED, no paid runs).** Nothing
   here has run against a real provider: real token units, billing, model
@@ -125,13 +127,9 @@ natural place for the claim to hold; on local, only if you have verified it.
   `tool.use` allowlist uses bare tool names, but 2.2.1 matches
   `<action>:<resource>`, so `read`/`glob`/`grep`/`edit`/`write` are all
   **blocked** (only `lazyagents_*` MCP calls work); (2) the shell tool is named
-  `shell`, not `bash`, so shell is never granted; (3) ambient config in
-  `$XDG_CONFIG_HOME/opencode`, an ancestor directory or `OPENCODE_CONFIG`
-  **overrides** the generated policy (the per-run XDG root sits inside the
-  workspace and is writable by an agent that may `write`); (4) MCP tools are not
-  advertised on the first model step of a turn. Until fixed, ticket runs cannot
-  read or edit files through OpenCode and `RUNNER_OPENCODE_ISOLATED` guards
-  only what the operator can attest.
+  `shell`, not `bash`, so shell is never granted; (3) MCP tools are not
+  advertised on the first model step of a turn. Ticket runs cannot read or edit
+  files through OpenCode until LAZYAGENTS-26 lands.
 - **Usage is a lower bound:** the real stream has no completion marker and omits
   the final step's `step_finish`, so tokens are partial and cost is `unknown`
   (success is a zero exit with no error event). A provider 429 or 529 is retried
@@ -156,6 +154,30 @@ natural place for the claim to hold; on local, only if you have verified it.
 - Docker backend runs against a real image are unexercised; only the local backend
   (fake CLI, and the real CLI against a stub) was.
 
+## Configuration and state isolation
+
+The backend owns persistent OpenCode state outside the checkout:
+local uses `<runner-dir>/runs/<workspace-id>/.lazyagents/opencode/<namespace>`;
+Docker mounts a separate `lazyagents-run-<workspace-id>-opencode` volume at
+`/.lazyagents/opencode`. Each delegated worktree has a separate namespace.
+Generated config is selected by a runner-owned `OPENCODE_CONFIG`; HOME and all
+XDG roots live alongside it. State survives resumed turns and runner recovery
+and is deleted with the workspace.
+
+Every launch, including version preflight and resumed turns, rejects ancestor
+and repository `opencode.json`/`opencode.jsonc`, known HOME/XDG configuration
+layers, and legacy checkout-local state. Ambient host/image `OPENCODE_*`
+switches are discarded. Staging refuses symlink destinations. Ordered tool
+denies cover both absolute and relative `.lazyagents` paths.
+
+This is defense in depth within the required OS boundary, not a same-user
+sandbox. Docker's ordinary writable state mount also needs that boundary for
+shell/MCP tools. Keep the isolation flag off on a shared runner without it.
+
+Existing checkout-local sessions are deliberately not imported: after upgrading,
+start a new run. Missing external resume state fails instead of silently
+starting a conversation with no history.
+
 ## Troubleshooting
 
 | Message (starts with) | Cause | Fix |
@@ -176,6 +198,14 @@ the last two rows are the captured CLI error envelopes
 (`server/internal/harness/testdata/opencode-real-*.jsonl`).
 
 ## Testing
+
+`LAZYAGENTS_REAL_OPENCODE=1 go test ./internal/runner -run
+TestRealOpenCodeSelfEscalation -v` (in `server/`) needs only the pinned CLI,
+no database. A localhost provider with a fake key directs a successful ordinary
+write, blocked external-XDG and checkout-metadata writes, and an unavailable
+shell attempt after resuming the same session with its history. The test corrects
+only the known LAZYAGENTS-26 tool allows so a broken allowlist cannot make this
+security regression pass accidentally. Its launcher blocks remote proxy traffic.
 
 `LAZYAGENTS_REAL_OPENCODE=1 TEST_DATABASE_URL=… go test ./internal/runner -run
 TestRealOpenCodeAgainstStub` (opt-in, in `server/`) drives the real runner with the

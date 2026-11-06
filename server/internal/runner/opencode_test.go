@@ -116,7 +116,7 @@ func TestOpenCodeTicketRunWithResume(t *testing.T) {
 	if !strings.Contains(string(got), "ANTHROPIC_API_KEY") || strings.Contains(string(got), "OPENAI_API_KEY") {
 		t.Fatalf("credential env names seen by opencode: %q", got)
 	}
-	cfg, err := os.ReadFile(filepath.Join(e.workspace(run), "opencode.json"))
+	cfg, err := os.ReadFile(filepath.Join(filepath.Dir(e.workspace(run)), ".lazyagents", "opencode", "main", "opencode.json"))
 	if err != nil || strings.Contains(string(cfg), "la_") || !strings.Contains(string(cfg), "{env:LAZYAGENTS_RUN_TOKEN}") {
 		t.Fatalf("generated config: %v\n%s", err, cfg)
 	}
@@ -463,7 +463,7 @@ func TestLocalOpenCodeEnvironmentIsAllowlisted(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "host-gemini")
 	t.Setenv("XDG_CONFIG_HOME", "/host/xdg")
 	t.Setenv("HOME", "/host/home")
-	l := &runner.Local{Dir: t.TempDir(), Bins: map[string]string{"opencode": "/usr/bin/env"}, OnlyBins: true}
+	l := &runner.Local{Dir: t.TempDir(), Bins: map[string]string{"opencode": "/usr/bin/env"}, OnlyBins: true, OpenCodeIsolated: true}
 	if err := l.EnsureWorkspace(context.Background(), "r1"); err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +487,7 @@ func TestLocalOpenCodeEnvironmentIsAllowlisted(t *testing.T) {
 			t.Errorf("host value %q leaked to opencode:\n%s", bad, env)
 		}
 	}
-	if !strings.Contains(env, "OPENAI_API_KEY=injected") || !strings.Contains(env, "HOME=/iso/home") {
+	if !strings.Contains(env, "OPENAI_API_KEY=injected") || !strings.Contains(env, "HOME="+filepath.Join(l.OpenCodeStateDir("r1", ""), "home")) {
 		t.Errorf("injected env missing:\n%s", env)
 	}
 }

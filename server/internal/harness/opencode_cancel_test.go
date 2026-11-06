@@ -31,7 +31,7 @@ func TestOpenCodeCancelKillsProcessGroup(t *testing.T) {
 	if err := l.EnsureWorkspace(context.Background(), "r1"); err != nil {
 		t.Fatal(err)
 	}
-	ws := harness.Workspace{Dir: l.WorkspaceDir("r1"), MCPURL: "http://mcp.test/mcp", Token: "la_TESTTOKEN12345"}
+	ws := harness.Workspace{OpenCodeStateDir: l.OpenCodeStateDir("r1", ""), Dir: l.WorkspaceDir("r1"), MCPURL: "http://mcp.test/mcp", Token: "la_TESTTOKEN12345"}
 	spec := agentdef.Resolved{Harness: harness.HarnessOpenCode, Model: "openai/gpt-5"}
 	inv, err := harness.OpenCode{ConfigIsolated: true}.Invocation(ws, harness.Turn{Spec: spec, Prompt: "work"})
 	if err != nil {

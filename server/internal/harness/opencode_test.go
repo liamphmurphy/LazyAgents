@@ -13,7 +13,7 @@ import (
 const ocToken = "la_TESTTOKENSECRET9999"
 
 func ocWS() Workspace {
-	return Workspace{Dir: "/work/space", MCPURL: "http://mcp.test/mcp", Token: ocToken, TokenEnv: "LAZYAGENTS_TOKEN"}
+	return Workspace{OpenCodeStateDir: "/work/.lazyagents/opencode/main", Dir: "/work/space", MCPURL: "http://mcp.test/mcp", Token: ocToken, TokenEnv: "LAZYAGENTS_TOKEN"}
 }
 
 func ocSpec(model string, opts map[string]string, scopes ...agentdef.ResolvedScope) agentdef.Resolved {
@@ -36,7 +36,7 @@ type ocCfg struct {
 func ocConfig(t *testing.T, inv Invocation) ocCfg {
 	t.Helper()
 	var c ocCfg
-	if err := json.Unmarshal(inv.Files[opencodeConfigFile], &c); err != nil {
+	if err := json.Unmarshal(inv.StateFiles[opencodeConfigFile], &c); err != nil {
 		t.Fatal(err)
 	}
 	return c
@@ -75,8 +75,8 @@ func TestOpenCodeInvocationFreshAndResumed(t *testing.T) {
 	if got := strings.Join(inv.Argv, " "); got != want {
 		t.Fatalf("fresh argv\n got %s\nwant %s", got, want)
 	}
-	if inv.Env["PWD"] != "/work/space" || !strings.HasPrefix(inv.Env["HOME"], "/work/space/.lazyagents/opencode/") ||
-		!strings.HasPrefix(inv.Env["XDG_DATA_HOME"], "/work/space/.lazyagents/opencode/") || inv.Env[opencodeTokenEnv] != ocToken {
+	if inv.Env["PWD"] != "/work/space" || !strings.HasPrefix(inv.Env["HOME"], "/work/.lazyagents/opencode/") ||
+		!strings.HasPrefix(inv.Env["XDG_DATA_HOME"], "/work/.lazyagents/opencode/") || inv.Env[opencodeTokenEnv] != ocToken {
 		t.Fatalf("env %v", inv.Env)
 	}
 	inv, err = h.Invocation(ocWS(), Turn{Spec: spec, Prompt: "continue", SessionID: "ses_abc123"})
@@ -150,7 +150,7 @@ func TestOpenCodeFilesAndSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{"opencode.json", ".opencode/skills/go-testing/SKILL.md", ".lazyagents/skills/go-testing/SKILL.md", SkillsExcludeFile} {
+	for _, p := range []string{".opencode/skills/go-testing/SKILL.md", ".lazyagents/skills/go-testing/SKILL.md", SkillsExcludeFile} {
 		if _, ok := inv.Files[p]; !ok {
 			t.Errorf("missing file %s", p)
 		}
@@ -175,7 +175,7 @@ func TestOpenCodeFilesAndSecrets(t *testing.T) {
 			t.Errorf("token written to %s", name)
 		}
 	}
-	if !strings.Contains(string(inv.Files["opencode.json"]), "{env:LAZYAGENTS_RUN_TOKEN}") {
+	if !strings.Contains(string(inv.StateFiles["opencode.json"]), "{env:LAZYAGENTS_RUN_TOKEN}") {
 		t.Error("config lacks token placeholder")
 	}
 	if strings.Contains(strings.Join(inv.Argv, " "), ocToken) {
@@ -515,5 +515,41 @@ func TestOpenCodeComputedAndUnknownCost(t *testing.T) {
 	// Native cost, even zero, wins over computed.
 	if r := run(exact, `{"input_tokens":10,"output_tokens":10,"cost":0}`); r.Usage.CostSource != "harness" {
 		t.Errorf("%+v", r.Usage)
+	}
+}
+
+func TestOpenCodeExternalStateRequiredAndProtectedRulesOrdered(t *testing.T) {
+	for _, state := range []string{"", "relative", "/work/space", "/work/space/state"} {
+		ws := ocWS()
+		ws.OpenCodeStateDir = state
+		if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ws, Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: "work"}); err == nil {
+			t.Fatalf("unsafe state accepted: %q", state)
+		}
+	}
+	inv, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: ocSpec("openai/gpt-5", nil), Prompt: "work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := inv.Files["opencode.json"]; ok {
+		t.Fatal("config staged in checkout")
+	}
+	if inv.Env["OPENCODE_CONFIG"] != "/work/.lazyagents/opencode/main/opencode.json" {
+		t.Fatal(inv.Env)
+	}
+	cfg := ocConfig(t, inv)
+	for _, resource := range []string{"write:*/.lazyagents/*", "edit:*/.lazyagents/*", "write:.lazyagents/*", "edit:.lazyagents/*"} {
+		found := -1
+		lastAllow := -1
+		for i, p := range cfg.Policies {
+			if p.Action == "tool.use" && p.Effect == "allow" {
+				lastAllow = i
+			}
+			if p.Action == "tool.use" && p.Resource == resource && p.Effect == "deny" {
+				found = i
+			}
+		}
+		if found <= lastAllow {
+			t.Fatalf("protected rule missing or before allow: %s", resource)
+		}
 	}
 }

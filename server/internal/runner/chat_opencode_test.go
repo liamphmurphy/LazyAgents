@@ -101,7 +101,7 @@ func TestOpenCodeChatTurnsResume(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".git")); !os.IsNotExist(err) {
 		t.Fatal("chat scratch workspace contains a git repository")
 	}
-	cfg, err := os.ReadFile(filepath.Join(root, "opencode.json"))
+	cfg, err := os.ReadFile(filepath.Join(filepath.Dir(root), ".lazyagents", "opencode", "main", "opencode.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

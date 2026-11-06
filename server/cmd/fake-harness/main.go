@@ -710,7 +710,7 @@ func opencodeEnv(model string) string {
 	if !strings.Contains(os.Getenv("HOME"), "/.lazyagents/opencode/") || !strings.Contains(os.Getenv("XDG_CONFIG_HOME"), "/.lazyagents/opencode/") {
 		return "HOME and XDG roots are not isolated"
 	}
-	if _, err := os.Stat("opencode.json"); err != nil {
+	if _, err := os.Stat(os.Getenv("OPENCODE_CONFIG")); err != nil {
 		return "no generated opencode.json"
 	}
 	return ""
@@ -730,7 +730,7 @@ func opencodeServers() (map[string]struct {
 			} `json:"servers"`
 		} `json:"mcp"`
 	}
-	raw, err := os.ReadFile("opencode.json")
+	raw, err := os.ReadFile(os.Getenv("OPENCODE_CONFIG"))
 	if err != nil {
 		return nil, err
 	}

@@ -54,10 +54,10 @@ var real, base string
 func main() {
 	if len(os.Args) > 1 && os.Args[1] != "--version" {
 		var cfg map[string]any
-		if b, err := os.ReadFile("opencode.json"); err == nil && json.Unmarshal(b, &cfg) == nil {
+		if b, err := os.ReadFile(os.Getenv("OPENCODE_CONFIG")); err == nil && json.Unmarshal(b, &cfg) == nil {
 			cfg["provider"] = map[string]any{"anthropic": map[string]any{"options": map[string]any{"baseURL": base + "/v1"}}}
 			b, _ = json.MarshalIndent(cfg, "", "  ")
-			_ = os.WriteFile("opencode.json", b, 0o600)
+			_ = os.WriteFile(os.Getenv("OPENCODE_CONFIG"), b, 0o600)
 		}
 	}
 	env := append(os.Environ(),

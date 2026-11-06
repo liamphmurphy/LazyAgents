@@ -21,7 +21,7 @@ const OpenCodeVersion = "2.2.1"
 
 const (
 	opencodeConfigFile = "opencode.json"
-	opencodeStateDir   = ".lazyagents/opencode"
+	opencodeStateDir   = ".lazyagents/opencode" // legacy checkout-local state (never reused)
 	opencodeSkillsDir  = ".opencode/skills"
 	opencodeTokenEnv   = "LAZYAGENTS_RUN_TOKEN"
 )
@@ -197,9 +197,13 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	argv = append(argv, t.Prompt)
 
-	state := filepath.Join(ws.Dir, opencodeStateDir)
+	state := filepath.Clean(ws.OpenCodeStateDir)
+	if !filepath.IsAbs(state) || state == filepath.Clean(ws.Dir) || strings.HasPrefix(state, filepath.Clean(ws.Dir)+string(filepath.Separator)) {
+		return Invocation{}, fmt.Errorf("harness: opencode needs backend-owned state outside the checkout")
+	}
 	env := map[string]string{
 		"PWD":             ws.Dir,
+		"OPENCODE_CONFIG": filepath.Join(state, opencodeConfigFile),
 		"HOME":            filepath.Join(state, "home"),
 		"XDG_CONFIG_HOME": filepath.Join(state, "config"),
 		"XDG_DATA_HOME":   filepath.Join(state, "data"),
@@ -209,7 +213,7 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		opencodeTokenEnv: ws.Token,
 	}
 
-	files := map[string][]byte{opencodeConfigFile: cfg}
+	files := map[string][]byte{}
 	exclude := []string{"/" + opencodeConfigFile, "/" + opencodeStateDir + "/", "/" + opencodeSkillsDir + "/"}
 	for _, s := range spec.Skills {
 		files[opencodeSkillsDir+"/"+s.Name+"/SKILL.md"] = RenderSkill(s)
@@ -219,7 +223,7 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	sort.Strings(exclude)
 	files[SkillsExcludeFile] = []byte(strings.Join(exclude, "\n") + "\n")
-	return Invocation{Argv: argv, Env: env, Files: files}, nil
+	return Invocation{Argv: argv, Env: env, Files: files, StateFiles: map[string][]byte{opencodeConfigFile: cfg}}, nil
 }
 
 // config renders the protected run-specific opencode.json.
@@ -270,7 +274,13 @@ func (OpenCode) config(ws Workspace, spec agentdef.Resolved, provider string, re
 			}
 		}
 	}
+	// Last match wins. Protect runner metadata after every tool allow.
 	policies = append(policies,
+		policyStatement{"tool.use", "write:*/.lazyagents/*", "deny"},
+		policyStatement{"tool.use", "edit:*/.lazyagents/*", "deny"},
+		// In-checkout paths are matched relative to the checkout root.
+		policyStatement{"tool.use", "write:.lazyagents/*", "deny"},
+		policyStatement{"tool.use", "edit:.lazyagents/*", "deny"},
 		policyStatement{"integration.use", "skill:*", "deny"},
 		policyStatement{"integration.use", "plugin:*", "deny"})
 	for _, s := range spec.Skills { // exact exceptions after the blanket deny
