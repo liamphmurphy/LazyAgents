@@ -407,6 +407,12 @@ func main() {
 			}
 		}
 		call("complete_run", map[string]any{"outcome": "Wrote " + file})
+		if hold := os.Getenv("FAKE_HARNESS_LINGER"); hold != "" {
+			_ = os.WriteFile(hold+".started", nil, 0o644)
+			if !waitFor(func() bool { _, err := os.Stat(hold); return err == nil }) {
+				os.Exit(2)
+			}
+		}
 		result(false, "Done.")
 		return
 	}
@@ -507,6 +513,12 @@ func main() {
 			_ = os.WriteFile("dirty.txt", []byte("uncommitted\n"), 0o644)
 		}
 		delegateScript(call, "FAKE_HARNESS_DELEGATIONS")
+		if hold := os.Getenv("FAKE_HARNESS_PARENT_HOLD"); hold != "" {
+			_ = os.WriteFile(hold+".started", nil, 0o644)
+			if !waitFor(func() bool { _, err := os.Stat(hold); return err == nil }) {
+				os.Exit(2)
+			}
+		}
 		text("Delegated. Ending my turn until the sub agents report back.")
 		result(false, "Waiting for the sub agents.")
 		return

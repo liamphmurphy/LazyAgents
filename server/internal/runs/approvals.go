@@ -413,7 +413,11 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			if err := runRecord(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunResumed, map[string]any{"run_id": run.ID}, nil); err != nil {
 				return err
 			}
-			if _, err := q.ActiveChildRun(ctx, &run.ID); err == nil {
+			live, err := q.HasLiveChild(ctx, &run.ID)
+			if err != nil {
+				return err
+			}
+			if live {
 				wait := "delegation" // the delegated run is still going; its result resumes the parent
 				if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &wait}); err != nil {
 					return err
@@ -421,7 +425,13 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 				out, err = q.GetRun(ctx, store.GetRunParams{ID: run.ID, WorkspaceID: ws})
 				return err
 			}
-			if err := resume(ctx, q, run, "resume", "You were paused; continue."); err != nil {
+			trigger, msg := "resume", "You were paused; continue."
+			if wake, ok, err := delegationWakeMessage(ctx, q, run); err != nil {
+				return err
+			} else if ok {
+				trigger, msg = "delegation", wake
+			}
+			if err := resume(ctx, q, run, trigger, msg); err != nil {
 				return err
 			}
 			out, err = q.GetRun(ctx, store.GetRunParams{ID: run.ID, WorkspaceID: ws})
@@ -471,10 +481,33 @@ func (s *Service) OnHumanComment(ctx context.Context, ws uuid.UUID, ticketKey, b
 			return err
 		}
 		if run.State == "waiting" && deref(run.WaitReason) == "delegation" {
-			// The ticket's live work is the sub agent's; @mention it to answer.
-			if child, err := q.ActiveChildRun(ctx, &run.ID); err == nil {
-				run = child
+			// A mention reaches every child of that agent waiting for a human reply.
+			kids, err := q.ChildRuns(ctx, &run.ID)
+			if err != nil {
+				return err
 			}
+			for _, child := range kids {
+				if child.State != "waiting" || deref(child.WaitReason) != "human_reply" {
+					continue
+				}
+				a, err := q.GetAgent(ctx, store.GetAgentParams{ID: child.AgentID, WorkspaceID: ws})
+				if err != nil {
+					return err
+				}
+				if !Mentions(body, a.Handle) {
+					continue
+				}
+				child, err = q.LockRun(ctx, child.ID)
+				if err != nil {
+					return err
+				}
+				if child.State == "waiting" && deref(child.WaitReason) == "human_reply" {
+					if err := resume(ctx, q, child, "comment", body); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
 		}
 		if run.State != "waiting" || deref(run.WaitReason) != "human_reply" {
 			return nil
@@ -489,6 +522,9 @@ func (s *Service) OnHumanComment(ctx context.Context, ws uuid.UUID, ticketKey, b
 		run, err = q.LockRun(ctx, run.ID)
 		if err != nil {
 			return err
+		}
+		if run.State != "waiting" || deref(run.WaitReason) != "human_reply" {
+			return nil
 		}
 		return resume(ctx, q, run, "comment", body)
 	})

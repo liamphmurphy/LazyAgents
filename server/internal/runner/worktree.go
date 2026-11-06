@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/google/uuid"
 
@@ -26,32 +26,12 @@ const worktreesDir = ".lazyagents/worktrees"
 // uncommitted work: the worktree would be cut from HEAD without it.
 var errDirtyParent = errors.New("commit your work before delegating")
 
-// waitParentIdle blocks until the parent's harness process has exited. A
-// delegated run's worktree is cut from the parent's committed state, which is
-// only stable once the parent has stopped editing.
-func (r *Runner) waitParentIdle(ctx context.Context, parentID uuid.UUID) error {
-	deadline := time.Now().Add(5 * time.Minute)
-	for {
-		turns, err := r.q().ListTurns(ctx, parentID)
-		if err != nil {
-			return err
-		}
-		busy := false
-		for _, t := range turns {
-			busy = busy || t.Status == "running"
-		}
-		if !busy {
-			return nil
-		}
-		if time.Now().After(deadline) {
-			return errors.New("the main agent's turn didn't end")
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(150 * time.Millisecond):
-		}
-	}
+// wtLock serializes git work within a workspace in this runner process.
+func (r *Runner) wtLock(ws string) func() {
+	lock, _ := r.wtLocks.LoadOrStore(ws, &sync.Mutex{})
+	mu := lock.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 // prepareWorktree creates (or, for a continued run, reuses) the child's
@@ -62,8 +42,7 @@ func (r *Runner) prepareWorktree(ctx context.Context, c runCtx, env map[string]s
 		_ = json.Unmarshal(c.run.Contract, &contract)
 	}
 	ws := wsID(c.run)
-	r.wtMu.Lock() // one git operation on the parent's repository at a time
-	defer r.wtMu.Unlock()
+	defer r.wtLock(ws)()
 	run := func(name, dir, script string) (string, error) {
 		cctx, cancel := context.WithTimeout(ctx, 2*checkTimeout)
 		defer cancel()
@@ -121,7 +100,7 @@ git rev-parse HEAD
 // completed and its checks passed (or it had no contract), recording the
 // outcome on k. A conflict is aborted and the branch kept.
 func (r *Runner) mergeChild(ctx context.Context, ws, parentBranch string, child store.Run, contract runs.Contract, k *runs.Checks, env map[string]string) {
-	if contract.Branch == "" {
+	if k.Merged || contract.Branch == "" {
 		return
 	}
 	switch {
@@ -131,13 +110,15 @@ func (r *Runner) mergeChild(ctx context.Context, ws, parentBranch string, child 
 	case !contract.Empty() && !k.Passed:
 		k.MergeNote = "Its automated checks failed."
 		return
+	case k.HeadSHA == "":
+		k.MergeNote = "The checked commit could not be determined."
+		return
 	case parentBranch == "":
 		k.MergeNote = "The main agent's branch couldn't be determined."
 		return
 	}
-	r.wtMu.Lock()
-	defer r.wtMu.Unlock()
-	br, pb := shellQuote(contract.Branch), shellQuote(parentBranch)
+	defer r.wtLock(ws)()
+	br, pb := shellQuote(k.HeadSHA), shellQuote(parentBranch)
 	script := `if [ "$(git rev-list --count ` + pb + `..` + br + `)" = 0 ]; then echo 'EMPTY'; exit 0; fi
 out=$(git merge --no-ff --no-edit ` + br + ` 2>&1) && { echo MERGED; exit 0; }
 files=$(git diff --name-only --diff-filter=U)
@@ -209,8 +190,7 @@ func (r *Runner) removeWorktrees(ctx context.Context, parentID uuid.UUID) {
 		}
 	}
 	sb.WriteString("true\n")
-	r.wtMu.Lock()
-	defer r.wtMu.Unlock()
+	defer r.wtLock(parentID.String())()
 	cctx, cancel := context.WithTimeout(ctx, 2*checkTimeout)
 	defer cancel()
 	if _, _, err := r.execOnce(cctx, parentID.String(), "lazyagents-wt-clean-"+parentID.String(), sb.String(), map[string]string{}); err != nil {

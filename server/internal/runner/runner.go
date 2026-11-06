@@ -61,9 +61,10 @@ type Runner struct {
 	mu     sync.Mutex
 	active int
 	wg     sync.WaitGroup
-	// wtMu serialises git operations on a parent's repository that create,
-	// merge or remove delegated runs' worktrees.
-	wtMu sync.Mutex
+	// wtLocks serialises worktree creation, merges and removal per workspace
+	// within this runner process. Git locks and the run state machine cover
+	// cross-process operations.
+	wtLocks sync.Map
 }
 
 const tokenEnv = "LAZYAGENTS_TOKEN"
@@ -370,12 +371,6 @@ func (r *Runner) startChild(ctx context.Context, c runCtx) {
 		return
 	}
 	setupStart := time.Now()
-	if err := r.waitParentIdle(ctx, parent.ID); err != nil {
-		if ctx.Err() == nil {
-			fail("The main agent's turn didn't finish, so the delegated run can't start: " + err.Error())
-		}
-		return
-	}
 	contract, err := r.prepareWorktree(ctx, c, map[string]string{})
 	if err != nil {
 		fail("Couldn't start the delegated run: " + err.Error())
@@ -744,7 +739,15 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	prompt := turn.InputMessage
 	if turn.Trigger == "delegation" {
-		prompt += r.delegationReport(ctx, c, env)
+		parked, err := r.parkDelegation(ctx, c.run, turn)
+		if err != nil {
+			log.Error("park delegation report", "err", err)
+			return
+		}
+		if parked {
+			return
+		}
+		prompt += r.delegationReport(ctx, c, env, int(turn.Seq))
 	}
 	if c.run.Purpose == "chat" {
 		// The files this turn's message attached, listed in its prompt.

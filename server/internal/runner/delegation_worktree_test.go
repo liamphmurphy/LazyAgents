@@ -136,7 +136,7 @@ func TestParallelDelegationMergesBothChildren(t *testing.T) {
 	if !strings.HasPrefix(outcome, "RESUMED") || strings.Count(outcome, "**MERGED**") != 2 || !strings.Contains(outcome, "@scribe") || !strings.Contains(outcome, "@tester") {
 		t.Fatalf("resume report:\n%s", outcome)
 	}
-	for _, want := range []string{"docs/a.txt", "src/b.txt", "Merge branch"} {
+	for _, want := range []string{"docs/a.txt", "src/b.txt", "Merge commit"} {
 		if !strings.Contains(outcome, want) {
 			t.Fatalf("parent checkout lacks %q:\n%s", want, outcome)
 		}
@@ -252,7 +252,7 @@ func TestMergeConflictIsAbortedAndReported(t *testing.T) {
 		t.Fatalf("report:\n%s", out)
 	}
 	state := out[strings.Index(out, "=== checkout"):]
-	if strings.Contains(state, "Merge branch") || strings.Contains(state, "UU ") || strings.Contains(state[strings.Index(state, "[git status]"):], "shared.txt") {
+	if strings.Contains(state, "Merge commit") || strings.Contains(state, "UU ") || strings.Contains(state[strings.Index(state, "[git status]"):], "shared.txt") {
 		t.Fatalf("merge wasn't aborted cleanly:\n%s", state)
 	}
 }
@@ -337,5 +337,247 @@ func TestContinueRunReusesWorktreeAndSession(t *testing.T) {
 				t.Fatalf("outcome:\n%s", out)
 			}
 		})
+	}
+}
+
+// tickUntil doesn't wait for held fake processes to exit.
+func (e env) tickUntil(what string, ready func() bool) {
+	e.t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		e.runner.Tick(e.ctx)
+		if ready() {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	e.t.Fatalf("timed out waiting for %s", what)
+}
+
+func releaseFile(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPausedParentChecksAndMergesAfterResume(t *testing.T) {
+	e := setup(t)
+	e.subagent("scribe")
+	hold := filepath.Join(t.TempDir(), "release")
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+	t.Setenv("FAKE_HARNESS_HOLD", hold)
+	t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt"}}))
+	e.dispatch("PAY-214")
+	e.tickUntil("held child", func() bool { _, err := os.Stat(hold + ".started"); return err == nil })
+	parent := e.run("PAY-214")
+	if _, err := e.runs.SetRunControl(e.ctx, e.ws, e.me.ID, parent.ID, "pause"); err != nil {
+		t.Fatal(err)
+	}
+	releaseFile(t, hold)
+	e.runner.Wait()
+	if got := e.run("PAY-214"); got.State != "paused" {
+		t.Fatalf("parent %s", got.State)
+	}
+	if _, err := e.runs.SetRunControl(e.ctx, e.ws, e.me.ID, parent.ID, "resume"); err != nil {
+		t.Fatal(err)
+	}
+	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
+	if len(turns) != 2 || turns[1].Trigger != "delegation" || turns[1].Status != "pending" {
+		t.Fatalf("resume turns %+v", turns)
+	}
+	e.until("completed", e.state("PAY-214=completed"))
+	kid := e.children(parent)[0]
+	checks := e.checksOf(kid)
+	if !checks.Merged || checks.HeadSHA == "" || !strings.Contains(deref(e.run("PAY-214").Outcome), "docs/a.txt") {
+		t.Fatalf("checks %s", kid.Checks)
+	}
+}
+
+func TestDelegationWaitsForChildProcessExit(t *testing.T) {
+	e := setup(t)
+	e.subagent("scribe")
+	hold := filepath.Join(t.TempDir(), "linger")
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+	t.Setenv("FAKE_HARNESS_LINGER", hold)
+	t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt"}}))
+	e.dispatch("PAY-214")
+	e.tickUntil("completed child still running", func() bool { _, err := os.Stat(hold + ".started"); return err == nil })
+	parent := e.run("PAY-214")
+	for i := 0; i < 5; i++ {
+		e.runner.Tick(e.ctx)
+		time.Sleep(20 * time.Millisecond)
+	}
+	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
+	if len(turns) != 2 || turns[1].Status != "pending" {
+		t.Fatalf("parent ran before child exited: %+v", turns)
+	}
+	child := e.children(parent)[0]
+	if len(child.Checks) != 0 {
+		t.Fatalf("checks before process exited: %s", child.Checks)
+	}
+	releaseFile(t, hold)
+	e.until("completed", e.state("PAY-214=completed"))
+	turns, _ = e.q.ListTurns(e.ctx, parent.ID)
+	ct, _ := e.q.ListTurns(e.ctx, child.ID)
+	if turns[1].ProcessStartedAt == nil || ct[0].EndedAt == nil || turns[1].ProcessStartedAt.Before(*ct[0].EndedAt) {
+		t.Fatalf("turn timestamps: parent %+v child %+v", turns[1], ct[0])
+	}
+}
+
+func TestQueuedChildDoesNotOccupyRunnerSlotWhileParentRuns(t *testing.T) {
+	e := setup(t)
+	e.subagent("scribe")
+	hold := filepath.Join(t.TempDir(), "parent")
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+	t.Setenv("FAKE_HARNESS_PARENT_HOLD", hold)
+	t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt"}}))
+	e.dispatch("PAY-214")
+	e.tickUntil("held parent", func() bool { _, err := os.Stat(hold + ".started"); return err == nil })
+	parent := e.run("PAY-214")
+	// Even an arbitrarily old running parent keeps its child queued, without a timeout.
+	if _, err := e.pool.Exec(e.ctx, "UPDATE run_turns SET process_started_at=now()-interval '10 minutes' WHERE run_id=$1", parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		e.runner.Tick(e.ctx)
+		time.Sleep(20 * time.Millisecond)
+	}
+	child := e.children(parent)[0]
+	if child.State != "queued" || child.SetupMs != nil {
+		t.Fatalf("child was claimed: %+v", child)
+	}
+	// Restore bookkeeping so the artificial age doesn't consume the parent's runtime budget.
+	if _, err := e.pool.Exec(e.ctx, "UPDATE run_turns SET process_started_at=now() WHERE run_id=$1", parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	releaseFile(t, hold)
+	e.until("completed", e.state("PAY-214=completed"))
+	if child = e.children(parent)[0]; child.State != "completed" || !e.checksOf(child).Merged {
+		t.Fatalf("child %s checks %s", child.State, child.Checks)
+	}
+}
+
+func TestDelegationReportReplaysStoredChecks(t *testing.T) {
+	e := setup(t)
+	e.subagent("scribe")
+	e.subagent("tester")
+	hold := filepath.Join(t.TempDir(), "release")
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+	t.Setenv("FAKE_HARNESS_HOLD", hold)
+	t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{
+		{"agent": "scribe", "task": "Write FILE=docs/a.txt", "allowed_paths": []string{"docs/"}},
+		{"agent": "tester", "task": "Write FILE=src/b.txt", "allowed_paths": []string{"src/"}},
+	}))
+	e.dispatch("PAY-214")
+	e.tickUntil("two held children", func() bool {
+		kids := e.children(e.run("PAY-214"))
+		if len(kids) != 2 {
+			return false
+		}
+		for _, k := range kids {
+			turns, _ := e.q.ListTurns(e.ctx, k.ID)
+			if len(turns) != 1 || turns[0].Status != "running" {
+				return false
+			}
+		}
+		return true
+	})
+	releaseFile(t, hold)
+	e.runner.Wait()
+	parent := e.run("PAY-214")
+	kids := e.children(parent)
+	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
+	if len(turns) != 2 || turns[1].Status != "pending" {
+		t.Fatalf("turns %+v", turns)
+	}
+	// Simulate a crash after the first child's merge and checks were stored.
+	contract := e.contractOf(kids[0])
+	root := e.runner.Backend.WorkspaceDir(parent.ID.String())
+	git := func(a ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", a...)
+		cmd.Dir = root
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v %s", a, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	sha := git("rev-parse", contract.Branch)
+	git("merge", "--no-ff", "--no-edit", sha)
+	stored := runs.Checks{Ran: true, Passed: true, Merged: true, ChildState: "completed", Branch: contract.Branch, HeadSHA: sha, ReportedTurn: int(turns[1].Seq), DiffStat: "stored report marker"}
+	raw, _ := json.Marshal(stored)
+	if err := e.q.SetRunChecks(e.ctx, store.SetRunChecksParams{ID: kids[0].ID, Checks: raw}); err != nil {
+		t.Fatal(err)
+	}
+	// Removing the branch proves replay doesn't try to check or merge it again.
+	git("worktree", "remove", "--force", contract.Worktree)
+	git("branch", "-D", contract.Branch)
+	e.until("completed", e.state("PAY-214=completed"))
+	outcome := deref(e.run("PAY-214").Outcome)
+	if strings.Count(outcome, "**MERGED**") != 2 || !strings.Contains(outcome, "stored report marker") {
+		t.Fatalf("report %s", outcome)
+	}
+	got := e.children(parent)
+	check := e.checksOf(got[0])
+	if check.HeadSHA != sha || check.DiffStat != stored.DiffStat || check.ReportedTurn != stored.ReportedTurn {
+		t.Fatalf("stored result changed: %s", got[0].Checks)
+	}
+}
+
+func TestMergeUsesCheckedCommit(t *testing.T) {
+	e := setup(t)
+	e.subagent("scribe")
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+	t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt", "test_command": "git commit --allow-empty -q -m 'Unchecked commit'"}}))
+	e.dispatch("PAY-214")
+	e.until("completed", e.state("PAY-214=completed"))
+	parent := e.run("PAY-214")
+	child := e.children(parent)[0]
+	checks := e.checksOf(child)
+	if !checks.Merged || checks.HeadSHA == "" {
+		t.Fatalf("checks %s", child.Checks)
+	}
+	out := deref(parent.Outcome)
+	if checkout := out[strings.Index(out, "=== checkout"):]; strings.Contains(checkout, "Unchecked commit") || !strings.Contains(checkout, "Add docs/a.txt") {
+		t.Fatalf("merged unchecked head: %s", out)
+	}
+}
+
+func TestChildCancelledBeforeParentProcessExits(t *testing.T) {
+	e := setup(t)
+	e.subagent("scribe")
+	hold := filepath.Join(t.TempDir(), "parent")
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+	t.Setenv("FAKE_HARNESS_PARENT_HOLD", hold)
+	t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt"}}))
+	e.dispatch("PAY-214")
+	e.tickUntil("held parent", func() bool { _, err := os.Stat(hold + ".started"); return err == nil })
+	parent := e.run("PAY-214")
+	child := e.children(parent)[0]
+	if _, err := e.runs.SetRunControl(e.ctx, e.ws, e.me.ID, child.ID, "cancel"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.runs.Delegate(e.ctx, agents.Caller{Agent: e.atlas, Kind: "run", RunID: &parent.ID}, "", "scribe", "another task")
+	if err == nil || !strings.Contains(err.Error(), "end your turn to read their report") {
+		t.Fatalf("delegate after child ended: %v", err)
+	}
+	for i := 0; i < 5; i++ {
+		e.runner.Tick(e.ctx)
+		time.Sleep(20 * time.Millisecond)
+	}
+	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
+	if len(turns) != 2 || turns[1].Status != "pending" {
+		t.Fatalf("report started while parent running: %+v", turns)
+	}
+	releaseFile(t, hold)
+	e.until("completed", e.state("PAY-214=completed"))
+	turns, _ = e.q.ListTurns(e.ctx, parent.ID)
+	if len(turns) != 2 || len(e.children(parent)) != 1 {
+		t.Fatalf("duplicate report or delegation: %+v", turns)
+	}
+	if len(e.children(parent)[0].Checks) == 0 {
+		t.Fatal("cancelled child was never reported")
 	}
 }

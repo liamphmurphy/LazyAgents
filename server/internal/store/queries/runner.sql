@@ -8,6 +8,7 @@ UPDATE runs SET state = 'starting', runner_id = sqlc.arg(runner_id)
 WHERE id = (
   SELECT r.id FROM runs r
   WHERE r.state = 'queued'
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND b.status = 'running')
     AND (r.parent_run_id IS NOT NULL OR NOT EXISTS (
       SELECT 1 FROM ticket_dependencies d JOIN tickets bt ON bt.id = d.blocker_id
       WHERE d.ticket_id = r.ticket_id AND bt.status <> 'done'))
@@ -30,6 +31,9 @@ WHERE id = (
     AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = t.run_id AND b.status = 'running')
     -- A delegated run shares its parent's checkout: wait for the parent's process to exit.
     AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND b.status = 'running')
+    AND NOT EXISTS (
+      SELECT 1 FROM run_turns b JOIN runs c ON c.id = b.run_id
+      WHERE c.parent_run_id = r.id AND b.status = 'running')
   ORDER BY t.seq
   FOR UPDATE OF t SKIP LOCKED
   LIMIT 1

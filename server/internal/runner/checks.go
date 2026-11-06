@@ -79,19 +79,59 @@ func parseStatus(out string) []string {
 	return files
 }
 
+// parkDelegation holds the parent lock while checking children and parking it,
+// so a child's concurrent WakeParent cannot be lost between those operations.
+func (r *Runner) parkDelegation(ctx context.Context, parent store.Run, turn store.RunTurn) (bool, error) {
+	tx, err := r.Pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+	q := store.New(tx)
+	locked, err := q.LockRun(ctx, parent.ID)
+	if err != nil {
+		return false, err
+	}
+	if locked.State != "running" {
+		if err := q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")}); err != nil {
+			return false, err
+		}
+		return true, tx.Commit(ctx)
+	}
+	live, err := q.HasLiveChild(ctx, &parent.ID)
+	if err != nil {
+		return false, err
+	}
+	if !live {
+		return false, nil
+	}
+	wait := "delegation"
+	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: parent.ID, State: "waiting", WaitReason: &wait}); err != nil {
+		return false, err
+	}
+	if err := q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")}); err != nil {
+		return false, err
+	}
+	return true, tx.Commit(ctx)
+}
+
 // delegationReport checks every delegated run that ended since the parent was
 // parked, in its worktree, merges the ones that passed into the parent's
 // branch, stores the results on the runs and returns the text to append to the
 // parent's resume message. It returns "" when no finished child is waiting to be
 // checked.
-func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[string]string) string {
+func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[string]string, reportedTurn int) string {
 	kids, err := r.q().ChildRuns(ctx, &parent.run.ID)
 	if err != nil {
 		return ""
 	}
 	var ended []store.Run
 	for _, k := range kids {
-		if isDone(k.State) && len(k.Checks) == 0 {
+		if !isDone(k.State) {
+			return ""
+		}
+		var checks runs.Checks
+		if len(k.Checks) == 0 || (json.Unmarshal(k.Checks, &checks) == nil && checks.ReportedTurn == reportedTurn) {
 			ended = append(ended, k)
 		}
 	}
@@ -106,16 +146,22 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 		if len(child.Contract) > 0 {
 			_ = json.Unmarshal(child.Contract, &contract)
 		}
-		checksStart := time.Now()
-		k := r.checkChild(ctx, child, contract, parentBranch, env)
-		r.mergeChild(ctx, ws, parentBranch, child, contract, &k, env)
-		r.addTiming(child.ID, 0, 0, time.Since(checksStart))
-		if b, err := json.Marshal(k); err == nil {
-			if err := r.q().SetRunChecks(ctx, store.SetRunChecksParams{ID: child.ID, Checks: b}); err != nil {
-				r.Log.Warn("store checks", "run", child.ID, "err", err)
+		var k runs.Checks
+		if len(child.Checks) > 0 {
+			_ = json.Unmarshal(child.Checks, &k)
+		} else {
+			checksStart := time.Now()
+			k = r.checkChild(ctx, child, contract, parentBranch, env)
+			k.ReportedTurn = reportedTurn
+			r.mergeChild(ctx, ws, parentBranch, child, contract, &k, env)
+			r.addTiming(child.ID, 0, 0, time.Since(checksStart))
+			if b, err := json.Marshal(k); err == nil {
+				if err := r.q().SetRunChecks(ctx, store.SetRunChecksParams{ID: child.ID, Checks: b}); err != nil {
+					r.Log.Warn("store checks", "run", child.ID, "err", err)
+				}
 			}
+			r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "checks", "passed": k.Passed, "ran": k.Ran, "merged": k.Merged, "branch": k.Branch})
 		}
-		r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "checks", "passed": k.Passed, "ran": k.Ran, "merged": k.Merged, "branch": k.Branch})
 		report.WriteString("\n\n")
 		if len(ended) > 1 {
 			handle := child.AgentID.String()
@@ -161,6 +207,13 @@ func (r *Runner) checkChild(ctx context.Context, child store.Run, contract runs.
 		out, code, err := r.execIn(cctx, ws, dir, "lazyagents-check-"+child.ID.String(), script, env)
 		return out, err == nil && code == 0
 	}
+	head, ok := git("git rev-parse HEAD")
+	if !ok {
+		k.Error = "git HEAD could not be determined"
+		k.Evaluate(contract)
+		return k
+	}
+	k.HeadSHA = strings.TrimSpace(head)
 	status, ok := git("git status --porcelain")
 	if !ok {
 		k.Error = "git status failed in the worktree"
@@ -171,14 +224,14 @@ func (r *Runner) checkChild(ctx context.Context, child store.Run, contract runs.
 	// What the branch would add to the parent's: everything since it forked from it.
 	base := ""
 	if parentBranch != "" {
-		base, _ = git("git merge-base " + shellQuote(parentBranch) + " HEAD")
+		base, _ = git("git merge-base " + shellQuote(parentBranch) + " " + shellQuote(k.HeadSHA))
 		base = strings.TrimSpace(base)
 	}
 	if base == "" {
 		k.Error = "the branch's fork point from the main agent's branch couldn't be found, so committed changes can't be listed"
 	} else {
 		k.BaseSHA = base
-		names, ok := git("git diff --name-only " + shellQuote(base) + " HEAD")
+		names, ok := git("git diff --name-only " + shellQuote(base) + " " + shellQuote(k.HeadSHA))
 		if !ok {
 			k.Error = "git diff against the fork point failed"
 		} else {
@@ -187,7 +240,7 @@ func (r *Runner) checkChild(ctx context.Context, child store.Run, contract runs.
 					k.ChangedFiles = append(k.ChangedFiles, f)
 				}
 			}
-			k.DiffStat, _ = git("git diff --stat " + shellQuote(base) + " HEAD")
+			k.DiffStat, _ = git("git diff --stat " + shellQuote(base) + " " + shellQuote(k.HeadSHA))
 			k.DiffStat = lastLines(strings.TrimSpace(k.DiffStat), 40)
 		}
 	}

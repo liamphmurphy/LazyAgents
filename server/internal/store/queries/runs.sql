@@ -13,7 +13,10 @@ SELECT * FROM runs WHERE id = $1 FOR UPDATE;
 SELECT * FROM runs WHERE ticket_id = $1 AND parent_run_id IS NULL AND state NOT IN ('completed', 'failed', 'cancelled');
 
 -- name: ActiveChildRun :one
-SELECT * FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled');
+SELECT * FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled') ORDER BY started_at DESC LIMIT 1;
+
+-- name: HasLiveChild :one
+SELECT EXISTS(SELECT 1 FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled'));
 
 -- name: CountChildRuns :one
 SELECT count(*) FROM runs WHERE parent_run_id = $1;

@@ -241,6 +241,18 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if run, err = q.LockRun(ctx, run.ID); err != nil {
 			return err
 		}
+		if run.State != "running" && !(run.State == "waiting" && deref(run.WaitReason) == "delegation") {
+			return apperr.Conflict("your run is no longer running")
+		}
+		turns, err := q.ListTurns(ctx, run.ID)
+		if err != nil {
+			return err
+		}
+		for _, turn := range turns {
+			if turn.Status == "pending" && turn.Trigger == "delegation" {
+				return apperr.Conflict("your delegated runs already finished; end your turn to read their report")
+			}
+		}
 		if run.ParentRunID != nil {
 			return apperr.Conflict("a delegated run can't delegate further")
 		}
@@ -392,6 +404,9 @@ func continuedRun(contract Contract, kids []store.Run, parent store.Run, sub sto
 	case !slices.Contains(Terminal, prev.State):
 		return nil, apperr.Invalid("continue_run_id", "that run is still in progress; wait for it to finish")
 	}
+	if len(prev.Checks) == 0 {
+		return nil, apperr.Invalid("continue_run_id", "that run hasn't been checked and merged yet; wait for your delegation report")
+	}
 	var pc Contract
 	_ = json.Unmarshal(prev.Contract, &pc)
 	if pc.Worktree == "" {
@@ -461,23 +476,30 @@ func WakeParent(ctx context.Context, q *store.Queries, child store.Run, state, o
 	if parent.State != "waiting" || deref(parent.WaitReason) != "delegation" {
 		return nil
 	}
-	kids, err := q.ChildRuns(ctx, &parent.ID)
-	if err != nil {
+	msg, ok, err := delegationWakeMessage(ctx, q, parent)
+	if err != nil || !ok {
 		return err
 	}
-	var ended []store.Run // not yet checked by the runner: finished since the parent was parked
+	return resume(ctx, q, parent, "delegation", msg)
+}
+
+// delegationWakeMessage includes every terminal child not yet checked by the runner.
+func delegationWakeMessage(ctx context.Context, q *store.Queries, parent store.Run) (string, bool, error) {
+	kids, err := q.ChildRuns(ctx, &parent.ID)
+	if err != nil {
+		return "", false, err
+	}
+	var ended []store.Run
 	for _, k := range kids {
 		if !slices.Contains(Terminal, k.State) {
-			return nil // wait for the rest
+			return "", false, nil
 		}
-		if len(k.Checks) == 0 && k.ID != child.ID {
+		if len(k.Checks) == 0 {
 			ended = append(ended, k)
 		}
 	}
-	ended = append(ended, child)
-	if state != child.State || outcome != deref(child.Outcome) { // the caller's view wins for the run that just ended
-		child.State, child.Outcome = state, &outcome
-		ended[len(ended)-1] = child
+	if len(ended) == 0 {
+		return "", false, nil
 	}
 	line := func(k store.Run) string {
 		handle := k.AgentID.String()
@@ -509,7 +531,7 @@ func WakeParent(ctx context.Context, q *store.Queries, child store.Run, state, o
 	msg += "\n\nThe server checks each delegated run in its worktree against its contract (changed files, allowed paths, test command) and merges the ones that passed into your branch before you resume; those results follow. " +
 		"Don't repeat checks that already ran. Read the diff for what they can't judge, read get_ticket, verify the acceptance criteria, and delegate again (continue_run_id sends fixes to the same sub agent) or fix any remaining work yourself. " +
 		"When every criterion is verified and checked, commit and push any changes, record the PR with set_pr, obtain delegated reviewer/QA approval, and finish with complete_run status=done."
-	return resume(ctx, q, parent, "delegation", msg)
+	return msg, true, nil
 }
 
 // CancelChildren ends a parent's live delegated runs (the parent was cancelled

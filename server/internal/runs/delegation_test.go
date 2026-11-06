@@ -168,6 +168,10 @@ func TestDelegationToSubagents(t *testing.T) {
 		t.Fatalf("clear after approval: %v", err)
 	}
 
+	// The runner has consumed the previous report before another delegation.
+	if _, err := pool.Exec(ctx, "UPDATE run_turns SET status='done' WHERE run_id=$1", parent.ID); err != nil {
+		t.Fatal(err)
+	}
 	// A failed child tells the parent; cancelling a parent takes its child down.
 	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: parent.ID, State: "running"}); err != nil {
 		t.Fatal(err)
@@ -186,6 +190,9 @@ func TestDelegationToSubagents(t *testing.T) {
 	turns, _ = q.ListTurns(ctx, parent.ID)
 	if m := turns[len(turns)-1].InputMessage; !strings.Contains(m, "cancelled") {
 		t.Fatalf("parent told %q", m)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE run_turns SET status='done' WHERE run_id=$1", parent.ID); err != nil {
+		t.Fatal(err)
 	}
 	d3, err := svc.DelegateWithContract(ctx, callerFor(atlas, &parent.ID), "", "scribe", "Third task",
 		runs.Contract{AcceptanceCriteria: []string{"docs updated"}, AllowedPaths: []string{"docs/"}, TestCommand: "make test"})

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 )
 
 // Workspace is where a turn runs, as seen from inside its environment.
@@ -250,13 +251,13 @@ func gitSection(spec agentdef.Resolved) string {
 
 // delegationSection tells a main agent it can hand work to sub agents.
 func delegationSection(agentdef.Resolved) string {
-	return "If sub agents exist (`list_subagents`), you may hand them self-contained parts of the ticket such as implementation or documentation with " +
-		"`delegate`. Commit your work first. Each sub agent works in its own git worktree and branch, and the server merges the branch into yours when its checks pass; " +
-		"you may run up to 3 in parallel if their allowed_paths don't overlap (call `delegate` once per sub agent, then end your turn), and you're resumed once when all have finished. " +
-		"Review the diff before relying on it, and send fixes back to the same sub agent with continue_run_id. " +
-		"Delegating costs a fresh agent startup, a handoff and a verification pass: do small or tightly coupled changes yourself, and delegate substantial work. " +
-		"Give `delegate` acceptance_criteria, allowed_paths and a test_command; the server runs those checks and hands you the results, so you don't repeat them. " +
-		"You stay responsible for the ticket: only you call claim_ticket and complete_run for it. Before finishing, read get_ticket and verify every acceptance criterion against evidence; use check_criterion only for verified criteria. If any criterion is unmet, implement it yourself or delegate it to a suitable agent and inspect the result. Continue until all criteria are satisfied. Commit and push any changes, record the PR with set_pr, obtain an approved verdict from a delegated reviewer or QA agent, then call complete_run with status=done. Do not stop at In Review when you can finish this workflow. If you need a person, use await_human or request_approval; status=todo explicitly hands back unfinished work.\n\n"
+	return fmt.Sprintf("If sub agents exist (`list_subagents`), you may hand them self-contained parts of the ticket such as implementation or documentation with "+
+		"`delegate`. Commit your work first: a delegated run fails to start if your checkout has uncommitted changes. Each sub agent works in its own git worktree and branch, and the server merges the branch into yours when its checks pass; "+
+		"you may run up to %d in parallel if their allowed_paths don't overlap (call `delegate` once per sub agent, then end your turn), and you're resumed once when all have finished. "+
+		"Review the diff before relying on it, and send fixes back to the same sub agent with continue_run_id. "+
+		"Delegating costs a fresh agent startup, a handoff and a verification pass: do small or tightly coupled changes yourself, and delegate substantial work. "+
+		"Give `delegate` acceptance_criteria, allowed_paths and a test_command; the server runs those checks and hands you the results, so you don't repeat them. "+
+		"You stay responsible for the ticket: only you call claim_ticket and complete_run for it. Before finishing, read get_ticket and verify every acceptance criterion against evidence; use check_criterion only for verified criteria. If any criterion is unmet, implement it yourself or delegate it to a suitable agent and inspect the result. Continue until all criteria are satisfied. Commit and push any changes, record the PR with set_pr, obtain an approved verdict from a delegated reviewer or QA agent, then call complete_run with status=done. Do not stop at In Review when you can finish this workflow. If you need a person, use await_human or request_approval; status=todo explicitly hands back unfinished work.\n\n", runs.MaxParallelDelegations)
 }
 
 // UsageLimit reports provider exhaustion from an error, never ordinary tool output.

@@ -14,7 +14,7 @@ import (
 )
 
 const activeChildRun = `-- name: ActiveChildRun :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled')
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled') ORDER BY started_at DESC LIMIT 1
 `
 
 func (q *Queries) ActiveChildRun(ctx context.Context, parentRunID *uuid.UUID) (Run, error) {
@@ -859,6 +859,17 @@ func (q *Queries) GetRun(ctx context.Context, arg GetRunParams) (Run, error) {
 		&i.ChecksMs,
 	)
 	return i, err
+}
+
+const hasLiveChild = `-- name: HasLiveChild :one
+SELECT EXISTS(SELECT 1 FROM runs WHERE parent_run_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled'))
+`
+
+func (q *Queries) HasLiveChild(ctx context.Context, parentRunID *uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasLiveChild, parentRunID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const insertPlanStep = `-- name: InsertPlanStep :exec

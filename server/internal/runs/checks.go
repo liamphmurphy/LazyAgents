@@ -10,6 +10,8 @@ import (
 // waking the main agent. It's stored on the child run and rendered into the
 // main agent's resume message.
 type Checks struct {
+	HeadSHA      string   `json:"head_sha,omitempty"`
+	ReportedTurn int      `json:"reported_turn,omitempty"`
 	Ran          bool     `json:"ran"`
 	Error        string   `json:"error,omitempty"` // why the checks couldn't run
 	ChildState   string   `json:"child_state"`
