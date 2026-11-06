@@ -15,7 +15,7 @@ default** (see [Isolation](#isolation-attestation)).
 > stub capture showed that ambient or agent-written `opencode.json` overrides the
 > generated policy. Ticket runs also can't read or edit files under the current
 > allowlist. Both are open follow-ups (see Limitations).
-> See [Limitations](#limitations). Requirement-by-requirement evidence:
+> Requirement-by-requirement evidence:
 > [`verification/LAZYAGENTS-25-requirements-matrix.md`](../verification/LAZYAGENTS-25-requirements-matrix.md).
 
 Design and evidence: [`docs/contracts/opencode2/`](contracts/opencode2/ADR.md)
@@ -107,6 +107,12 @@ natural place for the claim to hold; on local, only if you have verified it.
 
 ## Limitations
 
+- **Current usability (until LAZYAGENTS-26 lands):** OpenCode works only for
+  read-only chat and runs that use nothing but MCP tools. Ticket runs can't read
+  or edit files. `RUNNER_OPENCODE_ISOLATED=true` is only an operator claim: an
+  ambient or agent-written `opencode.json` can still override the policy
+  (LAZYAGENTS-27), so setting the flag doesn't make isolation true.
+
 - **Real-provider parity is not verified (UNVERIFIED, no paid runs).** Nothing
   here has run against a real provider: real token units, billing, model
   behaviour and real quota envelopes are unknown. What *has* been captured with
@@ -154,6 +160,7 @@ natural place for the claim to hold; on local, only if you have verified it.
 
 | Message (starts with) | Cause | Fix |
 | --- | --- | --- |
+| *(no message: the run never finishes while the provider is rate-limiting)* | On a 429/529 the CLI retries forever and emits no error. | Cancel the run and check the provider quota. Runner detection is tracked in LAZYAGENTS-28. |
 | `OpenCode needs isolated config (managed config, no ambient ~/.config/opencode), which this backend does not attest. Set RUNNER_OPENCODE_ISOLATED=true only where it holds, or pick another harness.` | Attestation unset (chat reason or run failure). | Set `RUNNER_OPENCODE_ISOLATED=true` on API **and** runner if true, else use another harness. |
 | `OpenCode is not available: install @opencode/cli@2.2.1 (the agent-base image pins it) or set RUNNER_OPENCODE_BIN.` | Executable missing or `--version` exits non-zero. | Rebuild the image, or install on the host / set `RUNNER_OPENCODE_BIN`. |
 | `OpenCode 2.2.1 is required; this runner has <output>.` | Another version installed. | Install exactly 2.2.1. |

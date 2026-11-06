@@ -30,7 +30,7 @@ Paths below are relative to the repo root. `S/` = `server/`, `W/` = `web/`.
 | Requirement | Implementation | Evidence | Evidence type | Status |
 | --- | --- | --- | --- | --- |
 | 1. Definition, override and fallback validation (`opencode` ID, provider-qualified model, options, fallback) | `S/internal/agentdef/{spec,enforce,opencode}.go`, `S/internal/agents/service.go` | `TestOpenCodeSelectionValidation`, `TestOpenCodeFallbackValidation`, `TestOpenCodeOverrideAndResolved`, `TestOpenCodeCapabilitiesAreConservative` in `S/internal/agentdef/opencode_test.go`; `TestOpenCodeInvalidSelections` in `S/internal/runner/opencode_test.go`; `TestPlanningOpenCodeOptionsPassValidation` in `S/internal/runs/planning_fallback_test.go` | unit, fake-CLI | VERIFIED (fake) |
-| 2. API source and generated consumers (enum `claude-code,codex,opencode`) | `api/openapi.yaml`, `S/internal/api/api.gen.go`, `W/lib/api/schema.d.ts` | `make gen-check` result recorded in `docs/contracts/opencode2/verification.md` (LAZYAGENTS-20 section); not re-run here | static | UNVERIFIED (generation recorded by earlier tickets; re-run belongs in Regression results) |
+| 2. API source and generated consumers (enum `claude-code,codex,opencode`) | `api/openapi.yaml`, `S/internal/api/api.gen.go`, `W/lib/api/schema.d.ts` | `make gen-check` pass (see Regression results) and CI job `contract` | static | VERIFIED (static) |
 | 3. Agent catalog and resolved UI metadata (accurate capabilities) | `S/internal/httpapi/agents.go`, `S/internal/agentdef/enforce.go` | `TestOpenCodeCapabilitiesAreConservative`, `TestOpenCodeOverrideAndResolved` in `S/internal/agentdef/opencode_test.go` | unit | VERIFIED (fake) |
 | 4. Agent defaults and editable definitions (no new default; third harness in editor, fallback not two-way) | `W/app/(app)/agents/[handle]/definition-editor.tsx` | Playwright in `W/e2e/agent-editor.spec.ts`: `editor: choose OpenCode by keyboard, save, reload keeps it`, `editor: fallback offers OpenCode and its default harness is not hardcoded`, `editor: codex suggests codex models`, `editor: 422 shows the error and keeps the draft` | unit (mocked API) | VERIFIED (fake) |
 | 5. Adapter boundary (Invocation/Parser, policy bridge or rejection) | `S/internal/harness/{harness,opencode,opencode_parser}.go` | `TestOpenCodeInvocationFreshAndResumed`, `TestOpenCodeModelAndCredentialMapping`, `TestOpenCodeFilesAndSecrets`, `TestOpenCodeRegisteredFailClosed`, `TestOpenCodeTurn` in `S/internal/harness/opencode_test.go` | unit | VERIFIED (fake) |
@@ -49,7 +49,7 @@ Paths below are relative to the repo root. `S/` = `server/`, `W/` = `web/`.
 | 18. UI chat and activity (live catalog labels, provider IDs, switching warning, cancellation, unknown cost) | `W/app/(app)/chat/_components/*`, `W/components/domain/start-chat.tsx`, `W/app/(app)/runs/[id]/run-log.tsx`, `W/app/(app)/settings/secrets-card.tsx` | `W/e2e/chat.spec.ts`: `OpenCode model is chosen with the keyboard, posted, and survives reload`, `unavailable OpenCode shows its reason and can't be selected`, `a rejected OpenCode post shows the error and keeps the selection`; `W/e2e-stack/opencode-chat.spec.ts`: `OpenCode: cancel a running turn, then repost and get a reply`; `W/e2e/run-log.spec.ts` title in row 16 | unit (mocked API), real-stack e2e with fake CLI | VERIFIED (fake) |
 | 19. Manual onboarding and docs | `docs/opencode.md`, `docs/guide.md`, `README.md`, `web/e2e-stack/README.md` | Files exist and cross-link (`README.md` line 78, `docs/guide.md` lines 27-47). Hand-written, no doc test. | docs | VERIFIED (fake) |
 | 20. Fixtures and verification (captured CLI envelopes) | `S/internal/harness/testdata/opencode-real-{auth-error,no-route}.jsonl` (real); `opencode-{turn,zero-cost,tool-error,quota-error,auth-error,malformed,truncated}.jsonl` (synthetic) | `TestOpenCodeRealErrorEnvelopes`, `TestOpenCodeFailuresNeverFabricateSuccess`, `TestOpenCodeOversizedLineFails` in `S/internal/harness/opencode_test.go` | real CLI error capture (2 errors), real CLI + stub provider, unit | VERIFIED (real) for `provider.no-route` and `provider.auth`. VERIFIED (real CLI + stub provider) for success, tool, resume, quota-error and cancel envelopes (`opencode-real-stub-*.jsonl`, `TestOpenCodeRealStub*` in `S/internal/harness/opencode_real_stub_test.go`); a real-provider capture is UNVERIFIED |
-| 21. Generation gate (gen-check, CI) | `Makefile`, `.github/workflows/ci.yml` | `make gen-check` (to be recorded in Regression results) | static | UNVERIFIED (not run by this matrix) |
+| 21. Generation gate (gen-check, CI) | `Makefile`, `.github/workflows/ci.yml` | `make gen-check` pass (see Regression results); CI jobs `contract`/`server`/`web`/`e2e-stack` green | static | VERIFIED (static) |
 
 ## B. Accepted capabilities in ADR.md / ADR-020
 
@@ -93,7 +93,7 @@ Each row needs a credentialed run of real OpenCode 2.2.1 against a real provider
 
 | Requirement | Implementation | Evidence | Evidence type | Status |
 | --- | --- | --- | --- | --- |
-| Real ticket turn (fresh turn, tool call, completion, usage, cost, resume) | `S/internal/runner/runner.go`, `S/internal/harness/opencode_parser.go` | None yet. Replace synthetic `opencode-turn.jsonl` with a sanitized capture. | real CLI + stub provider (CLI side only) | UNVERIFIED — owner directed no paid runs (2026-11-05); stub covers wire, MCP calls and resume |
+| Real ticket turn (fresh turn, tool call, completion, usage, cost, resume) | `S/internal/runner/runner.go`, `S/internal/harness/opencode_parser.go` | Real CLI + stub: `TestRealOpenCodeAgainstStubTicketTurn` (S/internal/runner/opencode_real_test.go), fixtures `testdata/opencode-real-stub-{text,tools-blocked,resume}.jsonl`. No real-provider capture. | real CLI + stub provider (CLI side only) | UNVERIFIED — owner directed no paid runs (2026-11-05); stub covers wire, MCP calls and resume |
 | Real planning draft (`propose_tickets` through the real CLI) | `S/internal/runs/planning.go` | None yet | none | UNVERIFIED — owner directed no paid runs (2026-11-05) |
 | Real two-turn chat with model/harness switch, recall and project-context citation | `S/internal/runner/chat.go`, `S/internal/agentapi/chat.go` | None yet. Fake-CLI equivalents: `TestOpenCodeChatModelChangeResumesSession`, `TestOpenCodeChatHarnessSwitches`, `TestOpenCodeChatReadsThroughChatToken`. Stub covers two-turn resume only (`TestRealOpenCodeAgainstStubChatResumes`) | real CLI + stub provider (resume only) | UNVERIFIED — owner directed no paid runs (2026-11-05); stub covers session resume with history |
 
@@ -106,7 +106,7 @@ Each row needs a credentialed run of real OpenCode 2.2.1 against a real provider
 
 ## Regression results
 
-Re-run by the tech lead on 2026-11-05 at branch head 0c6cf3f plus this docs commit, local darwin/arm64, Go 1.26. No real harness CLI or provider key was used.
+Re-run by the tech lead on 2026-11-05 at 0c6cf3f (Go suite, gen-check, web checks). PR #20 CI re-checked green at 99ebc1d; local darwin/arm64, Go 1.26. No real harness CLI or provider key was used.
 
 | Check | Result |
 | --- | --- |
