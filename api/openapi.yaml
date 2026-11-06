@@ -1502,7 +1502,7 @@ paths:
         default: { $ref: '#/components/responses/Error' }
   /projects/{key}/board:
     parameters:
-      - { name: key, in: path, required: true, description: Project key, e.g. PAY, schema: { type: string } }
+      - { name: key, in: path, required: true, description: "Project key, e.g. PAY", schema: { type: string } }
     get:
       operationId: getProjectBoard
       summary: Kanban board for a project, optionally one epic
@@ -1853,9 +1853,9 @@ components:
         status: { $ref: "#/components/schemas/EpicStatus" }
         criteria_total: { type: integer, description: Epic acceptance criteria }
         criteria_done: { type: integer }
-        points_total: { type: integer, description: Sum of estimate_points over the epic's tickets, canceled excluded }
+        points_total: { type: integer, description: "Sum of estimate_points over the epic's tickets, canceled excluded" }
         points_done: { type: integer, description: Sum of estimate_points over its done tickets }
-        tickets_total: { type: integer, description: Tickets in the epic, canceled excluded }
+        tickets_total: { type: integer, description: "Tickets in the epic, canceled excluded" }
         tickets_open: { type: integer, description: Tickets not done or canceled }
     EpicStatus:
       type: string
@@ -1894,8 +1894,8 @@ components:
       properties:
         status: { $ref: "#/components/schemas/TicketStatus" }
         cards: { type: array, items: { $ref: "#/components/schemas/TicketSummary" } }
-        count: { type: integer, description: All tickets in the column, including ones cut by truncation }
-        points: { type: integer, description: Sum of estimate_points in the column }
+        count: { type: integer, description: "All tickets in the column, including ones cut by truncation" }
+        points: { type: integer, description: "Sum of estimate_points over all tickets in the column, truncated ones included" }
         truncated: { type: boolean }
     BoardEpic:
       type: object

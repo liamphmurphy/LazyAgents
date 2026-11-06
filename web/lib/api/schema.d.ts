@@ -1161,7 +1161,7 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description Project key */
+                /** @description Project key, e.g. PAY */
                 key: string;
             };
             cookie?: never;
@@ -1406,11 +1406,11 @@ export interface components {
             /** @description Epic acceptance criteria */
             criteria_total: number;
             criteria_done: number;
-            /** @description Sum of estimate_points over the epic's tickets */
+            /** @description Sum of estimate_points over the epic's tickets, canceled excluded */
             points_total: number;
             /** @description Sum of estimate_points over its done tickets */
             points_done: number;
-            /** @description Tickets in the epic */
+            /** @description Tickets in the epic, canceled excluded */
             tickets_total: number;
             /** @description Tickets not done or canceled */
             tickets_open: number;
@@ -1448,9 +1448,9 @@ export interface components {
         BoardColumn: {
             status: components["schemas"]["TicketStatus"];
             cards: components["schemas"]["TicketSummary"][];
-            /** @description All tickets in the column */
+            /** @description All tickets in the column, including ones cut by truncation */
             count: number;
-            /** @description Sum of estimate_points in the column */
+            /** @description Sum of estimate_points over all tickets in the column, truncated ones included */
             points: number;
             truncated: boolean;
         };
@@ -4809,7 +4809,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Project key */
+                /** @description Project key, e.g. PAY */
                 key: string;
             };
             cookie?: never;
