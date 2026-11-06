@@ -134,7 +134,7 @@ SELECT kind,id,title,href FROM (
  AND ($3::text IS NULL OR p.key=$3)
  UNION ALL
  SELECT 'agent',a.id,a.name, '/agents/'||a.handle
- FROM agents a WHERE a.workspace_id=$1
+ FROM agents a WHERE a.workspace_id=$1 AND a.archived_at IS NULL
  AND (a.name ILIKE '%'||$2::text||'%' OR a.handle ILIKE replace($2,'@','')||'%')
  AND ($3::text IS NULL OR EXISTS (
  SELECT 1 FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.assignee_agent_id=a.id AND p.key=$3))

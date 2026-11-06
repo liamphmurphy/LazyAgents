@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -182,8 +183,15 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 		env = append(env, k+"="+v)
 	}
 	sort.Strings(env)
+	dir := workspacePath
+	if spec.Dir != "" {
+		if strings.Contains(spec.Dir, "..") || strings.HasPrefix(spec.Dir, "/") {
+			return nil, fmt.Errorf("runner: bad directory %q", spec.Dir)
+		}
+		dir = path.Join(workspacePath, spec.Dir)
+	}
 	body := map[string]any{
-		"Image": d.Image, "Cmd": spec.Argv, "Env": env, "WorkingDir": workspacePath,
+		"Image": d.Image, "Cmd": spec.Argv, "Env": env, "WorkingDir": dir,
 		"Labels": map[string]string{labelKey: runID},
 		"HostConfig": map[string]any{
 			"Mounts":      []map[string]any{{"Type": "volume", "Source": volumeName(runID), "Target": workspacePath}},
@@ -209,7 +217,7 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 			p.remove()
 			return nil, err
 		}
-		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(workspacePath), tb, "application/x-tar", nil); err != nil {
+		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(dir), tb, "application/x-tar", nil); err != nil {
 			p.remove()
 			return nil, err
 		}

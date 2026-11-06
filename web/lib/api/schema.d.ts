@@ -465,7 +465,8 @@ export interface paths {
         get: operations["getAgent"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete an agent (archived, so run history stays); 409 while it has open tickets or runs in progress */
+        delete: operations["deleteAgent"];
         options?: never;
         head?: never;
         patch?: never;
@@ -771,6 +772,23 @@ export interface paths {
         };
         /** A page by path (or a renamed page's old path) */
         get: operations["getWikiPage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find published patterns (Patterns/<Topic>/<Title>) by fuzzy search; an empty q browses by topic then title */
+        get: operations["findPatterns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1770,6 +1788,21 @@ export interface components {
             cost_usd: number;
             /** @description harness, computed, self_reported, unknown, or partial */
             cost_source?: string;
+            /**
+             * Format: int64
+             * @description Cumulative workspace setup time in milliseconds; absent if not timed
+             */
+            setup_ms?: number;
+            /**
+             * Format: int64
+             * @description Cumulative harness process time across all turns, in milliseconds; absent if not timed
+             */
+            harness_ms?: number;
+            /**
+             * Format: int64
+             * @description Time spent on the runner's post-run checks of this delegated run, in milliseconds; absent if not timed
+             */
+            checks_ms?: number;
             plan: components["schemas"]["PlanStep"][];
             /** @description Allowed scopes in the run's frozen definition */
             scopes: string[];
@@ -1928,6 +1961,17 @@ export interface components {
         SearchHit: {
             target: components["schemas"]["LinkTarget"];
             /** @description Matches are wrapped in « » */
+            snippet: string;
+            score: number;
+        };
+        WikiPattern: {
+            title: string;
+            path: string;
+            topic: string;
+            tags: string[];
+            /** @description First line of When to use */
+            summary: string;
+            /** @description Matches are wrapped in « »; empty when browsing */
             snippet: string;
             score: number;
         };
@@ -2164,11 +2208,13 @@ export interface components {
             name: string;
             /** @description Finished delegated runs */
             delegations: number;
+            /** @description Delegated runs the runner checked (older runs were never checked) */
+            checked: number;
             /** @description Runs whose result passed the runner's checks and needed no repeat delegation to the same agent */
             first_pass: number;
             /**
              * Format: double
-             * @description first_pass / delegations, 0 to 1
+             * @description first_pass / checked, 0 to 1; 0 when nothing was checked
              */
             first_pass_rate: number;
             /** @description Runs followed by another delegation to the same agent under the same parent run */
@@ -2177,7 +2223,7 @@ export interface components {
             child_cost_usd_micros: number;
             /**
              * Format: int64
-             * @description Cost of the distinct main-agent runs that delegated to this agent
+             * @description Main-agent run cost attributed to this agent: each parent run's cost is split evenly by count across its child runs, and this sums the shares of this agent's children
              */
             parent_cost_usd_micros: number;
             /** Format: int64 */
@@ -2187,6 +2233,21 @@ export interface components {
              * @description Mean elapsed time of a delegated run
              */
             avg_seconds: number;
+            /**
+             * Format: double
+             * @description Mean setup time over delegated runs that have timings
+             */
+            avg_setup_seconds: number;
+            /**
+             * Format: double
+             * @description Mean harness time over delegated runs that have timings
+             */
+            avg_harness_seconds: number;
+            /**
+             * Format: double
+             * @description Mean checks time over delegated runs that have timings
+             */
+            avg_checks_seconds: number;
         };
         DelegationEfficiencyList: {
             agents: components["schemas"]["DelegationEfficiency"][];
@@ -3288,6 +3349,27 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["AgentHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     saveAgentDefinition: {
         parameters: {
             query?: never;
@@ -3801,6 +3883,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    findPatterns: {
+        parameters: {
+            query?: {
+                q?: string;
+                /** @description Go, React, Postgres, Testing, API, Architecture or Process */
+                topic?: string;
+                /** @description Default 10, at most 50 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching patterns, best first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        patterns: components["schemas"]["WikiPattern"][];
+                    };
                 };
             };
             default: components["responses"]["Error"];

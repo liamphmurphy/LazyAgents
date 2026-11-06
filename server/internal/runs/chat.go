@@ -94,6 +94,9 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if err != nil {
 			return err
 		}
+		if a.ArchivedAt != nil {
+			return apperr.Invalid("agent_id", "unknown agent")
+		}
 		if a.Kind == "sub" {
 			return apperr.Invalid("agent_id", "pick a main agent")
 		}

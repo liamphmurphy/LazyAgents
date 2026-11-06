@@ -125,6 +125,8 @@ func validateOpenCodeOptions(opts map[string]string) error {
 			if opts[k] != "true" && opts[k] != "false" {
 				return fmt.Errorf("harness: opencode option readonly must be true or false")
 			}
+		case "effort":
+			// Accepted so a shared definition validates; opencode has no equivalent.
 		default:
 			// Includes mcp.use, skill.use, plugin.use, integration.connect,
 			// permission_mode and sandbox: nothing here can honor them.

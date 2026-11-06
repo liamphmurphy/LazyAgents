@@ -131,6 +131,14 @@ func (s *Server) CreateAgent(ctx context.Context, req api.CreateAgentRequestObje
 	return api.CreateAgent201JSONResponse(d), err
 }
 
+func (s *Server) DeleteAgent(ctx context.Context, req api.DeleteAgentRequestObject) (api.DeleteAgentResponseObject, error) {
+	_, _, ws := me(ctx)
+	if err := s.Agents.Delete(ctx, ws, req.Handle); err != nil {
+		return nil, err
+	}
+	return api.DeleteAgent204Response{}, nil
+}
+
 func (s *Server) SaveAgentDefinition(ctx context.Context, req api.SaveAgentDefinitionRequestObject) (api.SaveAgentDefinitionResponseObject, error) {
 	u, _, ws := me(ctx)
 	b := req.Body

@@ -56,7 +56,7 @@ SELECT kind,id,title,href FROM (
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
  UNION ALL
  SELECT 'agent',a.id,a.name, '/agents/'||a.handle
- FROM agents a WHERE a.workspace_id=sqlc.arg(workspace_id)
+ FROM agents a WHERE a.workspace_id=sqlc.arg(workspace_id) AND a.archived_at IS NULL
  AND (a.name ILIKE '%'||sqlc.arg(q)::text||'%' OR a.handle ILIKE replace(sqlc.arg(q),'@','')||'%')
  AND (sqlc.narg(project)::text IS NULL OR EXISTS (
  SELECT 1 FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.assignee_agent_id=a.id AND p.key=sqlc.narg(project)))

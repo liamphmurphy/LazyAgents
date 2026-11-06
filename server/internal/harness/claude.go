@@ -90,7 +90,11 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	files := SkillFiles(spec.Skills, true)
 	files[claudeMCPFile] = cfg
 	files[toolHookPath] = toolHook
-	settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{"PreToolUse": []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": env["LAZYAGENTS_POLICY_HOOK_COMMAND"], "timeout": 20}}}}}})
+	settingsDoc := map[string]any{"hooks": map[string]any{"PreToolUse": []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": env["LAZYAGENTS_POLICY_HOOK_COMMAND"], "timeout": 20}}}}}}
+	if effort := spec.HarnessOptions["effort"]; effort != "" {
+		settingsDoc["modelSettings"] = map[string]any{AnthropicModel(spec.Model): map[string]any{"effortLevel": effort}}
+	}
+	settings, _ := json.Marshal(settingsDoc)
 	files[".lazyagents/claude-settings.json"] = settings
 	return Invocation{
 		Argv:  argv,

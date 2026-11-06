@@ -298,6 +298,27 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
               ))}
             </datalist>
           </Field>
+          <Field label="Effort" htmlFor="ag-effort" hint="Reasoning effort. Default uses the harness's own default.">
+            <select
+              id="ag-effort"
+              className="h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
+              value={spec.harness_options[spec.harness]?.effort ?? ""}
+              onChange={(e) => {
+                const rest = { ...spec.harness_options[spec.harness] };
+                delete rest.effort;
+                const next = { ...spec.harness_options };
+                const opts = e.target.value ? { ...rest, effort: e.target.value } : rest;
+                if (Object.keys(opts).length) next[spec.harness] = opts;
+                else delete next[spec.harness];
+                set({ harness_options: next });
+              }}
+            >
+              <option value="">Default</option>
+              {["low", "medium", "high", "xhigh", "max"].map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </Field>
           <Field label="Concurrent runs" htmlFor="ag-conc">
             <TextInput id="ag-conc" type="number" min={1} max={16} value={spec.max_concurrency} onChange={(e) => set({ max_concurrency: Number(e.target.value) || 1 })} />
           </Field>
@@ -468,9 +489,27 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           <div key={i} className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-fg-tertiary">{i + 1}.</span>
             <Segmented label={`Fallback ${i + 1} harness`} value={f.harness} options={detail.harnesses.map((h) => ({ value: h.name, label: h.label }))}
-              onChange={(harness) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, harness, harness_options: {} } : v) })} />
+              onChange={(harness) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, harness, harness_options: v.harness_options?.effort ? { effort: v.harness_options.effort } : {} } : v) })} />
             <TextInput aria-label={`Fallback ${i + 1} model`} placeholder="Model" value={f.model}
               onChange={(e) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, model: e.target.value } : v) })} />
+            <select
+              aria-label={`Fallback ${i + 1} effort`}
+              className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
+              value={f.harness_options?.effort ?? ""}
+              onChange={(e) => set({
+                fallbacks: spec.fallbacks!.map((v, j) => {
+                  if (j !== i) return v;
+                  const opts = { ...v.harness_options };
+                  delete opts.effort;
+                  return { ...v, harness_options: e.target.value ? { ...opts, effort: e.target.value } : opts };
+                }),
+              })}
+            >
+              <option value="">Default effort</option>
+              {["low", "medium", "high", "xhigh", "max"].map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
             <IconButton icon="trash" label={`Remove fallback ${i + 1}`} onClick={() => set({ fallbacks: spec.fallbacks!.filter((_, j) => j !== i) })} />
           </div>
         ))}

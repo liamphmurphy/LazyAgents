@@ -17,6 +17,19 @@
 //	                    writes child.txt in the shared checkout and completes
 //	delegate_contract   delegate with a contract (allowed_paths docs/, a passing
 //	                    test_command); the resumed parent reports the checks it was given
+//	delegate_script     delegate as FAKE_HARNESS_DELEGATIONS (a JSON array of delegate
+//	                    arguments) says, optionally writing an uncommitted dirty.txt first
+//	                    (FAKE_HARNESS_DIRTY); on resume run FAKE_HARNESS_ROUND2 once (a
+//	                    "$1" continue_run_id is the first delegated run's id), then
+//	                    complete_run with the whole resume message as the outcome
+//
+// A delegated run (any delegate* mode) writes the file named by FILE=<path> in its
+// task (default child.txt) in its worktree and commits it. Test knobs: FAKE_HARNESS_LOG
+// appends one JSON line per invocation (cwd, resume session, first prompt line);
+// FAKE_HARNESS_SYNC=<dir> makes delegated runs wait until FAKE_HARNESS_SYNC_N (2) of
+// them are running at once; FAKE_HARNESS_HOLD=<file> writes <file>.started and waits
+// for <file> before working; FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
+// that lost the session.
 //
 // Resumed turns (--resume) finish the run with complete_run, unless
 // FAKE_HARNESS_RESUME=idle.
@@ -32,6 +45,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -191,6 +205,14 @@ func main() {
 	if session == "" {
 		session = newUUID()
 	}
+	if path := os.Getenv("FAKE_HARNESS_LOG"); path != "" {
+		wd, _ := os.Getwd()
+		line, _ := json.Marshal(map[string]any{"cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE")})
+		if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+			_, _ = f.Write(append(line, '\n'))
+			f.Close()
+		}
+	}
 	if codex {
 		emit(map[string]any{"type": "thread.started", "thread_id": session})
 		emit(map[string]any{"type": "turn.started"})
@@ -345,16 +367,67 @@ func main() {
 		return
 	}
 	if strings.HasPrefix(os.Getenv("FAKE_HARNESS_MODE"), "delegate") && strings.Contains(prompt, "delegated part of") {
-		// A delegated run: no claim; work in the parent's checkout and report back.
-		if err := os.WriteFile("child.txt", []byte("from the sub agent\n"), 0o644); err != nil {
+		// A delegated run: no claim; work in its worktree, commit, and report back.
+		if resume != "" && os.Getenv("FAKE_HARNESS_REJECT_RESUME") != "" {
+			result(true, "No conversation found with session ID: "+resume)
+			os.Exit(1)
+		}
+		if dir := os.Getenv("FAKE_HARNESS_SYNC"); dir != "" {
+			_ = os.WriteFile(fmt.Sprintf("%s/%d.start", dir, os.Getpid()), nil, 0o644)
+			want := 2
+			fmt.Sscan(os.Getenv("FAKE_HARNESS_SYNC_N"), &want)
+			if !waitFor(func() bool { m, _ := os.ReadDir(dir); return len(m) >= want }) {
+				result(true, "the other delegated runs never started: not running in parallel")
+				os.Exit(2)
+			}
+		}
+		if hold := os.Getenv("FAKE_HARNESS_HOLD"); hold != "" {
+			_ = os.WriteFile(hold+".started", nil, 0o644)
+			if !waitFor(func() bool { _, err := os.Stat(hold); return err == nil }) {
+				result(true, "never released")
+				os.Exit(2)
+			}
+		}
+		file := "child.txt"
+		if _, rest, ok := strings.Cut(prompt, "FILE="); ok && len(strings.Fields(rest)) > 0 {
+			file = strings.Fields(rest)[0]
+		}
+		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 			result(true, err.Error())
 			os.Exit(2)
 		}
-		call("complete_run", map[string]any{"outcome": "Wrote child.txt"})
+		if err := os.WriteFile(file, []byte("from the sub agent\n"), 0o644); err != nil {
+			result(true, err.Error())
+			os.Exit(2)
+		}
+		for _, args := range [][]string{{"add", file}, {"commit", "-q", "-m", "Add " + file}} {
+			if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+				result(true, "git "+args[0]+": "+string(out))
+				os.Exit(2)
+			}
+		}
+		call("complete_run", map[string]any{"outcome": "Wrote " + file})
 		result(false, "Done.")
 		return
 	}
 	if resume != "" {
+		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" {
+			if _, err := os.Stat(".lazyagents/round2"); err != nil && os.Getenv("FAKE_HARNESS_ROUND2") != "" {
+				_ = os.WriteFile(".lazyagents/round2", nil, 0o600)
+				delegateScript(call, "FAKE_HARNESS_ROUND2")
+				text("Delegated again. Ending my turn until it reports back.")
+				result(false, "Waiting for the sub agent.")
+				return
+			}
+			state := ""
+			for _, args := range [][]string{{"log", "--pretty=%s"}, {"branch", "--list"}, {"ls-files"}, {"status", "--porcelain"}, {"rev-parse", "-q", "--verify", "MERGE_HEAD"}} {
+				out, _ := exec.Command("git", args...).CombinedOutput()
+				state += "\n[git " + args[0] + "]\n" + string(out)
+			}
+			call("complete_run", map[string]any{"outcome": "RESUMED\n" + prompt + "\n=== checkout" + state})
+			result(false, "Done.")
+			return
+		}
 		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_contract" {
 			call("complete_run", map[string]any{"outcome": fmt.Sprintf("checks failed=%v outside=%v test_passed=%v criteria=%v",
 				strings.Contains(prompt, "**FAILED**"), strings.Contains(prompt, "Changed outside the allowed paths:\n- child.txt"),
@@ -429,6 +502,15 @@ func main() {
 		result(false, "Waiting for the sub agent.")
 		return
 	}
+	if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" {
+		if os.Getenv("FAKE_HARNESS_DIRTY") != "" {
+			_ = os.WriteFile("dirty.txt", []byte("uncommitted\n"), 0o644)
+		}
+		delegateScript(call, "FAKE_HARNESS_DELEGATIONS")
+		text("Delegated. Ending my turn until the sub agents report back.")
+		result(false, "Waiting for the sub agents.")
+		return
+	}
 	if os.Getenv("FAKE_HARNESS_MODE") == "delegate" {
 		call("delegate", map[string]any{"agent": "scribe", "task": "Write child.txt"})
 		text("Delegated to @scribe. Ending my turn until it reports back.")
@@ -445,6 +527,43 @@ func main() {
 		"detail": map[string]any{"sql": "SELECT 1"}, "risk": "Locks ledger_entries briefly"})
 	text(fmt.Sprintf("Asked for approval (%v). Ending my turn until a person decides.", ap["state"]))
 	result(false, "Waiting for approval.")
+}
+
+// delegateScript issues the delegate calls in the JSON array named by env. A
+// continue_run_id of "$N" means the Nth run_id this parent has been given.
+func delegateScript(call func(string, map[string]any) map[string]any, env string) {
+	var list []map[string]any
+	if err := json.Unmarshal([]byte(os.Getenv(env)), &list); err != nil {
+		return
+	}
+	for _, a := range list {
+		raw, _ := os.ReadFile(".lazyagents/children")
+		ids := strings.Fields(string(raw))
+		if v, ok := a["continue_run_id"].(string); ok && strings.HasPrefix(v, "$") {
+			var n int
+			fmt.Sscan(v[1:], &n)
+			if n >= 1 && n <= len(ids) {
+				a["continue_run_id"] = ids[n-1]
+			}
+		}
+		out := call("delegate", a)
+		if id, ok := out["run_id"].(string); ok {
+			f, _ := os.OpenFile(".lazyagents/children", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+			fmt.Fprintln(f, id)
+			f.Close()
+		}
+	}
+}
+
+// waitFor polls cond for up to 30 seconds.
+func waitFor(cond func() bool) bool {
+	for i := 0; i < 600; i++ {
+		if cond() {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return false
 }
 
 func firstLine(s string) string {

@@ -389,3 +389,115 @@ func TestGraphSearchVault(t *testing.T) {
 		t.Fatal("bad zip accepted")
 	}
 }
+
+// Published patterns matching the ticket come right after the memory index.
+func TestRunContextPatterns(t *testing.T) {
+	e := setup(t)
+	tk, _ := tracker.Get(e.ctx, e.q, e.ws, "PAY-224")
+	tk.DescriptionMd = ""
+	linked := agentdef.Memory{Enabled: true, Inject: "linked", MaxTokens: 4000}
+	refs := func(m agentdef.Memory, tk store.Ticket) []string {
+		t.Helper()
+		pages, err := wiki.RunContext(e.ctx, e.q, e.atlas, tk, m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, p := range pages {
+			out = append(out, p.Ref+" ("+p.Reason+")")
+		}
+		return out
+	}
+	hasPattern := func(rs []string) bool {
+		for _, r := range rs {
+			if strings.HasPrefix(r, "Patterns/") {
+				return true
+			}
+		}
+		return false
+	}
+
+	tk.Title = "Retry flaky ledger webhook deliveries"
+	e.save(t, "Patterns/API/Retry webhook deliveries with backoff", "Topic: API\nTags: webhooks, retries\n\n## When to use\n\nDelivering webhooks that can fail.\n\n## Rule\n\nRetry with exponential backoff.\n")
+	e.save(t, "Patterns/Proposed/Retry ledger webhook deliveries forever", "Topic: API\nTags: webhooks, retries\n\n## Rule\n\nRetry ledger webhook deliveries.\n")
+
+	// Title match: the pattern sits right after the index; the proposal never appears.
+	want := "Patterns/API/Retry webhook deliveries with backoff (Pattern: matches the ticket)"
+	for _, inject := range []string{"linked", "search"} {
+		rs := refs(agentdef.Memory{Enabled: true, Inject: inject, MaxTokens: 4000}, tk)
+		if len(rs) < 2 || rs[0] != "agents/atlas/Memory (Your memory index)" || rs[1] != want {
+			t.Fatalf("%s: %v", inject, rs)
+		}
+		for _, r := range rs {
+			if strings.Contains(r, "Proposed") {
+				t.Fatalf("%s: proposed pattern injected: %v", inject, rs)
+			}
+		}
+	}
+	// A match in the description counts too.
+	tk2 := tk
+	tk2.Title = "Ledger work"
+	tk2.DescriptionMd = "## Context\n\nOur **webhook deliveries** fail now and then; please add retries with backoff."
+	if rs := refs(linked, tk2); !hasPattern(rs) {
+		t.Fatalf("description match: %v", rs)
+	}
+	// Unrelated tickets and inject=index get none.
+	tk3 := tk
+	tk3.Title = "Update the onboarding illustrations"
+	if rs := refs(linked, tk3); hasPattern(rs) {
+		t.Fatalf("unrelated: %v", rs)
+	}
+	if rs := refs(agentdef.Memory{Enabled: true, Inject: "index", MaxTokens: 4000}, tk); hasPattern(rs) {
+		t.Fatalf("index: %v", rs)
+	}
+	// The budget still bounds the total.
+	pages, err := wiki.RunContext(e.ctx, e.q, e.atlas, tk, agentdef.Memory{Enabled: true, Inject: "linked", MaxTokens: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) == 0 || !pages[len(pages)-1].Truncated && len(pages) > 1 {
+		t.Fatalf("budget: %d pages", len(pages))
+	}
+	if n := len(pages); n > 2 {
+		t.Fatalf("budget not respected: %d pages", n)
+	}
+}
+
+// Regression: patterns linking each other used to be injected into unrelated
+// tickets that shared a single common word.
+func TestRunContextPatternsNeedRealOverlap(t *testing.T) {
+	e := setup(t)
+	tk, _ := tracker.Get(e.ctx, e.q, e.ws, "PAY-224")
+	e.save(t, "Patterns/Web/Avoid known Playwright and Next e2e traps", "Topic: Web\nTags: playwright, e2e, nextjs\n\n## Rule\n\nSee [[Patterns/Web/Put web logic in node-testable modules]]. Chat pages need stable selectors.\n")
+	e.save(t, "Patterns/Web/Put web logic in node-testable modules", "Topic: Web\nTags: nextjs, testing\n\n## Rule\n\nKeep logic out of components; see [[Patterns/Web/Avoid known Playwright and Next e2e traps]]. Chat state too.\n")
+	e.save(t, "Patterns/Architecture/Isolate harness tool policy", "Topic: Architecture\nTags: harness, policy\n\n## Rule\n\nGenerate the tool policy per run.\n")
+	patterns := func(title, desc string) []string {
+		t.Helper()
+		x := tk
+		x.Title, x.DescriptionMd = title, desc
+		pages, err := wiki.RunContext(e.ctx, e.q, e.atlas, x, agentdef.Memory{Enabled: true, Inject: "linked", MaxTokens: 8000})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, p := range pages {
+			if strings.HasPrefix(p.Ref, "Patterns/") {
+				out = append(out, p.Ref)
+			}
+		}
+		return out
+	}
+	// One shared common word ("chat", "testing" in a body) is not enough.
+	if got := patterns("Retry chat webhook failures in the runner", ""); len(got) != 0 {
+		t.Fatalf("single common word matched: %v", got)
+	}
+	// Two body-only words still miss: a title or tag match is required.
+	if got := patterns("Chat state flakiness", "components"); len(got) != 0 {
+		t.Fatalf("body-only match: %v", got)
+	}
+	// Real title/tag overlap picks the right pattern, not the React ones.
+	got := patterns("Fix harness tool policy for chat runs", "")
+	if len(got) != 1 || got[0] != "Patterns/Architecture/Isolate harness tool policy" {
+		t.Fatalf("policy ticket: %v", got)
+	}
+}

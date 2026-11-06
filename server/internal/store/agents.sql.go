@@ -13,6 +13,26 @@ import (
 	"github.com/google/uuid"
 )
 
+const archiveAgent = `-- name: ArchiveAgent :exec
+UPDATE agents SET archived_at = now() WHERE id = $1
+`
+
+func (q *Queries) ArchiveAgent(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, archiveAgent, id)
+	return err
+}
+
+const countActiveRunsForAgent = `-- name: CountActiveRunsForAgent :one
+SELECT count(*) FROM runs WHERE agent_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled')
+`
+
+func (q *Queries) CountActiveRunsForAgent(ctx context.Context, agentID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveRunsForAgent, agentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createDefinitionVersion = `-- name: CreateDefinitionVersion :one
 INSERT INTO agent_definition_versions (agent_id, version, spec, note, created_by_user_id, created_at)
 VALUES ($1, (SELECT coalesce(max(version), 0) + 1 FROM agent_definition_versions WHERE agent_id = $1), $2, $3, $4,
@@ -67,7 +87,7 @@ func (q *Queries) DeleteOverride(ctx context.Context, arg DeleteOverrideParams) 
 }
 
 const getAgentByHandle = `-- name: GetAgentByHandle :one
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE workspace_id = $1 AND handle = $2
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND handle = $2 AND archived_at IS NULL
 `
 
 type GetAgentByHandleParams struct {
@@ -93,6 +113,7 @@ func (q *Queries) GetAgentByHandle(ctx context.Context, arg GetAgentByHandlePara
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
 		&i.Kind,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -227,7 +248,7 @@ func (q *Queries) ListOverrides(ctx context.Context, agentID uuid.UUID) ([]ListO
 }
 
 const lockAgentByHandle = `-- name: LockAgentByHandle :one
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE workspace_id = $1 AND handle = $2 FOR UPDATE
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND handle = $2 AND archived_at IS NULL FOR UPDATE
 `
 
 type LockAgentByHandleParams struct {
@@ -253,14 +274,24 @@ func (q *Queries) LockAgentByHandle(ctx context.Context, arg LockAgentByHandlePa
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
 		&i.Kind,
+		&i.ArchivedAt,
 	)
 	return i, err
+}
+
+const revokeAgentTokensForAgent = `-- name: RevokeAgentTokensForAgent :exec
+UPDATE agent_tokens SET revoked_at = now() WHERE agent_id = $1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeAgentTokensForAgent(ctx context.Context, agentID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, revokeAgentTokensForAgent, agentID)
+	return err
 }
 
 const updateAgentFromDefinition = `-- name: UpdateAgentFromDefinition :one
 UPDATE agents SET name = $2, role = $3, specialty = $4, color_index = $5, model = $6,
   max_concurrency = $7, current_definition_version_id = $8, kind = coalesce($9, kind)
-WHERE id = $1 RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind
+WHERE id = $1 RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at
 `
 
 type UpdateAgentFromDefinitionParams struct {
@@ -305,6 +336,7 @@ func (q *Queries) UpdateAgentFromDefinition(ctx context.Context, arg UpdateAgent
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
 		&i.Kind,
+		&i.ArchivedAt,
 	)
 	return i, err
 }

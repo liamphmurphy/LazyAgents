@@ -316,7 +316,7 @@ func (s *Server) directory(ctx context.Context, ws uuid.UUID) (actorDirectory, e
 	for _, u := range users {
 		d.users[u.ID] = u
 	}
-	agents, err := s.Q.ListAgents(ctx, ws)
+	agents, err := s.Q.ListAllAgents(ctx, ws)
 	if err != nil {
 		return d, err
 	}

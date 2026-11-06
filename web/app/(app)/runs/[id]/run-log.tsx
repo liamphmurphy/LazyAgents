@@ -3,15 +3,17 @@
 import { runCost } from "@/lib/format";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
-import { useControlRunById, useDelegatedRunLogs, useRunLog } from "@/lib/api/hooks";
+import { useComment, useControlRunById, useDelegatedRunLogs, useRunLog } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
+import { latestQuestion, withMention } from "@/lib/run-question";
 import { absoluteTime, compact, duration } from "@/lib/format";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Tabs, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
-import { Banner, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
+import { Banner, EmptyState, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
 import { Stat } from "@/components/domain/data";
 import { Flag, SmallPill, type PillTone } from "@/components/domain/labels";
@@ -238,7 +240,7 @@ function TurnsRail({ d }: { d: RunDetail }) {
   const run = d.run;
   const pending = d.approvals.find((a) => a.state === "pending");
   return (
-    <aside aria-label="Turns" className="flex flex-[1_1_240px] flex-col gap-2 border-r border-border-subtle px-3 py-4 lg:max-w-[260px]">
+    <aside aria-label="Turns" className="flex flex-col gap-2 border-r border-border-subtle px-3 py-4 lg:min-h-0 lg:flex-[1_1_240px] lg:max-w-[260px] lg:overflow-y-auto">
       <h2 className="px-2 text-xs font-medium text-fg-tertiary">Turns</h2>
       <ol className="flex flex-col gap-1">
         {d.turns.map((t) => {
@@ -306,6 +308,72 @@ function rowText(r: Row) {
   return JSON.stringify(r.kind === "tool" ? [r.call.payload, r.result?.payload] : r.e.payload).toLowerCase();
 }
 
+/** Chat-style prompt for a run waiting on `human_reply`; replies go out as a ticket comment mentioning the agent. */
+function ReplyBox({ run, question, lastSeq }: { run: Schemas["Run"]; question: string | null; lastSeq: number }) {
+  const qc = useQueryClient();
+  const comment = useComment(run.ticket_key);
+  const [body, setBody] = useState("");
+  const [sentAt, setSentAt] = useState<number | null>(null);
+  const sent = sentAt === lastSeq;
+  const submit = () => {
+    if (!body.trim() || comment.isPending) return;
+    comment.mutate(
+      { body_md: withMention(body, run.agent.handle) },
+      {
+        onSuccess: () => {
+          setBody("");
+          setSentAt(lastSeq);
+        },
+        onSettled: () => qc.invalidateQueries({ queryKey: ["runs", run.id] }),
+      },
+    );
+  };
+  return (
+    <div className="border-b border-border-subtle px-5 py-3">
+      <div className="flex flex-col gap-2 rounded-xl border border-state-human/40 bg-surface p-3.5">
+        <p className="text-xs font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
+        {question && <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-[13.5px] leading-relaxed text-fg-2">{question}</p>}
+        {sent ? (
+          <p role="status" className="flex items-center gap-3 text-[13px] text-fg-secondary">
+            Sent. Resuming {run.agent.name}…
+            <Button variant="outline" onClick={() => setSentAt(null)}>Reply again</Button>
+          </p>
+        ) : (
+          <>
+            <label className="sr-only" htmlFor="run-reply">Reply to {run.agent.name}</label>
+            <TextArea
+              id="run-reply"
+              value={body}
+              rows={3}
+              placeholder={`Reply to ${run.agent.name}`}
+              onChange={(e) => setBody(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+            />
+            {comment.isError && (
+              <Banner tone="blocked" title="Couldn't send the reply">
+                {comment.error.message}
+              </Banner>
+            )}
+            <div className="flex items-center justify-end gap-3">
+              <span className="text-xs text-fg-tertiary">
+                <kbd className="font-mono">⌘↵</kbd> to send
+              </span>
+              <Button variant="approve" disabled={!body.trim() || comment.isPending} onClick={submit}>
+                {comment.isPending ? "Sending…" : "Send"}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function RunLogScreen({ id }: { id: string }) {
   const { data: d, isError, error } = useRunLog(id);
   const children = useDelegatedRunLogs(d?.child_runs ?? []);
@@ -314,7 +382,7 @@ export function RunLogScreen({ id }: { id: string }) {
   const [tab, setTab] = useState("all");
   const [filter, setFilter] = useState("");
   const [follow, setFollow] = useState(true);
-  const end = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
   // Pair tools within each run before merging: sequence numbers and tool IDs
   // are scoped to their own run and can collide across delegated agents.
   const entries = [
@@ -330,9 +398,11 @@ export function RunLogScreen({ id }: { id: string }) {
   const shown = entries.filter(({ row, source }) => TAB_FILTER[tab](row) &&
     (!filter || `${source?.agent.name ?? ""} ${rowText(row)}`.toLowerCase().includes(filter.toLowerCase())));
 
+  const loaded = !!d;
   useEffect(() => {
-    if (follow) end.current?.scrollIntoView({ block: "end" });
-  }, [follow, rows.length]);
+    const el = scroller.current;
+    if (follow && el) el.scrollTop = el.scrollHeight;
+  }, [follow, shown.length, tab, filter, loaded]);
 
   if (isError) {
     return (
@@ -363,7 +433,7 @@ export function RunLogScreen({ id }: { id: string }) {
   const live = !ENDED.includes(run.state);
   const lastLog = [...d.turns].reverse().find((t) => t.has_log);
   return (
-    <>
+    <div className="flex flex-col lg:h-dvh">
       <TopBar
         crumbs={[{ label: run.planning_id ? "Plan" : run.ticket_key, href: run.planning_id ? `/plans?id=${run.planning_id}` : `/tickets/${run.ticket_key}`, mono: true }, { label: "Run log" }]}
         actions={
@@ -434,9 +504,9 @@ export function RunLogScreen({ id }: { id: string }) {
           </Banner>
         </div>
       )}
-      <div className="flex flex-1 flex-wrap">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <TurnsRail d={d} />
-        <section aria-label="Events" className="flex min-w-0 flex-[999_1_480px] flex-col">
+        <section aria-label="Events" className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-5 py-2.5">
             <Tabs
               label="Event types"
@@ -461,6 +531,20 @@ export function RunLogScreen({ id }: { id: string }) {
             <div className="px-5 pt-3"><Banner tone="blocked" title="Couldn't load delegated agent logs">Some delegated activity is unavailable. Open the delegated run or try again.</Banner></div>
           )}
           {children.some((child) => child.isPending) && <p role="status" className="px-5 py-2 text-xs text-fg-secondary">Loading delegated agent logs…</p>}
+          {run.state === "waiting" && run.wait_reason === "human_reply" && run.ticket_key && (
+            <ReplyBox run={run} question={latestQuestion(d.events)} lastSeq={d.events.at(-1)?.seq ?? 0} />
+          )}
+          <div
+            ref={scroller}
+            role="log"
+            aria-label="Run log"
+            tabIndex={0}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 24);
+            }}
+            className="min-h-0 flex-1 overflow-y-auto max-lg:max-h-[70dvh]"
+          >
           {shown.length ? (
             <ol aria-live={follow ? "polite" : "off"}>
               {shown.map(({ row, source, runId }) => (
@@ -472,22 +556,25 @@ export function RunLogScreen({ id }: { id: string }) {
               {rows.length ? "Try another tab or filter." : run.state === "queued" ? "The run starts when a runner slot is free." : "Events appear as the harness works."}
             </EmptyState>
           )}
-          <div ref={end} />
           <p className="px-5 py-4 text-xs text-fg-tertiary">
             Normalized events. The raw harness stream of each turn is kept with the run ({run.mode === "managed" ? "raw links in Turns" : "unmanaged sessions have none"}).
           </p>
+          </div>
         </section>
       </div>
-      <Button
-        variant="secondary"
-        className="fixed bottom-6 right-6 z-20 shadow-md"
-        onClick={() => {
-          setFollow(false);
-          window.scrollTo({ top: 0, behavior: "instant" });
-        }}
-      >
-        <span aria-hidden="true">↑</span> Back to top
-      </Button>
-    </>
+      {!follow && (
+        <Button
+          variant="secondary"
+          className="fixed bottom-6 right-6 z-20 shadow-md"
+          onClick={() => {
+            const el = scroller.current;
+            if (el) el.scrollTop = el.scrollHeight;
+            setFollow(true);
+          }}
+        >
+          <span aria-hidden="true">↓</span> Jump to latest
+        </Button>
+      )}
+    </div>
   );
 }

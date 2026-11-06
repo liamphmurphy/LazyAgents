@@ -68,7 +68,7 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 			return apperr.Conflict("restore the archived project before starting a plan")
 		}
 		a, err := q.GetAgent(ctx, store.GetAgentParams{ID: in.AgentID, WorkspaceID: ws})
-		if err != nil {
+		if err != nil || a.ArchivedAt != nil {
 			return apperr.Invalid("agent_id", "unknown agent")
 		}
 		var sourceVersion *uuid.UUID
@@ -165,7 +165,7 @@ func validateProposals(ctx context.Context, q *store.Queries, ws uuid.UUID, item
 		p.Criteria = criteria
 		if p.AgentID != nil {
 			sa, err := q.GetAgent(ctx, store.GetAgentParams{ID: *p.AgentID, WorkspaceID: ws})
-			if err != nil {
+			if err != nil || sa.ArchivedAt != nil {
 				return apperr.Invalid("agent_id", "unknown suggested agent")
 			}
 			if sa.Kind == "sub" {

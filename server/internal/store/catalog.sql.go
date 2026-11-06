@@ -38,7 +38,7 @@ func (q *Queries) CountOpenTicketsForAgent(ctx context.Context, assigneeAgentID 
 
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (workspace_id, name, handle, color_index, role, specialty, model, status, kind)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 'main')) RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 'main')) RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at
 `
 
 type CreateAgentParams struct {
@@ -81,6 +81,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
 		&i.Kind,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -194,7 +195,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE id = $1 AND workspace_id = $2
 `
 
 type GetAgentParams struct {
@@ -220,6 +221,7 @@ func (q *Queries) GetAgent(ctx context.Context, arg GetAgentParams) (Agent, erro
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
 		&i.Kind,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -339,7 +341,7 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 }
 
 const listAgents = `-- name: ListAgents :many
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE workspace_id = $1 ORDER BY color_index, name
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY color_index, name
 `
 
 func (q *Queries) ListAgents(ctx context.Context, workspaceID uuid.UUID) ([]Agent, error) {
@@ -366,6 +368,48 @@ func (q *Queries) ListAgents(ctx context.Context, workspaceID uuid.UUID) ([]Agen
 			&i.UpdatedAt,
 			&i.CurrentDefinitionVersionID,
 			&i.Kind,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllAgents = `-- name: ListAllAgents :many
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 ORDER BY color_index, name
+`
+
+// Includes archived agents, for naming them in history.
+func (q *Queries) ListAllAgents(ctx context.Context, workspaceID uuid.UUID) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, listAllAgents, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Agent{}
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Handle,
+			&i.ColorIndex,
+			&i.Role,
+			&i.Specialty,
+			&i.Model,
+			&i.Status,
+			&i.MaxConcurrency,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CurrentDefinitionVersionID,
+			&i.Kind,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -483,7 +527,7 @@ func (q *Queries) ListProjects(ctx context.Context, workspaceID uuid.UUID) ([]Pr
 }
 
 const listSubagents = `-- name: ListSubagents :many
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE workspace_id = $1 AND kind = 'sub' ORDER BY handle
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND kind = 'sub' AND archived_at IS NULL ORDER BY handle
 `
 
 func (q *Queries) ListSubagents(ctx context.Context, workspaceID uuid.UUID) ([]Agent, error) {
@@ -510,6 +554,7 @@ func (q *Queries) ListSubagents(ctx context.Context, workspaceID uuid.UUID) ([]A
 			&i.UpdatedAt,
 			&i.CurrentDefinitionVersionID,
 			&i.Kind,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}

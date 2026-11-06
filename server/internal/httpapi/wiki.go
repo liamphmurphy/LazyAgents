@@ -306,3 +306,20 @@ func (s *Server) SearchKnowledge(ctx context.Context, req api.SearchKnowledgeReq
 	}
 	return out, nil
 }
+
+func (s *Server) FindPatterns(ctx context.Context, req api.FindPatternsRequestObject) (api.FindPatternsResponseObject, error) {
+	_, _, ws := me(ctx)
+	limit := 0
+	if req.Params.Limit != nil {
+		limit = *req.Params.Limit
+	}
+	ps, err := wiki.FindPatterns(ctx, s.Q, ws, deref(req.Params.Q), deref(req.Params.Topic), limit)
+	if err != nil {
+		return nil, err
+	}
+	out := api.FindPatterns200JSONResponse{Patterns: make([]api.WikiPattern, len(ps))}
+	for i, p := range ps {
+		out.Patterns[i] = api.WikiPattern{Title: p.Title, Path: p.Path, Topic: p.Topic, Tags: p.Tags, Summary: p.Summary, Snippet: p.Snippet, Score: float32(p.Score)}
+	}
+	return out, nil
+}

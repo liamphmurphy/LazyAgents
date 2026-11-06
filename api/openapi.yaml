@@ -592,6 +592,13 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AgentDetail" }
         default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteAgent
+      summary: Delete an agent (archived, so run history stays); 409 while it has open tickets or runs in progress
+      tags: [agents]
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
 
   /agents/{handle}/definition:
     parameters:
@@ -985,6 +992,35 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/patterns:
+    get:
+      operationId: findPatterns
+      summary: Find published patterns (Patterns/<Topic>/<Title>) by fuzzy search; an empty q browses by topic then title
+      tags: [wiki]
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: topic
+          in: query
+          description: Go, React, Postgres, Testing, API, Architecture or Process
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Default 10, at most 50
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Matching patterns, best first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [patterns]
+                properties:
+                  patterns: { type: array, items: { $ref: "#/components/schemas/WikiPattern" } }
         default: { $ref: "#/components/responses/Error" }
 
   /wiki/pages/{id}:
@@ -2176,6 +2212,9 @@ components:
         output_tokens: { type: integer, format: int64 }
         cost_usd: { type: number }
         cost_source: { type: string, description: "harness, computed, self_reported, unknown, or partial" }
+        setup_ms: { type: integer, format: int64, description: "Cumulative workspace setup time in milliseconds; absent if not timed" }
+        harness_ms: { type: integer, format: int64, description: "Cumulative harness process time across all turns, in milliseconds; absent if not timed" }
+        checks_ms: { type: integer, format: int64, description: "Time spent on the runner's post-run checks of this delegated run, in milliseconds; absent if not timed" }
         plan: { type: array, items: { $ref: "#/components/schemas/PlanStep" } }
         scopes:
           type: array
@@ -2345,6 +2384,17 @@ components:
       properties:
         target: { $ref: "#/components/schemas/LinkTarget" }
         snippet: { type: string, description: "Matches are wrapped in « »" }
+        score: { type: number }
+    WikiPattern:
+      type: object
+      required: [title, path, topic, tags, summary, snippet, score]
+      properties:
+        title: { type: string }
+        path: { type: string }
+        topic: { type: string }
+        tags: { type: array, items: { type: string } }
+        summary: { type: string, description: "First line of When to use" }
+        snippet: { type: string, description: "Matches are wrapped in « »; empty when browsing" }
         score: { type: number }
     WikiPageSummary:
       type: object
@@ -2601,19 +2651,23 @@ components:
 
     DelegationEfficiency:
       type: object
-      required: [agent_id, handle, name, delegations, first_pass, first_pass_rate, repair_loops, child_cost_usd_micros, parent_cost_usd_micros, total_cost_usd_micros, avg_seconds]
+      required: [agent_id, handle, name, delegations, checked, first_pass, first_pass_rate, repair_loops, child_cost_usd_micros, parent_cost_usd_micros, total_cost_usd_micros, avg_seconds, avg_setup_seconds, avg_harness_seconds, avg_checks_seconds]
       properties:
         agent_id: { type: string, format: uuid }
         handle: { type: string }
         name: { type: string }
         delegations: { type: integer, description: "Finished delegated runs" }
+        checked: { type: integer, description: "Delegated runs the runner checked (older runs were never checked)" }
         first_pass: { type: integer, description: "Runs whose result passed the runner's checks and needed no repeat delegation to the same agent" }
-        first_pass_rate: { type: number, format: double, description: "first_pass / delegations, 0 to 1" }
+        first_pass_rate: { type: number, format: double, description: "first_pass / checked, 0 to 1; 0 when nothing was checked" }
         repair_loops: { type: integer, description: "Runs followed by another delegation to the same agent under the same parent run" }
         child_cost_usd_micros: { type: integer, format: int64 }
-        parent_cost_usd_micros: { type: integer, format: int64, description: "Cost of the distinct main-agent runs that delegated to this agent" }
+        parent_cost_usd_micros: { type: integer, format: int64, description: "Main-agent run cost attributed to this agent: each parent run's cost is split evenly by count across its child runs, and this sums the shares of this agent's children" }
         total_cost_usd_micros: { type: integer, format: int64 }
         avg_seconds: { type: number, format: double, description: "Mean elapsed time of a delegated run" }
+        avg_setup_seconds: { type: number, format: double, description: "Mean setup time over delegated runs that have timings" }
+        avg_harness_seconds: { type: number, format: double, description: "Mean harness time over delegated runs that have timings" }
+        avg_checks_seconds: { type: number, format: double, description: "Mean checks time over delegated runs that have timings" }
 
     DelegationEfficiencyList:
       type: object

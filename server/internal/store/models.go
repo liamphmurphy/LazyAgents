@@ -39,6 +39,7 @@ type Agent struct {
 	UpdatedAt                  time.Time
 	CurrentDefinitionVersionID *uuid.UUID
 	Kind                       string
+	ArchivedAt                 *time.Time
 }
 
 type AgentDefinitionVersion struct {
@@ -350,6 +351,9 @@ type Run struct {
 	Purpose             string
 	Contract            []byte
 	Checks              []byte
+	SetupMs             *int64
+	HarnessMs           *int64
+	ChecksMs            *int64
 }
 
 type RunEvent struct {

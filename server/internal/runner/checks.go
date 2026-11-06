@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -13,9 +12,6 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
-
-// noCommits is the base "commit" of a checkout that had no commits yet.
-const noCommits = "none"
 
 const (
 	checkTimeout     = 30 * time.Second
@@ -25,7 +21,12 @@ const (
 // execOnce runs a shell script in a run's workspace and returns its combined
 // output and exit code. The process is killed when ctx ends.
 func (r *Runner) execOnce(ctx context.Context, ws, name, script string, env map[string]string) (string, int, error) {
-	proc, err := r.Backend.Start(ctx, ws, ExecSpec{Name: name, Argv: []string{"sh", "-c", script}, Env: env})
+	return r.execIn(ctx, ws, "", name, script, env)
+}
+
+// execIn is execOnce in a directory of the workspace (a delegated run's worktree).
+func (r *Runner) execIn(ctx context.Context, ws, dir, name, script string, env map[string]string) (string, int, error) {
+	proc, err := r.Backend.Start(ctx, ws, ExecSpec{Name: name, Argv: []string{"sh", "-c", script}, Env: env, Dir: dir})
 	if err != nil {
 		return "", -1, err
 	}
@@ -78,110 +79,122 @@ func parseStatus(out string) []string {
 	return files
 }
 
-// recordBaseline notes the checkout's HEAD and dirty files when a delegated
-// run starts, so the checks can tell what it changed.
-func (r *Runner) recordBaseline(ctx context.Context, c runCtx, env map[string]string) {
-	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
-	defer cancel()
-	out, code, err := r.execOnce(ctx, wsID(c.run), "lazyagents-base-"+c.run.ID.String(), "git rev-parse HEAD", env)
-	sha := strings.TrimSpace(out)
-	if err != nil {
-		return
-	}
-	if code != 0 || sha == "" {
-		sha = noCommits // an unborn branch: everything committed later is new
-	}
-	var contract runs.Contract
-	if len(c.run.Contract) > 0 {
-		_ = json.Unmarshal(c.run.Contract, &contract)
-	}
-	contract.BaseSHA = sha
-	if st, code, err := r.execOnce(ctx, wsID(c.run), "lazyagents-base-status-"+c.run.ID.String(), "git status --porcelain", env); err == nil && code == 0 {
-		contract.BaseUncommitted = parseStatus(st)
-	}
-	raw, _ := json.Marshal(contract)
-	if _, err := r.q().SetRunContract(ctx, store.SetRunContractParams{ID: c.run.ID, Contract: raw}); err != nil {
-		r.Log.Warn("record baseline", "run", c.run.ID, "err", err)
-	}
-}
-
-// delegationReport runs the deterministic checks on the latest delegated run
-// under a parent that is about to resume, stores them on that run and returns
-// the text to append to the parent's resume message. It returns "" when
-// there's no finished child to check.
+// delegationReport checks every delegated run that ended since the parent was
+// parked, in its worktree, merges the ones that passed into the parent's
+// branch, stores the results on the runs and returns the text to append to the
+// parent's resume message. It returns "" when no finished child is waiting to be
+// checked.
 func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[string]string) string {
 	kids, err := r.q().ChildRuns(ctx, &parent.run.ID)
-	if err != nil || len(kids) == 0 {
+	if err != nil {
 		return ""
 	}
-	child := kids[len(kids)-1]
-	if !isDone(child.State) {
-		return ""
-	}
-	var contract runs.Contract
-	if len(child.Contract) > 0 {
-		_ = json.Unmarshal(child.Contract, &contract)
-	}
-	k := r.checkChild(ctx, parent, child, contract, env)
-	if b, err := json.Marshal(k); err == nil {
-		if err := r.q().SetRunChecks(ctx, store.SetRunChecksParams{ID: child.ID, Checks: b}); err != nil {
-			r.Log.Warn("store checks", "run", child.ID, "err", err)
+	var ended []store.Run
+	for _, k := range kids {
+		if isDone(k.State) && len(k.Checks) == 0 {
+			ended = append(ended, k)
 		}
 	}
-	r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "checks", "passed": k.Passed, "ran": k.Ran})
-	return "\n\n" + k.Report()
+	if len(ended) == 0 {
+		return ""
+	}
+	ws := wsID(parent.run)
+	parentBranch := r.gitOut(ctx, ws, "", "lazyagents-branch-"+parent.run.ID.String(), "git symbolic-ref --short HEAD", env)
+	var report strings.Builder
+	for _, child := range ended {
+		var contract runs.Contract
+		if len(child.Contract) > 0 {
+			_ = json.Unmarshal(child.Contract, &contract)
+		}
+		checksStart := time.Now()
+		k := r.checkChild(ctx, child, contract, parentBranch, env)
+		r.mergeChild(ctx, ws, parentBranch, child, contract, &k, env)
+		r.addTiming(child.ID, 0, 0, time.Since(checksStart))
+		if b, err := json.Marshal(k); err == nil {
+			if err := r.q().SetRunChecks(ctx, store.SetRunChecksParams{ID: child.ID, Checks: b}); err != nil {
+				r.Log.Warn("store checks", "run", child.ID, "err", err)
+			}
+		}
+		r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "checks", "passed": k.Passed, "ran": k.Ran, "merged": k.Merged, "branch": k.Branch})
+		report.WriteString("\n\n")
+		if len(ended) > 1 {
+			handle := child.AgentID.String()
+			if a, err := r.q().GetAgent(ctx, store.GetAgentParams{ID: child.AgentID, WorkspaceID: child.WorkspaceID}); err == nil {
+				handle = "@" + a.Handle
+			}
+			report.WriteString("---\n\n# " + handle + " (run " + child.ID.String()[:8] + ", " + child.State + ")\n\n")
+		}
+		report.WriteString(k.Report())
+	}
+	return report.String()
 }
 
 func isDone(state string) bool {
 	return state == "completed" || state == "failed" || state == "cancelled"
 }
 
-func (r *Runner) checkChild(ctx context.Context, parent runCtx, child store.Run, contract runs.Contract, env map[string]string) runs.Checks {
-	k := runs.Checks{ChildState: child.State, BaseSHA: contract.BaseSHA, TestCommand: contract.TestCommand}
-	ws := wsID(child)
+// gitOut runs a one-line git query and returns its trimmed output, "" on failure.
+func (r *Runner) gitOut(ctx context.Context, ws, dir, name, script string, env map[string]string) string {
+	cctx, cancel := context.WithTimeout(ctx, checkTimeout)
+	defer cancel()
+	out, code, err := r.execIn(cctx, ws, dir, name, script, env)
+	if err != nil || code != 0 {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// checkChild measures a delegated run's result in its worktree: uncommitted
+// files, what its branch changed against the parent's branch, allowed paths
+// and the test command.
+func (r *Runner) checkChild(ctx context.Context, child store.Run, contract runs.Contract, parentBranch string, env map[string]string) runs.Checks {
+	k := runs.Checks{ChildState: child.State, TestCommand: contract.TestCommand, Branch: contract.Branch}
+	if contract.Worktree == "" {
+		k.Error = "the delegated run never got a worktree (it didn't start), so there is nothing to check"
+		k.Evaluate(contract)
+		return k
+	}
+	ws, dir := wsID(child), contract.Worktree
 	git := func(script string) (string, bool) {
 		cctx, cancel := context.WithTimeout(ctx, checkTimeout)
 		defer cancel()
-		out, code, err := r.execOnce(cctx, ws, "lazyagents-check-"+child.ID.String(), script, env)
+		out, code, err := r.execIn(cctx, ws, dir, "lazyagents-check-"+child.ID.String(), script, env)
 		return out, err == nil && code == 0
 	}
 	status, ok := git("git status --porcelain")
 	if !ok {
-		k.Error = "git status failed in the workspace"
-		k.Ran = false
+		k.Error = "git status failed in the worktree"
 		k.Evaluate(contract)
 		return k
 	}
-	for _, f := range parseStatus(status) {
-		if !slices.Contains(contract.BaseUncommitted, f) {
-			k.Uncommitted = append(k.Uncommitted, f)
-		}
+	k.Uncommitted = parseStatus(status)
+	// What the branch would add to the parent's: everything since it forked from it.
+	base := ""
+	if parentBranch != "" {
+		base, _ = git("git merge-base " + shellQuote(parentBranch) + " HEAD")
+		base = strings.TrimSpace(base)
 	}
-	if contract.BaseSHA == "" {
-		k.Error = "the checkout's starting commit wasn't recorded, so committed changes can't be listed"
+	if base == "" {
+		k.Error = "the branch's fork point from the main agent's branch couldn't be found, so committed changes can't be listed"
 	} else {
-		base := shellQuote(contract.BaseSHA)
-		diff, stat := "git diff --name-only "+base+" HEAD", "git diff --stat "+base+" HEAD"
-		if contract.BaseSHA == noCommits {
-			diff, stat = "git ls-tree -r --name-only HEAD 2>/dev/null || true", "git show --stat --format= HEAD 2>/dev/null || true"
-		}
-		names, ok := git(diff)
+		k.BaseSHA = base
+		names, ok := git("git diff --name-only " + shellQuote(base) + " HEAD")
 		if !ok {
-			k.Error = "git diff against the starting commit failed"
+			k.Error = "git diff against the fork point failed"
 		} else {
 			for _, f := range strings.Split(strings.TrimSpace(names), "\n") {
 				if f != "" {
 					k.ChangedFiles = append(k.ChangedFiles, f)
 				}
 			}
-			k.DiffStat, _ = git(stat)
+			k.DiffStat, _ = git("git diff --stat " + shellQuote(base) + " HEAD")
 			k.DiffStat = lastLines(strings.TrimSpace(k.DiffStat), 40)
 		}
 	}
 	k.Ran = true
 	if contract.TestCommand != "" {
 		tctx, cancel := context.WithTimeout(ctx, testCheckTimeout)
-		out, code, err := r.execOnce(tctx, ws, "lazyagents-test-"+child.ID.String(), contract.TestCommand, env)
+		out, code, err := r.execIn(tctx, ws, dir, "lazyagents-test-"+child.ID.String(), contract.TestCommand, env)
 		timedOut := tctx.Err() != nil
 		cancel()
 		if err == nil && !timedOut {

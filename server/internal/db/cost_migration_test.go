@@ -16,17 +16,22 @@ func TestCostAndCumulativeUsageMigration(t *testing.T) {
 	pool := testdb.New(t)
 	ctx := context.Background()
 	gooseTo(t, pool, false, 16)
+	// The seed uses current queries, which read agents.archived_at (migration 19).
+	mustExec(t, pool, `ALTER TABLE agents ADD COLUMN archived_at timestamptz`)
 	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
 		t.Fatal(err)
 	}
 	q := store.New(pool)
 	me, _ := q.GetLocalUser(ctx)
-	agent, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: me.WorkspaceID, Handle: "atlas"})
+	var agentID uuid.UUID
+	if err := pool.QueryRow(ctx, `SELECT id FROM agents WHERE workspace_id=$1 AND handle='atlas'`, me.WorkspaceID).Scan(&agentID); err != nil {
+		t.Fatal(err)
+	}
 	ticket, _ := q.GetTicketByKey(ctx, store.GetTicketByKeyParams{WorkspaceID: me.WorkspaceID, Key: "PAY-214"})
 	// Raw SQL: sqlc's CreateRun returns every current column, and this schema is older.
 	var runID uuid.UUID
 	err := pool.QueryRow(ctx, `INSERT INTO runs (workspace_id, ticket_id, agent_id, mode, state, resolved_spec, harness, model, purpose)
-		VALUES ($1,$2,$3,'managed','completed','{}','codex','test','ticket') RETURNING id`, me.WorkspaceID, ticket.ID, agent.ID).Scan(&runID)
+		VALUES ($1,$2,$3,'managed','completed','{}','codex','test','ticket') RETURNING id`, me.WorkspaceID, ticket.ID, agentID).Scan(&runID)
 	if err != nil {
 		t.Fatal(err)
 	}

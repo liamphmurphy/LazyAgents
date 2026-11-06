@@ -24,6 +24,7 @@ export type Approval = Schemas["Approval"];
 export type LinkTarget = Schemas["LinkTarget"];
 export type Mention = Schemas["Mention"];
 export type WikiPageSummary = Schemas["WikiPageSummary"];
+export type WikiPattern = Schemas["WikiPattern"];
 export type WikiSuggestion = Schemas["WikiSuggestion"];
 export type GraphData = Schemas["Graph"];
 export type NodeKind = Schemas["NodeKind"];

@@ -356,7 +356,7 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 }
 
 const defaultChatAgent = `-- name: DefaultChatAgent :one
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind FROM agents WHERE workspace_id = $1 AND kind <> 'sub' ORDER BY created_at, name, id LIMIT 1
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND kind <> 'sub' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1
 `
 
 // The default agent for a chat that names none: the oldest main (non-sub) agent,
@@ -379,6 +379,7 @@ func (q *Queries) DefaultChatAgent(ctx context.Context, workspaceID uuid.UUID) (
 		&i.UpdatedAt,
 		&i.CurrentDefinitionVersionID,
 		&i.Kind,
+		&i.ArchivedAt,
 	)
 	return i, err
 }

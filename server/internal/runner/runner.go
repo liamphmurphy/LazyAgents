@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"path"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -59,6 +61,9 @@ type Runner struct {
 	mu     sync.Mutex
 	active int
 	wg     sync.WaitGroup
+	// wtMu serialises git operations on a parent's repository that create,
+	// merge or remove delegated runs' worktrees.
+	wtMu sync.Mutex
 }
 
 const tokenEnv = "LAZYAGENTS_TOKEN"
@@ -232,6 +237,16 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 	return c, err
 }
 
+// addTiming adds to a run's cumulative phase timings. It is best-effort and
+// uses its own context so a shutting-down runner still records the phase.
+func (r *Runner) addTiming(runID uuid.UUID, setup, harness, checks time.Duration) {
+	err := r.q().AddRunTiming(context.Background(), store.AddRunTimingParams{ID: runID,
+		SetupMs: setup.Milliseconds(), HarnessMs: harness.Milliseconds(), ChecksMs: checks.Milliseconds()})
+	if err != nil {
+		r.Log.Warn("record timing", "run", runID, "err", err)
+	}
+}
+
 func (r *Runner) event(ctx context.Context, runID uuid.UUID, typ string, payload map[string]any) {
 	b, _ := json.Marshal(payload)
 	if err := r.q().AddRunEvent(ctx, store.AddRunEventParams{RunID: runID, Type: typ, Payload: b}); err != nil && ctx.Err() == nil {
@@ -290,6 +305,7 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 }
 
 func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
+	r.removeWorktrees(ctx, runID)
 	if err := r.Backend.RemoveWorkspace(ctx, runID.String()); err != nil {
 		r.Log.Warn("remove workspace", "run", runID, "err", err)
 		return
@@ -317,8 +333,22 @@ func wsID(run store.Run) string {
 	return run.ID.String()
 }
 
-// startChild readies a delegated run. There's no clone or setup: it works in
-// the parent's workspace, which the parent left on its ticket branch.
+// childDir is the directory of the parent's workspace a delegated run works
+// in (its git worktree); "" for any other run.
+func childDir(run store.Run) string {
+	if run.ParentRunID == nil {
+		return ""
+	}
+	var contract runs.Contract
+	if len(run.Contract) > 0 {
+		_ = json.Unmarshal(run.Contract, &contract)
+	}
+	return contract.Worktree
+}
+
+// startChild readies a delegated run. There's no clone or setup: it gets its
+// own git worktree and branch in the parent's workspace, cut from the branch
+// the parent left committed (or the worktree of the run it continues).
 func (r *Runner) startChild(ctx context.Context, c runCtx) {
 	run := c.run
 	fail := func(msg string) {
@@ -339,7 +369,20 @@ func (r *Runner) startChild(ctx context.Context, c runCtx) {
 		fail(fmt.Sprintf("No %s secret: add an API key in Settings → Connections & secrets.", key.Secret))
 		return
 	}
-	r.recordBaseline(ctx, c, map[string]string{})
+	setupStart := time.Now()
+	if err := r.waitParentIdle(ctx, parent.ID); err != nil {
+		if ctx.Err() == nil {
+			fail("The main agent's turn didn't finish, so the delegated run can't start: " + err.Error())
+		}
+		return
+	}
+	contract, err := r.prepareWorktree(ctx, c, map[string]string{})
+	if err != nil {
+		fail("Couldn't start the delegated run: " + err.Error())
+		return
+	}
+	rawContract, _ := json.Marshal(contract)
+	r.addTiming(run.ID, time.Since(setupStart), 0, 0)
 	err = pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
 		cur, err := q.LockRun(ctx, run.ID)
@@ -349,10 +392,13 @@ func (r *Runner) startChild(ctx context.Context, c runCtx) {
 		if cur.State != "starting" {
 			return nil // cancelled while queued
 		}
+		if _, err := q.SetRunContract(ctx, store.SetRunContractParams{ID: run.ID, Contract: rawContract}); err != nil {
+			return err
+		}
 		if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "running"}); err != nil {
 			return err
 		}
-		b, _ := json.Marshal(map[string]any{"state": "running", "mode": "managed", "parent_run_id": parent.ID})
+		b, _ := json.Marshal(map[string]any{"state": "running", "mode": "managed", "parent_run_id": parent.ID, "branch": contract.Branch, "worktree": contract.Worktree})
 		if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: run.ID, Type: "lifecycle", Payload: b}); err != nil {
 			return err
 		}
@@ -424,6 +470,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			env[SSHKeyEnv] = v
 		}
 	}
+	setupStart := time.Now()
 	if err := r.Backend.EnsureWorkspace(ctx, run.ID.String()); err != nil {
 		fail("Couldn't create the workspace: " + err.Error())
 		return
@@ -470,6 +517,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	if c, ok := proc.(io.Closer); ok {
 		_ = c.Close()
 	}
+	r.addTiming(run.ID, time.Since(setupStart), 0, 0)
 	tail := lastLines(redact(out.String(), env), 30)
 	if err != nil || code != 0 {
 		fail(fmt.Sprintf("Workspace setup failed (exit %d):\n%s", code, tail))
@@ -718,8 +766,13 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.run.HarnessSessionID != nil {
 		session = *c.run.HarnessSessionID
 	}
+	dir := childDir(c.run)
+	wsDir := r.Backend.WorkspaceDir(wsID(c.run))
+	if dir != "" {
+		wsDir = path.Join(wsDir, dir)
+	}
 	inv, err := h.Invocation(harness.Workspace{
-		Dir: r.Backend.WorkspaceDir(wsID(c.run)), MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
+		Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
 	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
@@ -754,7 +807,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
-		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Files: files,
+		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Dir: dir, Files: files,
 	})
 	if err != nil {
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
@@ -779,12 +832,23 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 	}
 
+	harnessStart := time.Now()
 	res, raw, code, waitErr := r.watch(ctx, c, proc, h.NewParser(c.spec.Model), sensitive, maxRuntime-used)
+	r.addTiming(c.run.ID, 0, time.Since(harnessStart), 0)
 	// Some CLI failures only reach stderr, without a JSON error event.
 	if code != 0 && !res.UsageLimited {
 		for _, line := range strings.Split(string(raw), "\n") {
 			if strings.HasPrefix(line, "[stderr] ") && harness.UsageLimit(line) {
 				res.UsageLimited = true
+				break
+			}
+		}
+	}
+	if code != 0 && res.Error == "" && c.run.ParentRunID != nil {
+		// A session the CLI can't resume is reported on stderr only.
+		for _, line := range strings.Split(string(raw), "\n") {
+			if strings.HasPrefix(line, "[stderr] ") && sessionGone.MatchString(line) {
+				res.Error = strings.TrimPrefix(line, "[stderr] ")
 				break
 			}
 		}
@@ -980,6 +1044,9 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 		}
 		return
 	}
+	if (waitErr != nil || code != 0 || res.IsError) && r.retryFreshSession(ctx, c, res) {
+		return
+	}
 	if waitErr != nil || code != 0 || res.IsError || res.UsageLimited {
 		msg := res.Error
 		if msg == "" && res.UsageLimited {
@@ -1049,4 +1116,43 @@ func runnerRecord(ctx context.Context, q *store.Queries, ws, ticket uuid.UUID, e
 		return nil
 	}
 	return tracker.Record(ctx, q, ws, ticket, epic, actor, verb, payload, at)
+}
+
+// sessionGone matches the CLIs' errors for a session id they can't resume.
+var sessionGone = regexp.MustCompile(`(?i)no conversation found|session[^\n]{0,40}(not found|expired|invalid|unknown)|(cannot|could not|couldn't|unable to) (resume|find)[^\n]{0,40}(session|thread|conversation)|thread[^\n]{0,20}not found`)
+
+// retryFreshSession handles a delegated run that continues an earlier run and
+// whose first turn failed because the harness could not resume that run's
+// session (expired, or lost with a volume): it forgets the session and starts
+// the turn again fresh, once. The worktree still holds the earlier work.
+// Detection is by error text, so an unrecognised message just fails the run.
+func (r *Runner) retryFreshSession(ctx context.Context, c runCtx, res harness.Result) bool {
+	var contract runs.Contract
+	if c.run.ParentRunID == nil || json.Unmarshal(c.run.Contract, &contract) != nil || !contract.ResumeSession || !sessionGone.MatchString(res.Error) {
+		return false
+	}
+	turns, err := r.q().ListTurns(ctx, c.run.ID)
+	if err != nil || len(turns) != 1 {
+		return false
+	}
+	contract.ResumeSession = false
+	raw, _ := json.Marshal(contract)
+	err = pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		if err := q.SetRunSession(ctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: nil}); err != nil {
+			return err
+		}
+		if _, err := q.SetRunContract(ctx, store.SetRunContractParams{ID: c.run.ID, Contract: raw}); err != nil {
+			return err
+		}
+		_, err := q.StartTurn(ctx, store.StartTurnParams{RunID: c.run.ID, Trigger: "resume", InputMessage: turns[0].InputMessage +
+			"\n\n(Your earlier conversation could not be resumed, so this is a fresh session. Your earlier work is still in this worktree: check git log and git diff before you start.)"})
+		return err
+	})
+	if err != nil {
+		r.Log.Error("fresh session retry", "run", c.run.ID, "err", err)
+		return false
+	}
+	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "session_reset", "reason": res.Error})
+	return true
 }

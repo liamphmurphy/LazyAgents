@@ -617,7 +617,7 @@ func TestApprovedRepositoryAndBaseBranchAreFrozen(t *testing.T) {
 	e.runner.Sweep(e.ctx)
 }
 
-func TestDelegatedRunSharesParentWorkspace(t *testing.T) {
+func TestDelegatedRunWorksInWorktreeOfParentWorkspace(t *testing.T) {
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "delegate")
 	if _, err := (&agents.Service{Pool: e.pool}).Create(e.ctx, e.ws, e.me.ID, "scribe", agents.Identity{Name: "Scribe", Role: "Docs", Kind: agents.KindSub}, nil); err != nil {
@@ -636,6 +636,13 @@ func TestDelegatedRunSharesParentWorkspace(t *testing.T) {
 	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
 	if len(turns) != 2 || turns[1].Trigger != "delegation" {
 		t.Fatalf("parent turns %+v", turns)
+	}
+	// The child worked in its own worktree and branch; its commit was merged into the parent's.
+	var ct runs.Contract
+	var ck runs.Checks
+	if json.Unmarshal(kids[0].Contract, &ct) != nil || json.Unmarshal(kids[0].Checks, &ck) != nil ||
+		ct.Worktree != ".lazyagents/worktrees/"+kids[0].ID.String() || !ck.Merged || ck.Branch != ct.Branch {
+		t.Fatalf("contract %s checks %s", kids[0].Contract, kids[0].Checks)
 	}
 	tk, _ := tracker.Get(e.ctx, e.q, e.ws, "PAY-214")
 	if tk.Status != "in_review" {
@@ -677,8 +684,20 @@ func TestDelegationChecksRunBeforeParentResumes(t *testing.T) {
 		t.Fatalf("checks %s (%v)", kids[0].Checks, err)
 	}
 	rows, err := e.q.DelegationEfficiency(e.ctx, e.ws)
-	if err != nil || len(rows) != 1 || rows[0].Delegations != 1 || rows[0].FirstPass != 0 || rows[0].RepairLoops != 0 {
+	if err != nil || len(rows) != 1 || rows[0].Delegations != 1 || rows[0].Checked != 1 || rows[0].FirstPass != 0 || rows[0].RepairLoops != 0 {
 		t.Fatalf("efficiency %+v (%v)", rows, err)
+	}
+	// Phase timings: the parent was set up and ran the harness; the child ran the harness,
+	// was baselined (setup) and was checked.
+	if parent.SetupMs == nil || parent.HarnessMs == nil || *parent.HarnessMs <= 0 {
+		t.Fatalf("parent timings setup=%v harness=%v", parent.SetupMs, parent.HarnessMs)
+	}
+	k := kids[0]
+	if k.SetupMs == nil || k.HarnessMs == nil || k.ChecksMs == nil || *k.HarnessMs <= 0 {
+		t.Fatalf("child timings setup=%v harness=%v checks=%v", k.SetupMs, k.HarnessMs, k.ChecksMs)
+	}
+	if rows[0].AvgHarnessSeconds <= 0 {
+		t.Fatalf("avg harness seconds %v", rows[0].AvgHarnessSeconds)
 	}
 }
 

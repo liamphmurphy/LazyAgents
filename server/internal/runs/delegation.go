@@ -21,17 +21,23 @@ import (
 
 // Delegation (PLAN.md §6.8). Main agents take tickets; sub agents only run
 // when a main agent hands them part of a ticket. A delegated run is a child of
-// the main agent's run: same ticket, and it works in the parent's checkout on
-// the parent's branch. The parent waits (wait_reason "delegation") and is
-// resumed with the child's outcome, so one agent edits the checkout at a time.
-// Parallel delegation is planned but not built.
+// the main agent's run: same ticket, but it works in its own git worktree
+// (inside the parent's workspace) on its own branch cut from the parent's
+// HEAD. The parent waits (wait_reason "delegation"); up to MaxParallelDelegations
+// children run at once as long as their allowed_paths are disjoint. When the
+// last active child ends the runner checks each finished child in its
+// worktree, merges the ones that passed into the parent's branch, and resumes
+// the parent once with a report covering all of them. A child can continue an
+// earlier child's worktree, branch and harness session (continue_run_id).
 
 const (
 	VerbDelegated = "delegated" // {run_id, child_run_id, agent_id, agent_name, task}
 
 	// MaxDelegations bounds the delegated runs under one parent run.
 	MaxDelegations = 8
-	maxTaskRunes   = 20000
+	// MaxParallelDelegations bounds the delegated runs of one parent that are live at once.
+	MaxParallelDelegations = 3
+	maxTaskRunes           = 20000
 )
 
 // Contract is what a main agent asks of a sub agent beyond the task text. The
@@ -43,10 +49,21 @@ type Contract struct {
 	AllowedPaths []string `json:"allowed_paths,omitempty"`
 	// TestCommand must exit 0 in the checkout for the result to pass.
 	TestCommand string `json:"test_command,omitempty"`
-	// BaseSHA is the checkout's HEAD when the sub agent started; the runner sets it.
+	// ContinueRunID is an earlier, finished delegated run of the same parent
+	// and sub agent to carry on: same worktree and branch, same harness session.
+	ContinueRunID string `json:"continue_run_id,omitempty"`
+	// BaseSHA is the worktree's HEAD when the sub agent started; the runner sets it.
 	BaseSHA string `json:"base_sha,omitempty"`
-	// BaseUncommitted are files already dirty at that point; they aren't the sub agent's.
+	// BaseUncommitted is kept for old runs; a worktree starts clean, so it is empty.
 	BaseUncommitted []string `json:"base_uncommitted,omitempty"`
+	// Branch and Worktree (relative to the workspace) are the child's git
+	// branch and worktree. The runner sets them, or they're copied from the run
+	// being continued.
+	Branch   string `json:"branch,omitempty"`
+	Worktree string `json:"worktree,omitempty"`
+	// ResumeSession is set while the run's first turn resumes the continued
+	// run's harness session; the runner clears it if that session is gone.
+	ResumeSession bool `json:"resume_session,omitempty"`
 }
 
 const (
@@ -89,8 +106,47 @@ func (c Contract) Normalize() (Contract, error) {
 	if c.TestCommand = strings.TrimSpace(c.TestCommand); len([]rune(c.TestCommand)) > maxContractRunes {
 		return c, apperr.Invalid("test_command", "must be at most %d characters", maxContractRunes)
 	}
-	c.BaseSHA, c.BaseUncommitted = "", nil
+	if c.ContinueRunID = strings.TrimSpace(c.ContinueRunID); c.ContinueRunID != "" {
+		if _, err := uuid.Parse(c.ContinueRunID); err != nil {
+			return c, apperr.Invalid("continue_run_id", "%q isn't a run id", c.ContinueRunID)
+		}
+	}
+	c.BaseSHA, c.BaseUncommitted, c.Branch, c.Worktree, c.ResumeSession = "", nil, "", "", false
 	return c, nil
+}
+
+// region is the part of the repository an allowed path claims: the path itself
+// or, for a glob, the directory it is confined under ("" = anywhere).
+func region(p string) string {
+	p = strings.TrimSuffix(strings.TrimPrefix(p, "./"), "/")
+	if !strings.ContainsAny(p, "*?[") {
+		return p
+	}
+	var dir []string
+	for _, el := range strings.Split(p, "/") {
+		if strings.ContainsAny(el, "*?[") {
+			break
+		}
+		dir = append(dir, el)
+	}
+	return strings.Join(dir, "/")
+}
+
+// PathsOverlap reports whether two sets of allowed paths might touch the same
+// file. It is conservative: equal paths, one inside the other's directory, and
+// globs (judged by the directory they're confined under, or anywhere if none)
+// all count as overlapping.
+func PathsOverlap(a, b []string) bool {
+	for _, x := range a {
+		rx := region(x)
+		for _, y := range b {
+			ry := region(y)
+			if rx == "" || ry == "" || rx == ry || strings.HasPrefix(rx, ry+"/") || strings.HasPrefix(ry, rx+"/") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Empty reports whether the contract adds nothing to the task.
@@ -119,9 +175,14 @@ func (c Contract) PathAllowed(file string) bool {
 
 // ChildPrompt is the first message of a delegated run.
 func ChildPrompt(ticket, parentHandle, task string, contract Contract) string {
-	p := "@" + parentHandle + " delegated part of " + ticket + " to you. You work in the same checkout and branch; " +
-		"do not call claim_ticket. Do only what the task says, commit your work to the current branch, then call complete_run " +
-		"with a short summary of what you did and anything the main agent must check. If you're blocked, call complete_run and say why.\n\n## Task\n\n" + task
+	p := "@" + parentHandle + " delegated part of " + ticket + " to you. You work in your own git worktree on your own branch, cut from the main agent's; " +
+		"other sub agents may be working in parallel in theirs, so stay inside your task. Do not call claim_ticket. " +
+		"Do only what the task says, commit your work to the current branch (the server merges it into the main agent's branch once checks pass), then call complete_run " +
+		"with a short summary of what you did and anything the main agent must check. If you're blocked, call complete_run and say why."
+	if contract.ContinueRunID != "" {
+		p += " This continues your earlier run on this ticket: same worktree and branch, so your earlier work is still here. The task below is the follow-up."
+	}
+	p += "\n\n## Task\n\n" + task
 	if len(contract.AcceptanceCriteria) > 0 {
 		p += "\n\n## Acceptance criteria\n\nThe task is done only when all of these hold:\n"
 		for _, a := range contract.AcceptanceCriteria {
@@ -171,8 +232,13 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if c.Agent.Kind == agents.KindSub {
 			return apperr.Conflict("sub agents can't delegate")
 		}
-		run, t, err := s.running(ctx, q, c, ticketKey)
+		run, t, err := s.delegating(ctx, q, c, ticketKey)
 		if err != nil {
+			return err
+		}
+		// Serialise a parent's delegate calls (an agent may issue several at once):
+		// the limits below read the other children.
+		if run, err = q.LockRun(ctx, run.ID); err != nil {
 			return err
 		}
 		if run.ParentRunID != nil {
@@ -191,15 +257,24 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if sub.Kind != agents.KindSub {
 			return apperr.Invalid("agent", "@%s is a main agent; delegate to a sub agent (list_subagents)", handle)
 		}
-		if _, err := q.ActiveChildRun(ctx, &run.ID); err == nil {
-			return apperr.Conflict("a delegated run is already in progress")
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		kids, err := q.ChildRuns(ctx, &run.ID)
+		if err != nil {
 			return err
 		}
-		if n, err := q.CountChildRuns(ctx, &run.ID); err != nil {
+		if len(kids) >= MaxDelegations {
+			return apperr.Conflict("this run has already delegated %d times; finish the rest yourself or hand back with complete_run", len(kids))
+		}
+		prev, err := continuedRun(contract, kids, run, sub)
+		if err != nil {
 			return err
-		} else if n >= MaxDelegations {
-			return apperr.Conflict("this run has already delegated %d times; finish the rest yourself or hand back with complete_run", n)
+		}
+		if prev != nil {
+			var pc Contract
+			_ = json.Unmarshal(prev.Contract, &pc)
+			contract.Branch, contract.Worktree = pc.Branch, pc.Worktree
+		}
+		if err := checkParallel(kids, contract); err != nil {
+			return err
 		}
 		p, err := q.LockProject(ctx, store.LockProjectParams{ID: t.ProjectID, WorkspaceID: ws})
 		if err != nil {
@@ -230,7 +305,14 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: child.ID, Trigger: "start", InputMessage: ChildPrompt(t.Key, c.Agent.Handle, task, contract)}); err != nil {
 			return err
 		}
-		if !contract.Empty() {
+		if prev != nil && prev.Harness == child.Harness && prev.HarnessSessionID != nil {
+			// Same harness: the first turn resumes the earlier run's conversation.
+			if err := q.SetRunSession(ctx, store.SetRunSessionParams{ID: child.ID, HarnessSessionID: prev.HarnessSessionID}); err != nil {
+				return err
+			}
+			contract.ResumeSession = true
+		}
+		if !contract.Empty() || prev != nil {
 			raw, err := json.Marshal(contract)
 			if err != nil {
 				return err
@@ -242,18 +324,20 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if err := event(ctx, q, child.ID, "lifecycle", map[string]any{"state": "queued", "mode": "managed", "parent_run_id": run.ID, "delegated_by": c.Agent.Handle}); err != nil {
 			return err
 		}
-		wait := "delegation"
-		if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &wait}); err != nil {
-			return err
-		}
-		if err := q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](0)}); err != nil {
-			return err
+		if run.State == "running" { // the first delegation of a turn parks the parent; later ones find it parked
+			wait := "delegation"
+			if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &wait}); err != nil {
+				return err
+			}
+			if err := q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](0)}); err != nil {
+				return err
+			}
 		}
 		if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "waiting", "reason": "delegation", "child_run_id": child.ID, "agent": sub.Handle}); err != nil {
 			return err
 		}
 		if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, agentActor(c), VerbDelegated, map[string]any{
-			"run_id": run.ID, "child_run_id": child.ID, "agent_id": sub.ID, "agent_name": sub.Name, "task": truncate(task, 300), "has_contract": !contract.Empty(),
+			"run_id": run.ID, "child_run_id": child.ID, "agent_id": sub.ID, "agent_name": sub.Name, "task": truncate(task, 300), "has_contract": !contract.Empty(), "continues": contract.ContinueRunID,
 		}, nil); err != nil {
 			return err
 		}
@@ -269,6 +353,91 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 	return out, err
 }
 
+// delegating is running, except that a parent parked by an earlier delegate
+// call of the same turn (its harness process is still going) may delegate again.
+func (s *Service) delegating(ctx context.Context, q *store.Queries, c Caller, key string) (store.Run, store.Ticket, error) {
+	run, t, err := s.Active(ctx, q, c, key)
+	if err == nil && run.State == "waiting" && deref(run.WaitReason) == "delegation" {
+		turns, lerr := q.ListTurns(ctx, run.ID)
+		if lerr != nil {
+			return run, t, lerr
+		}
+		for _, tn := range turns {
+			if tn.Status == "running" {
+				return run, t, nil
+			}
+		}
+	}
+	return s.running(ctx, q, c, key)
+}
+
+// continuedRun resolves contract.ContinueRunID: a finished delegated run of
+// this parent and this sub agent that no later run has already taken over.
+func continuedRun(contract Contract, kids []store.Run, parent store.Run, sub store.Agent) (*store.Run, error) {
+	if contract.ContinueRunID == "" {
+		return nil, nil
+	}
+	var prev *store.Run
+	at := 0
+	for i := range kids {
+		if kids[i].ID.String() == contract.ContinueRunID {
+			prev, at = &kids[i], i
+		}
+	}
+	switch {
+	case prev == nil:
+		return nil, apperr.Invalid("continue_run_id", "%s isn't a delegated run of this run; use the run_id delegate returned", contract.ContinueRunID)
+	case prev.AgentID != sub.ID:
+		return nil, apperr.Invalid("continue_run_id", "that run was delegated to a different agent; to continue it delegate to the same sub agent")
+	case !slices.Contains(Terminal, prev.State):
+		return nil, apperr.Invalid("continue_run_id", "that run is still in progress; wait for it to finish")
+	}
+	var pc Contract
+	_ = json.Unmarshal(prev.Contract, &pc)
+	if pc.Worktree == "" {
+		return nil, apperr.Invalid("continue_run_id", "that run never got a worktree (it failed to start), so there is nothing to continue; delegate afresh")
+	}
+	for _, k := range kids[at+1:] { // children are ordered by start
+		var kc Contract
+		if json.Unmarshal(k.Contract, &kc) == nil && kc.Worktree == pc.Worktree {
+			return nil, apperr.Invalid("continue_run_id", "run %s already continued that one; continue the latest run instead", k.ID)
+		}
+	}
+	return prev, nil
+}
+
+// checkParallel enforces the limits on children that are live at once: at most
+// MaxParallelDelegations, and once two run together both need non-empty,
+// disjoint allowed_paths so their worktrees can be merged without conflicts.
+func checkParallel(kids []store.Run, contract Contract) error {
+	var live []store.Run
+	for _, k := range kids {
+		if !slices.Contains(Terminal, k.State) {
+			live = append(live, k)
+		}
+	}
+	if len(live) == 0 {
+		return nil
+	}
+	if len(live) >= MaxParallelDelegations {
+		return apperr.Conflict("%d delegated runs are already in progress (the limit); wait for them to finish before delegating more", len(live))
+	}
+	if len(contract.AllowedPaths) == 0 {
+		return apperr.Invalid("allowed_paths", "a delegated run is already in progress, so this one needs allowed_paths that don't overlap with it; set allowed_paths or delegate sequentially")
+	}
+	for _, k := range live {
+		var kc Contract
+		_ = json.Unmarshal(k.Contract, &kc)
+		if len(kc.AllowedPaths) == 0 {
+			return apperr.Conflict("the delegated run %s has no allowed_paths, so it may touch anything; wait for it to finish and then delegate, or delegate sequentially", k.ID)
+		}
+		if PathsOverlap(kc.AllowedPaths, contract.AllowedPaths) {
+			return apperr.Conflict("allowed_paths overlap with the delegated run %s in progress (%s); narrow allowed_paths so they're disjoint, or delegate sequentially", k.ID, strings.Join(kc.AllowedPaths, ", "))
+		}
+	}
+	return nil
+}
+
 // ListSubagents is who a main agent can delegate to.
 func (s *Service) ListSubagents(ctx context.Context, c Caller) ([]store.Agent, error) {
 	if c.Agent.Kind == agents.KindSub {
@@ -277,8 +446,10 @@ func (s *Service) ListSubagents(ctx context.Context, c Caller) ([]store.Agent, e
 	return store.New(s.Pool).ListSubagents(ctx, c.Agent.WorkspaceID)
 }
 
-// WakeParent resumes a waiting parent once its delegated run has ended,
-// telling it how. The parent stays parked if a person paused or cancelled it.
+// WakeParent resumes a waiting parent once its last live delegated run has
+// ended, telling it how each run that ended since it was parked went. The
+// parent stays parked while any child is live, or if a person paused or
+// cancelled it.
 func WakeParent(ctx context.Context, q *store.Queries, child store.Run, state, outcome string) error {
 	if child.ParentRunID == nil {
 		return nil
@@ -290,25 +461,53 @@ func WakeParent(ctx context.Context, q *store.Queries, child store.Run, state, o
 	if parent.State != "waiting" || deref(parent.WaitReason) != "delegation" {
 		return nil
 	}
-	handle := child.AgentID.String()
-	if a, err := q.GetAgent(ctx, store.GetAgentParams{ID: child.AgentID, WorkspaceID: child.WorkspaceID}); err == nil {
-		handle = "@" + a.Handle
+	kids, err := q.ChildRuns(ctx, &parent.ID)
+	if err != nil {
+		return err
 	}
-	outcome = strings.TrimSpace(outcome)
-	if outcome == "" {
-		outcome = "(no summary)"
+	var ended []store.Run // not yet checked by the runner: finished since the parent was parked
+	for _, k := range kids {
+		if !slices.Contains(Terminal, k.State) {
+			return nil // wait for the rest
+		}
+		if len(k.Checks) == 0 && k.ID != child.ID {
+			ended = append(ended, k)
+		}
+	}
+	ended = append(ended, child)
+	if state != child.State || outcome != deref(child.Outcome) { // the caller's view wins for the run that just ended
+		child.State, child.Outcome = state, &outcome
+		ended[len(ended)-1] = child
+	}
+	line := func(k store.Run) string {
+		handle := k.AgentID.String()
+		if a, err := q.GetAgent(ctx, store.GetAgentParams{ID: k.AgentID, WorkspaceID: k.WorkspaceID}); err == nil {
+			handle = "@" + a.Handle
+		}
+		o := strings.TrimSpace(deref(k.Outcome))
+		if o == "" {
+			o = "(no summary)"
+		}
+		switch k.State {
+		case "completed":
+			return handle + " finished the delegated task.\n\n" + o
+		case "cancelled":
+			return handle + "'s delegated run was cancelled: " + o
+		default:
+			return handle + "'s delegated run failed: " + o
+		}
 	}
 	var msg string
-	switch state {
-	case "completed":
-		msg = handle + " finished the delegated task.\n\n" + outcome
-	case "cancelled":
-		msg = handle + "'s delegated run was cancelled: " + outcome
-	default:
-		msg = handle + "'s delegated run failed: " + outcome
+	if len(ended) == 1 {
+		msg = line(ended[0])
+	} else {
+		msg = fmt.Sprintf("%d delegated runs have ended.", len(ended))
+		for i, k := range ended {
+			msg += fmt.Sprintf("\n\n### %d. %s", i+1, line(k))
+		}
 	}
-	msg += "\n\nThe server checks the workspace against the delegation contract (changed files, allowed paths, test command) before you resume; those results follow. " +
-		"Don't repeat checks that already ran. Read the diff for what they can't judge, read get_ticket, verify the acceptance criteria, and delegate again or fix any remaining work yourself. " +
+	msg += "\n\nThe server checks each delegated run in its worktree against its contract (changed files, allowed paths, test command) and merges the ones that passed into your branch before you resume; those results follow. " +
+		"Don't repeat checks that already ran. Read the diff for what they can't judge, read get_ticket, verify the acceptance criteria, and delegate again (continue_run_id sends fixes to the same sub agent) or fix any remaining work yourself. " +
 		"When every criterion is verified and checked, commit and push any changes, record the PR with set_pr, obtain delegated reviewer/QA approval, and finish with complete_run status=done."
 	return resume(ctx, q, parent, "delegation", msg)
 }

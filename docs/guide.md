@@ -72,8 +72,33 @@ description. On Codex they use native discovery under
 
 `examples/skills/` holds a starter library, and
 `python3 examples/attach-skills.py` attaches it to the starter agents
-(`tech-lead`, `frontend-engineer`, `backend-engineer`, `code-reviewer`,
-`product-manager`). It's idempotent.
+(`tech-lead`, `implementer`, `code-reviewer`, `scoper`). It's idempotent.
+
+### Patterns
+
+Reusable team conventions (architecture patterns, coding styles) live in a
+curated, workspace-wide wiki area, separate from agents' run notes
+(`agents/<handle>/`) and project decisions (`Architecture/ADR - …`).
+
+- Published patterns are atomic notes at `Patterns/<Topic>/<Title>`. Topic is
+  one of Go, React, Postgres, Testing, API, Architecture, Process; the title is
+  short and imperative ("Wrap errors with context").
+- The body starts with `Topic: <topic>` and `Tags: tag1, tag2` (2-5 lowercase
+  tags), then the sections When to use, Rule, Example, When not to use, Related.
+- Agents look conventions up with `find_pattern({q, topic?, limit?})` before
+  implementing. Search tolerates typos and partial words (`eror wrap`, `pgx`);
+  an empty `q` lists everything. The web API is `GET /api/v1/wiki/patterns`.
+- Agents propose with `propose_pattern({title, topic, tags, body,
+  source_ticket?})`, which writes `Patterns/Proposed/<Title>` (always allowed,
+  whatever `wiki:write` says). Proposals are not searchable.
+- An agent whose `wiki:write` scope is `allowed` (for example a librarian or
+  `tech-lead`) reviews them: `list_proposed_patterns`, then `publish_pattern`
+  (optionally editing title, topic or body) or `reject_pattern` with a reason.
+  Both remove the proposal. If the pattern already exists, merge into it with
+  `write_note` (mode replace) and reject the duplicate.
+- Run notes under `agents/<handle>/` are only for durable lessons that help a
+  future run on this codebase, not a log of what was done. General lessons go
+  through `propose_pattern`; project-specific decisions stay in ADRs.
 
 ### Planning work
 

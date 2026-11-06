@@ -13,10 +13,12 @@ HERE = pathlib.Path(__file__).parent / "skills"
 
 ASSIGN = {
     "tech-lead": ["ticket-breakdown", "architecture-decision-records", "technical-risk-review", "api-contract-first"],
-    "frontend-engineer": ["ui-design-fidelity", "ui-states-and-interaction", "accessibility-checklist", "react-nextjs-patterns", "frontend-testing"],
-    "backend-engineer": ["go-code-style", "go-error-handling", "go-concurrency", "go-testing", "go-http-api", "postgres-pgx-and-migrations", "api-contract-first"],
+    "implementer": [
+        "ui-design-fidelity", "ui-states-and-interaction", "accessibility-checklist", "react-nextjs-patterns", "frontend-testing",
+        "go-code-style", "go-error-handling", "go-concurrency", "go-testing", "go-http-api", "postgres-pgx-and-migrations", "api-contract-first",
+    ],
     "code-reviewer": ["code-review-checklist", "writing-review-feedback", "security-review", "go-review-pitfalls", "ts-react-review-pitfalls"],
-    "product-manager": ["prd-and-requirements", "requirements-verification", "wiki-documentation"],
+    "scoper": ["prd-and-requirements", "requirements-verification", "wiki-documentation"],
 }
 
 

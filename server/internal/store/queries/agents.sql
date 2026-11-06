@@ -1,8 +1,8 @@
 -- name: GetAgentByHandle :one
-SELECT * FROM agents WHERE workspace_id = $1 AND handle = $2;
+SELECT * FROM agents WHERE workspace_id = $1 AND handle = $2 AND archived_at IS NULL;
 
 -- name: LockAgentByHandle :one
-SELECT * FROM agents WHERE workspace_id = $1 AND handle = $2 FOR UPDATE;
+SELECT * FROM agents WHERE workspace_id = $1 AND handle = $2 AND archived_at IS NULL FOR UPDATE;
 
 -- name: CreateDefinitionVersion :one
 INSERT INTO agent_definition_versions (agent_id, version, spec, note, created_by_user_id, created_at)
@@ -42,3 +42,12 @@ SELECT o.*, p.key AS project_key, p.name AS project_name, p.color AS project_col
 FROM agent_project_overrides o JOIN projects p ON p.id = o.project_id
 WHERE o.agent_id = $1
 ORDER BY p.created_at;
+
+-- name: ArchiveAgent :exec
+UPDATE agents SET archived_at = now() WHERE id = $1;
+
+-- name: RevokeAgentTokensForAgent :exec
+UPDATE agent_tokens SET revoked_at = now() WHERE agent_id = $1 AND revoked_at IS NULL;
+
+-- name: CountActiveRunsForAgent :one
+SELECT count(*) FROM runs WHERE agent_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled');

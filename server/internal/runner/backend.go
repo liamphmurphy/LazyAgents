@@ -19,10 +19,13 @@ import (
 
 // ExecSpec is one process in a run's workspace.
 type ExecSpec struct {
-	Name  string            // container/process name, for logs and cleanup
-	Argv  []string          // argv[0] is the program
-	Env   map[string]string // only these are passed (plus PATH/HOME on local)
-	Files map[string][]byte // written relative to the workspace before start
+	Name string            // container/process name, for logs and cleanup
+	Argv []string          // argv[0] is the program
+	Env  map[string]string // only these are passed (plus PATH/HOME on local)
+	// Dir is the working directory, relative to the workspace root ("" = the
+	// root). A delegated run's git worktree is one.
+	Dir   string
+	Files map[string][]byte // written relative to the working directory before start
 }
 
 // Process is a running ExecSpec.
@@ -82,6 +85,15 @@ func (l *Local) RemoveWorkspace(_ context.Context, runID string) error {
 
 func (l *Local) Cleanup(context.Context) error { return nil } // processes die with the runner
 
+// subDir joins a workspace-relative directory to root, refusing escapes.
+func subDir(root, rel string) (string, error) {
+	p := filepath.Join(root, filepath.FromSlash(rel))
+	if p != filepath.Clean(root) && !strings.HasPrefix(p, filepath.Clean(root)+string(filepath.Separator)) {
+		return "", fmt.Errorf("runner: directory %q escapes the workspace", rel)
+	}
+	return p, nil
+}
+
 func writeFiles(root string, files map[string][]byte) error {
 	for rel, data := range files {
 		p := filepath.Join(root, filepath.FromSlash(rel))
@@ -100,6 +112,12 @@ func writeFiles(root string, files map[string][]byte) error {
 
 func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process, error) {
 	dir := l.WorkspaceDir(runID)
+	if spec.Dir != "" {
+		var err error
+		if dir, err = subDir(dir, spec.Dir); err != nil {
+			return nil, err
+		}
+	}
 	if err := writeFiles(dir, spec.Files); err != nil {
 		return nil, err
 	}

@@ -29,6 +29,7 @@ import { TargetMark } from "@/components/domain/wikilink";
 import { StartChatButton } from "@/components/domain/start-chat";
 import { TopBar, type Crumb } from "@/components/shell/topbar";
 import { PageTree } from "./page-tree";
+import { PatternsFinder } from "./patterns-finder";
 import { SuggestionCard } from "./suggestions";
 
 function crumbsFor(path: string): Crumb[] {
@@ -212,6 +213,7 @@ function WikiHome() {
             </p>
           </div>
           <WikiSearch />
+          <PatternsFinder />
 
           {(sugg.data?.length ?? 0) > 0 && (
             <section className="flex flex-col gap-2.5">

@@ -143,7 +143,7 @@ SELECT kind, id, label, sub, sort FROM (
     FROM epics e WHERE e.workspace_id = $1 AND e.name ILIKE '%' || sqlc.arg(q) || '%'
   UNION ALL
   SELECT 'agent', a.id, '@' || a.handle, a.name, 4, a.created_at
-    FROM agents a WHERE a.workspace_id = $1 AND (a.handle ILIKE sqlc.arg(q) || '%' OR a.name ILIKE sqlc.arg(q) || '%'
+    FROM agents a WHERE a.workspace_id = $1 AND a.archived_at IS NULL AND (a.handle ILIKE sqlc.arg(q) || '%' OR a.name ILIKE sqlc.arg(q) || '%'
                                                  OR ('@' || a.handle) ILIKE sqlc.arg(q) || '%')
 ) s
 ORDER BY (lower(label) LIKE lower(sqlc.arg(q)) || '%') DESC, sort, at DESC
@@ -223,3 +223,63 @@ SELECT EXISTS (SELECT 1 FROM knowledge_links WHERE source_kind = 'artifact' AND 
 -- name: LinksFromTicket :many
 -- Links in a ticket's description and its comments.
 SELECT * FROM knowledge_links WHERE source_ticket_id = $1 ORDER BY created_at, position;
+
+-- name: FindPatterns :many
+-- Published patterns only (Patterns/<Topic>/<Title>, never Patterns/Proposed/).
+-- Rank blends trigram similarity (typos, partial words; title, Tags line and
+-- path), full-text rank and the link-count boost. An empty q browses by topic
+-- then title.
+WITH cand AS (
+  SELECT ar.id, ar.title, ar.path, ar.search, ar.search_text, v.body_md,
+    lower(ar.title) AS ltitle,
+    lower(coalesce(substring(v.body_md FROM '(?im)^tags:[ \t]*(.*)$'), '')) AS ltags,
+    lower(sqlc.arg(q)::text) AS lq,
+    websearch_to_tsquery('english', sqlc.arg(q)::text) AS tsq
+  FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
+  WHERE ar.workspace_id = sqlc.arg(workspace_id) AND ar.type = 'note' AND v.body_md IS NOT NULL
+    AND lower(ar.path) LIKE 'patterns/%/%' AND lower(ar.path) NOT LIKE 'patterns/proposed/%'
+    AND (sqlc.narg(topic)::text IS NULL OR lower(split_part(ar.path, '/', 2)) = lower(sqlc.narg(topic)::text))
+), scored AS (
+  SELECT c.*,
+    greatest(word_similarity(c.lq, c.ltitle), similarity(c.lq, c.ltitle),
+             0.8 * word_similarity(c.lq, c.ltags), 0.5 * word_similarity(c.lq, lower(c.path))) AS sim,
+    CASE WHEN c.lq = '' THEN 0 ELSE ts_rank(c.search, c.tsq, 32) END AS fts,
+    (c.lq <> '' AND (c.search @@ c.tsq OR c.ltitle LIKE '%' || c.lq || '%' OR lower(c.path) LIKE '%' || c.lq || '%')) AS exact
+  FROM cand c
+)
+SELECT s.id, s.title, s.path, s.body_md,
+  CASE WHEN s.lq = '' THEN '' ELSE ts_headline('english', s.search_text, s.tsq,
+    'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»') END::text AS snippet,
+  ((s.sim + s.fts + CASE WHEN s.exact THEN 0.5 ELSE 0 END) *
+    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l
+                 WHERE l.target_id = s.id AND l.target_kind IN ('artifact', 'section')))))::float8 AS score
+FROM scored s
+WHERE s.lq = '' OR s.exact OR s.sim >= 0.3
+ORDER BY score DESC, lower(split_part(s.path, '/', 2)), s.ltitle
+LIMIT sqlc.arg(lim);
+
+-- name: RelevantPatterns :many
+-- Published patterns that share at least two distinct words with a ticket, at
+-- least one of them in the title or Tags line. Exact (stemmed) word matches
+-- only: no trigram fuzziness and no link-count boost. Title/tag matches weigh
+-- 3, body-only matches 1.
+WITH cand AS (
+  SELECT ar.id, ar.title, ar.path, ar.search,
+    to_tsvector('english', ar.title || ' ' || coalesce(substring(v.body_md FROM '(?im)^tags:[ \t]*(.*)$'), '')) AS head
+  FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
+  WHERE ar.workspace_id = sqlc.arg(workspace_id) AND ar.type = 'note' AND v.body_md IS NOT NULL
+    AND lower(ar.path) LIKE 'patterns/%/%' AND lower(ar.path) NOT LIKE 'patterns/proposed/%'
+), hits AS (
+  SELECT c.id, c.title, c.path, w.word,
+    (c.head @@ plainto_tsquery('english', w.word)) AS in_head,
+    (c.search @@ plainto_tsquery('english', w.word)) AS in_any
+  FROM cand c CROSS JOIN unnest(sqlc.arg(words)::text[]) AS w(word)
+)
+SELECT h.id, h.title, h.path,
+  (3 * count(*) FILTER (WHERE h.in_head) + count(*) FILTER (WHERE h.in_any AND NOT h.in_head))::float8 AS score
+FROM hits h
+GROUP BY h.id, h.title, h.path
+HAVING count(*) FILTER (WHERE h.in_head) >= 1
+   AND count(*) FILTER (WHERE h.in_head OR h.in_any) >= 2
+ORDER BY score DESC, lower(h.path)
+LIMIT sqlc.arg(lim);

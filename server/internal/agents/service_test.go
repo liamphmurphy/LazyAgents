@@ -86,3 +86,41 @@ func TestDefinitionsVersionsAndOverrides(t *testing.T) {
 		t.Fatalf("create: %+v %v", n, err)
 	}
 }
+
+func TestDeleteArchivesAgent(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
+		t.Fatal(err)
+	}
+	q := store.New(pool)
+	me, _ := q.GetLocalUser(ctx)
+	ws := me.WorkspaceID
+	svc := &agents.Service{Pool: pool}
+	if _, err := svc.Create(ctx, ws, me.ID, "temp", agents.Identity{Name: "Temp"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Delete(ctx, ws, "temp"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "temp"}); err == nil {
+		t.Fatal("archived agent still resolvable by handle")
+	}
+	all, _ := q.ListAllAgents(ctx, ws)
+	live, _ := q.ListAgents(ctx, ws)
+	if len(all) != len(live)+1 {
+		t.Fatalf("all=%d live=%d", len(all), len(live))
+	}
+	if err := svc.Delete(ctx, ws, "temp"); !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("second delete = %v", err)
+	}
+	// Seeded agents have open tickets.
+	err := svc.Delete(ctx, ws, "atlas")
+	var c *apperr.ConflictError
+	if !errors.As(err, &c) {
+		t.Fatalf("atlas delete = %v, want conflict", err)
+	}
+	if _, err := svc.Create(ctx, ws, me.ID, "temp", agents.Identity{Name: "Temp"}, nil); err != nil {
+		t.Fatalf("handle reuse: %v", err)
+	}
+}

@@ -3,6 +3,7 @@ package wiki
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,8 +37,10 @@ type candidate struct {
 // RunContext picks the wiki pages a run on ticket starts with, most
 // relevant first, trimmed to mem.MaxTokens:
 //   - index:  the agent's Memory page;
-//   - linked: notes linked from the ticket (description, comments) and its
-//     attached artifacts, then notes that link to them, the agent's own first;
+//   - linked: up to maxPatterns published patterns sharing at least two words
+//     with the ticket (one in the pattern's title or tags), then
+//     notes linked from the ticket (description, comments) and its attached
+//     artifacts, then notes that link to them, the agent's own first;
 //   - search: the top note hits for the ticket's title.
 func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket store.Ticket, mem agentdef.Memory) ([]ContextPage, error) {
 	if !mem.Enabled {
@@ -66,6 +69,20 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 	}
 
 	if mem.Inject == agentdef.InjectLinked || mem.Inject == agentdef.InjectSearch {
+		// Patterns are short, curated and the most reusable guidance, so they
+		// come right after the index.
+		if words := ticketWords(ticket); len(words) > 0 {
+			ps, err := q.RelevantPatterns(ctx, store.RelevantPatternsParams{WorkspaceID: ws, Words: words, Lim: maxPatterns})
+			if err != nil {
+				return nil, err
+			}
+			for _, p := range ps {
+				if a, ok := note(p.ID); ok {
+					add(a, "Pattern: matches the ticket")
+				}
+			}
+		}
+
 		attached, err := q.TicketArtifactIDs(ctx, ticket.ID)
 		if err != nil {
 			return nil, err
@@ -147,7 +164,7 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 			return nil, err
 		}
 		for _, h := range hits {
-			if a, ok := note(*h.ID); ok {
+			if a, ok := note(*h.ID); ok && !strings.HasPrefix(strings.ToLower(deref(a.Path)), strings.ToLower(ProposedRoot)) {
 				add(a, "Matches the ticket title")
 			}
 		}
@@ -181,6 +198,48 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 		}
 	}
 	return pages, nil
+}
+
+const (
+	maxPatterns   = 3
+	maxQueryWords = 24
+)
+
+// genericWords are too common in tickets to say anything about a pattern.
+var genericWords = map[string]bool{
+	"about": true, "add": true, "adds": true, "after": true, "also": true, "avoid": true, "before": true,
+	"change": true, "changes": true, "code": true, "currently": true, "ensure": true, "fail": true,
+	"fails": true, "fix": true, "fixes": true, "from": true, "have": true, "implement": true, "into": true,
+	"make": true, "makes": true, "need": true, "needs": true, "only": true, "remove": true, "should": true,
+	"some": true, "stop": true, "support": true, "than": true, "that": true, "their": true, "them": true,
+	"then": true, "there": true, "these": true, "this": true, "ticket": true, "update": true, "updates": true,
+	"using": true, "when": true, "where": true, "which": true, "will": true, "with": true, "without": true,
+	"work": true, "works": true, "would": true,
+}
+
+var markdownNoise = regexp.MustCompile("```[\\s\\S]*?```|!?\\[([^\\]]*)\\]\\([^)]*\\)|\\[\\[([^\\]|]*)[^\\]]*\\]\\]|[#*_`>|~\\[\\]()]")
+
+// ticketWords are the distinct significant lower-case words from the ticket's
+// title and the first ~300 characters of its description, markdown removed.
+// RelevantPatterns matches them exactly (stemmed), never fuzzily.
+func ticketWords(t store.Ticket) []string {
+	desc := markdownNoise.ReplaceAllString(t.DescriptionMd, " ")
+	if r := []rune(desc); len(r) > 300 {
+		desc = string(r[:300])
+	}
+	seen := map[string]bool{}
+	words := []string{}
+	for _, w := range strings.Fields(t.Title + " " + desc) {
+		w = strings.ToLower(strings.Trim(w, `"'.,:;!?()[]{}-`))
+		if len(w) <= 3 || genericWords[w] || seen[w] || strings.ContainsAny(w, `"'()-:`) {
+			continue
+		}
+		seen[w] = true
+		if words = append(words, w); len(words) == maxQueryWords {
+			break
+		}
+	}
+	return words
 }
 
 // orQuery turns a title into an any-word web search ("a OR b OR c"), so a

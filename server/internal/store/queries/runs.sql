@@ -152,20 +152,38 @@ UPDATE runs SET contract = $2 WHERE id = $1 RETURNING *;
 -- name: SetRunChecks :exec
 UPDATE runs SET checks = $2 WHERE id = $1;
 
+-- name: AddRunTiming :exec
+-- Adds wall-clock milliseconds to a run's phase timings (NULL counts as 0).
+UPDATE runs SET setup_ms = coalesce(setup_ms, 0) + sqlc.arg(setup_ms)::bigint,
+  harness_ms = coalesce(harness_ms, 0) + sqlc.arg(harness_ms)::bigint,
+  checks_ms = coalesce(checks_ms, 0) + sqlc.arg(checks_ms)::bigint
+WHERE id = $1;
+
 -- name: DelegationEfficiency :many
 -- Per sub agent: what delegating to it costs and how often its first attempt
 -- passes the runner's checks. A repair loop is a later delegation to the same
 -- agent under the same parent run.
+-- checked counts delegations the runner checked (checks is not null; older runs
+-- were never checked); first-pass rate is first_pass / checked.
+-- parent_cost_usd_micros attributes each parent run's cost evenly across its
+-- child runs (parent cost / number of child runs of that parent, finished or not), summed over this agent's children, so a parent that
+-- delegated to several agents is not counted in full in each row.
+-- avg_*_seconds average the phase timings over child runs that have them.
 WITH kids AS (
-  SELECT r.*, lead(r.id) OVER (PARTITION BY r.parent_run_id, r.agent_id ORDER BY r.started_at) AS repaired_by
+  SELECT r.*, lead(r.id) OVER (PARTITION BY r.parent_run_id, r.agent_id ORDER BY r.started_at) AS repaired_by,
+    (SELECT count(*) FROM runs c WHERE c.parent_run_id = r.parent_run_id) AS siblings
   FROM runs r
   WHERE r.workspace_id = $1 AND r.parent_run_id IS NOT NULL AND r.state IN ('completed', 'failed', 'cancelled')
 )
 SELECT k.agent_id,
   count(*)::bigint AS delegations,
+  count(*) FILTER (WHERE k.checks IS NOT NULL)::bigint AS checked,
   count(*) FILTER (WHERE k.checks->>'passed' = 'true' AND k.repaired_by IS NULL)::bigint AS first_pass,
   count(*) FILTER (WHERE k.repaired_by IS NOT NULL)::bigint AS repair_loops,
   coalesce(sum(k.cost_usd_micros), 0)::bigint AS child_cost_usd_micros,
-  coalesce((SELECT sum(p.cost_usd_micros) FROM runs p WHERE p.id IN (SELECT parent_run_id FROM kids k2 WHERE k2.agent_id = k.agent_id)), 0)::bigint AS parent_cost_usd_micros,
-  coalesce(sum(extract(epoch FROM (k.ended_at - k.started_at))), 0)::float8 AS child_seconds
-FROM kids k GROUP BY k.agent_id;
+  floor(coalesce(sum(p.cost_usd_micros::float8 / k.siblings), 0))::bigint AS parent_cost_usd_micros,
+  coalesce(sum(extract(epoch FROM (k.ended_at - k.started_at))), 0)::float8 AS child_seconds,
+  (coalesce(avg(k.setup_ms), 0) / 1000)::float8 AS avg_setup_seconds,
+  (coalesce(avg(k.harness_ms), 0) / 1000)::float8 AS avg_harness_seconds,
+  (coalesce(avg(k.checks_ms), 0) / 1000)::float8 AS avg_checks_seconds
+FROM kids k LEFT JOIN runs p ON p.id = k.parent_run_id GROUP BY k.agent_id;

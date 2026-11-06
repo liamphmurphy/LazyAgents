@@ -196,6 +196,37 @@ func (s *Service) SaveDefinition(ctx context.Context, ws uuid.UUID, by uuid.UUID
 	return a, err
 }
 
+// Delete archives an agent: it disappears from lists and can't be assigned or
+// delegated to, but its runs, chats and finished tickets stay intact. It is
+// refused while the agent holds open tickets or has a run in progress.
+func (s *Service) Delete(ctx context.Context, ws uuid.UUID, handle string) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		a, err := q.LockAgentByHandle(ctx, store.LockAgentByHandleParams{WorkspaceID: ws, Handle: handle})
+		if err != nil {
+			return notFound(err)
+		}
+		n, err := q.CountOpenTicketsForAgent(ctx, &a.ID)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return apperr.Conflict("@%s is assigned %d open ticket(s); reassign or finish them before deleting it", a.Handle, n)
+		}
+		runs, err := q.CountActiveRunsForAgent(ctx, a.ID)
+		if err != nil {
+			return err
+		}
+		if runs > 0 {
+			return apperr.Conflict("@%s has %d run(s) in progress; wait for them to finish or cancel them before deleting it", a.Handle, runs)
+		}
+		if err := q.RevokeAgentTokensForAgent(ctx, a.ID); err != nil {
+			return err
+		}
+		return q.ArchiveAgent(ctx, a.ID)
+	})
+}
+
 // SetOverride stores a project's override; an empty override deletes it.
 func (s *Service) SetOverride(ctx context.Context, ws uuid.UUID, by uuid.UUID, handle, projectKey string, o agentdef.Override) error {
 	if err := o.Normalize(); err != nil {

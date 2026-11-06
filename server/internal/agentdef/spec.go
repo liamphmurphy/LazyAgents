@@ -158,6 +158,16 @@ func invalid(field, format string, a ...any) error {
 	return &ValidationError{Field: field, Msg: fmt.Sprintf(format, a...)}
 }
 
+// Efforts are the allowed values of the "effort" harness option.
+var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
+
+func validOptions(field string, opts map[string]string) error {
+	if e, ok := opts["effort"]; ok && !slices.Contains(Efforts, e) {
+		return invalid(field, "effort must be one of %s", strings.Join(Efforts, ", "))
+	}
+	return nil
+}
+
 func validMode(field string, m Mode) error {
 	if m.rank() < 0 {
 		return invalid(field, "mode must be allowed, requires_approval or denied")
@@ -259,6 +269,9 @@ func (s *Spec) Normalize() error {
 		if !slices.Contains(Harnesses, f.Harness) || f.Model == "" {
 			return invalid("fallbacks", "each target needs a supported harness and a model")
 		}
+		if err := validOptions("fallbacks", f.HarnessOptions); err != nil {
+			return err
+		}
 		key := f.Harness + "\x00" + f.Model
 		if seen[key] {
 			return invalid("fallbacks", "duplicate harness/model target")
@@ -287,6 +300,9 @@ func (s *Spec) Normalize() error {
 	for h := range s.HarnessOptions {
 		if !slices.Contains(Harnesses, h) {
 			return invalid("harness_options", "unknown harness %q", h)
+		}
+		if err := validOptions("harness_options", s.HarnessOptions[h]); err != nil {
+			return err
 		}
 	}
 	if err := validScopes("scopes", s.Scopes); err != nil {

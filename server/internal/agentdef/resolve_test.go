@@ -314,3 +314,24 @@ func TestSkillChanges(t *testing.T) {
 		t.Fatalf("Changes = %q", got)
 	}
 }
+
+func TestEffortOption(t *testing.T) {
+	for _, e := range Efforts {
+		s := base()
+		s.HarnessOptions = map[string]map[string]string{HarnessCodex: {"effort": e}}
+		if err := s.Normalize(); err != nil {
+			t.Errorf("effort %q: %v", e, err)
+		}
+	}
+	s := base()
+	s.HarnessOptions = map[string]map[string]string{HarnessClaudeCode: {"effort": "extreme"}}
+	var ve *ValidationError
+	if err := s.Normalize(); !errors.As(err, &ve) || ve.Field != "harness_options" {
+		t.Fatalf("bad effort = %v", err)
+	}
+	s = base()
+	s.HarnessOptions = map[string]map[string]string{HarnessClaudeCode: {"other": "x"}}
+	if err := s.Normalize(); err != nil {
+		t.Fatalf("unknown options must stay accepted: %v", err)
+	}
+}

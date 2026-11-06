@@ -155,4 +155,4 @@ DELETE FROM chat_sessions WHERE id = $1;
 -- name: DefaultChatAgent :one
 -- The default agent for a chat that names none: the oldest main (non-sub) agent,
 -- ties broken by name then id so the choice is deterministic.
-SELECT * FROM agents WHERE workspace_id = $1 AND kind <> 'sub' ORDER BY created_at, name, id LIMIT 1;
+SELECT * FROM agents WHERE workspace_id = $1 AND kind <> 'sub' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1;

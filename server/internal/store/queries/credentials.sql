@@ -11,6 +11,7 @@ SELECT sqlc.embed(agents), agent_tokens.id AS token_id, agent_tokens.kind AS tok
        agent_tokens.run_id AS token_run_id, agent_tokens.last_used_at AS token_last_used_at
 FROM agent_tokens JOIN agents ON agents.id = agent_tokens.agent_id
 WHERE agent_tokens.token_hash = $1
+  AND agents.archived_at IS NULL
   AND agent_tokens.revoked_at IS NULL
   AND (agent_tokens.expires_at IS NULL OR agent_tokens.expires_at > now());
 

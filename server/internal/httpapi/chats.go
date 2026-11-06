@@ -42,7 +42,7 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 	if err != nil {
 		return nil, err
 	}
-	agentRows, err := s.Q.ListAgents(ctx, ws)
+	agentRows, err := s.Q.ListAllAgents(ctx, ws)
 	if err != nil {
 		return nil, err
 	}

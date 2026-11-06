@@ -631,6 +631,18 @@ export function useKnowledgeSearch(q: string) {
   });
 }
 
+export const PATTERN_TOPICS = ["Go", "React", "Postgres", "Testing", "API", "Architecture", "Process"] as const;
+
+/** Fuzzy pattern finder; an empty q browses every pattern. */
+export function useFindPatterns(q: string, topic?: string) {
+  return useQuery({
+    queryKey: [...wikiKeys.all, "patterns", q, topic ?? ""] as const,
+    queryFn: () =>
+      unwrap(api.GET("/wiki/patterns", { params: { query: { q: q || undefined, topic: topic || undefined, limit: 50 } } })).then((d) => d.patterns),
+    placeholderData: (prev) => prev,
+  });
+}
+
 // ------------------------------------------------------------- attention
 export function useInbox(project?: string) {
   return useQuery({queryKey:["inbox",project??""],queryFn:()=>unwrap(api.GET("/inbox",{params:{query:{project}}})).then(d=>d.items)});

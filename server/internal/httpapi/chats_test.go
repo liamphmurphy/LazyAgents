@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/realtime"
@@ -57,7 +58,7 @@ func newChatEnv(t *testing.T) *chatEnv {
 	done := make(chan struct{})
 	go func() { defer close(done); hub.Run(hctx, pool) }()
 	t.Cleanup(func() { cancel(); <-done })
-	s := &Server{Events: hub, Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts, ModelDiscovery: testChatModels},
+	s := &Server{Events: hub, Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Agents: &agents.Service{Pool: pool}, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts, ModelDiscovery: testChatModels},
 		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)

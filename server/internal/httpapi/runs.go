@@ -33,6 +33,7 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		Harness: r.Harness, Model: r.Model, Outcome: r.Outcome, StartedAt: r.StartedAt, EndedAt: r.EndedAt,
 		ToolCalls: int(r.ToolCalls), InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 		CostUsd: float32(r.CostUsdMicros) / 1e6, CostSource: r.CostSource,
+		SetupMs: r.SetupMs, HarnessMs: r.HarnessMs, ChecksMs: r.ChecksMs,
 		Plan: []api.PlanStep{}, Scopes: []string{}, ApprovalScopes: []string{},
 	}
 	if r.TicketID == nil && r.Purpose == "planning" {

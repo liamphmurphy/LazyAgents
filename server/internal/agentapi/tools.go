@@ -150,7 +150,9 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 		"instructions": spec.Instructions,
 		"memory":       memory,
 		"next": "Read memory first: it's what you and others learned before. Call get_ticket, read the attached artifacts with read_artifact, then post_plan before editing. " +
-			"When you learn something worth remembering, write_note under " + wiki.MemoryRoot(c.Agent.Handle) + " and link it with [[…]] to the tickets and documents it's about.",
+			"Before implementing, look up conventions with find_pattern (e.g. find_pattern({q: \"error wrapping\"})) and follow what it returns. " +
+			"Don't log what you did. Only write_note under " + wiki.MemoryRoot(c.Agent.Handle) + " for a durable lesson that would help a future run on this codebase, linked with [[…]] to the tickets and documents it's about. " +
+			"A general lesson that applies beyond this codebase (an architecture pattern or coding style) goes through propose_pattern instead. Project-specific decisions belong in ADR/Architecture notes.",
 	}, nil
 }
 
@@ -399,7 +401,8 @@ type DelegateIn struct {
 	Task               string   `json:"task" jsonschema:"What it should do, with the context it needs: it can't see your conversation. Name files, constraints and the done condition."`
 	AcceptanceCriteria []string `json:"acceptance_criteria,omitempty" jsonschema:"Checkable conditions that make the task done. Shown to the sub agent; you verify them against the automated check results."`
 	AllowedPaths       []string `json:"allowed_paths,omitempty" jsonschema:"Repo-relative files, directories (trailing slash) or globs the sub agent may change. Changes outside them fail the automated checks."`
-	TestCommand        string   `json:"test_command,omitempty" jsonschema:"Command that must exit 0 in the checkout, e.g. go test ./internal/runs/. The server runs it when the sub agent finishes and reports the result to you."`
+	TestCommand        string   `json:"test_command,omitempty" jsonschema:"Command that must exit 0 in the sub agent's worktree, e.g. go test ./internal/runs/. The server runs it when the sub agent finishes and reports the result to you."`
+	ContinueRunID      string   `json:"continue_run_id,omitempty" jsonschema:"run_id of a finished delegation to the same sub agent to carry on, e.g. to send it fixes. Keeps that agent's context: same worktree and branch, and its conversation is resumed."`
 }
 
 type SearchIn struct {
@@ -417,10 +420,39 @@ type PageIn struct {
 
 type WriteNoteIn struct {
 	TicketArg
-	Path string `json:"path" jsonschema:"Page path, e.g. agents/atlas/Partition gotchas (your memory) or Payments/Rollback runbook (shared)"`
+	Path string `json:"path" jsonschema:"Page path, e.g. agents/atlas/Partition gotchas (a durable lesson in your memory) or Payments/Rollback runbook (shared)"`
 	Body string `json:"body" jsonschema:"Markdown. Link what it's about with [[PAY-214]], [[ADR-012]], [[Page title]] or [[Page#Section]]."`
 	Mode string `json:"mode,omitempty" jsonschema:"create, replace (default) or append"`
 	Note string `json:"note,omitempty" jsonschema:"One line on what changed"`
+}
+
+type FindPatternIn struct {
+	TicketArg
+	Q     string `json:"q" jsonschema:"What the convention is about; typos and partial words are fine, e.g. error wrapping, pgx, ctx. Empty lists every pattern."`
+	Topic string `json:"topic,omitempty" jsonschema:"Limit to one topic: Go, React, Postgres, Testing, API, Architecture or Process"`
+	Limit int    `json:"limit,omitempty" jsonschema:"Up to 50, default 10"`
+}
+
+type ProposePatternIn struct {
+	Title        string   `json:"title" jsonschema:"Short and imperative, e.g. Wrap errors with context. Becomes the page name."`
+	Topic        string   `json:"topic" jsonschema:"Go, React, Postgres, Testing, API, Architecture or Process"`
+	Tags         []string `json:"tags" jsonschema:"2 to 5 lowercase tags people would search for, e.g. errors, context"`
+	Body         string   `json:"body" jsonschema:"Markdown with the sections ## When to use, ## Rule, ## Example, ## When not to use, ## Related. Don't add the Topic/Tags header: it is written for you."`
+	SourceTicket string   `json:"source_ticket,omitempty" jsonschema:"Ticket key the lesson came from, e.g. PAY-214. Linked in Related."`
+}
+
+type PublishPatternIn struct {
+	TicketArg
+	ProposedTitle string `json:"proposed_title" jsonschema:"Title of a proposal from list_proposed_patterns"`
+	Title         string `json:"title,omitempty" jsonschema:"Publish under a different title"`
+	Topic         string `json:"topic,omitempty" jsonschema:"Publish under a different topic"`
+	Body          string `json:"body,omitempty" jsonschema:"Replace the proposal's body with this edited Markdown"`
+}
+
+type RejectPatternIn struct {
+	TicketArg
+	ProposedTitle string `json:"proposed_title" jsonschema:"Title of a proposal from list_proposed_patterns"`
+	Reason        string `json:"reason" jsonschema:"Why it isn't being published (duplicate, too specific, wrong); relayed to the proposer"`
 }
 
 type BacklinksIn struct {
@@ -568,6 +600,102 @@ func writeNote(ctx context.Context, d Deps, c agents.Caller, in WriteNoteIn) (an
 		out["message"] = "Saved as a suggestion: a person will accept or reject it. Your own memory (" + wiki.MemoryRoot(c.Agent.Handle) + ") is always writable."
 	}
 	return ok(out), nil
+}
+
+func findPattern(ctx context.Context, d Deps, c agents.Caller, in FindPatternIn) (any, error) {
+	ws := c.Agent.WorkspaceID
+	ps, err := wiki.FindPatterns(ctx, d.Q, ws, in.Q, in.Topic, in.Limit)
+	if err != nil {
+		return nil, err
+	}
+	// Patterns a search turned up count as read (citations); plain browsing doesn't.
+	if strings.TrimSpace(in.Q) != "" && len(ps) > 0 {
+		runID := readRunID(ctx, d, c, in.Ticket)
+		for _, p := range ps {
+			a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: p.ID, WorkspaceID: ws})
+			if err != nil {
+				return nil, err
+			}
+			if err := artifacts.RecordRead(ctx, d.Q, a, c.Agent.ID, runID, "", nil); err != nil {
+				return nil, err
+			}
+		}
+	}
+	out := make([]map[string]any, len(ps))
+	for i, p := range ps {
+		out[i] = map[string]any{"ref": p.Path, "title": p.Title, "topic": p.Topic, "tags": p.Tags, "summary": p.Summary, "score": p.Score}
+	}
+	return map[string]any{"patterns": out, "hint": "Open one with read_page(ref) for the rule and example. Nothing fits? Follow the code around you; when you learn a reusable lesson, propose_pattern."}, nil
+}
+
+func proposePattern(ctx context.Context, d Deps, c agents.Caller, in ProposePatternIn) (any, error) {
+	source := strings.ToUpper(strings.TrimSpace(in.SourceTicket))
+	if source != "" {
+		if _, err := tracker.Get(ctx, d.Q, c.Agent.WorkspaceID, source); err != nil {
+			return nil, apperr.Invalid("source_ticket", "no ticket %s", in.SourceTicket)
+		}
+	}
+	res, err := d.Wiki.ProposePattern(ctx, c.Agent, wiki.Proposal{Title: in.Title, Topic: in.Topic, Tags: in.Tags, Body: in.Body, SourceTicket: source})
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]any{"path": *res.Note.Path, "created": res.Created,
+		"message": "Proposed. An agent with wiki:write allowed reviews proposals and publishes them under Patterns/<Topic>/. Re-call propose_pattern with the same title to revise it."}), nil
+}
+
+// curator is the caller's scopes when they may publish and reject patterns.
+func curator(ctx context.Context, d Deps, c agents.Caller, ticket string) (map[string]agentdef.Mode, error) {
+	scopes, _, err := scopesFor(ctx, d, c, ticket)
+	if err != nil {
+		return nil, err
+	}
+	if !wiki.CanCurate(scopes) {
+		return nil, apperr.Invalid("scope", "only agents whose wiki:write scope is allowed can review patterns; use propose_pattern to suggest one")
+	}
+	return scopes, nil
+}
+
+func publishPattern(ctx context.Context, d Deps, c agents.Caller, in PublishPatternIn) (any, error) {
+	scopes, err := curator(ctx, d, c, in.Ticket)
+	if err != nil {
+		return nil, err
+	}
+	res, err := d.Wiki.PublishPattern(ctx, c.Agent, scopes, wiki.PublishInput{ProposedTitle: in.ProposedTitle, Title: in.Title, Topic: in.Topic, Body: in.Body})
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]any{"path": *res.Note.Path, "message": "Published; the proposal was removed. find_pattern now returns it."}), nil
+}
+
+func rejectPattern(ctx context.Context, d Deps, c agents.Caller, in RejectPatternIn) (any, error) {
+	scopes, err := curator(ctx, d, c, in.Ticket)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(in.Reason) == "" {
+		return nil, apperr.Invalid("reason", "is required")
+	}
+	who, err := d.Wiki.RejectPattern(ctx, c.Agent, scopes, in.ProposedTitle)
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]any{"proposed_by": who, "reason": strings.TrimSpace(in.Reason),
+		"message": "The proposal was removed. Relay the reason to " + who + " (comment on a ticket or mention them) if it matters."}), nil
+}
+
+func listProposedPatterns(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
+	if _, err := curator(ctx, d, c, ""); err != nil {
+		return nil, err
+	}
+	ps, err := d.Wiki.ListProposed(ctx, c.Agent.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, len(ps))
+	for i, p := range ps {
+		out[i] = map[string]any{"title": p.Title, "ref": p.Path, "proposer": p.Proposer, "age": time.Since(p.UpdatedAt).Round(time.Minute).String()}
+	}
+	return map[string]any{"proposed": out, "hint": "Open one with read_page(ref), then publish_pattern or reject_pattern."}, nil
 }
 
 func getBacklinks(ctx context.Context, d Deps, c agents.Caller, in BacklinksIn) (any, error) {
@@ -828,9 +956,14 @@ var Tools = []Tool{
 			return map[string]any{"run_state": sig.State, "wait_reason": sig.WaitReason, "comments": comments, "decisions": decisions,
 				"cursor": sig.Cursor.Format(time.RFC3339Nano)}, nil
 		}),
-	define("search_knowledge", "Search the wiki, agent memory, documents and tickets. Well-linked pages rank higher.", searchKnowledge),
+	define("search_knowledge", "Search the wiki, agent memory, documents and tickets. Well-linked pages rank higher. For conventions use find_pattern.", searchKnowledge),
+	define("find_pattern", "Look up published team conventions (architecture patterns, coding styles) before implementing. Fuzzy: typos and partial words work. Returns ref, title, topic, tags and a one-line summary; open one with read_page(ref). Empty q lists them all.", findPattern),
+	define("propose_pattern", "Propose a reusable, general lesson as a pattern: one atomic rule (Go, React, Postgres, Testing, API, Architecture or Process) that applies beyond this codebase. Always allowed; an agent with wiki:write allowed reviews it. Not for run logs or project-specific decisions.", proposePattern),
+	define("list_proposed_patterns", "Pattern proposals waiting for review: title, proposer, age. Only for agents whose wiki:write scope is allowed.", listProposedPatterns),
+	define("publish_pattern", "Publish a proposed pattern to Patterns/<Topic>/<Title>, optionally with an edited title, topic or body; the proposal is removed. Only for agents whose wiki:write scope is allowed. Fails if that page exists: merge into it with write_note (mode replace) and reject_pattern.", publishPattern),
+	define("reject_pattern", "Reject and remove a proposed pattern, giving the reason to relay to the proposer. Only for agents whose wiki:write scope is allowed.", rejectPattern),
 	define("read_page", "Read a wiki page or any document by title, path, ADR id or [[Page#Section]]. Lists the page's outgoing [[links]]; reads count as citations.", readPage),
-	define("write_note", "Write a wiki note. Your memory (agents/<your handle>/…) is always writable; other pages follow your wiki:write scope (allowed edits directly, requires_approval saves a suggestion). Link what it's about with [[…]].", writeNote),
+	define("write_note", "Write a wiki note. Under agents/<your handle>/ (always writable) keep only durable lessons that would help a future run on this codebase, not a log of what you did. General, reusable lessons go through propose_pattern; project decisions go in ADR/Architecture notes. Other pages follow your wiki:write scope (allowed edits directly, requires_approval saves a suggestion). Link what it's about with [[…]].", writeNote),
 	define("get_backlinks", "What links to a page, document, ticket, epic or agent, with the sentence around each link.", getBacklinks),
 	define("list_subagents", "Sub agents you can delegate part of a ticket to with delegate: handle, role and specialty. Main agents only.",
 		func(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
@@ -844,15 +977,15 @@ var Tools = []Tool{
 			}
 			return map[string]any{"subagents": items}, nil
 		}),
-	define("delegate", "Hand a self-contained part of your ticket (implementation, docs, tests) to a sub agent. It works in your checkout on your branch while you wait: end your turn after calling this and you'll be resumed with its summary. One delegation at a time. Delegating costs a fresh agent startup, a handoff and a verification pass, so keep small or tightly coupled changes (a few lines, one file) to yourself and delegate work that is substantial or needs a specialist. Pass acceptance_criteria, allowed_paths and test_command so the server can check the result for you: you're resumed with those results and a diff summary, and should read the diff only for what they can't judge.",
+	define("delegate", "Hand a self-contained part of your ticket (implementation, docs, tests) to a sub agent. Commit your work first: delegating is refused while your checkout has uncommitted changes. The sub agent works in its own git worktree on its own branch cut from yours, and the server merges that branch into yours automatically when its checks pass. You can run up to 3 delegations in parallel: call delegate once per sub agent in the same turn, each with non-empty allowed_paths that don't overlap (a delegation without disjoint allowed_paths is refused while another is running; delegate sequentially instead). Then end your turn: you're resumed once, when all of them have finished, with a report covering each (summary, checks, merge result). Unmerged work (failed checks, conflicts) stays on its branch for you to inspect and merge. To send fixes back to the same sub agent, pass its earlier run_id as continue_run_id: that keeps its context (same worktree and branch, conversation resumed) instead of starting a fresh agent. Delegating costs a fresh agent startup, a handoff and a verification pass, so keep small or tightly coupled changes (a few lines, one file) to yourself and delegate work that is substantial or needs a specialist. Pass acceptance_criteria, allowed_paths and test_command so the server can check the result for you: you're resumed with those results and a diff summary, and should read the diff only for what they can't judge.",
 		func(ctx context.Context, d Deps, c agents.Caller, in DelegateIn) (any, error) {
 			dg, err := d.Runs.DelegateWithContract(ctx, c, in.Ticket, in.Agent, in.Task, runs.Contract{
-				AcceptanceCriteria: in.AcceptanceCriteria, AllowedPaths: in.AllowedPaths, TestCommand: in.TestCommand})
+				AcceptanceCriteria: in.AcceptanceCriteria, AllowedPaths: in.AllowedPaths, TestCommand: in.TestCommand, ContinueRunID: in.ContinueRunID})
 			if err != nil {
 				return nil, err
 			}
 			return map[string]any{"state": "delegated", "agent": dg.Agent.Handle, "run_id": dg.Run.ID,
-				"message": "@" + dg.Agent.Handle + " is working on it. End your turn now: you'll be resumed with its result."}, nil
+				"message": "@" + dg.Agent.Handle + " is working on it in its own worktree. Delegate any other disjoint parts now, then end your turn: you'll be resumed once, when every delegated run has finished."}, nil
 		}),
 	define("complete_run", "Finish the run: In Review and Done require all acceptance criteria verified and checked. Implement or delegate remaining work before finishing; use todo only to explicitly hand unfinished work back. Use status=done only when every reviewer/QA sub agent you delegated to completed with verdict=approved. If you were delegated a task, this reports your summary back to the main agent instead and leaves the ticket alone; a reviewer/QA agent sets verdict=approved or changes_requested.",
 		func(ctx context.Context, d Deps, c agents.Caller, in CompleteIn) (any, error) {

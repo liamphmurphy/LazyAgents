@@ -106,6 +106,9 @@ func (r refs) agent(ctx context.Context, id *uuid.UUID) (store.Agent, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return a, invalid("assignee_agent_id", "unknown agent")
 	}
+	if err == nil && a.ArchivedAt != nil {
+		return a, invalid("assignee_agent_id", "@%s is deleted", a.Handle)
+	}
 	return a, err
 }
 

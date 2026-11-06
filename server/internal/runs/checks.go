@@ -22,6 +22,14 @@ type Checks struct {
 	TestExit     *int     `json:"test_exit,omitempty"`
 	TestTail     string   `json:"test_tail,omitempty"`
 	Passed       bool     `json:"passed"`
+	// Branch is the child's git branch; Merged says the runner merged it into
+	// the parent's branch. When it didn't, MergeConflicts lists the files that
+	// conflicted (the merge was aborted) and MergeNote says why it was skipped
+	// or failed. An unmerged branch is kept for the main agent to inspect.
+	Branch         string   `json:"branch,omitempty"`
+	Merged         bool     `json:"merged"`
+	MergeConflicts []string `json:"merge_conflicts,omitempty"`
+	MergeNote      string   `json:"merge_note,omitempty"`
 }
 
 // Evaluate fills the derived fields from the measured ones.
@@ -60,6 +68,7 @@ func (k Checks) Report() string {
 			b.WriteString(": " + k.Error)
 		}
 		b.WriteString(". Verify the result yourself (git status, git diff, tests).\n")
+		k.writeMerge(&b)
 		return b.String()
 	}
 	if k.Error != "" {
@@ -93,5 +102,18 @@ func (k Checks) Report() string {
 	if k.Passed {
 		b.WriteString("\nThese checks don't judge correctness against the acceptance criteria: review the diff for that.\n")
 	}
+	k.writeMerge(&b)
 	return b.String()
+}
+
+func (k Checks) writeMerge(b *strings.Builder) {
+	switch {
+	case k.Merged:
+		fmt.Fprintf(b, "\n**MERGED** branch `%s` into your branch (git merge --no-ff).\n", k.Branch)
+	case len(k.MergeConflicts) > 0:
+		fmt.Fprintf(b, "\n**NOT MERGED**: merging branch `%s` conflicted (the merge was aborted, your branch is unchanged). Conflicting files:\n%s"+
+			"Resolve it yourself with `git merge %s`, or delegate again with continue_run_id to have the sub agent rebase its work.\n", k.Branch, list(k.MergeConflicts), k.Branch)
+	case k.Branch != "":
+		fmt.Fprintf(b, "\n**NOT MERGED**: branch `%s` was kept. %s Inspect it (git diff, git log) and merge it with `git merge %s` if it's good, or send fixes back with continue_run_id.\n", k.Branch, k.MergeNote, k.Branch)
+	}
 }
