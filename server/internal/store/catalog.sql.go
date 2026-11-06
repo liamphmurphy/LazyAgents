@@ -88,7 +88,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 
 const createEpic = `-- name: CreateEpic :one
 INSERT INTO epics (workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, requires_mockup)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup, status
 `
 
 type CreateEpicParams struct {
@@ -130,6 +130,7 @@ func (q *Queries) CreateEpic(ctx context.Context, arg CreateEpicParams) (Epic, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.RequiresMockup,
+		&i.Status,
 	)
 	return i, err
 }
@@ -230,7 +231,7 @@ func (q *Queries) GetAgent(ctx context.Context, arg GetAgentParams) (Agent, erro
 }
 
 const getEpic = `-- name: GetEpic :one
-SELECT id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup FROM epics WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup, status FROM epics WHERE id = $1 AND workspace_id = $2
 `
 
 type GetEpicParams struct {
@@ -255,6 +256,7 @@ func (q *Queries) GetEpic(ctx context.Context, arg GetEpicParams) (Epic, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.RequiresMockup,
+		&i.Status,
 	)
 	return i, err
 }
@@ -426,7 +428,7 @@ func (q *Queries) ListAllAgents(ctx context.Context, workspaceID uuid.UUID) ([]A
 }
 
 const listEpics = `-- name: ListEpics :many
-SELECT id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup FROM epics WHERE workspace_id = $1 ORDER BY name
+SELECT id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup, status FROM epics WHERE workspace_id = $1 ORDER BY name
 `
 
 func (q *Queries) ListEpics(ctx context.Context, workspaceID uuid.UUID) ([]Epic, error) {
@@ -452,6 +454,7 @@ func (q *Queries) ListEpics(ctx context.Context, workspaceID uuid.UUID) ([]Epic,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.RequiresMockup,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -572,7 +575,7 @@ func (q *Queries) ListSubagents(ctx context.Context, workspaceID uuid.UUID) ([]A
 }
 
 const setEpicRequiresMockup = `-- name: SetEpicRequiresMockup :one
-UPDATE epics SET requires_mockup = $2, updated_at = now() WHERE id = $1 RETURNING id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup
+UPDATE epics SET requires_mockup = $2, updated_at = now() WHERE id = $1 RETURNING id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup, status
 `
 
 type SetEpicRequiresMockupParams struct {
@@ -597,6 +600,7 @@ func (q *Queries) SetEpicRequiresMockup(ctx context.Context, arg SetEpicRequires
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.RequiresMockup,
+		&i.Status,
 	)
 	return i, err
 }

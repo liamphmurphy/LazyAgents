@@ -378,7 +378,7 @@ func (q *Queries) FindArtifactByTitle(ctx context.Context, arg FindArtifactByTit
 }
 
 const findEpicByName = `-- name: FindEpicByName :one
-SELECT id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup FROM epics WHERE workspace_id = $1 AND lower(name) = lower($2) LIMIT 1
+SELECT id, workspace_id, project_id, name, objective, owner_user_id, start_date, target_date, health, icon, created_at, updated_at, requires_mockup, status FROM epics WHERE workspace_id = $1 AND lower(name) = lower($2) LIMIT 1
 `
 
 type FindEpicByNameParams struct {
@@ -403,6 +403,7 @@ func (q *Queries) FindEpicByName(ctx context.Context, arg FindEpicByNameParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.RequiresMockup,
+		&i.Status,
 	)
 	return i, err
 }

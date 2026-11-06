@@ -14,6 +14,8 @@ const prefixes: Record<string, string[]> = {
   artifact: ["artifacts", "wiki", "knowledge", "inbox", "bootstrap", "search"],
   knowledge: ["knowledge", "wiki"],
   project: ["projects", "planning", "bootstrap", "tickets", "inbox", "search"],
+  // Epic rows, epic criteria and rollup changes (00025). Epics used to send project.updated.
+  epic: ["projects", "planning", "bootstrap", "tickets", "board", "search"],
   inbox: ["inbox", "bootstrap"],
   chat: ["chats"],
 };
