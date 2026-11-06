@@ -27,6 +27,8 @@ ALTER TABLE tickets
 -- Decision 4: epic status and acceptance criteria. Existing epics start open.
 ALTER TABLE epics ADD COLUMN status text NOT NULL DEFAULT 'open'
   CONSTRAINT epics_status_check CHECK (status IN ('open', 'done'));
+-- Epic rollups, the done gate and ON DELETE SET NULL look tickets up by epic.
+CREATE INDEX tickets_epic_idx ON tickets (epic_id) WHERE epic_id IS NOT NULL;
 
 CREATE TABLE epic_criteria (
   id              uuid PRIMARY KEY DEFAULT uuid_v7(),
@@ -46,20 +48,26 @@ CREATE TABLE epic_criteria (
 CREATE TRIGGER epic_criteria_touch BEFORE UPDATE ON epic_criteria FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 
 -- Decision 5: realtime hints with real ids. notify_change() always sends empty ids,
--- and notify_chat_change() silently truncates at 50. notify_entity_change(type, id_col)
--- sends the distinct ids from the transition table, or empty ids ("refetch all of this
--- type") when there are more than 50, which keeps the payload far below pg_notify's
--- 8000 byte limit without ever sending a partial list.
+-- and notify_chat_change() silently truncates at 50. notify_entity_change(type, id_col...)
+-- sends the distinct non-null ids found in the given columns of the transition table.
+-- More than 50 ids are sent as empty ids ("refetch all of this type"), which keeps the
+-- payload far below pg_notify's 8000 byte limit without ever sending a partial list.
+-- A statement that touched no rows (or only rows with null ids) sends nothing, so empty
+-- ids always mean "refetch all", never "nothing changed".
 -- +goose StatementBegin
 CREATE FUNCTION notify_entity_change() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE ids text[];
+DECLARE cols text[] := TG_ARGV[1:TG_NARGS - 1];
 BEGIN
  IF TG_OP = 'DELETE' THEN
-  SELECT array_agg(i) INTO ids FROM (SELECT DISTINCT to_jsonb(r)->>TG_ARGV[1] AS i FROM old_rows r WHERE to_jsonb(r)->>TG_ARGV[1] IS NOT NULL LIMIT 51) s;
+  SELECT array_agg(i) INTO ids FROM (SELECT DISTINCT to_jsonb(r)->>c AS i FROM old_rows r CROSS JOIN unnest(cols) c WHERE to_jsonb(r)->>c IS NOT NULL LIMIT 51) s;
  ELSE
-  SELECT array_agg(i) INTO ids FROM (SELECT DISTINCT to_jsonb(r)->>TG_ARGV[1] AS i FROM new_rows r WHERE to_jsonb(r)->>TG_ARGV[1] IS NOT NULL LIMIT 51) s;
+  SELECT array_agg(i) INTO ids FROM (SELECT DISTINCT to_jsonb(r)->>c AS i FROM new_rows r CROSS JOIN unnest(cols) c WHERE to_jsonb(r)->>c IS NOT NULL LIMIT 51) s;
  END IF;
- IF ids IS NULL OR cardinality(ids) > 50 THEN
+ IF ids IS NULL THEN
+  RETURN NULL;
+ END IF;
+ IF cardinality(ids) > 50 THEN
   ids := ARRAY[]::text[];
  END IF;
  PERFORM pg_notify('lazyagents_changes', json_build_object('type', TG_ARGV[0], 'ids', ids)::text);
@@ -127,10 +135,11 @@ CREATE TRIGGER realtime_change_ins AFTER INSERT ON ticket_artifacts REFERENCING 
 CREATE TRIGGER realtime_change_upd AFTER UPDATE ON ticket_artifacts REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_entity_change('ticket.updated', 'ticket_id');
 CREATE TRIGGER realtime_change_del AFTER DELETE ON ticket_artifacts REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_entity_change('ticket.updated', 'ticket_id');
 
+-- Both ends of the edge: the dependent's blocked_by and the blocker's blocks list.
 DROP TRIGGER realtime_change ON ticket_dependencies;
-CREATE TRIGGER realtime_change_ins AFTER INSERT ON ticket_dependencies REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_entity_change('ticket.updated', 'ticket_id');
-CREATE TRIGGER realtime_change_upd AFTER UPDATE ON ticket_dependencies REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_entity_change('ticket.updated', 'ticket_id');
-CREATE TRIGGER realtime_change_del AFTER DELETE ON ticket_dependencies REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_entity_change('ticket.updated', 'ticket_id');
+CREATE TRIGGER realtime_change_ins AFTER INSERT ON ticket_dependencies REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_entity_change('ticket.updated', 'ticket_id', 'blocker_id');
+CREATE TRIGGER realtime_change_upd AFTER UPDATE ON ticket_dependencies REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_entity_change('ticket.updated', 'ticket_id', 'blocker_id');
+CREATE TRIGGER realtime_change_del AFTER DELETE ON ticket_dependencies REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_entity_change('ticket.updated', 'ticket_id', 'blocker_id');
 
 -- Epics stop sending project.updated for their own rows and send epic.updated instead.
 DROP TRIGGER realtime_change ON epics;
@@ -144,6 +153,7 @@ CREATE TRIGGER realtime_change_del AFTER DELETE ON epic_criteria REFERENCING OLD
 
 -- +goose Down
 DROP TABLE epic_criteria;
+DROP INDEX tickets_epic_idx;
 
 DROP TRIGGER realtime_change_ins ON epics;
 DROP TRIGGER realtime_change_upd ON epics;

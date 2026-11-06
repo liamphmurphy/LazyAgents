@@ -6,16 +6,16 @@ import { useQueryClient } from "@tanstack/react-query";
 const prefixes: Record<string, string[]> = {
   planning: ["planning", "inbox", "bootstrap"],
   metrics: ["dashboard", "agent-overviews"],
-  ticket: ["planning", "tickets", "inbox", "bootstrap", "knowledge", "search"],
+  ticket: ["planning", "tickets", "board", "inbox", "bootstrap", "knowledge", "search"],
   activity: ["tickets", "inbox", "bootstrap"],
   approval: ["tickets", "runs", "inbox", "bootstrap"],
-  run: ["planning", "runs", "tickets", "agents", "inbox", "bootstrap", "runner", "search"],
+  run: ["planning", "runs", "tickets", "board", "agents", "inbox", "bootstrap", "runner", "search"],
   agent: ["agents", "bootstrap", "search"],
   artifact: ["artifacts", "wiki", "knowledge", "inbox", "bootstrap", "search"],
   knowledge: ["knowledge", "wiki"],
   project: ["projects", "planning", "bootstrap", "tickets", "inbox", "search"],
   // Epic rows, epic criteria and rollup changes (00025). Epics used to send project.updated.
-  epic: ["projects", "planning", "bootstrap", "tickets", "board", "search"],
+  epic: ["projects", "planning", "bootstrap", "tickets", "board", "inbox", "search"],
   inbox: ["inbox", "bootstrap"],
   chat: ["chats"],
 };

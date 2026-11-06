@@ -38,7 +38,8 @@ type CreateEpicCriterionParams struct {
 	Text   string
 }
 
-// Appends at the end. Concurrent appends collide on UNIQUE (epic_id, position); retry.
+// Appends at the end. Concurrent appends collide on UNIQUE (epic_id, position): retry
+// on 23505. The constraint is deferrable, so it can't be an ON CONFLICT arbiter.
 func (q *Queries) CreateEpicCriterion(ctx context.Context, arg CreateEpicCriterionParams) (EpicCriterion, error) {
 	row := q.db.QueryRow(ctx, createEpicCriterion, arg.EpicID, arg.Text)
 	var i EpicCriterion
@@ -318,9 +319,9 @@ const setTicketEstimate = `-- name: SetTicketEstimate :one
 
 UPDATE tickets SET
   estimate_points = $1,
-  estimate_rationale = $2,
-  estimated_by_type = $3,
-  estimated_by_id = $4,
+  estimate_rationale = CASE WHEN $1::int IS NULL THEN NULL ELSE $2 END,
+  estimated_by_type = CASE WHEN $1::int IS NULL THEN NULL ELSE $3 END,
+  estimated_by_id = CASE WHEN $1::int IS NULL THEN NULL ELSE $4::uuid END,
   estimated_at = CASE WHEN $1::int IS NULL THEN NULL ELSE now() END,
   revision = revision + 1,
   updated_at = now()
@@ -339,7 +340,8 @@ type SetTicketEstimateParams struct {
 // Kanban board, ticket estimates and epic criteria (Architecture/ADR - Kanban board,
 // estimates and epic criteria). Service-level rules (the scale constant, people-win
 // estimates, the epic done gate) live in the tracker package.
-// Sets or clears (NULL points) a ticket's point estimate and bumps its revision.
+// Sets a ticket's point estimate and bumps its revision. NULL points clears the
+// estimate together with its rationale, author and time.
 func (q *Queries) SetTicketEstimate(ctx context.Context, arg SetTicketEstimateParams) (Ticket, error) {
 	row := q.db.QueryRow(ctx, setTicketEstimate,
 		arg.Points,

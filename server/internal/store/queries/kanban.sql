@@ -3,12 +3,13 @@
 -- estimates, the epic done gate) live in the tracker package.
 
 -- name: SetTicketEstimate :one
--- Sets or clears (NULL points) a ticket's point estimate and bumps its revision.
+-- Sets a ticket's point estimate and bumps its revision. NULL points clears the
+-- estimate together with its rationale, author and time.
 UPDATE tickets SET
   estimate_points = sqlc.narg(points),
-  estimate_rationale = sqlc.narg(rationale),
-  estimated_by_type = sqlc.narg(by_type),
-  estimated_by_id = sqlc.narg(by_id),
+  estimate_rationale = CASE WHEN sqlc.narg(points)::int IS NULL THEN NULL ELSE sqlc.narg(rationale) END,
+  estimated_by_type = CASE WHEN sqlc.narg(points)::int IS NULL THEN NULL ELSE sqlc.narg(by_type) END,
+  estimated_by_id = CASE WHEN sqlc.narg(points)::int IS NULL THEN NULL ELSE sqlc.narg(by_id)::uuid END,
   estimated_at = CASE WHEN sqlc.narg(points)::int IS NULL THEN NULL ELSE now() END,
   revision = revision + 1,
   updated_at = now()
@@ -47,7 +48,8 @@ WHERE c.id = $1 AND e.workspace_id = $2;
 SELECT * FROM epic_criteria WHERE epic_id = $1 AND position = $2;
 
 -- name: CreateEpicCriterion :one
--- Appends at the end. Concurrent appends collide on UNIQUE (epic_id, position); retry.
+-- Appends at the end. Concurrent appends collide on UNIQUE (epic_id, position): retry
+-- on 23505. The constraint is deferrable, so it can't be an ON CONFLICT arbiter.
 INSERT INTO epic_criteria (epic_id, position, text)
 VALUES ($1, (SELECT coalesce(max(position), 0) + 1 FROM epic_criteria WHERE epic_id = $1), $2)
 RETURNING *;

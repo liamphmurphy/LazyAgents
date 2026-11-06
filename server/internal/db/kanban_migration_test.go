@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -119,6 +120,23 @@ func TestKanbanMigration(t *testing.T) {
 	}
 	if n != 0 {
 		t.Errorf("%d 00025 columns remain after down", n)
+	}
+	var restored, leftover int
+	if err := pool.QueryRow(ctx, `SELECT
+		count(*) FILTER (WHERE tgname = 'realtime_change' AND pg_get_triggerdef(oid) LIKE '%notify_change(%'),
+		count(*) FILTER (WHERE tgname LIKE 'realtime_change_%' OR tgname LIKE 'realtime_epic_%')
+		FROM pg_trigger WHERE tgrelid::regclass::text IN ('tickets','acceptance_criteria','comments','ticket_artifacts','ticket_dependencies','epics')`).Scan(&restored, &leftover); err != nil {
+		t.Fatal(err)
+	}
+	if restored != 6 || leftover != 0 {
+		t.Errorf("after down: %d realtime_change triggers restored (want 6), %d 00025 triggers left (want 0)", restored, leftover)
+	}
+	var epicTrigger string
+	if err := pool.QueryRow(ctx, `SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid='epics'::regclass AND tgname='realtime_change'`).Scan(&epicTrigger); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(epicTrigger, "'project.updated'") {
+		t.Errorf("epics trigger after down = %s, want project.updated", epicTrigger)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE tickets SET status='canceled' WHERE id=$1`, canceled); err == nil {
 		t.Error("old schema accepted canceled after down")
@@ -289,6 +307,24 @@ func TestKanbanNotifyPayload(t *testing.T) {
 		}
 	}
 
+	// collect drains pending notifications and returns their types.
+	collect := func() map[string]bool {
+		seen := map[string]bool{}
+		for {
+			wctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+			n, err := conn.Conn().WaitForNotification(wctx)
+			cancel()
+			if err != nil {
+				return seen
+			}
+			var p struct {
+				Type string `json:"type"`
+			}
+			_ = json.Unmarshal([]byte(n.Payload), &p)
+			seen[p.Type] = true
+		}
+	}
+
 	epic := f.epic(t, pool, "E")
 	expect("epic insert", "epic.updated", epic)
 	other := f.epic(t, pool, "Other")
@@ -298,8 +334,28 @@ func TestKanbanNotifyPayload(t *testing.T) {
 	expect("ticket insert", "ticket.updated", ticket)
 	drain()
 
+	// A statement that touches no rows sends nothing (empty ids would mean "refetch all"),
+	// so the next ticket.updated is the real one.
+	mustExec(t, pool, `UPDATE tickets SET title='x' WHERE id='00000000-0000-0000-0000-000000000000'`)
 	mustExec(t, pool, `UPDATE tickets SET status='in_progress' WHERE id=$1`, ticket)
-	expect("ticket status change", "ticket.updated", ticket)
+	expect("ticket status change after a zero-row update", "ticket.updated", ticket)
+	expect("ticket status change (epic rollup)", "epic.updated", epic)
+	drain()
+
+	// A ticket without an epic, or a change that doesn't affect rollups, sends no epic.updated.
+	loose := f.ticket(t, pool, 99, "todo", nil)
+	drain()
+	mustExec(t, pool, `UPDATE tickets SET status='in_review' WHERE id=$1`, loose)
+	mustExec(t, pool, `UPDATE tickets SET title='renamed' WHERE id=$1`, ticket)
+	if seen := collect(); seen["epic.updated"] || !seen["ticket.updated"] {
+		t.Errorf("rollup-neutral changes sent %v, want ticket.updated only", seen)
+	}
+
+	// Dependencies notify both the dependent and the blocker.
+	mustExec(t, pool, `INSERT INTO ticket_dependencies(ticket_id,blocker_id) VALUES($1,$2)`, ticket, loose)
+	expect("dependency insert", "ticket.updated", ticket, loose)
+	mustExec(t, pool, `DELETE FROM ticket_dependencies WHERE ticket_id=$1`, ticket)
+	expect("dependency delete", "ticket.updated", ticket, loose)
 	drain()
 	mustExec(t, pool, `UPDATE tickets SET estimate_points=3 WHERE id=$1`, ticket)
 	expect("ticket estimate (epic rollup)", "epic.updated", epic)
@@ -319,8 +375,21 @@ func TestKanbanNotifyPayload(t *testing.T) {
 	expect("epic criterion insert (epic id)", "epic.updated", other)
 	mustExec(t, pool, `UPDATE epic_criteria SET done=true WHERE id=$1`, crit)
 	expect("epic criterion check", "epic.updated", other)
+	mustExec(t, pool, `DELETE FROM epic_criteria WHERE id=$1`, crit)
+	expect("epic criterion delete", "epic.updated", other)
 	mustExec(t, pool, `UPDATE epics SET status='done' WHERE id=$1`, epic)
 	expect("epic update", "epic.updated", epic)
+	if seen := collect(); seen["project.updated"] {
+		t.Error("epic update still sends project.updated")
+	}
+	// Deleting an epic with no criteria: the empty epic_criteria cascade sends nothing.
+	empty := f.epic(t, pool, "Empty")
+	drain()
+	mustExec(t, pool, `DELETE FROM epics WHERE id=$1`, empty)
+	expect("epic delete", "epic.updated", empty)
+	if seen := collect(); seen["epic.updated"] {
+		t.Error("empty cascade sent a second epic.updated")
+	}
 
 	// A bulk change over the cap sends empty ids ("refetch all"), never a partial list.
 	for i := 2; i <= 52; i++ {
@@ -329,6 +398,14 @@ func TestKanbanNotifyPayload(t *testing.T) {
 	drain()
 	mustExec(t, pool, `UPDATE tickets SET priority='high' WHERE project_id=$1`, f.project)
 	expect("bulk ticket update", "ticket.updated")
+	drain()
+	for i := 0; i < 51; i++ {
+		e := f.epic(t, pool, fmt.Sprintf("Bulk %d", i))
+		mustExec(t, pool, `UPDATE tickets SET epic_id=$2 WHERE number=$1 AND project_id=$3`, i+2, e, f.project)
+	}
+	drain()
+	mustExec(t, pool, `UPDATE tickets SET status='done' WHERE number BETWEEN 2 AND 52 AND project_id=$1`, f.project)
+	expect("bulk rollup change over 50 epics", "epic.updated")
 
 	mustExec(t, pool, `DELETE FROM tickets WHERE id=$1`, ticket)
 	expect("ticket delete", "ticket.updated", ticket)
