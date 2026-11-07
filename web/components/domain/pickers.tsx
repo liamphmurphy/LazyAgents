@@ -21,13 +21,13 @@ function Check({ on }: { on: boolean }) {
 
 type MenuProps<T> = { value?: T; onChange: (v: T) => void; children: ReactNode; align?: "start" | "end" };
 
-export function StatusMenu({ value, onChange, children, align = "start" }: MenuProps<TicketStatus>) {
+export function StatusMenu({ value, onChange, children, align = "start", statuses = STATUS_ORDER }: MenuProps<TicketStatus> & { statuses?: TicketStatus[] }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align={align} sideOffset={6} className={cx(floatPanel, "w-52")}>
-          {STATUS_ORDER.map((s) => (
+          {statuses.map((s) => (
             <DropdownMenu.Item key={s} className={item} onSelect={() => onChange(s)}>
               <StatusGlyph state={s} surface="var(--surface-raised)" label={false} />
               {STATUS_NAME[s]}

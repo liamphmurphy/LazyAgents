@@ -38,6 +38,7 @@ test("Enter opens the editor; Esc closes with no request and focus returns to th
   await expect(dialog(page)).toBeVisible();
   await expect(dialog(page).getByLabel("Title", { exact: true })).toHaveValue("Build ticket modal");
   await dialog(page).getByLabel("Title", { exact: true }).fill("Unsaved");
+  page.once("dialog", (dialog) => dialog.accept());
   await page.keyboard.press("Escape");
   await expect(dialog(page)).toHaveCount(0);
   await expect(page).not.toHaveURL(/ticket=/);
@@ -209,4 +210,20 @@ test("a missing ticket leaves the modal closed with a non-blocking error", async
   await expect(card(page)).toBeVisible();
   await screen(page).getByRole("button", { name: "Dismiss ticket error" }).click();
   await expect(page).not.toHaveURL(/ticket=/);
+});
+
+
+test("Markdown preview and keyboard save keep criteria atomic", async ({ page }) => {
+  const api = await installBoardApi(page);
+  await page.goto("/board?project=WEB&ticket=WEB-1");
+  const d = dialog(page);
+  await d.getByLabel("Description · Markdown").fill("**Verified** description");
+  await d.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(d.locator("strong")).toHaveText("Verified");
+  await d.getByLabel("Criterion 1 text").fill("Verified criterion");
+  expect(api.patches).toHaveLength(0);
+  await d.getByLabel("Title", { exact: true }).press("Control+Enter");
+  await expect(d).toHaveCount(0);
+  expect(api.patches).toHaveLength(1);
+  expect(api.patches[0].body).toMatchObject({ description_md: "**Verified** description", criteria: { items: [{ text: "Verified criterion", done: true }] } });
 });

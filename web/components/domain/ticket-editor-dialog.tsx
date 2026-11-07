@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Dialog } from "radix-ui";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, type Bootstrap, type Priority, type Ticket, type TicketPatch, type TicketStatus } from "@/lib/api/client";
 import { useSaveTicketDraft } from "@/lib/api/board-hooks";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/lib/ticket-draft";
 import { Button } from "@/components/ui/button";
 import { Banner, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
+import { Markdown } from "./markdown";
 import { PRIORITY_NAME, PRIORITY_ORDER, STATUS_NAME } from "./meta";
 
 const BOARD_STATUS_ORDER: TicketStatus[] = ["backlog", "todo", "in_progress", "in_review", "done", "canceled"];
@@ -32,11 +33,13 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
   onClose: () => void;
   onReload: () => Promise<Ticket | undefined>;
 }) {
+  const [dirty, setDirty] = useState(false);
+  const close = () => { if (!dirty || window.confirm("Discard your unsaved changes?")) onClose(); };
   const [loaded, setLoaded] = useState<{ ticket: Ticket; nonce: number }>();
   if (detail && !loaded) setLoaded({ ticket: detail, nonce: 0 });
 
   return (
-    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog.Root open onOpenChange={(open) => { if (!open) close(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
@@ -57,6 +60,9 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
               ticket={loaded.ticket}
               bootstrap={bootstrap}
               onClose={onClose}
+              onFetch={onReload}
+              onCancel={close}
+              onDirty={setDirty}
               onReload={async () => {
                 const fresh = await onReload();
                 if (fresh) setLoaded((l) => ({ ticket: fresh, nonce: (l?.nonce ?? 0) + 1 }));
@@ -75,16 +81,18 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
   );
 }
 
-function EditorForm({ ticket, bootstrap, onClose, onReload }: {
-  ticket: Ticket; bootstrap: Bootstrap; onClose: () => void; onReload: () => Promise<boolean>;
+function EditorForm({ ticket, bootstrap, onClose, onCancel, onDirty, onReload, onFetch }: {
+  ticket: Ticket; bootstrap: Bootstrap; onClose: () => void; onCancel: () => void; onDirty: (dirty: boolean) => void; onReload: () => Promise<boolean>; onFetch: () => Promise<Ticket | undefined>;
 }) {
-  const [base] = useState(() => snapshotFromTicket(ticket));
+  const [base, setBase] = useState(() => snapshotFromTicket(ticket));
   const estimatedBy = ticket.estimated_by;
   const [draft, setDraft] = useState<TicketDraft>(() => draftFromSnapshot(base));
   const [errors, setErrors] = useState<EditorErrors>({ conflict: false, fields: {} });
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(false);
   const save = useSaveTicketDraft(ticket.key);
   const patch = buildPatch(base, draft);
+  useEffect(() => onDirty(!!patch), [patch, onDirty]);
   const set = <K extends keyof TicketDraft>(k: K, v: TicketDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
   const agents = bootstrap.agents.filter((a) => a.kind === "main" || a.id === base.assignee_agent_id);
@@ -108,6 +116,26 @@ function EditorForm({ ticket, bootstrap, onClose, onReload }: {
     }
   }
 
+  async function reapplyMine() {
+    if (!patch || busy) return;
+    setBusy(true);
+    try {
+      const fresh = await onFetch();
+      if (!fresh) throw new Error("Couldn't reload the ticket. Try again.");
+      const nextBase = snapshotFromTicket(fresh);
+      const nextDraft = draftFromSnapshot(nextBase);
+      for (const field of ["title", "description_md", "status", "priority", "estimate_points", "assignee_agent_id", "epic_id"] as const) {
+        if (field in patch) Object.assign(nextDraft, { [field]: draft[field] });
+      }
+      if (patch.criteria) nextDraft.criteria = draft.criteria;
+      setBase(nextBase);
+      setDraft(nextDraft);
+      setErrors({ conflict: false, fields: {} });
+    } catch (e) {
+      setErrors({ conflict: true, fields: {}, general: e instanceof Error ? e.message : "Couldn't reload the ticket." });
+    } finally { setBusy(false); }
+  }
+
   async function reload() {
     setBusy(true);
     try {
@@ -126,11 +154,12 @@ function EditorForm({ ticket, bootstrap, onClose, onReload }: {
       <form
         id="ticket-editor-form"
         onSubmit={(e) => { e.preventDefault(); void submit(); }}
+        onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submit(); } }}
         className="flex flex-col gap-4 overflow-y-auto px-[18px] py-4"
       >
         {errors.conflict && (
           <Banner tone="blocked" title="This ticket changed by someone else. Your unsaved edits are still shown."
-            actions={<Button type="button" variant="outline" disabled={busy} onClick={() => void reload()}>Reload latest ticket (replaces this draft)</Button>} />
+            actions={<><Button type="button" variant="outline" disabled={busy} onClick={() => void reapplyMine()}>Reapply mine</Button><Button type="button" variant="outline" disabled={busy} onClick={() => void reload()}>Reload latest ticket (replaces this draft)</Button></>} />
         )}
         {errors.general && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errors.general}</p>}
         <Field label="Title" htmlFor="editor-title">
@@ -138,7 +167,8 @@ function EditorForm({ ticket, bootstrap, onClose, onReload }: {
           <FieldError id="err-title" message={err.title} />
         </Field>
         <Field label="Description · Markdown" htmlFor="editor-description">
-          <TextArea id="editor-description" rows={5} value={draft.description_md} aria-invalid={!!err.description_md} aria-describedby={err.description_md ? "err-description" : undefined} onChange={(e) => set("description_md", e.target.value)} />
+          <div className="flex gap-2 text-xs"><button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>Write</button><button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>Preview</button></div>
+          {preview ? <Markdown>{draft.description_md || "_Nothing to preview._"}</Markdown> : <TextArea id="editor-description" rows={5} value={draft.description_md} aria-invalid={!!err.description_md} aria-describedby={err.description_md ? "err-description" : undefined} onChange={(e) => set("description_md", e.target.value)} />}
           <FieldError id="err-description" message={err.description_md} />
         </Field>
         <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
@@ -165,6 +195,9 @@ function EditorForm({ ticket, bootstrap, onClose, onReload }: {
               </select>
               {draft.estimate_points != null && <Button type="button" variant="ghost" onClick={() => set("estimate_points", null)}>Clear</Button>}
             </div>
+            {ticket.estimated_at && <p className="text-xs text-fg-secondary">Estimated <time dateTime={ticket.estimated_at}>{new Date(ticket.estimated_at).toLocaleString()}</time></p>}
+            {ticket.estimate_rationale && <blockquote className="text-xs italic text-fg-secondary">{ticket.estimate_rationale}</blockquote>}
+            {ticket.estimate && <p className="text-xs text-fg-secondary">Legacy note: {ticket.estimate}</p>}
             <FieldError id="err-estimate" message={err.estimate_points} />
           </Field>
           <Field label="Assignee" htmlFor="editor-assignee">
@@ -203,7 +236,7 @@ function EditorForm({ ticket, bootstrap, onClose, onReload }: {
         </fieldset>
       </form>
       <Footer ticketKey={ticket.key}>
-        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
         <Button type="submit" form="ticket-editor-form" variant="primary" disabled={!patch || busy}>Save changes</Button>
       </Footer>
     </>

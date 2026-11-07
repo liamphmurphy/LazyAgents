@@ -75,7 +75,8 @@ test("Kanban: agent estimates via MCP, board shows it live, person edits to done
   await expect(card).toContainText("5 pt");
   await expect(page.getByLabel("Criterion 1 met")).toBeChecked();
   await expect(page.getByLabel("Criterion 2 met")).not.toBeChecked();
-  await expect(page.getByText(`Blocks done: ${target.key} open · criteria 2 unchecked`)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Done blockers" })).toContainText(target.key);
+  await expect(page.getByRole("button", { name: "Mark epic done" })).toBeDisabled();
 
   // --- Person: open the card, edit in the modal, move it to done -----------
   await card.getByRole("link", { name: "Board flow ticket" }).click();
@@ -96,17 +97,17 @@ test("Kanban: agent estimates via MCP, board shows it live, person edits to done
   await expect(page.getByRole("progressbar", { name: "Points" })).toHaveAttribute("aria-valuetext", "5 / 5 pts done");
 
   // --- Epic gate: closed while criterion 2 is unchecked, opens once it is ---
-  const status = page.getByLabel("Epic status");
-  await status.selectOption("done");
-  const blocked = page.getByRole("alert", { name: "Epic cannot be marked done" });
-  await expect(blocked).toBeVisible();
-  await expect(blocked.getByRole("list", { name: "Unchecked criteria" })).toContainText("2. A person confirms the flow");
-  await expect(status).toHaveValue("open");
+  const markDone = page.getByRole("button", { name: "Mark epic done" });
+  await expect(markDone).toBeDisabled();
+  await expect(page.getByRole("list", { name: "Unchecked criteria" })).toContainText("2. A person confirms the flow");
+  const refused = await request.patch(`${API}/api/v1/epics/${epic.id}`, { data: { status: "done" } });
+  expect(refused.status()).toBe(409);
 
   await page.getByLabel("Criterion 2 met").check();
   await expect(page.getByText("Ready to mark done")).toBeVisible();
-  await status.selectOption("done");
-  await expect(status).toHaveValue("done");
+  await expect(markDone).toBeEnabled();
+  await markDone.click();
+  await expect(page.getByRole("button", { name: "Reopen epic" })).toBeVisible();
   await expect(page.getByText("Reopen the epic to edit its criteria.")).toBeVisible();
 
   // The server agrees: epic done, ticket done with the person's edits and the agent's estimate.

@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, unwrap, type TicketPatch } from "./client";
-import { keys, useUpdateTicket } from "./hooks";
+import { keys } from "./hooks";
 import { moveRevision, type BoardCard, type BoardStatus, type PendingMove } from "../board";
 
 export type BoardFilters = { epic?: string; assignee?: string; include_canceled: boolean };
@@ -91,9 +91,11 @@ export function useTicketEditorDetail(key: string | undefined) {
 /** Saves one draft PATCH, then waits for board/ticket caches to refetch so the card shows it. */
 export function useSaveTicketDraft(key: string) {
   const qc = useQueryClient();
-  const update = useUpdateTicket(key);
   return async (patch: TicketPatch) => {
-    const saved = await update.mutateAsync(patch);
+    const saved = await unwrap(api.PATCH("/tickets/{key}", { params: { path: { key } }, body: patch }));
+    qc.setQueryData(keys.ticket(key), saved);
+    void qc.invalidateQueries({ queryKey: keys.activity(key) });
+    void qc.invalidateQueries({ queryKey: ["knowledge"] });
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["boards"] }),
       qc.invalidateQueries({ queryKey: keys.tickets }),

@@ -46,6 +46,7 @@ export async function installBoardApi(page: Page) {
   const boardRequests: string[] = [];
   const unhandled: string[] = [];
   let rejection: { status: number; message: string; field?: string } | undefined;
+  const criteriaRequests: string[] = [];
   let gate: Promise<void> | undefined;
   let boardError = false;
   let criterionError: string | undefined;
@@ -176,6 +177,27 @@ export async function installBoardApi(page: Page) {
       Object.assign(t, { revision: t.revision + 1, updated_at: stamp(t.revision + 1) });
       return json(t);
     }
+    // Ticket criteria have their own endpoints and never bump the ticket revision.
+    const owner = tickets.find((t) => path === `/tickets/${t.key}/criteria`);
+    if (owner && request.method() === "POST") {
+      criteriaRequests.push(`POST ${path}`);
+      const c = { id: `crit-${owner.key}-${owner.criteria.length + 1}-${Date.now()}`, position: owner.criteria.length + 1, text: (request.postDataJSON() as { text: string }).text, done: false };
+      owner.criteria.push(c);
+      return json(c, 201);
+    }
+    const crit = path.startsWith("/criteria/") && tickets.flatMap((t) => t.criteria.map((c) => ({ t, c }))).find(({ c }) => path === `/criteria/${c.id}`);
+    if (crit && request.method() === "PATCH") {
+      criteriaRequests.push(`PATCH ${path}`);
+      const body = request.postDataJSON() as { done?: boolean; text?: string };
+      if (body.done !== undefined) crit.c.done = body.done;
+      if (body.text !== undefined) crit.c.text = body.text;
+      return json(crit.c);
+    }
+    if (crit && request.method() === "DELETE") {
+      criteriaRequests.push(`DELETE ${path}`);
+      crit.t.criteria = crit.t.criteria.filter((c) => c !== crit.c).map((c, i) => ({ ...c, position: i + 1 }));
+      return route.fulfill({ status: 204 });
+    }
     unhandled.push(`${request.method()} ${path}`);
     return json({ code: "not_found", message: `mock: no handler for ${path}` }, 404);
   }
@@ -191,7 +213,7 @@ export async function installBoardApi(page: Page) {
   });
   await page.route("**/api/v1/**", handle);
   return {
-    epics, tickets, criteria, patches, boardRequests, unhandled, epicWrites,
+    epics, tickets, criteria, patches, boardRequests, unhandled, epicWrites, criteriaRequests,
     failCriteria: (message?: string) => { criterionError = message; },
     rejectNext: (status: number, message: string, field?: string) => { rejection = { status, message, field }; },
     failBoard: (fail: boolean) => { boardError = fail; },

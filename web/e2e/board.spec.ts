@@ -23,7 +23,8 @@ test("renders agreed columns, card anatomy, navigation and empty states", async 
   await expect(card(page, "WEB-2")).toContainText("unestimated");
   await expect(card(page, "WEB-2")).toContainText("Unassigned");
   await expect(card(page, "WEB-3")).not.toContainText("Blocked");
-  await expect(card(page).getByRole("link", { name: "Build ticket modal" })).toHaveAttribute("href", "/tickets/WEB-1");
+  await expect(card(page).getByRole("link", { name: "WEB-1" })).toHaveAttribute("href", "/tickets/WEB-1");
+  await expect(card(page).getByRole("link", { name: "Build ticket modal" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Board", exact: true })).toHaveAttribute("aria-current", "page");
   await screen(page).getByLabel("Project", { exact: true }).selectOption("OPS");
   await expect(screen(page).getByText("No tickets", { exact: true })).toHaveCount(5);
