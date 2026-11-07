@@ -1,5 +1,25 @@
 # LAZYAGENTS-36 Kanban requirements matrix
 
+## Current delivery status (2026-11-06)
+
+Consolidation [PR #35](https://github.com/liamphmurphy/LazyAgents/pull/35)
+merged to main as `a5178e5`. After a fresh fetch, all seven dependency commits
+(`c7a822e`, `e1ce444`, `262a1ec`, `1819db5`, `748c114`, `76ffa3b`, `5f8c6f4`)
+passed `git merge-base --is-ancestor <sha> origin/main` (exit 0).
+Dependency delivery is **VERIFIED**; the UNMET rows below are historical.
+
+All four consolidation PR CI jobs passed in
+[run 42331891587](https://github.com/liamphmurphy/LazyAgents/actions/runs/42331891587),
+including the real-stack suite. The main-branch real-stack job also passed in
+[run 42332176769](https://github.com/liamphmurphy/LazyAgents/actions/runs/42332176769);
+its server job was still running when this update was written.
+
+Product-manager sign-off remains **UNVERIFIED**. Independent review of the
+consolidated changes is pending; the earlier approval covered the original
+verification patch only.
+
+## Historical verification evidence
+
 Evidence is for this verification branch, which includes the LAZYAGENTS-32,
 LAZYAGENTS-34 and LAZYAGENTS-35 branches. It is **not product sign-off** or proof
 that those branches reached main. Checked 2026-11-06.
