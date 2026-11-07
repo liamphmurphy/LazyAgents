@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -238,6 +239,10 @@ func FindPatterns(ctx context.Context, q *store.Queries, ws uuid.UUID, text, top
 	if limit <= 0 || limit > 50 {
 		limit = 10
 	}
+	return findPatterns(ctx, q, ws, text, topic, limit)
+}
+
+func findPatterns(ctx context.Context, q *store.Queries, ws uuid.UUID, text, topic string, limit int) ([]Pattern, error) {
 	var tp *string
 	if strings.TrimSpace(topic) != "" {
 		t, err := ValidTopic(topic)
@@ -262,6 +267,65 @@ func FindPatterns(ctx context.Context, q *store.Queries, ws uuid.UUID, text, top
 		out = append(out, Pattern{ID: r.ID, Title: r.Title, Path: path, Topic: topic, Tags: tags, Summary: Summary(body), Snippet: r.Snippet, Score: r.Score})
 	}
 	return out, nil
+}
+
+// TagCount is one entry of a tag facet.
+type TagCount struct {
+	Tag   string
+	Count int
+}
+
+// maxPatternScan bounds how many matches BrowsePatterns reads to build the
+// facet before filtering by tag.
+const maxPatternScan = 1000
+
+// BrowsePatterns is FindPatterns with a tag filter (every tag must match) and
+// the tag facet of the text and topic matches, before the tag filter, most
+// used first (ties by name).
+func BrowsePatterns(ctx context.Context, q *store.Queries, ws uuid.UUID, text, topic string, tags []string, limit int) ([]Pattern, []TagCount, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	all, err := findPatterns(ctx, q, ws, text, topic, maxPatternScan)
+	if err != nil {
+		return nil, nil, err
+	}
+	want := map[string]bool{}
+	for _, t := range tags {
+		if t = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(t), "#"))); t != "" {
+			want[t] = true
+		}
+	}
+	counts := map[string]int{}
+	out := []Pattern{}
+	for _, p := range all {
+		has := 0
+		seen := map[string]bool{}
+		for _, t := range p.Tags {
+			if seen[t] {
+				continue
+			}
+			seen[t] = true
+			counts[t]++
+			if want[t] {
+				has++
+			}
+		}
+		if has == len(want) && len(out) < limit {
+			out = append(out, p)
+		}
+	}
+	facet := make([]TagCount, 0, len(counts))
+	for t, n := range counts {
+		facet = append(facet, TagCount{Tag: t, Count: n})
+	}
+	sort.Slice(facet, func(i, j int) bool {
+		if facet[i].Count != facet[j].Count {
+			return facet[i].Count > facet[j].Count
+		}
+		return facet[i].Tag < facet[j].Tag
+	})
+	return out, facet, nil
 }
 
 // ------------------------------------------------------------ proposals
