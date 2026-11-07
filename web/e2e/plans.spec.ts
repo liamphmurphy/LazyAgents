@@ -59,6 +59,12 @@ async function installPlansApi(page: Page) {
     const one = /^\/planning-sessions\/([^/]+)$/.exec(path);
     if (one) {
       const p = plans.find((x) => x.id === one[1]);
+      if (p && method === "PATCH") {
+        const body = req.postDataJSON();
+        posted.push(body);
+        Object.assign(p, { proposals: body.proposals, revision: Number(p.revision) + 1 });
+        if (body.action === "accept") Object.assign(p, { state: "accepted", ticket_keys: body.proposals.map((_: unknown, i: number) => `WEB-${i + 20}`) });
+      }
       return p ? json(p) : json({ code: "not_found", message: "no plan" }, 404);
     }
     const run = /^\/runs\/([^/]+)$/.exec(path);
@@ -154,4 +160,58 @@ test("start a plan with context, watch reads, hand off to review", async ({ page
   await expect(page).toHaveURL(/#proposal-review$/);
   await expect(page.getByRole("region", { name: "Proposal review" }).getByLabel("Ticket 1 title")).toHaveValue("Composer");
   await expect(rows.first()).toContainText("0/2 accepted", { timeout: 20_000 });
+});
+test("review edits criteria and estimates, validates dependencies and accepts a subset", async ({
+  page,
+}) => {
+  const mock = await installPlansApi(page);
+  // Create a planning session through the same UI entry point.
+  await page.goto("/plans?project=WEB");
+  await page.getByLabel("Goal").fill("Review drafts");
+  await page.getByLabel("Goal").press("ControlOrMeta+Enter");
+  await expect(page).toHaveURL(/id=p-new/);
+  mock.propose("p-new");
+  await page.reload();
+  await expect(page.getByLabel("Ticket 1 title")).toHaveValue("Composer");
+  await page
+    .getByRole("button", { name: "Add criterion", exact: true })
+    .click();
+  await page
+    .getByLabel("Criterion 2", { exact: true })
+    .fill("Second criterion");
+  await page
+    .getByRole("button", { name: "Move criterion 2 up", exact: true })
+    .click();
+  await expect(page.getByLabel("Criterion 1", { exact: true })).toHaveValue(
+    "Second criterion",
+  );
+  await page
+    .getByRole("button", { name: "Remove criterion 2", exact: true })
+    .click();
+  await page.getByRole("button", { name: "8", exact: true }).click();
+  await expect(page.getByText("Changed from unestimated.")).toBeVisible();
+  await page.getByLabel("Select draft 2").uncheck();
+  await page.getByText("Ticket 2 · Index", { exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("which is not selected");
+  await expect(
+    page.getByRole("button", { name: "Accept selected (1)", exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel("Select draft 2").check();
+  await page.getByRole("button", { name: /2 · Index/ }).click();
+  await page.getByText("Ticket 1 · Composer", { exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("cycle");
+  await page.getByText("Ticket 1 · Composer", { exact: true }).click();
+  await page.getByRole("button", { name: /1 · Composer/ }).click();
+  await page.getByText("Ticket 2 · Index", { exact: true }).click();
+  await page.getByLabel("Select draft 2").uncheck();
+  await page
+    .getByRole("button", { name: "Accept selected (1)", exact: true })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "WEB-20 · Composer" }),
+  ).toBeVisible();
+  await expect(page.getByText("Tickets created · 1/2 accepted")).toBeVisible();
+  expect(mock.posted.at(-1)?.proposals).toMatchObject([
+    { title: "Composer", criteria: ["Second criterion"], estimate_points: 8 },
+  ]);
 });
