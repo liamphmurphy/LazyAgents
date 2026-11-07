@@ -232,3 +232,29 @@ func (s *Service) DeleteEpicCriterion(ctx context.Context, ws, id uuid.UUID) err
 		return q.CompactEpicCriteria(ctx, store.CompactEpicCriteriaParams{EpicID: c.EpicID, Position: c.Position})
 	})
 }
+
+// CreateEpic creates an epic with optional initial acceptance criteria, all or nothing.
+func (s *Service) CreateEpic(ctx context.Context, p store.CreateEpicParams, criteria []string) (store.Epic, error) {
+	texts := make([]string, 0, len(criteria))
+	for _, c := range criteria {
+		t, err := validCriterion(c)
+		if err != nil {
+			return store.Epic{}, invalid("criteria", "each criterion must be 1–1000 characters")
+		}
+		texts = append(texts, t)
+	}
+	var out store.Epic
+	err := s.tx(ctx, func(q *store.Queries) error {
+		var err error
+		if out, err = q.CreateEpic(ctx, p); err != nil {
+			return err
+		}
+		for _, t := range texts {
+			if _, err := q.CreateEpicCriterion(ctx, store.CreateEpicCriterionParams{EpicID: out.ID, Text: t}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return out, err
+}

@@ -150,6 +150,29 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		t.Fatalf("foreign epic = %d %v", code, out)
 	}
 
+	// create_epic takes optional criteria, all or nothing; list_epics shows counts.
+	if code, out := call(token, "create_epic", map[string]any{"name": "Bad criteria", "criteria": []string{"ok", "  "}}); code != 422 || !strings.Contains(fmt.Sprint(out), "criteria") {
+		t.Fatalf("blank criterion = %d %v", code, out)
+	}
+	code, created = call(token, "create_epic", map[string]any{"name": "With criteria", "criteria": []string{"Board ships", "Docs updated"}})
+	if code != 200 || created["criteria"] != float64(2) {
+		t.Fatalf("create epic with criteria = %d %v", code, created)
+	}
+	_, listed2 := call(token, "list_epics", map[string]any{})
+	var withCriteria map[string]any
+	for _, e := range listed2["epics"].([]any) {
+		em := e.(map[string]any)
+		if em["Name"] == "Bad criteria" {
+			t.Fatalf("partial epic created: %v", em)
+		}
+		if em["Name"] == "With criteria" {
+			withCriteria = em
+		}
+	}
+	if withCriteria == nil || withCriteria["CriteriaTotal"] != float64(2) || withCriteria["CriteriaDone"] != float64(0) || withCriteria["Status"] != "open" || withCriteria["PointsTotal"] != float64(0) {
+		t.Fatalf("list_epics row = %v", withCriteria)
+	}
+
 	// whoami is chat-specific: no ticket queue, project and chat named.
 	_, who := call(token, "whoami", map[string]any{})
 	ins := fmt.Sprint(who["instructions"])
