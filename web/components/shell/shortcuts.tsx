@@ -6,6 +6,11 @@ import { IconButton } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/primitives";
 import { SHORTCUTS } from "@/lib/command-palette";
 
+/** Open the shortcut reference from a button (the Inbox's "Shortcuts"). */
+export function openShortcuts() {
+  window.dispatchEvent(new Event("la:shortcuts"));
+}
+
 /** Typing into a field: single-key shortcuts must not fire. */
 export function isTyping(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;

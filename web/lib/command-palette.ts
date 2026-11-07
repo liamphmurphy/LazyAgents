@@ -193,4 +193,17 @@ export const SHORTCUTS: { section: string; items: { label: string; keys: string[
       { label: "Save description / comment", keys: ["⌘/Ctrl", "↵"] },
     ],
   },
+  {
+    section: "Inbox",
+    items: [
+      { label: "Next / previous item", keys: ["J", "K"] },
+      { label: "Open the item’s page", keys: ["↵"] },
+      { label: "Approve (approvals, mockups)", keys: ["A"] },
+      { label: "Deny (approvals)", keys: ["D"] },
+      { label: "Reply (questions) or focus the note", keys: ["R"] },
+      { label: "Mark done: hide until it changes", keys: ["E"] },
+      { label: "Send the reply or note", keys: ["⌘/Ctrl", "↵"] },
+      { label: "Leave the text box, back to the list", keys: ["Esc"] },
+    ],
+  },
 ];

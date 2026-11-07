@@ -132,7 +132,7 @@ test("? opens the keyboard shortcut reference, but not while typing", async ({ p
   await page.locator("body").press("?");
   const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("heading")).toHaveText(["Keyboard shortcuts", "Global", "Palette", "Ticket"]);
+  await expect(dialog.getByRole("heading")).toHaveText(["Keyboard shortcuts", "Global", "Palette", "Ticket", "Inbox"]);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 

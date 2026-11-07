@@ -36,6 +36,8 @@ function AttentionRow({ item }: { item: Schemas["InboxItem"] }) {
     dispatch: "Dispatch",
     review: "Review",
     blocked: "Blocked",
+    question: "Question",
+    stalled: "Stalled",
     mention: "Mention",
     planning: "Review plan",
     suggestion: "Wiki edit",
@@ -48,7 +50,7 @@ function AttentionRow({ item }: { item: Schemas["InboxItem"] }) {
           <span className="font-mono text-xs text-fg-tertiary">
             {item.ticket_key || item.project || "Wiki"}
           </span>
-          <Flag tone={item.kind === "blocked" ? "blocked" : "human"}>
+          <Flag tone={item.kind === "blocked" || item.kind === "stalled" ? "blocked" : "human"}>
             {names[item.kind]}
           </Flag>
         </div>

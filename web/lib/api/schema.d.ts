@@ -2490,17 +2490,35 @@ export interface components {
         };
         InboxItem: {
             id: string;
-            /** @enum {string} */
-            kind: "approval" | "dispatch" | "mention" | "review" | "blocked" | "suggestion" | "planning" | "mockup";
+            /**
+             * @description question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes
+             * @enum {string}
+             */
+            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion";
             title: string;
             summary: string;
             href: string;
             project: string;
             ticket_key: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the item last changed; the wait starts here
+             */
             created_at: string;
             resolved: boolean;
+            /** @description Marked done by this person since the item last changed */
             read: boolean;
+            agent?: components["schemas"]["AgentRef"];
+            /**
+             * Format: uuid
+             * @description The run to reply to, retry or cancel
+             */
+            run_id?: string;
+            /**
+             * Format: uuid
+             * @description The mockup or wiki page under review
+             */
+            artifact_id?: string;
         };
         WorkflowCounts: {
             total: number;
