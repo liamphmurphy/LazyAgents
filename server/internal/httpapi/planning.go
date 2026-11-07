@@ -30,6 +30,10 @@ func (s *Server) toPlanning(ctx context.Context, p store.PlanningSession) (api.P
 			return out, err
 		}
 	}
+	out.ProposalCount = int(p.ProposalCount)
+	if out.ContextRefs, err = recode[[]api.ChatContextRef](jsonOrEmpty(p.ContextRefs)); err != nil {
+		return out, err
+	}
 	err = json.Unmarshal(p.Proposals, &out.Proposals)
 	return out, err
 }
