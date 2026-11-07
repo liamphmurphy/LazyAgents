@@ -8,7 +8,12 @@ import type { Page, Route } from "@playwright/test";
  *
  * A message starting with "slow:" keeps the turn running until it is cancelled;
  * its run reports one tool call (read_page Eng/Plan) for the live activity line.
- * Replies carry token usage and cost.
+ * Replies carry token usage and cost and a run_id whose events (GET /runs/{id}) hold the turn's tool calls.
+ *
+ * Assistant memory (LAZYAGENTS-71): an in-memory store behind /memories. A message
+ * "remember: <title>" makes the turn call save_memory (creating the entry, sourced
+ * from the chat) and "forget: <title>" calls forget_memory (deleting it); both put a
+ * successful tool_result into the turn's run events, between the user message and the reply.
  */
 
 type Harness = "claude-code" | "codex" | "opencode";
@@ -21,7 +26,11 @@ type Chat = {
 type Message = {
   id: string; seq: number; role: "user" | "assistant" | "system"; body_md: string;
   harness?: Harness; model?: string; created_at: string;
-  context_refs?: unknown[]; citations?: unknown[];
+  context_refs?: unknown[]; citations?: unknown[]; run_id?: string;
+};
+export type MockMemory = {
+  id: string; title: string; summary: string; body: string; tags: string[]; type: string;
+  source: string; source_chat_id?: string; created_at: string; updated_at: string;
 };
 
 // What the [[ picker can offer (api: GET /knowledge/suggest). OTHER-9 lives in another project.
@@ -82,6 +91,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const posted: Posted[] = [];
   const created: Array<Record<string, unknown>> = [];
   const artifactForms: string[] = [];
+  const memories: MockMemory[] = [];
+  const memoryRequests: string[] = [];
+  const memoryPatches: Array<Record<string, unknown>> = [];
   const wikiPages: Array<{ path: string; body_md: string; project_key?: string }> = [];
   let n = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
@@ -111,8 +123,42 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       }, c.id)
       .catch(() => undefined); // page may be navigating; the next fetch catches up
 
+  function memoryEvents(c: Chat, prompt: string) {
+    const save = /^remember:\s*(.+)$/.exec(prompt);
+    const forget = /^forget:\s*(.+)$/.exec(prompt);
+    if (!save && !forget) return;
+    const runId = c.current_run_id!;
+    const events = runEvents.get(runId) ?? [];
+    // Strictly after the user message, so the turn window (since < at) holds.
+    const lastUser = messages.get(c.id)!.findLast((x) => x.role === "user");
+    const at = new Date(Date.parse(lastUser?.created_at ?? now()) + 1).toISOString();
+    const tool = (name: string, output: unknown) => {
+      const id = `mem-${events.length + 1}`;
+      events.push({ seq: events.length + 1, type: "tool_call", at, payload: { id, tool: `mcp__lazyagents__${name}`, input: {} } });
+      events.push({ seq: events.length + 1, type: "tool_result", at, payload: { id, tool: `mcp__lazyagents__${name}`, output: JSON.stringify(output) } });
+    };
+    if (save) {
+      const title = save[1].trim();
+      const t = now();
+      const m: MockMemory = {
+        id: uuid(), title, summary: `About ${title}`, body: `Details about ${title}`, tags: ["chat"], type: "fact",
+        source: `chat ${c.id}`, source_chat_id: c.id, created_at: t, updated_at: t,
+      };
+      memories.unshift(m);
+      tool("save_memory", { id: m.id, action: "created", title });
+    } else if (forget) {
+      const title = forget[1].trim();
+      const i = memories.findIndex((x) => x.title === title);
+      if (i < 0) return;
+      const [gone] = memories.splice(i, 1);
+      tool("forget_memory", { forgotten: gone.id, title });
+    }
+    runEvents.set(runId, events);
+  }
+
   function finishTurn(c: Chat, prompt: string) {
     c.state = "idle";
+    memoryEvents(c, prompt);
     // "cite:" prompts get citations (one duplicate, one versioned section, one ticket).
     const citations = prompt.startsWith("cite:")
       ? [
@@ -122,7 +168,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
           { target: TICKET, title: TICKET.title },
         ]
       : undefined;
-    add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, ...USAGE, ...(citations ? { citations } : {}) });
+    add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE, ...(citations ? { citations } : {}) });
     void emit(c);
   }
   function ref(c: Chat) {
@@ -176,7 +222,51 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const title = /name="title"\r\n\r\n([^\r]*)/.exec(raw)?.[1] ?? "";
       return json({ id: "66666666-6666-4666-8666-666666666666", type: "report", title }, 201);
     }
+    // The chat header's spend chip: nothing spent, so no chip (an unhandled 404 would be retried and stall mutations).
+    if (path === "/costs") {
+      return json({
+        total: { key: "", label: "", runs: 0, tokens: 0, cost_micros: 0, unpriced_runs: 0 }, unpriced_runs: 0, estimated: { tickets: 0, points: 0, cost_micros: 0 },
+        days: [], agents: [], projects: [], models: [], purposes: [], top_tickets: [],
+      });
+    }
     if (path === "/chat-models") return json(catalog(codexAvailable, opencodeAvailable));
+
+    if (path === "/memories" && method === "GET") {
+      memoryRequests.push(`GET ${path}${url.search}`);
+      const q = (url.searchParams.get("q") ?? "").toLowerCase();
+      const type = url.searchParams.get("type");
+      const ofType = memories.filter((x) => !type || x.type === type);
+      const hits = ofType.filter((x) => !q || `${x.title} ${x.summary} ${x.tags.join(" ")}`.toLowerCase().includes(q));
+      return json({ memories: hits, total: ofType.length, has_more: false });
+    }
+    if (path === "/memories" && method === "DELETE") {
+      memoryRequests.push(`DELETE ${path}${url.search}`);
+      if (url.searchParams.get("confirm") !== "true") return fail(err(422, "invalid", "confirm=true is required", "confirm"));
+      const deleted = memories.length;
+      memories.length = 0;
+      return json({ deleted });
+    }
+    if (path === "/memories/export" && method === "GET") {
+      memoryRequests.push(`GET ${path}`);
+      return json({ exported_at: now(), memories });
+    }
+    const mem = /^\/memories\/([^/]+)$/.exec(path);
+    if (mem) {
+      memoryRequests.push(`${method} ${path}`);
+      const i = memories.findIndex((x) => x.id === mem[1]);
+      if (i < 0) return fail(err(404, "not_found", "Memory not found"));
+      if (method === "GET") return json(memories[i]);
+      if (method === "DELETE") {
+        memories.splice(i, 1);
+        return route.fulfill({ status: 204 });
+      }
+      if (method === "PATCH") {
+        const b = body();
+        memoryPatches.push(b);
+        Object.assign(memories[i], b, { updated_at: new Date(Date.now() + 1000).toISOString() });
+        return json(memories[i]);
+      }
+    }
 
     if (path === "/chats" && method === "GET") {
       const archived = url.searchParams.get("archived") === "true";
@@ -244,7 +334,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         const user = add(c, "user", text, refs.length ? { context_refs: refs } : {});
         c.state = "running";
         c.error = undefined;
-        c.current_run_id = c.current_run_id ?? uuid();
+        c.current_run_id = uuid();
         touch(c);
         if (text.startsWith("slow:")) {
           const events = runEvents.get(c.current_run_id) ?? [];
@@ -295,6 +385,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { unhandled, posted, created, wikiPages, artifactForms };
+    return { unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches };
   })();
 }
