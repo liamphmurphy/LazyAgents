@@ -9,6 +9,7 @@ import { cx } from "@/lib/cx";
 import { Button, IconButton } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
+import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { Conversation } from "./conversation";
 
 type Chat = Schemas["ChatSession"];
@@ -77,8 +78,12 @@ export function ChatScreen({ id }: { id?: string }) {
   const search = useSearchParams();
   const boot = useBootstrap();
   const current = useChat(id);
-  const projects = boot.data?.projects.filter((p) => !p.archived) ?? [];
-  const project = current.data?.project ?? search.get("project") ?? projects[0]?.key ?? "";
+  // An open chat carries its project; the index resolves ?project=, then the remembered one.
+  const scope = useProjectScope("required", { skip: !!id });
+  const project = id
+    ? (current.data?.project ?? search.get("project") ?? "")
+    : scope.status === "ready" ? (scope.project?.key ?? "") : "";
+  const scoped = boot.data?.projects.find((p) => p.key === project);
   const chats = useChats(project);
   const create = useCreateChat();
 
@@ -93,24 +98,17 @@ export function ChatScreen({ id }: { id?: string }) {
   const list = chats.data?.chats;
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar crumbs={[{ label: "Chat" }]} />
+      <TopBar crumbs={projectCrumbs(scoped, "Chat")} />
+      {!id && scope.status !== "ready" ? (
+        <ProjectScopeState base="/chat" scope={scope} />
+      ) : (
       <div className="flex min-h-0 flex-1 max-md:flex-col">
         <aside
           aria-label="Chat history"
           className="flex w-72 flex-none flex-col gap-3 border-r border-border-subtle p-3 max-md:max-h-64 max-md:w-full max-md:border-b max-md:border-r-0"
         >
           <div className="flex items-center gap-2">
-            <select
-              aria-label="Project"
-              value={project}
-              onChange={(e) => router.push(`/chat?project=${encodeURIComponent(e.target.value)}`)}
-              className="h-[30px] min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg"
-            >
-              {projects.map((p) => (
-                <option key={p.key} value={p.key}>{p.name}</option>
-              ))}
-            </select>
-            <Button variant="primary" icon="plus" disabled={!project || create.isPending} onClick={newChat}>
+            <Button variant="primary" icon="plus" className="flex-1 justify-center" disabled={!project || create.isPending} onClick={newChat}>
               New chat
             </Button>
           </div>
@@ -161,6 +159,7 @@ export function ChatScreen({ id }: { id?: string }) {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -139,6 +139,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
       });
     }
+    if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, queued: 0 });
     if (path === "/knowledge/resolve") return json({ links: [] });
     if (path === "/knowledge/suggest") {
       const q = (url.searchParams.get("q") ?? "").toLowerCase();

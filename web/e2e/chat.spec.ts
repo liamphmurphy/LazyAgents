@@ -27,7 +27,7 @@ async function send(page: Page, text: string) {
 
 test("create, send, switch model, reload keeps history", async ({ page }) => {
   const mock = await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await expect(page.getByRole("navigation", { name: "Chats" }).getByText("No chats yet")).toBeVisible();
 
   await newChat(page);
@@ -69,7 +69,7 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
 
 test("stop re-enables the composer", async ({ page }) => {
   await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await send(page, "slow: take your time");
   await expect(composer(page)).toBeDisabled();
@@ -81,7 +81,7 @@ test("stop re-enables the composer", async ({ page }) => {
 
 test("unavailable models are disabled with their reason", async ({ page }) => {
   await installChatApi(page, { codexAvailable: false });
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await picker(page).click();
   const item = page.getByRole("menuitem", { name: /Codex gpt-5-codex/ });
@@ -91,7 +91,7 @@ test("unavailable models are disabled with their reason", async ({ page }) => {
 
 test("rename and archive from the history list", async ({ page }) => {
   await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await page.getByRole("button", { name: "Rename New chat" }).click();
   await page.getByRole("textbox", { name: "Chat title" }).fill("Roadmap");
@@ -105,7 +105,7 @@ test("rename and archive from the history list", async ({ page }) => {
 
 test("[[ picks context as removable chips and sends them as context_refs", async ({ page }) => {
   const mock = await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
 
   // Typing [[ offers pages, artifacts and tickets; picking adds a chip, not text.
@@ -159,7 +159,7 @@ test("[[ picks context as removable chips and sends them as context_refs", async
 
 test("a rejected attachment shows the server error and keeps the chips", async ({ page }) => {
   await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await page.goto(page.url() + "&attach=ticket:OTHER-9&attach_title=Elsewhere");
   await expect(chips(page)).toHaveCount(1);
@@ -183,7 +183,7 @@ test("Start chat links pre-attach the item and drop the query param", async ({ p
 
 test("assistant messages list deduplicated Sources with version and section", async ({ page }) => {
   await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await send(page, "plain");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
@@ -202,7 +202,7 @@ test("assistant messages list deduplicated Sources with version and section", as
 
 test("save a reply to the wiki with a link back to the chat", async ({ page }) => {
   const mock = await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await send(page, "plain");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
@@ -229,7 +229,7 @@ test("save a reply to the wiki with a link back to the chat", async ({ page }) =
 
 test("save a reply as a report artifact with a link back to the chat", async ({ page }) => {
   const mock = await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await send(page, "plain");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
@@ -245,7 +245,7 @@ test("save a reply as a report artifact with a link back to the chat", async ({ 
 
 test("OpenCode model is chosen with the keyboard, posted, and survives reload", async ({ page }) => {
   const mock = await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await picker(page).focus();
   await page.keyboard.press("Enter");
@@ -272,7 +272,7 @@ test("OpenCode model is chosen with the keyboard, posted, and survives reload", 
 
 test("unavailable OpenCode shows its reason and can't be selected", async ({ page }) => {
   await installChatApi(page, { opencodeAvailable: false });
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await picker(page).click();
   const item = page.getByRole("menuitem", { name: /OpenCode anthropic\/claude-sonnet-4-5/ });
@@ -285,7 +285,7 @@ test("unavailable OpenCode shows its reason and can't be selected", async ({ pag
 
 test("a rejected OpenCode post shows the error and keeps the selection", async ({ page }) => {
   const mock = await installChatApi(page);
-  await page.goto("/chat");
+  await page.goto("/chat?project=WEB");
   await newChat(page);
   await page.route("**/api/v1/chats/*/messages", (route) =>
     route.request().method() === "POST"
