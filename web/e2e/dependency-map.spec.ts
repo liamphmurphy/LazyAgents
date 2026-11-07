@@ -43,6 +43,11 @@ test("filtered map retains canceled external blockers and removes only the selec
   const m = map(page);
   await expect(m.getByText("WEB-2 still blocks WEB-1", { exact: true })).toBeVisible();
   await expect(m.getByRole("button", { name: /WEB-2 Canceled/ })).toContainText("outside filter");
+  const reopen = m.getByRole("button", { name: "Open WEB-2 to reopen", exact: true });
+  await reopen.click();
+  await expect(page.getByRole("dialog", { name: "Edit WEB-2" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(reopen).toBeFocused();
   await m.getByRole("button", { name: "Remove WEB-2 from WEB-1", exact: true }).click();
   await expect(m.getByText("Dependency removed.")).toBeVisible();
   await expect(m.getByText("WEB-2 still blocks WEB-1", { exact: true })).toHaveCount(0);
@@ -74,24 +79,31 @@ test("epic Map tab offers the same map, accessible list, and editor", async ({ p
   await expect(m.getByRole("button", { name: "WEB-1 Build ticket modal", exact: true })).toBeFocused();
 });
 
-test("epic editor retains a dirty draft when background map and detail refetches fail", async ({ page }) => {
-  await installBoardApi(page);
-  await page.goto("/epics/epic-1");
-  await page.getByRole("navigation", { name: "Epic views" }).getByRole("button", { name: "Map", exact: true }).click();
-  await map(page).getByRole("button", { name: /WEB-1 Todo/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Edit WEB-1" });
-  await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Unsaved map draft");
-  let failed = 0;
-  await page.route("**/api/v1/tickets**", async (route) => {
-    failed++;
-    await route.fulfill({ status: 500, json: { code: "internal", message: "Refetch failed" } });
+for (const failure of ["map", "editor"] as const) {
+  test(`epic editor retains a dirty draft after terminal background ${failure} failure`, async ({ page }) => {
+    await page.clock.install();
+    await installBoardApi(page);
+    await page.goto("/epics/epic-1");
+    await page.getByRole("navigation", { name: "Epic views" }).getByRole("button", { name: "Map", exact: true }).click();
+    const m = page.locator('section[aria-label="Dependency map"]');
+    await m.getByRole("button", { name: /WEB-1 Todo/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit WEB-1" });
+    await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Unsaved map draft");
+    let failed = 0;
+    await page.route(failure === "map" ? "**/api/v1/tickets?**" : "**/api/v1/tickets/WEB-1", async (route) => {
+      failed++;
+      await route.fulfill({ status: 500, json: { code: "internal", message: "Refetch failed" } });
+    });
+    // Age both successful queries beyond the provider's 30s staleTime.
+    // Keep retry timers running, then reconnect to refetch stale active queries.
+    await page.clock.fastForward(31_000);
+    await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    const message = failure === "map" ? "Couldn't refresh dependency map:" : "Couldn't refresh WEB-1:";
+    // The alert appears only once retries finish and the query enters error state.
+    await expect(m.getByRole("alert", { includeHidden: true }).filter({ hasText: message })).toBeVisible({ timeout: 20_000 });
+    expect(failed).toBeGreaterThan(0);
+    await expect(dialog.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Unsaved map draft");
+    await expect(m.locator('[data-ticket-key="WEB-1"]').first()).toBeVisible();
   });
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event("blur"));
-    window.dispatchEvent(new Event("focus"));
-    window.dispatchEvent(new Event("offline"));
-    window.dispatchEvent(new Event("online"));
-  });
-  await expect.poll(() => failed, { timeout: 20_000 }).toBeGreaterThanOrEqual(5);
-  await expect(dialog.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Unsaved map draft");
-});
+}

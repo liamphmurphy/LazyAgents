@@ -65,6 +65,7 @@ export function DependencyMap({ project, epic, assignee, includeCanceled = true,
         <p className="text-xs text-fg-tertiary">Largest remaining point total; done and canceled tickets excluded. Unestimated tickets count as 0 pts.</p></div>
       <div className="flex gap-3"><button aria-pressed={!list} onClick={() => setList(false)}>Graph</button><button aria-pressed={list} onClick={() => setList(true)}>List</button></div>
     </div>
+    {query.isError && <p role="alert">Couldn&apos;t refresh dependency map: {query.error.message}. Showing the last loaded map.</p>}
     {!!graph.cyclic.length && <p role="alert">Dependency cycle detected. Review these tickets: {graph.cyclic.join(", ")}. The unfinished chain excludes cycles and their dependents.</p>}
     {!!graph.warnings.length && <div className="rounded-lg border border-state-blocked p-3 text-sm">
       <p className="font-semibold text-state-blocked">⚠ Canceled blockers still block work</p>
@@ -111,6 +112,7 @@ export function DependencyMap({ project, epic, assignee, includeCanceled = true,
         <tbody>{graph.nodes.map((t) => <tr key={t.key}><td className="p-2">{graph.depth.get(t.key)}</td><td className="p-2"><button data-ticket-key={t.key} className="underline" onClick={() => open(t.key)}>{t.key} {t.title}</button>{graph.chain.keys.includes(t.key) && " · critical path"}{t.external && " · outside filter"}</td><td className="p-2">{STATUS_NAME[t.status]}</td><td className="p-2">{t.estimate_points ?? "—"}</td><td className="p-2">{t.blocked_by.map((b) => `${b.key} (${STATUS_NAME[b.status]})`).join(", ") || "—"}</td></tr>)}</tbody>
       </table>
     </div>
+    {selected && editor.isError && editor.data && <p role="alert">Couldn&apos;t refresh {selected}: {editor.error.message}. Your draft is preserved.</p>}
     {selected && editor.isError && !editor.data && <p role="alert">Couldn&apos;t open {selected}: {editor.error.message} <button onClick={() => setSelected(undefined)}>Dismiss</button></p>}
     {selected && (!editor.isError || editor.data) && bootstrap.data && <TicketEditorDialog key={selected} ticketKey={selected} detail={editor.data as Ticket | undefined} bootstrap={bootstrap.data} onClose={() => setSelected(undefined)} onReload={async () => { const r = await editor.refetch(); return r.isError ? undefined : r.data; }} />}
   </section>;
