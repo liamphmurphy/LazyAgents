@@ -2,11 +2,24 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/api"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
+
+// reviewPins decodes a version's stored review_pins. It never returns nil, so
+// the API always sends an array.
+func reviewPins(raw []byte) []api.MockupPin {
+	var pins []artifacts.ReviewPin
+	_ = json.Unmarshal(raw, &pins) // the column defaults to '[]'; bad JSON reads as no pins
+	out := make([]api.MockupPin, 0, len(pins))
+	for _, p := range pins {
+		out = append(out, api.MockupPin{X: p.X, Y: p.Y, Text: p.Text})
+	}
+	return out
+}
 
 // mockupGate is the ticket's mockup gate for the API.
 func (s *Server) mockupGate(ctx context.Context, t store.Ticket) (api.MockupGate, error) {
@@ -26,7 +39,13 @@ func (s *Server) mockupGate(ctx context.Context, t store.Ticket) (api.MockupGate
 
 func (s *Server) ReviewArtifactVersion(ctx context.Context, req api.ReviewArtifactVersionRequestObject) (api.ReviewArtifactVersionResponseObject, error) {
 	u, _, ws := me(ctx)
-	a, err := s.Runs.ReviewMockup(ctx, ws, u.ID, req.Id, req.VersionId, string(req.Body.Decision), deref(req.Body.Note))
+	var pins []artifacts.ReviewPin
+	if req.Body.Pins != nil {
+		for _, p := range *req.Body.Pins {
+			pins = append(pins, artifacts.ReviewPin{X: p.X, Y: p.Y, Text: p.Text})
+		}
+	}
+	a, err := s.Runs.ReviewMockup(ctx, ws, u.ID, req.Id, req.VersionId, string(req.Body.Decision), deref(req.Body.Note), pins)
 	if err != nil {
 		return nil, err
 	}

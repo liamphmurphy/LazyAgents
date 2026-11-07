@@ -36,7 +36,7 @@ WHERE v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3;
 
 -- name: ListArtifactVersions :many
 SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at,
-  review_state, reviewed_by_user_id, reviewed_at, review_note
+  review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
 FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' ORDER BY seq DESC;
 
 -- name: CountPublishedVersions :one
@@ -135,7 +135,7 @@ ORDER BY t.updated_at DESC;
 SELECT * FROM artifacts WHERE workspace_id = $1 AND type = 'adr' AND number = $2;
 
 -- name: ReviewArtifactVersion :one
-UPDATE artifact_versions SET review_state = $2, reviewed_by_user_id = $3, reviewed_at = now(), review_note = $4
+UPDATE artifact_versions SET review_state = $2, reviewed_by_user_id = $3, reviewed_at = now(), review_note = $4, review_pins = $5
 WHERE id = $1 RETURNING *;
 
 -- name: MockupGateCandidates :many

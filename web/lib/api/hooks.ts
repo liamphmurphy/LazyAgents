@@ -4,6 +4,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import {
   api,
   ApiError,
+  contentUrl,
   postForm,
   unwrap,
   type AgentDetail,
@@ -17,6 +18,7 @@ import {
   type TicketPatch,
   type TicketStatus,
 } from "./client";
+import { runEach } from "../ticket-list";
 
 type NewTicket = Schemas["NewTicket"];
 
@@ -122,6 +124,71 @@ export function useUpdateTicket(key: string) {
   });
 }
 
+/**
+ * Revision-checked PATCH for the ticket page (ADR-034, same contract as the
+ * edit modal). Each save sends the revision the person saw; saves on one
+ * ticket run one after another, and a save queued behind this page's own
+ * earlier save uses that save's new revision. A 409 rolls the optimistic edit
+ * back and refetches the ticket so the latest is shown.
+ */
+export type RevisionPatch = { patch: TicketPatch; revision: number; what: string };
+
+export function useRevisionCheckedUpdate(key: string, onFailed?: (e: Error, v: RevisionPatch) => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    scope: { id: `ticket-patch:${key}` },
+    mutationFn: ({ patch, revision }: RevisionPatch) => {
+      // Our own earlier save in this queue may have bumped it since the click.
+      const rev = Math.max(revision, ownRevisions.get(key) ?? 0);
+      return unwrap(api.PATCH("/tickets/{key}", { params: { path: { key } }, body: { ...patch, revision: rev } }));
+    },
+    onMutate: async ({ patch }) => {
+      await qc.cancelQueries({ queryKey: keys.ticket(key) });
+      const prev = qc.getQueryData<Ticket>(keys.ticket(key));
+      if (prev) {
+        const next = { ...prev };
+        if (patch.title !== undefined) next.title = patch.title;
+        if (patch.description_md !== undefined) next.description_md = patch.description_md;
+        if (patch.status !== undefined) next.status = patch.status;
+        if (patch.priority !== undefined) next.priority = patch.priority;
+        if (patch.requires_mockup !== undefined) next.requires_mockup = patch.requires_mockup;
+        if (patch.estimate_points !== undefined) next.estimate_points = patch.estimate_points ?? undefined;
+        qc.setQueryData(keys.ticket(key), next);
+      }
+      return { prev };
+    },
+    // Hook-level, not per-mutate: queued saves each report their own failure.
+    onError: (e, v, ctx) => {
+      // A queued save snapshots `prev` when mutate() is called, possibly before an
+      // earlier save landed, so always refetch after rolling back.
+      if (ctx?.prev) qc.setQueryData(keys.ticket(key), ctx.prev);
+      void qc.invalidateQueries({ queryKey: keys.ticket(key) });
+      onFailed?.(e, v);
+    },
+    onSuccess: (t) => {
+      ownRevisions.set(key, t.revision);
+      qc.setQueryData(keys.ticket(key), t);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.tickets, predicate: (q) => q.queryKey[1] !== "detail" });
+      void qc.invalidateQueries({ queryKey: ["boards"] });
+      void qc.invalidateQueries({ queryKey: ["knowledge"] });
+    },
+  });
+}
+
+/** The revision each ticket reached through this tab's own last save. */
+const ownRevisions = new Map<string, number>();
+
+/** Every run on a ticket, delegated runs included, newest first. */
+export function useTicketRuns(key: string, live = false) {
+  return useQuery({
+    queryKey: ["runs", "ticket", key],
+    queryFn: () => unwrap(api.GET("/runs", { params: { query: { ticket: key, state: "all" } } })),
+    refetchInterval: live ? LIVE_POLL_MS : false,
+  });
+}
+
 export function useBulkUpdate() {
   const qc = useQueryClient();
   return useMutation({
@@ -131,6 +198,64 @@ export function useBulkUpdate() {
       qc.invalidateQueries({ queryKey: keys.tickets });
       qc.invalidateQueries({ queryKey: keys.artifacts });
     },
+  });
+}
+
+/**
+ * Patch each ticket on its own (PATCH /tickets/{key}), so one refusal (a 409
+ * for canceling a ticket with a live run) doesn't undo the others.
+ */
+export function useBulkEach() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ keys: ks, patch }: { keys: string[]; patch: TicketPatch }) =>
+      runEach(ks, (key) => unwrap(api.PATCH("/tickets/{key}", { params: { path: { key } }, body: patch }))),
+    onSettled: (_r, _e, v) => {
+      qc.invalidateQueries({ queryKey: ["tickets", "list"] });
+      for (const k of v.keys) qc.invalidateQueries({ queryKey: keys.ticket(k) });
+      qc.invalidateQueries({ queryKey: ["boards"] });
+      qc.invalidateQueries({ queryKey: ["epics"] });
+    },
+  });
+}
+
+export type SavedView = Schemas["SavedView"];
+const savedViewsKey = ["saved-views"] as const;
+
+/** The signed-in person's saved ticket-list views. */
+export function useSavedViews() {
+  return useQuery({
+    queryKey: savedViewsKey,
+    queryFn: () => unwrap(api.GET("/saved-views")).then((d) => d.views),
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["SavedViewInput"]) => unwrap(api.POST("/saved-views", { body })),
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
+  });
+}
+
+export function useUpdateSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: Schemas["SavedViewPatch"] & { id: string }) =>
+      unwrap(api.PATCH("/saved-views/{id}", { params: { path: { id } }, body })),
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
+  });
+}
+
+export function useDeleteSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const r = await api.DELETE("/saved-views/{id}", { params: { path: { id } } });
+      if (!r.response.ok) throw new Error("Couldn't delete the view");
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
   });
 }
 
@@ -258,11 +383,11 @@ export function useUpdateArtifact(id: string) {
 export function useReviewMockup(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { versionId: string; decision: "approved" | "changes_requested"; note?: string }) =>
+    mutationFn: (v: { versionId: string; decision: "approved" | "changes_requested"; note?: string; pins?: Schemas["MockupPin"][] }) =>
       unwrap(
         api.POST("/artifacts/{id}/versions/{versionId}/review", {
           params: { path: { id, versionId: v.versionId } },
-          body: { decision: v.decision, note: v.note },
+          body: { decision: v.decision, note: v.note, pins: v.pins },
         }),
       ),
     onSuccess: (a) => {
@@ -379,14 +504,29 @@ export function useRevokeToken(handle: string) {
 }
 
 export function useSecrets() {
-  return useQuery({ queryKey: ["secrets"], queryFn: () => unwrap(api.GET("/secrets")) });
+  return useQuery({ queryKey: ["secrets"], queryFn: () => unwrap(api.GET("/secrets")), staleTime: 30_000, retry: 1 });
+}
+
+/**
+ * A secret change can make harnesses available or unavailable: refresh the
+ * secrets list (and the sidebar dot), chat model availability and dispatch
+ * previews, which list the secrets a run would receive.
+ */
+function invalidateSecretDependents(qc: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: ["secrets"] }),
+    qc.invalidateQueries({ queryKey: chatKeys.models }),
+    qc.invalidateQueries({ queryKey: ["tickets", "dispatch"] }),
+  ]);
 }
 
 export function useSetSecret() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { name: string; value: string; grants_scope?: string; project_key?: string }) => unwrap(api.PUT("/secrets", { body })),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["secrets"] }),
+    onSettled: () => invalidateSecretDependents(qc),
+    // The variables hold the plaintext value: don't keep them in the mutation cache.
+    gcTime: 0,
   });
 }
 
@@ -397,7 +537,7 @@ export function useDeleteSecret() {
       const r = await api.DELETE("/secrets/{id}", { params: { path: { id } } });
       if (!r.response.ok) throw new Error("Couldn't delete the secret");
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["secrets"] }),
+    onSettled: () => invalidateSecretDependents(qc),
   });
 }
 
@@ -507,6 +647,55 @@ export function useControlRunById(id: string) {
       qc.invalidateQueries({ queryKey: ["runs", id] });
       qc.invalidateQueries({ queryKey: keys.tickets });
     },
+  });
+}
+
+/** Decide an approval from the run page; works for runs without a ticket. */
+export function useDecideRunApproval(runId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; decision: "approve" | "deny"; note?: string }) =>
+      unwrap(api.POST("/approvals/{id}/{decision}", { params: { path: { id: v.id, decision: v.decision } }, body: { note: v.note } })),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["runs", runId] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: keys.tickets });
+    },
+  });
+}
+
+export type RunListFilters = { state: string; agent?: string; project?: string; purpose?: "ticket" | "planning" | "chat" };
+
+type ListRunsState = "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+
+function runListOptions(f: RunListFilters, offset: number) {
+  return {
+    queryKey: ["runs", "list", f, offset] as const,
+    queryFn: () => unwrap(api.GET("/runs", { params: { query: { state: f.state as ListRunsState, agent: f.agent, project: f.project, purpose: f.purpose, offset } } })),
+    refetchInterval: f.state === "live" ? 10_000 : (false as const),
+  };
+}
+
+/** Top-level runs, newest first, one query per loaded page. Under ["runs"] so SSE invalidation refreshes them. */
+export function useRunPages(f: RunListFilters, pages: number) {
+  return useQueries({ queries: Array.from({ length: pages }, (_, i) => runListOptions(f, i * RUNS_PAGE)) });
+}
+
+export const RUNS_PAGE = 50;
+
+export type CostQuery = { from?: string; to?: string; project?: string; ticket?: string; chat?: string };
+
+/**
+ * Spend summed server-side from run counters (GET /costs). Ticket and range
+ * reports live under ["runs"] and a chat's under ["chats"], so run and chat
+ * SSE events refresh them; the interval covers spend added by a live run.
+ */
+export function useCosts(q: CostQuery, enabled = true) {
+  return useQuery({
+    queryKey: [q.chat ? "chats" : "runs", "costs", q] as const,
+    queryFn: () => unwrap(api.GET("/costs", { params: { query: q } })),
+    enabled,
+    refetchInterval: 30_000,
   });
 }
 
@@ -657,19 +846,57 @@ export function useKnowledgeSearch(q: string) {
 
 export const PATTERN_TOPICS = ["Go", "React", "Postgres", "Testing", "API", "Architecture", "Process"] as const;
 
-/** Fuzzy pattern finder; an empty q browses every pattern. */
-export function useFindPatterns(q: string, topic?: string) {
+/**
+ * Fuzzy pattern finder; an empty q browses every pattern. tags filters to
+ * patterns with all of them; the response's tag facet ignores that filter.
+ */
+export function useFindPatterns(q: string, topic?: string, tags: string[] = []) {
   return useQuery({
-    queryKey: [...wikiKeys.all, "patterns", q, topic ?? ""] as const,
+    queryKey: [...wikiKeys.all, "patterns", q, topic ?? "", tags.join(",")] as const,
     queryFn: () =>
-      unwrap(api.GET("/wiki/patterns", { params: { query: { q: q || undefined, topic: topic || undefined, limit: 50 } } })).then((d) => d.patterns),
+      unwrap(
+        api.GET("/wiki/patterns", {
+          params: { query: { q: q || undefined, topic: topic || undefined, tag: tags.length ? tags : undefined, limit: 50 } },
+        }),
+      ),
     placeholderData: (prev) => prev,
   });
 }
 
+/** The ADR index: status and open questions parsed from each ADR. */
+export function useWikiADRs() {
+  return useQuery({
+    queryKey: [...wikiKeys.all, "adrs"] as const,
+    queryFn: () => unwrap(api.GET("/wiki/adrs")).then((d) => d.adrs),
+  });
+}
+
+/** Runs and chats that read a page. */
+export function useWikiCitations(id: string | undefined) {
+  return useQuery({
+    queryKey: [...wikiKeys.all, "citations", id] as const,
+    queryFn: () => unwrap(api.GET("/wiki/pages/{id}/citations", { params: { path: { id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+/** Raw text of one version (for diffs). Versions never change, so it's cached for good. */
+export function useVersionText(artifactId: string | undefined, versionId: string | undefined) {
+  return useQuery({
+    queryKey: ["artifact-version-text", artifactId, versionId] as const,
+    queryFn: async () => {
+      const res = await fetch(contentUrl(artifactId!, versionId!));
+      if (!res.ok) throw new ApiError(res.status, "internal", res.statusText);
+      return res.text();
+    },
+    enabled: !!artifactId && !!versionId,
+    staleTime: Infinity,
+  });
+}
+
 // ------------------------------------------------------------- attention
-export function useInbox(project?: string) {
-  return useQuery({queryKey:["inbox",project??""],queryFn:()=>unwrap(api.GET("/inbox",{params:{query:{project}}})).then(d=>d.items)});
+export function useInbox(project?: string, enabled = true) {
+  return useQuery({enabled,queryKey:["inbox",project??""],queryFn:()=>unwrap(api.GET("/inbox",{params:{query:{project}}})).then(d=>d.items)});
 }
 export function useReadInbox() {
  const qc=useQueryClient();

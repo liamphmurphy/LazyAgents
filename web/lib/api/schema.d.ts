@@ -223,7 +223,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search tickets, artifacts, wiki pages, epics and agents */
+        /** Search tickets, artifacts, wiki pages, epics, agents and the local user's chats */
         get: operations["search"];
         put?: never;
         post?: never;
@@ -849,6 +849,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Spend aggregated from run cost counters, for the Costs page and cost chips
+         * @description Every number is summed server-side from runs.cost_usd_micros (sub agent runs included), so breakdowns, days and chips reconcile with each other. Chat runs are split by the model of each reply. Omit from and to for all-time spend (cost chips); days are only listed when both are given.
+         */
+        get: operations["getCosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Top-level runs, newest first, 50 per page (delegated runs are counted in child_count; a ticket filter lists them too) */
+        get: operations["listRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}": {
         parameters: {
             query?: never;
@@ -932,6 +969,42 @@ export interface paths {
         };
         /** Find published patterns (Patterns/<Topic>/<Title>) by fuzzy search; an empty q browses by topic then title */
         get: operations["findPatterns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/adrs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Architecture decisions (wiki pages titled "ADR …" and ADR documents) with the status and open questions parsed from their body */
+        get: operations["listWikiADRs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/pages/{id}/citations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        /** Runs and chats that read a page (or any document), from recorded reads */
+        get: operations["getWikiCitations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1182,6 +1255,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/saved-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's saved ticket-list views, by name */
+        get: operations["listSavedViews"];
+        put?: never;
+        /** Save a ticket-list view for the signed-in person */
+        post: operations["createSavedView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/saved-views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved view (tickets are untouched) */
+        delete: operations["deleteSavedView"];
+        options?: never;
+        head?: never;
+        /** Rename a saved view or replace its query */
+        patch: operations["updateSavedView"];
+        trace?: never;
+    };
     "/projects/{key}": {
         parameters: {
             query?: never;
@@ -1412,7 +1523,7 @@ export interface components {
             key: string;
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
             repo_url?: string;
             default_branch: string;
             archived: boolean;
@@ -1596,6 +1707,33 @@ export interface components {
         TicketList: {
             tickets: components["schemas"]["TicketSummary"][];
         };
+        /**
+         * @description A named ticket-list view owned by one person. query is the list's URL
+         *     search string without project (e.g. "view=active&group=epic"), so the
+         *     view applies to whichever project is current.
+         */
+        SavedView: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            query: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SavedViewList: {
+            views: components["schemas"]["SavedView"][];
+        };
+        SavedViewInput: {
+            /** @description Unique per person, ignoring case; a duplicate is 409 */
+            name: string;
+            query: string;
+        };
+        SavedViewPatch: {
+            name?: string;
+            query?: string;
+        };
         Ticket: {
             /** Format: uuid */
             id: string;
@@ -1666,10 +1804,26 @@ export interface components {
         MockupReviewState: "pending" | "approved" | "changes_requested";
         MockupReview: {
             state: components["schemas"]["MockupReviewState"];
+            /** @description The reviewer's note, followed by the pinned comments as a numbered list */
             note: string;
+            /** @description Comments pinned on this version, numbered by position (the first is 1) */
+            pins: components["schemas"]["MockupPin"][];
             reviewed_by?: components["schemas"]["UserRef"];
             /** Format: date-time */
             reviewed_at?: string;
+        };
+        MockupPin: {
+            /**
+             * Format: double
+             * @description Horizontal position as a fraction of the drawing's width
+             */
+            x: number;
+            /**
+             * Format: double
+             * @description Vertical position as a fraction of the drawing's height
+             */
+            y: number;
+            text: string;
         };
         Criterion: {
             /** Format: uuid */
@@ -1956,6 +2110,10 @@ export interface components {
             harness?: components["schemas"]["Harness"];
             model?: string;
             instructions_append?: string;
+            /** @description Skills appended after removals; existing names are skipped unless removed first. */
+            skills_add?: components["schemas"]["AgentSkill"][];
+            /** @description Agent skill names to remove; unknown names are ignored. */
+            skills_remove?: string[];
             scopes?: {
                 [key: string]: components["schemas"]["ScopeMode"];
             };
@@ -2049,14 +2207,13 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string;
         };
+        /** @description Secret metadata. Values are write-only; no part of a value is ever returned. */
         SecretInfo: {
             /** Format: uuid */
             id: string;
             name: string;
             project?: components["schemas"]["Project"];
             grants_scope?: string;
-            /** @description Last 4 characters, or empty for short values */
-            preview: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2081,13 +2238,115 @@ export interface components {
             /** @enum {string} */
             state: "pending" | "current" | "done" | "needs_human" | "failed";
         };
+        CostReport: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            total: components["schemas"]["CostSlice"];
+            /** @description Runs whose cost is unknown or partial; totals are lower bounds */
+            unpriced_runs: number;
+            /** @description Spend on estimated tickets and their points, for cost per point */
+            estimated: {
+                tickets: number;
+                points: number;
+                /** Format: int64 */
+                cost_micros: number;
+            };
+            /** @description Every UTC day in the range */
+            days: components["schemas"]["CostDay"][];
+            agents: components["schemas"]["CostSlice"][];
+            projects: components["schemas"]["CostSlice"][];
+            /** @description Keyed harness/model */
+            models: components["schemas"]["CostSlice"][];
+            purposes: components["schemas"]["CostSlice"][];
+            /** @description The 10 most expensive tickets in the range */
+            top_tickets: components["schemas"]["CostTicket"][];
+        };
+        /** @description One breakdown row; slices of a breakdown add up to the total. Runs can appear in several model slices. */
+        CostSlice: {
+            key: string;
+            label: string;
+            /** @description Harness for models, project key for projects */
+            detail?: string;
+            runs: number;
+            /** Format: int64 */
+            tokens: number;
+            /**
+             * Format: int64
+             * @description Spend in millionths of a US dollar
+             */
+            cost_micros: number;
+            unpriced_runs: number;
+        };
+        CostPart: {
+            key: string;
+            /** Format: int64 */
+            cost_micros: number;
+        };
+        CostDay: {
+            /** Format: date */
+            date: string;
+            runs: number;
+            /** Format: int64 */
+            cost_micros: number;
+            /** @description Keyed by agent handle */
+            agents: components["schemas"]["CostPart"][];
+            /** @description Keyed harness/model */
+            models: components["schemas"]["CostPart"][];
+        };
+        CostTicket: {
+            key: string;
+            title: string;
+            project_key: string;
+            points?: number;
+            /** Format: int64 */
+            cost_micros: number;
+            /** @description Runs behind the spend */
+            runs: components["schemas"]["CostRun"][];
+        };
+        CostRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            parent_run_id?: string;
+            /** @description Agent handle */
+            agent: string;
+            model: string;
+            state: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: int64 */
+            cost_micros: number;
+        };
         Run: {
             /** Format: uuid */
             id: string;
             /** @description Empty for standalone planning runs */
             ticket_key: string;
+            /**
+             * @description What the run works on: a ticket, a plan or a chat
+             * @enum {string}
+             */
+            purpose: "ticket" | "planning" | "chat";
             /** Format: uuid */
             planning_id?: string;
+            /**
+             * Format: uuid
+             * @description The chat session of a chat run
+             */
+            chat_id?: string;
+            /** @description Project of the ticket, plan or chat */
+            project_key?: string;
+            /** @description Ticket title, plan goal or chat title */
+            work_title?: string;
+            /** @description Ticket runs: the ticket's branch */
+            branch?: string;
+            pr_number?: number;
+            pr_url?: string;
+            pr_state?: string;
+            /** @description Direct delegated runs */
+            child_count?: number;
             agent: components["schemas"]["AgentRef"];
             /** @enum {string} */
             mode: "managed" | "unmanaged";
@@ -2263,8 +2522,11 @@ export interface components {
         NodeKind: "artifact" | "ticket" | "epic" | "agent";
         /** @description What a [[link]] points at, with enough to render it */
         LinkTarget: {
-            /** @enum {string} */
-            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "unresolved";
+            /**
+             * @description chat only appears in GET /search hits (the asking user's own chats)
+             * @enum {string}
+             */
+            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "chat" | "unresolved";
             /** Format: uuid */
             id?: string;
             anchor?: string;
@@ -2322,6 +2584,61 @@ export interface components {
             /** @description Matches are wrapped in « »; empty when browsing */
             snippet: string;
             score: number;
+        };
+        TagCount: {
+            tag: string;
+            count: number;
+        };
+        WikiADR: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description Wiki pages only */
+            path?: string;
+            /** @description ADR documents only, e.g. ADR-012 */
+            display_id?: string;
+            href: string;
+            /** @description From the "Status: …" line, without "with open questions" (see has_open_questions); empty when there's no Status line */
+            status: string;
+            /** @enum {string} */
+            state: "accepted" | "proposed" | "superseded" | "deprecated" | "rejected" | "other" | "none";
+            /** @description YYYY-MM-DD from the Status line */
+            date?: string;
+            /** @description Ticket key from the Status line (Ticket: [[KEY]]) */
+            ticket?: string;
+            /** @description Items of the "Open questions" section, as Markdown */
+            open_questions: string[];
+            /** @description Open questions are listed, or the Status line says "with open questions" */
+            has_open_questions: boolean;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        WikiCitation: {
+            /** Format: uuid */
+            run_id: string;
+            /** @enum {string} */
+            purpose: "ticket" | "planning" | "chat";
+            agent: components["schemas"]["AgentRef"];
+            ticket_key?: string;
+            ticket_title?: string;
+            /**
+             * Format: uuid
+             * @description Only for the caller's own chats
+             */
+            chat_id?: string;
+            chat_title?: string;
+            reads: number;
+            /** Format: date-time */
+            last_read_at: string;
+        };
+        WikiCitations: {
+            /** @description Distinct non-chat runs */
+            runs: number;
+            /** @description Distinct chats (another person's chat counts once per run) */
+            chats: number;
+            citations: components["schemas"]["WikiCitation"][];
+            /** @description Reads not tied to a run that still exists (older data), per agent */
+            unlinked: components["schemas"]["ArtifactReader"][];
         };
         WikiPageSummary: {
             /** Format: uuid */
@@ -2502,17 +2819,35 @@ export interface components {
         };
         InboxItem: {
             id: string;
-            /** @enum {string} */
-            kind: "approval" | "dispatch" | "mention" | "review" | "blocked" | "suggestion" | "planning" | "mockup";
+            /**
+             * @description question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes
+             * @enum {string}
+             */
+            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion";
             title: string;
             summary: string;
             href: string;
             project: string;
             ticket_key: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the item last changed; the wait starts here
+             */
             created_at: string;
             resolved: boolean;
+            /** @description Marked done by this person since the item last changed */
             read: boolean;
+            agent?: components["schemas"]["AgentRef"];
+            /**
+             * Format: uuid
+             * @description The run to reply to, retry or cancel
+             */
+            run_id?: string;
+            /**
+             * Format: uuid
+             * @description The mockup or wiki page under review
+             */
+            artifact_id?: string;
         };
         WorkflowCounts: {
             total: number;
@@ -2695,6 +3030,21 @@ export interface components {
             attention: components["schemas"]["InboxItem"][];
             recent_artifacts: components["schemas"]["OverviewArtifact"][];
             runner: components["schemas"]["RunnerStatus"];
+            weekly_spend?: components["schemas"]["WeeklySpend"];
+        };
+        /** @description Reported cost of runs started since Monday 00:00 UTC */
+        WeeklySpend: {
+            /**
+             * Format: date-time
+             * @description Start of the week: Monday 00:00 UTC
+             */
+            since: string;
+            /** Format: double */
+            cost_usd: number;
+            /** @description Runs started this week */
+            runs: number;
+            /** @description Runs whose cost is unknown or partial, so cost_usd may be low */
+            unpriced_runs: number;
         };
         AgentRunSummary: {
             /** Format: uuid */
@@ -2745,6 +3095,11 @@ export interface components {
             requires_mockup?: boolean;
             estimate_points?: components["schemas"]["EstimatePoints"];
             estimate_rationale?: string;
+            /** @description Original planner estimate, preserved across reviewer saves. */
+            readonly planner_estimate?: {
+                points?: components["schemas"]["EstimatePoints"];
+                rationale?: string;
+            };
         };
         PlanningInput: {
             project: string;
@@ -2755,6 +3110,8 @@ export interface components {
             epic_id?: string;
             /** Format: uuid */
             artifact_id?: string;
+            /** @description Wiki pages, sections, artifacts and tickets in the project for the planner to read; delivered as context files when the run starts. */
+            context_refs?: components["schemas"]["ChatContextRef"][];
         };
         PlanningSession: {
             /** Format: uuid */
@@ -2777,6 +3134,10 @@ export interface components {
             state: "planning" | "review" | "accepted" | "dismissed";
             revision: number;
             proposals: components["schemas"]["TicketProposal"][];
+            /** @description How many proposals the planner submitted (0 until it does); ticket_keys counts the accepted ones */
+            proposal_count: number;
+            /** @description What the person attached when starting the plan */
+            context_refs: components["schemas"]["ChatContextRef"][];
             /** @description Created tickets currently ready for manual dispatch */
             ready_keys: string[];
             ticket_keys: string[];
@@ -2789,14 +3150,14 @@ export interface components {
             key: string;
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
             repo_url: string;
             default_branch: string;
         };
         ProjectUpdate: {
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
             repo_url: string;
             default_branch: string;
             archived: boolean;
@@ -3873,6 +4234,8 @@ export interface operations {
                     decision: "approved" | "changes_requested";
                     /** @description Required when requesting changes */
                     note?: string;
+                    /** @description Comments pinned on the drawing. They're saved with the review and appended to its note as a numbered list. */
+                    pins?: components["schemas"]["MockupPin"][];
                 };
             };
         };
@@ -4415,6 +4778,73 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getCosts: {
+        parameters: {
+            query?: {
+                /** @description First UTC day (inclusive) */
+                from?: string;
+                /** @description Last UTC day (inclusive) */
+                to?: string;
+                /** @description Project key */
+                project?: string;
+                /** @description Ticket key (its runs and their sub agents) */
+                ticket?: string;
+                /** @description Chat session id (every run segment of the chat) */
+                chat?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cost report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostReport"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: {
+                /** @description live (queued to waiting, the default), all, or one run state */
+                state?: "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+                /** @description Agent handle */
+                agent?: string;
+                /** @description Project key */
+                project?: string;
+                purpose?: "ticket" | "planning" | "chat";
+                /** @description Ticket key: every run on that ticket, delegated runs included */
+                ticket?: string;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        runs: components["schemas"]["Run"][];
+                        has_more: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getRun: {
         parameters: {
             query?: {
@@ -4540,6 +4970,8 @@ export interface operations {
                 q?: string;
                 /** @description Go, React, Postgres, Testing, API, Architecture or Process */
                 topic?: string;
+                /** @description Only patterns with every one of these tags (repeat for several; AND) */
+                tag?: string[];
                 /** @description Default 10, at most 50 */
                 limit?: number;
             };
@@ -4557,7 +4989,55 @@ export interface operations {
                 content: {
                     "application/json": {
                         patterns: components["schemas"]["WikiPattern"][];
+                        /** @description Tag facet for q and topic (before the tag filter), most used first */
+                        tags: components["schemas"]["TagCount"][];
                     };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWikiADRs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ADRs with open questions first, then newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        adrs: components["schemas"]["WikiADR"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getWikiCitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Citations, most recent first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WikiCitations"];
                 };
             };
             default: components["responses"]["Error"];
@@ -4981,6 +5461,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSavedViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved views, ordered by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedViewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedViewInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedViewPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
                 };
             };
             default: components["responses"]["Error"];

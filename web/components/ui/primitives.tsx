@@ -154,7 +154,7 @@ export function Field({
         {label}
       </label>
       {children}
-      {hint && <span className="text-xs text-fg-tertiary">{hint}</span>}
+      {hint && <span id={htmlFor ? `${htmlFor}-hint` : undefined} className="text-xs text-fg-tertiary">{hint}</span>}
     </div>
   );
 }

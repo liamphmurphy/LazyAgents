@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
@@ -281,7 +282,10 @@ func (s *Server) GetDashboard(ctx context.Context, req api.GetDashboardRequestOb
 	if _, ok := metrics.Windows[window]; !ok {
 		return nil, &tracker.ValidationError{Field: "range", Msg: "choose 24h, 7d or 30d"}
 	}
-	snap, err := metrics.Get(ctx, s.Pool, ws, window)
+	// Calculated fresh, not read from the rollup cache: the dashboard refetches
+	// on live events and its throughput must reflect the change that caused it.
+	now := time.Now().UTC()
+	snap, err := metrics.Calculate(ctx, s.Pool, ws, window, now)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +322,20 @@ func (s *Server) GetDashboard(ctx context.Context, req api.GetDashboardRequestOb
 	if err != nil {
 		return nil, err
 	}
-	return api.GetDashboard200JSONResponse{Stats: stats, Counts: overview.counts, Projects: overview.projects, Agents: agents.Agents, Attention: attention, RecentArtifacts: overview.artifacts, Runner: runner, ReviewOverDay: int(old)}, nil
+	since := weekStart(now)
+	spend, err := s.Q.WeeklySpend(ctx, store.WeeklySpendParams{WorkspaceID: ws, Since: since})
+	if err != nil {
+		return nil, err
+	}
+	weekly := api.WeeklySpend{Since: since, CostUsd: float64(spend.CostUsdMicros) / 1e6, Runs: int(spend.Runs), UnpricedRuns: int(spend.UnpricedRuns)}
+	return api.GetDashboard200JSONResponse{Stats: stats, Counts: overview.counts, Projects: overview.projects, Agents: agents.Agents, Attention: attention, RecentArtifacts: overview.artifacts, Runner: runner, ReviewOverDay: int(old), WeeklySpend: &weekly}, nil
+}
+
+// weekStart is Monday 00:00 UTC of the week containing t.
+func weekStart(t time.Time) time.Time {
+	t = t.UTC()
+	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	return day.AddDate(0, 0, -((int(day.Weekday()) + 6) % 7))
 }
 
 // Used by bootstrap so seeded status labels cannot masquerade as live work.

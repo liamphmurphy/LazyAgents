@@ -2,192 +2,171 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap, type Ticket } from "@/lib/api/client";
-import { hasLiveRun } from "@/lib/api/hooks";
-import { Button } from "@/components/ui/button";
+import { api, unwrap, type Schemas, type Ticket } from "@/lib/api/client";
+import { hasLiveRun, keys as queryKeys } from "@/lib/api/hooks";
+import { Button, IconButton } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/primitives";
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { STATUS_NAME } from "@/components/domain/meta";
 
+type Dep = Schemas["TicketDependency"];
+const KEY = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
+
+/** Set a ticket's blockers (PUT /tickets/{key}/dependencies, checked against its dependency_revision). */
+function putBlockers(key: string, revision: number, blockedBy: string[]) {
+  return unwrap(api.PUT("/tickets/{key}/dependencies", { params: { path: { key } }, body: { revision, blocked_by: blockedBy } }));
+}
+
+/**
+ * Blocked by / Blocks in the side panel. Each list shows the linked tickets'
+ * status and edits in place: adding to "Blocks" adds this ticket as a blocker
+ * of the other one.
+ */
 export function Dependencies({ ticket: t }: { ticket: Ticket }) {
-  const [editing, setEditing] = useState(false);
-  const [keys, setKeys] = useState<string[]>([]);
-  const [revision, setRevision] = useState(t.dependency_revision);
-  const [search, setSearch] = useState("");
   const qc = useQueryClient();
-  const candidates = useQuery({
-    queryKey: ["tickets", "dependency-search", search],
-    enabled: editing && search.trim().length >= 2,
-    queryFn: () =>
-      unwrap(
-        api.GET("/tickets", {
-          params: { query: { q: search.trim(), view: "all" } },
-        }),
-      ),
-  });
-  const save = useMutation({
-    mutationFn: () =>
-      unwrap(
-        api.PUT("/tickets/{key}/dependencies", {
-          params: { path: { key: t.key } },
-          body: { revision, blocked_by: keys },
-        }),
-      ),
-    onSuccess: () => {
-      for (const key of [
-        "tickets",
-        "planning",
-        "inbox",
-        "bootstrap",
-        "dashboard",
-        "agent-overviews",
-      ])
-        void qc.invalidateQueries({ queryKey: [key] });
-      setEditing(false);
+  const change = useMutation({
+    mutationFn: async (c: { list: "blocked_by" | "blocks"; op: "add" | "remove"; key: string }) => {
+      if (c.list === "blocked_by") {
+        const keys = t.blocked_by.map((d) => d.key);
+        return putBlockers(t.key, t.dependency_revision, c.op === "add" ? [...keys, c.key] : keys.filter((k) => k !== c.key));
+      }
+      // "Blocks" lives on the other ticket: read its blockers and revision first.
+      const other = await unwrap(api.GET("/tickets/{key}", { params: { path: { key: c.key } } }));
+      const keys = other.blocked_by.map((d) => d.key);
+      return putBlockers(other.key, other.dependency_revision, c.op === "add" ? [...keys, t.key] : keys.filter((k) => k !== t.key));
     },
+    // The saved ticket carries the new dependency_revision; cache it before the
+    // buttons re-enable so a quick second edit doesn't send a stale revision.
+    onSuccess: (saved) => qc.setQueryData(queryKeys.ticket(saved.key), saved),
+    onSettled: () =>
+      Promise.all(["tickets", "planning", "inbox", "bootstrap", "dashboard", "agent-overviews", "boards"].map((key) => qc.invalidateQueries({ queryKey: [key] }))),
+  });
+  const live = hasLiveRun(t);
+  return (
+    <div className="flex flex-col gap-5">
+      <DepList
+        id="blocked-by"
+        title="Blocked by"
+        items={t.blocked_by}
+        exclude={[t.key, ...t.blocked_by.map((d) => d.key)]}
+        disabled={live || change.isPending}
+        disabledReason={live ? "Finish or cancel the active run before changing what blocks this ticket" : undefined}
+        onAdd={(key) => change.mutate({ list: "blocked_by", op: "add", key })}
+        onRemove={(key) => change.mutate({ list: "blocked_by", op: "remove", key })}
+      />
+      <DepList
+        id="blocks"
+        title="Blocks"
+        items={t.blocks}
+        exclude={[t.key, ...t.blocks.map((d) => d.key)]}
+        disabled={change.isPending}
+        onAdd={(key) => change.mutate({ list: "blocks", op: "add", key })}
+        onRemove={(key) => change.mutate({ list: "blocks", op: "remove", key })}
+      />
+      {change.isError && (
+        <p role="alert" className="px-2 text-xs text-pill-blocked-fg">
+          {change.error.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DepList({
+  id,
+  title,
+  items,
+  exclude,
+  disabled,
+  disabledReason,
+  onAdd,
+  onRemove,
+}: {
+  id: string;
+  title: string;
+  items: Dep[];
+  exclude: string[];
+  disabled: boolean;
+  disabledReason?: string;
+  onAdd: (key: string) => void;
+  onRemove: (key: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState("");
+  const q = search.trim();
+  const candidates = useQuery({
+    queryKey: ["tickets", "dependency-search", q],
+    enabled: adding && q.length >= 2,
+    queryFn: () => unwrap(api.GET("/tickets", { params: { query: { q, view: "all" } } })),
   });
   const add = (key: string) => {
-    const value = key.trim().toUpperCase();
-    if (value && !keys.includes(value)) setKeys([...keys, value]);
+    const k = key.trim().toUpperCase();
+    if (k && !exclude.includes(k)) onAdd(k);
     setSearch("");
+    setAdding(false);
   };
+  const shown = (candidates.data?.tickets ?? []).filter((c) => !exclude.includes(c.key)).slice(0, 6);
+
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="type-heading">Dependencies</h2>
-        <Button
-          variant="ghost"
-          disabled={hasLiveRun(t)}
-          title={
-            hasLiveRun(t)
-              ? "Finish or cancel the active run before changing dependencies"
-              : undefined
-          }
-          onClick={() => {
-            setKeys(t.blocked_by.map((d) => d.key));
-            setRevision(t.dependency_revision);
-            setEditing(true);
-            save.reset();
-          }}
-        >
-          Edit
+    <section id={id} aria-labelledby={`${id}-title`} className="flex scroll-mt-16 flex-col gap-1.5">
+      <div className="flex items-center justify-between px-2">
+        <h2 id={`${id}-title`} className="text-[12.5px] text-fg-tertiary">
+          {title}
+          {items.length > 0 && <span className="ml-1.5 font-mono">{items.length}</span>}
+        </h2>
+        <Button variant="ghost" icon="plus" disabled={disabled} title={disabledReason} aria-expanded={adding} onClick={() => setAdding((v) => !v)} className="h-6 px-1.5 text-xs">
+          Add<span className="sr-only"> to {title}</span>
         </Button>
       </div>
-      <p className="text-xs text-fg-tertiary">
-        A dispatched ticket queues until its blockers are Done. Runs always
-        require human approval.
-      </p>
-      {editing ? (
-        <div className="space-y-3 rounded-lg border border-border-strong p-3">
-          {keys.map((key) => (
-            <div
-              key={key}
-              className="flex items-center justify-between text-sm"
-            >
-              <span className="font-mono">{key}</span>
-              <Button
-                variant="ghost"
-                onClick={() => setKeys(keys.filter((k) => k !== key))}
-                aria-label={`Remove blocker ${key}`}
-              >
-                Remove
-              </Button>
-            </div>
-          ))}
+      {items.length === 0 && !adding && <p className="px-2 text-xs text-fg-tertiary">{title === "Blocks" ? "Doesn’t block other tickets." : "No blockers."}</p>}
+      <ul className="flex flex-col">
+        {items.map((d) => (
+          <li key={d.key} className="group flex min-h-8 items-center gap-2 rounded-md px-2 hover:bg-hover">
+            <StatusGlyph state={d.status} size={12} surface="var(--bg-panel)" label={false} />
+            <Link href={`/tickets/${d.key}`} className="flex min-w-0 flex-1 items-baseline gap-2 text-[13px]">
+              <span className="flex-none font-mono text-xs text-fg-secondary">{d.key}</span>
+              <span className="truncate text-fg-2" title={d.title}>
+                {d.title}
+              </span>
+            </Link>
+            <span className="flex-none text-[11.5px] text-fg-tertiary">{STATUS_NAME[d.status]}</span>
+            <IconButton
+              icon="x"
+              size={22}
+              label={`Remove ${d.key} from ${title}`}
+              disabled={disabled}
+              onClick={() => onRemove(d.key)}
+              className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+            />
+          </li>
+        ))}
+      </ul>
+      {adding && (
+        <div className="flex flex-col gap-1 px-2">
           <TextInput
-            aria-label="Find a blocker ticket"
-            placeholder="Search tickets or enter a ticket key"
+            autoFocus
+            aria-label={`Add a ticket to ${title}`}
+            placeholder="Search tickets or type a key"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
-              if (
-                e.key === "Enter" &&
-                /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(search.trim())
-              ) {
+              if (e.key === "Escape") setAdding(false);
+              if (e.key === "Enter") {
                 e.preventDefault();
-                add(search);
+                if (KEY.test(q)) add(q);
+                else if (shown[0]) add(shown[0].key);
               }
             }}
           />
-          {search &&
-            candidates.data?.tickets
-              .filter((c) => c.key !== t.key && !keys.includes(c.key))
-              .slice(0, 8)
-              .map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => add(c.key)}
-                  className="block w-full rounded-md p-2 text-left text-sm hover:bg-hover"
-                >
-                  <span className="mr-2 font-mono text-xs text-fg-tertiary">
-                    {c.key}
-                  </span>
-                  {c.title}
-                </button>
-              ))}
-          {/^[A-Za-z][A-Za-z0-9]*-\d+$/.test(search.trim()) && (
-            <Button variant="outline" onClick={() => add(search)}>
-              Add {search.trim().toUpperCase()}
-            </Button>
-          )}
-          {save.error && (
-            <p role="alert" className="text-sm text-pill-blocked-fg">
-              {save.error.message}
-            </p>
-          )}
-          <div className="flex gap-2">
-            <Button
-              variant="primary"
-              disabled={save.isPending}
-              onClick={() => save.mutate()}
-            >
-              Save dependencies
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={save.isPending}
-              onClick={() => setEditing(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {t.blocked_by.length === 0 && (
-            <p className="text-sm text-fg-tertiary">No blockers.</p>
-          )}
-          {t.blocked_by.map((d) => (
-            <Link
-              key={d.key}
-              href={`/tickets/${d.key}`}
-              className="flex flex-wrap items-center gap-2 rounded-md border border-border-subtle p-2 text-sm hover:bg-hover"
-            >
-              <StatusGlyph state={d.status} />
-              <span className="font-mono text-xs text-fg-tertiary">
-                {d.key}
-              </span>
-              <span className="min-w-0 flex-1">{d.title}</span>
-              <span className="text-xs text-fg-tertiary">
-                {STATUS_NAME[d.status]}
-              </span>
-            </Link>
+          {shown.map((c) => (
+            <button key={c.key} type="button" onClick={() => add(c.key)} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-hover">
+              <StatusGlyph state={c.status} size={12} label={false} />
+              <span className="font-mono text-xs text-fg-tertiary">{c.key}</span>
+              <span className="truncate">{c.title}</span>
+            </button>
           ))}
-        </div>
-      )}
-      {t.blocks.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs text-fg-tertiary">This ticket blocks</h3>
-          {t.blocks.map((d) => (
-            <Link
-              key={d.key}
-              href={`/tickets/${d.key}`}
-              className="block text-sm text-accent"
-            >
-              {d.key} · {d.title}
-            </Link>
-          ))}
+          {q.length >= 2 && candidates.isSuccess && shown.length === 0 && !KEY.test(q) && <p className="px-2 text-xs text-fg-tertiary">No tickets match “{q}”.</p>}
+          <p className="text-[11.5px] text-fg-tertiary">A dispatched ticket queues until its blockers are Done.</p>
         </div>
       )}
     </section>

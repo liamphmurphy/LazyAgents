@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
-import type { Zoom } from "@/lib/mockup";
+import { svgDataUrl, type Zoom } from "@/lib/mockup";
 import { Flag, type PillTone } from "./labels";
 
 export type ReviewState = Schemas["MockupReviewState"];
@@ -47,14 +47,8 @@ export function MockupImage({
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [broken, setBroken] = useState(false);
 
-  // A data: URL, not blob:. A blob URL carries the app's origin, so "Open
-  // image in new tab" would render the SVG top-level on it; data: URLs get an
-  // opaque origin and browsers refuse top-level navigation to them.
   useEffect(() => {
-    const bytes = new TextEncoder().encode(source);
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    const u = "data:image/svg+xml;base64," + btoa(bin);
+    const u = svgDataUrl(source);
     let live = true;
     queueMicrotask(() => live && setUrl(u));
     return () => {

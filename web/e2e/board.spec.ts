@@ -4,6 +4,10 @@ import { installBoardApi } from "./mock-board-api";
 const screen = (page: Page) => page.locator('[data-testid="board-screen"]:visible');
 const card = (page: Page, key = "WEB-1") => screen(page).getByRole("article", { name: `Ticket ${key}`, exact: true });
 const column = (page: Page, status: string) => screen(page).getByTestId(`column-${status}`);
+async function switchProject(page: Page, name: string) {
+  await page.getByRole("button", { name: /^Switch project/ }).click();
+  await page.getByRole("menuitemradio", { name: new RegExp(`^${name}`) }).click();
+}
 async function move(page: Page, key: string, to: string) {
   await card(page, key).getByRole("button", { name: `Move ${key} to…` }).click();
   await page.getByRole("menuitem", { name: to, exact: true }).click();
@@ -26,7 +30,7 @@ test("renders agreed columns, card anatomy, navigation and empty states", async 
   await expect(card(page).getByRole("link", { name: "WEB-1" })).toHaveAttribute("href", "/tickets/WEB-1");
   await expect(card(page).getByRole("link", { name: "Build ticket modal" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Board", exact: true })).toHaveAttribute("aria-current", "page");
-  await screen(page).getByLabel("Project", { exact: true }).selectOption("OPS");
+  await switchProject(page, "Operations");
   await expect(screen(page).getByText("No tickets", { exact: true })).toHaveCount(5);
   expect(api.unhandled).toEqual([]);
 });
@@ -34,7 +38,7 @@ test("renders agreed columns, card anatomy, navigation and empty states", async 
 test("epic filter shows points, criteria and blockers, and assignee/canceled filters reach the API", async ({ page }, testInfo) => {
   const api = await installBoardApi(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/board");
+  await page.goto("/board?project=WEB");
   await screen(page).getByLabel("Epic", { exact: true }).selectOption("epic-1");
   const summary = screen(page).getByRole("region", { name: "Epic summary" });
   await expect(summary).toContainText("Kanban board");
@@ -55,7 +59,7 @@ test("epic filter shows points, criteria and blockers, and assignee/canceled fil
   const url = new URL(api.boardRequests.at(-1)!);
   expect(url.searchParams.get("epic")).toBe("epic-1");
   expect(url.searchParams.get("include_canceled")).toBe("true");
-  await screen(page).getByLabel("Project", { exact: true }).selectOption("OPS");
+  await switchProject(page, "Operations");
   await expect(page).not.toHaveURL(/epic=/);
   await expect(summary).toHaveCount(0);
   expect(api.unhandled).toEqual([]);
@@ -188,12 +192,12 @@ test("an in-flight move cannot leak into another project view", async ({ page })
   const release = api.holdNextPatch();
   await move(page, "WEB-1", "Done");
   await expect.poll(() => api.patches.length).toBe(1);
-  await screen(page).getByLabel("Project", { exact: true }).selectOption("OPS");
+  await switchProject(page, "Operations");
   await expect(screen(page).getByText("No tickets", { exact: true })).toHaveCount(5);
   release();
   await expect.poll(() => api.tickets[0].status).toBe("done");
   await expect(card(page)).toHaveCount(0);
-  await screen(page).getByLabel("Project", { exact: true }).selectOption("WEB");
+  await switchProject(page, "Web app");
   await expect(column(page, "done").getByRole("article", { name: "Ticket WEB-1" })).toBeVisible();
 });
 

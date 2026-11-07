@@ -72,3 +72,15 @@ export function insertIndent(value: string, start: number, end: number, indent =
 }
 
 export type Zoom = "fit" | "100" | "200";
+
+/**
+ * SVG source as a base64 data: URL for an <img>. Not a blob: URL: those carry
+ * the app's origin, so "Open image in new tab" would render the SVG top-level
+ * on it; data: URLs get an opaque origin and browsers refuse to navigate to them.
+ */
+export function svgDataUrl(source: string): string {
+  const bytes = new TextEncoder().encode(source);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return "data:image/svg+xml;base64," + btoa(bin);
+}

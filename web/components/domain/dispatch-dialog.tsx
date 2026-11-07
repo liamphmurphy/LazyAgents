@@ -242,7 +242,11 @@ export function DispatchDialog({ keys, open, onOpenChange, onDone }: { keys: str
   // Only Docker runs need a stored key; a local runner uses the machine's own CLI login.
   const needsKey = (p: NonNullable<(typeof previews)[number]>) =>
     p.runner.runners.length === 0 || p.runner.runners.some((r) => r.backend === "docker");
-  const noKey = previews.some((p) => p && p.blockers.length === 0 && !p.harness_key.present && needsKey(p));
+  const keyless = previews.filter((p): p is NonNullable<typeof p> => !!p && p.blockers.length === 0 && !p.harness_key.present && needsKey(p));
+  const noKey = keyless.length > 0;
+  // Every online runner is Docker, so a run without its harness key would sit in starting: refuse before approving.
+  const stuck = keyless.filter((p) => p.runner.runners.length > 0 && p.runner.runners.every((r) => r.backend === "docker"));
+  const stuckReasons = [...new Set(stuck.map((p) => `${p.resolved?.harness ?? "This harness"}: no ${p.harness_key.secret} secret`))];
   const p = one.data;
 
   return (
@@ -304,12 +308,24 @@ export function DispatchDialog({ keys, open, onOpenChange, onDone }: { keys: str
             ) : (
               <BulkPreview previews={previews} />
             )}
-            {noKey && (
+            {stuck.length > 0 ? (
+              <Banner
+                tone="blocked"
+                title="No harness can run this"
+                actions={
+                  <ButtonLink href="/settings#secrets" variant="outline">
+                    Add a key
+                  </ButtonLink>
+                }
+              >
+                {stuckReasons.join(". ")}. Every online runner uses Docker, so the run would sit in starting.
+              </Banner>
+            ) : noKey && (
               <Banner
                 tone="human"
                 title="No harness API key"
                 actions={
-                  <ButtonLink href="/settings" variant="outline">
+                  <ButtonLink href="/settings#secrets" variant="outline">
                     Add a key
                   </ButtonLink>
                 }
@@ -336,7 +352,7 @@ export function DispatchDialog({ keys, open, onOpenChange, onDone }: { keys: str
             )}
             <Button
               variant="approve"
-              disabled={!loaded || blocked || dispatch.isPending}
+              disabled={!loaded || blocked || stuck.length > 0 || dispatch.isPending}
               onClick={() =>
                 dispatch.mutate(keys, {
                   onSuccess: () => {

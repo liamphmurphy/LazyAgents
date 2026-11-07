@@ -786,6 +786,180 @@ func (q *Queries) LinksFromTicket(ctx context.Context, sourceTicketID *uuid.UUID
 	return items, nil
 }
 
+const listADRDocs = `-- name: ListADRDocs :many
+SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.updated_at, v.body_md
+FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
+WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL
+  AND (ar.type = 'adr'
+       OR (ar.type = 'note' AND ar.title ~* '^adr([^a-z]|$)'
+           AND lower(ar.path) NOT LIKE 'agents/%' AND lower(ar.path) NOT LIKE 'patterns/%'))
+ORDER BY ar.updated_at DESC
+`
+
+type ListADRDocsRow struct {
+	ID        uuid.UUID
+	Type      string
+	Title     string
+	Path      *string
+	Number    *int32
+	UpdatedAt time.Time
+	BodyMd    *string
+}
+
+// ADR documents and published wiki pages titled "ADR …" (outside agent
+// memory and Patterns/), with their current body for status parsing.
+func (q *Queries) ListADRDocs(ctx context.Context, workspaceID uuid.UUID) ([]ListADRDocsRow, error) {
+	rows, err := q.db.Query(ctx, listADRDocs, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListADRDocsRow{}
+	for rows.Next() {
+		var i ListADRDocsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Title,
+			&i.Path,
+			&i.Number,
+			&i.UpdatedAt,
+			&i.BodyMd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listArtifactCitations = `-- name: ListArtifactCitations :many
+SELECT ru.id AS run_id, ru.purpose, a.id AS agent_id, a.name AS agent_name, a.handle AS agent_handle, a.color_index AS agent_color_index,
+  t.key AS ticket_key, t.title AS ticket_title,
+  coalesce(cs.id::text, '')::text AS chat_id, coalesce(cs.title, '')::text AS chat_title,
+  count(*)::int AS reads, max(r.read_at)::timestamptz AS last_read_at
+FROM artifact_reads r
+JOIN artifact_versions v ON v.id = r.version_id
+JOIN runs ru ON ru.id = r.run_id AND ru.workspace_id = $1
+JOIN agents a ON a.id = r.agent_id
+LEFT JOIN tickets t ON t.id = ru.ticket_id
+LEFT JOIN LATERAL (
+  SELECT s.id, s.title FROM chat_sessions s
+  WHERE ru.purpose = 'chat' AND s.workspace_id = ru.workspace_id AND s.created_by = $2::uuid
+    AND (s.current_run_id = ru.id OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.session_id = s.id AND m.run_id = ru.id))
+  LIMIT 1
+) cs ON true
+WHERE v.artifact_id = $3
+GROUP BY ru.id, a.id, t.id, cs.id, cs.title
+ORDER BY max(r.read_at) DESC
+`
+
+type ListArtifactCitationsParams struct {
+	WorkspaceID uuid.UUID
+	Viewer      uuid.UUID
+	ArtifactID  uuid.UUID
+}
+
+type ListArtifactCitationsRow struct {
+	RunID           uuid.UUID
+	Purpose         string
+	AgentID         uuid.UUID
+	AgentName       string
+	AgentHandle     string
+	AgentColorIndex int32
+	TicketKey       *string
+	TicketTitle     *string
+	ChatID          string
+	ChatTitle       string
+	Reads           int32
+	LastReadAt      time.Time
+}
+
+// Reads of an artifact grouped by the run that made them (runs that still
+// exist, in the workspace), with the run's ticket or chat. Chats are private
+// to their creator: another person's chat run keeps its purpose but no chat.
+func (q *Queries) ListArtifactCitations(ctx context.Context, arg ListArtifactCitationsParams) ([]ListArtifactCitationsRow, error) {
+	rows, err := q.db.Query(ctx, listArtifactCitations, arg.WorkspaceID, arg.Viewer, arg.ArtifactID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArtifactCitationsRow{}
+	for rows.Next() {
+		var i ListArtifactCitationsRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.Purpose,
+			&i.AgentID,
+			&i.AgentName,
+			&i.AgentHandle,
+			&i.AgentColorIndex,
+			&i.TicketKey,
+			&i.TicketTitle,
+			&i.ChatID,
+			&i.ChatTitle,
+			&i.Reads,
+			&i.LastReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listArtifactUnlinkedReaders = `-- name: ListArtifactUnlinkedReaders :many
+SELECT a.id, a.name, a.handle, a.color_index, count(*)::int AS reads, max(r.read_at)::timestamptz AS last_read_at
+FROM artifact_reads r
+JOIN artifact_versions v ON v.id = r.version_id
+JOIN agents a ON a.id = r.agent_id
+WHERE v.artifact_id = $1 AND (r.run_id IS NULL OR NOT EXISTS (SELECT 1 FROM runs ru WHERE ru.id = r.run_id))
+GROUP BY a.id ORDER BY max(r.read_at) DESC
+`
+
+type ListArtifactUnlinkedReadersRow struct {
+	ID         uuid.UUID
+	Name       string
+	Handle     string
+	ColorIndex int32
+	Reads      int32
+	LastReadAt time.Time
+}
+
+// Reads with no run (older data) or whose run is gone, per agent.
+func (q *Queries) ListArtifactUnlinkedReaders(ctx context.Context, artifactID uuid.UUID) ([]ListArtifactUnlinkedReadersRow, error) {
+	rows, err := q.db.Query(ctx, listArtifactUnlinkedReaders, artifactID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListArtifactUnlinkedReadersRow{}
+	for rows.Next() {
+		var i ListArtifactUnlinkedReadersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Handle,
+			&i.ColorIndex,
+			&i.Reads,
+			&i.LastReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNotes = `-- name: ListNotes :many
 SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.updated_at, ar.project_id,
   (ar.current_version_id IS NOT NULL)::bool AS published,
@@ -901,7 +1075,7 @@ func (q *Queries) ListSuggestions(ctx context.Context, arg ListSuggestionsParams
 }
 
 const lockSuggestion = `-- name: LockSuggestion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
 WHERE v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v
 `
 
@@ -935,6 +1109,7 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 		&i.ReviewedByUserID,
 		&i.ReviewedAt,
 		&i.ReviewNote,
+		&i.ReviewPins,
 	)
 	return i, err
 }

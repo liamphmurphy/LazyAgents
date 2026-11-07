@@ -6,6 +6,7 @@ import { ApiError, type Schemas } from "@/lib/api/client";
 import { useCreateEpicReview, useEpicCriterionMutations, useUpdateEpic } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
 import { cx } from "@/lib/cx";
+import { absoluteTime, ago } from "@/lib/format";
 import { STATUS_LABEL as TICKET_STATUS_LABEL } from "./glyphs";
 
 type BoardEpic = Schemas["BoardEpic"];
@@ -174,7 +175,12 @@ function CriteriaEditor({ criteria, closed, mutations }: {
               <Button type="submit" variant="primary" disabled={pending || !editing.text.trim()}>Save</Button>
               <Button variant="ghost" onClick={() => setEditing(undefined)}>Cancel</Button>
             </form> : <>
-              <span className={cx("min-w-0 flex-1 break-words", c.done && "text-fg-secondary")}>{c.position}. {c.text}</span>
+              <span className={cx("min-w-0 flex-1 break-words", c.done && "text-fg-secondary")}>
+                {c.position}. {c.text}
+                {c.done && (c.checked_by || c.checked_at) && <span className="block text-[11px] text-fg-tertiary" title={c.checked_at ? absoluteTime(c.checked_at) : undefined}>
+                  Checked{c.checked_by && ` by ${c.checked_by.name}`}{c.checked_at && ` ${ago(c.checked_at)}`}
+                </span>}
+              </span>
               <span className="flex flex-wrap gap-0.5">
                 <button type="button" className={rowButton} aria-label={`Move criterion ${c.position} up`} disabled={locked || i === 0}
                   onClick={() => void run(c.id, "reorder criteria", mutations.update.mutateAsync({ id: c.id, position: c.position - 1 }))}>↑</button>

@@ -91,7 +91,7 @@ WITH completed AS (
 SELECT t.id,t.assignee_agent_id,c.completed_at::timestamptz AS completed_at,
  greatest(extract(epoch FROM (c.completed_at-coalesce((SELECT min(e.created_at) FROM activity_events e WHERE e.ticket_id=t.id AND e.verb='status_changed' AND e.payload->>'to'='in_progress' AND e.created_at<=c.completed_at),t.created_at))),0)::float8 AS cycle_seconds
 FROM completed c JOIN tickets t ON t.id=c.ticket_id
-WHERE c.completed_at>=$1::timestamptz-interval '30 days' ORDER BY c.completed_at
+WHERE t.status='done' AND c.completed_at>=$1::timestamptz-interval '30 days' ORDER BY c.completed_at
 `
 
 type CompletedTicketMetricsParams struct {
@@ -106,6 +106,8 @@ type CompletedTicketMetricsRow struct {
 	CycleSeconds    float64
 }
 
+// Throughput counts tickets that are done now: one reopened or canceled after
+// reaching done is not a completion (Kanban board ADR).
 func (q *Queries) CompletedTicketMetrics(ctx context.Context, arg CompletedTicketMetricsParams) ([]CompletedTicketMetricsRow, error) {
 	rows, err := q.db.Query(ctx, completedTicketMetrics, arg.AsOf, arg.WorkspaceID)
 	if err != nil {
@@ -595,4 +597,30 @@ func (q *Queries) SaveMetricSnapshot(ctx context.Context, arg SaveMetricSnapshot
 		arg.GeneratedAt,
 	)
 	return err
+}
+
+const weeklySpend = `-- name: WeeklySpend :one
+SELECT count(*)::int AS runs,
+ coalesce(sum(cost_usd_micros),0)::bigint AS cost_usd_micros,
+ (count(*) FILTER (WHERE cost_source IS NULL OR cost_source IN ('unknown','partial')))::int AS unpriced_runs
+FROM runs WHERE workspace_id=$1 AND started_at>=$2::timestamptz
+`
+
+type WeeklySpendParams struct {
+	WorkspaceID uuid.UUID
+	Since       time.Time
+}
+
+type WeeklySpendRow struct {
+	Runs          int32
+	CostUsdMicros int64
+	UnpricedRuns  int32
+}
+
+// Reported cost of every run started since the week began (Monday 00:00 UTC).
+func (q *Queries) WeeklySpend(ctx context.Context, arg WeeklySpendParams) (WeeklySpendRow, error) {
+	row := q.db.QueryRow(ctx, weeklySpend, arg.WorkspaceID, arg.Since)
+	var i WeeklySpendRow
+	err := row.Scan(&i.Runs, &i.CostUsdMicros, &i.UnpricedRuns)
+	return i, err
 }

@@ -355,6 +355,36 @@ func (q *Queries) CacheUsageForRuns(ctx context.Context, runIds []uuid.UUID) ([]
 	return items, nil
 }
 
+const chatSessionOfRun = `-- name: ChatSessionOfRun :one
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions
+WHERE current_run_id = $1 OR id IN (SELECT session_id FROM chat_messages WHERE run_id = $1)
+LIMIT 1
+`
+
+// The chat a chat run belongs to: its current run or an earlier segment.
+func (q *Queries) ChatSessionOfRun(ctx context.Context, runID *uuid.UUID) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, chatSessionOfRun, runID)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
 const childRuns = `-- name: ChildRuns :many
 SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms FROM runs WHERE parent_run_id = $1 ORDER BY started_at
 `
@@ -1141,6 +1171,101 @@ func (q *Queries) ListRunEvents(ctx context.Context, arg ListRunEventsParams) ([
 			&i.Type,
 			&i.Payload,
 			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRuns = `-- name: ListRuns :many
+SELECT r.id, r.workspace_id, r.ticket_id, r.agent_id, r.mode, r.state, r.wait_reason, r.resolved_spec, r.definition_version_id, r.harness, r.model, r.harness_session_id, r.outcome, r.tool_calls, r.input_tokens, r.output_tokens, r.cost_usd_micros, r.cost_source, r.started_at, r.ended_at, r.created_at, r.updated_at, r.dispatched_by_user_id, r.runner_id, r.workspace_volume, r.idle_turns, r.parent_run_id, r.purpose, r.contract, r.checks, r.setup_ms, r.harness_ms, r.checks_ms FROM runs r
+LEFT JOIN tickets t ON t.id = r.ticket_id
+LEFT JOIN planning_sessions ps ON ps.run_id = r.id
+LEFT JOIN LATERAL (
+  SELECT c.project_id FROM chat_sessions c
+  WHERE r.purpose = 'chat' AND (c.current_run_id = r.id OR c.id IN (SELECT m.session_id FROM chat_messages m WHERE m.run_id = r.id))
+  LIMIT 1
+) cs ON true
+WHERE r.workspace_id = $1
+  AND (r.parent_run_id IS NULL OR $2::uuid IS NOT NULL)
+  AND ($2::uuid IS NULL OR r.ticket_id = $2)
+  AND r.state = ANY($3::text[])
+  AND ($4::uuid IS NULL OR r.agent_id = $4)
+  AND ($5::text IS NULL OR r.purpose = $5)
+  AND ($6::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = $6)
+ORDER BY r.started_at DESC, r.id DESC
+LIMIT 51 OFFSET $7::int
+`
+
+type ListRunsParams struct {
+	WorkspaceID uuid.UUID
+	TicketID    *uuid.UUID
+	States      []string
+	AgentID     *uuid.UUID
+	Purpose     *string
+	ProjectID   *uuid.UUID
+	Skip        int32
+}
+
+// Top-level runs for the Runs index. A run's project comes from its ticket,
+// planning session or chat session; delegated runs are left to their parent
+// unless the list is filtered to one ticket, where every run is listed.
+func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, error) {
+	rows, err := q.db.Query(ctx, listRuns,
+		arg.WorkspaceID,
+		arg.TicketID,
+		arg.States,
+		arg.AgentID,
+		arg.Purpose,
+		arg.ProjectID,
+		arg.Skip,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.TicketID,
+			&i.AgentID,
+			&i.Mode,
+			&i.State,
+			&i.WaitReason,
+			&i.ResolvedSpec,
+			&i.DefinitionVersionID,
+			&i.Harness,
+			&i.Model,
+			&i.HarnessSessionID,
+			&i.Outcome,
+			&i.ToolCalls,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CostUsdMicros,
+			&i.CostSource,
+			&i.StartedAt,
+			&i.EndedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DispatchedByUserID,
+			&i.RunnerID,
+			&i.WorkspaceVolume,
+			&i.IdleTurns,
+			&i.ParentRunID,
+			&i.Purpose,
+			&i.Contract,
+			&i.Checks,
+			&i.SetupMs,
+			&i.HarnessMs,
+			&i.ChecksMs,
 		); err != nil {
 			return nil, err
 		}

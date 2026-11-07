@@ -3,26 +3,34 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Ticket } from "@/lib/api/client";
-import { useActivity, useBootstrap, useTicket, useTickets, useUpdateTicket, hasLiveRun } from "@/lib/api/hooks";
+import { useActivity, useBootstrap, useTicket, useTickets, hasLiveRun } from "@/lib/api/hooks";
 import { Button, ButtonLink, IconButton } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
 import { Markdown } from "@/components/domain/markdown";
 import { StartChatButton } from "@/components/domain/start-chat";
+import { DispatchDialog } from "@/components/domain/dispatch-dialog";
+import { TicketEditorDialog } from "@/components/domain/ticket-editor-dialog";
+import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
+import { Flag } from "@/components/domain/labels";
+import { STATUS_NAME } from "@/components/domain/meta";
+import { TicketCostChip } from "@/components/domain/cost-chip";
 import { TopBar } from "@/components/shell/topbar";
 import { BacklinksPanel } from "@/components/domain/backlinks";
 import { ContextArtifacts } from "./context-artifacts";
 import { Dependencies } from "./dependencies";
 import { Criteria } from "./criteria";
+import { GateStrip } from "./gates";
 import { CodeSection, Properties } from "./properties";
-import { ApprovalBanner, DispatchBanner, needsDispatch, RunCard } from "./run-parts";
+import { ApprovalBanner, needsDispatch, RunCard } from "./run-parts";
+import { RunsHistory } from "./runs-history";
+import { ConflictBanner, useTicketSave, type SaveTicket } from "./ticket-save";
 import { Composer, Timeline } from "./timeline";
 
-function TitleEditor({ t }: { t: Ticket }) {
-  const update = useUpdateTicket(t.key);
+function TitleEditor({ t, save }: { t: Ticket; save: SaveTicket }) {
   const [editing, setEditing] = useState(false);
   if (!editing) {
     return (
-      <h1 className="type-display">
+      <h1 className="type-display min-w-0 flex-1">
         <button type="button" onClick={() => setEditing(true)} className="-mx-1 rounded-md px-1 text-left hover:bg-hover" title="Edit title">
           {t.title}
         </button>
@@ -32,7 +40,7 @@ function TitleEditor({ t }: { t: Ticket }) {
   }
   const commit = (v: string) => {
     setEditing(false);
-    if (v.trim() && v.trim() !== t.title) update.mutate({ title: v.trim() });
+    if (v.trim() && v.trim() !== t.title) save({ title: v.trim() }, "title change");
   };
   return (
     <>
@@ -55,8 +63,7 @@ function TitleEditor({ t }: { t: Ticket }) {
   );
 }
 
-function Description({ t }: { t: Ticket }) {
-  const update = useUpdateTicket(t.key);
+function Description({ t, save: saveTicket }: { t: Ticket; save: SaveTicket }) {
   const [draft, setDraft] = useState<string | null>(null);
   if (draft === null) {
     return t.description_md ? (
@@ -73,7 +80,7 @@ function Description({ t }: { t: Ticket }) {
     );
   }
   const save = () => {
-    if (draft !== t.description_md) update.mutate({ description_md: draft });
+    if (draft !== t.description_md) saveTicket({ description_md: draft }, "description edit");
     setDraft(null);
   };
   return (
@@ -127,6 +134,58 @@ function DetailSkeleton() {
   );
 }
 
+/** "Dispatching queues it until X is Done" and similar: why Dispatch now is offered. */
+function dispatchHint(t: Ticket) {
+  const blockers = t.blocked_by.filter((d) => d.status !== "done");
+  if (blockers.length) return `Dispatching queues it until ${blockers.map((d) => d.key).join(", ")} ${blockers.length === 1 ? "is" : "are"} Done.`;
+  if (t.run) return `The last run ${t.run.state}. Dispatch again to start a new run.`;
+  return `${t.assignee?.name ?? "The agent"} is assigned and waiting for dispatch. Assigning doesn’t start work.`;
+}
+
+/** Key, status, blocked badge and priority over the title, with the ticket's actions. */
+function Header({ t, save, onEdit }: { t: Ticket; save: SaveTicket; onEdit: () => void }) {
+  const [dispatching, setDispatching] = useState(false);
+  const blockers = t.blocked_by.filter((d) => d.status !== "done");
+  const dispatch = needsDispatch(t);
+  return (
+    <header className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+        <span className="font-mono text-fg-tertiary">{t.key}</span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-fg-2">
+          <StatusGlyph state={t.status} size={12} label={false} />
+          {STATUS_NAME[t.status]}
+        </span>
+        {blockers.length > 0 && (
+          <a href="#blocked-by" className="rounded-[5px] focus-visible:outline-2">
+            <Flag tone="blocked">
+              Blocked · {blockers.length} {blockers.length === 1 ? "blocker" : "blockers"}
+            </Flag>
+          </a>
+        )}
+        <span className="inline-flex items-center gap-1.5 text-fg-secondary">
+          <PriorityGlyph priority={t.priority} />
+        </span>
+      </div>
+      <div className="flex flex-wrap items-start gap-3">
+        <TitleEditor t={t} save={save} />
+        <div className="flex flex-none flex-wrap items-center gap-2">
+          {dispatch && (
+            <Button variant="approve" icon="play" disabled={t.project.archived} onClick={() => setDispatching(true)}>
+              Dispatch now
+            </Button>
+          )}
+          <StartChatButton attach={{ kind: "ticket", key: t.key }} title={`${t.key} ${t.title}`} project={t.project.key} />
+          <Button variant="outline" icon="edit" hint="E" onClick={onEdit} aria-keyshortcuts="E">
+            Edit
+          </Button>
+        </div>
+      </div>
+      {dispatch && <p className="text-xs text-pill-human-fg">{dispatchHint(t)}</p>}
+      {dispatching && <DispatchDialog keys={[t.key]} open onOpenChange={setDispatching} />}
+    </header>
+  );
+}
+
 export function TicketScreen({ ticketKey }: { ticketKey: string }) {
   const router = useRouter();
   const ticket = useTicket(ticketKey);
@@ -135,14 +194,21 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
   const t = ticket.data;
   const pager = usePager(t);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const saver = useTicketSave(t);
 
-  // J/K step through the project's tickets.
+  // J/K step through the project's tickets; E opens the editor.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const el = e.target as HTMLElement;
-      if (e.metaKey || e.ctrlKey || e.altKey || ["INPUT", "TEXTAREA"].includes(el.tagName) || el.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable) return;
+      if (document.querySelector("[role=dialog], [role=menu]")) return;
       if (e.key === "j" && pager.next) router.push(`/tickets/${pager.next}`);
       if (e.key === "k" && pager.prev) router.push(`/tickets/${pager.prev}`);
+      if (e.key === "e") {
+        e.preventDefault();
+        setEditing(true);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -182,7 +248,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
         }
         actions={
           <>
-            {t && <StartChatButton attach={{ kind: "ticket", key: t.key }} title={`${t.key} ${t.title}`} project={t.project.key} />}
+            {t && <TicketCostChip ticketKey={t.key} project={t.project.key} />}
             {pager.total > 0 && pager.index >= 0 && (
               <span className="font-mono text-xs text-fg-tertiary" aria-label={`Ticket ${pager.index + 1} of ${pager.total}`}>
                 {pager.index + 1} / {pager.total}
@@ -208,18 +274,19 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
         <div className="flex flex-1 flex-wrap">
           <article className="flex min-w-0 flex-[999_1_480px] justify-center px-7 py-8 max-sm:px-4">
             <div className="flex w-full max-w-[700px] flex-col gap-7">
-              {t.approvals.map((ap) => (
-                <ApprovalBanner key={ap.id} t={t} ap={ap} />
-              ))}
               {t.project.archived && <Banner tone="human" title="This project is archived" actions={<ButtonLink href="/settings/projects" variant="outline">Manage projects</ButtonLink>}>History is preserved. Restore the project before starting new work.</Banner>}
-              {needsDispatch(t) && <DispatchBanner t={t} />}
-              <div className="flex flex-col gap-3">
-                <TitleEditor t={t} />
-                <Description t={t} />
+              <Header t={t} save={saver.save} onEdit={() => setEditing(true)} />
+              <GateStrip t={t} />
+              {t.approvals.map((ap) => (
+                <div key={ap.id} id={`approval-${ap.id}`} className="scroll-mt-16">
+                  <ApprovalBanner t={t} ap={ap} />
+                </div>
+              ))}
+              <Description t={t} save={saver.save} />
+              <Criteria t={t} events={activity.data} />
+              <div id="mockups" className="scroll-mt-16">
+                <ContextArtifacts t={t} />
               </div>
-              <Criteria t={t} />
-              <Dependencies ticket={t} />
-              <ContextArtifacts t={t} />
               <section className="flex flex-col gap-4">
                 <h2 className="type-heading">Activity</h2>
                 {activity.data ? (
@@ -231,16 +298,35 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               </section>
             </div>
           </article>
-          <aside aria-label="Properties" className="flex flex-[1_1_300px] flex-col gap-6 border-l border-border-subtle bg-panel px-4 py-6 lg:max-w-[340px]">
-            <Properties t={t} boot={boot.data} />
-            {t.run && <RunCard t={t} run={t.run} />}
-            <CodeSection t={t} />
+          <aside aria-label="Properties" className="flex flex-[1_1_300px] flex-col gap-6 border-l border-border-subtle bg-panel px-4 py-6 lg:max-w-[360px]">
+            {saver.conflict && (
+              <ConflictBanner what={saver.conflict.what} reloading={ticket.isFetching} onReapply={saver.reapply} onKeep={saver.keepLatest} />
+            )}
+            <Properties t={t} boot={boot.data} save={saver.save} error={saver.error} />
+            <Dependencies ticket={t} />
+            {t.run && hasLiveRun(t) && <RunCard t={t} run={t.run} />}
+            <RunsHistory t={t} />
+            <div id="code" className="scroll-mt-16">
+              <CodeSection t={t} />
+            </div>
             <section className="flex flex-col gap-2 px-1">
               <h2 className="text-[12.5px] text-fg-tertiary">Backlinks</h2>
               <BacklinksPanel kind="ticket" id={t.id} compact />
             </section>
           </aside>
         </div>
+      )}
+      {editing && t && boot.data && (
+        <TicketEditorDialog
+          ticketKey={t.key}
+          detail={t}
+          bootstrap={boot.data}
+          onClose={() => setEditing(false)}
+          onReload={async () => {
+            const r = await ticket.refetch();
+            return r.isError ? undefined : r.data;
+          }}
+        />
       )}
     </>
   );

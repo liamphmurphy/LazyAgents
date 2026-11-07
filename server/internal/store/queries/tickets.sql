@@ -66,7 +66,7 @@ ORDER BY
   CASE t.status WHEN 'in_progress' THEN 0 WHEN 'in_review' THEN 1 WHEN 'todo' THEN 2 WHEN 'backlog' THEN 3 ELSE 4 END,
   CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
   t.updated_at DESC
-LIMIT 500;
+LIMIT CASE WHEN sqlc.narg(project_id)::uuid IS NOT NULL OR sqlc.narg(epic_id)::uuid IS NOT NULL THEN NULL ELSE 500 END;
 
 -- name: ListLabelsForTickets :many
 SELECT tl.ticket_id, l.id, l.name, l.color

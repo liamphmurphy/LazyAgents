@@ -29,7 +29,7 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		}
 	}
 	out := api.Run{
-		Id: r.ID, TicketKey: t.Key, Agent: *toAgentRef(a), Mode: api.RunMode(r.Mode), State: api.RunState(r.State),
+		Id: r.ID, TicketKey: t.Key, Purpose: api.RunPurpose(r.Purpose), Agent: *toAgentRef(a), Mode: api.RunMode(r.Mode), State: api.RunState(r.State),
 		Harness: r.Harness, Model: r.Model, Outcome: r.Outcome, StartedAt: r.StartedAt, EndedAt: r.EndedAt,
 		ToolCalls: int(r.ToolCalls), InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 		CostUsd: float32(r.CostUsdMicros) / 1e6, CostSource: r.CostSource,
@@ -46,12 +46,44 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 	}
 	cached, uncached, unknown := cacheBreakdown(r.InputTokens, cached, reported)
 	out.CachedInputTokens, out.UncachedInputTokens, out.UnreportedInputTokens = &cached, &uncached, &unknown
-	if r.TicketID == nil && r.Purpose == "planning" {
+	var projectID uuid.UUID
+	switch {
+	case r.TicketID != nil:
+		projectID = t.ProjectID
+		out.WorkTitle = &t.Title
+		out.Branch, out.PrUrl, out.PrState = t.Branch, t.PrUrl, t.PrState
+		if t.PrNumber != nil {
+			n := int(*t.PrNumber)
+			out.PrNumber = &n
+		}
+	case r.Purpose == "planning":
 		p, err := s.Q.PlanningSessionForRun(ctx, r.ID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return out, err
+		}
+		if err == nil {
+			out.PlanningId, out.WorkTitle, projectID = &p.ID, &p.Goal, p.ProjectID
+		}
+	case r.Purpose == "chat":
+		// A chat run without its session (deleted chat) still renders.
+		if c, err := s.Q.ChatSessionOfRun(ctx, &r.ID); err == nil {
+			out.ChatId, out.WorkTitle, projectID = &c.ID, &c.Title, c.ProjectID
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return out, err
+		}
+	}
+	if projectID != uuid.Nil {
+		if p, err := s.Q.GetProject(ctx, store.GetProjectParams{ID: projectID, WorkspaceID: r.WorkspaceID}); err == nil {
+			out.ProjectKey = &p.Key
+		}
+	}
+	if r.ParentRunID == nil {
+		n, err := s.Q.CountChildRuns(ctx, &r.ID)
 		if err != nil {
 			return out, err
 		}
-		out.PlanningId = &p.ID
+		c := int(n)
+		out.ChildCount = &c
 	}
 	if r.WaitReason != nil {
 		w := api.RunWaitReason(*r.WaitReason)
@@ -176,8 +208,33 @@ func (s *Server) DecideApproval(ctx context.Context, req api.DecideApprovalReque
 	return api.DecideApproval200JSONResponse(out), err
 }
 
+// readableRun applies the chat's creator boundary to generic run surfaces too.
+func (s *Server) readableRun(ctx context.Context, id uuid.UUID) (store.Run, error) {
+	u, _, ws := me(ctx)
+	r, err := s.Q.GetRun(ctx, store.GetRunParams{ID: id, WorkspaceID: ws})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return r, apperr.ErrNotFound
+	}
+	if err != nil {
+		return r, err
+	}
+	if r.Purpose == "chat" {
+		owns, err := s.Q.OwnsChatRun(ctx, store.OwnsChatRunParams{WorkspaceID: ws, Viewer: u.ID, RunID: r.ID})
+		if err != nil {
+			return r, err
+		}
+		if !owns {
+			return r, apperr.ErrNotFound
+		}
+	}
+	return r, nil
+}
+
 func (s *Server) ControlRun(ctx context.Context, req api.ControlRunRequestObject) (api.ControlRunResponseObject, error) {
 	u, _, ws := me(ctx)
+	if _, err := s.readableRun(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	r, err := s.Runs.SetRunControl(ctx, ws, u.ID, req.Id, string(req.Action))
 	if err != nil {
 		return nil, err
@@ -188,7 +245,7 @@ func (s *Server) ControlRun(ctx context.Context, req api.ControlRunRequestObject
 
 func (s *Server) GetRun(ctx context.Context, req api.GetRunRequestObject) (api.GetRunResponseObject, error) {
 	_, _, ws := me(ctx)
-	r, err := s.Q.GetRun(ctx, store.GetRunParams{ID: req.Id, WorkspaceID: ws})
+	r, err := s.readableRun(ctx, req.Id)
 	if err != nil {
 		return nil, apperr.ErrNotFound
 	}
@@ -257,6 +314,86 @@ func (s *Server) GetRun(ctx context.Context, req api.GetRunRequestObject) (api.G
 		m := map[string]any{}
 		_ = json.Unmarshal(e.Payload, &m)
 		out.Events = append(out.Events, api.RunEvent{Seq: e.Seq, Type: api.RunEventType(e.Type), Payload: m, At: e.At})
+	}
+	return out, nil
+}
+
+// liveRunStates are the states the Runs index shows by default.
+var liveRunStates = []string{"queued", "starting", "running", "waiting", "paused", "blocked"}
+
+func (s *Server) ListRuns(ctx context.Context, req api.ListRunsRequestObject) (api.ListRunsResponseObject, error) {
+	_, _, ws := me(ctx)
+	out := api.ListRuns200JSONResponse{Runs: []api.Run{}}
+	pr := req.Params
+	offset := 0
+	if pr.Offset != nil {
+		offset = *pr.Offset
+	}
+	if offset < 0 || offset > 100000 {
+		return nil, apperr.Invalid("offset", "must be between 0 and 100000")
+	}
+	arg := store.ListRunsParams{WorkspaceID: ws, States: liveRunStates, Skip: int32(offset)}
+	if pr.State != nil {
+		switch st := *pr.State; st {
+		case api.ListRunsParamsStateLive:
+		case api.ListRunsParamsStateAll:
+			arg.States = append(append([]string{}, liveRunStates...), "completed", "failed", "cancelled")
+		default:
+			if !st.Valid() {
+				return nil, apperr.Invalid("state", "unknown run state")
+			}
+			arg.States = []string{string(st)}
+		}
+	}
+	if pr.Purpose != nil {
+		if !pr.Purpose.Valid() {
+			return nil, apperr.Invalid("purpose", "must be ticket, planning or chat")
+		}
+		p := string(*pr.Purpose)
+		arg.Purpose = &p
+	}
+	// An unknown agent or project matches nothing rather than failing, so a
+	// stale filter in the URL shows an empty table.
+	if pr.Agent != nil && *pr.Agent != "" {
+		a, err := s.Q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: *pr.Agent})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return out, nil
+		} else if err != nil {
+			return nil, err
+		}
+		arg.AgentID = &a.ID
+	}
+	if pr.Project != nil && *pr.Project != "" {
+		p, err := s.Q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: ws, Key: *pr.Project})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return out, nil
+		} else if err != nil {
+			return nil, err
+		}
+		arg.ProjectID = &p.ID
+	}
+	if pr.Ticket != nil && *pr.Ticket != "" {
+		t, err := s.Q.GetTicketByKey(ctx, store.GetTicketByKeyParams{WorkspaceID: ws, Key: *pr.Ticket})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return out, nil
+		} else if err != nil {
+			return nil, err
+		}
+		arg.TicketID = &t.ID
+	}
+	rows, err := s.Q.ListRuns(ctx, arg)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) > 50 {
+		out.HasMore, rows = true, rows[:50]
+	}
+	for _, r := range rows {
+		run, err := s.toRun(ctx, r)
+		if err != nil {
+			return nil, err
+		}
+		out.Runs = append(out.Runs, run)
 	}
 	return out, nil
 }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { withBoardMoves, moveRevision } from "./board.ts";
+import { withBoardMoves, moveRevision, onlyBlocked } from "./board.ts";
 
 const card = { key: "WEB-1", status: "todo", updated_at: "2026-11-06T12:00:00Z", estimate_points: 3 };
 const other = { ...card, key: "WEB-2", estimate_points: undefined };
@@ -42,4 +42,17 @@ test("only a matching detail supplies a move revision", () => {
   for (const change of [{ status: "done" }, { updated_at: "new" }, { key: "WEB-2" }]) {
     assert.throws(() => moveRevision(card, { ...card, revision: 10, ...change }), /changed elsewhere/);
   }
+});
+
+test("blocked-only keeps cards with open blockers and recomputes counts and points", () => {
+  const card = (key, unmet, points) => ({ key, unmet_dependencies: unmet, estimate_points: points });
+  const board = { project: {}, columns: [
+    { status: "todo", cards: [card("A-1", 1, 3), card("A-2", 0, 5), card("A-3", 2, null)], count: 3, points: 8, truncated: false },
+    { status: "done", cards: [card("A-4", 0, 2)], count: 60, points: 120, truncated: true },
+  ] };
+  const out = onlyBlocked(board);
+  assert.deepEqual(out.columns[0].cards.map((c) => c.key), ["A-1", "A-3"]);
+  assert.equal(out.columns[0].count, 2);
+  assert.equal(out.columns[0].points, 3);
+  assert.deepEqual([out.columns[1].count, out.columns[1].points, out.columns[1].truncated], [0, 0, false]);
 });
