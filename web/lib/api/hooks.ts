@@ -19,6 +19,7 @@ import {
   type TicketStatus,
 } from "./client";
 import { runEach } from "../ticket-list";
+import { personaKeys } from "./persona-hooks";
 
 type NewTicket = Schemas["NewTicket"];
 
@@ -1184,18 +1185,3 @@ export function useStartChat() {
   });
 }
 
-// ---- Personas (ADR: Assistant personas). SSE `persona.updated` invalidates ["personas"] and ["chats"].
-
-export const personaKeys = {
-  all: ["personas"] as const,
-  list: ["personas", "list"] as const,
-};
-
-/** The caller's personas, default first. Private to them; at most 20, so no paging. */
-export function usePersonas() {
-  return useQuery({
-    queryKey: personaKeys.list,
-    queryFn: () => unwrap(api.GET("/personas")),
-    staleTime: 30_000,
-  });
-}

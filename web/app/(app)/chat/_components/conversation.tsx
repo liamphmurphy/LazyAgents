@@ -14,9 +14,9 @@ import {
   useChatModels,
   useCreateChat,
   useDeleteChat,
-  usePersonas,
   useSendChatMessage,
 } from "@/lib/api/hooks";
+import { usePersonas } from "@/lib/api/persona-hooks";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";

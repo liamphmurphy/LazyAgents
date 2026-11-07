@@ -37,7 +37,7 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 	if len(chats) == 0 {
 		return out, nil
 	}
-	_, _, ws := me(ctx)
+	u, _, ws := me(ctx)
 	projects, err := s.Q.ListProjects(ctx, ws)
 	if err != nil {
 		return nil, err
@@ -47,11 +47,25 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		return nil, err
 	}
 	ids := make([]uuid.UUID, len(chats))
-	var failed []uuid.UUID
+	var failed, personaIDs []uuid.UUID
 	for i, c := range chats {
 		ids[i] = c.ID
 		if c.State == "failed" {
 			failed = append(failed, c.ID)
+		}
+		if c.PersonaID != nil && !slices.Contains(personaIDs, *c.PersonaID) {
+			personaIDs = append(personaIDs, *c.PersonaID)
+		}
+	}
+	personaRows := map[uuid.UUID]store.Persona{}
+	if len(personaIDs) > 0 {
+		// Only the caller's own personas; chats are listed for their creator.
+		rows, err := s.Q.PersonasByIDs(ctx, store.PersonasByIDsParams{Ids: personaIDs, WorkspaceID: ws, UserID: u.ID})
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range rows {
+			personaRows[p.ID] = p
 		}
 	}
 	counts := map[uuid.UUID]int{}
@@ -83,6 +97,11 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		}
 		if i := slices.IndexFunc(agentRows, func(a store.Agent) bool { return a.ID == c.AgentID }); i >= 0 {
 			item.Agent = *toAgentRef(agentRows[i])
+		}
+		if c.PersonaID != nil {
+			if p, ok := personaRows[*c.PersonaID]; ok {
+				item.Persona = toPersonaSummary(p)
+			}
 		}
 		if r, ok := reasons[c.ID]; ok && c.State == "failed" {
 			item.Error = &r
@@ -201,9 +220,13 @@ func (s *Server) ListChats(ctx context.Context, req api.ListChatsRequestObject) 
 	if offset < 0 || offset > 100000 {
 		return nil, apperr.Invalid("offset", "must be between 0 and 100000")
 	}
+	filter, personaID, err := s.chatPersonaFilter(ctx, req.Params.PersonaId)
+	if err != nil {
+		return nil, err
+	}
 	chats, err := s.Q.ListChatsForUser(ctx, store.ListChatsForUserParams{
 		WorkspaceID: ws, CreatedBy: u.ID, Archived: deref(req.Params.Archived), ProjectKey: req.Params.Project,
-		RowOffset: int32(offset), RowLimit: chatPageSize + 1,
+		PersonaFilter: filter, PersonaID: personaID, RowOffset: int32(offset), RowLimit: chatPageSize + 1,
 	})
 	if err != nil {
 		return nil, err
@@ -217,6 +240,34 @@ func (s *Server) ListChats(ctx context.Context, req api.ListChatsRequestObject) 
 		return nil, err
 	}
 	return api.ListChats200JSONResponse{Chats: items, HasMore: more}, nil
+}
+
+// chatPersonaFilter resolves GET /chats?persona_id= to ListChatsForUser's
+// filter: `all`, `none`, or one of the caller's personas. Omitted means the
+// caller's default persona, or `none` when they have no default.
+func (s *Server) chatPersonaFilter(ctx context.Context, raw *string) (string, *uuid.UUID, error) {
+	o := personaOwner(ctx)
+	if raw == nil {
+		p, err := s.personas().Default(ctx, o)
+		if err != nil || p == nil {
+			return "none", nil, err
+		}
+		return "id", &p.ID, nil
+	}
+	switch *raw {
+	case "all", "none":
+		return *raw, nil, nil
+	}
+	id, err := uuid.Parse(*raw)
+	if err != nil {
+		return "", nil, apperr.Invalid("persona_id", "must be a persona id, all or none")
+	}
+	if _, err := s.personas().Get(ctx, o, id); errors.Is(err, apperr.ErrNotFound) {
+		return "", nil, apperr.Invalid("persona_id", "unknown persona")
+	} else if err != nil {
+		return "", nil, err
+	}
+	return "id", &id, nil
 }
 
 // toMessageInput converts the contract's message body.
@@ -244,7 +295,7 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 		return nil, apperr.Invalid("body", "required")
 	}
 	b := req.Body
-	in := runs.ChatInput{Project: b.Project, Title: deref(b.Title), Model: deref(b.Model)}
+	in := runs.ChatInput{Project: b.Project, Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}

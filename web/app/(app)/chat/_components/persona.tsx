@@ -1,13 +1,13 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import { DropdownMenu } from "radix-ui";
 import type { Schemas } from "@/lib/api/client";
-import { usePersonas } from "@/lib/api/hooks";
+import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
+import { usePersonaPanel } from "./persona-panel";
 
 // Assistant personas in the Assistant view only (ADR: Assistant personas). Ticket,
 // epic and run views keep their agent identity and never render these.
@@ -152,16 +152,9 @@ export function usePersonaFilter(): PersonaFilterState {
   };
 }
 
-/** Opens the persona manager (a right-hand panel, like Memory, driven by ?personas=). */
+/** Opens the persona manager panel (LAZYAGENTS-85), driven by ?personas=. */
 export function useOpenPersonaManager() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
-  return () => {
-    const q = new URLSearchParams(search.toString());
-    q.set("personas", "1");
-    router.replace(`${pathname}?${q.toString()}`, { scroll: false });
-  };
+  return usePersonaPanel().show;
 }
 
 const item =

@@ -49,7 +49,10 @@ type ChatInput struct {
 	Title   string
 	Harness string
 	Model   string
-	Message *ChatMessageInput
+	// PersonaID is one of the creator's personas; nil means their default
+	// persona (none when they have no default). Fixed for the chat's life.
+	PersonaID *uuid.UUID
+	Message   *ChatMessageInput
 }
 
 // ChatMessageInput is a single human prompt. A non-empty Harness/Model is
@@ -101,11 +104,20 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if err != nil {
 			return err
 		}
+		if in.PersonaID != nil {
+			_, err := q.KeySharePersona(ctx, store.KeySharePersonaParams{ID: *in.PersonaID, WorkspaceID: ws, UserID: user})
+			if errors.Is(err, pgx.ErrNoRows) {
+				return apperr.Invalid("persona_id", "unknown persona")
+			}
+			if err != nil {
+				return err
+			}
+		}
 		title := in.Title
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: h, Model: m})
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: h, Model: m, PersonaID: in.PersonaID})
 		if err != nil {
 			return err
 		}
@@ -202,6 +214,12 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			if chat, err = q.SetChatTitle(ctx, store.SetChatTitleParams{ID: chat.ID, Title: firstLine(body, 80)}); err != nil {
 				return chat, msg, err
 			}
+		}
+	}
+	if chat.PersonaID != nil {
+		// Recency orders the persona list and picks the successor when the default is deleted.
+		if err = q.TouchPersonaUsed(ctx, *chat.PersonaID); err != nil {
+			return chat, msg, err
 		}
 	}
 	var run store.Run
