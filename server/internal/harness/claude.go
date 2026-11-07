@@ -73,7 +73,7 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	var deny []string
 	if readonly {
 		allow = []string{"mcp__" + lazyagentsServer, "Read", "Glob", "Grep"}
-		deny = append(deny, "Edit", "Write", "NotebookEdit", "Bash", "Agent")
+		deny = append(deny, "Edit", "Write", "NotebookEdit", "Bash", "Agent", "WebFetch", "WebSearch")
 	}
 	// The assistant's web_search option grants web tools even to read-only
 	// chat; otherwise read-only runs never get the web.
