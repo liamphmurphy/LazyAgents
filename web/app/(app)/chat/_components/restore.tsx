@@ -2,6 +2,7 @@
 
 import type { Schemas } from "@/lib/api/client";
 import { useUpdateChat } from "@/lib/api/hooks";
+import { chatTitle } from "@/lib/chat-ui";
 import { Button, type ButtonVariant } from "@/components/ui/button";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -24,7 +25,7 @@ export function RestoreChat({
       <Button
         variant={variant}
         icon={compact ? undefined : "refresh"}
-        aria-label={`Restore ${chat.title}`}
+        aria-label={`Restore ${chatTitle(chat)}`}
         // cx doesn't merge Tailwind classes, so the compact size overrides with !important.
         className={compact ? "!h-6 !px-2 !text-xs" : undefined}
         disabled={update.isPending}

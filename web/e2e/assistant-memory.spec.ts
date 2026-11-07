@@ -14,7 +14,7 @@ async function send(page: Page, text: string) {
 
 async function openChat(page: Page) {
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: "New conversation" }).first().click();
+  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
   await expect(composer(page)).toBeVisible();
 }
 

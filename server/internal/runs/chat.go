@@ -140,6 +140,10 @@ func lockChat(ctx context.Context, q *store.Queries, ws, user, id uuid.UUID) (st
 	return chat, err
 }
 
+// firstTurnNote is appended to a conversation's first turn prompt only; the
+// person never sees it in the stored message.
+const firstTurnNote = "\n\n(Vesper: this is the first message of a new conversation. Call set_chat_title once with a concise title of 2 to 6 words that says what the person wants, then answer as usual. Don't mention the title in your reply.)"
+
 func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catalog, chat store.ChatSession, in ChatMessageInput, handoffChars int) (store.ChatSession, store.ChatMessage, error) {
 	var msg store.ChatMessage
 	body := strings.TrimSpace(in.Body)
@@ -186,6 +190,18 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	if h != chat.Harness || m != chat.Model {
 		if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: h, Model: m}); err != nil {
 			return chat, msg, err
+		}
+	}
+	if chat.Title == "" {
+		// An empty chat has no title yet; the first message names it until the agent does.
+		total, err := q.CountChatHistory(ctx, chat.ID)
+		if err != nil {
+			return chat, msg, err
+		}
+		if total == 0 {
+			if chat, err = q.SetChatTitle(ctx, store.SetChatTitleParams{ID: chat.ID, Title: firstLine(body, 80)}); err != nil {
+				return chat, msg, err
+			}
 		}
 	}
 	var run store.Run
@@ -254,6 +270,9 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		total, err := q.CountChatHistory(ctx, chat.ID)
 		if err != nil {
 			return chat, msg, err
+		}
+		if total == 0 {
+			prompt += firstTurnNote
 		}
 		if total > 0 {
 			rows, err := q.ListRecentChatMessages(ctx, store.ListRecentChatMessagesParams{SessionID: chat.ID, RowLimit: handoffRows, MaxChars: handoffRowChars})
@@ -380,6 +399,34 @@ func firstLine(body string, max int) string {
 		return string(r[:max-1]) + "…"
 	}
 	return string(r)
+}
+
+// SetAgentChatTitle names a chat on the agent's behalf, but only while its
+// title is still the automatic one (empty, or the first message's first line):
+// a title the person typed is never overwritten. applied is false when blocked.
+func (s *Service) SetAgentChatTitle(ctx context.Context, chatID uuid.UUID, title string) (applied bool, chat store.ChatSession, err error) {
+	err = s.tx(ctx, func(q *store.Queries) error {
+		chat, err = q.LockChatSessionByID(ctx, chatID)
+		if err != nil {
+			return err
+		}
+		if chat.Archived {
+			return apperr.Conflict("the chat is archived")
+		}
+		if chat.Title != "" {
+			first, err := q.FirstChatUserMessageBody(ctx, chat.ID)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if errors.Is(err, pgx.ErrNoRows) || chat.Title != firstLine(first, 80) {
+				return nil
+			}
+		}
+		chat, err = q.SetChatTitle(ctx, store.SetChatTitleParams{ID: chat.ID, Title: title})
+		applied = err == nil
+		return err
+	})
+	return
 }
 
 // ChatPatchInput is a revision-checked rename and/or archive change.

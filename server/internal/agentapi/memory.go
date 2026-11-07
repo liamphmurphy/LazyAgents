@@ -189,3 +189,31 @@ func forgetMemory(ctx context.Context, d Deps, c agents.Caller, in MemoryIDIn) (
 	}
 	return map[string]any{"forgotten": m.ID, "title": m.Title, "tell_the_person": "Forgot: " + m.Title + "."}, nil
 }
+
+type SetChatTitleIn struct {
+	Title string `json:"title" jsonschema:"Concise title for this conversation, 2–6 words"`
+}
+
+// setChatTitle names the chat; it never overwrites a title the person set.
+func setChatTitle(ctx context.Context, d Deps, c agents.Caller, in SetChatTitleIn) (any, error) {
+	s, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil {
+		return nil, apperr.Conflict("set_chat_title only works in a chat with a person")
+	}
+	title := strings.Join(strings.Fields(in.Title), " ")
+	title = strings.TrimSpace(strings.TrimRight(strings.Trim(title, "\"'`“”‘’"), "."))
+	if n := len([]rune(title)); n < 1 || n > 80 {
+		return nil, apperr.Invalid("title", "provide 1–80 characters")
+	}
+	applied, chat, err := d.Runs.SetAgentChatTitle(ctx, s.ChatID, title)
+	if err != nil {
+		return nil, err
+	}
+	if !applied {
+		return map[string]any{"applied": false, "title": chat.Title, "reason": "The person already named this conversation; leave it."}, nil
+	}
+	return map[string]any{"title": chat.Title, "applied": true}, nil
+}

@@ -14,7 +14,7 @@ import {
   useSendChatMessage,
 } from "@/lib/api/hooks";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
-import { needsSwitchConfirm } from "@/lib/chat-ui";
+import { chatTitle, needsSwitchConfirm } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
@@ -229,10 +229,10 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   };
   return (
     <Tooltip.Provider delayDuration={200}>
-      <section aria-label={c.title} className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
+      <section aria-label={chatTitle(c)} className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
         <DropOverlay over={drop.over} />
         <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
-          <h1 className="type-heading truncate">{c.title}</h1>
+          <h1 className="type-heading truncate">{chatTitle(c)}</h1>
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
           <ChatCostChip chatId={c.id} project={c.project} />
           <span className="flex-1" />

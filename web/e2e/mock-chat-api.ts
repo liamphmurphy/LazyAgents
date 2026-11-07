@@ -308,7 +308,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       if (agent.kind === "sub") return fail(err(422, "invalid", "pick a main agent", "agent_id"));
       created.push(b);
       const c: Chat = {
-        id: uuid(), project: String(b.project), title: String(b.title ?? "New chat"), agent_id: agent.id,
+        id: uuid(), project: String(b.project), title: String(b.title ?? ""), agent_id: agent.id,
         harness: (b.harness as Harness) ?? "claude-code", model: String(b.model ?? "opus-5.5"),
         state: "idle", archived: false, revision: 1, message_count: 0, created_at: now(), updated_at: now(),
       };
@@ -323,6 +323,10 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       if (!c) return fail(err(404, "not_found", "Chat not found"));
       const sub = m[2];
       if (!sub && method === "GET") return json(ref(c));
+      if (!sub && method === "DELETE") {
+        chats.splice(chats.indexOf(c), 1);
+        return route.fulfill({ status: 204 });
+      }
       if (!sub && method === "PATCH") {
         const b = body();
         if (b.revision !== c.revision) return fail(err(409, "conflict", "This chat changed. Reload and try again."));
@@ -353,7 +357,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
           c.model = model;
           add(c, "system", `Switched to ${label(harness, model)}`);
         }
-        if (c.title === "New chat") c.title = text.slice(0, 40);
+        if (!c.title) c.title = text.slice(0, 40);
         posted.push({ chat: c.id, body: b });
         const refs = (b.context_refs as Array<{ key?: string }> | undefined) ?? [];
         if (refs.some((r) => r.key === "OTHER-9")) return fail(err(422, "invalid", "OTHER-9 is not in this chat's project", "context_refs"));

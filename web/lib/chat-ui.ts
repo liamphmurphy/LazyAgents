@@ -112,3 +112,8 @@ export function replyCost(cost: number | undefined): string | undefined {
   if (cost < 0.001) return "< $0.001";
   return `$${cost.toFixed(cost < 1 ? 3 : 2)}`;
 }
+
+/** A chat's display title: a new conversation has none until the first turn names it. */
+export function chatTitle(c: { title: string }): string {
+  return c.title.trim() || "New conversation";
+}
