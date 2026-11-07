@@ -339,4 +339,22 @@ func TestInboxQuestionsAndStalledRuns(t *testing.T) {
 	if find("stalled:"+run.ID.String()) != nil {
 		t.Fatal("a run with recent activity is not stalled")
 	}
+
+	// A failed delegated child is its parent's business (and can't be retried);
+	// it must not hide the parent's own failure either.
+	var child string
+	err = pool.QueryRow(ctx, `INSERT INTO runs (workspace_id,ticket_id,agent_id,mode,state,resolved_spec,harness,model,purpose,parent_run_id,started_at)
+ SELECT workspace_id,ticket_id,agent_id,'managed','failed',resolved_spec,harness,model,'ticket',id,now() FROM runs WHERE id=$1 RETURNING id::text`, run.ID).Scan(&child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if find("blocked:"+child) != nil {
+		t.Fatal("a failed delegated child is listed as a failed run")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE runs SET state='failed', outcome='Harness error' WHERE id=$1`, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if failed := find("blocked:" + run.ID.String()); failed == nil || failed.Summary != "Harness error" {
+		t.Fatalf("parent failure hidden by its child: %+v", failed)
+	}
 }

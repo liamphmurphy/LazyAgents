@@ -157,7 +157,7 @@ export function InboxScreen() {
   // The selection and its slot, so focus can take the same slot when the item leaves.
   const [sel, setSel] = useState<{ id?: string; index: number }>({ index: 0 });
   const [sent, setSent] = useState<ReadonlySet<string>>(new Set());
-  const inbox = useInbox(remembered === undefined ? undefined : project || undefined);
+  const inbox = useInbox(project || undefined, remembered !== undefined);
   const all = useMemo(() => inbox.data ?? [], [inbox.data]);
   const groups = useMemo(() => groupItems(all, view, sort), [all, view, sort]);
   const ids = useMemo(() => groups.flatMap((g) => g.items.map((i) => i.id)), [groups]);

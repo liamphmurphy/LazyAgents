@@ -40,8 +40,9 @@ WITH items AS (
  UNION ALL
  SELECT 'blocked:'||r.id,'blocked',t.title,coalesce(r.outcome,'Run needs a person'),'/runs/'||r.id,p.key,t.key,r.updated_at,false,r.agent_id,r.id,NULL
  FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN projects p ON p.id=t.project_id
- WHERE r.workspace_id=$3 AND t.status NOT IN ('done', 'canceled') AND r.state IN ('blocked','failed')
- AND NOT EXISTS (SELECT 1 FROM runs newer WHERE newer.ticket_id=r.ticket_id AND newer.started_at>r.started_at)
+ -- Ticket runs only: a delegated child's result goes to its parent, and Retry refuses children.
+ WHERE r.workspace_id=$3 AND t.status NOT IN ('done', 'canceled') AND r.state IN ('blocked','failed') AND r.parent_run_id IS NULL
+ AND NOT EXISTS (SELECT 1 FROM runs newer WHERE newer.ticket_id=r.ticket_id AND newer.parent_run_id IS NULL AND newer.started_at>r.started_at)
  UNION ALL
  -- await_human: the summary is the agent's question.
  SELECT 'question:'||r.id,'question',t.title,

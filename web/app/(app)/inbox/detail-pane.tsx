@@ -351,8 +351,9 @@ function RunPane({ item, register, onSent }: PaneProps) {
         <Section label="Last activity">
           <Quote tone="blocked">No events for {waited(item.created_at)}.</Quote>
           <Hint>
-            A running run counts as stalled after 30 minutes without an event. Cancel stops the harness and keeps the
-            branch, so Retry can pick up from there.
+            A running run counts as stalled after 30 minutes without an event; one long, quiet command can look the
+            same, so check the run log first. Cancel stops the harness and keeps the branch, so Retry can pick up from
+            there.
           </Hint>
         </Section>
       ) : (

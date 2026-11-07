@@ -668,8 +668,8 @@ export function useFindPatterns(q: string, topic?: string) {
 }
 
 // ------------------------------------------------------------- attention
-export function useInbox(project?: string) {
-  return useQuery({queryKey:["inbox",project??""],queryFn:()=>unwrap(api.GET("/inbox",{params:{query:{project}}})).then(d=>d.items)});
+export function useInbox(project?: string, enabled = true) {
+  return useQuery({enabled,queryKey:["inbox",project??""],queryFn:()=>unwrap(api.GET("/inbox",{params:{query:{project}}})).then(d=>d.items)});
 }
 export function useReadInbox() {
  const qc=useQueryClient();
