@@ -137,6 +137,7 @@ func (q *Queries) ReadInboxItem(ctx context.Context, arg ReadInboxItemParams) er
 
 const searchAttentionTargets = `-- name: SearchAttentionTargets :many
 SELECT kind,id,title,href FROM (
+SELECT kind, id, title, href, row_number() OVER (PARTITION BY kind ORDER BY title,id) AS n FROM (
  SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href
  FROM epics e JOIN projects p ON p.id=e.project_id
  WHERE e.workspace_id=$1 AND e.name ILIKE '%'||$2::text||'%'
@@ -147,13 +148,22 @@ SELECT kind,id,title,href FROM (
  AND (a.name ILIKE '%'||$2::text||'%' OR a.handle ILIKE replace($2,'@','')||'%')
  AND ($3::text IS NULL OR EXISTS (
  SELECT 1 FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.assignee_agent_id=a.id AND p.key=$3))
-) results ORDER BY kind,title,id LIMIT 20
+ UNION ALL
+ -- Chats are private: only the asking user's, unarchived, matched by title.
+ SELECT 'chat',c.id,c.title,'/chat/'||c.id
+ FROM chat_sessions c JOIN projects p ON p.id=c.project_id
+ WHERE c.workspace_id=$1 AND c.created_by=$4 AND NOT c.archived
+ AND c.title ILIKE '%'||$2::text||'%'
+ AND ($3::text IS NULL OR p.key=$3)
+) matches
+) results WHERE n<=8 ORDER BY kind,title,id LIMIT 24
 `
 
 type SearchAttentionTargetsParams struct {
 	WorkspaceID uuid.UUID
 	Q           string
 	Project     *string
+	UserID      uuid.UUID
 }
 
 type SearchAttentionTargetsRow struct {
@@ -163,8 +173,14 @@ type SearchAttentionTargetsRow struct {
 	Href  string
 }
 
+// At most 8 per kind, so many chats or agents can't crowd epics out.
 func (q *Queries) SearchAttentionTargets(ctx context.Context, arg SearchAttentionTargetsParams) ([]SearchAttentionTargetsRow, error) {
-	rows, err := q.db.Query(ctx, searchAttentionTargets, arg.WorkspaceID, arg.Q, arg.Project)
+	rows, err := q.db.Query(ctx, searchAttentionTargets,
+		arg.WorkspaceID,
+		arg.Q,
+		arg.Project,
+		arg.UserID,
+	)
 	if err != nil {
 		return nil, err
 	}

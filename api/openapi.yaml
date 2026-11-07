@@ -241,7 +241,7 @@ paths:
   /search:
     get:
       operationId: search
-      summary: Search tickets, artifacts, wiki pages, epics and agents
+      summary: Search tickets, artifacts, wiki pages, epics, agents and the local user's chats
       parameters:
         - { name: q, in: query, required: true, schema: { type: string, maxLength: 500 } }
         - { name: project, in: query, schema: { type: string } }
@@ -2694,7 +2694,7 @@ components:
       required: [kind, title]
       description: What a [[link]] points at, with enough to render it
       properties:
-        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, unresolved] }
+        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, chat, unresolved], description: "chat only appears in GET /search hits (the asking user's own chats)" }
         id: { type: string, format: uuid }
         anchor: { type: string }
         title: { type: string }

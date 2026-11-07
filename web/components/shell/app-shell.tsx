@@ -6,16 +6,8 @@ import { useBootstrap, useRunnerStatus } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/primitives";
 import { LiveUpdates } from "./live-updates";
 import { CommandMenu } from "./command-menu";
+import { isTyping, ShortcutsDialog } from "./shortcuts";
 import { Sidebar } from "./sidebar";
-
-function isTyping(el: EventTarget | null) {
-  if (!(el instanceof HTMLElement)) return false;
-  return (
-    el.isContentEditable ||
-    ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) ||
-    el.getAttribute("role") === "combobox"
-  );
-}
 
 /** Global single-key shortcuts (DESIGN.md §6). */
 function useShortcuts() {
@@ -30,6 +22,11 @@ function useShortcuts() {
         document.querySelector('[role="dialog"]')
       )
         return;
+      if (e.key === "?") {
+        e.preventDefault();
+        window.dispatchEvent(new Event("la:shortcuts"));
+        return;
+      }
       if (e.key === "c" || e.key === "C") {
         e.preventDefault();
         // Keep the project in view as the composer's default.
@@ -75,7 +72,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-wrap bg-bg text-fg">
       <LiveUpdates />
-      <CommandMenu />
+      {/* usePathname needs a Suspense boundary for prerendering. */}
+      <Suspense fallback={null}>
+        <CommandMenu />
+      </Suspense>
+      <ShortcutsDialog />
       {data ? (
         <Suspense fallback={<SidebarSkeleton />}>
           <Sidebar

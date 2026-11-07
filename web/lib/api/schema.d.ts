@@ -196,7 +196,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search tickets, artifacts, wiki pages, epics and agents */
+        /** Search tickets, artifacts, wiki pages, epics, agents and the local user's chats */
         get: operations["search"];
         put?: never;
         post?: never;
@@ -2248,8 +2248,11 @@ export interface components {
         NodeKind: "artifact" | "ticket" | "epic" | "agent";
         /** @description What a [[link]] points at, with enough to render it */
         LinkTarget: {
-            /** @enum {string} */
-            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "unresolved";
+            /**
+             * @description chat only appears in GET /search hits (the asking user's own chats)
+             * @enum {string}
+             */
+            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "chat" | "unresolved";
             /** Format: uuid */
             id?: string;
             anchor?: string;

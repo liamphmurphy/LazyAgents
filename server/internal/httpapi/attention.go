@@ -39,7 +39,7 @@ func (s *Server) ReadInboxItem(ctx context.Context, req api.ReadInboxItemRequest
 	return api.ReadInboxItem204Response{}, nil
 }
 func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.SearchResponseObject, error) {
-	_, _, ws := me(ctx)
+	u, _, ws := me(ctx)
 	out := api.Search200JSONResponse{Hits: []api.SearchHit{}}
 	text := strings.TrimSpace(req.Params.Q)
 	if text == "" {
@@ -73,7 +73,7 @@ func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.S
 	for _, h := range hits {
 		out.Hits = append(out.Hits, api.SearchHit{Target: toTarget(h.Target), Snippet: h.Snippet, Score: float32(h.Score)})
 	}
-	targets, err := s.Q.SearchAttentionTargets(ctx, store.SearchAttentionTargetsParams{WorkspaceID: ws, Q: text, Project: req.Params.Project})
+	targets, err := s.Q.SearchAttentionTargets(ctx, store.SearchAttentionTargetsParams{WorkspaceID: ws, UserID: u.ID, Q: text, Project: req.Params.Project})
 	if err != nil {
 		return nil, err
 	}

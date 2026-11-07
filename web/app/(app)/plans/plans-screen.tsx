@@ -67,7 +67,8 @@ function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project 
   // Planner agents are main agents: sub agents only run when delegated to.
   const planners = data.agents.filter((a) => a.kind === "main");
   const [agent, setAgent] = useState(planners[0]?.id || "");
-  const [goal, setGoal] = useState("");
+  // ?goal= prefills from the command palette ("Start planning: …").
+  const [goal, setGoal] = useState(search.get("goal") ?? "");
   // "Plan with agent" links arrive with ?attach=, ?epic= or ?artifact= (a PRD/SPEC whose version is pinned).
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
   const epics = data.epics.filter((e) => e.project_id === scoped.id && e.status === "open");
