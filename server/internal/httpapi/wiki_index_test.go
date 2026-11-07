@@ -179,5 +179,33 @@ func TestWikiIndexes(t *testing.T) {
 			}
 		}
 	}
-	get("/api/v1/wiki/pages/"+ws.String()+"/citations", 404, nil)
+	// Generic run routes must not bypass private chat ownership.
+	get("/api/v1/runs/"+otherRun.ID.String(), 404, nil)
+	get("/api/v1/runs/"+otherRun.ID.String()+"/turns/1/log", 404, nil)
+	get("/api/v1/runs/"+chatRun.ID.String(), 200, nil)
+	// Ownership must also work for past chat segments, after current_run_id changes.
+	if _, err := pool.Exec(ctx, `INSERT INTO chat_messages (session_id, seq, role, body_md, run_id) VALUES ($1, 1, 'assistant', 'answer', $2), ($3, 1, 'assistant', 'private answer', $4)`, sess.ID, chatRun.ID, otherSess.ID, otherRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE chat_sessions SET current_run_id = NULL WHERE id = ANY($1::uuid[])`, []uuid.UUID{sess.ID, otherSess.ID}); err != nil {
+		t.Fatal(err)
+	}
+	get("/api/v1/runs/"+chatRun.ID.String(), 200, nil)
+	get("/api/v1/runs/"+otherRun.ID.String(), 404, nil)
+	control := httptest.NewRecorder()
+	handler.ServeHTTP(control, httptest.NewRequest("POST", "/api/v1/runs/"+otherRun.ID.String()+"/cancel", nil))
+	if control.Code != 404 {
+		t.Fatalf("private run control: %d %s", control.Code, control.Body.String())
+	}
+
+	otherWS, err := q.CreateWorkspace(ctx, store.CreateWorkspaceParams{Name: "Other", Slug: "other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignPath := "Private"
+	foreignPage, err := q.CreateArtifact(ctx, store.CreateArtifactParams{WorkspaceID: otherWS.ID, Type: "note", Title: "Private workspace page", Path: &foreignPath, AuthorType: "user", AuthorID: me.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	get("/api/v1/wiki/pages/"+foreignPage.ID.String()+"/citations", 404, nil)
 }
