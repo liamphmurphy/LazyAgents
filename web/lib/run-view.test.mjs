@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  argSummary, cacheShare, condenseFeed, delegateChild, finalMessage, groupByTurn, nowLine, parseRunAnchor, pickRunView, hasActiveFilters, parseRunFilters, rowsOf, runFilterQuery,
+  advancedFilterCount, argSummary, cacheShare, condenseFeed, delegateChild, finalMessage, groupByTurn, nowLine, parseRunAnchor, pickRunView, hasActiveFilters, parseRunFilters, rowsOf, runColumns, runFilterQuery,
   toolLink, toolName, turnAt, turnByEvent, turnStarts, usageByModel, workHref,
 } from "./run-view.ts";
 
@@ -77,6 +77,17 @@ test("filters round-trip through the URL", () => {
   assert.equal(parseRunFilters(new URLSearchParams("state=bogus&purpose=x")).state, "live");
   assert.equal(hasActiveFilters({ state: "live" }), false);
   assert.equal(hasActiveFilters({ state: "all" }), true);
+  assert.equal(advancedFilterCount({ state: "failed", project: "WEB" }), 0);
+  assert.equal(advancedFilterCount(parseRunFilters(new URLSearchParams("purpose=chat"))), 1);
+  assert.equal(advancedFilterCount({ state: "live", agent: "dev", purpose: "ticket" }), 2);
+});
+
+test("runColumns prefers the URL, then the remembered choice", () => {
+  assert.equal(runColumns(null, undefined), "default");
+  assert.equal(runColumns(null, "more"), "more");
+  assert.equal(runColumns("default", "more"), "default");
+  assert.equal(runColumns("more", null), "more");
+  assert.equal(runColumns("bogus", "bogus"), "default");
 });
 
 test("workHref never links a ticket without a key", () => {

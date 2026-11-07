@@ -203,6 +203,22 @@ export function hasActiveFilters(f: RunFilters): boolean {
   return f.state !== "live" || !!f.agent || !!f.project || !!f.purpose;
 }
 
+/** How many of the filters behind the Filters popover (agent, purpose) are set. */
+export function advancedFilterCount(f: RunFilters): number {
+  return (f.agent ? 1 : 0) + (f.purpose ? 1 : 0);
+}
+
+// --------------------------------------------------------------- index columns
+
+export type RunColumns = "default" | "more";
+export const RUN_COLUMNS_KEY = "lazyagents.runs.columns";
+
+/** ?columns= wins; otherwise the remembered choice; otherwise the default set. */
+export function runColumns(param: string | null, stored: string | null | undefined): RunColumns {
+  if (param === "more" || param === "default") return param;
+  return stored === "more" ? "more" : "default";
+}
+
 // ------------------------------------------------------------ work links
 
 type WorkRun = { purpose: string; ticket_key: string; planning_id?: string; chat_id?: string; project_key?: string };
