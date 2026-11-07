@@ -1879,6 +1879,52 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chat-attachments:
+    post:
+      operationId: uploadChatAttachment
+      summary: Upload a file to attach to your next assistant message
+      description: |
+        Stores one file for the caller. It stays unattached and private to
+        the caller until a message lists its id in `attachment_ids`; each
+        upload can be attached to one message. Supported: PDF, PNG, JPEG,
+        GIF, WebP, plain text, Markdown, CSV and JSON, up to 25 MB each.
+        422 for an unsupported type, an empty file or one over the limit.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatAttachment" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chat-attachments/{attachmentId}/content:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getChatAttachmentContent
+      summary: Download one of your chat attachments
+      description: 404 unless the caller uploaded it.
+      tags: [chats]
+      responses:
+        "200":
+          description: The file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /chats/{id}:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -1957,7 +2003,8 @@ paths:
         same session, new model; other harness: new session with a
         transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
         is running or the chat is archived; 422 empty body, unknown
-        harness/model, or a context ref outside the chat's project.
+        harness/model, a context ref outside the chat's project, or an
+        attachment id that isn't the caller's unattached upload.
       tags: [chats]
       requestBody:
         required: true
@@ -3834,6 +3881,20 @@ components:
           type: array
           maxItems: 20
           items: { $ref: "#/components/schemas/ChatContextRef" }
+        attachment_ids:
+          type: array
+          maxItems: 5
+          description: "Uploads from POST /chat-attachments that you made and haven't attached yet; the assistant gets the files with this message"
+          items: { type: string, format: uuid }
+    ChatAttachment:
+      type: object
+      required: [id, filename, content_type, size_bytes, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
     ChatMessage:
       type: object
       required: [id, seq, role, body_md, created_at]
@@ -3848,6 +3909,7 @@ components:
         turn_seq: { type: integer, description: The run turn that produced an assistant message }
         context_refs: { type: array, items: { $ref: "#/components/schemas/ChatContextRef" } }
         citations: { type: array, items: { $ref: "#/components/schemas/ChatCitation" } }
+        attachments: { type: array, items: { $ref: "#/components/schemas/ChatAttachment" }, description: Files the person attached to a user message }
         author: { $ref: "#/components/schemas/UserRef" }
         input_tokens: { type: integer, format: int64 }
         output_tokens: { type: integer, format: int64 }

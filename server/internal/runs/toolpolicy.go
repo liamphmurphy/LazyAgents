@@ -47,6 +47,17 @@ func ToolScopes(tool string, input map[string]any) []string {
 	return []string{"tests:run"} // unknown execution tools require the execution scope
 }
 
+// WebTool reports a harness's built-in web search or page fetch tool. They
+// touch no workspace files, so they're governed by agentdef.OptionWebSearch
+// rather than a scope.
+func WebTool(tool string) bool {
+	switch tool {
+	case "WebSearch", "WebFetch", "web_search":
+		return true
+	}
+	return false
+}
+
 func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDecision, error) {
 	deny := func(reason string) (ToolDecision, error) { return ToolDecision{Decision: "deny", Reason: reason}, nil }
 	if c.RunID == nil {
@@ -63,6 +74,22 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	spec, err := Spec(run)
 	if err != nil {
 		return ToolDecision{}, err
+	}
+	if WebTool(in.Tool) && run.Purpose == "chat" && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+		if in.Tool != "WebFetch" {
+			return ToolDecision{Decision: "allow"}, nil
+		}
+		// A fetch can carry data out in its URL: only addresses the person
+		// gave or this run's searches returned (ADR "Assistant web access").
+		url, _ := in.Input["url"].(string)
+		known, err := webFetchAllowed(ctx, q, run.ID, url)
+		if err != nil {
+			return ToolDecision{}, err
+		}
+		if !known {
+			return deny("Only open pages the person linked or that your web search returned; search first, then fetch a result URL exactly")
+		}
+		return ToolDecision{Decision: "allow"}, nil
 	}
 	scopes := ToolScopes(in.Tool, in.Input)
 	if spec.HarnessOptions["readonly"] == "true" && len(scopes) > 0 {

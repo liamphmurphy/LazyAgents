@@ -26,6 +26,8 @@ import { Sources } from "./sources";
 import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
 import { RunActivity } from "./activity";
 import { MemoryNotices } from "./memory-notices";
+import { AttachButton, AttachmentChips, DropOverlay, SentAttachments, useAttachments, useFileDrop } from "./attachments";
+import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
@@ -81,8 +83,10 @@ function Bubble({ m, groups, chat, saveable, names, turn }: { m: Message; groups
       >
         <ChatMarkdown>{m.body_md}</ChatMarkdown>
       </div>
+      {mine && <SentAttachments attachments={m.attachments} />}
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
       {!mine && <Sources citations={m.citations} />}
+      {turn && <WebSearchPill runId={m.run_id} since={turn.since} until={turn.until} />}
       {turn && <MemoryNotices runId={m.run_id} since={turn.since} until={turn.until} />}
       {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
     </li>
@@ -124,6 +128,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const search = useSearchParams();
   // "Start chat" links arrive with ?attach=kind:id; seed once, then drop it from the URL.
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
+  const files = useAttachments();
   const area = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLLIElement>(null);
 
@@ -141,6 +146,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const list = messages.data?.messages;
   const lastUser = list?.findLast((m) => m.role === "user");
   const turns = turnWindows(list);
+  const drop = useFileDrop(files.add, !!c && !c.archived && !locked);
 
   useEffect(() => {
     if (!search.has("attach")) return;
@@ -173,14 +179,15 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   }, [list?.length, running]);
 
   function submit(body: string) {
-    if (!body.trim() || locked || unavailable) return;
+    if (!body.trim() || locked || unavailable || files.pending) return;
     cancel.reset();
     const context_refs = toContextRefs(chips);
     setNames((n) => new Map([...n, ...chips.map((c): [string, string] => [c.key, c.label])]));
     send.mutate(
-      { body, ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}), ...(context_refs ? { context_refs } : {}) },
+      { body, ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) },
       {
         onSuccess: () => {
+          files.clear();
           setText("");
           setPicked(null);
           setChips([]);
@@ -222,7 +229,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   };
   return (
     <Tooltip.Provider delayDuration={200}>
-      <section aria-label={c.title} className="flex min-h-0 flex-1 flex-col">
+      <section aria-label={c.title} className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
+        <DropOverlay over={drop.over} />
         <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
           <h1 className="type-heading truncate">{c.title}</h1>
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
@@ -321,6 +329,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               }}
               className="flex flex-col gap-2"
             >
+              <AttachmentChips attachments={files} />
               <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
               <LinkEditor
                 inputRef={(el) => {
@@ -343,6 +352,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 }}
               />
               <div className="flex flex-wrap items-center gap-2">
+                <AttachButton onFiles={files.add} disabled={locked} />
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked} />}
                 <span className="flex-1" />
@@ -351,7 +361,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                     {stopping ? "Stopping…" : "Stop"}
                   </Button>
                 )}
-                <Button type="submit" variant="primary" disabled={locked || !!unavailable || !text.trim()}>
+                <Button type="submit" variant="primary" disabled={locked || !!unavailable || files.pending || !text.trim()}>
                   Send
                 </Button>
               </div>

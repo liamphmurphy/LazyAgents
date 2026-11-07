@@ -24,6 +24,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/blob"
 	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/harness"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
@@ -39,7 +40,9 @@ type Config struct {
 	Poll          time.Duration // queue poll interval
 	Grace         time.Duration // after SIGINT, before SIGKILL (pause, cancel)
 	LogBucket     string        // raw harness logs (run-logs)
-	Version       string
+	// AttachmentBucket holds chat attachments (the artifact bucket).
+	AttachmentBucket string
+	Version          string
 	// RequireHarnessKey refuses to start a run without the harness's API
 	// key secret. Docker runs need it; local runs can use the host's login.
 	RequireHarnessKey bool
@@ -51,6 +54,11 @@ type Blobs interface {
 	Put(ctx context.Context, bucket, key string, body io.Reader, size int64, contentType string) error
 }
 
+// AttachmentReader reads chat attachments (blob.Store).
+type AttachmentReader interface {
+	Get(ctx context.Context, bucket, key string) (blob.Object, error)
+}
+
 type Runner struct {
 	Cfg     Config
 	Pool    *pgxpool.Pool
@@ -58,7 +66,10 @@ type Runner struct {
 	Secrets Revealer
 	Tracker *tracker.Service
 	Blobs   Blobs // nil: raw logs aren't kept
-	Log     *slog.Logger
+	// Attachments reads chat attachments (blob.Store); nil: they're named in
+	// the prompt but not delivered.
+	Attachments AttachmentReader
+	Log         *slog.Logger
 
 	mu     sync.Mutex
 	active int
@@ -827,6 +838,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		ctxFiles = append(ctxFiles, refFiles...)
 		prompt += refPrompt
+		attFiles, attPrompt, err := r.chatTurnAttachments(ctx, q, turn)
+		if err != nil {
+			log.Warn("chat attachments", "err", err)
+			r.failChat(ctx, c, "Could not load the message's attached files.")
+			return
+		}
+		ctxFiles = append(ctxFiles, attFiles...)
+		prompt += attPrompt
 	}
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}

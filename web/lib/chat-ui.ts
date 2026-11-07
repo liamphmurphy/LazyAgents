@@ -72,6 +72,16 @@ export function activityOf(call: { tool: string; input: unknown }): Activity {
       return s("q") ? { verb: "Searching", text: `“${clip(s("q"))}”` } : { verb: "Searching the knowledge base" };
     case "find_pattern":
       return s("q") ? { verb: "Looking up patterns for", text: `“${clip(s("q"))}”` } : { verb: "Looking up patterns" };
+    case "WebSearch":
+    case "web_search":
+      return s("query") ? { verb: "Searching the web for", text: `“${clip(s("query"))}”` } : { verb: "Searching the web" };
+    case "WebFetch": {
+      let host = s("url");
+      try {
+        host = new URL(host).hostname.replace(/^www\./, "");
+      } catch {}
+      return host ? { verb: "Reading", text: clip(host) } : { verb: "Reading a web page" };
+    }
     case "whoami":
       return { verb: "Checking its instructions" };
     case "shell":

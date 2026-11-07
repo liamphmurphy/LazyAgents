@@ -179,3 +179,34 @@ ON CONFLICT DO NOTHING RETURNING *;
 
 -- name: SetChatAgent :exec
 UPDATE chat_sessions SET agent_id = $2 WHERE id = $1;
+
+-- name: CreateChatAttachment :one
+INSERT INTO chat_attachments (workspace_id, user_id, filename, content_type, size_bytes, blob_key)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+
+-- name: GetChatAttachment :one
+SELECT * FROM chat_attachments WHERE id = $1 AND workspace_id = $2 AND user_id = $3;
+
+-- name: AttachChatAttachments :many
+-- Binds the caller's own unattached uploads to a message; ids that don't
+-- qualify are simply not returned, so the caller compares counts.
+UPDATE chat_attachments SET message_id = sqlc.arg(message_id)
+WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND message_id IS NULL
+RETURNING *;
+
+-- name: ListChatAttachmentsForMessages :many
+SELECT * FROM chat_attachments WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) ORDER BY created_at, id;
+
+-- name: ChatUserMentions :one
+-- Whether the person wrote text in this run's conversation (any segment).
+SELECT EXISTS (
+  SELECT 1 FROM chat_messages m
+  WHERE m.role = 'user' AND strpos(m.body_md, sqlc.arg(text)::text) > 0
+    AND m.session_id IN (SELECT c.session_id FROM chat_messages c WHERE c.run_id = sqlc.arg(run_id))
+) AS mentioned;
+
+-- name: RunWebSearchEvents :many
+-- A run's WebSearch calls and results, for the WebFetch allowlist.
+SELECT type, payload FROM run_events
+WHERE run_id = $1 AND type IN ('tool_call', 'tool_result') AND payload->>'tool' = 'WebSearch'
+ORDER BY seq;
