@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Tooltip } from "radix-ui";
 import { ApiError, type Schemas } from "@/lib/api/client";
 import {
   chatKeys,
@@ -175,154 +176,164 @@ export function Conversation({ id }: { id: string }) {
     );
   }
   const actionError = send.error ?? cancel.error;
+  // Restoring a chat opened from the Archived list shows it under Active again.
+  const restored = () => {
+    if (!search.has("view")) return;
+    const q = new URLSearchParams(search.toString());
+    q.delete("view");
+    router.replace(`/chat/${id}?${q.toString()}`);
+  };
   const pick = (s: Selection) => {
     if (current && needsSwitchConfirm(current, s, picked, c.message_count)) setConfirming(s);
     else setPicked(s);
   };
   return (
-    <section aria-label={c.title} className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
-        <h1 className="type-heading truncate">{c.title}</h1>
-        {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
-        {c.agent.name && (
-          <span
-            data-testid="chat-agent"
-            title={`This chat answers as ${c.agent.name}`}
-            className="flex flex-none items-center gap-1.5 rounded-full border border-border-strong py-0.5 pl-1 pr-2.5 text-[12.5px]"
-          >
-            <AgentAvatar name={c.agent.name} colorIndex={c.agent.color_index} size="sm" label={false} />
-            {c.agent.name}
-          </span>
-        )}
-        <span className="flex-1" />
-        {c.archived ? (
-          <RestoreChat chat={c} />
-        ) : (
-          current && (
-            <span className="truncate font-mono text-[11.5px] text-fg-tertiary max-sm:hidden">
-              {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
+    <Tooltip.Provider delayDuration={200}>
+      <section aria-label={c.title} className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
+          <h1 className="type-heading truncate">{c.title}</h1>
+          {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
+          {c.agent.name && (
+            <span
+              data-testid="chat-agent"
+              title={`This chat answers as ${c.agent.name}`}
+              className="flex flex-none items-center gap-1.5 rounded-full border border-border-strong py-0.5 pl-1 pr-2.5 text-[12.5px]"
+            >
+              <AgentAvatar name={c.agent.name} colorIndex={c.agent.color_index} size="sm" label={false} />
+              {c.agent.name}
             </span>
-          )
-        )}
-      </div>
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        {messages.isError ? (
-          <Banner tone="blocked" title="Couldn’t load messages">{errorText(messages.error)}</Banner>
-        ) : !list ? (
-          <div aria-busy="true" className="flex flex-col gap-3">
-            <Skeleton className="h-12 w-1/2" />
-            <Skeleton className="h-16 w-2/3" />
-          </div>
-        ) : list.length === 0 && !running ? (
-          <EmptyState icon="msg" title="Ask anything about this project">
-            The assistant can search the wiki, artifacts and tickets. Write a message below to begin.
-          </EmptyState>
-        ) : (
-          <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
-            {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
-            {list.map((m) => (
-              <Bubble key={m.id} m={m} groups={groups} chat={c} saveable={!running} names={names} />
-            ))}
-            {pending && selection && (
-              <Divider testId="pending-switch">
-                {`Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}
-              </Divider>
-            )}
-            {running && (
-              <li className="flex flex-col gap-2" data-testid="thinking">
-                <span role="status" className="text-[13px] text-fg-secondary">{stopping ? "Stopping…" : "Thinking…"}</span>
-                <RunActivity runId={c.current_run_id} since={lastUser?.created_at} />
-              </li>
-            )}
-            <li ref={end} aria-hidden />
-          </ol>
-        )}
-      </div>
-      <div className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5">
-        {c.state === "failed" && (
-          <Banner
-            tone="blocked"
-            title="The last turn failed"
-            actions={
-              lastUser && (
-                <Button variant="outline" icon="refresh" disabled={locked} onClick={() => submit(lastUser.body_md)}>
-                  Retry
-                </Button>
-              )
-            }
-          >
-            {c.error ?? "No error details were recorded."}
-          </Banner>
-        )}
-        {actionError && (
-          <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
-            {actionError instanceof ApiError && actionError.status === 409
-              ? `Can’t do that right now: ${actionError.message}`
-              : errorText(actionError)}
-          </p>
-        )}
-        {c.archived ? (
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
-            <p className="flex-1 text-[13px] text-fg-secondary">This chat is archived. Restore it to continue.</p>
-            <RestoreChat chat={c} variant="primary" />
-          </div>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit(text);
-            }}
-            className="flex flex-col gap-2"
-          >
-            <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
-            <LinkEditor
-              inputRef={(el) => {
-                area.current = el;
-              }}
-              mono={false}
-              aria-label="Message"
-              rows={3}
-              value={text}
-              onChange={setText}
-              onPick={attach}
-              accept={acceptTarget}
-              disabled={locked}
-              placeholder={locked ? "Waiting for the reply…" : "Message the assistant. Type [[ to attach context. Enter sends, Shift+Enter adds a line."}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  submit(text);
-                }
-              }}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
-              {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked} />}
-              <span className="flex-1" />
-              {running && (
-                <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
-                  {stopping ? "Stopping…" : "Stop"}
-                </Button>
-              )}
-              <Button type="submit" variant="primary" disabled={locked || !text.trim()}>
-                Send
-              </Button>
+          )}
+          <span className="flex-1" />
+          {c.archived ? (
+            <RestoreChat chat={c} onRestored={restored} />
+          ) : (
+            current && (
+              <span className="truncate font-mono text-[11.5px] text-fg-tertiary max-sm:hidden">
+                {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
+              </span>
+            )
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {messages.isError ? (
+            <Banner tone="blocked" title="Couldn’t load messages">{errorText(messages.error)}</Banner>
+          ) : !list ? (
+            <div aria-busy="true" className="flex flex-col gap-3">
+              <Skeleton className="h-12 w-1/2" />
+              <Skeleton className="h-16 w-2/3" />
             </div>
-          </form>
+          ) : list.length === 0 && !running ? (
+            <EmptyState icon="msg" title="Ask anything about this project">
+              The assistant can search the wiki, artifacts and tickets. Write a message below to begin.
+            </EmptyState>
+          ) : (
+            <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
+              {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
+              {list.map((m) => (
+                <Bubble key={m.id} m={m} groups={groups} chat={c} saveable={!running} names={names} />
+              ))}
+              {pending && selection && (
+                <Divider testId="pending-switch">
+                  {`Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}
+                </Divider>
+              )}
+              {running && (
+                <li className="flex flex-col gap-2" data-testid="thinking">
+                  <span role="status" className="text-[13px] text-fg-secondary">{stopping ? "Stopping…" : "Thinking…"}</span>
+                  <RunActivity runId={c.current_run_id} since={lastUser?.created_at} />
+                </li>
+              )}
+              <li ref={end} aria-hidden />
+            </ol>
+          )}
+        </div>
+        <div className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5">
+          {c.state === "failed" && (
+            <Banner
+              tone="blocked"
+              title="The last turn failed"
+              actions={
+                lastUser && (
+                  <Button variant="outline" icon="refresh" disabled={locked} onClick={() => submit(lastUser.body_md)}>
+                    Retry
+                  </Button>
+                )
+              }
+            >
+              {c.error ?? "No error details were recorded."}
+            </Banner>
+          )}
+          {actionError && (
+            <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
+              {actionError instanceof ApiError && actionError.status === 409
+                ? `Can’t do that right now: ${actionError.message}`
+                : errorText(actionError)}
+            </p>
+          )}
+          {c.archived ? (
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
+              <p className="flex-1 text-[13px] text-fg-secondary">This chat is archived. Restore it to continue.</p>
+              <RestoreChat chat={c} variant="primary" onRestored={restored} />
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit(text);
+              }}
+              className="flex flex-col gap-2"
+            >
+              <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
+              <LinkEditor
+                inputRef={(el) => {
+                  area.current = el;
+                }}
+                mono={false}
+                aria-label="Message"
+                rows={3}
+                value={text}
+                onChange={setText}
+                onPick={attach}
+                accept={acceptTarget}
+                disabled={locked}
+                placeholder={locked ? "Waiting for the reply…" : "Message the assistant. Type [[ to attach context. Enter sends, Shift+Enter adds a line."}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    submit(text);
+                  }
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
+                {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked} />}
+                <span className="flex-1" />
+                {running && (
+                  <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
+                    {stopping ? "Stopping…" : "Stop"}
+                  </Button>
+                )}
+                <Button type="submit" variant="primary" disabled={locked || !text.trim()}>
+                  Send
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+        {current && (
+          <HarnessSwitchDialog
+            from={modelLabel(groups, current)}
+            to={confirming && modelLabel(groups, confirming)}
+            agent={c.agent.name || "The agent"}
+            onCancel={() => setConfirming(null)}
+            onClosed={() => area.current?.focus()}
+            onConfirm={() => {
+              setPicked(confirming);
+              setConfirming(null);
+            }}
+          />
         )}
-      </div>
-      {current && (
-        <HarnessSwitchDialog
-          from={modelLabel(groups, current)}
-          to={confirming && modelLabel(groups, confirming)}
-          agent={c.agent.name || "The agent"}
-          onCancel={() => setConfirming(null)}
-          onConfirm={() => {
-            setPicked(confirming);
-            setConfirming(null);
-          }}
-        />
-      )}
-    </section>
+      </section>
+    </Tooltip.Provider>
   );
 }

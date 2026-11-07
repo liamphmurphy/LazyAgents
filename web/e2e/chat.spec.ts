@@ -351,6 +351,11 @@ test("archived chats are listed under Archived and can be restored", async ({ pa
   await expect(chat.getByRole("button", { name: "Restore keep me" })).toHaveCount(2);
   await chat.getByRole("button", { name: "Restore keep me" }).last().click();
   await expect(composer(page)).toBeVisible();
+  // The restored chat is listed under Active again, next to the open conversation.
+  await expect(page.getByRole("radio", { name: "Active" })).toBeChecked();
+  await expect(page).not.toHaveURL(/view=archived/);
+  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
+  await page.getByRole("radio", { name: "Archived" }).click();
   await expect(nav.getByText("No archived chats.")).toBeVisible();
   await page.getByRole("radio", { name: "Active" }).click();
   await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
@@ -409,13 +414,14 @@ test("switching harness asks first and lists what is lost; same harness doesn't"
   await expect(dialog.getByRole("region", { name: "Is lost" })).toContainText("The prompt cache, so the first reply costs more");
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(composer(page)).toBeFocused();
   await expect(pending).toContainText("Claude Code · Sonnet 5.5");
 
   await picker(page).click();
   await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
   await dialog.getByRole("button", { name: "Switch harness" }).click();
   await expect(pending).toContainText("Codex · gpt-5-codex");
-  await expect(composer(page)).toBeEnabled();
+  await expect(composer(page)).toBeFocused();
 });
 
 test("each reply shows its tokens and cost on hover or focus", async ({ page }) => {

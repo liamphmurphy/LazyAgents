@@ -17,19 +17,25 @@ export function HarnessSwitchDialog({
   agent,
   onConfirm,
   onCancel,
+  onClosed,
 }: {
   from: Label;
   to: Label | null;
   agent: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Where focus goes on close: the menu item that opened the dialog is gone by then. */
+  onClosed: () => void;
 }) {
   return (
     <Dialog.Root open={!!to} onOpenChange={(o) => !o && onCancel()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
-          aria-describedby="switch-desc"
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            onClosed();
+          }}
           className="fixed left-1/2 top-[14vh] z-50 flex w-[min(560px,calc(100%-32px))] -translate-x-1/2 flex-col gap-4 rounded-2xl border border-border-float bg-surface-raised p-6 shadow-[var(--shadow-float)] outline-none"
         >
           {to && (
@@ -38,10 +44,10 @@ export function HarnessSwitchDialog({
                 <Dialog.Title className="type-heading">
                   Switch to {to.harness} · {to.model}?
                 </Dialog.Title>
-                <p id="switch-desc" className="text-[13px] text-fg-secondary">
+                <Dialog.Description className="text-[13px] text-fg-secondary">
                   {to.harness} is a different harness, so the next message starts a new session. It gets a handoff of this
                   chat instead of {from.harness}’s session.
-                </p>
+                </Dialog.Description>
               </div>
               <section aria-label="Carries over" className="flex flex-col gap-1.5">
                 <h3 className="flex items-center gap-1.5 text-[12.5px] font-semibold text-state-done">

@@ -44,33 +44,32 @@ export function UsageTag({ m, children }: { m: Message; children: ReactNode }) {
     .join(" · ");
   return (
     <>
-      <Tooltip.Provider delayDuration={200}>
-        <Tooltip.Root>
-          <Tooltip.Trigger asChild>
-            <button
-              type="button"
-              data-testid="model-tag"
-              className={cx(tagClass, "cursor-help rounded-xs underline decoration-dotted underline-offset-2 hover:text-fg-secondary focus-visible:outline focus-visible:outline-accent")}
-            >
-              {children}
-            </button>
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Content
-              side="top"
-              align="start"
-              sideOffset={6}
-              data-testid="usage-tooltip"
-              className={cx(floatPanel, "flex flex-col gap-1 px-3 py-2 text-xs")}
-            >
-              <span className="text-[11.5px] text-fg-tertiary">This reply</span>
-              <Row label="Input" value={compact(t.input)} note={cache || undefined} />
-              <Row label="Output" value={compact(t.output)} />
-              <Row label="Cost" value={cost ?? "not reported"} />
-            </Tooltip.Content>
-          </Tooltip.Portal>
-        </Tooltip.Root>
-      </Tooltip.Provider>
+      {/* The Tooltip.Provider is in Conversation, shared by every reply. */}
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <button
+            type="button"
+            data-testid="model-tag"
+            className={cx(tagClass, "cursor-help rounded-xs underline decoration-dotted underline-offset-2 hover:text-fg-secondary focus-visible:outline focus-visible:outline-accent")}
+          >
+            {children}
+          </button>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            side="top"
+            align="start"
+            sideOffset={6}
+            data-testid="usage-tooltip"
+            className={cx(floatPanel, "flex flex-col gap-1 px-3 py-2 text-xs")}
+          >
+            <span className="text-[11.5px] text-fg-tertiary">This reply</span>
+            <Row label="Input" value={compact(t.input)} note={cache || undefined} />
+            <Row label="Output" value={compact(t.output)} />
+            <Row label="Cost" value={cost ?? "not reported"} />
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
       {cost && <span className="text-xs text-fg-tertiary"> · {cost}</span>}
     </>
   );
