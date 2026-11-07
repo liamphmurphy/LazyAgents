@@ -1028,7 +1028,7 @@ export function useChatModels() {
 function useChatInvalidate() {
   const qc = useQueryClient();
   // Persona.chat_count changes when a chat is created or deleted.
-  return () => Promise.all([qc.invalidateQueries({ queryKey: chatKeys.all }), qc.invalidateQueries({ queryKey: ["personas"] })]);
+  return () => Promise.all([qc.invalidateQueries({ queryKey: chatKeys.all }), qc.invalidateQueries({ queryKey: personaKeys.all })]);
 }
 
 export function useCreateChat() {
