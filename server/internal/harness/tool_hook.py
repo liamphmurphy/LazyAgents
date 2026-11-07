@@ -22,9 +22,9 @@ def main():
         if decision.get("decision") == "allow":
             print("{}")
             return
-        reason = decision.get("reason", "LazyAgents denied the tool")
+        reason = decision.get("reason", "Vesper denied the tool")
     except Exception:
-        reason = "LazyAgents tool policy is unavailable. Do not run this tool; end the turn and ask for help."
+        reason = "Vesper tool policy is unavailable. Do not run this tool; end the turn and ask for help."
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}}))
 
 if __name__ == "__main__":

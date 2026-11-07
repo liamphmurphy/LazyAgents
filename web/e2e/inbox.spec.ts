@@ -65,7 +65,7 @@ async function installInboxApi(page: Page) {
     const method = request.method();
     const json = (data: unknown, status = 200) => route.fulfill({ status, json: data });
     if (path === "/bootstrap") return json({
-      workspace: { id: "workspace", name: "LazyAgents", slug: "lazyagents" },
+      workspace: { id: "workspace", name: "Vesper", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
       users: [], agents: [], epics: [], projects: [project], labels: [],
       counts: { inbox: open(), wiki_suggestions: 0, live_agents: 0 },

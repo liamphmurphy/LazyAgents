@@ -15,6 +15,9 @@ import { RUN_ENDED, StatusPill } from "@/components/domain/run-status";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, TextArea, TextInput } from "@/components/ui/primitives";
 
+/** The ActionBox carries this id; the Graph view focuses it from a pending gate. */
+export const ACTION_BOX_ID = "run-action-box";
+
 type Run = Schemas["Run"];
 type RunDetail = Schemas["RunDetail"];
 type P = Record<string, unknown>;
@@ -231,7 +234,7 @@ export function ActionBox({ d }: { d: RunDetail }) {
   if (!body) return null;
   return (
     <div className="border-b border-border-subtle px-6 py-3">
-      <div aria-label="Needs attention" role="group" className="flex flex-col gap-2 rounded-xl border border-state-human/40 bg-surface p-3.5">
+      <div id={ACTION_BOX_ID} tabIndex={-1} aria-label="Needs attention" role="group" className="flex flex-col gap-2 rounded-xl border border-state-human/40 bg-surface p-3.5">
         {body}
         {control.isError && (
           <Banner tone="blocked" title="Couldn't change the run">{control.error.message}</Banner>

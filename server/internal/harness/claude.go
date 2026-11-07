@@ -66,11 +66,17 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	if spec.Mode("tests:run") != agentdef.Denied || spec.Mode("repo:write") != agentdef.Denied || spec.Mode("repo:read") != agentdef.Denied {
 		allow = append(allow, "Bash")
 	}
+	// Web tools need web:read; requires_approval goes through the policy hook.
+	if spec.Mode("web:read") != agentdef.Denied {
+		allow = append(allow, "WebFetch", "WebSearch")
+	}
 	var deny []string
 	if readonly {
 		allow = []string{"mcp__" + lazyagentsServer, "Read", "Glob", "Grep"}
 		deny = append(deny, "Edit", "Write", "NotebookEdit", "Bash", "Agent")
 	}
+	// The assistant's web_search option grants web tools even to read-only
+	// chat; otherwise read-only runs never get the web.
 	if spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
 		allow = append(allow, "WebSearch", "WebFetch")
 	} else if readonly {

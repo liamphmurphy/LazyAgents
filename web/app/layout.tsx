@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LazyAgents",
+  title: "Vesper",
   description: "Issue tracking for autonomous coding agents",
 };
 

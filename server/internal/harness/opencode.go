@@ -48,7 +48,7 @@ type OpenCode struct {
 
 func (OpenCode) Name() string { return HarnessOpenCode }
 
-// OpenCodeCredentialEnv maps a provider-qualified model to the LazyAgents
+// OpenCodeCredentialEnv maps a provider-qualified model to the Vesper
 // secret and environment variable that authenticate it. Only the selected
 // provider's key may be injected into the turn.
 func OpenCodeCredentialEnv(model string) (secret, env string, err error) {
@@ -170,7 +170,7 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		info := agentdef.Catalog[s.Scope]
 		if !info.Brokered && !info.APIOnly {
 			// No authenticated pre-tool bridge exists: a CLI prompt is not
-			// LazyAgents approval.
+			// Vesper approval.
 			return Invocation{}, fmt.Errorf("harness: opencode cannot enforce approval for scope %q", s.Scope)
 		}
 	}
@@ -272,6 +272,11 @@ func (OpenCode) config(ws Workspace, spec agentdef.Resolved, provider string, re
 					policyStatement{"bash", "git push*", "deny"},
 					policyStatement{"bash", "gh pr create*", "deny"})
 			}
+		}
+		// Approval for web:read is rejected above (no pre-tool bridge).
+		if allowed(spec, "web:read") {
+			allowTool("webfetch")
+			allowTool("websearch")
 		}
 	}
 	// Last match wins. Protect runner metadata after every tool allow.

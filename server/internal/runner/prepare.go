@@ -71,7 +71,7 @@ export GIT_SSH_COMMAND="ssh $sshopts"
 `
 
 // SetupScript prepares a fresh workspace (§6.5): clone the project's repo
-// (or start an empty one), create the run's branch, keep LazyAgents' files
+// (or start an empty one), create the run's branch, keep Vesper's files
 // out of git, and run the project's setup commands. The working directory
 // is the workspace; GH_TOKEN, when present, authenticates git and gh.
 func SetupScript(repoURL, branch, authorName, authorEmail string, setup []string) string {
@@ -326,7 +326,7 @@ func PlanSecrets(ctx context.Context, q *store.Queries, ws uuid.UUID, project *u
 				}
 				d.Reason = d.Scope + " is allowed"
 			case ok && mode == agentdef.RequiresApproval:
-				d.Reason = d.Scope + " requires approval: LazyAgents uses it server-side after a person approves"
+				d.Reason = d.Scope + " requires approval: Vesper uses it server-side after a person approves"
 			default:
 				d.Reason = d.Scope + " is denied"
 			}

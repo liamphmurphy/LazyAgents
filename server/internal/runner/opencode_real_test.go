@@ -26,7 +26,7 @@ import (
 // backend) against a localhost STUB provider, so no paid or remote model call is
 // possible. Skipped unless LAZYAGENTS_REAL_OPENCODE=1 (and a database, like the
 // other runner tests). It proves the real wire through the runner: session id,
-// tool events, partial usage, MCP calls into LazyAgents, resume, chat history
+// tool events, partial usage, MCP calls into Vesper, resume, chat history
 // and SIGINT cancellation. It does NOT prove a real provider, real tokens or
 // cost.
 //
@@ -327,7 +327,7 @@ func TestRealOpenCodeAgainstStubTicketTurn(t *testing.T) {
 	if !strings.Contains(mains[0].Text, "PAY-214") {
 		t.Errorf("the run prompt never reached the model")
 	}
-	if !strings.Contains(mains[0].Text, "lazyagents:start") && !strings.Contains(mains[0].Text, "LazyAgents run") {
+	if !strings.Contains(mains[0].Text, "lazyagents:start") && !strings.Contains(mains[0].Text, "Vesper run") {
 		t.Errorf("the generated AGENTS.md is not in the system prompt")
 	}
 }

@@ -10,7 +10,7 @@ import { DocTypeTag, EnforcementChip, Flag, LabelChip, MonoChip, Pill, ScopeMode
 import { ThemeSwitch } from "@/components/shell/theme";
 import { RangeDemo, ScopeModeDemo, TabsDemo, ToggleDemo } from "./interactive";
 
-export const metadata: Metadata = { title: "Foundations · LazyAgents" };
+export const metadata: Metadata = { title: "Foundations · Vesper" };
 
 const SURFACES: Array<[string, string]> = [
   ["Ground", "--bg"],
@@ -71,7 +71,7 @@ export default function Foundations() {
         <div className="flex items-center gap-4">
           <Mark size={52} />
           <div className="flex flex-col gap-0.5">
-            <h1 className="text-[32px] font-semibold leading-[1.1] tracking-[-0.03em]">LazyAgents Foundations</h1>
+            <h1 className="text-[32px] font-semibold leading-[1.1] tracking-[-0.03em]">Vesper Foundations</h1>
             <span className="text-sm text-fg-secondary">The design language for supervising autonomous coding agents</span>
           </div>
         </div>

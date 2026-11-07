@@ -1,6 +1,6 @@
 # Connecting agents (unmanaged sessions)
 
-Until the runner lands (Phase 5), agents connect to LazyAgents themselves. A
+Until the runner lands (Phase 5), agents connect to Vesper themselves. A
 person mints a token on the agent's **Tokens** tab (Agents → Atlas → Tokens),
 and the session acts as that agent through the Agent API at `/mcp`.
 

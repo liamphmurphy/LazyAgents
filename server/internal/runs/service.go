@@ -301,7 +301,7 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 }
 
 // StartPrompt is the first message of a managed run. The rest of what the
-// agent needs is in AGENTS.md and the LazyAgents tools.
+// agent needs is in AGENTS.md and the Vesper tools.
 func StartPrompt(key string) string {
 	return "You've been dispatched to work on " + key + ". Follow AGENTS.md: call claim_ticket(\"" + key +
 		"\") first, use relevant context already available in AGENTS.md, post_plan, then work directly. When you need a person, " +
