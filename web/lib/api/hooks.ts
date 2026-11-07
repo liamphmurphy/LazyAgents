@@ -981,7 +981,8 @@ export function useAgentRuns(handle:string,offset=0) {
 
 export const chatKeys = {
   all: ["chats"] as const,
-  list: (project: string, archived = false) => ["chats", "list", project, archived] as const,
+  /** persona: a persona id, "all", "none", or "" for the server's default (the caller's default persona). */
+  list: (project: string, archived = false, persona = "") => ["chats", "list", project, archived, persona] as const,
   detail: (id: string) => ["chats", "detail", id] as const,
   messages: (id: string) => ["chats", "messages", id] as const,
   models: ["chats", "models"] as const,
@@ -990,11 +991,12 @@ export const chatKeys = {
 // Slow fallback while a turn runs and the realtime connection is unavailable.
 const CHAT_POLL_MS = 3000;
 
-export function useChats(project: string, archived = false) {
+export function useChats(project: string, archived = false, persona = "") {
   return useQuery({
     enabled: !!project,
-    queryKey: chatKeys.list(project, archived),
-    queryFn: () => unwrap(api.GET("/chats", { params: { query: { project, archived } } })),
+    queryKey: chatKeys.list(project, archived, persona),
+    queryFn: () =>
+      unwrap(api.GET("/chats", { params: { query: { project, archived, ...(persona ? { persona_id: persona } : {}) } } })),
   });
 }
 
@@ -1172,11 +1174,27 @@ export function exportMemories() {
 export function useStartChat() {
   const done = useChatInvalidate();
   return useMutation({
-    mutationFn: async (v: { project: string; message: Schemas["NewChatMessage"] }) => {
-      const chat = await unwrap(api.POST("/chats", { body: { project: v.project } }));
+    mutationFn: async (v: { project: string; persona_id?: string; message: Schemas["NewChatMessage"] }) => {
+      const chat = await unwrap(api.POST("/chats", { body: { project: v.project, ...(v.persona_id ? { persona_id: v.persona_id } : {}) } }));
       await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id: chat.id } }, body: v.message }));
       return chat;
     },
     onSettled: done,
+  });
+}
+
+// ---- Personas (ADR: Assistant personas). SSE `persona.updated` invalidates ["personas"] and ["chats"].
+
+export const personaKeys = {
+  all: ["personas"] as const,
+  list: ["personas", "list"] as const,
+};
+
+/** The caller's personas, default first. Private to them; at most 20, so no paging. */
+export function usePersonas() {
+  return useQuery({
+    queryKey: personaKeys.list,
+    queryFn: () => unwrap(api.GET("/personas")),
+    staleTime: 30_000,
   });
 }

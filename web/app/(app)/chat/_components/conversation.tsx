@@ -7,10 +7,14 @@ import { Tooltip } from "radix-ui";
 import { ApiError, type Schemas } from "@/lib/api/client";
 import {
   chatKeys,
+  useBootstrap,
   useCancelChat,
   useChat,
   useChatMessages,
   useChatModels,
+  useCreateChat,
+  useDeleteChat,
+  usePersonas,
   useSendChatMessage,
 } from "@/lib/api/hooks";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
@@ -31,6 +35,7 @@ import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
+import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaSwitcher, personaLook, type PersonaLook } from "./persona";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import Link from "next/link";
@@ -65,16 +70,22 @@ type ChatInfo = { id: string; title: string; project: string; agent: { name: str
 /** The window of run events that belongs to an assistant reply: from its turn's message to the next one. */
 type Turn = { since?: string; until?: string };
 
-function Bubble({ m, groups, chat, saveable, names, turn }: { m: Message; groups: Groups; chat: ChatInfo; saveable: boolean; names: Map<string, string>; turn?: Turn }) {
+function Bubble({ m, groups, chat, persona, saveable, names, turn }: { m: Message; groups: Groups; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: Turn }) {
   if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
   const mine = m.role === "user";
   return (
     <li className={cx("flex flex-col gap-1", mine ? "items-end" : "items-start")} data-testid={`${m.role}-message`}>
-      <span className="text-xs text-fg-tertiary">
-        {mine ? (m.author?.name ?? "You") : (chat.agent.name || "Assistant")}
-        {!mine && " · "}
-        {!mine && <Tag groups={groups} m={m} />}
-      </span>
+      {mine ? (
+        <span className="text-xs text-fg-tertiary">{m.author?.name ?? "You"}</span>
+      ) : (
+        // Assistant replies carry the persona's avatar and its name in the persona's color.
+        <span className="flex items-center gap-1.5 text-xs text-fg-tertiary" data-testid="assistant-identity">
+          <PersonaAvatar persona={persona} size={22} />
+          <PersonaName persona={persona} className="text-[13px]" />
+          <span aria-hidden>·</span>
+          <Tag groups={groups} m={m} />
+        </span>
+      )}
       <div
         className={cx(
           "max-w-[min(720px,100%)] rounded-xl border px-3.5 py-2.5 text-[13.5px]",
@@ -119,6 +130,10 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const models = useChatModels();
   const send = useSendChatMessage(id);
   const cancel = useCancelChat(id);
+  const boot = useBootstrap();
+  const personas = usePersonas();
+  const create = useCreateChat();
+  const discard = useDeleteChat();
   const qc = useQueryClient();
   const [text, setText] = useState("");
   const [picked, setPicked] = useState<Selection | null>(null);
@@ -196,6 +211,22 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     );
   }
 
+  // Before the first message the persona can still change: a chat keeps its persona for life,
+  // so switching starts a fresh chat with the other persona and drops this empty one.
+  const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
+  function switchPersona(personaId: string) {
+    if (!c || personaId === c.persona?.id || create.isPending) return;
+    create.mutate(
+      { project: c.project, persona_id: personaId, harness: c.harness, model: c.model },
+      {
+        onSuccess: (next) => {
+          router.replace(`/chat/${next.id}?project=${encodeURIComponent(c.project)}`);
+          discard.mutate(c.id);
+        },
+      },
+    );
+  }
+
   if (chat.isError) {
     const gone = chat.error instanceof ApiError && chat.error.status === 404;
     return (
@@ -215,7 +246,10 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
       </div>
     );
   }
-  const actionError = send.error ?? cancel.error;
+  const actionError = send.error ?? cancel.error ?? create.error;
+  // A chat without a persona, or whose persona was deleted, is the built-in Assistant.
+  const persona = personaLook(c.persona);
+  const full = personas.data?.personas.find((p) => p.id === c.persona?.id);
   // Restoring a chat opened from the Archived list shows it under Active again.
   const restored = () => {
     if (!search.has("view")) return;
@@ -233,6 +267,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
         <DropOverlay over={drop.over} />
         <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
           <h1 className="type-heading truncate">{chatTitle(c)}</h1>
+          <span
+            className="flex flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden"
+            aria-label={`Persona: ${persona.name}`}
+          >
+            <PersonaAvatar persona={persona} size={16} />
+            <PersonaName persona={persona} />
+          </span>
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
           <ChatCostChip chatId={c.id} project={c.project} />
           <span className="flex-1" />
@@ -256,14 +297,24 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               <Skeleton className="h-16 w-2/3" />
             </div>
           ) : list.length === 0 && !running ? (
-            <EmptyState icon="msg" title="A new conversation">
-              Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do.
-            </EmptyState>
+            c.archived ? (
+              <EmptyState icon="msg" title="A new conversation">
+                Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do.
+              </EmptyState>
+            ) : (
+              <PersonaGreeting
+                persona={persona}
+                tone={full?.tone}
+                isDefault={!!c.persona && c.persona.id === personas.data?.default_persona_id}
+                firstName={boot.data?.me.name?.split(" ")[0]}
+                canSwitch={!!personas.data?.personas.length}
+              />
+            )
           ) : (
             <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m) => (
-                <Bubble key={m.id} m={m} groups={groups} chat={c} saveable={!running} names={names} turn={turns.get(m.id)} />
+                <Bubble key={m.id} m={m} groups={groups} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} />
               ))}
               {pending && selection && (
                 <Divider testId="pending-switch">
@@ -343,7 +394,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 onPick={attach}
                 accept={acceptTarget}
                 disabled={locked}
-                placeholder={locked ? "Waiting for the reply…" : "Message your assistant… Type [[ to attach context. Enter sends, Shift+Enter adds a line."}
+                placeholder={locked ? "Waiting for the reply…" : `Message ${c.persona ? persona.name : "your assistant"}… Type [[ to attach context. Enter sends, Shift+Enter adds a line.`}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
@@ -352,6 +403,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 }}
               />
               <div className="flex flex-wrap items-center gap-2">
+                {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
                 <AttachButton onFiles={files.add} disabled={locked} />
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked} />}
