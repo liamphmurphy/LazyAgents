@@ -242,6 +242,32 @@ func (q *Queries) ListEpicCriteria(ctx context.Context, epicID uuid.UUID) ([]Epi
 	return items, nil
 }
 
+const reorderEpicCriterion = `-- name: ReorderEpicCriterion :exec
+UPDATE epic_criteria SET position = CASE
+ WHEN id = $1 THEN $2::int
+ WHEN position > $3::int AND position <= $2::int THEN position - 1
+ WHEN position < $3::int AND position >= $2::int THEN position + 1
+ ELSE position END
+WHERE epic_id = $4 AND position BETWEEN least($3::int, $2::int) AND greatest($3::int, $2::int)
+`
+
+type ReorderEpicCriterionParams struct {
+	ID          uuid.UUID
+	NewPosition int32
+	OldPosition int32
+	EpicID      uuid.UUID
+}
+
+func (q *Queries) ReorderEpicCriterion(ctx context.Context, arg ReorderEpicCriterionParams) error {
+	_, err := q.db.Exec(ctx, reorderEpicCriterion,
+		arg.ID,
+		arg.NewPosition,
+		arg.OldPosition,
+		arg.EpicID,
+	)
+	return err
+}
+
 const setEpicCriterionDone = `-- name: SetEpicCriterionDone :one
 UPDATE epic_criteria SET
   done = $1,

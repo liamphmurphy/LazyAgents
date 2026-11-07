@@ -210,8 +210,10 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			return apperr.Conflict("restore the archived project before creating tickets")
 		}
 		if in.EpicID != nil {
-			if _, err := r.epic(ctx, in.EpicID, p.ID); err != nil {
+			if e, err := r.epic(ctx, in.EpicID, p.ID); err != nil {
 				return err
+			} else if e.Status == "done" {
+				return apperr.Conflict("epic is done")
 			}
 		}
 		var agent *store.Agent
@@ -309,6 +311,9 @@ func (s *Service) Update(ctx context.Context, ws uuid.UUID, actor Actor, key str
 	var t store.Ticket
 	err := s.tx(ctx, func(q *store.Queries) error {
 		var err error
+		if err = LockTicketProjects(ctx, q, ws, []string{key}); err != nil {
+			return err
+		}
 		t, err = applyPatch(ctx, q, ws, actor, key, p)
 		return err
 	})
@@ -330,6 +335,12 @@ func (s *Service) Bulk(ctx context.Context, ws uuid.UUID, actor Actor, keys []st
 	}
 	n := 0
 	err := s.tx(ctx, func(q *store.Queries) error {
+		if err := LockTicketProjects(ctx, q, ws, keys); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return invalid("keys", "unknown ticket")
+			}
+			return err
+		}
 		for _, k := range keys {
 			if _, err := applyPatch(ctx, q, ws, actor, k, p); err != nil {
 				if errors.Is(err, ErrNotFound) {
@@ -398,10 +409,12 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		next.DescriptionMd = *p.DescriptionMd
 		add(VerbDescriptionEdited, nil)
 	}
-	if p.Status != nil && *p.Status != cur.Status {
+	if p.Status != nil {
 		if err := checkEnum("status", *p.Status, Statuses); err != nil {
 			return cur, err
 		}
+	}
+	if p.Status != nil && *p.Status != cur.Status {
 		if *p.Status == "canceled" {
 			if actor.Type != "user" {
 				return cur, apperr.Conflict("only a person may cancel a ticket")
@@ -458,10 +471,22 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			if err != nil {
 				return cur, err
 			}
+			if e.Status == "done" {
+				return cur, apperr.Conflict("epic is done")
+			}
 			payload["epic_id"], payload["epic_name"] = e.ID, e.Name
 		}
 		next.EpicID = p.EpicID.Value
 		add(VerbEpicChanged, payload)
+	}
+	if next.EpicID != nil && next.Status != "done" && next.Status != "canceled" && (cur.Status == "done" || cur.Status == "canceled") {
+		e, err := r.epic(ctx, next.EpicID, cur.ProjectID)
+		if err != nil {
+			return cur, err
+		}
+		if e.Status == "done" {
+			return cur, apperr.Conflict("epic is done")
+		}
 	}
 	if p.Estimate.Set {
 		v := emptyToNil(p.Estimate.Value)
@@ -479,14 +504,20 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			v := int32(*p.EstimatePoints.Value)
 			points = &v
 		}
-		if !ptrEq(points, cur.EstimatePoints) || !ptrEq(p.EstimateRationale, cur.EstimateRationale) {
+		rationale := p.EstimateRationale
+		if points == nil {
+			rationale = nil
+		} else if rationale == nil && ptrEq(points, cur.EstimatePoints) {
+			rationale = cur.EstimateRationale
+		}
+		if !ptrEq(points, cur.EstimatePoints) || !ptrEq(rationale, cur.EstimateRationale) {
 			if actor.Type == "agent" && cur.EstimatedByType != nil && *cur.EstimatedByType == "user" {
 				return cur, apperr.Conflict("a person estimated this; comment instead")
 			}
 			if p.EstimateRationale != nil && len([]rune(*p.EstimateRationale)) > 2000 {
 				return cur, invalid("estimate_rationale", "must be at most 2000 characters")
 			}
-			next.EstimatePoints, next.EstimateRationale = points, p.EstimateRationale
+			next.EstimatePoints, next.EstimateRationale = points, rationale
 			if points == nil {
 				next.EstimatedByType, next.EstimatedByID, next.EstimatedAt = nil, nil, nil
 			} else {
@@ -638,14 +669,5 @@ func (s *Service) DetachArtifact(ctx context.Context, ws uuid.UUID, actor Actor,
 
 // SetEpicRequiresMockup flags (or clears) the whole epic as needing person-approved mockups.
 func (s *Service) SetEpicRequiresMockup(ctx context.Context, ws, epicID uuid.UUID, requires bool) (store.Epic, error) {
-	var out store.Epic
-	err := s.tx(ctx, func(q *store.Queries) error {
-		if _, err := q.GetEpic(ctx, store.GetEpicParams{ID: epicID, WorkspaceID: ws}); err != nil {
-			return notFound(err)
-		}
-		var err error
-		out, err = q.SetEpicRequiresMockup(ctx, store.SetEpicRequiresMockupParams{ID: epicID, RequiresMockup: requires})
-		return err
-	})
-	return out, err
+	return s.UpdateEpic(ctx, ws, epicID, nil, &requires)
 }

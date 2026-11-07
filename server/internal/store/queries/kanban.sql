@@ -74,3 +74,11 @@ DELETE FROM epic_criteria WHERE id = $1 RETURNING epic_id, position;
 -- Closes the gap after a delete so positions stay 1..n. The deferrable unique
 -- constraint lets this shift rows in one statement.
 UPDATE epic_criteria SET position = position - 1 WHERE epic_id = $1 AND position > $2;
+
+-- name: ReorderEpicCriterion :exec
+UPDATE epic_criteria SET position = CASE
+ WHEN id = sqlc.arg(id) THEN sqlc.arg(new_position)::int
+ WHEN position > sqlc.arg(old_position)::int AND position <= sqlc.arg(new_position)::int THEN position - 1
+ WHEN position < sqlc.arg(old_position)::int AND position >= sqlc.arg(new_position)::int THEN position + 1
+ ELSE position END
+WHERE epic_id = sqlc.arg(epic_id) AND position BETWEEN least(sqlc.arg(old_position)::int, sqlc.arg(new_position)::int) AND greatest(sqlc.arg(old_position)::int, sqlc.arg(new_position)::int);
