@@ -41,7 +41,9 @@ func webFetchAllowed(ctx context.Context, q *store.Queries, run uuid.UUID, url s
 			continue
 		}
 		if r.Type == "tool_call" {
-			queries[p.ID] = p.Input.Query
+			if _, seen := queries[p.ID]; !seen { // a repeated id can't swap the query
+				queries[p.ID] = p.Input.Query
+			}
 			continue
 		}
 		query, ok := queries[p.ID]
