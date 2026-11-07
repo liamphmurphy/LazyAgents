@@ -205,7 +205,6 @@ test("row checkbox focus permits list shortcuts while search keeps typing", asyn
   await checkbox.focus();
   await page.keyboard.press("Space");
   await expect(checkbox).toBeChecked();
-  await page.keyboard.press("j");
   await expect(row(page, "WEB-4")).toHaveAttribute("data-focused", "true");
   await page.keyboard.press("j");
   await expect(row(page, "WEB-5")).toHaveAttribute("data-focused", "true");
