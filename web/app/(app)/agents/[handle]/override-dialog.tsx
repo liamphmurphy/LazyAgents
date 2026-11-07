@@ -51,7 +51,10 @@ export function OverrideDialog({
   const removals = skillsRemove.split(/[,\s]+/).filter(Boolean);
   const skillNameValid = (name: string) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(name);
   const removalsValid = removals.every(skillNameValid) && new Set(removals).size === removals.length;
-  const canAddSkill = skillNameValid(skill.name.trim()) && !!skill.description.trim() && !!skill.body.trim() && !skillsAdd.some((s) => s.name === skill.name.trim()) && skillsAdd.length < 30;
+  // The server caps a skill body at 64 KiB in bytes, not characters.
+  const skillBodyTooLong = new TextEncoder().encode(skill.body.trim()).length > 65536;
+  const skillDraftPending = !!(skill.name.trim() || skill.description.trim() || skill.body.trim());
+  const canAddSkill = skillNameValid(skill.name.trim()) && !!skill.description.trim() && !!skill.body.trim() && !skillBodyTooLong && !skillsAdd.some((s) => s.name === skill.name.trim()) && skillsAdd.length < 30;
 
   function build(): AgentOverride {
     const sc: Record<string, ScopeMode> = {};
@@ -184,6 +187,7 @@ export function OverrideDialog({
               <Field label="Added skill name" htmlFor="ov-skill-name"><TextInput id="ov-skill-name" mono maxLength={64} value={skill.name} onChange={(e) => setSkill({ ...skill, name: e.target.value })} /></Field>
               <Field label="When to use this skill" htmlFor="ov-skill-description"><TextInput id="ov-skill-description" maxLength={1024} value={skill.description} onChange={(e) => setSkill({ ...skill, description: e.target.value })} /></Field>
               <Field label="Skill instructions" htmlFor="ov-skill-body"><TextArea id="ov-skill-body" mono rows={4} maxLength={65536} value={skill.body} onChange={(e) => setSkill({ ...skill, body: e.target.value })} /></Field>
+              {skillBodyTooLong && <p role="alert" className="text-xs text-pill-blocked-fg">Skill instructions are over 64 KiB. Shorten them before adding.</p>}
               <p className="text-xs text-fg-tertiary">Up to 30 added skills. The resolved result keeps agent skills first and caps the total at 30. Add the draft skill or clear it before saving.</p>
               {(skill.name || skill.description || skill.body) && <Button variant="ghost" onClick={() => setSkill({ name: "", description: "", body: "" })}>Clear skill draft</Button>}
               <Button variant="outline" disabled={!canAddSkill} onClick={() => { setSkillsAdd([...skillsAdd, { name: skill.name.trim(), description: skill.description.trim(), body: skill.body.trim() }]); setSkill({ name: "", description: "", body: "" }); }}>Add project skill</Button>
@@ -206,7 +210,7 @@ export function OverrideDialog({
             <Dialog.Close asChild>
               <Button variant="ghost">Cancel</Button>
             </Dialog.Close>
-            <Button variant="primary" disabled={save.isPending || !removalsValid || !!skill.name || !!skill.description || !!skill.body} onClick={() => submit(build())}>
+            <Button variant="primary" disabled={save.isPending || !removalsValid || skillDraftPending} onClick={() => submit(build())}>
               Save override
             </Button>
           </div>
