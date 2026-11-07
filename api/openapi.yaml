@@ -3235,6 +3235,13 @@ components:
         requires_mockup: { type: boolean, description: "The ticket changes UI: a person must approve a mockup before implementation" }
         estimate_points: { $ref: "#/components/schemas/EstimatePoints" }
         estimate_rationale: { type: string, maxLength: 2000 }
+        planner_estimate:
+          type: object
+          readOnly: true
+          description: Original planner estimate, preserved across reviewer saves.
+          properties:
+            points: { $ref: "#/components/schemas/EstimatePoints" }
+            rationale: { type: string }
     PlanningInput:
       type: object
       required: [project, agent_id, goal]

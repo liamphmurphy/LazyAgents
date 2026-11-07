@@ -2789,6 +2789,11 @@ export interface components {
             requires_mockup?: boolean;
             estimate_points?: components["schemas"]["EstimatePoints"];
             estimate_rationale?: string;
+            /** @description Original planner estimate, preserved across reviewer saves. */
+            readonly planner_estimate?: {
+                points?: components["schemas"]["EstimatePoints"];
+                rationale?: string;
+            };
         };
         PlanningInput: {
             project: string;
