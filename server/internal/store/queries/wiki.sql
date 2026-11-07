@@ -283,3 +283,45 @@ HAVING count(*) FILTER (WHERE h.in_head) >= 1
    AND count(*) FILTER (WHERE h.in_head OR h.in_any) >= 2
 ORDER BY score DESC, lower(h.path)
 LIMIT sqlc.arg(lim);
+
+-- name: ListADRDocs :many
+-- ADR documents and published wiki pages titled "ADR …" (outside agent
+-- memory and Patterns/), with their current body for status parsing.
+SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.updated_at, v.body_md
+FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
+WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL
+  AND (ar.type = 'adr'
+       OR (ar.type = 'note' AND ar.title ~* '^adr([^a-z]|$)'
+           AND lower(ar.path) NOT LIKE 'agents/%' AND lower(ar.path) NOT LIKE 'patterns/%'))
+ORDER BY ar.updated_at DESC;
+
+-- name: ListArtifactCitations :many
+-- Reads of an artifact grouped by the run that made them (runs that still
+-- exist), with the run's ticket or chat.
+SELECT ru.id AS run_id, ru.purpose, a.id AS agent_id, a.name AS agent_name, a.handle AS agent_handle, a.color_index AS agent_color_index,
+  t.key AS ticket_key, t.title AS ticket_title,
+  coalesce(cs.id::text, '')::text AS chat_id, coalesce(cs.title, '')::text AS chat_title,
+  count(*)::int AS reads, max(r.read_at)::timestamptz AS last_read_at
+FROM artifact_reads r
+JOIN artifact_versions v ON v.id = r.version_id
+JOIN runs ru ON ru.id = r.run_id
+JOIN agents a ON a.id = r.agent_id
+LEFT JOIN tickets t ON t.id = ru.ticket_id
+LEFT JOIN LATERAL (
+  SELECT s.id, s.title FROM chat_sessions s
+  WHERE ru.purpose = 'chat'
+    AND (s.current_run_id = ru.id OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.session_id = s.id AND m.run_id = ru.id))
+  LIMIT 1
+) cs ON true
+WHERE v.artifact_id = $1
+GROUP BY ru.id, a.id, t.id, cs.id, cs.title
+ORDER BY max(r.read_at) DESC;
+
+-- name: ListArtifactUnlinkedReaders :many
+-- Reads with no run (older data) or whose run is gone, per agent.
+SELECT a.id, a.name, a.handle, a.color_index, count(*)::int AS reads, max(r.read_at)::timestamptz AS last_read_at
+FROM artifact_reads r
+JOIN artifact_versions v ON v.id = r.version_id
+JOIN agents a ON a.id = r.agent_id
+WHERE v.artifact_id = $1 AND (r.run_id IS NULL OR NOT EXISTS (SELECT 1 FROM runs ru WHERE ru.id = r.run_id))
+GROUP BY a.id ORDER BY max(r.read_at) DESC;
