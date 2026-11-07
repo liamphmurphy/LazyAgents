@@ -3202,9 +3202,14 @@ components:
         goal: { type: string, maxLength: 20000 }
         epic_id: { type: string, format: uuid }
         artifact_id: { type: string, format: uuid }
+        context_refs:
+          type: array
+          maxItems: 20
+          description: Wiki pages, sections, artifacts and tickets in the project for the planner to read; delivered as context files when the run starts.
+          items: { $ref: "#/components/schemas/ChatContextRef" }
     PlanningSession:
       type: object
-      required: [id, project, goal, run_id, run_state, state, revision, proposals, ticket_keys, ready_keys, created_at, updated_at, harness, model]
+      required: [id, project, goal, run_id, run_state, state, revision, proposals, proposal_count, context_refs, ticket_keys, ready_keys, created_at, updated_at, harness, model]
       properties:
         id: { type: string, format: uuid }
         project: { type: string }
@@ -3222,6 +3227,8 @@ components:
         proposals:
           type: array
           items: { $ref: '#/components/schemas/TicketProposal' }
+        proposal_count: { type: integer, description: How many proposals the planner submitted (0 until it does); ticket_keys counts the accepted ones }
+        context_refs: { type: array, items: { $ref: "#/components/schemas/ChatContextRef" }, description: What the person attached when starting the plan }
         ready_keys: { type: array, items: { type: string }, description: Created tickets currently ready for manual dispatch }
         ticket_keys:
           type: array

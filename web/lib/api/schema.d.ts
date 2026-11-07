@@ -2739,6 +2739,8 @@ export interface components {
             epic_id?: string;
             /** Format: uuid */
             artifact_id?: string;
+            /** @description Wiki pages, sections, artifacts and tickets in the project for the planner to read; delivered as context files when the run starts. */
+            context_refs?: components["schemas"]["ChatContextRef"][];
         };
         PlanningSession: {
             /** Format: uuid */
@@ -2761,6 +2763,10 @@ export interface components {
             state: "planning" | "review" | "accepted" | "dismissed";
             revision: number;
             proposals: components["schemas"]["TicketProposal"][];
+            /** @description How many proposals the planner submitted (0 until it does); ticket_keys counts the accepted ones */
+            proposal_count: number;
+            /** @description What the person attached when starting the plan */
+            context_refs: components["schemas"]["ChatContextRef"][];
             /** @description Created tickets currently ready for manual dispatch */
             ready_keys: string[];
             ticket_keys: string[];
