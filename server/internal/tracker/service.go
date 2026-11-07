@@ -414,6 +414,11 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			return cur, err
 		}
 	}
+	// Delayed completion, runner and PR callbacks must not reopen work a person
+	// canceled after the callback's own transaction ended. Only people reopen it.
+	if cur.Status == "canceled" && actor.Type != "user" {
+		p.Status = nil
+	}
 	if p.Status != nil && *p.Status != cur.Status {
 		if *p.Status == "canceled" {
 			if actor.Type != "user" {
@@ -507,10 +512,14 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		rationale := p.EstimateRationale
 		if points == nil {
 			rationale = nil
+		} else if actor.Type == "user" {
+			rationale = nil
 		} else if rationale == nil && ptrEq(points, cur.EstimatePoints) {
 			rationale = cur.EstimateRationale
 		}
-		if !ptrEq(points, cur.EstimatePoints) || !ptrEq(rationale, cur.EstimateRationale) {
+		ownershipChanged := points != nil && actor.Type == "user" &&
+			(cur.EstimatedByType == nil || *cur.EstimatedByType != "user" || !ptrEq(actor.ID, cur.EstimatedByID))
+		if !ptrEq(points, cur.EstimatePoints) || !ptrEq(rationale, cur.EstimateRationale) || ownershipChanged {
 			if actor.Type == "agent" && cur.EstimatedByType != nil && *cur.EstimatedByType == "user" {
 				return cur, apperr.Conflict("a person estimated this; comment instead")
 			}
@@ -524,7 +533,7 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 				now := time.Now()
 				next.EstimatedByType, next.EstimatedByID, next.EstimatedAt = &actor.Type, actor.ID, &now
 			}
-			add(VerbEstimateChanged, map[string]any{"to_points": points, "rationale": p.EstimateRationale})
+			add(VerbEstimateChanged, map[string]any{"to_points": points, "rationale": rationale})
 		}
 	}
 	if p.DueDate.Set && !dateEq(p.DueDate.Value, cur.DueDate) {

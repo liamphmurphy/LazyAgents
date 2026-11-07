@@ -237,6 +237,13 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if err != nil {
 			return err
 		}
+		// Match tracker/dispatch ordering. Child cancellation may already hold a
+		// ticket FK lock when it wakes this parent; never hold the parent while
+		// waiting for a project locked by a ticket patch.
+		p, err := q.LockProject(ctx, store.LockProjectParams{ID: t.ProjectID, WorkspaceID: run.WorkspaceID})
+		if err != nil {
+			return err
+		}
 		// Serialise a parent's delegate calls (an agent may issue several at once):
 		// the limits below read the other children.
 		if run, err = q.LockRun(ctx, run.ID); err != nil {
@@ -244,6 +251,9 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		}
 		if run.State != "running" && !(run.State == "waiting" && deref(run.WaitReason) == "delegation") {
 			return apperr.Conflict("your run is no longer running")
+		}
+		if _, t, err = s.delegating(ctx, q, c, ticketKey); err != nil {
+			return err
 		}
 		turns, err := q.ListTurns(ctx, run.ID)
 		if err != nil {
@@ -287,10 +297,6 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 			contract.Branch, contract.Worktree = pc.Branch, pc.Worktree
 		}
 		if err := checkParallel(kids, contract); err != nil {
-			return err
-		}
-		p, err := q.LockProject(ctx, store.LockProjectParams{ID: t.ProjectID, WorkspaceID: ws})
-		if err != nil {
 			return err
 		}
 		resolved, err := agents.ResolveRunnable(ctx, q, ws, sub, p.Key)

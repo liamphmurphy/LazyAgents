@@ -236,3 +236,41 @@ func TestTicketRevisionAndEstimate(t *testing.T) {
 		t.Fatal("agent overwrote human estimate")
 	}
 }
+
+func TestHumanConfirmsAgentEstimate(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	ticket, err := f.svc.Create(ctx, f.ws, f.maya, tracker.NewTicket{ProjectKey: "PAY", Title: "ownership"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentID := f.agent["quill"].ID
+	agent := tracker.AgentActor(agentID)
+	rationale := "agent assessment"
+	estimated, err := f.svc.Update(ctx, f.ws, agent, ticket.Key, tracker.Patch{EstimatePoints: tracker.SetTo(5), EstimateRationale: &rationale})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := len(verbs(t, f, ticket.Key))
+	confirmed, err := f.svc.Update(ctx, f.ws, f.maya, ticket.Key, tracker.Patch{EstimatePoints: tracker.SetTo(5)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if confirmed.EstimatedByType == nil || *confirmed.EstimatedByType != "user" || confirmed.EstimatedByID == nil || *confirmed.EstimatedByID != *f.maya.ID || confirmed.EstimateRationale != nil || confirmed.Revision != estimated.Revision+1 {
+		t.Fatalf("confirmation did not transfer ownership: %+v", confirmed)
+	}
+	events, err := f.q.ListTicketActivity(ctx, &ticket.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != before+1 || events[len(events)-1].Verb != tracker.VerbEstimateChanged || events[len(events)-1].ActorType != "user" {
+		t.Fatalf("missing confirmation activity: %+v", events)
+	}
+	again, err := f.svc.Update(ctx, f.ws, f.maya, ticket.Key, tracker.Patch{EstimatePoints: tracker.SetTo(5)})
+	if err != nil || again.Revision != confirmed.Revision || len(verbs(t, f, ticket.Key)) != len(events) {
+		t.Fatalf("repeat confirmation: %+v %v", again, err)
+	}
+	if _, err = f.svc.Update(ctx, f.ws, agent, ticket.Key, tracker.Patch{EstimatePoints: tracker.SetTo(8)}); err == nil {
+		t.Fatal("agent overwrote confirmed human estimate")
+	}
+}
