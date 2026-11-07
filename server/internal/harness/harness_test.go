@@ -437,6 +437,19 @@ func TestCodexDependencyCachePermissions(t *testing.T) {
 	}
 }
 
+func TestCodexResumeDependencyCacheFlagBeforeSubcommand(t *testing.T) {
+	workspace := ws
+	workspace.DependencyCacheDir = "/runner/cache"
+	inv, err := (Codex{}).Invocation(workspace, Turn{Spec: spec("tests:run", "allowed"), SessionID: "session", Prompt: "continue"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, resume := slices.Index(inv.Argv, "--add-dir"), slices.Index(inv.Argv, "resume")
+	if cache < 0 || resume < 0 || cache >= resume || inv.Argv[cache+1] != workspace.DependencyCacheDir {
+		t.Fatalf("exec cache flag must precede resume: %v", inv.Argv)
+	}
+}
+
 func TestDirectExecutionPolicyAndSelectiveContextInstructions(t *testing.T) {
 	s := spec()
 	s.Instructions = "Standing role routine: hand implementation to an implementer."

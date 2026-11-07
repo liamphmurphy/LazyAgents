@@ -2,3 +2,6 @@
 .DS_Store
 server/tmp/
 server/.lazyagents/runs/
+
+# Claude Code agent worktrees (separate checkouts, never commit)
+.claude/worktrees/
