@@ -50,6 +50,7 @@ export async function installBoardApi(page: Page) {
   const patches: Array<{ key: string; body: S["TicketPatch"] }> = [];
   const boardRequests: string[] = [];
   const unhandled: string[] = [];
+  const savedViews: S["SavedView"][] = [];
   let rejection: { status: number; message: string; field?: string } | undefined;
   const criteriaRequests: string[] = [];
   let gate: Promise<void> | undefined;
@@ -70,7 +71,7 @@ export async function installBoardApi(page: Page) {
   }
   function summary(t: S["Ticket"]): S["TicketSummary"] {
     return { id: t.id, key: t.key, project_key: t.project.key, title: t.title, status: t.status, priority: t.priority,
-      assignee: t.assignee, epic: t.epic, labels: t.labels, estimate_points: t.estimate_points, updated_at: t.updated_at,
+      assignee: t.assignee, epic: t.epic, labels: t.labels, estimate_points: t.estimate_points, updated_at: t.updated_at, pr: t.pr,
       unmet_dependencies: t.blocked_by.filter((b) => b.status !== "done").length,
       criteria_total: t.criteria.length, criteria_done: t.criteria.filter((c) => c.done).length };
   }
@@ -95,6 +96,27 @@ export async function installBoardApi(page: Page) {
     }) } satisfies S["EpicOverviewList"]);
     if (path === "/tickets" && request.method() === "GET") return json({ tickets: tickets.filter((t) => !url.searchParams.get("epic") || t.epic?.id === url.searchParams.get("epic")).map(summary) });
     if (path === "/runner") return json(runner);
+    // Saved views: per person, names unique ignoring case (409).
+    if (path === "/saved-views" && request.method() === "GET") return json({ views: [...savedViews].sort((a, b) => a.name.localeCompare(b.name)) });
+    const view = savedViews.find((v) => path === `/saved-views/${v.id}`);
+    if ((path === "/saved-views" && request.method() === "POST") || (view && request.method() === "PATCH")) {
+      const body = request.postDataJSON() as Partial<S["SavedViewInput"]>;
+      const name = body.name?.trim();
+      if (name && savedViews.some((v) => v !== view && v.name.toLowerCase() === name.toLowerCase())) {
+        return json({ code: "conflict", message: "You already have a view with that name", field: "name" }, 409);
+      }
+      if (view) {
+        Object.assign(view, name ? { name } : {}, body.query !== undefined ? { query: body.query } : {});
+        return json(view);
+      }
+      const created = { id: `view-${savedViews.length + 1}`, name: name ?? "", query: body.query ?? "", created_at: stamp(1), updated_at: stamp(1) };
+      savedViews.push(created);
+      return json(created, 201);
+    }
+    if (view && request.method() === "DELETE") {
+      savedViews.splice(savedViews.indexOf(view), 1);
+      return route.fulfill({ status: 204 });
+    }
     if (/^\/projects\/(WEB|OPS)\/board$/.test(path)) {
       boardRequests.push(request.url());
       if (boardError) return json({ code: "internal", message: "Board service unavailable" }, 501);
@@ -222,7 +244,7 @@ export async function installBoardApi(page: Page) {
   });
   await page.route("**/api/v1/**", handle);
   return {
-    epics, tickets, criteria, patches, projects, counts, runner, boardRequests, unhandled, epicWrites, criteriaRequests,
+    epics, tickets, criteria, patches, projects, counts, runner, boardRequests, unhandled, epicWrites, criteriaRequests, savedViews,
     failCriteria: (message?: string) => { criterionError = message; },
     rejectNext: (status: number, message: string, field?: string) => { rejection = { status, message, field }; },
     failBoard: (fail: boolean) => { boardError = fail; },
