@@ -236,7 +236,7 @@ export const PURPOSE_LABEL: Record<string, string> = { ticket: "Ticket run", pla
 // ------------------------------------------------------------- view mode
 
 /** Run page modes. "graph" joins this list with the Graph view ticket. */
-export const RUN_VIEW_MODES = ["simple", "details"] as const;
+export const RUN_VIEW_MODES = ["simple", "details", "graph"] as const;
 export type RunViewMode = (typeof RUN_VIEW_MODES)[number];
 export const RUN_VIEW_STORAGE_KEY = "lazyagents.runs.view";
 

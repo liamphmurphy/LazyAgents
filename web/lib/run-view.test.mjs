@@ -114,6 +114,8 @@ test("pickRunView: deep links open Details, then ?view=, then localStorage, then
   assert.equal(pickRunView("simple", "#turn-3", "simple"), "details");
   assert.equal(pickRunView(null, "#event-42", null), "details");
   assert.equal(pickRunView(null, "#top", null), "simple");
+  assert.equal(pickRunView("graph", "", null), "graph");
+  assert.equal(pickRunView(null, "", "graph"), "graph");
   assert.deepEqual(parseRunAnchor("#turn-3"), { kind: "turn", n: 3 });
   assert.deepEqual(parseRunAnchor("event-7"), { kind: "event", n: 7 });
   assert.equal(parseRunAnchor("#turn-x"), null);
