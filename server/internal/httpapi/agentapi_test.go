@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -124,11 +125,14 @@ func TestAgentAPIOverMCP(t *testing.T) {
 	if msg := callErr("claim_ticket", map[string]any{"ticket": "PAY-203"}); !strings.Contains(msg, "isn't assigned") {
 		t.Fatalf("claiming someone else's ticket: %s", msg)
 	}
-	call("claim_ticket", map[string]any{"ticket": "PAY-214"})
+	claimed := call("claim_ticket", map[string]any{"ticket": "PAY-214"})
 	tk := call("get_ticket", map[string]any{"ticket": "PAY-214"})
 	docs := tk["artifacts"].([]any)
 	if len(docs) != 4 || len(tk["criteria"].([]any)) != 5 {
 		t.Fatalf("get_ticket: %d docs %d criteria", len(docs), len(tk["criteria"].([]any)))
+	}
+	if det, _ := claimed["ticket_details"].(map[string]any); det["key"] != "PAY-214" || !reflect.DeepEqual(det, map[string]any(tk)) {
+		t.Fatalf("claim_ticket ticket_details differs from get_ticket: %v", claimed["ticket_details"])
 	}
 	prdID := docs[0].(map[string]any)["id"].(string)
 	sec4 := call("read_artifact", map[string]any{"artifact": prdID, "section": "reconciliation-performance"})
@@ -139,7 +143,12 @@ func TestAgentAPIOverMCP(t *testing.T) {
 		t.Fatalf("ADR by number: %v", adr["title"])
 	}
 	call("post_plan", map[string]any{"steps": []string{"Create partitions", "Dual-write", "Apply to staging"}})
-	call("update_step", map[string]any{"step": 3, "state": "current"})
+	if r := call("update_step", map[string]any{"step": 1, "state": "done"}); r["current"] != float64(2) {
+		t.Fatalf("done should advance to step 2: %v", r)
+	}
+	if r := call("update_step", map[string]any{"step": 3, "state": "current"}); r["current"] != nil {
+		t.Fatalf("jump to current reported an advance: %v", r)
+	}
 
 	ap := call("request_approval", map[string]any{
 		"scope": "db:migrate", "action": "Apply 0042_partition_ledger_entries to staging",
@@ -198,8 +207,20 @@ func TestAgentAPIOverMCP(t *testing.T) {
 	if msg := callErr("complete_run", map[string]any{"outcome": "Partial work"}); !strings.Contains(msg, "unchecked") {
 		t.Fatalf("unchecked criteria completion: %s", msg)
 	}
-	for i := range tk["criteria"].([]any) {
-		call("check_criterion", map[string]any{"n": i + 1, "done": true})
+	for _, args := range []map[string]any{{}, {"n": 1, "ns": []int{2}}, {"ns": []int{1, 99}}} {
+		if msg := callErr("check_criterion", args); msg == "" {
+			t.Fatalf("check_criterion %v accepted", args)
+		}
+	}
+	if msg := callErr("check_criterion", map[string]any{"ns": []int{1, 99}}); !strings.Contains(msg, "no criterion 99") {
+		t.Fatalf("bad ns: %s", msg)
+	}
+	call("check_criterion", map[string]any{"n": 1})
+	call("check_criterion", map[string]any{"ns": []int{2, 3, 4, 5}, "done": true})
+	for i, c := range call("get_ticket", map[string]any{"ticket": "PAY-214"})["criteria"].([]any) {
+		if c.(map[string]any)["done"] != true {
+			t.Fatalf("criterion %d not ticked", i+1)
+		}
 	}
 	call("complete_run", map[string]any{"outcome": "Applied to staging"})
 

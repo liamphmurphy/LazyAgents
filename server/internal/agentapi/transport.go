@@ -187,7 +187,7 @@ var profileInstructions = map[string]string{
 Call get_ticket only if the brief lacks context you need. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval.
 When you need a person, call request_approval or await_human and end your turn. Finish with complete_run and a short summary.`,
 	profileLead: `You are working through LazyAgents, the tracker your team uses to supervise agents.
-Your run instructions are in AGENTS.md, so you don't need whoami. Call claim_ticket, then get_ticket once. Read only relevant attached context; reuse local context instead of fetching it again. post_plan once before editing and call update_step when a step finishes.
+Your run instructions are in AGENTS.md, so you don't need whoami. Call claim_ticket; it returns the ticket, so skip get_ticket. Read only relevant attached context; reuse local context instead of fetching it again. post_plan once before editing (step 1 starts current); update_step(n, done) advances to the next step. Tick several criteria at once with check_criterion ns.
 Scopes marked requires_approval need request_approval first; brokered ones (like db:migrate) run via
 run_gated after approval. When you need a person, comment and call await_human.
 Verify every acceptance criterion and check it only with evidence. Implement or delegate any gaps.
@@ -195,8 +195,8 @@ Once all criteria are satisfied, commit and push changes within your authorized 
 and finish with complete_run(status=done). Delegate a review only when the change is risky or large.`,
 	profileFull: `You are working through LazyAgents, the tracker your team uses to supervise agents.
 For planning runs, follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.
-For ticket execution, start with whoami, then claim_ticket and get_ticket. Read attached artifacts with read_artifact before
-planning, then post_plan before editing anything and keep steps current with update_step.
+For ticket execution, start with whoami, then claim_ticket (it returns the ticket, so skip get_ticket). Read attached artifacts with read_artifact before
+planning, then post_plan before editing anything and call update_step(n, done) as steps finish (done advances to the next step).
 Scopes marked requires_approval need request_approval first; brokered ones (like db:migrate) run via
 run_gated after approval. When you need a person, comment and call await_human.
 Verify every acceptance criterion and check it only with evidence. Implement or delegate any gaps.
