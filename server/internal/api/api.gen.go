@@ -2900,7 +2900,7 @@ type SavedViewPatch struct {
 
 // ScopeInfo defines model for ScopeInfo.
 type ScopeInfo struct {
-	// ApiOnly Only possible through the LazyAgents API (wiki edits), so every mode is enforced server-side
+	// ApiOnly Only possible through the Vesper API (wiki edits), so every mode is enforced server-side
 	ApiOnly     *bool   `json:"api_only,omitempty"`
 	Brokered    bool    `json:"brokered"`
 	Description string  `json:"description"`

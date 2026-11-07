@@ -1,4 +1,4 @@
-// Package harness adapts coding-agent CLIs to LazyAgents runs (PLAN.md
+// Package harness adapts coding-agent CLIs to Vesper runs (PLAN.md
 // §6.2): how to invoke one turn (argv, env, files to write) and how to read
 // its event stream into normalized run events. Adapters know nothing about
 // containers or the database; the runner does both.
@@ -21,7 +21,7 @@ type Workspace struct {
 	DependencyCacheDir string // shared runner cache; execution scopes may write it
 	OpenCodeStateDir   string // backend-owned persistent path outside the checkout; required by OpenCode
 	Dir                string // absolute path of the checkout, e.g. /workspace
-	MCPURL             string // the LazyAgents MCP endpoint, reachable from the turn
+	MCPURL             string // the Vesper MCP endpoint, reachable from the turn
 	Token              string // the run's agent token (la_…)
 	TokenEnv           string // env var that carries it, e.g. LAZYAGENTS_TOKEN
 }
@@ -143,7 +143,7 @@ func SubagentAgentsMD(existing string, spec agentdef.Resolved, contextFiles []st
 // ChatAgentsMD renders conversation instructions without ticket workflow sections.
 func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project string) []byte {
 	var b strings.Builder
-	b.WriteString(sectionStart + "\n# LazyAgents chat: project " + project + "\n\n")
+	b.WriteString(sectionStart + "\n# Vesper chat: project " + project + "\n\n")
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
 	b.WriteString("Use search_knowledge, read_page, read_artifact, get_ticket and get_backlinks to look up project context. Cite sources with [[…]].\n")
 	b.WriteString("Use create_ticket, create_epic and list_epics to manage this project when the person asks. Return identifiers for created items. Do not call claim_ticket, complete_run or propose_tickets. Do not modify files, run shell commands, delegate work, or write memory.\n\n")
@@ -164,14 +164,14 @@ func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project string)
 func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string, delegated bool) []byte {
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n")
-	b.WriteString("# LazyAgents run: " + ticket + "\n\n")
+	b.WriteString("# Vesper run: " + ticket + "\n\n")
 	if delegated {
-		b.WriteString("You're a sub agent running headless for LazyAgents. A main agent delegated one task to you and is waiting. ")
+		b.WriteString("You're a sub agent running headless for Vesper. A main agent delegated one task to you and is waiting. ")
 		b.WriteString("Don't call claim_ticket. Work in this checkout on the current branch, commit what you change, and call complete_run ")
 		b.WriteString("with a short summary when you're done (or blocked). If you need a person, call request_approval or await_human and end your turn. ")
 		b.WriteString("Your task brief is self-contained: call get_ticket only if it lacks context you need, and don't post plans or step updates.\n\n")
 	} else {
-		b.WriteString("You're running headless for LazyAgents. Use the `lazyagents` MCP tools to report progress: claim_ticket first (it returns the ticket, so skip get_ticket); ")
+		b.WriteString("You're running headless for Vesper. Use the `lazyagents` MCP tools to report progress: claim_ticket first (it returns the ticket, so skip get_ticket); ")
 		b.WriteString("post_plan once before editing (step 1 starts current), update_step(n, done) when a step finishes (the next step becomes current), check_criterion with ns to tick verified criteria together, request_approval before any scope that needs it, and complete_run at the end. ")
 		b.WriteString("Every tool call re-reads your whole context, so skip calls that don't add information. ")
 		b.WriteString("When you need a person (an approval, an answer), call request_approval or await_human and then end your turn: ")

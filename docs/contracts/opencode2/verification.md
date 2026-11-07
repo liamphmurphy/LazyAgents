@@ -266,7 +266,7 @@ Findings (a to g):
   close: **no lingering descendants** (the pre-existing `serve --service` background
   process on this machine is not ours and was left alone). The runner's
   process-group SIGINT therefore works.
-- **e. Config isolation: ambient config can override the LazyAgents policy.**
+- **e. Config isolation: ambient config can override the Vesper policy.**
   An ambient config that allows everything, adds an MCP server (`ambient`) and an
   instructions file was tried in each layer, with the generated `opencode.json` in
   the cwd:
@@ -277,7 +277,7 @@ Findings (a to g):
   | ancestor directory `opencode.json` | **yes** (same) | yes |
   | `OPENCODE_CONFIG=<file>` | **yes** (same) | yes |
   | `$HOME/.config/opencode/opencode.json` (with `XDG_CONFIG_HOME` set) | no (not read) | no |
-  | `<cwd>/.opencode/opencode.json` | no (LazyAgents deny still wins, MCP server dropped) | **yes** |
+  | `<cwd>/.opencode/opencode.json` | no (Vesper deny still wins, MCP server dropped) | **yes** |
   | `OPENCODE_CONFIG_CONTENT` | no | **yes** |
 
   `--model` on the command line always won over an ambient `model`. Because the

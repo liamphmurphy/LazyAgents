@@ -3,7 +3,7 @@
 // it emits Claude's stream-json and reads the MCP server from --mcp-config;
 // invoked as `codex exec [resume] … --json` it emits Codex's JSONL and reads
 // the server from -c mcp_servers.lazyagents.* overrides. Either way it does
-// real work through the LazyAgents MCP server. Invoked as `opencode run …` it
+// real work through the Vesper MCP server. Invoked as `opencode run …` it
 // emits the SYNTHETIC OpenCode envelope the adapter's parser assumes, reads the
 // server from the generated ./opencode.json, and answers `opencode --version`.
 //
@@ -466,7 +466,7 @@ func main() {
 			os.Exit(2)
 		}
 		if strings.Contains(string(body), `"deny"`) {
-			text("Tool blocked; waiting for LazyAgents approval.")
+			text("Tool blocked; waiting for Vesper approval.")
 			result(false, "Waiting for tool approval")
 			return
 		}

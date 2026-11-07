@@ -1,4 +1,4 @@
-// Command lazyagents is the single LazyAgents binary.
+// Command lazyagents is the single Vesper binary.
 //
 //	lazyagents serve        run migrations, ensure buckets, serve HTTP (default)
 //	lazyagents migrate      run migrations and exit

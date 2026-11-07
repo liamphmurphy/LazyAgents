@@ -20,7 +20,7 @@ import (
 )
 
 // These run the real runner against the fake CLI speaking the SYNTHETIC
-// OpenCode envelope (cmd/fake-harness), so they prove LazyAgents' dispatch,
+// OpenCode envelope (cmd/fake-harness), so they prove Vesper's dispatch,
 // credentials, isolation, completion and usage rules, not the real wire.
 
 const (

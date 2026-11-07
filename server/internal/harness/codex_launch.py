@@ -1,6 +1,6 @@
 """Validate active hooks before trusting this invocation's generated policy hook.
 
-Only LazyAgents' exact session hook and already trusted/managed hooks may run.
+Only Vesper's exact session hook and already trusted/managed hooks may run.
 This is an offline protocol preflight: no thread or model turn is started.
 """
 import json
@@ -25,9 +25,9 @@ def validate_hooks(result, expected):
                     and hook.get("matcher") == "*" and not hook.get("async", False)):
                 found += 1
             elif hook.get("trustStatus") not in ("trusted", "managed"):
-                raise RuntimeError("Unreviewed Codex hook found; review it in Codex before running LazyAgents")
+                raise RuntimeError("Unreviewed Codex hook found; review it in Codex before running Vesper")
     if found != 1:
-        raise RuntimeError("LazyAgents policy hook was not loaded exactly once; refusing to run without tool gating")
+        raise RuntimeError("Vesper policy hook was not loaded exactly once; refusing to run without tool gating")
 
 
 def main():
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as error:
-        message = "LazyAgents Codex preflight: " + str(error)
+        message = "Vesper Codex preflight: " + str(error)
         print(json.dumps({"type": "error", "message": message}), flush=True)
         print(message, file=sys.stderr)
         sys.exit(1)

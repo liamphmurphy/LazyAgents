@@ -176,7 +176,7 @@ func TestResumedRunSwitchesWithHandoff(t *testing.T) {
 	if len(lines) != 2 || lines[1].Codex != "codex" || lines[1].Resume != "" {
 		t.Fatalf("second turn must be a fresh codex session: %+v", lines)
 	}
-	if !strings.HasPrefix(lines[1].Prompt, "Continue this existing LazyAgents run after claude-code") {
+	if !strings.HasPrefix(lines[1].Prompt, "Continue this existing Vesper run after claude-code") {
 		t.Fatalf("no handoff prompt: %q", lines[1].Prompt)
 	}
 	turns, _ := e.q.ListTurns(e.ctx, run.ID)
@@ -290,7 +290,7 @@ func TestRunReturnsToPrimaryWhenLimitExpires(t *testing.T) {
 	if len(lines) != 3 || lines[2].Codex != "claude" || lines[2].Resume != "" {
 		t.Fatalf("third turn must be a fresh claude session: %+v", lines)
 	}
-	if !strings.HasPrefix(lines[2].Prompt, "Continue this existing LazyAgents run after codex") {
+	if !strings.HasPrefix(lines[2].Prompt, "Continue this existing Vesper run after codex") {
 		t.Fatalf("no handoff prompt: %q", lines[2].Prompt)
 	}
 	got := e.run("PAY-214")

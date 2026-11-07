@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: LazyAgents API
+  title: Vesper API
   version: 0.2.0
   description: |
-    REST contract for the LazyAgents UI and agents. This file is the source of
+    REST contract for the Vesper UI and agents. This file is the source of
     truth: `make gen` regenerates the Go server interfaces and the TypeScript client.
 
     There is no login for now: every request acts as the workspace's local
@@ -2700,7 +2700,7 @@ components:
         description: { type: string }
         secret: { type: string }
         brokered: { type: boolean }
-        api_only: { type: boolean, description: "Only possible through the LazyAgents API (wiki edits), so every mode is enforced server-side" }
+        api_only: { type: boolean, description: "Only possible through the Vesper API (wiki edits), so every mode is enforced server-side" }
     AgentDetail:
       type: object
       required: [agent, specialty, definition, spec, versions, overrides, harnesses, catalog]

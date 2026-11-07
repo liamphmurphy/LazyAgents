@@ -1,9 +1,9 @@
 package agentdef
 
-// Caps is what LazyAgents can enforce or observe on a harness (§6.2).
+// Caps is what Vesper can enforce or observe on a harness (§6.2).
 type Caps struct {
 	ToolGating       bool `json:"tool_gating"`       // allow/deny individual tools
-	PermissionPrompt bool `json:"permission_prompt"` // route permission prompts to LazyAgents
+	PermissionPrompt bool `json:"permission_prompt"` // route permission prompts to Vesper
 	NativeCost       bool `json:"native_cost"`       // harness reports cost itself
 	Resume           bool `json:"resume"`            // resume a session by id
 }
@@ -19,7 +19,7 @@ var Capabilities = map[string]Caps{
 
 // Enforcement is how strongly a scope holds (§6.3), strongest first:
 //   - credential: the agent only gets the secret when the scope is allowed;
-//   - brokered:   LazyAgents performs the action (run_gated) after approval;
+//   - brokered:   Vesper performs the action (run_gated) after approval;
 //   - harness:    best-effort tool rules in the harness;
 //   - none:       nothing stops it beyond instructions (e.g. Codex tool rules).
 type Enforcement string
@@ -40,7 +40,7 @@ type ScopeInfo struct {
 	Secret string `json:"secret,omitempty"`
 	// Brokered scopes can run server-side through run_gated after approval.
 	Brokered bool `json:"brokered"`
-	// APIOnly scopes cover actions that only exist in the LazyAgents API
+	// APIOnly scopes cover actions that only exist in the Vesper API
 	// (wiki edits), so the server enforces every mode itself.
 	APIOnly bool `json:"api_only,omitempty"`
 }
@@ -63,11 +63,11 @@ func EnforcementFor(scope string, mode Mode, harness string) (Enforcement, strin
 	caps := Capabilities[harness]
 	switch {
 	case scope == "tracker:epics" && mode == Allowed:
-		return ByBroker, "check_epic_criterion is served by LazyAgents"
+		return ByBroker, "check_epic_criterion is served by Vesper"
 	case scope == "tracker:epics":
 		return ByBroker, "check_epic_criterion is refused unless allowed (requires_approval counts as denied in v1)"
 	case info.APIOnly && mode == Allowed:
-		return ByBroker, "Edits go through LazyAgents and publish directly"
+		return ByBroker, "Edits go through Vesper and publish directly"
 	case info.APIOnly && mode == RequiresApproval:
 		return ByBroker, "Edits are saved as suggestions a person accepts"
 	case info.APIOnly:
@@ -76,7 +76,7 @@ func EnforcementFor(scope string, mode Mode, harness string) (Enforcement, strin
 		return ByBroker, "Runs server-side after a person approves"
 	case mode == RequiresApproval:
 		if caps.PermissionPrompt {
-			return ByHarness, "Each use prompts for approval through LazyAgents"
+			return ByHarness, "Each use prompts for approval through Vesper"
 		}
 		return ByNothing, "This harness can't pause for approval; the agent is told to ask first"
 	case info.Secret != "" && mode == Denied:

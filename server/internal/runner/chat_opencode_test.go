@@ -105,7 +105,7 @@ func TestOpenCodeChatTurnsResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Read-only: no edit/write/bash grants; only the LazyAgents MCP server.
+	// Read-only: no edit/write/bash grants; only the Vesper MCP server.
 	for _, bad := range []string{`"edit"`, `"write"`, `"bash"`} {
 		if strings.Contains(string(cfg), bad) {
 			t.Errorf("chat opencode.json grants %s:\n%s", bad, cfg)
