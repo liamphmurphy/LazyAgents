@@ -109,6 +109,9 @@ test("[[ picks context as removable chips and sends them as context_refs", async
   await expect(chips(page).first()).toContainText("Eng/Plan");
   await expect(composer(page)).toHaveValue("see ");
 
+  // Picking restores the caret on the next frame; don't type into that restoration.
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+
   // Enter on the highlighted suggestion picks it with the keyboard.
   await composer(page).pressSequentially("[[WEB-");
   await expect(page.getByRole("option", { name: /WEB-3/ })).toBeVisible();
