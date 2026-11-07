@@ -1,100 +1,68 @@
 "use client";
 
 import { Dialog } from "radix-ui";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { IconButton } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/primitives";
+import { SHORTCUTS } from "@/lib/command-palette";
 
-const OPEN = "la:shortcuts";
-
-/** Open the overlay from a button (the Inbox's "Shortcuts"). */
+/** Open the shortcut reference from a button (the Inbox's "Shortcuts"). */
 export function openShortcuts() {
-  window.dispatchEvent(new Event(OPEN));
+  window.dispatchEvent(new Event("la:shortcuts"));
 }
 
-type Row = { keys: string[]; label: string };
-
-const SECTIONS: ReadonlyArray<{ title: string; rows: Row[] }> = [
-  {
-    title: "Inbox",
-    rows: [
-      { keys: ["J", "K"], label: "Next / previous item" },
-      { keys: ["↵"], label: "Open the item’s page" },
-      { keys: ["A"], label: "Approve (approvals, mockups)" },
-      { keys: ["D"], label: "Deny (approvals)" },
-      { keys: ["R"], label: "Reply (questions) or focus the note" },
-      { keys: ["E"], label: "Mark done: hide until it changes" },
-      { keys: ["⌘", "↵"], label: "Send the reply or note" },
-      { keys: ["esc"], label: "Leave the text box, back to the list" },
-    ],
-  },
-  {
-    title: "Global",
-    rows: [
-      { keys: ["⌘", "K"], label: "Command menu" },
-      { keys: ["?"], label: "This overlay" },
-      { keys: ["C"], label: "New ticket" },
-    ],
-  },
-];
-
-function isTyping(el: EventTarget | null) {
-  return el instanceof HTMLElement && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+/** Typing into a field: single-key shortcuts must not fire. */
+export function isTyping(el: EventTarget | null) {
+  if (!(el instanceof HTMLElement)) return false;
+  return (
+    el.isContentEditable ||
+    ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) ||
+    el.getAttribute("role") === "combobox"
+  );
 }
 
-/** Keyboard shortcut overlay, opened with "?" anywhere outside a text box. */
-export function ShortcutsOverlay() {
+/** The `?` keyboard shortcut reference; opened by `?` (app-shell.tsx) or the palette's action. */
+export function ShortcutsDialog() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const show = () => setOpen(true);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
-      if (document.querySelector('[role="dialog"]') && !open) return;
-      e.preventDefault();
-      setOpen((v) => !v);
-    };
-    window.addEventListener(OPEN, show);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener(OPEN, show);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+    window.addEventListener("la:shortcuts", show);
+    return () => window.removeEventListener("la:shortcuts", show);
+  }, []);
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-scrim" />
         <Dialog.Content
-          aria-describedby="shortcuts-desc"
-          className="fixed left-1/2 top-[10vh] z-50 flex max-h-[80vh] w-[min(420px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
+          aria-describedby={undefined}
+          className="fixed left-1/2 top-[12vh] z-50 flex max-h-[80vh] w-[600px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border-float bg-surface-raised shadow-xl outline-none"
         >
-          <div className="flex items-center justify-between border-b border-border-subtle px-5 py-3">
-            <Dialog.Title className="type-heading">Keyboard shortcuts</Dialog.Title>
+          <div className="flex items-center border-b border-border px-6 py-3">
+            <Dialog.Title className="flex-1 text-base font-semibold">Keyboard shortcuts</Dialog.Title>
             <Dialog.Close asChild>
-              <IconButton icon="x" label="Close" />
+              <IconButton icon="x" label="Close keyboard shortcuts" />
             </Dialog.Close>
           </div>
-          <div className="flex flex-col gap-5 overflow-y-auto px-5 py-4">
-            {SECTIONS.map((s) => (
-              <section key={s.title} aria-label={`${s.title} shortcuts`}>
-                <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-tertiary">{s.title}</h3>
-                <dl className="grid grid-cols-[64px_1fr] items-center gap-x-3 gap-y-2 text-[13px]">
-                  {s.rows.map((r) => (
-                    <Fragment key={r.label}>
-                      <dt className="flex gap-1">
-                        {r.keys.map((k) => (
+          <div className="overflow-y-auto px-6 pb-5">
+            {SHORTCUTS.map((s) => (
+              <section key={s.section} aria-labelledby={`shortcuts-${s.section}`}>
+                <h3 id={`shortcuts-${s.section}`} className="pb-1 pt-4 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+                  {s.section}
+                </h3>
+                <dl>
+                  {s.items.map((i) => (
+                    <div key={i.label} className="flex min-h-[28px] items-center gap-4 text-sm">
+                      <dt className="flex-1">{i.label}</dt>
+                      <dd className="flex gap-1">
+                        {i.keys.map((k) => (
                           <Kbd key={k}>{k}</Kbd>
                         ))}
-                      </dt>
-                      <dd className="text-fg-2">{r.label}</dd>
-                    </Fragment>
+                      </dd>
+                    </div>
                   ))}
                 </dl>
               </section>
             ))}
-            <p id="shortcuts-desc" className="text-xs text-fg-tertiary">
-              Inbox keys are off while typing in a text box.
-            </p>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

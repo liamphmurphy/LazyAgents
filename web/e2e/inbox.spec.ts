@@ -195,7 +195,7 @@ test("the shortcut overlay lists the Inbox keys", async ({ page }) => {
   await expect(selectedRow(page)).toBeFocused();
   await page.keyboard.press("?");
   const overlay = page.getByRole("dialog", { name: "Keyboard shortcuts" });
-  const inboxKeys = overlay.getByRole("region", { name: "Inbox shortcuts" });
+  const inboxKeys = overlay.getByRole("region", { name: "Inbox" });
   for (const label of ["Next / previous item", "Approve (approvals, mockups)", "Reply (questions) or focus the note", "Mark done: hide until it changes"]) {
     await expect(inboxKeys.getByText(label)).toBeVisible();
   }
