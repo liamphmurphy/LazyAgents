@@ -16,6 +16,16 @@ SELECT count(*)::int FROM personas WHERE workspace_id = $1 AND user_id = $2;
 -- name: GetPersona :one
 SELECT * FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3;
 
+-- name: KeySharePersona :one
+-- Checks a new chat's persona and holds it until the chat commits, so a
+-- concurrent delete waits instead of failing the chat insert on the FK.
+SELECT id FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3 FOR KEY SHARE;
+
+-- name: LockPersonaChats :exec
+-- Before a delete: lock the persona's chats first, in the same order a message
+-- post takes them (chat, then persona), so the two never deadlock.
+SELECT id FROM chat_sessions WHERE persona_id = $1 ORDER BY id FOR UPDATE;
+
 -- name: DefaultPersona :one
 SELECT * FROM personas WHERE workspace_id = $1 AND user_id = $2 AND is_default;
 
@@ -66,6 +76,8 @@ UPDATE personas SET is_default = true, revision = revision + 1, updated_at = now
 WHERE id = (
   SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(user_id)
   ORDER BY p.last_used_at DESC NULLS LAST, p.created_at DESC, p.id DESC LIMIT 1
+) AND NOT EXISTS (
+  SELECT 1 FROM personas d WHERE d.workspace_id = sqlc.arg(workspace_id) AND d.user_id = sqlc.arg(user_id) AND d.is_default
 );
 
 -- name: PersonaChatCounts :many
@@ -81,8 +93,10 @@ SELECT id FROM chat_sessions WHERE persona_id = $1 ORDER BY id;
 SELECT * FROM personas WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id);
 
 -- name: TouchPersonaUsed :exec
--- A chat with this persona got a message; drives ordering and promotion on delete.
-UPDATE personas SET last_used_at = now() WHERE id = $1;
+-- A chat with this persona got a message; drives ordering and promotion on
+-- delete. At most once a minute, so chatting doesn't flood persona.updated.
+UPDATE personas SET last_used_at = now()
+WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute');
 
 -- name: SeedDefaultPersona :one
 -- A new person's built-in "Assistant" default; no row when they already have a default.

@@ -293,6 +293,9 @@ func (s *Service) Delete(ctx context.Context, o Owner, id uuid.UUID, revision *i
 		if revision != nil && *revision != cur.Revision {
 			return apperr.Conflict("the persona changed since you loaded it")
 		}
+		if err := q.LockPersonaChats(ctx, &id); err != nil {
+			return err
+		}
 		if out, err = q.DeletePersona(ctx, store.DeletePersonaParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID}); err != nil {
 			return err
 		}

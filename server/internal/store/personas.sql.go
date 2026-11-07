@@ -184,6 +184,25 @@ func (q *Queries) GetPersona(ctx context.Context, arg GetPersonaParams) (Persona
 	return i, err
 }
 
+const keySharePersona = `-- name: KeySharePersona :one
+SELECT id FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3 FOR KEY SHARE
+`
+
+type KeySharePersonaParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+// Checks a new chat's persona and holds it until the chat commits, so a
+// concurrent delete waits instead of failing the chat insert on the FK.
+func (q *Queries) KeySharePersona(ctx context.Context, arg KeySharePersonaParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, keySharePersona, arg.ID, arg.WorkspaceID, arg.UserID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listPersonas = `-- name: ListPersonas :many
 SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at FROM personas WHERE workspace_id = $1 AND user_id = $2
 ORDER BY is_default DESC, last_used_at DESC NULLS LAST, lower(btrim(name)), id
@@ -228,6 +247,17 @@ func (q *Queries) ListPersonas(ctx context.Context, arg ListPersonasParams) ([]P
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockPersonaChats = `-- name: LockPersonaChats :exec
+SELECT id FROM chat_sessions WHERE persona_id = $1 ORDER BY id FOR UPDATE
+`
+
+// Before a delete: lock the persona's chats first, in the same order a message
+// post takes them (chat, then persona), so the two never deadlock.
+func (q *Queries) LockPersonaChats(ctx context.Context, personaID *uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockPersonaChats, personaID)
+	return err
 }
 
 const lockPersonaOwner = `-- name: LockPersonaOwner :exec
@@ -431,6 +461,8 @@ UPDATE personas SET is_default = true, revision = revision + 1, updated_at = now
 WHERE id = (
   SELECT p.id FROM personas p WHERE p.workspace_id = $1 AND p.user_id = $2
   ORDER BY p.last_used_at DESC NULLS LAST, p.created_at DESC, p.id DESC LIMIT 1
+) AND NOT EXISTS (
+  SELECT 1 FROM personas d WHERE d.workspace_id = $1 AND d.user_id = $2 AND d.is_default
 )
 `
 
@@ -481,10 +513,12 @@ func (q *Queries) SeedDefaultPersona(ctx context.Context, arg SeedDefaultPersona
 }
 
 const touchPersonaUsed = `-- name: TouchPersonaUsed :exec
-UPDATE personas SET last_used_at = now() WHERE id = $1
+UPDATE personas SET last_used_at = now()
+WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')
 `
 
-// A chat with this persona got a message; drives ordering and promotion on delete.
+// A chat with this persona got a message; drives ordering and promotion on
+// delete. At most once a minute, so chatting doesn't flood persona.updated.
 func (q *Queries) TouchPersonaUsed(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, touchPersonaUsed, id)
 	return err

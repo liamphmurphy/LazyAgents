@@ -105,7 +105,7 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 			return err
 		}
 		if in.PersonaID != nil {
-			_, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *in.PersonaID, WorkspaceID: ws, UserID: user})
+			_, err := q.KeySharePersona(ctx, store.KeySharePersonaParams{ID: *in.PersonaID, WorkspaceID: ws, UserID: user})
 			if errors.Is(err, pgx.ErrNoRows) {
 				return apperr.Invalid("persona_id", "unknown persona")
 			}
