@@ -23,7 +23,7 @@ export async function installBoardApi(page: Page) {
     return {
       id: `ticket-${n}`, key: `WEB-${n}`, project, title, status, description_md: "", priority: "medium", labels: [],
       revision: 1, dependency_revision: 1, blocked_by: [], blocks: [], criteria: [], artifacts: [], approvals: [],
-      requires_mockup: false, mockup_gate: { required: false, from_epic: false, approved: false, mockups: [] },
+      requires_mockup: false, epic_review: false, mockup_gate: { required: false, from_epic: false, approved: false, mockups: [] },
       created_at: stamp(1), updated_at: stamp(1), epic: { id: epics[0].id, name: epics[0].name }, ...extra,
     };
   }
@@ -63,6 +63,10 @@ export async function installBoardApi(page: Page) {
       criteria_total: criteria.filter((c) => c.epic_id === epic.id).length,
       criteria_done: criteria.filter((c) => c.epic_id === epic.id && c.done).length };
   }
+  function reviewOf(epicId: string) {
+    const r = tickets.find((x) => x.epic?.id === epicId && x.epic_review);
+    return r ? { review: { id: r.id, key: r.key, title: r.title, status: r.status, priority: r.priority } satisfies S["WorkTicket"] } : {};
+  }
   function summary(t: S["Ticket"]): S["TicketSummary"] {
     return { id: t.id, key: t.key, project_key: t.project.key, title: t.title, status: t.status, priority: t.priority,
       assignee: t.assignee, epic: t.epic, labels: t.labels, estimate_points: t.estimate_points, updated_at: t.updated_at,
@@ -101,7 +105,7 @@ export async function installBoardApi(page: Page) {
         const capped = status === "done" || status === "canceled";
         return { status, cards: (capped ? all.slice(-50) : all).map(summary), count: all.length,
           points: all.reduce((n, t) => n + (t.estimate_points ?? 0), 0), truncated: capped && all.length > 50 };
-      }), ...(epic ? { epic: { epic: epicSummary(epic), criteria: sorted().filter((c) => c.epic_id === epic.id),
+      }), ...(epic ? { epic: { epic: epicSummary(epic), ...reviewOf(epic.id), criteria: sorted().filter((c) => c.epic_id === epic.id),
         done_blockers: { open_tickets: tickets.filter((t) => t.epic?.id === epic.id && !["done", "canceled"].includes(t.status)).map((t) => t.key),
           unchecked_criteria: criteria.filter((c) => c.epic_id === epic.id && !c.done).map((c) => c.position) } } } : {}) } satisfies S["Board"]);
     }
@@ -117,6 +121,17 @@ export async function installBoardApi(page: Page) {
       }
       if (body.status) epicPatch.status = body.status;
       return json(epicSummary(epicPatch));
+    }
+    const epicReview = epics.find((e) => path === `/epics/${e.id}/review`);
+    if (epicReview && request.method() === "POST") {
+      epicWrites.push({ method: "POST", path, body: undefined });
+      if (epicReview.status === "done") return json({ code: "conflict", message: "epic is done" }, 409);
+      let r = tickets.find((x) => x.epic?.id === epicReview.id && x.epic_review);
+      if (!r) {
+        r = make(tickets.length + 1, "backlog", `Final review: ${epicReview.name}`, { epic_review: true, epic: { id: epicReview.id, name: epicReview.name } });
+        tickets.push(r);
+      }
+      return json({ id: r.id, key: r.key, title: r.title, status: r.status, priority: r.priority } satisfies S["WorkTicket"]);
     }
     const epicCriteria = epics.find((e) => path === `/epics/${e.id}/criteria`);
     if (epicCriteria && request.method() === "POST") {

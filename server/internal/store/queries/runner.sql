@@ -74,8 +74,12 @@ FROM run_turns WHERE run_id = $1 AND process_started_at IS NOT NULL;
 -- name: RequeueInterrupted :exec
 -- On runner start: turns that were running when it died run again (the
 -- harness resumes the session), and half-started runs go back to the queue.
+-- The runner id is host-pid, so a restarted runner has a new one: also reclaim
+-- turns of any runner that has stopped heartbeating (LiveRunners' window).
 UPDATE run_turns SET status = 'pending', process_started_at = NULL, ended_at = NULL, exit_code = NULL
-WHERE status = 'running' AND run_id IN (SELECT id FROM runs WHERE runner_id = sqlc.arg(runner_id) OR runner_id IS NULL);
+WHERE status = 'running' AND run_id IN (
+  SELECT id FROM runs WHERE runner_id = sqlc.arg(runner_id) OR runner_id IS NULL
+    OR runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'));
 
 -- name: RequeueStarting :exec
 UPDATE runs SET state = 'queued' WHERE state = 'starting';
@@ -129,10 +133,10 @@ SELECT * FROM runs WHERE id = $1;
 SELECT EXISTS (SELECT 1 FROM run_turns WHERE run_id = $1 AND status = 'pending')::bool;
 
 -- name: EndedRunsWithWorkspace :many
--- Workspaces of runs that ended while no turn was running (cancelled while
--- waiting, say); the runner removes them.
+-- Workspaces of runs that completed while no turn was running; the runner
+-- removes them. Failed and cancelled runs keep theirs (unpushed work).
 SELECT id FROM runs r
-WHERE r.workspace_volume IS NOT NULL AND r.state IN ('completed', 'failed', 'cancelled')
+WHERE r.workspace_volume IS NOT NULL AND r.state = 'completed'
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
 LIMIT 20;
 

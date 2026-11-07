@@ -141,7 +141,7 @@ func (s *Server) ticketDetail(ctx context.Context, ws uuid.UUID, t store.Ticket)
 		Status: api.TicketStatus(t.Status), Priority: api.Priority(t.Priority),
 		Estimate: t.Estimate, DueDate: toDate(t.DueDate), Branch: t.Branch,
 		Pr:        withSync(toPR(t.PrNumber, t.PrState, t.PrUrl, t.PrAdditions, t.PrDeletions), t),
-		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, RequiresMockup: t.RequiresMockup,
+		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, RequiresMockup: t.RequiresMockup, EpicReview: t.EpicReview,
 	}
 	out.Revision = int(t.Revision)
 	if t.EstimatePoints != nil {

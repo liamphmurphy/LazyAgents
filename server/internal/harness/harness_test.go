@@ -437,6 +437,19 @@ func TestCodexDependencyCachePermissions(t *testing.T) {
 	}
 }
 
+func TestCodexResumeDependencyCacheFlagBeforeSubcommand(t *testing.T) {
+	workspace := ws
+	workspace.DependencyCacheDir = "/runner/cache"
+	inv, err := (Codex{}).Invocation(workspace, Turn{Spec: spec("tests:run", "allowed"), SessionID: "session", Prompt: "continue"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, resume := slices.Index(inv.Argv, "--add-dir"), slices.Index(inv.Argv, "resume")
+	if cache < 0 || resume < 0 || cache >= resume || inv.Argv[cache+1] != workspace.DependencyCacheDir {
+		t.Fatalf("exec cache flag must precede resume: %v", inv.Argv)
+	}
+}
+
 func TestDirectExecutionPolicyAndSelectiveContextInstructions(t *testing.T) {
 	s := spec()
 	s.Instructions = "Standing role routine: hand implementation to an implementer."
@@ -468,5 +481,69 @@ func TestAgentsMDTestsSection(t *testing.T) {
 	}
 	if strings.Contains(string(ChatAgentsMD(spec(), nil, "PAY")), "## Tests") {
 		t.Fatal("chat AGENTS.md must not carry the Tests section")
+	}
+}
+
+func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
+	epic := spec("repo:write", "allowed")
+	epic.Repository = &agentdef.Repository{DefaultBranch: "main", EpicBranch: "epic/pay-1234abcd", EpicName: "Ledger"}
+	md := string(AgentsMD("", epic, nil, "PAY-1"))
+	for _, want := range []string{"## Checks", "Tests run once, in the epic's final review", "Resolve conflicts and rebuild.", "builds cleanly", "no test_command"} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("epic ticket missing %q:\n%s", want, md)
+		}
+	}
+	for _, bad := range []string{"## Tests", "Run the full suite", "rerun tests", "tests pass", "## Epic review"} {
+		if strings.Contains(md, bad) {
+			t.Fatalf("epic ticket must not contain %q:\n%s", bad, md)
+		}
+	}
+
+	plain := string(AgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
+	for _, want := range []string{"## Tests", "Run the full suite once before finishing", "tests pass"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("standalone ticket missing %q:\n%s", want, plain)
+		}
+	}
+	if strings.Contains(plain, "## Checks") {
+		t.Fatal("standalone ticket must keep the Tests section")
+	}
+
+	// A sub agent of an epic ticket defers tests too; one of the review keeps them.
+	child := string(SubagentAgentsMD("", epic, nil, "PAY-1"))
+	if !strings.Contains(child, "## Checks") || strings.Contains(child, "Run the full suite") {
+		t.Fatalf("epic ticket's sub agent must defer tests:\n%s", child)
+	}
+	review := spec("repo:write", "allowed")
+	review.Repository = &agentdef.Repository{DefaultBranch: "main", EpicBranch: "epic/pay-1234abcd", EpicName: "Ledger", EpicReview: true}
+	if md := string(SubagentAgentsMD("", review, nil, "PAY-1")); !strings.Contains(md, "## Tests") || strings.Contains(md, "## Epic review") {
+		t.Fatalf("epic review's sub agent must run tests without the review brief:\n%s", md)
+	}
+}
+
+func TestAgentsMDEpicReview(t *testing.T) {
+	rv := spec("repo:write", "allowed")
+	rv.Repository = &agentdef.Repository{DefaultBranch: "main", EpicBranch: "epic/pay-1234abcd", EpicName: "Ledger", EpicReview: true,
+		EpicTickets: []agentdef.EpicTicket{
+			{Key: "PAY-1", Title: "Schema", Status: "done", Branch: "pay-1", PRURL: "https://github.com/o/r/pull/3", PRState: "open"},
+			{Key: "PAY-2", Title: "API", Status: "in_review"},
+		}}
+	md := string(AgentsMD("", rv, nil, "PAY-3"))
+	for _, want := range []string{
+		"## Tests", "Run the full suite once before finishing", "## Epic review",
+		"- PAY-1 Schema — done, branch `pay-1`, PR https://github.com/o/r/pull/3 (open)",
+		"- PAY-2 API — in_review\n",
+		"gh pr ready <epic PR>", "git branch -r --no-merged origin/epic/pay-1234abcd", "check_epic_criterion",
+		"Resolve conflicts and rerun tests.", "tests pass",
+	} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("review ticket missing %q:\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "## Checks") {
+		t.Fatal("review ticket runs the tests")
+	}
+	if i, j := strings.Index(md, "## Epic review"), strings.Index(md, "## Git and GitHub"); i < 0 || j < i {
+		t.Fatal("epic review section belongs before Git/GitHub")
 	}
 }

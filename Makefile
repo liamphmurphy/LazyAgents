@@ -21,7 +21,7 @@ WEB_PORT ?= 3000
 # Host development uses CLI logins; override both API and runner for Docker.
 RUNNER_BACKEND ?= local
 # Processes the host runner runs at once; delegated runs and resumed turns share these slots.
-RUNNER_MAX_CONCURRENT ?= 10
+RUNNER_MAX_CONCURRENT ?= 4
 # Runs inherit this, so agents' DB tests use the dev Postgres (each test makes its own database) instead of starting one.
 TEST_DATABASE_URL ?= postgres://lazyagents:lazyagents@127.0.0.1:5432/postgres?sslmode=disable
 

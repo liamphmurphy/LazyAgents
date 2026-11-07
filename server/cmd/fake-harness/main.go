@@ -570,9 +570,13 @@ func main() {
 	if os.Getenv("FAKE_HARNESS_MODE") == "quota" {
 		// Claude always hits the limit and Codex never does (the existing
 		// fixtures); OpenCode hits it until it is a fallback's fresh session.
-		if (!codex && !opencode) || (opencode && !strings.Contains(prompt, "fresh session")) {
+		// FAKE_HARNESS_CODEX_QUOTA makes Codex hit it too, after FAKE_HARNESS_QUOTA_SLEEP.
+		if (!codex && !opencode) || (opencode && !strings.Contains(prompt, "fresh session")) || (codex && os.Getenv("FAKE_HARNESS_CODEX_QUOTA") != "") {
 			call("claim_ticket", map[string]any{"ticket": ticket})
 			_ = os.WriteFile("before-fallback.txt", []byte("work preserved"), 0o644)
+			if d, err := time.ParseDuration(os.Getenv("FAKE_HARNESS_QUOTA_SLEEP")); err == nil {
+				time.Sleep(d)
+			}
 			result(true, "You have hit your usage limit")
 			os.Exit(1)
 		}

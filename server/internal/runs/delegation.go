@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
@@ -303,7 +302,12 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if err != nil {
 			return err
 		}
-		resolved.Repository = &agentdef.Repository{URL: p.RepoUrl, DefaultBranch: p.DefaultBranch}
+		// The child inherits the ticket's epic context so an epic ticket's
+		// children also defer tests to the epic review.
+		if resolved.Repository, err = RepositoryFor(ctx, q, p, t); err != nil {
+			return err
+		}
+		resolved.Repository.EpicTickets = nil
 		raw, err := json.Marshal(resolved)
 		if err != nil {
 			return err

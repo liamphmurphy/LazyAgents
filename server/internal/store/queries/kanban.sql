@@ -37,6 +37,27 @@ WHERE e.id = ANY(sqlc.arg(epic_ids)::uuid[]);
 -- What blocks the epic done gate on the ticket side.
 SELECT key FROM tickets WHERE epic_id = $1 AND status NOT IN ('done', 'canceled') ORDER BY number;
 
+-- name: EpicReviewState :one
+-- What the epic review trigger needs: ticket counts excluding the review ticket.
+-- total skips canceled tickets, so an epic whose work was all canceled gets no review.
+SELECT
+  count(*) FILTER (WHERE NOT epic_review AND status <> 'canceled')::int AS total,
+  count(*) FILTER (WHERE NOT epic_review AND status IN ('backlog', 'todo', 'in_progress'))::int AS unfinished,
+  coalesce(bool_or(epic_review), false)::boolean AS has_review
+FROM tickets WHERE epic_id = $1;
+
+-- name: EpicTopAssignee :one
+-- The agent holding most of the epic's regular tickets, newest activity breaking ties.
+SELECT assignee_agent_id FROM tickets
+WHERE epic_id = $1 AND NOT epic_review AND assignee_agent_id IS NOT NULL
+GROUP BY assignee_agent_id
+ORDER BY count(*) DESC, max(updated_at) DESC
+LIMIT 1;
+
+-- name: ListEpicReviewTickets :many
+SELECT key, title, status, branch, pr_url, pr_state FROM tickets
+WHERE epic_id = $1 AND NOT epic_review ORDER BY number;
+
 -- name: ListEpicCriteria :many
 SELECT * FROM epic_criteria WHERE epic_id = $1 ORDER BY position;
 
@@ -107,3 +128,12 @@ WITH ranked AS (
 )
 SELECT * FROM ranked WHERE status NOT IN ('done','canceled') OR row_num <= 50
 ORDER BY status, row_num;
+
+-- name: GetEpicReviewTicket :one
+SELECT * FROM tickets WHERE epic_id = $1 AND epic_review ORDER BY number LIMIT 1;
+
+-- name: EpicUnfinishedKeys :many
+-- Non-review tickets still being worked, for the final review's dispatch blocker.
+SELECT key, status FROM tickets
+WHERE epic_id = $1 AND NOT epic_review AND status IN ('backlog', 'todo', 'in_progress')
+ORDER BY number;
