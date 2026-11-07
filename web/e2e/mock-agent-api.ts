@@ -65,6 +65,7 @@ export async function installAgentApi(page: Page) {
         counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
       });
     }
+    if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, queued: 0 });
     if (path === "/agents/atlas" && method === "GET") return json(detail());
     if (path === "/agents/atlas/definition" && method === "PUT") {
       const b = body();

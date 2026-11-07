@@ -41,6 +41,10 @@ export async function installBoardApi(page: Page) {
   tickets[0].estimated_by = { type: "agent", id: builder.id, name: builder.name };
   tickets[2].estimated_by = { type: "user", id: "other-user", name: "Sam" };
   const me = { type: "user" as const, id: "user", name: "Liam" };
+  // Mutable so specs can archive projects or bump the shell's live counts.
+  const projects: S["Project"][] = [project, ops];
+  const counts: S["Bootstrap"]["counts"] = { inbox: 0, wiki_suggestions: 0, live_agents: 0 };
+  const runner: S["RunnerStatus"] = { online: true, runners: [], slots: 3, busy: 0, queued: 0 };
   let newCriterionId = 0;
   const patches: Array<{ key: string; body: S["TicketPatch"] }> = [];
   const boardRequests: string[] = [];
@@ -77,8 +81,8 @@ export async function installBoardApi(page: Page) {
     if (path === "/bootstrap") return json({
       workspace: { id: "workspace", name: "LazyAgents", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
-      users: [], agents: [builder, reviewer], epics: epics.map(epicSummary), projects: [project, ops], labels: [],
-      counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
+      users: [], agents: [builder, reviewer], epics: epics.map(epicSummary), projects, labels: [],
+      counts,
     } satisfies S["Bootstrap"]);
     if (path === "/epics" && request.method() === "GET") return json({ epics: [epics[0]].map((e) => {
       const ts = tickets.filter((t) => t.epic?.id === e.id && t.status !== "canceled");
@@ -88,7 +92,7 @@ export async function installBoardApi(page: Page) {
         tickets: ts.map((t) => ({ id: t.id, key: t.key, title: t.title, status: t.status, priority: t.priority })) };
     }) } satisfies S["EpicOverviewList"]);
     if (path === "/tickets" && request.method() === "GET") return json({ tickets: tickets.filter((t) => !url.searchParams.get("epic") || t.epic?.id === url.searchParams.get("epic")).map(summary) });
-    if (path === "/runner") return json({ online: true, slots: 3, busy: 0, queued: 0 });
+    if (path === "/runner") return json(runner);
     if (/^\/projects\/(WEB|OPS)\/board$/.test(path)) {
       boardRequests.push(request.url());
       if (boardError) return json({ code: "internal", message: "Board service unavailable" }, 501);
@@ -213,7 +217,7 @@ export async function installBoardApi(page: Page) {
   });
   await page.route("**/api/v1/**", handle);
   return {
-    epics, tickets, criteria, patches, boardRequests, unhandled, epicWrites, criteriaRequests,
+    epics, tickets, criteria, patches, projects, counts, runner, boardRequests, unhandled, epicWrites, criteriaRequests,
     failCriteria: (message?: string) => { criterionError = message; },
     rejectNext: (status: number, message: string, field?: string) => { rejection = { status, message, field }; },
     failBoard: (fail: boolean) => { boardError = fail; },
