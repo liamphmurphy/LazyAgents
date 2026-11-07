@@ -26,6 +26,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/config"
 	"github.com/liamphmurphy/lazyagents/server/internal/db"
 	"github.com/liamphmurphy/lazyagents/server/internal/httpapi"
+	"github.com/liamphmurphy/lazyagents/server/internal/memory"
 	"github.com/liamphmurphy/lazyagents/server/internal/metrics"
 	"github.com/liamphmurphy/lazyagents/server/internal/prsync"
 	"github.com/liamphmurphy/lazyagents/server/internal/realtime"
@@ -169,6 +170,9 @@ func serve(ctx context.Context, log *slog.Logger) error {
 			MinAge: time.Duration(cfg.PRSyncInterval) * time.Second}
 		go sync.Run(ctx, time.Duration(cfg.PRSyncInterval)*time.Second)
 	}
+	if cfg.MemoryConsolidateInterval > 0 {
+		go memory.RunConsolidation(ctx, q, log, time.Duration(cfg.MemoryConsolidateInterval)*time.Second)
+	}
 	hs := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           srv.Handler(),
@@ -264,14 +268,15 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		backend = &runner.Local{Dir: rc.DataDir, Bins: bins, OpenCodeIsolated: rc.OpenCodeIsolated}
 	}
 	host, _ := os.Hostname()
+	blobs := blob.New(cfg.S3)
 	r := &runner.Runner{
 		Cfg: runner.Config{
 			ModelPrices: rc.ModelPrices,
 			ID:          fmt.Sprintf("%s-%d", host, os.Getpid()), MaxConcurrent: rc.MaxConcurrent, MCPURL: rc.MCPURL,
-			Grace: 30 * time.Second, LogBucket: "run-logs", Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
+			Grace: 30 * time.Second, LogBucket: "run-logs", AttachmentBucket: cfg.S3.ArtifactBucket, Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
 		},
 		Pool: pool, Backend: backend, Secrets: &secrets.Service{Q: store.New(pool), Box: box},
-		Tracker: &tracker.Service{Pool: pool}, Blobs: blob.New(cfg.S3), Log: log,
+		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
 	}
 	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
 	return r.Run(ctx)

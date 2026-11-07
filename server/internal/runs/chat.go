@@ -26,23 +26,26 @@ func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
 	}
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
-	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
+	// web_search turns on the harness's own web search and page fetch tools
+	// (Claude Code WebSearch/WebFetch, Codex live web search); see
+	// agentdef.OptionWebSearch.
+	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true", agentdef.OptionWebSearch: "true"}
 	if r.Harness == agentdef.HarnessOpenCode {
 		// OpenCode honors only readonly and rejects any other option.
 		r.HarnessOptions = map[string]string{"readonly": "true"}
 	}
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
-	r.Instructions = "You are chatting with a person. Answer directly, use context tools to look things up, and cite sources with [[…]]. Use create_ticket, create_epic and list_epics for requested project changes. Do not claim tickets, execute project work, or write memory.\n\n" + r.Instructions
+	// Every chat is the Personal Assistant, whichever agent it was started with.
+	r.Instructions = agents.AssistantInstructions
 	return r
 }
 
-// ChatInput opens an idle conversation; its first message creates the segment run.
-// AgentID may be the zero UUID, which picks the default agent (see DefaultChatAgent).
-// An empty Harness/Model keeps what the agent and project resolve to.
+// ChatInput opens an idle conversation with the Personal Assistant; its first
+// message creates the segment run. An empty Harness/Model keeps what the
+// assistant and project resolve to.
 type ChatInput struct {
 	Project string
-	AgentID uuid.UUID
 	Title   string
 	Harness string
 	Model   string
@@ -58,6 +61,9 @@ type ChatMessageInput struct {
 	Harness     string
 	Model       string
 	ContextRefs []ChatContextRef
+	// AttachmentIDs are the poster's own unattached uploads (chat_attachments);
+	// they're bound to the new message and delivered to its turn.
+	AttachmentIDs []uuid.UUID
 }
 
 // ChatCatalog is the harness/model catalog chats validate against.
@@ -83,26 +89,9 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if p.Archived {
 			return apperr.Conflict("restore the archived project before starting a chat")
 		}
-		var a store.Agent
-		if in.AgentID == uuid.Nil {
-			a, err = q.DefaultChatAgent(ctx, ws)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return apperr.Invalid("agent_id", "the workspace has no main agent to chat with")
-			}
-		} else {
-			a, err = q.GetAgent(ctx, store.GetAgentParams{ID: in.AgentID, WorkspaceID: ws})
-			if errors.Is(err, pgx.ErrNoRows) {
-				return apperr.Invalid("agent_id", "unknown agent")
-			}
-		}
+		a, err := agents.EnsureAssistant(ctx, q, ws)
 		if err != nil {
 			return err
-		}
-		if a.ArchivedAt != nil {
-			return apperr.Invalid("agent_id", "unknown agent")
-		}
-		if a.Kind == "sub" {
-			return apperr.Invalid("agent_id", "pick a main agent")
 		}
 		spec, err := agents.Resolve(ctx, q, ws, a, p.Key)
 		if err != nil {
@@ -173,6 +162,15 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	if err != nil {
 		return chat, msg, err
 	}
+	if len(in.AttachmentIDs) > MaxChatAttachments {
+		return chat, msg, apperr.Invalid("attachment_ids", "attach at most %d files", MaxChatAttachments)
+	}
+	var attachIDs []uuid.UUID
+	for _, id := range in.AttachmentIDs {
+		if !slices.Contains(attachIDs, id) {
+			attachIDs = append(attachIDs, id)
+		}
+	}
 	docs, err := ResolveChatRefs(ctx, q, chat.WorkspaceID, chat.ProjectID, in.ContextRefs)
 	if err != nil {
 		return chat, msg, err
@@ -224,9 +222,16 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		}
 	}
 	if fresh {
-		a, err := q.GetAgent(ctx, store.GetAgentParams{ID: chat.AgentID, WorkspaceID: chat.WorkspaceID})
+		// Chats started before the Personal Assistant existed move to it at their next segment.
+		a, err := agents.EnsureAssistant(ctx, q, chat.WorkspaceID)
 		if err != nil {
 			return chat, msg, err
+		}
+		if chat.AgentID != a.ID {
+			if err = q.SetChatAgent(ctx, store.SetChatAgentParams{ID: chat.ID, AgentID: a.ID}); err != nil {
+				return chat, msg, err
+			}
+			chat.AgentID = a.ID
 		}
 		spec, err := agents.Resolve(ctx, q, chat.WorkspaceID, a, p.Key)
 		if err != nil {
@@ -278,6 +283,17 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		return chat, msg, err
 	}
 	msg = store.ChatMessage(appended)
+	if len(attachIDs) > 0 {
+		// Only the chat owner's own uploads that no message has claimed yet; any
+		// other id fails the whole post (the transaction rolls back).
+		bound, err := q.AttachChatAttachments(ctx, store.AttachChatAttachmentsParams{MessageID: &msg.ID, Ids: attachIDs, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+		if err != nil {
+			return chat, msg, err
+		}
+		if len(bound) != len(attachIDs) {
+			return chat, msg, apperr.Invalid("attachment_ids", "upload the files again: an attachment is unknown or already sent")
+		}
+	}
 	chat, err = q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: chat.ID, CurrentRunID: &run.ID, State: "running"})
 	if err != nil {
 		return chat, msg, err

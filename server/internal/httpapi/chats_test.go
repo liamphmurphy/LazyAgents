@@ -207,18 +207,19 @@ func TestChatModelsUnavailableWithoutKey(t *testing.T) {
 
 func TestChatLifecycleAndArchive(t *testing.T) {
 	e := newChatEnv(t)
-	def, err := e.q.DefaultChatAgent(context.Background(), e.me.WorkspaceID)
+	chat := e.newChat(map[string]any{"title": "Planning chat"})
+	// Every chat runs as the workspace's Personal Assistant.
+	def, err := e.q.AssistantAgent(context.Background(), e.me.WorkspaceID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chat := e.newChat(map[string]any{"title": "Planning chat"})
 	id := chat["id"].(string)
 	agent := chat["agent"].(map[string]any)
 	if agent["id"] != def.ID.String() || chat["state"] != "idle" || chat["message_count"].(float64) != 0 || chat["project"] != "PAY" || chat["revision"].(float64) != 1 {
 		t.Fatalf("created chat %v (default agent %s)", chat, def.ID)
 	}
-	if def.Kind == "sub" {
-		t.Fatal("default agent must be a main agent")
+	if def.Kind != agents.KindAssistant {
+		t.Fatalf("chat agent kind %q, want the assistant", def.Kind)
 	}
 	got := e.want("GET", "/chats/"+id, nil, 200)
 	if got["title"] != "Planning chat" {
@@ -285,7 +286,6 @@ func TestChatLifecycleAndArchive(t *testing.T) {
 		t.Fatalf("second page %v", rest)
 	}
 	e.invalid("POST", "/chats", map[string]any{"project": "NOPE"}, "project", "unknown")
-	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "agent_id": uuid.New()}, "agent_id", "unknown")
 	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "harness": "vim"}, "harness", "unknown")
 	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "model": "gpt-9000"}, "model", "unknown")
 	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "message": map[string]any{"body": "  "}}, "body", "1–100000")

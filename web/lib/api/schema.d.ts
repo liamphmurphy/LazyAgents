@@ -1293,6 +1293,70 @@ export interface paths {
         patch: operations["updateSavedView"];
         trace?: never;
     };
+    "/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in person's assistant memories, newest change first (or ranked by q)
+         * @description Memory is strictly per person: only the signed-in person's entries are
+         *     ever returned. With q, results are ranked by full-text relevance over
+         *     title, tags, summary and body (plus fuzzy title matching).
+         */
+        get: operations["listMemories"];
+        put?: never;
+        post?: never;
+        /** Forget everything the assistant remembers about the signed-in person */
+        delete: operations["deleteAllMemories"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memories/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every memory of the signed-in person, retired entries included, oldest first */
+        get: operations["exportMemories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** One memory entry; another person's entry is a 404 */
+        get: operations["getMemory"];
+        put?: never;
+        post?: never;
+        /** Forget a memory entry and the retired entries it superseded */
+        delete: operations["deleteMemory"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a memory entry, retire it (superseded_by) or restore it (restore)
+         * @description Text that looks like a credential or token is refused with 422.
+         */
+        patch: operations["updateMemory"];
+        trace?: never;
+    };
     "/projects/{key}": {
         parameters: {
             query?: never;
@@ -1372,10 +1436,57 @@ export interface paths {
          * Start a chat in a project
          * @description Creates an idle chat. Nothing runs until the first message. When
          *     `message` is set it is posted as the first message (same rules as
-         *     POST /chats/{id}/messages). 422 for an unknown or archived project,
-         *     an unknown or sub agent, or a harness/model not in GET /chat-models.
+         *     POST /chats/{id}/messages). Every chat is with the workspace's
+         *     Personal Assistant, created on first use. 422 for an unknown or
+         *     archived project, or a harness/model not in GET /chat-models.
          */
         post: operations["createChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat-attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a file to attach to your next assistant message
+         * @description Stores one file for the caller. It stays unattached and private to
+         *     the caller until a message lists its id in `attachment_ids`; each
+         *     upload can be attached to one message. Supported: PDF, PNG, JPEG,
+         *     GIF, WebP, plain text, Markdown, CSV and JSON, up to 25 MB each.
+         *     422 for an unsupported type, an empty file or one over the limit.
+         */
+        post: operations["uploadChatAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat-attachments/{attachmentId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Download one of your chat attachments
+         * @description 404 unless the caller uploaded it.
+         */
+        get: operations["getChatAttachmentContent"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1428,7 +1539,8 @@ export interface paths {
          *     same session, new model; other harness: new session with a
          *     transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
          *     is running or the chat is archived; 422 empty body, unknown
-         *     harness/model, or a context ref outside the chat's project.
+         *     harness/model, a context ref outside the chat's project, or an
+         *     attachment id that isn't the caller's unattached upload.
          */
         post: operations["postChatMessage"];
         delete?: never;
@@ -1530,10 +1642,10 @@ export interface components {
             revision: number;
         };
         /**
-         * @description main agents are assigned tickets and may delegate parts of them; sub agents only run when a main agent delegates to them
+         * @description main agents are assigned tickets and may delegate parts of them; sub agents only run when a main agent delegates to them; the assistant is the workspace's Personal Assistant, which every chat runs as (it can't be created, edited, deleted or assigned tickets)
          * @enum {string}
          */
-        AgentKind: "main" | "sub";
+        AgentKind: "main" | "sub" | "assistant";
         Agent: {
             kind: components["schemas"]["AgentKind"];
             /** Format: uuid */
@@ -1733,6 +1845,78 @@ export interface components {
         SavedViewPatch: {
             name?: string;
             query?: string;
+        };
+        /** @description One of preference, project, person, life, work, fact, other */
+        MemoryType: string;
+        /**
+         * @description One thing the personal assistant remembers about its person, kept apart
+         *     from the shared wiki. superseded_by marks a retired entry and names the
+         *     entry that replaced it; retired_reason and retired_at say why and when
+         *     (a periodic consolidation pass retires duplicates this way). Restoring
+         *     an entry clears all three.
+         */
+        Memory: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description One line */
+            summary: string;
+            body: string;
+            tags: string[];
+            type: components["schemas"]["MemoryType"];
+            /** @description Where it came from in words, e.g. chat <id> or manual */
+            source: string;
+            /**
+             * Format: uuid
+             * @description The chat it came from
+             */
+            source_chat_id?: string;
+            /**
+             * Format: uuid
+             * @description The run that wrote it
+             */
+            source_run_id?: string;
+            /**
+             * Format: uuid
+             * @description Set when retired in favour of this newer entry
+             */
+            superseded_by?: string;
+            /** @description Why it was retired, e.g. merged by memory consolidation; empty while current */
+            retired_reason?: string;
+            /**
+             * Format: date-time
+             * @description When it was retired
+             */
+            retired_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        MemoryList: {
+            memories: components["schemas"]["Memory"][];
+            /** @description Entries matching type and include_retired (q not applied) */
+            total: number;
+            has_more: boolean;
+        };
+        MemoryExport: {
+            /** Format: date-time */
+            exported_at: string;
+            memories: components["schemas"]["Memory"][];
+        };
+        MemoryPatch: {
+            title?: string;
+            summary?: string;
+            body?: string;
+            tags?: string[];
+            type?: components["schemas"]["MemoryType"];
+            /**
+             * Format: uuid
+             * @description Retire this entry in favour of another current entry
+             */
+            superseded_by?: string;
+            /** @description true clears superseded_by */
+            restore?: boolean;
         };
         Ticket: {
             /** Format: uuid */
@@ -3243,11 +3427,6 @@ export interface components {
             /** @description Project key */
             project: string;
             title?: string;
-            /**
-             * Format: uuid
-             * @description A main agent; the server picks the default when omitted
-             */
-            agent_id?: string;
             harness?: components["schemas"]["Harness"];
             /** @description Defaults to the harness's default model in GET /chat-models */
             model?: string;
@@ -3263,6 +3442,18 @@ export interface components {
             harness?: components["schemas"]["Harness"];
             model?: string;
             context_refs?: components["schemas"]["ChatContextRef"][];
+            /** @description Uploads from POST /chat-attachments that you made and haven't attached yet; the assistant gets the files with this message */
+            attachment_ids?: string[];
+        };
+        ChatAttachment: {
+            /** Format: uuid */
+            id: string;
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: date-time */
+            created_at: string;
         };
         ChatMessage: {
             /** Format: uuid */
@@ -3283,6 +3474,8 @@ export interface components {
             turn_seq?: number;
             context_refs?: components["schemas"]["ChatContextRef"][];
             citations?: components["schemas"]["ChatCitation"][];
+            /** @description Files the person attached to a user message */
+            attachments?: components["schemas"]["ChatAttachment"][];
             author?: components["schemas"]["UserRef"];
             /** Format: int64 */
             input_tokens?: number;
@@ -5560,6 +5753,155 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listMemories: {
+        parameters: {
+            query?: {
+                /** @description Search text */
+                q?: string;
+                /** @description Only entries of this type */
+                type?: components["schemas"]["MemoryType"];
+                /** @description Also list entries superseded by newer ones */
+                include_retired?: boolean;
+                /** @description Skip this many (listing only; search returns the top 50) */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memories, 50 per page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteAllMemories: {
+        parameters: {
+            query: {
+                /** @description Must be true; guards against accidental wipes */
+                confirm: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Entries deleted (not counting retired entries they superseded) */
+                        deleted: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    exportMemories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryExport"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     updateProject: {
         parameters: {
             query?: never;
@@ -5700,6 +6042,59 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadChatAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAttachment"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatAttachmentContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

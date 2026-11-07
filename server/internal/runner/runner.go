@@ -24,6 +24,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/blob"
 	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/harness"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
@@ -39,7 +40,9 @@ type Config struct {
 	Poll          time.Duration // queue poll interval
 	Grace         time.Duration // after SIGINT, before SIGKILL (pause, cancel)
 	LogBucket     string        // raw harness logs (run-logs)
-	Version       string
+	// AttachmentBucket holds chat attachments (the artifact bucket).
+	AttachmentBucket string
+	Version          string
 	// RequireHarnessKey refuses to start a run without the harness's API
 	// key secret. Docker runs need it; local runs can use the host's login.
 	RequireHarnessKey bool
@@ -51,6 +54,12 @@ type Blobs interface {
 	Put(ctx context.Context, bucket, key string, body io.Reader, size int64, contentType string) error
 }
 
+// AttachmentStore reads chat attachments and deletes stale ones (blob.Store).
+type AttachmentStore interface {
+	Get(ctx context.Context, bucket, key string) (blob.Object, error)
+	Delete(ctx context.Context, bucket, key string) error
+}
+
 type Runner struct {
 	Cfg     Config
 	Pool    *pgxpool.Pool
@@ -58,7 +67,10 @@ type Runner struct {
 	Secrets Revealer
 	Tracker *tracker.Service
 	Blobs   Blobs // nil: raw logs aren't kept
-	Log     *slog.Logger
+	// Attachments reads chat attachments (blob.Store); nil: they're named in
+	// the prompt but not delivered, and stale uploads aren't swept.
+	Attachments AttachmentStore
+	Log         *slog.Logger
 
 	mu     sync.Mutex
 	active int
@@ -320,12 +332,36 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 
 // Sweep removes workspaces of runs that ended between turns.
 func (r *Runner) Sweep(ctx context.Context) {
+	defer r.sweepChatAttachments(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx)
 	if err != nil {
 		return
 	}
 	for _, id := range ids {
 		r.cleanup(ctx, id)
+	}
+}
+
+// StaleChatAttachmentAge is how long an upload may sit unsent (or detached by
+// its chat's deletion) before the sweep deletes it and its object.
+const StaleChatAttachmentAge = 24 * time.Hour
+
+// sweepChatAttachments deletes a batch of stale uploads: the rows first, so
+// one can't be bound to a message after its object is gone. An object whose
+// delete fails is logged and left behind.
+func (r *Runner) sweepChatAttachments(ctx context.Context) {
+	if r.Attachments == nil {
+		return
+	}
+	keys, err := r.q().DeleteStaleChatAttachments(ctx, store.DeleteStaleChatAttachmentsParams{Cutoff: time.Now().Add(-StaleChatAttachmentAge), RowLimit: 200})
+	if err != nil {
+		r.Log.Warn("sweep chat attachments", "err", err)
+		return
+	}
+	for _, k := range keys {
+		if err := r.Attachments.Delete(ctx, r.Cfg.AttachmentBucket, k); err != nil {
+			r.Log.Warn("delete chat attachment object", "key", k, "err", err)
+		}
 	}
 }
 
@@ -827,6 +863,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		ctxFiles = append(ctxFiles, refFiles...)
 		prompt += refPrompt
+		attFiles, attPrompt, err := r.chatTurnAttachments(ctx, q, turn)
+		if err != nil {
+			log.Warn("chat attachments", "err", err)
+			r.failChat(ctx, c, "Could not load the message's attached files.")
+			return
+		}
+		ctxFiles = append(ctxFiles, attFiles...)
+		prompt += attPrompt
 	}
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}
@@ -866,7 +910,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		files[".lazyagents/agents-section.md"] = harness.SubagentAgentsMD("", c.spec, paths, c.ticket.Key)
 	}
 	if c.run.Purpose == "chat" {
-		files[".lazyagents/agents-section.md"] = harness.ChatAgentsMD(c.spec, paths, c.project.Key)
+		// The person's memory index, refreshed every turn so saves and forgets show.
+		idx, err := chatMemoryIndex(ctx, q, c.run)
+		if err != nil {
+			r.Log.Warn("chat memory index", "run", c.run.ID, "err", err)
+			r.failChat(ctx, c, "Could not load the assistant's memory index.")
+			return
+		}
+		files[".lazyagents/agents-section.md"] = harness.ChatAgentsMD(c.spec, paths, c.project.Key, idx)
 	}
 	if c.run.Purpose == "planning" {
 		files[".lazyagents/agents-section.md"] = []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n"))

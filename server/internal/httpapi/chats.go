@@ -118,6 +118,10 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 			turnSeq[t.ID] = int(t.Seq)
 		}
 	}
+	files, err := s.messageAttachments(ctx, msgs)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]api.ChatMessage, 0, len(msgs))
 	for _, m := range msgs {
 		item := api.ChatMessage{Id: m.ID, Seq: int(m.Seq), Role: api.ChatMessageRole(m.Role), BodyMd: m.BodyMd, RunId: m.RunID, Model: m.Model, CreatedAt: m.CreatedAt}
@@ -135,6 +139,11 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 		item.ContextRefs, item.Citations = &refs, &cites
 		if m.Role == "user" {
 			item.Author = toUserRef(u)
+			attached := files[m.ID]
+			if attached == nil {
+				attached = []api.ChatAttachment{}
+			}
+			item.Attachments = &attached
 		}
 		if len(m.Usage) > 0 {
 			var usage harness.Usage
@@ -223,6 +232,9 @@ func toMessageInput(b api.NewChatMessage) (runs.ChatMessageInput, error) {
 		}
 		in.ContextRefs = refs
 	}
+	if b.AttachmentIds != nil {
+		in.AttachmentIDs = *b.AttachmentIds
+	}
 	return in, nil
 }
 
@@ -233,9 +245,6 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 	}
 	b := req.Body
 	in := runs.ChatInput{Project: b.Project, Title: deref(b.Title), Model: deref(b.Model)}
-	if b.AgentId != nil {
-		in.AgentID = *b.AgentId
-	}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}

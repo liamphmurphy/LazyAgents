@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 )
 
 func TestChatSpecReadOnly(t *testing.T) {
@@ -24,8 +25,9 @@ func TestChatSpecReadOnly(t *testing.T) {
 	if len(got.Setup)+len(got.MCPServers)+len(got.Fallbacks) != 0 || got.HarnessOptions["readonly"] != "true" || got.HarnessOptions["sandbox"] != "read-only" {
 		t.Fatalf("unsafe chat spec: %+v", got)
 	}
-	if !strings.Contains(got.Instructions, "Agent persona") || !reflect.DeepEqual(got.Skills, in.Skills) {
-		t.Fatal("lost persona or skills")
+	// Every chat is the Personal Assistant, whatever agent it was started with.
+	if got.Instructions != agents.AssistantInstructions || strings.Contains(got.Instructions, "Agent persona") || !reflect.DeepEqual(got.Skills, in.Skills) {
+		t.Fatal("chat isn't the Personal Assistant, or lost skills")
 	}
 	if in.Scopes[0].Mode != agentdef.Allowed || in.HarnessOptions["sandbox"] != "danger-full-access" || len(in.Fallbacks) != 1 {
 		t.Fatal("mutated original definition")

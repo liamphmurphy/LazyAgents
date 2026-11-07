@@ -1,0 +1,235 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="2290" viewBox="0 0 1440 2290" font-family="Inter, system-ui, -apple-system, sans-serif">
+<style>
+.bg{fill:#0B0B0D}.side{fill:#0E0E11}.panel{fill:#0D0D10}.surf{fill:#111114}.raised{fill:#16161B}.sel{fill:#1B1B21}
+.bd{stroke:#1F1F25;fill:none}.bds{stroke:#26262C}
+.t{fill:#EDEDEF;font-size:13px}.t14{fill:#EDEDEF;font-size:14px}.h{fill:#EDEDEF;font-size:20px;font-weight:600}.h15{fill:#EDEDEF;font-size:15px;font-weight:600}
+.s{fill:#A1A1AA;font-size:13px}.s12{fill:#A1A1AA;font-size:12px}.m{fill:#8B8B94;font-size:12px}.m11{fill:#8B8B94;font-size:11px}
+.acc{fill:#8B8FFF}.acct{fill:#A3A6FF;font-size:12px}.accbg{fill:#8B8FFF26}
+.red{fill:#F48A87;font-size:12px}.ok{fill:#6FCF97;font-size:12px}
+.lbl{fill:#F0BF4C;font-size:13px;font-weight:600;letter-spacing:.04em}.note{fill:#F0BF4C;font-size:12px}
+</style>
+<rect width="1440" height="2290" fill="#060607"/>
+
+<!-- ============ FRAME 1: active conversation ============ -->
+<text x="16" y="26" class="lbl">1 · ASSISTANT: ACTIVE CONVERSATION (1440×900). Replaces Chat. One conversation surface, no agent picker, no chat list.</text>
+<g transform="translate(0,40)">
+  <rect width="1440" height="900" class="bg"/>
+  <rect width="232" height="900" class="side"/><line x1="232" y1="0" x2="232" y2="900" class="bd"/>
+  <rect x="14" y="14" width="20" height="20" rx="5" class="acc"/><text x="44" y="29" class="t14" font-weight="600">LazyAgents</text>
+  <text x="24" y="76" class="s">Inbox</text><text x="24" y="106" class="s">My work</text><text x="24" y="136" class="s">Tickets</text>
+  <text x="24" y="166" class="s">Epics</text><text x="24" y="196" class="s">Runs</text><text x="24" y="226" class="s">Wiki</text>
+  <rect x="10" y="240" width="212" height="28" rx="6" class="sel"/><circle cx="30" cy="254" r="5" class="acc"/><text x="44" y="259" class="t">Assistant</text>
+  <text x="24" y="292" class="s">Agents</text><text x="24" y="322" class="s">Settings</text>
+  <text x="16" y="880" class="m11">"Chat" nav item is renamed to "Assistant"</text>
+
+  <line x1="232" y1="44" x2="1440" y2="44" class="bd"/>
+  <text x="248" y="27" class="t">Assistant</text>
+  <rect x="1172" y="9" width="104" height="26" rx="6" class="raised"/><rect x="1172" y="9" width="104" height="26" rx="6" class="bd"/>
+  <path d="M1184 15h8v14l-4-3-4 3z" fill="none" stroke="#A1A1AA" stroke-width="1.4"/><text x="1200" y="27" class="t">Memory</text><text x="1252" y="27" class="m">24</text>
+  <rect x="1284" y="9" width="144" height="26" rx="6" class="raised"/><rect x="1284" y="9" width="144" height="26" rx="6" class="bd"/>
+  <text x="1296" y="27" class="t">+  New conversation</text>
+
+  <text x="836" y="76" class="m11" text-anchor="middle">Today</text>
+
+  <rect x="1004" y="92" width="192" height="30" rx="8" class="surf"/><rect x="1004" y="92" width="192" height="30" rx="8" class="bd"/>
+  <rect x="1012" y="99" width="16" height="16" rx="3" fill="#EF64611F"/><text x="1015" y="111" font-size="8" fill="#F48A87">PDF</text>
+  <text x="1036" y="111" class="t">q3-roadmap.pdf</text><text x="1140" y="111" class="m11">2.1 MB</text>
+  <rect x="756" y="130" width="440" height="52" rx="10" class="raised"/>
+  <text x="772" y="152" class="t">Summarize the attached roadmap and check what our</text>
+  <text x="772" y="170" class="t">competitors announced this week.</text>
+
+  <circle cx="488" cy="214" r="12" class="accbg"/><text x="488" y="219" text-anchor="middle" class="acct" font-weight="600">A</text>
+  <rect x="508" y="202" width="196" height="24" rx="12" class="surf"/><rect x="508" y="202" width="196" height="24" rx="12" class="bd"/>
+  <circle cx="522" cy="214" r="5" fill="none" stroke="#8B8B94" stroke-width="1.3"/><line x1="517" y1="214" x2="527" y2="214" stroke="#8B8B94"/>
+  <text x="534" y="218" class="s12">Searched the web · 3 sources</text><text x="690" y="218" class="m11">▾</text>
+  <rect x="712" y="202" width="150" height="24" rx="12" class="surf"/><rect x="712" y="202" width="150" height="24" rx="12" class="bd"/>
+  <text x="726" y="218" class="s12">Read q3-roadmap.pdf</text>
+  <text x="508" y="252" class="t14">The Q3 roadmap centres on three things</text>
+  <rect x="756" y="240" width="16" height="15" rx="4" class="accbg"/><text x="764" y="251" text-anchor="middle" font-size="10" fill="#A3A6FF">1</text><text x="776" y="252" class="t14">:</text>
+  <text x="520" y="278" class="t14">•  Billing rewrite: usage-based invoices, target end of August.</text>
+  <text x="520" y="300" class="t14">•  Mobile parity for approvals and comments.</text>
+  <text x="520" y="322" class="t14">•  Self-serve SSO for the Team plan.</text>
+  <text x="508" y="352" class="t14">This week, Acme shipped usage-based pricing on Nov 4</text>
+  <rect x="854" y="340" width="16" height="15" rx="4" class="accbg"/><text x="862" y="351" text-anchor="middle" font-size="10" fill="#A3A6FF">2</text>
+  <text x="876" y="352" class="t14">and Globex announced an offline-mode</text>
+  <text x="508" y="374" class="t14">beta</text><rect x="540" y="362" width="16" height="15" rx="4" class="accbg"/><text x="548" y="373" text-anchor="middle" font-size="10" fill="#A3A6FF">3</text>
+  <text x="560" y="374" class="t14">. The billing rewrite is the item most exposed to Acme's move.</text>
+  <text x="508" y="404" class="m11">SOURCES</text>
+  <g>
+    <rect x="508" y="412" width="224" height="48" rx="8" class="surf"/><rect x="508" y="412" width="224" height="48" rx="8" class="bd"/>
+    <text x="520" y="432" class="acct">1</text><text x="534" y="432" class="t">q3-roadmap.pdf</text><text x="534" y="450" class="m11">Your attachment · p. 3</text>
+    <rect x="740" y="412" width="224" height="48" rx="8" class="surf"/><rect x="740" y="412" width="224" height="48" rx="8" class="bd"/>
+    <text x="752" y="432" class="acct">2</text><text x="766" y="432" class="t">Acme: New pricing ↗</text><text x="766" y="450" class="m11">acme.com · Nov 4</text>
+    <rect x="972" y="412" width="224" height="48" rx="8" class="surf"/><rect x="972" y="412" width="224" height="48" rx="8" class="bd"/>
+    <text x="984" y="432" class="acct">3</text><text x="998" y="432" class="t">Offline mode beta ↗</text><text x="998" y="450" class="m11">globex.io/blog · Nov 5</text>
+  </g>
+  <rect x="508" y="474" width="688" height="32" rx="8" fill="#8B8FFF14"/><rect x="508" y="474" width="3" height="32" rx="1.5" class="acc"/>
+  <path d="M522 482h8v15l-4-3-4 3z" fill="#8B8FFF"/>
+  <text x="538" y="494" class="s12">Saved to memory:</text><text x="636" y="494" class="t" font-size="12">“Prefers roadmap summaries as 3 bullets”</text>
+  <text x="1038" y="494" class="acct">View</text><text x="1078" y="494" class="acct">Undo</text><text x="1120" y="494" class="acct">Forget</text>
+  <text x="508" y="530" class="m11">Copy   ·   Retry</text>
+
+  <rect x="740" y="550" width="456" height="34" rx="10" class="raised"/>
+  <text x="756" y="572" class="t">Don't remember anything about the Globex deal. It's confidential.</text>
+  <circle cx="488" cy="616" r="12" class="accbg"/><text x="488" y="621" text-anchor="middle" class="acct" font-weight="600">A</text>
+  <text x="508" y="621" class="t14">Understood. I've forgotten it and won't save anything about that deal.</text>
+  <rect x="508" y="636" width="688" height="32" rx="8" class="surf"/><rect x="508" y="636" width="3" height="32" rx="1.5" fill="#6B6B73"/>
+  <path d="M522 644h8v15l-4-3-4 3z" fill="none" stroke="#8B8B94" stroke-width="1.3"/><line x1="519" y1="660" x2="533" y2="643" stroke="#8B8B94" stroke-width="1.3"/>
+  <text x="538" y="656" class="s12">Forgot 1 memory:</text><text x="636" y="656" class="s12">“Globex deal timeline”</text>
+  <text x="1150" y="656" class="acct">Undo</text>
+
+  <rect x="476" y="736" width="720" height="124" rx="12" class="surf"/><rect x="476" y="736" width="720" height="124" rx="12" class="bds" fill="none"/>
+  <rect x="488" y="748" width="178" height="28" rx="6" class="raised"/><rect x="488" y="748" width="178" height="28" rx="6" class="bd"/>
+  <rect x="496" y="754" width="16" height="16" rx="3" fill="#4CB7821F"/><text x="498" y="766" font-size="8" fill="#6FCF97">CSV</text>
+  <text x="518" y="766" class="t" font-size="12">competitors.csv</text><text x="610" y="766" class="m11">14 KB</text><text x="650" y="766" class="m">✕</text>
+  <rect x="674" y="748" width="178" height="28" rx="6" class="raised"/><rect x="674" y="748" width="178" height="28" rx="6" class="bd"/>
+  <rect x="682" y="754" width="16" height="16" rx="3" fill="#4EA7FC1F"/><text x="684" y="766" font-size="8" fill="#7CBEFD">IMG</text>
+  <text x="704" y="764" class="t" font-size="12">screenshot.png</text><text x="836" y="766" class="m">✕</text>
+  <rect x="704" y="769" width="120" height="3" rx="1.5" fill="#22222A"/><rect x="704" y="769" width="72" height="3" rx="1.5" class="acc"/>
+  <rect x="860" y="748" width="200" height="28" rx="6" fill="#EF64611F"/>
+  <text x="870" y="766" class="red">archive.zip · type not supported</text><text x="1044" y="766" class="red">✕</text>
+  <text x="492" y="804" class="m" font-size="14">Message your assistant…</text>
+  <rect x="486" y="822" width="28" height="28" rx="6" class="raised"/>
+  <path d="M505 830l-8 8a3 3 0 0 0 4 4l9-9a5 5 0 0 0-7-7l-9 9" fill="none" stroke="#A1A1AA" stroke-width="1.4" transform="translate(-2,-1) scale(1)"/>
+  <text x="522" y="841" class="m11">Attach or drop files</text>
+  <rect x="1152" y="822" width="32" height="28" rx="6" class="acc"/><path d="M1168 843v-14m-5 5l5-5 5 5" stroke="#0B0B0D" stroke-width="1.8" fill="none"/>
+  <text x="836" y="884" text-anchor="middle" class="m11">I save useful things to your private memory and tell you when I do. Say “forget that” any time.</text>
+</g>
+
+<!-- ============ FRAME 2: empty state + memory manager ============ -->
+<text x="16" y="976" class="lbl">2 · FIRST-TIME EMPTY STATE + MEMORY MANAGER (opened from the "Memory" button; right-hand panel, 440 wide)</text>
+<g transform="translate(0,990)">
+  <rect width="1440" height="900" class="bg"/>
+  <rect width="232" height="900" class="side"/><line x1="232" y1="0" x2="232" y2="900" class="bd"/>
+  <rect x="14" y="14" width="20" height="20" rx="5" class="acc"/><text x="44" y="29" class="t14" font-weight="600">LazyAgents</text>
+  <text x="24" y="76" class="s">Inbox</text><text x="24" y="106" class="s">My work</text><text x="24" y="136" class="s">Tickets</text>
+  <text x="24" y="166" class="s">Epics</text><text x="24" y="196" class="s">Runs</text><text x="24" y="226" class="s">Wiki</text>
+  <rect x="10" y="240" width="212" height="28" rx="6" class="sel"/><circle cx="30" cy="254" r="5" class="acc"/><text x="44" y="259" class="t">Assistant</text>
+  <text x="24" y="292" class="s">Agents</text><text x="24" y="322" class="s">Settings</text>
+
+  <line x1="232" y1="44" x2="1000" y2="44" class="bd"/>
+  <text x="248" y="27" class="t">Assistant</text>
+  <rect x="772" y="9" width="104" height="26" rx="6" class="sel"/><rect x="772" y="9" width="104" height="26" rx="6" stroke="#8B8FFF" fill="none"/>
+  <path d="M784 15h8v14l-4-3-4 3z" fill="#8B8FFF"/><text x="800" y="27" class="t">Memory</text><text x="852" y="27" class="m">24</text>
+  <rect x="884" y="9" width="104" height="26" rx="6" class="raised" opacity=".5"/><text x="894" y="27" class="m">+  New conv.</text>
+
+  <circle cx="616" cy="270" r="26" class="accbg"/><text x="616" y="278" text-anchor="middle" fill="#A3A6FF" font-size="22" font-weight="600">A</text>
+  <text x="616" y="330" text-anchor="middle" class="h">Hi Liam, what can I help with?</text>
+  <text x="616" y="358" text-anchor="middle" class="s">I can read your runs, tickets, epics, wiki and files, search the web,</text>
+  <text x="616" y="377" text-anchor="middle" class="s">and create tickets for you. I remember what matters and tell you when I do.</text>
+  <g>
+    <rect x="356" y="408" width="256" height="52" rx="10" class="surf"/><rect x="356" y="408" width="256" height="52" rx="10" class="bd"/>
+    <text x="370" y="430" class="t">What did my agents finish</text><text x="370" y="448" class="t">this week?</text>
+    <rect x="620" y="408" width="256" height="52" rx="10" class="surf"/><rect x="620" y="408" width="256" height="52" rx="10" class="bd"/>
+    <text x="634" y="430" class="t">What's blocking the Personal</text><text x="634" y="448" class="t">Assistant epic?</text>
+    <rect x="356" y="468" width="256" height="52" rx="10" class="surf"/><rect x="356" y="468" width="256" height="52" rx="10" class="bd"/>
+    <text x="370" y="490" class="t">Draft tickets from a spec</text><text x="370" y="508" class="m">Attach a file first</text>
+    <rect x="620" y="468" width="256" height="52" rx="10" class="surf"/><rect x="620" y="468" width="256" height="52" rx="10" class="bd"/>
+    <text x="634" y="490" class="t">Search the web for the latest</text><text x="634" y="508" class="t">on a topic</text>
+  </g>
+  <text x="616" y="560" text-anchor="middle" class="m11">Your memory is private to you and separate from the team wiki.</text>
+  <rect x="296" y="760" width="640" height="96" rx="12" class="surf"/><rect x="296" y="760" width="640" height="96" rx="12" class="bds" fill="none"/>
+  <text x="312" y="790" class="m" font-size="14">Message your assistant…</text>
+  <rect x="306" y="818" width="28" height="28" rx="6" class="raised"/>
+  <path d="M323 826l-8 8a3 3 0 0 0 4 4l9-9a5 5 0 0 0-7-7l-9 9" fill="none" stroke="#A1A1AA" stroke-width="1.4" transform="translate(-2,-1)"/>
+  <text x="342" y="837" class="m11">Attach or drop files</text>
+  <rect x="892" y="818" width="32" height="28" rx="6" fill="#26262C"/><path d="M908 839v-14m-5 5l5-5 5 5" stroke="#8B8B94" stroke-width="1.8" fill="none"/>
+
+  <rect x="1000" y="0" width="440" height="900" class="panel"/><line x1="1000" y1="0" x2="1000" y2="900" class="bds"/>
+  <text x="1020" y="28" class="h15">Memory</text><text x="1088" y="28" class="m">24 entries</text>
+  <rect x="1316" y="10" width="76" height="26" rx="6" class="raised"/><rect x="1316" y="10" width="76" height="26" rx="6" class="bd"/>
+  <text x="1328" y="27" class="t" font-size="12">Export ▾</text>
+  <text x="1410" y="28" class="s">✕</text>
+  <line x1="1000" y1="44" x2="1440" y2="44" class="bd"/>
+  <rect x="1016" y="56" width="408" height="30" rx="6" class="surf"/><rect x="1016" y="56" width="408" height="30" rx="6" class="bd"/>
+  <circle cx="1032" cy="70" r="5" fill="none" stroke="#8B8B94" stroke-width="1.3"/><line x1="1036" y1="74" x2="1040" y2="78" stroke="#8B8B94" stroke-width="1.3"/>
+  <text x="1048" y="76" class="m" font-size="13">Search memories</text>
+  <rect x="1016" y="96" width="408" height="26" rx="6" class="surf"/>
+  <rect x="1018" y="98" width="44" height="22" rx="5" class="sel"/><text x="1030" y="113" class="t" font-size="12">All</text>
+  <text x="1074" y="113" class="s12">Preference</text><text x="1150" y="113" class="s12">Fact</text><text x="1194" y="113" class="s12">Project</text><text x="1254" y="113" class="s12">Person</text><text x="1310" y="113" class="s12">Decision</text>
+
+  <rect x="1016" y="134" width="408" height="262" rx="8" class="surf"/><rect x="1016" y="134" width="408" height="262" rx="8" stroke="#8B8FFF" fill="none"/>
+  <text x="1028" y="154" class="m11">TITLE</text>
+  <rect x="1028" y="160" width="384" height="28" rx="5" class="bg"/><rect x="1028" y="160" width="384" height="28" rx="5" class="bds" fill="none"/>
+  <text x="1038" y="179" class="t">Prefers roadmap summaries as 3 bullets</text>
+  <text x="1028" y="206" class="m11">SUMMARY</text>
+  <rect x="1028" y="212" width="384" height="52" rx="5" class="bg"/><rect x="1028" y="212" width="384" height="52" rx="5" class="bds" fill="none"/>
+  <text x="1038" y="231" class="t" font-size="12">When summarizing plans or roadmaps, use at most three</text>
+  <text x="1038" y="249" class="t" font-size="12">bullets and call out the riskiest item.</text>
+  <text x="1028" y="282" class="m11">TYPE</text><text x="1180" y="282" class="m11">TAGS</text>
+  <rect x="1028" y="288" width="140" height="28" rx="5" class="bg"/><rect x="1028" y="288" width="140" height="28" rx="5" class="bds" fill="none"/>
+  <text x="1038" y="307" class="t" font-size="12">Preference</text><text x="1150" y="307" class="m11">▾</text>
+  <rect x="1180" y="288" width="232" height="28" rx="5" class="bg"/><rect x="1180" y="288" width="232" height="28" rx="5" class="bds" fill="none"/>
+  <rect x="1186" y="293" width="66" height="18" rx="9" fill="#26262C"/><text x="1194" y="306" class="s12" font-size="11">writing ✕</text>
+  <rect x="1258" y="293" width="74" height="18" rx="9" fill="#26262C"/><text x="1266" y="306" class="s12" font-size="11">roadmap ✕</text>
+  <text x="1028" y="338" class="m11">Saved Nov 7 from this conversation ↗ · updated once</text>
+  <rect x="1028" y="352" width="56" height="28" rx="6" class="acc"/><text x="1056" y="371" text-anchor="middle" font-size="12" fill="#0B0B0D" font-weight="600">Save</text>
+  <rect x="1092" y="352" width="64" height="28" rx="6" class="raised"/><text x="1124" y="371" text-anchor="middle" class="t" font-size="12">Cancel</text>
+  <text x="1412" y="371" text-anchor="end" class="red">Delete</text>
+
+  <rect x="1016" y="404" width="408" height="84" rx="8" class="bd"/>
+  <text x="1028" y="426" class="t">Works in Pacific time</text><text x="1412" y="426" text-anchor="end" class="m">⋯</text>
+  <text x="1028" y="445" class="s12">Schedule-related answers should use PT (UTC−8).</text>
+  <rect x="1028" y="456" width="40" height="18" rx="9" fill="#26262C"/><text x="1036" y="469" class="m11">time</text>
+  <text x="1078" y="469" class="m11">Fact · from conversation · Oct 30</text>
+  <rect x="1016" y="496" width="408" height="84" rx="8" class="bd"/>
+  <text x="1028" y="518" class="t">LazyAgents billing rewrite owner</text><text x="1412" y="518" text-anchor="end" class="m">⋯</text>
+  <text x="1028" y="537" class="s12">Priya owns the billing rewrite; ask her before re-scoping.</text>
+  <rect x="1028" y="548" width="54" height="18" rx="9" fill="#26262C"/><text x="1036" y="561" class="m11">billing</text>
+  <text x="1092" y="561" class="m11">Person · from LAZYAGENTS-41 ↗ · Oct 22</text>
+  <rect x="1016" y="588" width="408" height="84" rx="8" class="bd"/>
+  <text x="1028" y="610" class="t">Prefers tickets of 3 points or less</text><text x="1412" y="610" text-anchor="end" class="m">⋯</text>
+  <text x="1028" y="629" class="s12">Split anything larger when drafting tickets.</text>
+  <rect x="1028" y="640" width="58" height="18" rx="9" fill="#26262C"/><text x="1036" y="653" class="m11">planning</text>
+  <text x="1096" y="653" class="m11">Preference · from conversation · Oct 18</text>
+  <text x="1016" y="700" class="m11">⋯ on a row: Edit · Delete. Click a row to edit it in place.</text>
+
+  <line x1="1000" y1="850" x2="1440" y2="850" class="bd"/>
+  <text x="1016" y="872" class="m11">Private to you. Never shared with the team wiki. Secrets and tokens are never saved.</text>
+  <text x="1016" y="888" class="m11">Export: JSON or Markdown (all entries).</text>
+</g>
+
+<!-- ============ FRAME 3: states ============ -->
+<text x="16" y="1926" class="lbl">3 · DETAIL STATES</text>
+<g transform="translate(0,1940)">
+  <text x="24" y="16" class="note">3a · Drag a file anywhere over the conversation</text>
+  <rect x="24" y="28" width="440" height="300" rx="10" class="bg"/>
+  <rect x="40" y="44" width="408" height="268" rx="12" fill="#8B8FFF0F" stroke="#8B8FFF" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <path d="M244 140v-36m-12 12l12-12 12 12" stroke="#A3A6FF" stroke-width="2" fill="none"/>
+  <text x="244" y="180" text-anchor="middle" class="t14" font-weight="600">Drop files to attach</text>
+  <text x="244" y="202" text-anchor="middle" class="m">PDF, images, text, Markdown, CSV · up to 25 MB each</text>
+  <text x="244" y="222" text-anchor="middle" class="m">Files become chips in the composer before you send</text>
+
+  <text x="496" y="16" class="note">3b · "Searched the web" pill expanded</text>
+  <rect x="496" y="28" width="440" height="300" rx="10" class="bg"/>
+  <rect x="512" y="44" width="196" height="24" rx="12" class="sel"/><rect x="512" y="44" width="196" height="24" rx="12" class="bds" fill="none"/>
+  <circle cx="526" cy="56" r="5" fill="none" stroke="#A1A1AA" stroke-width="1.3"/><line x1="521" y1="56" x2="531" y2="56" stroke="#A1A1AA"/>
+  <text x="538" y="60" class="t" font-size="12">Searched the web · 3 sources</text><text x="694" y="60" class="m11">▴</text>
+  <rect x="512" y="76" width="408" height="168" rx="8" class="surf"/><rect x="512" y="76" width="408" height="168" rx="8" class="bd"/>
+  <text x="526" y="98" class="m11">QUERIES</text>
+  <text x="526" y="118" class="s12">⌕  acme pricing announcement november 2026</text>
+  <text x="526" y="138" class="s12">⌕  globex offline mode beta</text>
+  <line x1="526" y1="152" x2="906" y2="152" class="bd"/>
+  <text x="526" y="172" class="acct">2</text><text x="540" y="172" class="t" font-size="12">Acme: New pricing</text><text x="906" y="172" text-anchor="end" class="m11">acme.com</text>
+  <text x="526" y="196" class="acct">3</text><text x="540" y="196" class="t" font-size="12">Offline mode beta</text><text x="906" y="196" text-anchor="end" class="m11">globex.io</text>
+  <text x="526" y="220" class="acct">·</text><text x="540" y="220" class="m" font-size="12">Globex press kit (opened, not cited)</text><text x="906" y="220" text-anchor="end" class="m11">globex.io</text>
+  <text x="512" y="272" class="m11">While running: "Searching the web…" with a spinner, then this summary.</text>
+  <text x="512" y="290" class="m11">Citation chips [n] in the text open the matching source.</text>
+
+  <text x="968" y="16" class="note">3c · Inline memory notices</text>
+  <rect x="968" y="28" width="448" height="300" rx="10" class="bg"/>
+  <text x="984" y="54" class="m11">SAVED (new)</text>
+  <rect x="984" y="62" width="416" height="30" rx="8" fill="#8B8FFF14"/><rect x="984" y="62" width="3" height="30" rx="1.5" class="acc"/>
+  <text x="998" y="81" class="s12">Saved: “Works in Pacific time”</text><text x="1300" y="81" class="acct">Undo</text><text x="1340" y="81" class="acct">Forget</text>
+  <text x="984" y="114" class="m11">UPDATED (near-duplicate found, existing entry updated)</text>
+  <rect x="984" y="122" width="416" height="30" rx="8" fill="#8B8FFF14"/><rect x="984" y="122" width="3" height="30" rx="1.5" class="acc"/>
+  <text x="998" y="141" class="s12">Updated: “Prefers tickets of 3 points or less”</text><text x="1340" y="141" class="acct">Undo</text>
+  <text x="984" y="174" class="m11">AFTER UNDO</text>
+  <rect x="984" y="182" width="416" height="30" rx="8" class="surf"/><rect x="984" y="182" width="3" height="30" rx="1.5" fill="#6B6B73"/>
+  <text x="998" y="201" class="m">Not saved. I won't remember this.</text>
+  <text x="984" y="234" class="m11">FORGOTTEN (by "forget that" or the Forget link)</text>
+  <rect x="984" y="242" width="416" height="30" rx="8" class="surf"/><rect x="984" y="242" width="3" height="30" rx="1.5" fill="#6B6B73"/>
+  <text x="998" y="261" class="s12">Forgot 1 memory: “Globex deal timeline”</text><text x="1356" y="261" class="acct">Undo</text>
+  <text x="984" y="300" class="m11">"View" opens the Memory panel focused on that entry.</text>
+</g>
+</svg>

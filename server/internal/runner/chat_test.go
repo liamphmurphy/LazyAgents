@@ -42,7 +42,7 @@ func (e env) chatRun(id uuid.UUID) store.Run {
 }
 func (e env) startChat(body string) store.ChatSession {
 	e.t.Helper()
-	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", AgentID: e.atlas.ID, Title: "Test chat", Message: &runs.ChatMessageInput{Body: body}})
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "Test chat", Message: &runs.ChatMessageInput{Body: body}})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestChatTurnsResumeWithoutTools(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			e := setup(t)
 			t.Setenv("FAKE_HARNESS_MODE", "chat")
-			if err := (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, "atlas", "PAY", agentdef.Override{Harness: name, Setup: []string{"exit 79"}, Budget: agentdef.Budget{MaxTurns: 1, MaxRuntime: "3s"}}); err != nil {
+			if err := (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, e.assistant().Handle, "PAY", agentdef.Override{Harness: name, Setup: []string{"exit 79"}, Budget: agentdef.Budget{MaxTurns: 1, MaxRuntime: "3s"}}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url='https://invalid.example/must-not-clone.git' WHERE key='PAY'"); err != nil {
@@ -143,7 +143,7 @@ func TestChatTurnsResumeWithoutTools(t *testing.T) {
 
 func TestChatConcurrentPostsAndQueuedCancel(t *testing.T) {
 	e := setup(t)
-	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", AgentID: e.atlas.ID})
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestChatFailureAndRuntimeLeaveChatUsable(t *testing.T) {
 			e := setup(t)
 			t.Setenv("FAKE_HARNESS_MODE", "chat")
 			if tc.runtime != "" {
-				if err := (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, "atlas", "PAY", agentdef.Override{Budget: agentdef.Budget{MaxRuntime: tc.runtime}}); err != nil {
+				if err := (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, e.assistant().Handle, "PAY", agentdef.Override{Budget: agentdef.Budget{MaxRuntime: tc.runtime}}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -323,7 +323,7 @@ func TestChatFailureAndRuntimeLeaveChatUsable(t *testing.T) {
 func TestChatValidationAndArchivedConflict(t *testing.T) {
 	e := setup(t)
 	for _, body := range []string{" ", strings.Repeat("é", 100001)} {
-		_, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", AgentID: e.atlas.ID, Message: &runs.ChatMessageInput{Body: body}})
+		_, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Message: &runs.ChatMessageInput{Body: body}})
 		var validation *apperr.ValidationError
 		if !errors.As(err, &validation) || validation.Field != "body" {
 			t.Fatalf("invalid body error: %v", err)
@@ -337,7 +337,7 @@ func TestChatValidationAndArchivedConflict(t *testing.T) {
 	if err != nil || len(chats) != 0 {
 		t.Fatalf("invalid first message left chat records: %+v %v", chats, err)
 	}
-	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", AgentID: e.atlas.ID})
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,4 +458,15 @@ func TestChatTurnCitations(t *testing.T) {
 	if string(msgs[3].Citations) != "[]" || string(msgs[0].Citations) != "[]" {
 		t.Fatalf("citations bled: user=%s second=%s", msgs[0].Citations, msgs[3].Citations)
 	}
+}
+
+// assistant is the Personal Assistant every chat runs as, created on demand so
+// a test can set its project override before the first chat.
+func (e *env) assistant() store.Agent {
+	e.t.Helper()
+	a, err := agents.EnsureAssistant(e.ctx, e.q, e.ws)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return a
 }

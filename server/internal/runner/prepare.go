@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -16,8 +17,10 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/lazyagents/server/internal/blob"
 	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/harness"
+	"github.com/liamphmurphy/lazyagents/server/internal/memory"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
@@ -438,9 +441,80 @@ func ChatTurnContext(ctx context.Context, q *store.Queries, run store.Run, proje
 	return files, b.String(), nil
 }
 
+// maxChatAttachmentTurnBytes bounds what one turn loads into memory to deliver.
+const maxChatAttachmentTurnBytes = runs.MaxChatAttachments * runs.MaxChatAttachmentBytes
+
+// chatTurnAttachments delivers the files uploaded with a chat turn's message
+// under .lazyagents/attachments/. Paths come from the turn and position plus
+// the sanitized upload name, so a name can't escape that directory. A file
+// whose bytes are gone (or with no attachment store) is named as unavailable.
+func (r *Runner) chatTurnAttachments(ctx context.Context, q *store.Queries, turn store.RunTurn) (files []ContextFile, prompt string, err error) {
+	msg, err := q.ChatMessageForTurn(ctx, &turn.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	atts, err := q.ListChatAttachmentsForMessages(ctx, []uuid.UUID{msg.ID})
+	if err != nil || len(atts) == 0 {
+		return nil, "", err
+	}
+	var b strings.Builder
+	b.WriteString("\n\nThe person attached these files to this message. Open each with your file-reading tool before answering:\n")
+	var total int64
+	for i, a := range atts {
+		name := runs.ChatAttachmentDiskName(runs.ChatAttachmentName(a.Filename))
+		if name == "" || strings.HasPrefix(name, ".") {
+			name = "file" + name
+		}
+		p := fmt.Sprintf(".lazyagents/attachments/turn-%d/%d-%s", turn.Seq, i+1, name)
+		total += a.SizeBytes
+		if r.Attachments == nil || total > maxChatAttachmentTurnBytes {
+			fmt.Fprintf(&b, "- %q (%s): not available\n", a.Filename, a.ContentType)
+			continue
+		}
+		body, err := r.readAttachment(ctx, a.BlobKey)
+		if errors.Is(err, blob.ErrNotFound) {
+			fmt.Fprintf(&b, "- %q (%s): not available\n", a.Filename, a.ContentType)
+			continue
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		files = append(files, ContextFile{Path: p, Body: body})
+		fmt.Fprintf(&b, "- `%s`: %q (%s)\n", p, a.Filename, a.ContentType)
+	}
+	return files, b.String(), nil
+}
+
+func (r *Runner) readAttachment(ctx context.Context, key string) ([]byte, error) {
+	o, err := r.Attachments.Get(ctx, r.Cfg.AttachmentBucket, key)
+	if err != nil {
+		return nil, err
+	}
+	defer o.Body.Close()
+	return io.ReadAll(io.LimitReader(o.Body, runs.MaxChatAttachmentBytes+1))
+}
+
 func derefID(id *uuid.UUID) uuid.UUID {
 	if id == nil {
 		return uuid.Nil
 	}
 	return *id
+}
+
+// chatMemoryIndex renders the always-loaded index of the memory of the person
+// the chat belongs to: titles and summaries only, never another person's.
+func chatMemoryIndex(ctx context.Context, q *store.Queries, run store.Run) (string, error) {
+	chat, err := q.ChatSessionForRun(ctx, &run.ID)
+	if err != nil {
+		return "", err
+	}
+	o := memory.Owner{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy}
+	entries, total, err := memory.New(q).Index(ctx, o)
+	if err != nil {
+		return "", err
+	}
+	return memory.IndexMarkdown(entries, total), nil
 }

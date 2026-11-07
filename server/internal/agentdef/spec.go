@@ -162,10 +162,20 @@ func invalid(field, format string, a ...any) error {
 	return &ValidationError{Field: field, Msg: fmt.Sprintf(format, a...)}
 }
 
+// OptionWebSearch ("true") enables a harness's built-in web search and page
+// fetch tools for a read-only run. Only the Personal Assistant's chat spec sets
+// it (definitions can't), and the tool policy honors it only on chat runs;
+// Claude Code and Codex support it, OpenCode doesn't accept it. See
+// ADR "Assistant web access".
+const OptionWebSearch = "web_search"
+
 // Efforts are the allowed values of the "effort" harness option.
 var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 
 func validOptions(field string, opts map[string]string) error {
+	if _, ok := opts[OptionWebSearch]; ok {
+		return invalid(field, "%s is set by LazyAgents for the Personal Assistant only", OptionWebSearch)
+	}
 	if e, ok := opts["effort"]; ok && !slices.Contains(Efforts, e) {
 		return invalid(field, "effort must be one of %s", strings.Join(Efforts, ", "))
 	}

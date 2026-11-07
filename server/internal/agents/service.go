@@ -180,6 +180,9 @@ func (s *Service) SaveDefinition(ctx context.Context, ws uuid.UUID, by uuid.UUID
 		if err != nil {
 			return notFound(err)
 		}
+		if cur.Kind == KindAssistant {
+			return apperr.Conflict("the Personal Assistant's definition is managed by LazyAgents")
+		}
 		if id.Kind == KindSub && cur.Kind != KindSub {
 			// Sub agents can't hold tickets: hand the open ones to someone else first.
 			n, err := q.CountOpenTicketsForAgent(ctx, &cur.ID)
@@ -205,6 +208,9 @@ func (s *Service) Delete(ctx context.Context, ws uuid.UUID, handle string) error
 		a, err := q.LockAgentByHandle(ctx, store.LockAgentByHandleParams{WorkspaceID: ws, Handle: handle})
 		if err != nil {
 			return notFound(err)
+		}
+		if a.Kind == KindAssistant {
+			return apperr.Conflict("the Personal Assistant can't be deleted")
 		}
 		n, err := q.CountOpenTicketsForAgent(ctx, &a.ID)
 		if err != nil {

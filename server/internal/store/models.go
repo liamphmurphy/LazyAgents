@@ -166,6 +166,18 @@ type ArtifactVersion struct {
 	ReviewPins       json.RawMessage
 }
 
+type ChatAttachment struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	MessageID   *uuid.UUID
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+	CreatedAt   time.Time
+}
+
 type ChatMessage struct {
 	ID          uuid.UUID
 	SessionID   uuid.UUID
@@ -290,6 +302,26 @@ type Label struct {
 	Color       string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type Memory struct {
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	UserID              uuid.UUID
+	Title               string
+	Summary             string
+	Body                string
+	Tags                []string
+	Type                string
+	Source              string
+	SourceChatID        *uuid.UUID
+	SourceRunID         *uuid.UUID
+	SupersededBy        *uuid.UUID
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	RetiredReason       string
+	RetiredAt           *time.Time
+	ConsolidationExempt bool
 }
 
 type MetricSnapshot struct {

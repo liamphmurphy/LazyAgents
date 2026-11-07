@@ -28,10 +28,16 @@ func brokerFor(scope string) (broker.Action, bool) { return broker.For(scope) }
 func define[In any](name, desc string, fn func(context.Context, Deps, agents.Caller, In) (any, error)) Tool {
 	original := fn
 	fn = func(ctx context.Context, d Deps, c agents.Caller, in In) (any, error) {
+		if c.Agent.Kind == agents.KindAssistant && c.RunID == nil {
+			return nil, apperr.Conflict("the Personal Assistant only works inside chats")
+		}
 		if c.RunID != nil {
 			run, err := d.Q.GetRun(ctx, store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID})
 			if err != nil {
 				return nil, err
+			}
+			if c.Agent.Kind == agents.KindAssistant && run.Purpose != "chat" {
+				return nil, apperr.Conflict("the Personal Assistant only works inside chats")
 			}
 			switch {
 			case run.Purpose == "chat":
@@ -141,8 +147,9 @@ var planningTools = []string{"whoami", "get_ticket", "read_artifact", "search_kn
 var subagentTools = []string{"get_ticket", "read_artifact", "create_artifact", "comment", "request_approval", "wait_for_approval", "run_gated", "await_human", "search_knowledge", "find_pattern", "propose_pattern", "list_proposed_patterns", "read_page", "write_note", "get_backlinks", "complete_run"}
 
 // leadHidden are the tools a managed ticket run never needs: usage is reported
-// by the runner and the ticket is already assigned.
-var leadHidden = []string{"report_usage", "next_ticket"}
+// by the runner, the ticket is already assigned, and personal memory belongs
+// to chats with a person.
+var leadHidden = []string{"report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "list_runs", "get_run"}
 
 // profileFor must stay consistent with the checks in define().
 func profileFor(run store.Run) string {

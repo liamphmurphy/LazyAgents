@@ -69,7 +69,13 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	// Codex can't route web search through Vesper approval, so it's live only
 	// when web:read is plainly allowed.
 	web := "disabled"
-	if allowed(spec, "web:read") && spec.HarnessOptions["readonly"] != "true" {
+	if spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+		// The assistant's own search option (checked against codex-cli 0.167.0,
+		// which accepts disabled, cached, indexed or live under --strict-config).
+		// cached searches OpenAI's index without live fetches of arbitrary
+		// URLs, which could carry data out (ADR "Assistant web access").
+		web = "cached"
+	} else if allowed(spec, "web:read") && spec.HarnessOptions["readonly"] != "true" {
 		web = "live"
 	}
 	cfg = append(cfg, "web_search="+tomlString(web))

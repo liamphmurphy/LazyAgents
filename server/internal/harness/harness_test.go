@@ -343,7 +343,7 @@ func TestAgentsMDGitHubSection(t *testing.T) {
 
 func TestChatAgentsMD(t *testing.T) {
 	spec := agentdef.Resolved{Harness: agentdef.HarnessCodex, Instructions: "Agent persona", Skills: []agentdef.Skill{{Name: "context", Description: "Read context"}}}
-	got := string(ChatAgentsMD(spec, []string{".lazyagents/context/memory.md"}, "PAY"))
+	got := string(ChatAgentsMD(spec, []string{".lazyagents/context/memory.md"}, "PAY", ""))
 	for _, want := range []string{"project PAY", "conversation with a person", "Answer directly", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "Do not call claim_ticket, complete_run or propose_tickets", "Agent persona", ".lazyagents/context/memory.md", "context"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in %s", want, got)
@@ -479,7 +479,7 @@ func TestAgentsMDTestsSection(t *testing.T) {
 	if md := string(AgentsMD("", spec(), nil, "PAY-1")); !strings.Contains(md, "skip get_ticket") || !strings.Contains(md, "check_criterion with ns") {
 		t.Fatal("managed AGENTS.md lacks the claim/criteria guidance")
 	}
-	if strings.Contains(string(ChatAgentsMD(spec(), nil, "PAY")), "## Tests") {
+	if strings.Contains(string(ChatAgentsMD(spec(), nil, "PAY", "")), "## Tests") {
 		t.Fatal("chat AGENTS.md must not carry the Tests section")
 	}
 }
@@ -545,6 +545,52 @@ func TestAgentsMDEpicReview(t *testing.T) {
 	}
 	if i, j := strings.Index(md, "## Epic review"), strings.Index(md, "## Git and GitHub"); i < 0 || j < i {
 		t.Fatal("epic review section belongs before Git/GitHub")
+	}
+}
+
+func TestChatWebSearchOption(t *testing.T) {
+	ws := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	s := spec("repo:write", "denied", "tests:run", "denied")
+	s.HarnessOptions = map[string]string{"readonly": "true", "sandbox": "read-only"}
+	claude, err := (ClaudeCode{}).Invocation(ws, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allowed := strings.Split(flag(claude.Argv, "--allowedTools"), ","); slices.Contains(allowed, "WebSearch") {
+		t.Fatal("web search allowed without the option")
+	}
+	codex, err := (Codex{}).Invocation(ws, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(codex.Argv, `web_search="disabled"`) {
+		t.Fatalf("codex web search enabled without the option: %v", codex.Argv)
+	}
+
+	s.HarnessOptions[agentdef.OptionWebSearch] = "true"
+	claude, err = (ClaudeCode{}).Invocation(ws, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := strings.Split(flag(claude.Argv, "--allowedTools"), ",")
+	denied := strings.Split(flag(claude.Argv, "--disallowedTools"), ",")
+	for _, tool := range []string{"WebSearch", "WebFetch"} {
+		if !slices.Contains(allowed, tool) || slices.Contains(denied, tool) {
+			t.Fatalf("%s not allowed: allow %v deny %v", tool, allowed, denied)
+		}
+	}
+	if slices.Contains(allowed, "Bash") || !slices.Contains(denied, "Bash") {
+		t.Fatal("web search must not widen a read-only run")
+	}
+	codex, err = (Codex{}).Invocation(ws, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args := strings.Join(codex.Argv, " "); !strings.Contains(args, `web_search="cached"`) || !strings.Contains(args, `sandbox_mode="read-only"`) {
+		t.Fatalf("codex: %s", args)
+	}
+	if md := string(ChatAgentsMD(s, nil, "PAY", "")); !strings.Contains(md, "search the web") {
+		t.Fatalf("chat AGENTS.md doesn't mention web search:\n%s", md)
 	}
 }
 

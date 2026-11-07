@@ -153,9 +153,13 @@ WHERE id = $1 RETURNING *;
 DELETE FROM chat_sessions WHERE id = $1;
 
 -- name: DefaultChatAgent :one
--- The default agent for a chat that names none: the oldest main (non-sub) agent,
--- ties broken by name then id so the choice is deterministic.
-SELECT * FROM agents WHERE workspace_id = $1 AND kind <> 'sub' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1;
+-- The oldest main agent, ties broken by name then id so the choice is
+-- deterministic. A new Personal Assistant starts on its harness and model.
+SELECT * FROM agents WHERE workspace_id = $1 AND kind = 'main' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1;
+
+-- name: AssistantAgent :one
+-- The workspace's Personal Assistant: the agent every chat runs as.
+SELECT * FROM agents WHERE workspace_id = $1 AND kind = 'assistant';
 
 -- name: OwnsChatRun :one
 SELECT EXISTS (
@@ -165,3 +169,61 @@ SELECT EXISTS (
       SELECT 1 FROM chat_messages m WHERE m.session_id = s.id AND m.run_id = sqlc.arg(run_id)::uuid
     ))
 )::boolean;
+
+-- name: CreateAssistantAgent :one
+-- Creates the workspace's Personal Assistant. Returns no row when a concurrent
+-- call already made it (or the handle is taken).
+INSERT INTO agents (workspace_id, name, handle, color_index, role, specialty, model, status, kind)
+VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle', 'assistant')
+ON CONFLICT DO NOTHING RETURNING *;
+
+-- name: SetChatAgent :exec
+UPDATE chat_sessions SET agent_id = $2 WHERE id = $1;
+
+-- name: CreateChatAttachment :one
+INSERT INTO chat_attachments (workspace_id, user_id, filename, content_type, size_bytes, blob_key)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+
+-- name: GetChatAttachment :one
+SELECT * FROM chat_attachments WHERE id = $1 AND workspace_id = $2 AND user_id = $3;
+
+-- name: AttachChatAttachments :many
+-- Binds the caller's own unattached uploads to a message; ids that don't
+-- qualify are simply not returned, so the caller compares counts.
+UPDATE chat_attachments SET message_id = sqlc.arg(message_id)
+WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND message_id IS NULL
+RETURNING *;
+
+-- name: ChatAttachmentBytes :one
+-- What a person has stored in uploads, for the per-person cap.
+SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM chat_attachments WHERE workspace_id = $1 AND user_id = $2;
+
+-- name: DeleteStaleChatAttachments :many
+-- Removes up to row_limit uploads never sent (or detached by a chat's
+-- deletion) that are older than the cutoff, returning their blob keys. SKIP
+-- LOCKED lets several runners sweep at once; a row a message is binding at
+-- the same moment is re-checked after its lock and survives.
+DELETE FROM chat_attachments
+WHERE id IN (
+  SELECT id FROM chat_attachments
+  WHERE message_id IS NULL AND created_at < sqlc.arg(cutoff)::timestamptz
+  ORDER BY created_at LIMIT sqlc.arg(row_limit) FOR UPDATE SKIP LOCKED
+) AND message_id IS NULL
+RETURNING blob_key;
+
+-- name: ListChatAttachmentsForMessages :many
+SELECT * FROM chat_attachments WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) ORDER BY created_at, id;
+
+-- name: ChatUserMentions :one
+-- Whether the person wrote text in this run's conversation (any segment).
+SELECT EXISTS (
+  SELECT 1 FROM chat_messages m
+  WHERE m.role = 'user' AND strpos(m.body_md, sqlc.arg(text)::text) > 0
+    AND m.session_id IN (SELECT c.session_id FROM chat_messages c WHERE c.run_id = sqlc.arg(run_id))
+) AS mentioned;
+
+-- name: RunWebSearchEvents :many
+-- A run's WebSearch calls and results, for the WebFetch allowlist.
+SELECT type, payload FROM run_events
+WHERE run_id = $1 AND type IN ('tool_call', 'tool_result') AND payload->>'tool' = 'WebSearch'
+ORDER BY seq;
