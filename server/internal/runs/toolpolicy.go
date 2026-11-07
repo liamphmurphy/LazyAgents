@@ -47,6 +47,17 @@ func ToolScopes(tool string, input map[string]any) []string {
 	return []string{"tests:run"} // unknown execution tools require the execution scope
 }
 
+// WebTool reports a harness's built-in web search or page fetch tool. They
+// touch no workspace files, so they're governed by agentdef.OptionWebSearch
+// rather than a scope.
+func WebTool(tool string) bool {
+	switch tool {
+	case "WebSearch", "WebFetch", "web_search":
+		return true
+	}
+	return false
+}
+
 func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDecision, error) {
 	deny := func(reason string) (ToolDecision, error) { return ToolDecision{Decision: "deny", Reason: reason}, nil }
 	if c.RunID == nil {
@@ -63,6 +74,9 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	spec, err := Spec(run)
 	if err != nil {
 		return ToolDecision{}, err
+	}
+	if WebTool(in.Tool) && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+		return ToolDecision{Decision: "allow"}, nil
 	}
 	scopes := ToolScopes(in.Tool, in.Input)
 	if spec.HarnessOptions["readonly"] == "true" && len(scopes) > 0 {

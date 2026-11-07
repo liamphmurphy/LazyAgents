@@ -179,3 +179,20 @@ ON CONFLICT DO NOTHING RETURNING *;
 
 -- name: SetChatAgent :exec
 UPDATE chat_sessions SET agent_id = $2 WHERE id = $1;
+
+-- name: CreateChatAttachment :one
+INSERT INTO chat_attachments (workspace_id, user_id, filename, content_type, size_bytes, blob_key)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+
+-- name: GetChatAttachment :one
+SELECT * FROM chat_attachments WHERE id = $1 AND workspace_id = $2 AND user_id = $3;
+
+-- name: AttachChatAttachments :many
+-- Binds the caller's own unattached uploads to a message; ids that don't
+-- qualify are simply not returned, so the caller compares counts.
+UPDATE chat_attachments SET message_id = sqlc.arg(message_id)
+WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND message_id IS NULL
+RETURNING *;
+
+-- name: ListChatAttachmentsForMessages :many
+SELECT * FROM chat_attachments WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) ORDER BY created_at, id;

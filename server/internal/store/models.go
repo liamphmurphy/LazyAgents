@@ -166,6 +166,18 @@ type ArtifactVersion struct {
 	ReviewPins       json.RawMessage
 }
 
+type ChatAttachment struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	MessageID   *uuid.UUID
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+	CreatedAt   time.Time
+}
+
 type ChatMessage struct {
 	ID          uuid.UUID
 	SessionID   uuid.UUID

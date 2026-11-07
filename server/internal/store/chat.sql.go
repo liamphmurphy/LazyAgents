@@ -153,6 +153,56 @@ func (q *Queries) AssistantAgent(ctx context.Context, workspaceID uuid.UUID) (Ag
 	return i, err
 }
 
+const attachChatAttachments = `-- name: AttachChatAttachments :many
+UPDATE chat_attachments SET message_id = $1
+WHERE id = ANY($2::uuid[]) AND workspace_id = $3 AND user_id = $4 AND message_id IS NULL
+RETURNING id, workspace_id, user_id, message_id, filename, content_type, size_bytes, blob_key, created_at
+`
+
+type AttachChatAttachmentsParams struct {
+	MessageID   *uuid.UUID
+	Ids         []uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+// Binds the caller's own unattached uploads to a message; ids that don't
+// qualify are simply not returned, so the caller compares counts.
+func (q *Queries) AttachChatAttachments(ctx context.Context, arg AttachChatAttachmentsParams) ([]ChatAttachment, error) {
+	rows, err := q.db.Query(ctx, attachChatAttachments,
+		arg.MessageID,
+		arg.Ids,
+		arg.WorkspaceID,
+		arg.UserID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatAttachment{}
+	for rows.Next() {
+		var i ChatAttachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.MessageID,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.BlobKey,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const chatLastErrors = `-- name: ChatLastErrors :many
 SELECT DISTINCT ON (session_id) session_id, body_md FROM chat_messages
 WHERE session_id = ANY($1::uuid[]) AND role = 'system'
@@ -386,6 +436,44 @@ func (q *Queries) CreateAssistantAgent(ctx context.Context, arg CreateAssistantA
 	return i, err
 }
 
+const createChatAttachment = `-- name: CreateChatAttachment :one
+INSERT INTO chat_attachments (workspace_id, user_id, filename, content_type, size_bytes, blob_key)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, workspace_id, user_id, message_id, filename, content_type, size_bytes, blob_key, created_at
+`
+
+type CreateChatAttachmentParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+}
+
+func (q *Queries) CreateChatAttachment(ctx context.Context, arg CreateChatAttachmentParams) (ChatAttachment, error) {
+	row := q.db.QueryRow(ctx, createChatAttachment,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Filename,
+		arg.ContentType,
+		arg.SizeBytes,
+		arg.BlobKey,
+	)
+	var i ChatAttachment
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.MessageID,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createChatSession = `-- name: CreateChatSession :one
 INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
@@ -480,6 +568,33 @@ func (q *Queries) FinishUnfinishedChatTurns(ctx context.Context, runID uuid.UUID
 	return err
 }
 
+const getChatAttachment = `-- name: GetChatAttachment :one
+SELECT id, workspace_id, user_id, message_id, filename, content_type, size_bytes, blob_key, created_at FROM chat_attachments WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+`
+
+type GetChatAttachmentParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+func (q *Queries) GetChatAttachment(ctx context.Context, arg GetChatAttachmentParams) (ChatAttachment, error) {
+	row := q.db.QueryRow(ctx, getChatAttachment, arg.ID, arg.WorkspaceID, arg.UserID)
+	var i ChatAttachment
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.MessageID,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getChatSession = `-- name: GetChatSession :one
 SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 AND workspace_id = $2
 `
@@ -544,6 +659,40 @@ func (q *Queries) LinkSourceInProject(ctx context.Context, arg LinkSourceInProje
 	var visible bool
 	err := row.Scan(&visible)
 	return visible, err
+}
+
+const listChatAttachmentsForMessages = `-- name: ListChatAttachmentsForMessages :many
+SELECT id, workspace_id, user_id, message_id, filename, content_type, size_bytes, blob_key, created_at FROM chat_attachments WHERE message_id = ANY($1::uuid[]) ORDER BY created_at, id
+`
+
+func (q *Queries) ListChatAttachmentsForMessages(ctx context.Context, messageIds []uuid.UUID) ([]ChatAttachment, error) {
+	rows, err := q.db.Query(ctx, listChatAttachmentsForMessages, messageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatAttachment{}
+	for rows.Next() {
+		var i ChatAttachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.MessageID,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.BlobKey,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listChatMessages = `-- name: ListChatMessages :many

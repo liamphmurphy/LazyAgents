@@ -268,14 +268,15 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		backend = &runner.Local{Dir: rc.DataDir, Bins: bins, OpenCodeIsolated: rc.OpenCodeIsolated}
 	}
 	host, _ := os.Hostname()
+	blobs := blob.New(cfg.S3)
 	r := &runner.Runner{
 		Cfg: runner.Config{
 			ModelPrices: rc.ModelPrices,
 			ID:          fmt.Sprintf("%s-%d", host, os.Getpid()), MaxConcurrent: rc.MaxConcurrent, MCPURL: rc.MCPURL,
-			Grace: 30 * time.Second, LogBucket: "run-logs", Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
+			Grace: 30 * time.Second, LogBucket: "run-logs", AttachmentBucket: cfg.S3.ArtifactBucket, Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
 		},
 		Pool: pool, Backend: backend, Secrets: &secrets.Service{Q: store.New(pool), Box: box},
-		Tracker: &tracker.Service{Pool: pool}, Blobs: blob.New(cfg.S3), Log: log,
+		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
 	}
 	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
 	return r.Run(ctx)

@@ -162,6 +162,11 @@ func invalid(field, format string, a ...any) error {
 	return &ValidationError{Field: field, Msg: fmt.Sprintf(format, a...)}
 }
 
+// OptionWebSearch ("true") enables a harness's built-in web search and page
+// fetch tools for a read-only run. Only the Personal Assistant's chat spec sets
+// it; Claude Code and Codex honor it, OpenCode doesn't accept it.
+const OptionWebSearch = "web_search"
+
 // Efforts are the allowed values of the "effort" harness option.
 var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 

@@ -469,6 +469,14 @@ var inlineSafe = map[string]bool{
 }
 
 func (r contentResponse) VisitGetArtifactContentResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
+func (r contentResponse) VisitGetChatAttachmentContentResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
+func (r contentResponse) write(w http.ResponseWriter) error {
 	if r.closer != nil {
 		defer r.closer.Close()
 	}

@@ -26,7 +26,10 @@ func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
 	}
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
-	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
+	// web_search turns on the harness's own web search and page fetch tools
+	// (Claude Code WebSearch/WebFetch, Codex live web search); see
+	// agentdef.OptionWebSearch.
+	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true", agentdef.OptionWebSearch: "true"}
 	if r.Harness == agentdef.HarnessOpenCode {
 		// OpenCode honors only readonly and rejects any other option.
 		r.HarnessOptions = map[string]string{"readonly": "true"}
@@ -58,6 +61,9 @@ type ChatMessageInput struct {
 	Harness     string
 	Model       string
 	ContextRefs []ChatContextRef
+	// AttachmentIDs are the poster's own unattached uploads (chat_attachments);
+	// they're bound to the new message and delivered to its turn.
+	AttachmentIDs []uuid.UUID
 }
 
 // ChatCatalog is the harness/model catalog chats validate against.
@@ -155,6 +161,15 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	h, m, err := cat.Resolve(ctx, q, chat.WorkspaceID, chat.Harness, chat.Model, in.Harness, in.Model)
 	if err != nil {
 		return chat, msg, err
+	}
+	if len(in.AttachmentIDs) > MaxChatAttachments {
+		return chat, msg, apperr.Invalid("attachment_ids", "attach at most %d files", MaxChatAttachments)
+	}
+	var attachIDs []uuid.UUID
+	for _, id := range in.AttachmentIDs {
+		if !slices.Contains(attachIDs, id) {
+			attachIDs = append(attachIDs, id)
+		}
 	}
 	docs, err := ResolveChatRefs(ctx, q, chat.WorkspaceID, chat.ProjectID, in.ContextRefs)
 	if err != nil {
@@ -268,6 +283,17 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		return chat, msg, err
 	}
 	msg = store.ChatMessage(appended)
+	if len(attachIDs) > 0 {
+		// Only the chat owner's own uploads that no message has claimed yet; any
+		// other id fails the whole post (the transaction rolls back).
+		bound, err := q.AttachChatAttachments(ctx, store.AttachChatAttachmentsParams{MessageID: &msg.ID, Ids: attachIDs, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+		if err != nil {
+			return chat, msg, err
+		}
+		if len(bound) != len(attachIDs) {
+			return chat, msg, apperr.Invalid("attachment_ids", "upload the files again: an attachment is unknown or already sent")
+		}
+	}
 	chat, err = q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: chat.ID, CurrentRunID: &run.ID, State: "running"})
 	if err != nil {
 		return chat, msg, err

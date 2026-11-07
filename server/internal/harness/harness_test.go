@@ -547,3 +547,49 @@ func TestAgentsMDEpicReview(t *testing.T) {
 		t.Fatal("epic review section belongs before Git/GitHub")
 	}
 }
+
+func TestChatWebSearchOption(t *testing.T) {
+	ws := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	s := spec("repo:write", "denied", "tests:run", "denied")
+	s.HarnessOptions = map[string]string{"readonly": "true", "sandbox": "read-only"}
+	claude, err := (ClaudeCode{}).Invocation(ws, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allowed := strings.Split(flag(claude.Argv, "--allowedTools"), ","); slices.Contains(allowed, "WebSearch") {
+		t.Fatal("web search allowed without the option")
+	}
+	codex, err := (Codex{}).Invocation(ws, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(codex.Argv, " "), "web_search=") {
+		t.Fatal("codex web search set without the option")
+	}
+
+	s.HarnessOptions[agentdef.OptionWebSearch] = "true"
+	claude, err = (ClaudeCode{}).Invocation(ws, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := strings.Split(flag(claude.Argv, "--allowedTools"), ",")
+	denied := strings.Split(flag(claude.Argv, "--disallowedTools"), ",")
+	for _, tool := range []string{"WebSearch", "WebFetch"} {
+		if !slices.Contains(allowed, tool) || slices.Contains(denied, tool) {
+			t.Fatalf("%s not allowed: allow %v deny %v", tool, allowed, denied)
+		}
+	}
+	if slices.Contains(allowed, "Bash") || !slices.Contains(denied, "Bash") {
+		t.Fatal("web search must not widen a read-only run")
+	}
+	codex, err = (Codex{}).Invocation(ws, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args := strings.Join(codex.Argv, " "); !strings.Contains(args, `web_search="live"`) || !strings.Contains(args, `sandbox_mode="read-only"`) {
+		t.Fatalf("codex: %s", args)
+	}
+	if md := string(ChatAgentsMD(s, nil, "PAY", "")); !strings.Contains(md, "search the web") {
+		t.Fatalf("chat AGENTS.md doesn't mention web search:\n%s", md)
+	}
+}

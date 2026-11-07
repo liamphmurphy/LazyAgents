@@ -66,6 +66,11 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	} else {
 		cfg = append(cfg, "sandbox_mode="+tomlString(sandbox))
 	}
+	if spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+		// Codex's own search tool (checked against codex-cli 0.167.0, which
+		// accepts disabled, cached, indexed or live under --strict-config).
+		cfg = append(cfg, "web_search="+tomlString("live"))
+	}
 	if effort := spec.HarnessOptions["effort"]; effort != "" {
 		if effort == "xhigh" || effort == "max" {
 			effort = "high"
