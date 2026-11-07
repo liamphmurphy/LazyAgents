@@ -332,6 +332,7 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 
 // Sweep removes workspaces of runs that ended between turns.
 func (r *Runner) Sweep(ctx context.Context) {
+	defer r.sweepChatAttachments(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx)
 	if err != nil {
 		return
@@ -339,7 +340,6 @@ func (r *Runner) Sweep(ctx context.Context) {
 	for _, id := range ids {
 		r.cleanup(ctx, id)
 	}
-	r.sweepChatAttachments(ctx)
 }
 
 // StaleChatAttachmentAge is how long an upload may sit unsent (or detached by
