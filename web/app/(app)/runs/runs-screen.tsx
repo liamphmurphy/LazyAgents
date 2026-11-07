@@ -38,7 +38,6 @@ const PURPOSES = [
   { value: "all", label: "All" },
   { value: "ticket", label: "Ticket" },
   { value: "planning", label: "Planning" },
-  { value: "chat", label: "Chat" },
 ] as const;
 
 const selectClass = "h-8 rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg";
@@ -224,7 +223,7 @@ export function RunsScreen() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="space-y-1">
               <h1 className="type-display">Runs</h1>
-              <p className="text-sm text-fg-secondary">Ticket, planning and chat runs across agents.</p>
+              <p className="text-sm text-fg-secondary">Ticket and planning runs across agents.</p>
             </div>
             <p role="status" className="flex items-center gap-3 font-mono text-xs text-fg-tertiary">
               {r && (r.online ? `${r.busy} running · ${r.queued} queued · ${r.slots} slots` : `Runner offline · ${r.queued} queued`)}

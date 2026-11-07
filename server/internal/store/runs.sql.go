@@ -1197,9 +1197,10 @@ WHERE r.workspace_id = $1
   AND r.state = ANY($3::text[])
   AND ($4::uuid IS NULL OR r.agent_id = $4)
   AND ($5::text IS NULL OR r.purpose = $5)
-  AND ($6::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = $6)
+  AND (NOT $6::bool OR r.purpose <> 'chat')
+  AND ($7::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = $7)
 ORDER BY r.started_at DESC, r.id DESC
-LIMIT 51 OFFSET $7::int
+LIMIT 51 OFFSET $8::int
 `
 
 type ListRunsParams struct {
@@ -1208,6 +1209,7 @@ type ListRunsParams struct {
 	States      []string
 	AgentID     *uuid.UUID
 	Purpose     *string
+	HideChat    bool
 	ProjectID   *uuid.UUID
 	Skip        int32
 }
@@ -1215,6 +1217,7 @@ type ListRunsParams struct {
 // Top-level runs for the Runs index. A run's project comes from its ticket,
 // planning session or chat session; delegated runs are left to their parent
 // unless the list is filtered to one ticket, where every run is listed.
+// hide_chat leaves out Personal Assistant chat runs (they live in Chat).
 func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, error) {
 	rows, err := q.db.Query(ctx, listRuns,
 		arg.WorkspaceID,
@@ -1222,6 +1225,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 		arg.States,
 		arg.AgentID,
 		arg.Purpose,
+		arg.HideChat,
 		arg.ProjectID,
 		arg.Skip,
 	)

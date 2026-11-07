@@ -47,7 +47,14 @@ type Config struct {
 	// key secret. Docker runs need it; local runs can use the host's login.
 	RequireHarnessKey bool
 	ModelPrices       map[string]harness.Price
+	// ChatIdleTTL ends a chat segment idle this long so its workspace is
+	// freed; the chat's next message starts a new segment. 0 means
+	// DefaultChatIdleTTL.
+	ChatIdleTTL time.Duration
 }
+
+// DefaultChatIdleTTL is how long an idle chat segment keeps its workspace.
+const DefaultChatIdleTTL = 4 * time.Hour
 
 // Blobs stores raw logs (blob.Store).
 type Blobs interface {
@@ -330,9 +337,11 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 	_ = r.q().SetRunWorkspace(ctx, store.SetRunWorkspaceParams{ID: runID, WorkspaceVolume: nil})
 }
 
-// Sweep removes workspaces of runs that ended between turns.
+// Sweep ends idle chat segments and removes workspaces of runs that ended
+// between turns.
 func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepChatAttachments(ctx)
+	r.expireIdleChats(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx)
 	if err != nil {
 		return

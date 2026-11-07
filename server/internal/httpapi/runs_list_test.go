@@ -17,8 +17,9 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
 
-// The Runs index lists top-level ticket, planning and chat runs with their
-// work and project, and filters by state, agent, project and purpose.
+// The Runs index lists top-level ticket and planning runs with their work and
+// project, and filters by state, agent, project and purpose. Personal
+// Assistant chat runs are never listed: they belong to Chat.
 func TestListRuns(t *testing.T) {
 	pool := testdb.New(t)
 	ctx := context.Background()
@@ -126,15 +127,14 @@ func TestListRuns(t *testing.T) {
 		t.Fatal("live filter leaked a completed run")
 	}
 	tr0, ok := live[ticketRun.ID]
-	if !ok || live[chatRun.ID].Id == uuid.Nil {
+	if !ok {
 		t.Fatalf("live runs missing: %+v", live)
+	}
+	if _, ok := live[chatRun.ID]; ok {
+		t.Fatal("a chat run leaked into the Runs index")
 	}
 	if tr0.Purpose != api.RunPurposeTicket || tr0.ProjectKey == nil || *tr0.ProjectKey != "PAY" || tr0.WorkTitle == nil || *tr0.WorkTitle != ticket.Title || tr0.ChildCount == nil || *tr0.ChildCount != 1 {
 		t.Fatalf("ticket run not enriched: %+v", tr0)
-	}
-	cr := live[chatRun.ID]
-	if cr.ChatId == nil || *cr.ChatId != chatID || cr.WorkTitle == nil || *cr.WorkTitle != "Refund questions" || cr.ProjectKey == nil || *cr.ProjectKey != "PAY" {
-		t.Fatalf("chat run not enriched: %+v", cr)
 	}
 
 	all := ids(list("?state=all", 200))
@@ -142,20 +142,20 @@ func TestListRuns(t *testing.T) {
 	if pr.PlanningId == nil || *pr.PlanningId != planID || pr.ProjectKey == nil || *pr.ProjectKey != other.Key || pr.WorkTitle == nil || *pr.WorkTitle != "Harden the ledger" {
 		t.Fatalf("planning run not enriched: %+v", pr)
 	}
-	if old := all[chatOld.ID]; old.ChatId == nil || *old.ChatId != chatID {
-		t.Fatalf("earlier chat segment lost its chat: %+v", old)
+	if _, ok := all[chatOld.ID]; ok {
+		t.Fatal("an ended chat segment leaked into the Runs index")
 	}
 
 	if got := ids(list("?state=all&project="+other.Key, 200)); len(got) != 1 || got[planRun.ID].Id == uuid.Nil {
 		t.Fatalf("project filter: %+v", got)
 	}
-	if got := ids(list("?state=all&project=PAY&purpose=chat", 200)); len(got) != 2 || got[chatRun.ID].Id == uuid.Nil || got[chatOld.ID].Id == uuid.Nil {
-		t.Fatalf("project + purpose filter: %+v", got)
+	if got := ids(list("?state=all&project=PAY&purpose=chat", 200)); len(got) != 0 {
+		t.Fatalf("purpose=chat must list nothing: %+v", got)
 	}
 	if got := ids(list("?state=waiting", 200)); got[ticketRun.ID].Id == uuid.Nil || got[chatRun.ID].Id != uuid.Nil {
 		t.Fatalf("single state filter: %+v", got)
 	}
-	if got := list("?state=all&agent=atlas", 200); len(got.Runs) < 4 {
+	if got := list("?state=all&agent=atlas", 200); len(got.Runs) < 3 {
 		t.Fatalf("agent filter dropped runs: %d", len(got.Runs))
 	}
 	// A ticket filter lists every run on that ticket, delegated runs included.

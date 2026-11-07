@@ -332,7 +332,8 @@ func (s *Server) ListRuns(ctx context.Context, req api.ListRunsRequestObject) (a
 	if offset < 0 || offset > 100000 {
 		return nil, apperr.Invalid("offset", "must be between 0 and 100000")
 	}
-	arg := store.ListRunsParams{WorkspaceID: ws, States: liveRunStates, Skip: int32(offset)}
+	// Personal Assistant chats belong to Chat, not the Runs index.
+	arg := store.ListRunsParams{WorkspaceID: ws, States: liveRunStates, Skip: int32(offset), HideChat: true}
 	if pr.State != nil {
 		switch st := *pr.State; st {
 		case api.ListRunsParamsStateLive:

@@ -139,13 +139,15 @@ func (q *Queries) DropPendingTurns(ctx context.Context, runID uuid.UUID) error {
 
 const endedRunsWithWorkspace = `-- name: EndedRunsWithWorkspace :many
 SELECT id FROM runs r
-WHERE r.workspace_volume IS NOT NULL AND r.state = 'completed'
+WHERE r.workspace_volume IS NOT NULL
+  AND (r.state = 'completed' OR (r.purpose = 'chat' AND r.state IN ('failed', 'cancelled')))
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
 LIMIT 20
 `
 
 // Workspaces of runs that completed while no turn was running; the runner
-// removes them. Failed and cancelled runs keep theirs (unpushed work).
+// removes them. Failed and cancelled runs keep theirs (unpushed work), except
+// chat runs: their scratch workspace never holds work worth keeping.
 func (q *Queries) EndedRunsWithWorkspace(ctx context.Context) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, endedRunsWithWorkspace)
 	if err != nil {
@@ -248,6 +250,41 @@ func (q *Queries) Heartbeat(ctx context.Context, arg HeartbeatParams) error {
 		arg.Version,
 	)
 	return err
+}
+
+const idleChatRuns = `-- name: IdleChatRuns :many
+SELECT r.id, r.workspace_id FROM runs r
+WHERE r.purpose = 'chat' AND r.state = 'waiting' AND r.updated_at < $1::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status IN ('pending', 'running'))
+ORDER BY r.updated_at
+LIMIT 20
+`
+
+type IdleChatRunsRow struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// Chat segments waiting on the person with no activity since the cutoff and
+// no turn queued or running; the runner ends them so their workspace is freed.
+func (q *Queries) IdleChatRuns(ctx context.Context, cutoff time.Time) ([]IdleChatRunsRow, error) {
+	rows, err := q.db.Query(ctx, idleChatRuns, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IdleChatRunsRow{}
+	for rows.Next() {
+		var i IdleChatRunsRow
+		if err := rows.Scan(&i.ID, &i.WorkspaceID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const liveRunners = `-- name: LiveRunners :many

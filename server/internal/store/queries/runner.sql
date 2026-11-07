@@ -134,9 +134,11 @@ SELECT EXISTS (SELECT 1 FROM run_turns WHERE run_id = $1 AND status = 'pending')
 
 -- name: EndedRunsWithWorkspace :many
 -- Workspaces of runs that completed while no turn was running; the runner
--- removes them. Failed and cancelled runs keep theirs (unpushed work).
+-- removes them. Failed and cancelled runs keep theirs (unpushed work), except
+-- chat runs: their scratch workspace never holds work worth keeping.
 SELECT id FROM runs r
-WHERE r.workspace_volume IS NOT NULL AND r.state = 'completed'
+WHERE r.workspace_volume IS NOT NULL
+  AND (r.state = 'completed' OR (r.purpose = 'chat' AND r.state IN ('failed', 'cancelled')))
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
 LIMIT 20;
 
@@ -158,3 +160,12 @@ SELECT * FROM (
 ) AS snapshots
 ORDER BY recorded_at DESC
 LIMIT 50;
+
+-- name: IdleChatRuns :many
+-- Chat segments waiting on the person with no activity since the cutoff and
+-- no turn queued or running; the runner ends them so their workspace is freed.
+SELECT r.id, r.workspace_id FROM runs r
+WHERE r.purpose = 'chat' AND r.state = 'waiting' AND r.updated_at < sqlc.arg(cutoff)::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status IN ('pending', 'running'))
+ORDER BY r.updated_at
+LIMIT 20;
