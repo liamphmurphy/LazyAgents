@@ -4,18 +4,18 @@ import { TokenUsage } from "@/components/domain/token-usage";
 import { eventTokenUsage, tokenBreakdown } from "@/lib/token-usage";
 import { runCost } from "@/lib/format";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useControlRunById, useDelegatedRunLogs, useRunLog } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { absoluteTime, compact, duration } from "@/lib/format";
 import {
-  PURPOSE_LABEL, argSummary, delegateChild, groupByTurn, isFailedRow, rowEvent, rowsOf, str, toolLink, toolName,
-  triggerLine, turnAt, turnByEvent, turnStarts, workHref, type Row,
+  PURPOSE_LABEL, RUN_VIEW_STORAGE_KEY, argSummary, delegateChild, groupByTurn, isFailedRow, parseRunAnchor, pickRunView, rowEvent, rowsOf, str,
+  toolLink, toolName, triggerLine, turnAt, turnByEvent, turnStarts, workHref, type Row, type RunViewMode,
 } from "@/lib/run-view";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Tabs, Toggle } from "@/components/ui/controls";
+import { Segmented, Tabs, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
@@ -25,6 +25,7 @@ import { RunCostChip } from "@/components/domain/cost-chip";
 import { RUN_ENDED, RUN_STATE as STATE, StatusPill } from "@/components/domain/run-status";
 import { TopBar, type Crumb } from "@/components/shell/topbar";
 import { ActionBox, RunRail, confirmCancel } from "./run-panels";
+import { CostValue, SimpleHeader, SimpleView } from "./run-simple";
 
 type RunDetail = Schemas["RunDetail"];
 type RunEvent = Schemas["RunEvent"];
@@ -199,6 +200,7 @@ function EventRow({ entry, plan, tools, runs, calls }: { entry: Entry; plan: Run
   }
   return (
     <li
+      id={source ? undefined : `event-${e.seq}`}
       className={cx(
         "grid grid-cols-[72px_76px_1fr] items-start gap-3 border-b border-border-subtle px-5 py-2.5 max-sm:grid-cols-[60px_1fr] max-sm:px-3",
         red && "shadow-[inset_2px_0_0_var(--state-blocked)]",
@@ -279,8 +281,6 @@ function TurnGroup({ turn, t, items, open, onToggle, runId }: { turn: number; t?
 function Header({ d }: { d: RunDetail }) {
   const run = d.run;
   const href = workHref(run);
-  const sub = d.child_runs.reduce((n, c) => n + c.cost_usd, 0);
-  const subPriced = d.child_runs.every((c) => c.cost_source && c.cost_source !== "unknown");
   return (
     <>
       <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b border-border-subtle px-6 py-3.5">
@@ -309,10 +309,7 @@ function Header({ d }: { d: RunDetail }) {
         <Stat label="Harness" value={run.harness} />
         <Stat label="Model" value={run.model} />
         <Stat label="Elapsed" value={duration(run.started_at, run.ended_at)} />
-        <Stat
-          label="Cost"
-          value={<>{runCost(run.cost_usd, run.cost_source)}{d.child_runs.length > 0 && <span className="ml-1.5 text-xs font-normal text-fg-tertiary">{subPriced ? "+" : "≥ +"}${sub.toFixed(2)} sub</span>}</>}
-        />
+        <Stat label="Cost" value={<CostValue d={d} />} />
         <Stat label="Tokens" value={compact(run.input_tokens + run.output_tokens)} />
         <Stat label="Tool calls" value={run.tool_calls} />
         {run.purpose === "ticket" && (
@@ -330,6 +327,14 @@ function Header({ d }: { d: RunDetail }) {
   );
 }
 
+function readStoredView(): string | null {
+  try {
+    return window.localStorage.getItem(RUN_VIEW_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function RunLogScreen({ id }: { id: string }) {
   const { data: d, isError, error } = useRunLog(id);
   const children = useDelegatedRunLogs(d?.child_runs ?? []);
@@ -337,7 +342,17 @@ export function RunLogScreen({ id }: { id: string }) {
   const control = useControlRunById(id);
   const [tab, setTab] = useState("all");
   const [filter, setFilter] = useState("");
-  const [follow, setFollow] = useState(true);
+  const params = useSearchParams();
+  // The hash (a deep link to a turn or event) and the stored choice are read
+  // once on load; ?view= is read on every render, so the URL stays the truth.
+  const [nav, setNav] = useState(() => ({
+    hash: typeof window === "undefined" ? "" : window.location.hash,
+    stored: typeof window === "undefined" ? null : readStoredView(),
+  }));
+  const mode = pickRunView(params.get("view"), nav.hash, nav.stored);
+  const anchor = mode === "details" ? parseRunAnchor(nav.hash) : null;
+  const [follow, setFollow] = useState(() => !anchor);
+  const detailsScroll = useRef<number | null>(null);
   const [allOpen, setAllOpen] = useState(false);
   const [turnOpen, setTurnOpen] = useState<Record<number, boolean>>({});
   const [toolOpen, setToolOpen] = useState<Record<string, boolean>>({});
@@ -362,12 +377,46 @@ export function RunLogScreen({ id }: { id: string }) {
     (!filter || `${source?.agent.name ?? ""} ${rowText(row)}`.toLowerCase().includes(filter.toLowerCase())));
   const groups = groupByTurn(shown, (e) => e.turn);
   const lastTurn = Math.max(0, ...(d?.turns.map((t) => t.seq) ?? []), ...groups.map((g) => g.turn));
+  // A deep link opens its turn and collapses the others.
+  const focusTurn = anchor ? (anchor.kind === "turn" ? anchor.n : parentTurn.get(anchor.n)) : undefined;
 
   const loaded = !!d;
   useEffect(() => {
     const el = scroller.current;
     if (follow && el) el.scrollTop = el.scrollHeight;
-  }, [follow, shown.length, tab, filter, loaded]);
+  }, [follow, shown.length, tab, filter, loaded, mode]);
+  // Coming back to Details puts the timeline where it was.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (mode === "details" && el && !follow && !anchor && detailsScroll.current != null) el.scrollTop = detailsScroll.current;
+    // Only on a mode switch: follow and anchor changes are handled elsewhere.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, loaded]);
+  useEffect(() => {
+    if (!anchor || !loaded) return;
+    const el = document.getElementById(`${anchor.kind}-${anchor.n}`);
+    (anchor.kind === "turn" ? el?.closest("section") : el)?.scrollIntoView({ block: "start" });
+  }, [anchor?.kind, anchor?.n, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Sets ?view= (no history entry) and remembers the choice. */
+  const switchMode = (m: RunViewMode, hash = "") => {
+    try {
+      window.localStorage.setItem(RUN_VIEW_STORAGE_KEY, m);
+    } catch {
+      // Storage can be unavailable (private mode); the URL still carries the mode.
+    }
+    setNav({ hash, stored: m });
+    const q = new URLSearchParams(params.toString());
+    q.set("view", m);
+    router.replace(`/runs/${id}?${q}${hash}`, { scroll: false });
+  };
+  /** From Simple: open turn n in Details, scrolled into view, the others collapsed. */
+  const openTurn = (n: number) => {
+    setFollow(false);
+    setAllOpen(false);
+    setTurnOpen({});
+    switchMode("details", `#turn-${n}`);
+  };
 
   if (isError) {
     return (
@@ -409,7 +458,7 @@ export function RunLogScreen({ id }: { id: string }) {
     open: (key: string) => toolOpen[key] ?? allOpen,
     toggle: (key: string) => setToolOpen((o) => ({ ...o, [key]: !(o[key] ?? allOpen) })),
   };
-  const isOpen = (n: number) => turnOpen[n] ?? (allOpen || n === lastTurn);
+  const isOpen = (n: number) => turnOpen[n] ?? (allOpen || n === (focusTurn ?? lastTurn));
   const grandchildren = children.map((c) => c.data?.child_runs as Run[] | undefined);
   return (
     <div className="flex flex-col lg:h-dvh">
@@ -417,8 +466,14 @@ export function RunLogScreen({ id }: { id: string }) {
         crumbs={crumbs}
         actions={
           <>
-            <ButtonLink href={`/settings/runner?run_id=${run.id}`} variant="outline">Environment</ButtonLink>
-            {lastLog && (
+            <Segmented
+              label="Run view"
+              value={mode}
+              onChange={(m) => switchMode(m)}
+              options={[{ value: "simple", label: "Simple" }, { value: "details", label: "Details" }]}
+            />
+            {mode === "details" && <ButtonLink href={`/settings/runner?run_id=${run.id}`} variant="outline">Environment</ButtonLink>}
+            {mode === "details" && lastLog && (
               <ButtonLink href={`/api/v1/runs/${run.id}/turns/${lastLog.seq}/log`} prefetch={false} variant="outline" icon="download">
                 Raw log
               </ButtonLink>
@@ -452,7 +507,7 @@ export function RunLogScreen({ id }: { id: string }) {
           </>
         }
       />
-      <Header d={d} />
+      {mode === "simple" ? <SimpleHeader d={d} /> : <Header d={d} />}
       {control.isError && (
         <div className="px-6 pt-3">
           <Banner tone="blocked" title={control.variables === "retry" ? "Couldn't retry the run" : "Couldn't change the run"}>
@@ -461,6 +516,9 @@ export function RunLogScreen({ id }: { id: string }) {
         </div>
       )}
       <ActionBox d={d} />
+      {mode === "simple" ? (
+        <SimpleView d={d} ended={!live} onOpenTurn={openTurn} onDetails={() => switchMode("details")} />
+      ) : (
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section aria-label="Events" className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-5 py-2.5">
@@ -504,6 +562,7 @@ export function RunLogScreen({ id }: { id: string }) {
             tabIndex={0}
             onScroll={(e) => {
               const el = e.currentTarget;
+              detailsScroll.current = el.scrollTop;
               setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 24);
             }}
             className="min-h-0 flex-1 overflow-y-auto max-lg:max-h-[70dvh]"
@@ -536,7 +595,8 @@ export function RunLogScreen({ id }: { id: string }) {
         </section>
         <RunRail d={d} grandchildren={grandchildren} />
       </div>
-      {!follow && (
+      )}
+      {mode === "details" && !follow && (
         <Button
           variant="secondary"
           className="fixed bottom-6 right-6 z-20 shadow-md"
