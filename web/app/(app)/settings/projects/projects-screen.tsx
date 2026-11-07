@@ -22,7 +22,7 @@ function RepoHint({ check, changed }: { check: ReturnType<typeof checkRepoURL>; 
   if (check.state === "empty")
     return <>Optional. Without one, runs start in an empty workspace and can’t push. SSH (git@github.com:owner/repo.git) and HTTPS (https://github.com/owner/repo) both work.</>;
   if (check.state === "invalid")
-    return changed ? <span role="alert" className="text-pill-blocked-fg">{check.message}</span> : <>Saved value kept as-is. Changing it requires a GitHub URL.</>;
+    return changed ? <span aria-live="polite" className="text-pill-blocked-fg">{check.message}</span> : <>Saved value kept as-is. Changing it requires a GitHub URL.</>;
   if (check.kind === "https")
     return <span className="text-pill-done-fg">✓ GitHub HTTPS link. Saved as <code className="font-mono">{check.saved}</code>, so runs clone and push over SSH (git:ssh).</span>;
   return <span className="text-pill-done-fg">✓ GitHub SSH URL. Runs clone and push with the git:ssh key.</span>;

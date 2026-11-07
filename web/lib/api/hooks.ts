@@ -400,6 +400,8 @@ export function useSetSecret() {
   return useMutation({
     mutationFn: (body: { name: string; value: string; grants_scope?: string; project_key?: string }) => unwrap(api.PUT("/secrets", { body })),
     onSettled: () => invalidateSecretDependents(qc),
+    // The variables hold the plaintext value: don't keep them in the mutation cache.
+    gcTime: 0,
   });
 }
 

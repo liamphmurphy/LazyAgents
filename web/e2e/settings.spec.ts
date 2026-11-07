@@ -85,6 +85,14 @@ test("provider secrets show status and unlocks, are write-only, and saving refre
   await expect(page.getByRole("navigation", { name: "Primary" })).not.toContainText("a setting runs need is missing");
   expect(await page.content()).not.toContain(SECRET);
 
+  // Switching from one Replace to another remounts the form with the new name.
+  await page.getByRole("button", { name: "Replace db:staging" }).click();
+  await page.getByRole("button", { name: "Add secret" }).click();
+  const name = page.locator("#secrets").getByLabel("Name", { exact: true });
+  await expect(name).toHaveValue("");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("button", { name: "Delete harness:anthropic" })).toBeVisible();
+
   // The chat model cache was invalidated, so back in chat Codex is selectable
   // without a reload (the cache is otherwise fresh for a minute).
   await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /Chat/ }).click();
@@ -102,7 +110,7 @@ test("project repo URLs are validated inline and accept SSH and HTTPS", async ({
   await projects.getByRole("button", { name: "Edit" }).click();
   const repo = projects.getByLabel("GitHub repository");
   await repo.fill("git@gitlab.com:northwind/payments.git");
-  await expect(projects.getByRole("alert")).toContainText("Only GitHub repositories work");
+  await expect(projects.getByText(/Only GitHub repositories work/)).toBeVisible();
   await expect(repo).toHaveAttribute("aria-invalid", "true");
   await expect(projects.getByRole("button", { name: "Save changes" })).toBeDisabled();
   await repo.fill("https://github.com/acme/payments");

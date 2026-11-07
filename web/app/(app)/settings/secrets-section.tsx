@@ -15,6 +15,7 @@ import { floatPanel } from "@/components/domain/pickers";
 const sentence = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
 
 type Target = { name: string; project: string; fixedName: boolean };
+const targetKey = (t: Target) => `${t.name}|${t.project}|${t.fixedName}`;
 
 /**
  * Provider secrets (LAZYAGENTS-44). Values are write-only: the API stores them
@@ -89,6 +90,10 @@ export function SecretsSection() {
               readOnly={readOnly}
               editing={editing?.fixedName && editing.name === c.name && !editing.project ? editing : null}
               onEdit={() => open({ name: c.name, project: "", fixedName: true })}
+              onDelete={(id) => {
+                if (window.confirm(`Delete ${c.name}? ${c.without}`)) del.mutate(id);
+              }}
+              deleting={del.isPending}
               onCancel={() => setEditing(null)}
               onSaved={saved}
             />
@@ -107,7 +112,7 @@ export function SecretsSection() {
       >
         {editing && !(editing.fixedName && !editing.project && CONNECTIONS.some((c) => c.name === editing.name)) && (
           <div className="border-b border-border-subtle px-[18px] py-3">
-            <SecretForm target={editing} known={d.known} onCancel={() => setEditing(null)} onSaved={saved} />
+            <SecretForm key={targetKey(editing)} target={editing} known={d.known} onCancel={() => setEditing(null)} onSaved={saved} />
           </div>
         )}
         {others.length === 0 ? (
@@ -181,6 +186,8 @@ function ConnectionRow({
   readOnly,
   editing,
   onEdit,
+  onDelete,
+  deleting,
   onCancel,
   onSaved,
 }: {
@@ -190,6 +197,8 @@ function ConnectionRow({
   readOnly: boolean;
   editing: Target | null;
   onEdit: () => void;
+  onDelete: (id: string) => void;
+  deleting: boolean;
   onCancel: () => void;
   onSaved: (name: string) => void;
 }) {
@@ -235,14 +244,17 @@ function ConnectionRow({
           )}
         </span>
         {!editing && (
-          <Button variant="outline" disabled={readOnly} aria-label={`${on ? "Replace" : "Add"} ${c.label} key`} onClick={onEdit}>
-            {on ? "Replace" : "Add key"}
-          </Button>
+          <span className="flex items-center gap-1">
+            <Button variant="outline" disabled={readOnly} aria-label={`${on ? "Replace" : "Add"} ${c.label} key`} onClick={onEdit}>
+              {on ? "Replace" : "Add key"}
+            </Button>
+            {on && <IconButton icon="trash" label={`Delete ${c.name}`} disabled={deleting} onClick={() => onDelete(state.secret.id)} />}
+          </span>
         )}
       </div>
       {editing && (
         <div className="mt-3 pl-11">
-          <SecretForm target={editing} onCancel={onCancel} onSaved={onSaved} hint={`Without it: ${c.without} Replacing a value takes effect on the next run.`} />
+          <SecretForm key={targetKey(editing)} target={editing} onCancel={onCancel} onSaved={onSaved} hint={`Without it: ${c.without} Replacing a value takes effect on the next run.`} />
         </div>
       )}
     </li>
@@ -274,6 +286,8 @@ function SecretForm({
     (target.fixedName ? valueRef : nameRef).current?.focus();
   }, [target.fixedName]);
   const projects = boot.data?.projects.filter((p) => !p.archived) ?? [];
+  // Replacing keeps the secret's scope; changing it would create a second secret.
+  const lockedScope = target.fixedName ? (boot.data?.projects.find((p) => p.key === target.project)?.name ?? (target.project || "Workspace")) : null;
 
   return (
     <form
@@ -286,6 +300,7 @@ function SecretForm({
           {
             onSuccess: () => {
               setValue("");
+              set.reset();
               onSaved(n);
             },
           },
@@ -314,24 +329,28 @@ function SecretForm({
           />
         </Field>
         <Field label="Scope" htmlFor={`${id}-project`}>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button id={`${id}-project`} type="button" className="flex h-[30px] items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-left text-[13px] hover:bg-hover">
-                <span className="flex-1 truncate">{projects.find((p) => p.key === project)?.name ?? "Workspace"}</span>
-                <Icon name="chev" size={12} className="text-fg-tertiary" />
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content align="start" sideOffset={4} className={cx(floatPanel, "w-56")}>
-                {[{ key: "", name: "Workspace", color: "" }, ...projects].map((p) => (
-                  <DropdownMenu.Item key={p.key} onSelect={() => setProject(p.key)} className="flex h-8 items-center gap-2.5 rounded-md px-2 outline-none data-[highlighted]:bg-hover">
-                    {p.color && <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: p.color }} />}
-                    {p.name}
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+          {lockedScope !== null ? (
+            <TextInput id={`${id}-project`} value={lockedScope} readOnly disabled />
+          ) : (
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button id={`${id}-project`} type="button" className="flex h-[30px] items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-left text-[13px] hover:bg-hover">
+                  <span className="flex-1 truncate">{projects.find((p) => p.key === project)?.name ?? "Workspace"}</span>
+                  <Icon name="chev" size={12} className="text-fg-tertiary" />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content align="start" sideOffset={4} className={cx(floatPanel, "w-56")}>
+                  {[{ key: "", name: "Workspace", color: "" }, ...projects].map((p) => (
+                    <DropdownMenu.Item key={p.key} onSelect={() => setProject(p.key)} className="flex h-8 items-center gap-2.5 rounded-md px-2 outline-none data-[highlighted]:bg-hover">
+                      {p.color && <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: p.color }} />}
+                      {p.name}
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          )}
         </Field>
         <div className="flex gap-2">
           <Button type="submit" variant="primary" disabled={!name.trim() || !value || set.isPending}>
