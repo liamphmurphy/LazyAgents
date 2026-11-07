@@ -85,6 +85,8 @@ type Patch struct {
 	DueDate           Opt[time.Time]
 	LabelIDs          *[]uuid.UUID
 	RequiresMockup    *bool
+	// Criteria replaces the ticket's criteria atomically; needs Revision. Not for bulk.
+	Criteria *CriteriaDraft
 }
 
 func validTitle(t string) (string, error) {
@@ -355,6 +357,9 @@ func (s *Service) Bulk(ctx context.Context, ws uuid.UUID, actor Actor, keys []st
 	if p.Revision != nil {
 		return 0, invalid("revision", "not allowed in bulk updates")
 	}
+	if p.Criteria != nil {
+		return 0, invalid("criteria", "not allowed in bulk updates")
+	}
 	if p.Title != nil || p.DescriptionMd != nil {
 		return 0, invalid("patch", "title and description can't be bulk-edited")
 	}
@@ -403,12 +408,27 @@ func dateEq(a, b *time.Time) bool {
 }
 
 func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor, key string, p Patch) (store.Ticket, error) {
+	var draftTexts []string
+	if p.Criteria != nil {
+		if p.Revision == nil {
+			return store.Ticket{}, invalid("revision", "is required when saving criteria")
+		}
+		var err error
+		if draftTexts, err = validateDraft(p.Criteria); err != nil {
+			return store.Ticket{}, err
+		}
+	}
 	cur, err := q.LockTicketByKey(ctx, store.LockTicketByKeyParams{WorkspaceID: ws, Key: key})
 	if err != nil {
 		return cur, notFound(err)
 	}
 	if p.Revision != nil && *p.Revision != int(cur.Revision) {
-		return cur, apperr.Conflict("ticket revision is stale")
+		return cur, apperr.ConflictField("revision", "ticket revision is stale")
+	}
+	if p.Criteria != nil {
+		if err := applyCriteriaDraft(ctx, q, ws, actor, cur.ID, cur.EpicID, p.Criteria, draftTexts); err != nil {
+			return cur, err
+		}
 	}
 	r := refs{q, ws}
 	next := store.UpdateTicketParams{

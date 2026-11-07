@@ -13,6 +13,12 @@ SELECT * FROM tickets WHERE workspace_id = $1 AND key = $2;
 -- name: LockTicketByKey :one
 SELECT * FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE;
 
+-- name: LockTicketByID :one
+SELECT * FROM tickets WHERE workspace_id = $1 AND id = $2 FOR UPDATE;
+
+-- name: TicketProjectID :one
+SELECT project_id FROM tickets WHERE workspace_id = $1 AND id = $2;
+
 -- name: UpdateTicket :one
 -- Callers load the row, apply the patch in Go and write every field back.
 UPDATE tickets SET
@@ -83,6 +89,12 @@ SELECT * FROM acceptance_criteria WHERE ticket_id = $1 ORDER BY position, create
 INSERT INTO acceptance_criteria (ticket_id, position, text)
 VALUES ($1, (SELECT coalesce(max(position), 0) + 1 FROM acceptance_criteria WHERE ticket_id = $1), $2)
 RETURNING *;
+
+-- name: CreateCriterionAt :one
+INSERT INTO acceptance_criteria (ticket_id, position, text, done) VALUES ($1, $2, $3, $4) RETURNING *;
+
+-- name: SaveCriterionDraft :one
+UPDATE acceptance_criteria SET position = $2, text = $3, done = $4 WHERE id = $1 RETURNING *;
 
 -- name: GetCriterion :one
 SELECT c.* FROM acceptance_criteria c JOIN tickets t ON t.id = c.ticket_id

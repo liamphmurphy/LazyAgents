@@ -74,7 +74,7 @@ test("keyboard Move to menu optimistically PATCHes status plus detail revision",
   await page.goto("/board?project=WEB");
   const release = api.holdNextPatch();
   await card(page).focus();
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Space");
   const target = page.getByRole("menuitem", { name: "In Progress", exact: true });
   await target.focus();
   await page.keyboard.press("Enter");

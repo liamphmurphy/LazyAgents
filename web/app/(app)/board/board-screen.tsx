@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useRef, useState, type MouseEvent } from "react";
 import { DropdownMenu } from "radix-ui";
 import { useBootstrap } from "@/lib/api/hooks";
-import { useBoard, useBoardMoves, type BoardFilters } from "@/lib/api/board-hooks";
+import { useBoard, useBoardMoves, useTicketEditorDetail, type BoardFilters } from "@/lib/api/board-hooks";
 import { BOARD_STATUSES, withBoardMoves, type Board, type BoardCard, type BoardStatus } from "@/lib/board";
 import { cx } from "@/lib/cx";
 import { TopBar } from "@/components/shell/topbar";
@@ -13,6 +13,7 @@ import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
 import { floatPanel } from "@/components/domain/pickers";
+import { TicketEditorDialog } from "@/components/domain/ticket-editor-dialog";
 
 const selectClass = "h-8 max-w-52 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg";
 
@@ -36,6 +37,16 @@ export function BoardScreen() {
     if (value) next.set(name, value); else next.delete(name);
     if (name === "project") next.delete("epic");
     window.history.replaceState(null, "", `/board?${next}`);
+  }
+  const ticketKey = params.get("ticket") || undefined;
+  const editor = useTicketEditorDetail(ticketKey);
+  // Only a failed first load closes the editor; a failed background refetch keeps the draft.
+  const loadFailed = editor.isError && !editor.data;
+  function setTicket(key?: string) {
+    const next = new URLSearchParams(window.location.search);
+    if (key) next.set("ticket", key); else next.delete("ticket");
+    const qs = next.toString();
+    window.history.replaceState(null, "", qs ? `/board?${qs}` : "/board");
   }
   return (
     <div data-testid="board-screen">
@@ -62,7 +73,13 @@ export function BoardScreen() {
       {bootstrap.isPending ? <p role="status" className="p-6 text-fg-secondary">Loading projects…</p>
         : bootstrap.isError ? <p role="alert" className="p-6">Couldn&apos;t load projects: {bootstrap.error.message}</p>
         : !project ? <p className="p-6 text-fg-secondary">{requested ? "Project unavailable. Choose an active project." : "Create a project to view its board."}</p>
-        : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} />}
+        : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} onOpen={setTicket} />}
+      {ticketKey && loadFailed && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
+        <span>Couldn&apos;t open {ticketKey}: {editor.error.message}</span>
+        <button type="button" aria-label="Dismiss ticket error" onClick={() => setTicket()}>×</button>
+      </div>}
+      {ticketKey && !loadFailed && bootstrap.data && <TicketEditorDialog key={ticketKey} ticketKey={ticketKey} detail={editor.data} bootstrap={bootstrap.data}
+        onClose={() => setTicket()} onReload={async () => { const r = await editor.refetch(); return r.isError ? undefined : r.data; }} />}
     </div>
   );
 }
@@ -106,7 +123,7 @@ function Progress({ label, done, total, value }: { label: string; done: number; 
   </div>;
 }
 
-function BoardView({ project, filters }: { project: string; filters: BoardFilters }) {
+function BoardView({ project, filters, onOpen }: { project: string; filters: BoardFilters; onOpen: (key: string) => void }) {
   const query = useBoard(project, filters);
   const moves = useBoardMoves();
   const dragging = useRef<string | null>(null);
@@ -142,7 +159,7 @@ function BoardView({ project, filters }: { project: string; filters: BoardFilter
               <span className="ml-auto whitespace-nowrap text-fg-tertiary">{column?.count ?? 0} · {column?.points ?? 0} pts</span>
             </header>
             <div className="space-y-2">
-              {column?.cards.map((card) => <TicketCard key={card.key} card={card} statuses={statuses} pending={!!moves.pending[card.key]}
+              {column?.cards.map((card) => <TicketCard key={card.key} card={card} statuses={statuses} pending={!!moves.pending[card.key]} onOpen={() => onOpen(card.key)}
                 onMove={(target) => void moves.move(card, target)}
                 onDragStart={() => { dragging.current = card.key; }}
                 onDragEnd={() => { dragging.current = null; setOver(undefined); }} />)}
@@ -156,22 +173,25 @@ function BoardView({ project, filters }: { project: string; filters: BoardFilter
   );
 }
 
-function TicketCard({ card, statuses, pending, onMove, onDragStart, onDragEnd }: {
-  card: BoardCard; statuses: BoardStatus[]; pending: boolean; onMove: (status: BoardStatus) => void; onDragStart: () => void; onDragEnd: () => void;
+function TicketCard({ card, statuses, pending, onOpen, onMove, onDragStart, onDragEnd }: {
+  card: BoardCard; statuses: BoardStatus[]; pending: boolean; onOpen: () => void; onMove: (status: BoardStatus) => void; onDragStart: () => void; onDragEnd: () => void;
 }) {
   const [menu, setMenu] = useState(false);
-  const router = useRouter();
   const href = `/tickets/${encodeURIComponent(card.key)}`;
-  return <article tabIndex={0} aria-label={`Ticket ${card.key}`} aria-busy={pending} draggable={!pending}
+  // Plain clicks open the editor; modified clicks keep normal link behavior.
+  const open = (e: MouseEvent) => { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); onOpen(); };
+  return <article tabIndex={0} data-ticket-key={card.key} aria-label={`Ticket ${card.key}`} aria-busy={pending} draggable={!pending}
     onDragStart={(e) => { e.dataTransfer.setData("text/plain", card.key); e.dataTransfer.effectAllowed = "move"; onDragStart(); }} onDragEnd={onDragEnd}
-    onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button,[role=menu]")) router.push(href); }}
-    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ") && !pending) { e.preventDefault(); setMenu(true); } }}
+    onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button,[role=menu]")) onOpen(); }}
+    onKeyDown={(e) => { if (e.target === e.currentTarget && !pending) {
+      if (e.key === "Enter") { e.preventDefault(); onOpen(); } else if (e.key === " ") { e.preventDefault(); setMenu(true); }
+    } }}
     className={cx("rounded-md border border-border bg-surface p-3 shadow-sm outline-offset-2", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
     <div className="mb-2 flex items-start justify-between gap-1 text-[11px]">
-      <Link href={href} className="font-mono text-fg-tertiary hover:text-fg">{card.key}</Link>
+      <Link href={href} onClick={open} className="font-mono text-fg-tertiary hover:text-fg">{card.key}</Link>
       {card.unmet_dependencies > 0 && <span className="rounded-full bg-accent-soft px-1.5 text-state-blocked" title={`${card.unmet_dependencies} open blockers`}>⛔ Blocked</span>}
     </div>
-    <Link href={href} className="mb-3 block text-[13px] font-medium leading-snug hover:underline">{card.title}</Link>
+    <Link href={href} onClick={open} className="mb-3 block text-[13px] font-medium leading-snug hover:underline">{card.title}</Link>
     <div className="flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
       <span className="flex items-center gap-1"><PriorityGlyph priority={card.priority} label={false} />{PRIORITY_NAME[card.priority]}</span>
       <span className={cx("rounded-full px-1.5 py-0.5", card.estimate_points == null ? "border border-dashed border-border-strong text-fg-tertiary" : "bg-accent-soft text-accent")}>{card.estimate_points == null ? "unestimated" : `${card.estimate_points} pt`}</span>

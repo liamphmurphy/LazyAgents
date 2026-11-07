@@ -23,10 +23,18 @@ func Invalid(field, format string, args ...any) error {
 
 // ConflictError means the request is valid but the current state forbids it
 // (e.g. acting on a run that isn't running). Mapped to 409.
-type ConflictError struct{ Msg string }
+type ConflictError struct {
+	Msg   string
+	Field string
+}
 
 func (e *ConflictError) Error() string { return e.Msg }
 
 func Conflict(format string, args ...any) error {
 	return &ConflictError{Msg: fmt.Sprintf(format, args...)}
+}
+
+// ConflictField is a Conflict that names the input field whose state is stale.
+func ConflictField(field, format string, args ...any) error {
+	return &ConflictError{Msg: fmt.Sprintf(format, args...), Field: field}
 }

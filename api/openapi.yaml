@@ -2147,6 +2147,33 @@ components:
         due_date: { type: string, format: date, nullable: true }
         label_ids: { type: array, items: { type: string, format: uuid } }
         requires_mockup: { type: boolean }
+        criteria: { $ref: "#/components/schemas/TicketCriteriaDraft" }
+    TicketCriteriaDraft:
+      type: object
+      description: |
+        Replaces the ticket's acceptance criteria atomically with the ticket
+        fields (ADR-034). Requires revision. expected is the complete criteria
+        list the client started from; if it no longer matches, nothing changes
+        and the server answers 409 with field criteria. items order defines the
+        final positions; existing IDs are kept, items without id are created and
+        omitted IDs are deleted. Not allowed in BulkUpdate.patch (422).
+      required: [expected, items]
+      properties:
+        expected:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/Criterion" }
+        items:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/TicketCriterionDraft" }
+    TicketCriterionDraft:
+      type: object
+      required: [text, done]
+      properties:
+        id: { type: string, format: uuid, description: "Existing criterion of this ticket; omit to create" }
+        text: { type: string, minLength: 1, maxLength: 1000 }
+        done: { type: boolean }
     BulkUpdate:
       type: object
       required: [keys, patch]

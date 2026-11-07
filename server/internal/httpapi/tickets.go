@@ -284,6 +284,16 @@ func toPatch(b api.TicketPatch) tracker.Patch {
 		EpicID: optUUID(b.EpicId), AssigneeAgentID: optUUID(b.AssigneeAgentId), ReviewerUserID: optUUID(b.ReviewerUserId),
 		LabelIDs: b.LabelIds, RequiresMockup: b.RequiresMockup,
 	}
+	if b.Criteria != nil {
+		d := &tracker.CriteriaDraft{}
+		for _, c := range b.Criteria.Expected {
+			d.Expected = append(d.Expected, tracker.ExpectedCriterion{ID: c.Id, Position: c.Position, Text: c.Text, Done: c.Done})
+		}
+		for _, c := range b.Criteria.Items {
+			d.Items = append(d.Items, tracker.CriterionDraft{ID: c.Id, Text: c.Text, Done: c.Done})
+		}
+		p.Criteria = d
+	}
 	if b.Status != nil {
 		v := string(*b.Status)
 		p.Status = &v
