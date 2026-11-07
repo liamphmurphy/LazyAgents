@@ -13,6 +13,7 @@ import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
 import { floatPanel } from "@/components/domain/pickers";
+import { EpicCompletion } from "@/components/domain/epic-completion";
 
 const selectClass = "h-8 max-w-52 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg";
 
@@ -68,42 +69,17 @@ export function BoardScreen() {
 }
 
 function EpicHeader({ summary }: { summary: NonNullable<Board["epic"]> }) {
-  const { epic, criteria, done_blockers: blockers } = summary;
+  const { epic } = summary;
   return (
-    <section aria-label="Epic summary" className="mb-4 grid gap-5 rounded-lg border border-border bg-surface p-4 md:grid-cols-2">
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-[15px] font-semibold">{epic.name}</h1>
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent">{{ on_track: "On track", at_risk: "At risk", off_track: "Off track" }[epic.health]}</span>
-          <span className="text-xs text-fg-tertiary">{epic.status} · {epic.tickets_total} tickets, {epic.tickets_open} open</span>
-        </div>
-        {summary.objective && <p className="text-xs text-fg-secondary">{summary.objective}</p>}
-        <Progress label="Points" done={epic.points_done} total={epic.points_total} value={`${epic.points_done} / ${epic.points_total} pts done`} />
-        <Progress label="Criteria" done={epic.criteria_done} total={epic.criteria_total} value={`${epic.criteria_done} / ${epic.criteria_total} met`} />
-        <p className="text-xs text-fg-tertiary">
-          {blockers.open_tickets.length || blockers.unchecked_criteria.length
-            ? `Blocks done: ${[blockers.open_tickets.length ? `${blockers.open_tickets.join(", ")} open` : "", blockers.unchecked_criteria.length ? `criteria ${blockers.unchecked_criteria.join(", ")} unchecked` : ""].filter(Boolean).join(" · ")}`
-            : "Ready to mark done"}
-        </p>
+    <section aria-label="Epic summary" className="mb-4 space-y-3 rounded-lg border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-[15px] font-semibold">{epic.name}</h1>
+        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent">{{ on_track: "On track", at_risk: "At risk", off_track: "Off track" }[epic.health]}</span>
       </div>
-      <div>
-        <h2 className="mb-2 text-xs font-semibold text-fg-secondary">Final acceptance criteria</h2>
-        {criteria.length ? <ol className="space-y-1.5 text-xs">
-          {criteria.map((c) => <li key={c.id} className="flex items-start gap-2"><span aria-label={c.done ? "Met" : "Not met"}>{c.done ? "☑" : "☐"}</span><span>{c.position}. {c.text}</span></li>)}
-        </ol> : <p className="text-xs text-fg-tertiary">No acceptance criteria yet.</p>}
-      </div>
+      {summary.objective && <p className="text-xs text-fg-secondary">{summary.objective}</p>}
+      <EpicCompletion summary={summary} />
     </section>
   );
-}
-
-function Progress({ label, done, total, value }: { label: string; done: number; total: number; value: string }) {
-  return <div className="flex items-center gap-3 text-xs">
-    <span className="w-11 text-fg-secondary">{label}</span>
-    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total || 1} aria-valuenow={done} aria-valuetext={value} className="h-2 max-w-64 flex-1 overflow-hidden rounded-full bg-surface-sunken">
-      <div className="h-full rounded-full bg-accent" style={{ width: `${total ? Math.min(100, done / total * 100) : 0}%` }} />
-    </div>
-    <span className="text-fg-secondary">{value}</span>
-  </div>;
 }
 
 function BoardView({ project, filters }: { project: string; filters: BoardFilters }) {

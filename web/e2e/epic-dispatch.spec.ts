@@ -24,6 +24,10 @@ for (const mixed of [false, true]) {
       epic, project, objective: "Deliver", counts: { total: 4, done: 1, todo: 3, backlog: 0, in_progress: 0, in_review: 0 },
       agents: [], agent_seconds: 0, tickets: tickets.slice(0, 1),
     }] } }));
+    await page.route("**/api/v1/projects/WEB/board**", (route) => route.fulfill({ json: {
+      project, columns: [], epic: { epic: { ...epic, requires_mockup: false, status: "open", criteria_total: 0, criteria_done: 0, points_total: 0, points_done: 0, tickets_total: 4, tickets_open: 3 },
+        criteria: [], done_blockers: { open_tickets: [], unchecked_criteria: [] } },
+    } }));
     await page.route("**/api/v1/tickets**", async (route) => {
       const url = new URL(route.request().url());
       if (route.request().method() === "POST") {

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
 import { hasLiveRun, keys, useBootstrap, useBulkUpdate, useDispatch, useEpicOverviews, useTickets, useUpdateEpic } from "@/lib/api/hooks";
+import { useBoard } from "@/lib/api/board-hooks";
 import { dueDate } from "@/lib/format";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
@@ -21,6 +22,7 @@ import {
 } from "@/components/domain/overview";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { DocTypeTag } from "@/components/domain/labels";
+import { EpicCompletion } from "@/components/domain/epic-completion";
 import { cx } from "@/lib/cx";
 
 function Timeline({
@@ -343,6 +345,7 @@ function Featured({ epic: e }: { epic: EpicOverview }) {
           <dd className="font-mono">{(e.agent_seconds / 3600).toFixed(1)}h</dd>
         </dl>
       </div>
+      <FeaturedCompletion projectKey={e.project.key} epicId={e.epic.id} />
       <EpicDispatch key={e.epic.id} epic={e} />
       <div className="flex items-center justify-between border-t border-border-subtle bg-surface-sunken px-5 py-3">
         <h3 className="text-xs font-medium text-fg-secondary">Tickets</h3>
@@ -361,6 +364,17 @@ function Featured({ epic: e }: { epic: EpicOverview }) {
         </p>
       )}
     </Card>
+  );
+}
+/** Same criteria editor and done gate as the board header, sourced from the epic's board summary. */
+function FeaturedCompletion({ projectKey, epicId }: { projectKey: string; epicId: string }) {
+  const board = useBoard(projectKey, { epic: epicId, include_canceled: false });
+  return (
+    <section aria-label="Epic completion" className="border-t border-border-subtle px-5 py-4">
+      {board.data?.epic ? <EpicCompletion summary={board.data.epic} />
+        : board.isError ? <p role="alert" className="text-xs">Couldn&apos;t load acceptance criteria: {board.error.message} <button type="button" className="underline" onClick={() => void board.refetch()}>Retry</button></p>
+        : <p role="status" className="text-xs text-fg-tertiary">Loading acceptance criteria…</p>}
+    </section>
   );
 }
 export function EpicsScreen() {
