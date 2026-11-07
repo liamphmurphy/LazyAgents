@@ -1,20 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, defaultChatAgent, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
-
-const lead = { id: "a1", kind: "main", name: "Lead" };
-const helper = { id: "a2", kind: "sub", name: "Helper" };
-const mind = { id: "a3", kind: "main", name: "Mastermind" };
-
-test("a new chat starts with the remembered agent, then the newest chat's, then the first main agent", () => {
-  const agents = [helper, lead, mind];
-  assert.equal(defaultChatAgent(agents, "a3", [{ agent: { id: "a1" } }]), mind);
-  assert.equal(defaultChatAgent(agents, undefined, [{ agent: { id: "a3" } }]), mind);
-  assert.equal(defaultChatAgent(agents, "gone", undefined), lead);
-  // Sub agents never chat, even when remembered or used before.
-  assert.equal(defaultChatAgent(agents, "a2", [{ agent: { id: "a2" } }]), lead);
-  assert.equal(defaultChatAgent([helper], null, []), undefined);
-});
+import { activityOf, bareTool, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [

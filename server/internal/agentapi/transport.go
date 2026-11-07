@@ -28,10 +28,16 @@ func brokerFor(scope string) (broker.Action, bool) { return broker.For(scope) }
 func define[In any](name, desc string, fn func(context.Context, Deps, agents.Caller, In) (any, error)) Tool {
 	original := fn
 	fn = func(ctx context.Context, d Deps, c agents.Caller, in In) (any, error) {
+		if c.Agent.Kind == agents.KindAssistant && c.RunID == nil {
+			return nil, apperr.Conflict("the Personal Assistant only works inside chats")
+		}
 		if c.RunID != nil {
 			run, err := d.Q.GetRun(ctx, store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID})
 			if err != nil {
 				return nil, err
+			}
+			if c.Agent.Kind == agents.KindAssistant && run.Purpose != "chat" {
+				return nil, apperr.Conflict("the Personal Assistant only works inside chats")
 			}
 			switch {
 			case run.Purpose == "chat":
@@ -143,7 +149,7 @@ var subagentTools = []string{"get_ticket", "read_artifact", "create_artifact", "
 // leadHidden are the tools a managed ticket run never needs: usage is reported
 // by the runner, the ticket is already assigned, and personal memory belongs
 // to chats with a person.
-var leadHidden = []string{"report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory"}
+var leadHidden = []string{"report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "list_runs", "get_run"}
 
 // profileFor must stay consistent with the checks in define().
 func profileFor(run store.Run) string {

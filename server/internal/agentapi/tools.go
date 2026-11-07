@@ -973,6 +973,8 @@ var Tools = []Tool{
 	define("save_memory", "Remember something about this person. Updates a near-duplicate entry instead of adding another. Never include secrets (credentials, tokens, passwords): they are refused. Tell the person what you saved.", saveMemory),
 	define("update_memory", "Change a memory entry, or retire it in favour of a newer one with superseded_by.", updateMemory),
 	define("forget_memory", "Delete a memory entry for good, e.g. when the person says 'forget that'.", forgetMemory),
+	define("list_runs", "List agent runs in the current chat project, newest first: live runs by default, or finished/all. Filter by ticket or agent; open one with get_run.", listChatRuns),
+	define("get_run", "One agent run in the current chat project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
 	define("list_epics", "List epics in the current chat project.", listChatEpics),
 	define("create_epic", "Create an epic in the current chat project.", createChatEpic),
 	define("create_ticket", "Open a follow-up ticket in the same project (unassigned, in the backlog).",

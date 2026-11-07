@@ -135,6 +135,9 @@ func (r refs) assignee(ctx context.Context, id *uuid.UUID) (store.Agent, error) 
 	if err == nil && a.Kind == "sub" {
 		return a, invalid("assignee_agent_id", "@%s is a sub agent and can't be assigned tickets; assign a main agent, which can delegate to it", a.Handle)
 	}
+	if err == nil && a.Kind == "assistant" {
+		return a, invalid("assignee_agent_id", "@%s is the Personal Assistant and can't be assigned tickets; assign a main agent", a.Handle)
+	}
 	return a, err
 }
 

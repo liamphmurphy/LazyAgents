@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { AGENTS, catalog, installChatApi } from "./mock-chat-api";
+import { catalog, installChatApi } from "./mock-chat-api";
 
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const picker = (page: Page) => page.getByRole("button", { name: /Model for the next message/ });
@@ -325,29 +325,12 @@ test("a rejected OpenCode post shows the error and keeps the selection", async (
   expect(mock.posted).toEqual([]);
 });
 
-test("a new chat answers as the picked main agent, remembered for the next one", async ({ page }) => {
+test("a new chat has no agent picker and names no agent", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
-  // No pick and no chats yet: the first main agent.
-  const agentPicker = page.getByRole("button", { name: /Agent for new chats/ });
-  await expect(agentPicker).toHaveAccessibleName("Agent for new chats: Atlas");
-  await agentPicker.click();
-  await expect(page.getByRole("menuitem")).toHaveText([/Atlas/, /Juno/]); // sub agents can't chat
-  await page.getByRole("menuitem", { name: "Juno" }).click();
-  await expect(agentPicker).toHaveAccessibleName("Agent for new chats: Juno");
-
+  await expect(page.getByRole("button", { name: /Agent for new chats/ })).toHaveCount(0);
   await newChat(page);
-  expect(mock.created.at(-1)).toMatchObject({ project: "WEB", agent_id: AGENTS[1].id });
-  await expect(page.getByTestId("chat-agent")).toContainText("Juno");
-  await expect(page.getByTestId("chat-agent")).toHaveAttribute("title", "This chat answers as Juno");
-  await send(page, "hello");
-  await expect(page.getByTestId("assistant-message")).toContainText("Juno · Claude Code · Opus 5.5");
-
-  // The pick sticks across reloads.
-  await page.goto("/chat?project=WEB");
-  await expect(agentPicker).toHaveAccessibleName("Agent for new chats: Juno");
-  await newChat(page);
-  expect(mock.created.at(-1)).toMatchObject({ agent_id: AGENTS[1].id });
+  expect(mock.created.at(-1)).toEqual({ project: "WEB" });
   expect(mock.unhandled).toEqual([]);
 });
 

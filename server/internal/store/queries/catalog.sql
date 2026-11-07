@@ -31,7 +31,8 @@ SELECT * FROM agents WHERE workspace_id = $1 AND kind = 'sub' AND archived_at IS
 SELECT count(*) FROM tickets WHERE assignee_agent_id = $1 AND status NOT IN ('done', 'canceled');
 
 -- name: ListAgents :many
-SELECT * FROM agents WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY color_index, name;
+-- The roster of agents that work on tickets; the Personal Assistant isn't one.
+SELECT * FROM agents WHERE workspace_id = $1 AND archived_at IS NULL AND kind <> 'assistant' ORDER BY color_index, name;
 
 -- name: ListAllAgents :many
 -- Includes archived agents, for naming them in history.

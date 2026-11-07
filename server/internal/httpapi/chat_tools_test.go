@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
@@ -75,7 +77,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	}
 	mobTicket := mt.Key
 
-	chat, err := rs.StartChat(ctx, ws, me.ID, runs.ChatInput{Project: "PAY", AgentID: atlas.ID, Title: "Tools", Message: &runs.ChatMessageInput{Body: "hello"}})
+	chat, err := rs.StartChat(ctx, ws, me.ID, runs.ChatInput{Project: "PAY", Title: "Tools", Message: &runs.ChatMessageInput{Body: "hello"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +89,15 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: runID, State: "running"}); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := agents.IssueToken(ctx, q, atlas.ID, "run", "chat", &runID, nil, nil)
+	// Every chat runs as the workspace's Personal Assistant, not the agent that used to be picked.
+	if chat.AgentID == atlas.ID {
+		t.Fatal("chat runs as atlas, not the Personal Assistant")
+	}
+	assistant, err := q.GetAgent(ctx, store.GetAgentParams{ID: chat.AgentID, WorkspaceID: ws})
+	if err != nil || assistant.Kind != agents.KindAssistant {
+		t.Fatalf("chat agent = %+v, %v", assistant, err)
+	}
+	token, _, err := agents.IssueToken(ctx, q, assistant.ID, "run", "chat", &runID, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,11 +118,21 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"create_ticket": map[string]any{"title": "Chat-created ticket"},
 		"create_epic":   map[string]any{"name": "Chat-created epic"},
 		"list_epics":    map[string]any{},
+		"list_runs":     map[string]any{},
 	}
+	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
+	needArgs := []string{"get_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]
 		code, out := call(token, tool.Name, args)
+		if slices.Contains(needArgs, tool.Name) {
+			seen++
+			if code == 409 {
+				t.Errorf("%s: %d %v", tool.Name, code, out)
+			}
+			continue
+		}
 		if ok {
 			seen++
 			if code != 200 {
@@ -124,8 +144,8 @@ func TestChatRunToolAuthorization(t *testing.T) {
 			t.Errorf("%s: %d %v", tool.Name, code, out)
 		}
 	}
-	if seen != len(allowed) {
-		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed))
+	if seen != len(allowed)+len(needArgs) {
+		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed)+len(needArgs))
 	}
 
 	// Writes use the chat project, without needing an execution ticket.
@@ -233,6 +253,86 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	var n int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM artifact_reads WHERE run_id=$1", runID).Scan(&n); err != nil || n < 4 {
 		t.Fatalf("reads attributed to chat run = %d, %v", n, err)
+	}
+
+	// Runs: only ticket runs of the chat's project; delegated runs show under their parent.
+	payTicket, err := tracker.Get(ctx, q, ws, "PAY-214")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mkRun := func(ticket *store.Ticket, parent *uuid.UUID, state, purpose string) store.Run {
+		t.Helper()
+		var tid *uuid.UUID
+		if ticket != nil {
+			tid = &ticket.ID
+		}
+		r, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, TicketID: tid, AgentID: atlas.ID, Mode: "managed", State: state,
+			ResolvedSpec: json.RawMessage(`{}`), Harness: "codex", Model: "m", ParentRunID: parent, Purpose: purpose})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	payRun := mkRun(&payTicket, nil, "running", "ticket")
+	child := mkRun(&payTicket, &payRun.ID, "completed", "ticket")
+	doneRun := mkRun(&payTicket, nil, "completed", "ticket")
+	mobRun := mkRun(&mt, nil, "running", "ticket")
+	planRun := mkRun(nil, nil, "running", "planning")
+	runIDs := func(args map[string]any) []string {
+		t.Helper()
+		code, out := call(token, "list_runs", args)
+		if code != 200 {
+			t.Fatalf("list_runs %v = %d %v", args, code, out)
+		}
+		var ids []string
+		for _, r := range out["runs"].([]any) {
+			ids = append(ids, r.(map[string]any)["id"].(string))
+		}
+		return ids
+	}
+	if ids := runIDs(map[string]any{}); !slices.Contains(ids, payRun.ID.String()) || slices.Contains(ids, doneRun.ID.String()) {
+		t.Fatalf("live runs = %v", ids)
+	}
+	if ids := runIDs(map[string]any{"state": "finished"}); !slices.Contains(ids, doneRun.ID.String()) || slices.Contains(ids, payRun.ID.String()) {
+		t.Fatalf("finished runs = %v", ids)
+	}
+	for _, ids := range [][]string{runIDs(map[string]any{"state": "all"}), runIDs(map[string]any{"state": "all", "agent": "atlas"})} {
+		for _, hidden := range []uuid.UUID{child.ID, mobRun.ID, planRun.ID, runID} {
+			if slices.Contains(ids, hidden.String()) {
+				t.Fatalf("list_runs leaks %s: %v", hidden, ids)
+			}
+		}
+	}
+	if ids := runIDs(map[string]any{"state": "all", "ticket": "pay-214"}); !slices.Contains(ids, child.ID.String()) {
+		t.Fatalf("a ticket's runs include delegated ones: %v", ids)
+	}
+	if code, out := call(token, "list_runs", map[string]any{"ticket": mobTicket}); code != 422 {
+		t.Fatalf("foreign ticket runs = %d %v", code, out)
+	}
+	code, got2 := call(token, "get_run", map[string]any{"id": payRun.ID.String()})
+	if code != 200 || got2["run"].(map[string]any)["ticket"] != "PAY-214" || len(got2["delegated_runs"].([]any)) != 1 {
+		t.Fatalf("get_run = %d %v", code, got2)
+	}
+	for _, hidden := range []uuid.UUID{mobRun.ID, planRun.ID, runID} {
+		if code, out := call(token, "get_run", map[string]any{"id": hidden.String()}); code != 422 {
+			t.Fatalf("get_run %s = %d %v", hidden, code, out)
+		}
+	}
+
+	// The assistant's tokens work only inside chat runs.
+	payRunID := payRun.ID
+	for _, rid := range []*uuid.UUID{nil, &payRunID} {
+		kind := "run"
+		if rid == nil {
+			kind = "unmanaged"
+		}
+		tok, _, err := agents.IssueToken(ctx, q, assistant.ID, kind, "chat", rid, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if code, out := call(tok, "get_ticket", map[string]any{"ticket": "PAY-214"}); code != 409 || !strings.Contains(fmt.Sprint(out["message"]), "only works inside chats") {
+			t.Fatalf("assistant outside a chat (run %v) = %d %v", rid, code, out)
+		}
 	}
 
 	// A finished chat run is refused even for allowed tools.

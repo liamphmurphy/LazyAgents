@@ -31,7 +31,7 @@ func TestChatContextRefsAreDeliveredPerTurn(t *testing.T) {
 
 	// An unknown ref is a 422 naming it, and nothing is queued.
 	missing := uuid.New()
-	_, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", AgentID: e.atlas.ID,
+	_, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY",
 		Message: &runs.ChatMessageInput{Body: "hi", ContextRefs: []runs.ChatContextRef{{Kind: "artifact", ID: &missing}}}})
 	var ve *apperr.ValidationError
 	if !errors.As(err, &ve) || ve.Field != "context_refs" || !strings.Contains(ve.Msg, missing.String()) {
@@ -43,7 +43,7 @@ func TestChatContextRefsAreDeliveredPerTurn(t *testing.T) {
 		t.Fatalf("%d chats were created by a rejected start", n)
 	}
 
-	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", AgentID: e.atlas.ID,
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY",
 		Message: &runs.ChatMessageInput{Body: "Summarise these", ContextRefs: []runs.ChatContextRef{{Kind: "artifact", ID: &art}, {Kind: "ticket", Key: key}}}})
 	if err != nil {
 		t.Fatal(err)

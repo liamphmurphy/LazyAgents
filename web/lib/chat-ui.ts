@@ -1,23 +1,5 @@
-// Pure logic for the chat screen (LAZYAGENTS-57): the agent a new chat starts
-// with, the live activity line, when a model switch asks first, and reply cost.
+// Pure logic for the chat screen (LAZYAGENTS-57): the live activity line, when a model switch asks first, and reply cost.
 // Kept free of React so `npm run test:unit` covers it.
-
-export type AgentLike = { id: string; kind: string };
-export type ChatLike = { agent: { id: string } };
-
-/**
- * The agent a new chat starts with: the one picked last, else the agent of the
- * most recently active chat, else the first main agent. Sub agents never chat.
- */
-export function defaultChatAgent<A extends AgentLike>(
-  agents: A[],
-  remembered: string | null | undefined,
-  recent: ChatLike[] | undefined,
-): A | undefined {
-  const main = agents.filter((a) => a.kind === "main");
-  const find = (id: string | null | undefined) => (id ? main.find((a) => a.id === id) : undefined);
-  return find(remembered) ?? find(recent?.[0]?.agent.id) ?? main[0];
-}
 
 export type RunEventLike = { seq: number; type: string; at: string; payload: Record<string, unknown> };
 export type ToolCall = { key: number; tool: string; input: unknown; done: boolean };

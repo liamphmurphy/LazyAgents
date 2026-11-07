@@ -285,7 +285,6 @@ func TestChatLifecycleAndArchive(t *testing.T) {
 		t.Fatalf("second page %v", rest)
 	}
 	e.invalid("POST", "/chats", map[string]any{"project": "NOPE"}, "project", "unknown")
-	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "agent_id": uuid.New()}, "agent_id", "unknown")
 	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "harness": "vim"}, "harness", "unknown")
 	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "model": "gpt-9000"}, "model", "unknown")
 	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "message": map[string]any{"body": "  "}}, "body", "1–100000")

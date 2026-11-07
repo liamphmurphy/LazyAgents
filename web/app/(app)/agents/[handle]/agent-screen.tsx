@@ -252,7 +252,7 @@ export function AgentScreen({ handle }: { handle: string }) {
                   <Pill tone={status.tone}>{status.label}</Pill>
                 </div>
                 <span className="text-[13px] text-fg-secondary">
-                  {detail.agent.kind === "sub" ? "Sub agent" : "Main"}
+                  {detail.agent.kind === "sub" ? "Sub agent" : detail.agent.kind === "assistant" ? "Personal Assistant (managed by LazyAgents)" : "Main"}
                   {detail.agent.role && ` · ${detail.agent.role}`} · definition <b className="font-mono font-medium text-fg">v{detail.definition.version}</b>
                   {detail.definition.created_by && ` saved by ${detail.definition.created_by.name}`} {ago(detail.definition.created_at)}
                 </span>
