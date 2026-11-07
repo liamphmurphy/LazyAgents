@@ -240,6 +240,10 @@ func main() {
 	if len(args) > 0 && args[0] == "exec" {
 		codex = true
 		args = args[1:]
+		// exec's own flags (--add-dir <dir>) come before the resume subcommand.
+		for len(args) > 1 && args[0] == "--add-dir" {
+			args = args[2:]
+		}
 		isResume := len(args) > 0 && args[0] == "resume"
 		if isResume {
 			args = args[1:]
