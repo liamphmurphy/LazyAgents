@@ -33,7 +33,10 @@ export function useMemoryPanel() {
   const go = (value: string | null) => {
     const q = new URLSearchParams(search.toString());
     if (value === null) q.delete("memory");
-    else q.set("memory", value);
+    else {
+      q.set("memory", value);
+      q.delete("personas"); // one right-hand panel at a time
+    }
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
   return {
