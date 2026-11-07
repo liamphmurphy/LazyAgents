@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { DropdownMenu } from "radix-ui";
 import { useBootstrap } from "@/lib/api/hooks";
 import { useBoard, useBoardMoves, useTicketEditorDetail, type BoardFilters } from "@/lib/api/board-hooks";
@@ -111,6 +111,7 @@ function BoardView({ project, filters, onOpen }: { project: string; filters: Boa
       {moves.error && <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
         <span>{moves.error}</span><button type="button" aria-label="Dismiss move error" onClick={moves.dismissError}>×</button>
       </div>}
+      {moves.conflict && <ConflictToast {...moves.conflict} onDismiss={moves.dismissConflict} />}
       <p role="status" className="sr-only">{moves.notice ?? (Object.keys(moves.pending).length ? "Moving ticket…" : "")}</p>
       {query.isPending && <p role="status" className="text-sm text-fg-secondary">Loading board…</p>}
       {query.isError && <div role="alert" className="mb-4 text-sm">Couldn&apos;t load board: {query.error.message} <button type="button" onClick={() => void query.refetch()} className="underline">Retry</button></div>}
@@ -147,6 +148,21 @@ function BoardView({ project, filters, onOpen }: { project: string; filters: Boa
       </div>}
     </div>
   );
+}
+
+/** Stale-revision moves: the board already refetched, so this only explains why the card snapped back. */
+function ConflictToast({ ticket, message, onDismiss }: { ticket: string; message: string; onDismiss: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 6000);
+    return () => clearTimeout(timer);
+  }, [ticket, message, onDismiss]);
+  return <div role="alert" aria-label="Move conflict" className="fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-4 rounded-lg border border-border-float bg-surface-raised p-3 text-sm shadow-lg">
+    <div>
+      <p className="font-semibold">{ticket} changed elsewhere</p>
+      <p className="text-xs text-fg-secondary">Board refreshed. Review it and try again. ({message})</p>
+    </div>
+    <button type="button" aria-label="Dismiss move conflict" onClick={onDismiss} className="text-base leading-none">×</button>
+  </div>;
 }
 
 function TicketCard({ card, statuses, pending, onOpen, onMove, onDragStart, onDragEnd }: {

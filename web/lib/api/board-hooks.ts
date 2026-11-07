@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap, type TicketPatch } from "./client";
+import { ApiError, api, unwrap, type TicketPatch } from "./client";
 import { keys, useUpdateTicket } from "./hooks";
 import { moveRevision, type BoardCard, type BoardStatus, type PendingMove } from "../board";
 
@@ -24,12 +24,16 @@ export function useBoardMoves() {
   const locks = useRef(new Set<string>());
   const [pending, setPending] = useState<Record<string, PendingMove>>({});
   const [error, setError] = useState<string>();
+  // A 409 (or a card that went stale before PATCH) is shown as a toast after the refetch.
+  const [conflict, setConflict] = useState<{ ticket: string; message: string }>();
   const [notice, setNotice] = useState<string>();
+  const dismissConflict = useCallback(() => setConflict(undefined), []);
 
   async function move(card: BoardCard, status: BoardStatus) {
     if (card.status === status || locks.current.has(card.key)) return;
     locks.current.add(card.key);
     setError(undefined);
+    setConflict(undefined);
     setNotice(undefined);
     setPending((p) => ({ ...p, [card.key]: { card, status } }));
     try {
@@ -41,7 +45,9 @@ export function useBoardMoves() {
       qc.setQueryData(keys.ticket(card.key), updated);
       setNotice(`Moved ${card.key}.`);
     } catch (e) {
-      setError(`Couldn't move ${card.key}: ${e instanceof Error ? e.message : "Request failed. Try again."}`);
+      const stale = (e instanceof ApiError && e.status === 409) || (e instanceof Error && !(e instanceof ApiError) && e.message.startsWith("Ticket changed elsewhere"));
+      if (stale) setConflict({ ticket: card.key, message: e instanceof Error ? e.message : "" });
+      else setError(`Couldn't move ${card.key}: ${e instanceof Error ? e.message : "Request failed. Try again."}`);
       setPending((p) => {
         const next = { ...p };
         delete next[card.key];
@@ -64,7 +70,11 @@ export function useBoardMoves() {
     }
   }
 
-  return { pending, move, error, notice, dismissError: () => setError(undefined) };
+  return {
+    pending, move, error, notice, conflict,
+    dismissError: () => setError(undefined),
+    dismissConflict,
+  };
 }
 
 /** Fresh detail for the editor. gcTime 0 so every open fetches again instead of showing a cached copy. */

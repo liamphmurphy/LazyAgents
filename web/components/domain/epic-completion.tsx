@@ -39,49 +39,48 @@ export function EpicCompletion({ summary }: { summary: BoardEpic }) {
   }
 
   const unchecked = criteria.filter((c) => blockers.unchecked_criteria.includes(c.position));
+  const gated = blockers.open_tickets.length > 0 || blockers.unchecked_criteria.length > 0;
+  const ready = !closed && criteria.length > 0 && !gated;
   return (
     <div className="grid gap-5 md:grid-cols-2">
       <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <label className="flex items-center gap-1.5 text-fg-secondary">
-            Status
-            <select aria-label="Epic status" value={epic.status} disabled={status.isPending}
-              onChange={(e) => changeStatus(e.target.value as Schemas["EpicStatus"])}
-              className="h-7 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg disabled:opacity-60">
-              <option value="open">{STATUS_LABEL.open}</option>
-              <option value="done" disabled={!criteria.length && !closed}>{STATUS_LABEL.done}</option>
-            </select>
-          </label>
-          {status.isPending && <span role="status" className="text-fg-tertiary">Saving status…</span>}
+          <span className="text-fg-secondary">Status: <span className="font-medium text-fg">{STATUS_LABEL[epic.status]}</span></span>
           <span className="text-fg-tertiary">{epic.tickets_total} tickets, {epic.tickets_open} open</span>
         </div>
         <Progress label="Points" done={epic.points_done} total={epic.points_total} value={`${epic.points_done} / ${epic.points_total} pts done`} />
         <Progress label="Criteria" done={epic.criteria_done} total={epic.criteria_total} value={`${epic.criteria_done} / ${epic.criteria_total} met`} />
-        {!closed && <p className="text-xs text-fg-tertiary">
-          {!criteria.length ? "Add acceptance criteria before marking done"
-            : blockers.open_tickets.length || blockers.unchecked_criteria.length
-              ? `Blocks done: ${[blockers.open_tickets.length ? `${blockers.open_tickets.join(", ")} open` : "", blockers.unchecked_criteria.length ? `criteria ${blockers.unchecked_criteria.join(", ")} unchecked` : ""].filter(Boolean).join(" · ")}`
-              : "Ready to mark done"}
-        </p>}
+        <div className="flex flex-wrap items-start gap-3">
+          {!closed && (gated || !criteria.length) && <section aria-label="Done blockers" className="min-w-0 flex-1 space-y-1.5 rounded-md border border-border-strong bg-surface-sunken p-3 text-xs">
+            <p className="font-semibold text-fg">Can&apos;t mark done yet</p>
+            {!criteria.length && <p className="text-fg-secondary">Add acceptance criteria before marking done.</p>}
+            {blockers.open_tickets.length > 0 && <div>
+              <p className="font-medium text-fg-secondary">Open tickets</p>
+              <ul aria-label="Open tickets" className="flex flex-wrap gap-x-3">{blockers.open_tickets.map((key) =>
+                <li key={key}><Link href={`/tickets/${encodeURIComponent(key)}`} className="font-mono hover:text-accent">{key} ↗</Link></li>)}</ul>
+            </div>}
+            {blockers.unchecked_criteria.length > 0 && <div>
+              <p className="font-medium text-fg-secondary">Unchecked criteria</p>
+              <ul aria-label="Unchecked criteria" className="list-none">{(unchecked.length ? unchecked.map((c) => `${c.position}. ${c.text}`) : blockers.unchecked_criteria.map(String)).map((t) => <li key={t}>{t}</li>)}</ul>
+            </div>}
+          </section>}
+          {!closed && !gated && criteria.length > 0 && <p className="flex-1 text-xs text-fg-tertiary">Ready to mark done</p>}
+          {closed
+            ? <Button variant="outline" disabled={status.isPending} onClick={() => changeStatus("open")}>{status.isPending ? "Reopening…" : "Reopen epic"}</Button>
+            : <Button variant="primary" disabled={!ready || status.isPending} onClick={() => changeStatus("done")}
+                title={ready ? undefined : "Close the open tickets and check every criterion first"}>{status.isPending ? "Saving…" : "Mark epic done"}</Button>}
+        </div>
         {statusError && <p role="alert" className="text-xs text-pill-blocked-fg">{statusError}</p>}
         {blocked && <div role="alert" aria-label="Epic cannot be marked done" className="space-y-2 rounded-md border border-state-blocked bg-surface p-3 text-xs">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-semibold text-fg">Epic cannot be marked done</p>
-              <p className="text-fg-secondary">Complete these items first. Epic remains {STATUS_LABEL[epic.status]}.</p>
+              <p className="text-fg-secondary">Something changed since this page loaded. Epic remains {STATUS_LABEL[epic.status]}.</p>
             </div>
             <button type="button" aria-label="Dismiss completion error" onClick={() => setBlocked(undefined)} className="text-base leading-none">×</button>
           </div>
           <p className="text-fg-tertiary">{blocked}</p>
-          {unchecked.length > 0 && <div>
-            <p className="font-medium text-fg-secondary">Unchecked criteria</p>
-            <ul aria-label="Unchecked criteria" className="list-none">{unchecked.map((c) => <li key={c.id}>{c.position}. {c.text}</li>)}</ul>
-          </div>}
-          {blockers.open_tickets.length > 0 && <div>
-            <p className="font-medium text-fg-secondary">Open tickets</p>
-            <ul aria-label="Open tickets" className="flex flex-wrap gap-x-3">{blockers.open_tickets.map((key) =>
-              <li key={key}><Link href={`/tickets/${encodeURIComponent(key)}`} className="font-mono hover:text-accent">{key} ↗</Link></li>)}</ul>
-          </div>}
+          <p className="text-fg-secondary">The blockers above are refreshed from the server.</p>
         </div>}
       </div>
       <CriteriaEditor criteria={criteria} closed={closed} mutations={mutations} />
