@@ -107,8 +107,14 @@ export function CommandMenu() {
   // Where actions happen: the page's project, then the URL's, then the remembered one.
   const actionProject = attach?.project ?? project ?? remembered ?? projects[0]?.key;
 
+  const close = (next: boolean) => {
+    // A failed "New chat" alert belongs to that attempt only.
+    if (!next) createChat.reset();
+    setOpen(next);
+  };
+
   const go = (item: Item) => {
-    setOpen(false);
+    close(false);
     if (item.recent) {
       const next = pushRecent(recent, item.recent);
       setRecent(next);
@@ -145,7 +151,8 @@ export function CommandMenu() {
     : [];
 
   const hits: Item[] =
-    mode === "root" && !commands && query.trim()
+    // Only once the debounce settles, so ↵ never opens a hit for an earlier query.
+    mode === "root" && !commands && query.trim() && text === query.trim()
       ? sortByGroup(
           (search.data ?? []).flatMap((h) => {
             const link = linkFromTarget(h.target);
@@ -272,7 +279,13 @@ export function CommandMenu() {
       setQuery("");
       setMode("root");
       setActive(0);
-      setRecent(parseRecent(window.localStorage.getItem(RECENT_KEY)));
+      let stored: string | null = null;
+      try {
+        stored = window.localStorage.getItem(RECENT_KEY);
+      } catch {
+        /* storage blocked: no recents */
+      }
+      setRecent(parseRecent(stored));
       setOpen(true);
     };
     const key = (e: KeyboardEvent) => {
@@ -298,7 +311,7 @@ export function CommandMenu() {
   });
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={close}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-scrim" />
         <Dialog.Content
@@ -397,7 +410,7 @@ export function CommandMenu() {
               <IconButton icon="x" label="Close search" />
             </Dialog.Close>
           </div>
-          <div id="command-results" role="listbox" aria-label="Results" className="overflow-y-auto p-2">
+          <div className="overflow-y-auto p-2">
             {search.isFetching && (
               <p role="status" className="p-3 text-xs text-fg-tertiary">
                 Searching…
@@ -419,39 +432,41 @@ export function CommandMenu() {
             {mode === "projects" && items.length === 0 && (
               <p className="p-3 text-sm text-fg-tertiary">No project matches “{query}”.</p>
             )}
-            {groups.map((g) => (
-              <div key={g.name} role="group" aria-labelledby={`command-group-${g.name.replace(/\s+/g, "-")}`}>
-                <div
-                  id={`command-group-${g.name.replace(/\s+/g, "-")}`}
-                  role="presentation"
-                  className="px-3 pb-1 pt-3 text-xs text-fg-tertiary"
-                >
-                  {g.name}
-                </div>
-                {g.items.map(({ item, i }) => (
+            <div id="command-results" role="listbox" aria-label="Results">
+              {groups.map((g) => (
+                <div key={g.name} role="group" aria-labelledby={`command-group-${g.name.replace(/\s+/g, "-")}`}>
                   <div
-                    key={`${item.group}-${item.id}`}
-                    id={`command-${i}`}
-                    role="option"
-                    aria-selected={i === index}
-                    onClick={() => go(item)}
-                    onMouseMove={() => setActive(i)}
-                    className={cx(
-                      "flex min-h-[38px] w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left text-sm",
-                      i === index ? "bg-selected" : "hover:bg-hover",
-                    )}
+                    id={`command-group-${g.name.replace(/\s+/g, "-")}`}
+                    role="presentation"
+                    className="px-3 pb-1 pt-3 text-xs text-fg-tertiary"
                   >
-                    <span aria-hidden className="w-4 flex-none text-center text-fg-tertiary">
-                      {item.glyph ?? GLYPH[item.group] ?? ""}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">
-                      <Match text={item.title} query={mode === "projects" ? query : title} />
-                    </span>
-                    {item.meta && <span className="font-mono text-xs text-fg-tertiary">{item.meta}</span>}
+                    {g.name}
                   </div>
-                ))}
-              </div>
-            ))}
+                  {g.items.map(({ item, i }) => (
+                    <div
+                      key={`${item.group}-${item.id}`}
+                      id={`command-${i}`}
+                      role="option"
+                      aria-selected={i === index}
+                      onClick={() => go(item)}
+                      onMouseMove={() => setActive(i)}
+                      className={cx(
+                        "flex min-h-[38px] w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left text-sm",
+                        i === index ? "bg-selected" : "hover:bg-hover",
+                      )}
+                    >
+                      <span aria-hidden className="w-4 flex-none text-center text-fg-tertiary">
+                        {item.glyph ?? GLYPH[item.group] ?? ""}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">
+                        <Match text={item.title} query={mode === "projects" ? query : title} />
+                      </span>
+                      {item.meta && <span className="font-mono text-xs text-fg-tertiary">{item.meta}</span>}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
           <div className="border-t border-border px-4 py-2 text-xs text-fg-tertiary">
             {mode === "projects"

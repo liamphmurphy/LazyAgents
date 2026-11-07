@@ -137,6 +137,7 @@ func (q *Queries) ReadInboxItem(ctx context.Context, arg ReadInboxItemParams) er
 
 const searchAttentionTargets = `-- name: SearchAttentionTargets :many
 SELECT kind,id,title,href FROM (
+SELECT kind, id, title, href, row_number() OVER (PARTITION BY kind ORDER BY title,id) AS n FROM (
  SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href
  FROM epics e JOIN projects p ON p.id=e.project_id
  WHERE e.workspace_id=$1 AND e.name ILIKE '%'||$2::text||'%'
@@ -154,7 +155,8 @@ SELECT kind,id,title,href FROM (
  WHERE c.workspace_id=$1 AND c.created_by=$4 AND NOT c.archived
  AND c.title ILIKE '%'||$2::text||'%'
  AND ($3::text IS NULL OR p.key=$3)
-) results ORDER BY kind,title,id LIMIT 20
+) matches
+) results WHERE n<=8 ORDER BY kind,title,id LIMIT 24
 `
 
 type SearchAttentionTargetsParams struct {
@@ -171,6 +173,7 @@ type SearchAttentionTargetsRow struct {
 	Href  string
 }
 
+// At most 8 per kind, so many chats or agents can't crowd epics out.
 func (q *Queries) SearchAttentionTargets(ctx context.Context, arg SearchAttentionTargetsParams) ([]SearchAttentionTargetsRow, error) {
 	rows, err := q.db.Query(ctx, searchAttentionTargets,
 		arg.WorkspaceID,

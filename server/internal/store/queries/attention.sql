@@ -58,7 +58,9 @@ INSERT INTO inbox_reads (user_id,item_id) VALUES ($1,$2)
 ON CONFLICT (user_id,item_id) DO UPDATE SET read_at=clock_timestamp();
 
 -- name: SearchAttentionTargets :many
+-- At most 8 per kind, so many chats or agents can't crowd epics out.
 SELECT kind,id,title,href FROM (
+SELECT *, row_number() OVER (PARTITION BY kind ORDER BY title,id) AS n FROM (
  SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href
  FROM epics e JOIN projects p ON p.id=e.project_id
  WHERE e.workspace_id=sqlc.arg(workspace_id) AND e.name ILIKE '%'||sqlc.arg(q)::text||'%'
@@ -76,4 +78,5 @@ SELECT kind,id,title,href FROM (
  WHERE c.workspace_id=sqlc.arg(workspace_id) AND c.created_by=sqlc.arg(user_id) AND NOT c.archived
  AND c.title ILIKE '%'||sqlc.arg(q)::text||'%'
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
-) results ORDER BY kind,title,id LIMIT 20;
+) matches
+) results WHERE n<=8 ORDER BY kind,title,id LIMIT 24;
