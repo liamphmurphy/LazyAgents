@@ -188,7 +188,7 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		}
 	}
 
-	b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. Run the full suite once before finishing. If `TEST_DATABASE_URL` is set, database tests use it: don't start your own database.\n\n")
+	b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. Run the full suite once before finishing; that local run is enough, so never wait for or poll GitHub PR checks. If `TEST_DATABASE_URL` is set, database tests use it: don't start your own database.\n\n")
 	if !delegated {
 		b.WriteString(gitSection(spec))
 	}
@@ -273,8 +273,7 @@ func gitSection(spec agentdef.Resolved) string {
 	b.WriteString("1. `git push -u origin HEAD`\n")
 	b.WriteString("2. `gh pr create --title \"<ticket key>: <summary>\" --body \"<what changed, how you tested it, link to the ticket>\"` (add `--draft` if anything is unfinished)\n")
 	b.WriteString("3. Record the PR URL it prints with the `set_pr` tool.\n\n")
-	b.WriteString("If a PR for the branch already exists (`gh pr view`), push to update it instead of opening another. ")
-	b.WriteString("Use `gh pr checks` and `gh run view --log-failed` to find out why CI is red before asking for help.\n\n")
+	b.WriteString("If a PR for the branch already exists (`gh pr view`), push to update it instead of opening another.\n\n")
 	return b.String()
 }
 
@@ -296,9 +295,8 @@ func epicSteps(epic, base, name string) string {
 	fmt.Fprintf(&b, "4. If the epic has no open PR (`gh pr list --head %s --base %s --state open`), open it as a draft: `gh pr create --draft --head %s --base %s --title \"Epic: %s\" --body \"<the epic's objective; tickets are stacked on this PR>\"`.\n",
 		epic, base, epic, base, strings.ReplaceAll(name, `"`, `'`))
 	b.WriteString("5. Open your ticket's PR stacked on the epic: `gh pr create --base " + epic + " --title \"<ticket key>: <summary>\" --body \"<what changed, how you tested it, link to the ticket>\"`, and record its URL with the `set_pr` tool.\n")
-	b.WriteString("6. Once its checks pass (`gh pr checks --watch`), and any required review has approved it, merge it into the epic branch: `gh pr merge --squash --delete-branch`. Only ever merge PRs whose base is " + e + ".\n\n")
-	b.WriteString("If a PR for your branch already exists (`gh pr view`), push to update it instead of opening another. ")
-	b.WriteString("Use `gh pr checks` and `gh run view --log-failed` to find out why CI is red before asking for help.\n\n")
+	b.WriteString("6. Once any required review has approved it, merge it into the epic branch without waiting for GitHub checks: `gh pr merge --squash --delete-branch`. If GitHub refuses until checks pass, leave the PR open and say so in complete_run. Only ever merge PRs whose base is " + e + ".\n\n")
+	b.WriteString("If a PR for your branch already exists (`gh pr view`), push to update it instead of opening another.\n\n")
 	return b.String()
 }
 

@@ -300,6 +300,24 @@ func TestAgentsMDEpicStacksOnOnePR(t *testing.T) {
 	}
 }
 
+// Local tests are the verification: no generated instructions wait on GitHub checks.
+func TestAgentsMDDoesNotWaitForPRChecks(t *testing.T) {
+	epic := spec("repo:write", "allowed")
+	epic.Repository = &agentdef.Repository{DefaultBranch: "main", EpicBranch: "epic/pay-1234abcd", EpicName: "Ledger"}
+	for name, md := range map[string]string{
+		"standalone": string(AgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1")),
+		"epic":       string(AgentsMD("", epic, nil, "PAY-1")),
+		"delegated":  string(SubagentAgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1")),
+	} {
+		if strings.Contains(md, "gh pr checks") || strings.Contains(md, "gh run view") {
+			t.Fatalf("%s AGENTS.md waits on GitHub checks:\n%s", name, md)
+		}
+		if !strings.Contains(md, "never wait for or poll GitHub PR checks") {
+			t.Fatalf("%s AGENTS.md lacks the no-wait rule:\n%s", name, md)
+		}
+	}
+}
+
 func TestAgentsMDGitHubSection(t *testing.T) {
 	allowed := string(AgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
 	for _, want := range []string{"`gh` CLI", "git push -u origin HEAD", "gh pr create", "`set_pr`"} {
