@@ -29,6 +29,7 @@ import { RunActivity } from "./activity";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
+import { ChatCostChip } from "@/components/domain/cost-chip";
 
 type Message = Schemas["ChatMessage"];
 type Groups = Schemas["ChatHarnessModels"][] | undefined;
@@ -203,6 +204,7 @@ export function Conversation({ id }: { id: string }) {
               {c.agent.name}
             </span>
           )}
+          <ChatCostChip chatId={c.id} project={c.project} />
           <span className="flex-1" />
           {c.archived ? (
             <RestoreChat chat={c} onRestored={restored} />

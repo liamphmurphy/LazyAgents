@@ -13,6 +13,7 @@ import { TicketEditorDialog } from "@/components/domain/ticket-editor-dialog";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { Flag } from "@/components/domain/labels";
 import { STATUS_NAME } from "@/components/domain/meta";
+import { TicketCostChip } from "@/components/domain/cost-chip";
 import { TopBar } from "@/components/shell/topbar";
 import { BacklinksPanel } from "@/components/domain/backlinks";
 import { ContextArtifacts } from "./context-artifacts";
@@ -246,6 +247,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
         }
         actions={
           <>
+            {t && <TicketCostChip ticketKey={t.key} project={t.project.key} />}
             {pager.total > 0 && pager.index >= 0 && (
               <span className="font-mono text-xs text-fg-tertiary" aria-label={`Ticket ${pager.index + 1} of ${pager.total}`}>
                 {pager.index + 1} / {pager.total}

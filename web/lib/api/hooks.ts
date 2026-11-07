@@ -683,6 +683,22 @@ export function useRunPages(f: RunListFilters, pages: number) {
 
 export const RUNS_PAGE = 50;
 
+export type CostQuery = { from?: string; to?: string; project?: string; ticket?: string; chat?: string };
+
+/**
+ * Spend summed server-side from run counters (GET /costs). Ticket and range
+ * reports live under ["runs"] and a chat's under ["chats"], so run and chat
+ * SSE events refresh them; the interval covers spend added by a live run.
+ */
+export function useCosts(q: CostQuery, enabled = true) {
+  return useQuery({
+    queryKey: [q.chat ? "chats" : "runs", "costs", q] as const,
+    queryFn: () => unwrap(api.GET("/costs", { params: { query: q } })),
+    enabled,
+    refetchInterval: 30_000,
+  });
+}
+
 // ------------------------------------------------------------- wiki (§12)
 
 export const wikiKeys = {
