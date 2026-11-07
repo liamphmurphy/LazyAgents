@@ -1958,6 +1958,10 @@ export interface components {
             harness?: components["schemas"]["Harness"];
             model?: string;
             instructions_append?: string;
+            /** @description Skills appended after removals; existing names are skipped unless removed first. */
+            skills_add?: components["schemas"]["AgentSkill"][];
+            /** @description Agent skill names to remove; unknown names are ignored. */
+            skills_remove?: string[];
             scopes?: {
                 [key: string]: components["schemas"]["ScopeMode"];
             };

@@ -31,6 +31,7 @@ export function SettingsScreen() {
     { id: "secrets", label: "Provider secrets", health: !secrets.data ? "unknown" : missing || !secrets.data.key_configured ? "attention" : "ok", badge: missing ? `${missing} off` : undefined },
     { id: "projects", label: "Projects", health: !boot.data ? "unknown" : activeProjects ? "ok" : "attention" },
     { id: "runners", label: "Runner backends", health: !runner.data ? "unknown" : runner.data.online ? "ok" : "attention" },
+    { id: "overrides", label: "Project overrides", health: "idle" },
     { id: "appearance", label: "Appearance", health: "idle" },
   ];
 
@@ -70,6 +71,9 @@ export function SettingsScreen() {
             lead="Reported by each runner’s heartbeat. Set by environment variables on the runner process; restart the runner to change them."
           >
             <RunnerSection />
+          </Section>
+          <Section id="overrides" title="Project overrides" lead="Customize an agent for one project while keeping future agent definition updates.">
+            <ProjectOverridesSection />
           </Section>
           <Section id="appearance" title="Appearance">
             <Card>
@@ -266,4 +270,15 @@ function Stat({ label, value, of }: { label: string; value: number; of?: number 
       </div>
     </div>
   );
+}
+
+function ProjectOverridesSection() {
+  const boot = useBootstrap();
+  return <Card>
+    <p className="text-sm text-fg-secondary">Add skills to extend an agent’s defaults, or remove skills to stop injecting them for a project. With no override, the project uses the agent definition as is. Changes apply to new runs; active runs keep their saved snapshot.</p>
+    <p className="mt-2 text-sm text-fg-secondary">Open an agent’s Skills tab to inspect its skills. In Project overrides, choose Add or an existing project to edit skill additions and removals.</p>
+    {boot.isPending && <div aria-label="Loading project override editors" className="mt-4"><Skeleton className="h-16" /></div>}
+    {boot.isError && <Banner tone="blocked" title="Couldn’t load project override editors" actions={<Button variant="outline" onClick={() => void boot.refetch()}>Retry</Button>}>Agent and project details are unavailable.</Banner>}
+    {boot.data && (!boot.data.projects.length || !boot.data.agents.length ? <p className="mt-4 text-sm text-fg-tertiary">No project overrides available yet. Create a project and an agent first; until then agents use their default skills.</p> : <ul className="mt-4 flex flex-col gap-2">{boot.data.agents.map((agent) => <li key={agent.id}><Link href={`/agents/${agent.handle}?tab=skills#overrides`} className="text-sm text-accent">Manage {agent.name} project skills →</Link></li>)}</ul>)}
+  </Card>;
 }

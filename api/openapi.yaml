@@ -2444,6 +2444,8 @@ components:
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string }
         instructions_append: { type: string }
+        skills_add: { type: array, maxItems: 30, items: { $ref: "#/components/schemas/AgentSkill" }, description: "Skills appended after removals; existing names are skipped unless removed first." }
+        skills_remove: { type: array, items: { type: string }, description: "Agent skill names to remove; unknown names are ignored." }
         scopes:
           type: object
           additionalProperties: { $ref: "#/components/schemas/ScopeMode" }
