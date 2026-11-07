@@ -586,7 +586,7 @@ func TestChatWebSearchOption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if args := strings.Join(codex.Argv, " "); !strings.Contains(args, `web_search="live"`) || !strings.Contains(args, `sandbox_mode="read-only"`) {
+	if args := strings.Join(codex.Argv, " "); !strings.Contains(args, `web_search="cached"`) || !strings.Contains(args, `sandbox_mode="read-only"`) {
 		t.Fatalf("codex: %s", args)
 	}
 	if md := string(ChatAgentsMD(s, nil, "PAY", "")); !strings.Contains(md, "search the web") {

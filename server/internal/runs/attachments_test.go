@@ -3,6 +3,7 @@ package runs
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestChatAttachmentName(t *testing.T) {
@@ -32,12 +33,15 @@ func TestChatAttachmentType(t *testing.T) {
 	}{
 		{"a.png", 10, png, "image/png"},
 		{"a.PDF", 10, pdf, "application/pdf"},
-		{"a.csv", 10, []byte("a,b\n1,2\n"), "text/csv"},
-		{"a.md", 10, []byte("# Hi ünïcode"), "text/markdown"},
+		{"a.csv", 10, []byte("a,b\n1,2\n"), "text/csv; charset=utf-8"},
+		{"a.md", 10, []byte("# Hi ünïcode"), "text/markdown; charset=utf-8"},
+		{"README.md", 10, []byte(`<p align="center">logo</p>`), "text/markdown; charset=utf-8"},
+		{"cut.txt", 10, []byte("ab\xc3"), "text/plain; charset=utf-8"}, // rune cut at the sniff limit
 		{"a.json", 10, []byte(`{"a":1}`), "application/json"},
 		{"a.png", 10, pdf, ""},                         // renamed PDF
 		{"a.txt", 10, []byte{0, 1, 2, 0xff, 0xfe}, ""}, // binary as text
 		{"a.zip", 10, []byte("PK\x03\x04"), ""},
+		{"bad.txt", 10, []byte("ab\xff\xfe"), ""},
 		{"a.svg", 10, []byte("<svg/>"), ""},
 		{"a.txt", 0, nil, ""},
 		{"a.txt", MaxChatAttachmentBytes + 1, []byte("x"), ""},
@@ -54,5 +58,16 @@ func TestChatAttachmentType(t *testing.T) {
 		if err != nil || got != c.want {
 			t.Errorf("%s: got %q, %v; want %q", c.name, got, err, c.want)
 		}
+	}
+}
+
+func TestChatAttachmentDiskName(t *testing.T) {
+	long := strings.Repeat("é", 150) + ".pdf" // 304 bytes
+	got := ChatAttachmentDiskName(long)
+	if len(got) > 200 || !strings.HasSuffix(got, ".pdf") || !utf8.ValidString(got) {
+		t.Fatalf("got %d bytes %q", len(got), got)
+	}
+	if ChatAttachmentDiskName("a.txt") != "a.txt" {
+		t.Fatal("short names must not change")
 	}
 }

@@ -1203,3 +1203,31 @@ func (q *Queries) UpdateChatTitleArchived(ctx context.Context, arg UpdateChatTit
 	)
 	return i, err
 }
+
+const webFetchURLKnown = `-- name: WebFetchURLKnown :one
+SELECT EXISTS (
+  SELECT 1 FROM run_events e
+  WHERE e.run_id = $1 AND e.type = 'tool_result' AND e.payload->>'tool' = 'WebSearch'
+    AND COALESCE(e.payload->>'is_error', 'false') <> 'true'
+    AND strpos(e.payload->>'output', '"' || $2::text || '"') > 0
+) OR EXISTS (
+  SELECT 1 FROM chat_messages m
+  WHERE m.role = 'user' AND strpos(m.body_md, $2::text) > 0
+    AND m.session_id IN (SELECT c.session_id FROM chat_messages c WHERE c.run_id = $1)
+) AS known
+`
+
+type WebFetchURLKnownParams struct {
+	RunID uuid.UUID
+	Url   string
+}
+
+// A chat run may fetch only a URL the person wrote in the conversation or
+// that one of the run's own web searches returned (quoted in its Links JSON),
+// so injected instructions can't send data to an arbitrary address.
+func (q *Queries) WebFetchURLKnown(ctx context.Context, arg WebFetchURLKnownParams) (*bool, error) {
+	row := q.db.QueryRow(ctx, webFetchURLKnown, arg.RunID, arg.Url)
+	var known *bool
+	err := row.Scan(&known)
+	return known, err
+}

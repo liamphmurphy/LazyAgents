@@ -69,7 +69,9 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	if spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
 		// Codex's own search tool (checked against codex-cli 0.167.0, which
 		// accepts disabled, cached, indexed or live under --strict-config).
-		cfg = append(cfg, "web_search="+tomlString("live"))
+		// cached searches OpenAI's index without live fetches of arbitrary
+		// URLs, which could carry data out (ADR "Assistant web access").
+		cfg = append(cfg, "web_search="+tomlString("cached"))
 	}
 	if effort := spec.HarnessOptions["effort"]; effort != "" {
 		if effort == "xhigh" || effort == "max" {

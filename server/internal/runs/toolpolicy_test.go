@@ -142,3 +142,58 @@ func TestToolPolicyExactApproval(t *testing.T) {
 	}
 
 }
+
+// The assistant's web tools: only on chat runs with the option, and a fetch
+// only for a URL the run's own search returned (ADR "Assistant web access").
+func TestToolPolicyWebAccess(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.New(t)
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
+		t.Fatal(err)
+	}
+	q := store.New(pool)
+	me, _ := q.GetLocalUser(ctx)
+	a, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: me.WorkspaceID, Handle: "atlas"})
+	svc := &runs.Service{Pool: pool, Tracker: &tracker.Service{Pool: pool}}
+	c := agents.Caller{Agent: a, Kind: "unmanaged"}
+	run, err := svc.Claim(ctx, c, "PAY-214")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.RunID = &run.ID
+	spec, _ := runs.Spec(run)
+	raw, _ := json.Marshal(runs.ChatSpec(spec))
+	if _, err := pool.Exec(ctx, "UPDATE runs SET resolved_spec=$2 WHERE id=$1", run.ID, raw); err != nil {
+		t.Fatal(err)
+	}
+	check := func(tool string, input map[string]any, want string) {
+		t.Helper()
+		d, err := svc.CheckTool(ctx, c, runs.ToolCheck{Tool: tool, Input: input})
+		if err != nil || d.Decision != want {
+			t.Fatalf("%s %v: %+v %v, want %s", tool, input, d, err, want)
+		}
+	}
+	search := map[string]any{"query": "acme pricing"}
+	// A ticket run with the option (never set by definitions) still gets no web.
+	check("WebSearch", search, "deny")
+
+	if _, err := pool.Exec(ctx, "UPDATE runs SET purpose='chat', ticket_id=NULL WHERE id=$1", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	check("WebSearch", search, "allow")
+	check("web_search", search, "allow")
+	ok := "https://acme.example/pricing?x=1&y=2"
+	check("WebFetch", map[string]any{"url": ok}, "deny")
+	out, _ := json.Marshal(map[string]any{"id": "t1", "tool": "WebSearch", "is_error": false,
+		"output": `Web search results for query: "acme"` + "\n\nLinks: " + `[{"title":"Pricing","url":"` + ok + `"}]`})
+	if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: run.ID, Type: "tool_result", Payload: out}); err != nil {
+		t.Fatal(err)
+	}
+	check("WebFetch", map[string]any{"url": ok}, "allow")
+	check("WebFetch", map[string]any{"url": ok + "&secret=PAY-214"}, "deny")
+	check("WebFetch", map[string]any{"url": "https://acme.example/pricing"}, "deny")
+	check("WebFetch", map[string]any{}, "deny")
+	// Reading files stays allowed; writing and the shell stay denied.
+	check("Read", map[string]any{"file_path": ".lazyagents/attachments/turn-1/1-a.pdf"}, "allow")
+	check("Bash", map[string]any{"command": "curl https://evil.example"}, "deny")
+}

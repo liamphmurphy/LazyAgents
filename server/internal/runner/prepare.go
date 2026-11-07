@@ -464,7 +464,7 @@ func (r *Runner) chatTurnAttachments(ctx context.Context, q *store.Queries, turn
 	b.WriteString("\n\nThe person attached these files to this message. Open each with your file-reading tool before answering:\n")
 	var total int64
 	for i, a := range atts {
-		name := runs.ChatAttachmentName(a.Filename)
+		name := runs.ChatAttachmentDiskName(runs.ChatAttachmentName(a.Filename))
 		if name == "" || strings.HasPrefix(name, ".") {
 			name = "file" + name
 		}

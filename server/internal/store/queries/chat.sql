@@ -196,3 +196,18 @@ RETURNING *;
 
 -- name: ListChatAttachmentsForMessages :many
 SELECT * FROM chat_attachments WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) ORDER BY created_at, id;
+
+-- name: WebFetchURLKnown :one
+-- A chat run may fetch only a URL the person wrote in the conversation or
+-- that one of the run's own web searches returned (quoted in its Links JSON),
+-- so injected instructions can't send data to an arbitrary address.
+SELECT EXISTS (
+  SELECT 1 FROM run_events e
+  WHERE e.run_id = sqlc.arg(run_id) AND e.type = 'tool_result' AND e.payload->>'tool' = 'WebSearch'
+    AND COALESCE(e.payload->>'is_error', 'false') <> 'true'
+    AND strpos(e.payload->>'output', '"' || sqlc.arg(url)::text || '"') > 0
+) OR EXISTS (
+  SELECT 1 FROM chat_messages m
+  WHERE m.role = 'user' AND strpos(m.body_md, sqlc.arg(url)::text) > 0
+    AND m.session_id IN (SELECT c.session_id FROM chat_messages c WHERE c.run_id = sqlc.arg(run_id))
+) AS known;

@@ -75,7 +75,20 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	if err != nil {
 		return ToolDecision{}, err
 	}
-	if WebTool(in.Tool) && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+	if WebTool(in.Tool) && run.Purpose == "chat" && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+		if in.Tool != "WebFetch" {
+			return ToolDecision{Decision: "allow"}, nil
+		}
+		// A fetch can carry data out in its URL: only addresses the person
+		// gave or this run's searches returned (ADR "Assistant web access").
+		url, _ := in.Input["url"].(string)
+		known, err := q.WebFetchURLKnown(ctx, store.WebFetchURLKnownParams{RunID: run.ID, Url: strings.TrimSpace(url)})
+		if err != nil {
+			return ToolDecision{}, err
+		}
+		if strings.TrimSpace(url) == "" || known == nil || !*known {
+			return deny("Only open pages the person linked or that your web search returned; search first, then fetch a result URL exactly")
+		}
 		return ToolDecision{Decision: "allow"}, nil
 	}
 	scopes := ToolScopes(in.Tool, in.Input)
