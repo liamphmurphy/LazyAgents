@@ -822,6 +822,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Top-level runs, newest first, 50 per page (delegated runs are counted in child_count) */
+        get: operations["listRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}": {
         parameters: {
             query?: never;
@@ -2071,8 +2088,29 @@ export interface components {
             id: string;
             /** @description Empty for standalone planning runs */
             ticket_key: string;
+            /**
+             * @description What the run works on: a ticket, a plan or a chat
+             * @enum {string}
+             */
+            purpose: "ticket" | "planning" | "chat";
             /** Format: uuid */
             planning_id?: string;
+            /**
+             * Format: uuid
+             * @description The chat session of a chat run
+             */
+            chat_id?: string;
+            /** @description Project of the ticket, plan or chat */
+            project_key?: string;
+            /** @description Ticket title, plan goal or chat title */
+            work_title?: string;
+            /** @description Ticket runs: the ticket's branch */
+            branch?: string;
+            pr_number?: number;
+            pr_url?: string;
+            pr_state?: string;
+            /** @description Direct delegated runs */
+            child_count?: number;
             agent: components["schemas"]["AgentRef"];
             /** @enum {string} */
             mode: "managed" | "unmanaged";
@@ -4374,6 +4412,39 @@ export interface operations {
                 };
                 content: {
                     "application/x-ndjson": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: {
+                /** @description live (queued to waiting, the default), all, or one run state */
+                state?: "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+                /** @description Agent handle */
+                agent?: string;
+                /** @description Project key */
+                project?: string;
+                purpose?: "ticket" | "planning" | "chat";
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        runs: components["schemas"]["Run"][];
+                        has_more: boolean;
+                    };
                 };
             };
             default: components["responses"]["Error"];
