@@ -17,10 +17,9 @@ import { cx } from "@/lib/cx";
 import { absoluteTime, timelineTime } from "@/lib/format";
 import { wikiHref } from "@/lib/wikilinks";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Field, Kbd, Skeleton, TextInput } from "@/components/ui/primitives";
 import { DialogShell } from "@/components/domain/artifact-dialogs";
-import { AgentAvatar, ApiActorAvatar } from "@/components/domain/avatars";
+import { ApiActorAvatar } from "@/components/domain/avatars";
 import { BacklinksPanel } from "@/components/domain/backlinks";
 import { LinkEditor } from "@/components/domain/link-editor";
 import { LocalGraph } from "@/components/domain/local-graph";
@@ -28,8 +27,12 @@ import { Markdown } from "@/components/domain/markdown";
 import { TargetMark } from "@/components/domain/wikilink";
 import { StartChatButton } from "@/components/domain/start-chat";
 import { TopBar, type Crumb } from "@/components/shell/topbar";
-import { PageTree } from "./page-tree";
+import { pageHeader, parseCompare } from "@/lib/wiki";
+import { ADRIndex } from "./adr-index";
+import { CitedBy, History, LinkedTickets, PanelSection, TagsSection } from "./page-rail";
+import { PageTree, type WikiIndex } from "./page-tree";
 import { PatternsFinder } from "./patterns-finder";
+import { VersionDiff } from "./version-diff";
 import { SuggestionCard } from "./suggestions";
 
 function crumbsFor(path: string): Crumb[] {
@@ -42,14 +45,26 @@ function crumbsFor(path: string): Crumb[] {
 }
 
 /** Tree on the left, the page (or home) in the middle. */
-function WikiLayout({ current, crumbs, actions, children }: { current: string; crumbs: Crumb[]; actions?: ReactNode; children: ReactNode }) {
+function WikiLayout({
+  current,
+  index,
+  crumbs,
+  actions,
+  children,
+}: {
+  current: string;
+  index?: WikiIndex;
+  crumbs: Crumb[];
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   const tree = useWikiTree();
   return (
     <>
       <TopBar crumbs={crumbs} actions={actions} />
       <div className="flex flex-1 flex-wrap">
         <aside className="flex-[1_1_220px] border-r border-border-subtle bg-sidebar px-2 py-4 lg:max-w-[260px]">
-          <PageTree pages={tree.data?.pages} current={current} />
+          <PageTree pages={tree.data?.pages} current={current} index={index} />
         </aside>
         {children}
       </div>
@@ -177,6 +192,29 @@ function WikiSearch() {
         </ul>
       )}
     </section>
+  );
+}
+
+/** The Pattern index (?index=patterns) and ADR index (?index=adrs). */
+function WikiIndexView({ index }: { index: WikiIndex }) {
+  const [creating, setCreating] = useState(false);
+  const label = index === "patterns" ? "Pattern index" : "ADR index";
+  return (
+    <WikiLayout
+      current=""
+      index={index}
+      crumbs={[{ label: "Wiki", href: "/wiki" }, { label: index === "patterns" ? "Patterns" : "Architecture" }, { label }]}
+      actions={
+        <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+          New page
+        </Button>
+      }
+    >
+      <div className="flex min-w-0 flex-[999_1_480px] justify-center px-7 py-8 max-sm:px-4">
+        <div className="flex w-full max-w-[var(--reading-max)] flex-col gap-7">{index === "patterns" ? <PatternsFinder index /> : <ADRIndex />}</div>
+      </div>
+      {creating && <NewPageDialog open onOpenChange={setCreating} folder={index === "patterns" ? "Patterns" : "Architecture"} />}
+    </WikiLayout>
   );
 }
 
@@ -371,18 +409,6 @@ function withoutTitle(md: string, title: string) {
   return md.slice(0, i) + md.slice(i + m[0].trim().length);
 }
 
-function PanelSection({ title, children, icon }: { title: string; children: ReactNode; icon?: "graph" }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-1.5 text-[12.5px] text-fg-tertiary">
-        {icon && <Icon name={icon} size={13} />}
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
 function PageView({ path }: { path: string }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -412,6 +438,8 @@ function PageView({ path }: { path: string }) {
   }, [editing, page]);
 
   const missing = isError && error instanceof ApiError && error.status === 404;
+  const compare = parseCompare(search.get("compare"));
+  const header = pageHeader(page?.body_md ?? "");
   const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 
   return (
@@ -478,7 +506,9 @@ function PageView({ path }: { path: string }) {
                 <SuggestionCard key={s.id} s={s} />
               ))}
               <div className="border-t border-border-subtle pt-5">
-                {editing ? (
+                {compare && !editing ? (
+                  <VersionDiff page={page} from={compare[0]} to={compare[1]} />
+                ) : editing ? (
                   <PageEditor
                     key={page.current_version.id}
                     page={page}
@@ -488,9 +518,9 @@ function PageView({ path }: { path: string }) {
                       else if (search.get("edit")) router.replace(wikiHref(page.path ?? path));
                     }}
                   />
-                ) : page.body_md?.trim() ? (
+                ) : header.body.trim() ? (
                   <Markdown anchors className="type-reading text-fg-2">
-                    {withoutTitle(page.body_md, page.title)}
+                    {withoutTitle(header.body, page.title)}
                   </Markdown>
                 ) : (
                   <p className="text-sm text-fg-tertiary">
@@ -508,12 +538,13 @@ function PageView({ path }: { path: string }) {
 
       {page && (
         <aside aria-label="Page details" className="flex flex-[1_1_280px] flex-col gap-6 border-l border-border-subtle bg-panel px-5 py-6 lg:max-w-[340px]">
-          <PanelSection title="Local graph" icon="graph">
-            <LocalGraph kind="artifact" id={page.id} />
-          </PanelSection>
+          <TagsSection topic={header.topic} tags={header.tags} />
           <PanelSection title="Backlinks">
             <BacklinksPanel kind="artifact" id={page.id} />
           </PanelSection>
+          <LinkedTickets page={page} />
+          <CitedBy id={page.id} />
+          <History page={page} />
           {page.outline.length > 1 && (
             <PanelSection title="Outline">
               <ol>
@@ -523,6 +554,7 @@ function PageView({ path }: { path: string }) {
                       href={`#${s.anchor}`}
                       className="flex min-h-[26px] items-center gap-2 rounded-sm text-[13px] hover:bg-hover"
                       style={{ paddingLeft: (s.level - 1) * 12 }}
+                      title={s.citations > 0 ? `Cited ${s.citations} times` : undefined}
                     >
                       <span className={cx("flex-1 truncate", s.level === 1 && "font-medium")}>{s.heading}</span>
                       {s.citations > 0 && <span className="font-mono text-xs text-fg-secondary">{s.citations}</span>}
@@ -532,41 +564,8 @@ function PageView({ path }: { path: string }) {
               </ol>
             </PanelSection>
           )}
-          <PanelSection title="Read by">
-            {page.read_by.length ? (
-              <ul className="flex flex-col gap-1.5">
-                {page.read_by.map((r) => (
-                  <li key={r.agent.id} className="flex items-center gap-2 text-[13px]">
-                    <AgentAvatar name={r.agent.name} colorIndex={r.agent.color_index} label={false} />
-                    <span className="flex-1">{r.agent.name}</span>
-                    <span className="font-mono text-xs text-fg-tertiary" title={`Last read ${absoluteTime(r.last_read_at)}`}>
-                      {r.reads} reads
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-fg-tertiary">No agent has read this yet.</p>
-            )}
-          </PanelSection>
-          <PanelSection title="History">
-            <ol className="flex flex-col">
-              {page.versions.slice(0, 8).map((v) => (
-                <li key={v.id} className="flex items-center gap-2 py-1 text-xs text-fg-secondary">
-                  <span className="font-mono">{v.label}</span>
-                  <span className="flex-1 truncate">
-                    {v.created_by.name}
-                    {v.note && ` · ${v.note}`}
-                  </span>
-                  <span className="text-fg-tertiary" title={absoluteTime(v.created_at)}>
-                    {timelineTime(v.created_at)}
-                  </span>
-                </li>
-              ))}
-            </ol>
-            <Link href={`/artifacts/${page.id}?versions=1`} className="text-xs text-accent hover:underline">
-              All versions
-            </Link>
+          <PanelSection title="Local graph" icon="graph">
+            <LocalGraph kind="artifact" id={page.id} />
           </PanelSection>
         </aside>
       )}
@@ -575,6 +574,11 @@ function PageView({ path }: { path: string }) {
   );
 }
 
+function WikiRoot() {
+  const index = useSearchParams().get("index");
+  return index === "patterns" || index === "adrs" ? <WikiIndexView index={index} /> : <WikiHome />;
+}
+
 export function WikiScreen({ path }: { path: string }) {
-  return path ? <PageView key={path.toLowerCase()} path={path} /> : <WikiHome />;
+  return path ? <PageView key={path.toLowerCase()} path={path} /> : <WikiRoot />;
 }
