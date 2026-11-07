@@ -10,6 +10,7 @@ import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
+import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { ChipList } from "./context-chips";
 import { MemoryButton, MemoryPanel, useMemoryPanel } from "./memory-panel";
 
@@ -31,28 +32,31 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
   const [text, setText] = useState("");
   // A "Start chat" link with no chat yet (?attach=…) lands here; its chips go with the first message.
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
+  const files = useAttachments();
   const area = useRef<HTMLTextAreaElement>(null);
   const name = boot.data?.me.name?.split(" ")[0];
   const locked = disabled || start.isPending;
+  const drop = useFileDrop(files.add, !locked);
 
   function submit() {
     const body = text.trim();
-    if (!body || locked) return;
+    if (!body || locked || files.pending) return;
     const context_refs = toContextRefs(chips);
     start.mutate(
-      { project, message: { body, ...(context_refs ? { context_refs } : {}) } },
+      { project, message: { body, ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
       { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) },
     );
   }
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
+      <DropOverlay over={drop.over} />
       <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-8 text-center">
         <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent/15 text-xl font-semibold text-accent">
           A
         </span>
         <h1 className="text-xl font-semibold text-fg">{name ? `Hi ${name}, what can I help with?` : "What can I help with?"}</h1>
         <p className="max-w-[520px] text-[13px] text-fg-secondary">
-          I can read your runs, tickets, epics, wiki and files, and create tickets for you. I remember what matters and tell you when I do.
+          I can read your runs, tickets, epics, wiki and files, search the web, and create tickets for you. I remember what matters and tell you when I do.
         </p>
         <ul aria-label="Suggestions" className="mt-2 grid w-full max-w-[520px] grid-cols-2 gap-2 max-sm:grid-cols-1">
           {SUGGESTIONS.map((s) => (
@@ -83,6 +87,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
         {start.isError && (
           <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(start.error)}</p>
         )}
+        <AttachmentChips attachments={files} />
         <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
         <TextArea
           ref={area}
@@ -99,8 +104,10 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
             }
           }}
         />
-        <div className="flex items-center justify-end">
-          <Button type="submit" variant="primary" disabled={locked || !text.trim()}>
+        <div className="flex items-center gap-2">
+          <AttachButton onFiles={files.add} disabled={locked} />
+          <span className="flex-1" />
+          <Button type="submit" variant="primary" disabled={locked || files.pending || !text.trim()}>
             {start.isPending ? "Starting…" : "Send"}
           </Button>
         </div>

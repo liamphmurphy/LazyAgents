@@ -77,6 +77,11 @@ export async function postForm<T>(path: string, form: FormData): Promise<T> {
   return body as T;
 }
 
+/** URL of an uploaded chat attachment's file. */
+export function chatAttachmentUrl(attachmentId: string) {
+  return `/api/v1/chat-attachments/${attachmentId}/content`;
+}
+
 /** URL of one version's raw content (markdown text or the stored file). */
 export function contentUrl(artifactId: string, versionId: string, download = false) {
   return `/api/v1/artifacts/${artifactId}/versions/${versionId}/content${download ? "?download=true" : ""}`;
