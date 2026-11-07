@@ -134,3 +134,20 @@ test("cross-project links keep all projects while bare routes use the remembered
   await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
   expect(api.unhandled).toEqual([]);
 });
+
+test("a stale remembered project is replaced by the valid project in the URL", async ({ page }) => {
+  const api = await installWithArchived(page);
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("seeded")) {
+      localStorage.setItem("lazyagents.project", "OLD");
+      sessionStorage.setItem("seeded", "1");
+    }
+  });
+  await page.goto("/board?project=WEB");
+  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Web app");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("lazyagents.project"))).toBe("WEB");
+  // And the bare route now resolves to it.
+  await page.goto("/board");
+  await expect(page).toHaveURL(/\/board\?project=WEB$/);
+  expect(api.unhandled).toEqual([]);
+});

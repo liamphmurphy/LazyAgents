@@ -84,9 +84,13 @@ export function useProjectScope(mode: ProjectMode, { skip = false }: { skip?: bo
   useEffect(() => {
     if (visited && read() !== visited) rememberProject(visited);
   }, [visited]);
+  // Re-read storage: the effect above may have just replaced the stale key
+  // with the valid URL project in this same commit.
   useEffect(() => {
-    if (stale) rememberProject(null);
-  }, [stale]);
+    if (!stale) return;
+    const key = read();
+    if (key && !projects?.some((p) => p.key === key && !p.archived)) rememberProject(null);
+  }, [stale, projects]);
   useEffect(() => {
     if (!redirect) return;
     const next = new URLSearchParams(window.location.search);
