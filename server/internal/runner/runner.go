@@ -54,9 +54,10 @@ type Blobs interface {
 	Put(ctx context.Context, bucket, key string, body io.Reader, size int64, contentType string) error
 }
 
-// AttachmentReader reads chat attachments (blob.Store).
-type AttachmentReader interface {
+// AttachmentStore reads chat attachments and deletes stale ones (blob.Store).
+type AttachmentStore interface {
 	Get(ctx context.Context, bucket, key string) (blob.Object, error)
+	Delete(ctx context.Context, bucket, key string) error
 }
 
 type Runner struct {
@@ -67,8 +68,8 @@ type Runner struct {
 	Tracker *tracker.Service
 	Blobs   Blobs // nil: raw logs aren't kept
 	// Attachments reads chat attachments (blob.Store); nil: they're named in
-	// the prompt but not delivered.
-	Attachments AttachmentReader
+	// the prompt but not delivered, and stale uploads aren't swept.
+	Attachments AttachmentStore
 	Log         *slog.Logger
 
 	mu     sync.Mutex
@@ -331,12 +332,36 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 
 // Sweep removes workspaces of runs that ended between turns.
 func (r *Runner) Sweep(ctx context.Context) {
+	defer r.sweepChatAttachments(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx)
 	if err != nil {
 		return
 	}
 	for _, id := range ids {
 		r.cleanup(ctx, id)
+	}
+}
+
+// StaleChatAttachmentAge is how long an upload may sit unsent (or detached by
+// its chat's deletion) before the sweep deletes it and its object.
+const StaleChatAttachmentAge = 24 * time.Hour
+
+// sweepChatAttachments deletes a batch of stale uploads: the rows first, so
+// one can't be bound to a message after its object is gone. An object whose
+// delete fails is logged and left behind.
+func (r *Runner) sweepChatAttachments(ctx context.Context) {
+	if r.Attachments == nil {
+		return
+	}
+	keys, err := r.q().DeleteStaleChatAttachments(ctx, store.DeleteStaleChatAttachmentsParams{Cutoff: time.Now().Add(-StaleChatAttachmentAge), RowLimit: 200})
+	if err != nil {
+		r.Log.Warn("sweep chat attachments", "err", err)
+		return
+	}
+	for _, k := range keys {
+		if err := r.Attachments.Delete(ctx, r.Cfg.AttachmentBucket, k); err != nil {
+			r.Log.Warn("delete chat attachment object", "key", k, "err", err)
+		}
 	}
 }
 

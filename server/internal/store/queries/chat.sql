@@ -194,6 +194,23 @@ UPDATE chat_attachments SET message_id = sqlc.arg(message_id)
 WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND message_id IS NULL
 RETURNING *;
 
+-- name: ChatAttachmentBytes :one
+-- What a person has stored in uploads, for the per-person cap.
+SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM chat_attachments WHERE workspace_id = $1 AND user_id = $2;
+
+-- name: DeleteStaleChatAttachments :many
+-- Removes up to row_limit uploads never sent (or detached by a chat's
+-- deletion) that are older than the cutoff, returning their blob keys. SKIP
+-- LOCKED lets several runners sweep at once; a row a message is binding at
+-- the same moment is re-checked after its lock and survives.
+DELETE FROM chat_attachments
+WHERE id IN (
+  SELECT id FROM chat_attachments
+  WHERE message_id IS NULL AND created_at < sqlc.arg(cutoff)::timestamptz
+  ORDER BY created_at LIMIT sqlc.arg(row_limit) FOR UPDATE SKIP LOCKED
+) AND message_id IS NULL
+RETURNING blob_key;
+
 -- name: ListChatAttachmentsForMessages :many
 SELECT * FROM chat_attachments WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) ORDER BY created_at, id;
 

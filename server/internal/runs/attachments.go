@@ -17,7 +17,19 @@ const (
 	MaxChatAttachmentBytes = 25 << 20
 	// MaxChatAttachments matches the contract's maxItems for attachment_ids.
 	MaxChatAttachments = 5
+	// MaxChatAttachmentStorageBytes caps what one person keeps in uploads,
+	// sent or not (unsent ones are swept after a day).
+	MaxChatAttachmentStorageBytes = 500 << 20
 )
+
+// CheckChatAttachmentQuota refuses an upload of size that would take a person
+// holding stored bytes past MaxChatAttachmentStorageBytes (a 422 on file).
+func CheckChatAttachmentQuota(stored, size int64) error {
+	if stored+size > MaxChatAttachmentStorageBytes {
+		return apperr.Invalid("file", "you've reached the 500 MB limit for uploaded files: delete chats with attachments you no longer need")
+	}
+	return nil
+}
 
 // chatAttachmentTypes maps a supported extension to the stored content type.
 var chatAttachmentTypes = map[string]string{

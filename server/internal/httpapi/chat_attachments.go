@@ -50,6 +50,14 @@ func (s *Server) UploadChatAttachment(ctx context.Context, req api.UploadChatAtt
 	if err != nil {
 		return nil, err
 	}
+	// A soft cap: two concurrent uploads can each pass the check.
+	stored, err := s.Q.ChatAttachmentBytes(ctx, store.ChatAttachmentBytesParams{WorkspaceID: ws, UserID: u.ID})
+	if err != nil {
+		return nil, err
+	}
+	if err := runs.CheckChatAttachmentQuota(stored, f.file.Size); err != nil {
+		return nil, err
+	}
 	key := chatAttachmentKey(ws, u.ID)
 	if err := s.Blobs.Put(ctx, s.ArtifactBucket, key, f.tmp, f.file.Size, ct); err != nil {
 		return nil, err
