@@ -1447,6 +1447,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chat-attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a file to attach to your next assistant message
+         * @description Stores one file for the caller. It stays unattached and private to
+         *     the caller until a message lists its id in `attachment_ids`; each
+         *     upload can be attached to one message. Supported: PDF, PNG, JPEG,
+         *     GIF, WebP, plain text, Markdown, CSV and JSON, up to 25 MB each.
+         *     422 for an unsupported type, an empty file or one over the limit.
+         */
+        post: operations["uploadChatAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat-attachments/{attachmentId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Download one of your chat attachments
+         * @description 404 unless the caller uploaded it.
+         */
+        get: operations["getChatAttachmentContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}": {
         parameters: {
             query?: never;
@@ -1493,7 +1539,8 @@ export interface paths {
          *     same session, new model; other harness: new session with a
          *     transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
          *     is running or the chat is archived; 422 empty body, unknown
-         *     harness/model, or a context ref outside the chat's project.
+         *     harness/model, a context ref outside the chat's project, or an
+         *     attachment id that isn't the caller's unattached upload.
          */
         post: operations["postChatMessage"];
         delete?: never;
@@ -3395,6 +3442,18 @@ export interface components {
             harness?: components["schemas"]["Harness"];
             model?: string;
             context_refs?: components["schemas"]["ChatContextRef"][];
+            /** @description Uploads from POST /chat-attachments that you made and haven't attached yet; the assistant gets the files with this message */
+            attachment_ids?: string[];
+        };
+        ChatAttachment: {
+            /** Format: uuid */
+            id: string;
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: date-time */
+            created_at: string;
         };
         ChatMessage: {
             /** Format: uuid */
@@ -3415,6 +3474,8 @@ export interface components {
             turn_seq?: number;
             context_refs?: components["schemas"]["ChatContextRef"][];
             citations?: components["schemas"]["ChatCitation"][];
+            /** @description Files the person attached to a user message */
+            attachments?: components["schemas"]["ChatAttachment"][];
             author?: components["schemas"]["UserRef"];
             /** Format: int64 */
             input_tokens?: number;
@@ -5981,6 +6042,59 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadChatAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAttachment"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatAttachmentContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
