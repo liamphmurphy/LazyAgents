@@ -21,6 +21,7 @@ import { Banner, EmptyState, Skeleton, TextInput } from "@/components/ui/primiti
 import { AgentAvatar } from "@/components/domain/avatars";
 import { Stat } from "@/components/domain/data";
 import { Flag, MonoChip, SmallPill } from "@/components/domain/labels";
+import { RunCostChip } from "@/components/domain/cost-chip";
 import { RUN_ENDED, RUN_STATE as STATE, StatusPill } from "@/components/domain/run-status";
 import { TopBar, type Crumb } from "@/components/shell/topbar";
 import { ActionBox, RunRail, confirmCancel } from "./run-panels";
@@ -290,6 +291,7 @@ function Header({ d }: { d: RunDetail }) {
               {run.agent.name}
               <StatusPill run={run} />
               <MonoChip variant="outline">{PURPOSE_LABEL[run.purpose]}</MonoChip>
+              <RunCostChip run={run} />
             </span>
             <span className="text-xs text-fg-tertiary">
               {run.purpose === "ticket" && run.ticket_key ? (

@@ -822,6 +822,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Spend aggregated from run cost counters, for the Costs page and cost chips
+         * @description Every number is summed server-side from runs.cost_usd_micros (sub agent runs included), so breakdowns, days and chips reconcile with each other. Chat runs are split by the model of each reply. Omit from and to for all-time spend (cost chips); days are only listed when both are given.
+         */
+        get: operations["getCosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs": {
         parameters: {
             query?: never;
@@ -2186,6 +2206,87 @@ export interface components {
             text: string;
             /** @enum {string} */
             state: "pending" | "current" | "done" | "needs_human" | "failed";
+        };
+        CostReport: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            total: components["schemas"]["CostSlice"];
+            /** @description Runs whose cost is unknown or partial; totals are lower bounds */
+            unpriced_runs: number;
+            /** @description Spend on estimated tickets and their points, for cost per point */
+            estimated: {
+                tickets: number;
+                points: number;
+                /** Format: int64 */
+                cost_micros: number;
+            };
+            /** @description Every UTC day in the range */
+            days: components["schemas"]["CostDay"][];
+            agents: components["schemas"]["CostSlice"][];
+            projects: components["schemas"]["CostSlice"][];
+            /** @description Keyed harness/model */
+            models: components["schemas"]["CostSlice"][];
+            purposes: components["schemas"]["CostSlice"][];
+            /** @description The 10 most expensive tickets in the range */
+            top_tickets: components["schemas"]["CostTicket"][];
+        };
+        /** @description One breakdown row; slices of a breakdown add up to the total. Runs can appear in several model slices. */
+        CostSlice: {
+            key: string;
+            label: string;
+            /** @description Harness for models, project key for projects */
+            detail?: string;
+            runs: number;
+            /** Format: int64 */
+            tokens: number;
+            /**
+             * Format: int64
+             * @description Spend in millionths of a US dollar
+             */
+            cost_micros: number;
+            unpriced_runs: number;
+        };
+        CostPart: {
+            key: string;
+            /** Format: int64 */
+            cost_micros: number;
+        };
+        CostDay: {
+            /** Format: date */
+            date: string;
+            runs: number;
+            /** Format: int64 */
+            cost_micros: number;
+            /** @description Keyed by agent handle */
+            agents: components["schemas"]["CostPart"][];
+            /** @description Keyed harness/model */
+            models: components["schemas"]["CostPart"][];
+        };
+        CostTicket: {
+            key: string;
+            title: string;
+            project_key: string;
+            points?: number;
+            /** Format: int64 */
+            cost_micros: number;
+            /** @description Runs behind the spend */
+            runs: components["schemas"]["CostRun"][];
+        };
+        CostRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            parent_run_id?: string;
+            /** @description Agent handle */
+            agent: string;
+            model: string;
+            state: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: int64 */
+            cost_micros: number;
         };
         Run: {
             /** Format: uuid */
@@ -4618,6 +4719,38 @@ export interface operations {
                 };
                 content: {
                     "application/x-ndjson": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCosts: {
+        parameters: {
+            query?: {
+                /** @description First UTC day (inclusive) */
+                from?: string;
+                /** @description Last UTC day (inclusive) */
+                to?: string;
+                /** @description Project key */
+                project?: string;
+                /** @description Ticket key (its runs and their sub agents) */
+                ticket?: string;
+                /** @description Chat session id (every run segment of the chat) */
+                chat?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cost report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostReport"];
                 };
             };
             default: components["responses"]["Error"];
