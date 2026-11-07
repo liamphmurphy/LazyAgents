@@ -42,6 +42,9 @@ SELECT * FROM chat_messages WHERE session_id = $1 AND seq > $2 ORDER BY seq LIMI
 -- name: LockChatSession :one
 SELECT * FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE;
 
+-- name: LockChatSessionByID :one
+SELECT * FROM chat_sessions WHERE id = $1 FOR UPDATE;
+
 -- name: ChatSessionForRun :one
 SELECT * FROM chat_sessions WHERE current_run_id = $1;
 
@@ -148,6 +151,13 @@ SELECT * FROM chat_messages WHERE run_turn_id = $1 AND role = 'user';
 -- name: UpdateChatTitleArchived :one
 UPDATE chat_sessions SET title = $2, archived = $3, revision = revision + 1, updated_at = now()
 WHERE id = $1 RETURNING *;
+
+-- name: SetChatTitle :one
+UPDATE chat_sessions SET title = $2, revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING *;
+
+-- name: FirstChatUserMessageBody :one
+SELECT body_md FROM chat_messages WHERE session_id = $1 AND role = 'user' ORDER BY seq LIMIT 1;
 
 -- name: DeleteChatSession :exec
 DELETE FROM chat_sessions WHERE id = $1;

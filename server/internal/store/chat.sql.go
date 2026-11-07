@@ -645,6 +645,17 @@ func (q *Queries) FinishUnfinishedChatTurns(ctx context.Context, runID uuid.UUID
 	return err
 }
 
+const firstChatUserMessageBody = `-- name: FirstChatUserMessageBody :one
+SELECT body_md FROM chat_messages WHERE session_id = $1 AND role = 'user' ORDER BY seq LIMIT 1
+`
+
+func (q *Queries) FirstChatUserMessageBody(ctx context.Context, sessionID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, firstChatUserMessageBody, sessionID)
+	var body_md string
+	err := row.Scan(&body_md)
+	return body_md, err
+}
+
 const getChatAttachment = `-- name: GetChatAttachment :one
 SELECT id, workspace_id, user_id, message_id, filename, content_type, size_bytes, blob_key, created_at FROM chat_attachments WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `
@@ -1011,6 +1022,33 @@ func (q *Queries) LockChatSession(ctx context.Context, arg LockChatSessionParams
 	return i, err
 }
 
+const lockChatSessionByID = `-- name: LockChatSessionByID :one
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, lockChatSessionByID, id)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
 const ownsChatRun = `-- name: OwnsChatRun :one
 SELECT EXISTS (
   SELECT 1 FROM chat_sessions s
@@ -1258,6 +1296,39 @@ type SetChatSelectionParams struct {
 // the pair and hold the chat row lock; the runner applies it on the next message.
 func (q *Queries) SetChatSelection(ctx context.Context, arg SetChatSelectionParams) (ChatSession, error) {
 	row := q.db.QueryRow(ctx, setChatSelection, arg.ID, arg.Harness, arg.Model)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+	)
+	return i, err
+}
+
+const setChatTitle = `-- name: SetChatTitle :one
+UPDATE chat_sessions SET title = $2, revision = revision + 1, updated_at = now()
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+`
+
+type SetChatTitleParams struct {
+	ID    uuid.UUID
+	Title string
+}
+
+func (q *Queries) SetChatTitle(ctx context.Context, arg SetChatTitleParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, setChatTitle, arg.ID, arg.Title)
 	var i ChatSession
 	err := row.Scan(
 		&i.ID,

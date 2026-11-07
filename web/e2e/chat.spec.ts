@@ -8,7 +8,7 @@ const chips = (page: Page) => page.getByTestId("context-chip");
 
 // Starts a conversation from the Welcome (or the conversation header).
 async function newChat(page: Page) {
-  await page.getByRole("button", { name: "New conversation" }).first().click();
+  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
   // The route swap finishes once the composer of the new chat is there.
   await expect(composer(page)).toBeVisible();
 }
@@ -340,7 +340,7 @@ test("with no harness available, chat says why before anything is sent", async (
   await composer(page).press("Enter");
   expect(mock.posted).toEqual([]);
   // New conversation is refused up front, naming the missing secrets.
-  await expect(page.getByRole("button", { name: "New conversation" }).first()).toBeDisabled();
+  await expect(page.getByRole("button", { name: "New conversation", exact: true }).first()).toBeDisabled();
   await expect(page.locator('p[role="status"]').filter({ hasText: "No harness is available: add harness:anthropic or harness:openai." })).toBeVisible();
   // The shell banner names the same secrets on every screen.
   await expect(page.getByRole("status", { name: /Agents can’t run/ })).toBeVisible();
@@ -373,6 +373,90 @@ test("a new chat has no agent picker and names no agent", async ({ page }) => {
   await expect(page.getByTestId("chat-agent")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByText("Assistant", { exact: true })).toBeVisible();
   expect(mock.unhandled).toEqual([]);
+});
+
+// Next keeps the page we navigated from mounted but hidden, so scope to what is on screen.
+const history = (page: Page) => page.locator('aside[aria-label="Chat history"]:visible');
+const historyNav = (page: Page) => history(page).getByRole("navigation", { name: "Chats" });
+
+test("rename and archive from the history list", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  // A conversation nobody has named yet reads as New conversation.
+  await expect(historyNav(page).getByRole("link", { name: "New conversation" })).toBeVisible();
+  await page.getByRole("button", { name: "Rename New conversation" }).click();
+  const title = page.getByRole("textbox", { name: "Conversation title" });
+  await expect(title).toHaveValue("");
+  await expect(title).toHaveAttribute("placeholder", "New conversation");
+  await title.fill("Roadmap");
+  await title.press("Enter");
+  await expect(historyNav(page).getByRole("link", { name: "Roadmap" })).toBeVisible();
+  await page.getByRole("button", { name: "Archive Roadmap" }).click();
+  await expect(page).toHaveURL(/\/chat\?project=WEB/);
+  await expect(historyNav(page).getByText("No conversations yet.")).toBeVisible();
+});
+
+test("delete asks first, Cancel keeps the conversation, and deleting the open one leaves it", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "delete me");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: delete me");
+  const nav = historyNav(page);
+  await nav.getByRole("button", { name: "Delete delete me" }).click();
+  const confirm = nav.getByRole("group", { name: "Confirm delete delete me" });
+  await expect(confirm).toContainText("This can’t be undone.");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(nav.getByRole("link", { name: "delete me" })).toBeVisible();
+
+  await nav.getByRole("button", { name: "Delete delete me" }).click();
+  await nav.getByRole("group", { name: "Confirm delete delete me" }).getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page).toHaveURL(/\/chat\?project=WEB$/);
+  await expect(nav.getByText("No conversations yet.")).toBeVisible();
+});
+
+test("archived conversations are listed under Archived and can be restored", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "keep me");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: keep me");
+  const nav = historyNav(page);
+  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
+  await page.getByRole("button", { name: "Archive keep me" }).click();
+  await expect(page).toHaveURL(/\/chat\?project=WEB/);
+  await expect(nav.getByText("No conversations yet.")).toBeVisible();
+
+  await history(page).getByRole("radio", { name: "Archived" }).click();
+  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
+  await expect(nav.getByText("Archived conversations are read-only")).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Archive keep me" })).toHaveCount(0);
+
+  // Opened, an archived conversation is read-only with Restore in the header and in place of the composer.
+  await nav.getByRole("link", { name: "keep me" }).click();
+  const chat = page.getByRole("region", { name: "keep me" });
+  await expect(chat.getByText("This chat is archived. Restore it to continue.")).toBeVisible();
+  await expect(composer(page)).toHaveCount(0);
+  await expect(chat.getByRole("button", { name: "Restore keep me" })).toHaveCount(2);
+  await chat.getByRole("button", { name: "Restore keep me" }).last().click();
+  await expect(composer(page)).toBeVisible();
+  // The restored conversation is listed under Active again, next to the open one.
+  await expect(history(page).getByRole("radio", { name: "Active" })).toBeChecked();
+  await expect(page).not.toHaveURL(/view=archived/);
+  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
+  await history(page).getByRole("radio", { name: "Archived" }).click();
+  await expect(nav.getByText("No archived conversations.")).toBeVisible();
+  await history(page).getByRole("radio", { name: "Active" }).click();
+  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
+
+  // Restore straight from the list too. Archiving the open chat navigates back to the index first.
+  await page.getByRole("button", { name: "Archive keep me" }).click();
+  await expect(nav.getByText("No conversations yet.")).toBeVisible();
+  await history(page).getByRole("radio", { name: "Archived" }).click();
+  await expect(page).toHaveURL(/view=archived/);
+  await nav.getByRole("button", { name: "Restore keep me" }).click();
+  await expect(nav.getByText("No archived conversations.")).toBeVisible();
 });
 
 test("an archived chat opened by URL is read-only and Restore brings back the composer", async ({ page }) => {

@@ -79,7 +79,7 @@ func TestMCPProfiles(t *testing.T) {
 	}
 	subTools := []string{"get_ticket", "read_artifact", "create_artifact", "comment", "request_approval", "wait_for_approval", "run_gated", "await_human", "search_knowledge", "find_pattern", "propose_pattern", "list_proposed_patterns", "read_page", "write_note", "get_backlinks", "complete_run"}
 	chatTools := []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-		"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory"}
+		"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title"}
 	planTools := []string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}
 
 	connect := func(tok string) *mcp.ClientSession {
@@ -118,7 +118,7 @@ func TestMCPProfiles(t *testing.T) {
 	sub := connect(mkRun(&ticket.ID, &lead.ID, "ticket"))
 	leadSess := connect(leadTok)
 	check("subagent", sub, subTools)
-	check("lead", leadSess, without("report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "list_runs", "get_run"))
+	check("lead", leadSess, without("report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run"))
 	check("chat", connect(mkRun(nil, nil, "chat")), chatTools)
 	check("planning", connect(mkRun(nil, nil, "planning")), planTools)
 	check("unmanaged", connect(unmanaged), all)

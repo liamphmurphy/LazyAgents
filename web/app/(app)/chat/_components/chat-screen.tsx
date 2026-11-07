@@ -1,19 +1,26 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { useBootstrap, useChat, useChats, useCreateChat, useStartChat } from "@/lib/api/hooks";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import type { Schemas } from "@/lib/api/client";
+import { useBootstrap, useChat, useChats, useCreateChat, useDeleteChat, useStartChat, useUpdateChat } from "@/lib/api/hooks";
+import { chatTitle } from "@/lib/chat-ui";
+import { cx } from "@/lib/cx";
 import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
-import { Button } from "@/components/ui/button";
-import { Banner, Skeleton, TextArea } from "@/components/ui/primitives";
+import { Button, IconButton } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/controls";
+import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { ChipList } from "./context-chips";
+import { RestoreChat } from "./restore";
 import { MemoryButton, MemoryPanel, useMemoryPanel } from "./memory-panel";
 
+type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
 const SUGGESTIONS = [
@@ -116,10 +123,188 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
   );
 }
 
+/** Trash button that asks first, inline in the row; deleting can't be undone. */
+function DeleteChat({ chat, onDeleted }: { chat: Chat; onDeleted: () => void }) {
+  const del = useDeleteChat();
+  const [asking, setAsking] = useState(false);
+  const label = chatTitle(chat);
+  if (!asking) return <IconButton icon="trash" label={`Delete ${label}`} onClick={() => setAsking(true)} />;
+  return (
+    <div role="group" aria-label={`Confirm delete ${label}`} className="flex basis-full flex-wrap items-center gap-1.5 px-2 pb-1.5">
+      <span className="flex-1 text-xs text-fg">Delete this conversation? This can’t be undone.</span>
+      <Button
+        variant="primary"
+        className="!h-6 bg-state-blocked !px-2 !text-xs"
+        disabled={del.isPending}
+        // mutateAsync: the row unmounts when the list refetches.
+        onClick={() => del.mutateAsync(chat.id).then(onDeleted, () => undefined)}
+      >
+        Delete
+      </Button>
+      <Button variant="outline" className="!h-6 !px-2 !text-xs" onClick={() => setAsking(false)}>
+        Cancel
+      </Button>
+      {del.isError && <p role="alert" className="basis-full text-xs text-pill-blocked-fg">{errorText(del.error)}</p>}
+    </div>
+  );
+}
+
+/** An archived conversation: open it read-only, or restore it to the active list. */
+function ArchivedRow({ chat, active, project, onDeleted }: { chat: Chat; active: boolean; project: string; onDeleted: () => void }) {
+  return (
+    <li className={cx("flex flex-wrap items-center gap-1 rounded-md pr-1", active ? "bg-selected" : "hover:bg-hover")}>
+      <Link
+        href={`/chat/${chat.id}?project=${encodeURIComponent(project)}&view=archived`}
+        aria-current={active ? "page" : undefined}
+        className="min-w-0 flex-1 truncate px-2 py-1.5 text-[13px]"
+      >
+        {chatTitle(chat)}
+      </Link>
+      <RestoreChat chat={chat} compact />
+      <DeleteChat chat={chat} onDeleted={onDeleted} />
+    </li>
+  );
+}
+
+function ChatRow({ chat, active, project, onLeave }: { chat: Chat; active: boolean; project: string; onLeave: () => void }) {
+  const update = useUpdateChat();
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(chat.title);
+  const label = chatTitle(chat);
+
+  function save(e: FormEvent) {
+    e.preventDefault();
+    const t = title.trim();
+    if (!t || t === chat.title) return setEditing(false);
+    // mutateAsync: the row may unmount on refetch before mutate-level callbacks run.
+    update.mutateAsync({ id: chat.id, patch: { revision: chat.revision, title: t } }).then(() => setEditing(false), () => undefined);
+  }
+  return (
+    <li className="flex flex-col">
+      {editing ? (
+        <form onSubmit={save} className="flex items-center gap-1 px-1 py-1">
+          <TextInput
+            aria-label="Conversation title"
+            value={title}
+            placeholder="New conversation"
+            autoFocus
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setEditing(false)}
+          />
+          <IconButton icon="check" label="Save title" type="submit" />
+          <IconButton icon="x" label="Cancel rename" onClick={() => setEditing(false)} />
+        </form>
+      ) : (
+        <div className={cx("group flex flex-wrap items-center gap-1 rounded-md pr-1", active ? "bg-selected" : "hover:bg-hover")}>
+          <Link
+            href={`/chat/${chat.id}?project=${encodeURIComponent(project)}`}
+            aria-current={active ? "page" : undefined}
+            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
+          >
+            {chat.state === "running" && <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-done" />}
+            <span className="truncate">{label}</span>
+            {chat.state === "running" && <span className="sr-only"> (running)</span>}
+            {chat.state === "failed" && <span className="text-xs text-pill-blocked-fg">Failed</span>}
+          </Link>
+          <IconButton icon="edit" label={`Rename ${label}`} onClick={() => { setTitle(chat.title); setEditing(true); }} />
+          <IconButton
+            icon="folder"
+            label={`Archive ${label}`}
+            disabled={update.isPending}
+            onClick={() =>
+              update.mutateAsync({ id: chat.id, patch: { revision: chat.revision, archived: true } }).then(onLeave, () => undefined)
+            }
+          />
+          <DeleteChat chat={chat} onDeleted={onLeave} />
+        </div>
+      )}
+      {update.isError && (
+        <p role="alert" className="px-2 pb-1 text-xs text-pill-blocked-fg">
+          {errorText(update.error)}
+        </p>
+      )}
+    </li>
+  );
+}
+
+/** The conversation history: Active/Archived (kept in ?view= so it survives opening one), with rename, archive and restore. */
+function HistorySidebar({ project, id }: { project: string; id?: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const view = search.get("view") === "archived" ? "archived" : "active";
+  const setView = (v: "active" | "archived") => {
+    const q = new URLSearchParams(search.toString());
+    if (v === "archived") q.set("view", "archived");
+    else q.delete("view");
+    router.replace(`${pathname}?${q.toString()}`);
+  };
+  const active = useChats(project);
+  const archived = useChats(view === "archived" ? project : "", true);
+  const chats = view === "archived" ? archived : active;
+  const list = chats.data?.chats;
+  // Archiving or deleting the open conversation goes back to /chat, which resumes the newest one.
+  const leave = (chatId: string) => chatId === id && router.push(`/chat?project=${encodeURIComponent(project)}`);
+  return (
+    <aside
+      aria-label="Chat history"
+      className="flex w-72 flex-none flex-col gap-3 border-r border-border-subtle p-3 max-md:max-h-64 max-md:w-full max-md:border-b max-md:border-r-0"
+    >
+      <Segmented
+        label="Show conversations"
+        small
+        value={view}
+        onChange={setView}
+        options={[
+          { value: "active", label: "Active" },
+          { value: "archived", label: "Archived" },
+        ]}
+      />
+      <nav aria-label="Chats" className="min-h-0 flex-1 overflow-y-auto">
+        {chats.isError ? (
+          <Banner tone="blocked" title="Couldn’t load conversations">{errorText(chats.error)}</Banner>
+        ) : !list ? (
+          <div aria-busy="true" className="flex flex-col gap-2">
+            {[80, 60, 70].map((w) => (
+              <Skeleton key={w} className="h-5" style={{ width: `${w}%` }} />
+            ))}
+          </div>
+        ) : list.length === 0 ? (
+          <p className="px-2 py-4 text-[13px] text-fg-secondary">
+            {view === "archived" ? "No archived conversations." : "No conversations yet."}
+          </p>
+        ) : view === "archived" ? (
+          <>
+            <ul className="flex flex-col gap-px">
+              {list.map((c) => (
+                <ArchivedRow key={c.id} chat={c} project={project} active={c.id === id} onDeleted={() => leave(c.id)} />
+              ))}
+            </ul>
+            <p className="px-2 py-3 text-xs text-fg-tertiary">Archived conversations are read-only. Restore one to continue it.</p>
+          </>
+        ) : (
+          <ul className="flex flex-col gap-px">
+            {list.map((c) => (
+              <ChatRow
+                key={c.id}
+                chat={c}
+                project={project}
+                active={c.id === id}
+                onLeave={() => leave(c.id)}
+              />
+            ))}
+          </ul>
+        )}
+      </nav>
+    </aside>
+  );
+}
+
 /**
- * The Personal Assistant (replaces Chat): one conversation surface, no agent
- * picker and no chat list. /chat opens the newest conversation, or the first-time
- * welcome; "New conversation" starts afresh. Memory opens as a right-hand panel.
+ * The Personal Assistant (replaces Chat): one conversation surface with no agent
+ * picker and a history sidebar (rename, archive, restore, delete) beside it.
+ * /chat opens the newest conversation, or the first-time welcome; "New
+ * conversation" starts afresh. Memory opens as a right-hand panel.
  */
 export function ChatScreen({ id }: { id?: string }) {
   const router = useRouter();
@@ -138,7 +323,7 @@ export function ChatScreen({ id }: { id?: string }) {
   const noHarness = !!health && !health.ready;
   // /chat resumes the newest conversation, unless a "Start chat" link brought context to attach.
   const attaching = search.has("attach");
-  const chats = useChats(!id && !attaching ? project : "");
+  const chats = useChats(project);
   const newest = chats.data?.chats.reduce<(typeof chats.data.chats)[number] | undefined>((a, c) => {
     const t = (x: typeof c) => Date.parse(x.last_message_at ?? x.updated_at);
     return !a || t(c) > t(a) ? c : a;
@@ -170,7 +355,8 @@ export function ChatScreen({ id }: { id?: string }) {
       {!id && scope.status !== "ready" ? (
         <ProjectScopeState base="/chat" scope={scope} />
       ) : (
-        <div className="relative flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1 max-md:flex-col">
+          <HistorySidebar project={project} id={id} />
           <div className="flex min-w-0 flex-1 flex-col">
             {(noHarness || create.isError) && (
               <div className="flex flex-col gap-1 px-6 pt-3">

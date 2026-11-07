@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
+import { activityOf, bareTool, chatTitle, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -62,4 +62,10 @@ test("reply cost keeps small turns visible and never shows unknown as free", () 
   assert.equal(replyCost(0), undefined);
   assert.equal(replyCost(undefined), undefined);
   assert.equal(replyCost(Number.NaN), undefined);
+});
+
+test("an empty chat title reads as New conversation", () => {
+  assert.equal(chatTitle({ title: "" }), "New conversation");
+  assert.equal(chatTitle({ title: "   " }), "New conversation");
+  assert.equal(chatTitle({ title: "Roadmap" }), "Roadmap");
 });

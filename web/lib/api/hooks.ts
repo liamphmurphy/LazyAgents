@@ -1045,6 +1045,23 @@ export function useUpdateChat() {
   });
 }
 
+/** Deletes a chat and its messages. Its detail queries are dropped first so the open view doesn't refetch a 404. */
+export function useDeleteChat() {
+  const qc = useQueryClient();
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE("/chats/{id}", { params: { path: { id } } });
+      if (error || !response.ok) throw error ?? new Error(`Delete failed (${response.status})`);
+    },
+    onSuccess: (_, id) => {
+      qc.removeQueries({ queryKey: chatKeys.detail(id) });
+      qc.removeQueries({ queryKey: chatKeys.messages(id) });
+    },
+    onSettled: done,
+  });
+}
+
 export function useSendChatMessage(id: string) {
   const done = useChatInvalidate();
   return useMutation({
