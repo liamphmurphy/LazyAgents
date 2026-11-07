@@ -79,7 +79,7 @@ export function scopeRows(catalog: string[], agent: ScopeMap, override: ScopeMap
   }));
 }
 
-export type ScopeChangeKind = "approval" | "widens" | "tightens";
+export type ScopeChangeKind = "approval" | "widens" | "tightens" | "none";
 
 /**
  * How a definition change reads at run time. Not granted counts as denied.
@@ -92,13 +92,19 @@ export function classifyChange(from: Mode | undefined, to: Mode | undefined): Sc
   return RANK[b] < RANK[a] ? "widens" : "tightens";
 }
 
-export type ScopeChange = { scope: string; from?: Mode; to?: Mode; kind: ScopeChangeKind };
+/** from/to are the definition's own entries; effective* apply wildcards, and the kind is judged on those. */
+export type ScopeChange = { scope: string; from?: Mode; to?: Mode; effectiveFrom: Mode; effectiveTo: Mode; kind: ScopeChangeKind };
 
 export function scopeChanges(before: ScopeMap, after: ScopeMap): ScopeChange[] {
   const names = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
   return names
     .filter((s) => before[s] !== after[s])
-    .map((s) => ({ scope: s, from: before[s], to: after[s], kind: classifyChange(before[s], after[s]) }));
+    .map((s) => {
+      const effectiveFrom = modeFor(before, s).mode;
+      const effectiveTo = modeFor(after, s).mode;
+      const kind = effectiveFrom === effectiveTo ? "none" : classifyChange(effectiveFrom, effectiveTo);
+      return { scope: s, from: before[s], to: after[s], effectiveFrom, effectiveTo, kind };
+    });
 }
 
 export function countModes(scopes: Array<{ mode: Mode }>): Record<Mode, number> {

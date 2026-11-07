@@ -173,7 +173,8 @@ export function AgentScreen({ handle }: { handle: string }) {
   const changes = dirty && base && draft ? describeChanges(base, draft).split("; ").length : 0;
 
   function review() {
-    if (!dirty) return;
+    // Already reviewing: resetting the mutation would drop its error and its onSuccess.
+    if (!dirty || reviewing) return;
     save.reset();
     setReviewing(true);
   }
@@ -181,7 +182,7 @@ export function AgentScreen({ handle }: { handle: string }) {
   // ⌘S opens the review; saving happens there (DESIGN.md §6).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s" && detail) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && detail && !editing) {
         e.preventDefault();
         review();
       }
@@ -213,6 +214,7 @@ export function AgentScreen({ handle }: { handle: string }) {
   }
 
   const editingProject = editing ? boot.data?.projects.find((p) => p.key === editing) : undefined;
+  const status = STATUS[boot.data?.agents.find((a) => a.handle === handle)?.status ?? detail?.agent.status ?? "idle"];
 
   return (
     <>
@@ -247,7 +249,7 @@ export function AgentScreen({ handle }: { handle: string }) {
               <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-2.5">
                   <h1 className="type-display">{detail.agent.name}</h1>
-                  <Pill tone={STATUS[boot.data?.agents.find(a => a.handle === handle)?.status ?? detail.agent.status].tone}>{STATUS[boot.data?.agents.find(a => a.handle === handle)?.status ?? detail.agent.status].label}</Pill>
+                  <Pill tone={status.tone}>{status.label}</Pill>
                 </div>
                 <span className="text-[13px] text-fg-secondary">
                   {detail.agent.kind === "sub" ? "Sub agent" : "Main"}

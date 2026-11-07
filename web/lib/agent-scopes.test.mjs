@@ -63,10 +63,21 @@ test("change classification: approval is always called out, widening is separate
   assert.deepEqual(
     scopeChanges({ "a:x": "allowed", "b:y": "denied" }, { "a:x": "allowed", "b:y": "requires_approval", "c:z": "allowed" }),
     [
-      { scope: "b:y", from: "denied", to: "requires_approval", kind: "approval" },
-      { scope: "c:z", from: undefined, to: "allowed", kind: "widens" },
+      { scope: "b:y", from: "denied", to: "requires_approval", effectiveFrom: "denied", effectiveTo: "requires_approval", kind: "approval" },
+      { scope: "c:z", from: undefined, to: "allowed", effectiveFrom: "denied", effectiveTo: "allowed", kind: "widens" },
     ],
   );
+});
+
+test("scope changes are judged on what a run gets, wildcards included", () => {
+  // Removing an exact entry under an allowing wildcard widens access.
+  const [removed] = scopeChanges({ "db:*": "allowed", "db:migrate": "requires_approval" }, { "db:*": "allowed" });
+  assert.equal(removed.kind, "widens");
+  assert.equal(removed.effectiveTo, "allowed");
+  // Allowing a scope a denying wildcard still covers changes nothing.
+  const [held] = scopeChanges({ "prod:*": "denied" }, { "prod:*": "denied", "prod:deploy": "allowed" });
+  assert.equal(held.kind, "none");
+  assert.equal(held.effectiveTo, "denied");
 });
 
 test("countModes counts each level", () => {

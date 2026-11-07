@@ -16,6 +16,7 @@ const KIND: Record<ScopeChange["kind"], { tone: "human" | "blocked" | "neutral";
   approval: { tone: "human", label: "Requires approval" },
   widens: { tone: "blocked", label: "Widens access" },
   tightens: { tone: "neutral", label: "Tightens" },
+  none: { tone: "neutral", label: "No effect at run time" },
 };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -73,7 +74,7 @@ export function ReviewDialog({
   const held = detail.overrides.flatMap((o) =>
     scopes
       .map((s) => ({ s, eff: effectiveMode(draft.spec.scopes, o.override.scopes, s.scope) }))
-      .filter(({ s, eff }) => eff.source === "project" && s.to && eff.mode !== s.to)
+      .filter(({ s, eff }) => eff.source === "project" && eff.mode !== s.effectiveTo)
       .map(({ s, eff }) => `in ${o.project.name}, ${s.scope} stays ${MODE_LABEL[eff.mode]}`),
   );
   const save = () => !pending && onSave(note.trim() || describeChanges(base, draft));
@@ -171,7 +172,13 @@ export function ReviewDialog({
                         </span>
                       </div>
                       <span className="text-xs text-fg-tertiary">
-                        {s.to ? enforcementFor(s.scope, s.to, draft.spec.harness, detail).how : "Removed from the definition, so it's denied unless a wildcard grants it."}
+                        {s.to && s.effectiveTo !== s.to
+                          ? `A wildcard in the definition keeps it at ${MODE_LABEL[s.effectiveTo]}.`
+                          : s.to
+                            ? enforcementFor(s.scope, s.to, draft.spec.harness, detail).how
+                            : s.effectiveTo === "denied"
+                              ? "Removed from the definition, so it's denied."
+                              : `Removed, but a wildcard still grants it at ${MODE_LABEL[s.effectiveTo]}.`}
                       </span>
                     </li>
                   ))}
