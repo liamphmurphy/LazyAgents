@@ -2,6 +2,7 @@ package runs
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -127,10 +128,18 @@ func (s *Service) CreateMockup(ctx context.Context, c Caller, key, title, svg, n
 
 // ReviewMockup records a person's decision on a mockup's current version and
 // wakes the runs it was gating.
-func (s *Service) ReviewMockup(ctx context.Context, ws, userID, artifactID, versionID uuid.UUID, decision, note string) (store.Artifact, error) {
+func (s *Service) ReviewMockup(ctx context.Context, ws, userID, artifactID, versionID uuid.UUID, decision, note string, pins []artifacts.ReviewPin) (store.Artifact, error) {
 	note = strings.TrimSpace(note)
+	pins, err := artifacts.CleanReviewPins(pins)
+	if err != nil {
+		return store.Artifact{}, err
+	}
+	pinsJSON, err := json.Marshal(pins)
+	if err != nil {
+		return store.Artifact{}, err
+	}
 	var out store.Artifact
-	err := s.tx(ctx, func(q *store.Queries) error {
+	err = s.tx(ctx, func(q *store.Queries) error {
 		a, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: artifactID, WorkspaceID: ws})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
@@ -149,7 +158,8 @@ func (s *Service) ReviewMockup(ctx context.Context, ws, userID, artifactID, vers
 		if a.CurrentVersionID == nil || *a.CurrentVersionID != versionID {
 			return apperr.Conflict("a newer version exists; review that one")
 		}
-		v, err := q.ReviewArtifactVersion(ctx, store.ReviewArtifactVersionParams{ID: versionID, ReviewState: &decision, ReviewedByUserID: &userID, ReviewNote: note})
+		note := artifacts.GatherReviewNote(note, pins)
+		v, err := q.ReviewArtifactVersion(ctx, store.ReviewArtifactVersionParams{ID: versionID, ReviewState: &decision, ReviewedByUserID: &userID, ReviewNote: note, ReviewPins: pinsJSON})
 		if err != nil {
 			return err
 		}

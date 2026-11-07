@@ -111,13 +111,13 @@ func TestMockupGateAndReview(t *testing.T) {
 	other1, _ := q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws})
 	vers, _ := q.ListArtifactVersions(ctx, other1.ID)
 	v1 := vers[len(vers)-1].ID
-	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v1, "approved", ""); !isConflict(err) {
+	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v1, "approved", "", nil); !isConflict(err) {
 		t.Fatalf("reviewing a stale version: %v", err)
 	}
-	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v2, "changes_requested", "  "); !isInvalid(err) {
+	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v2, "changes_requested", "  ", nil); !isInvalid(err) {
 		t.Fatalf("changes without a note: %v", err)
 	}
-	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v2, "maybe", ""); !isInvalid(err) {
+	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v2, "maybe", "", nil); !isInvalid(err) {
 		t.Fatalf("bad decision: %v", err)
 	}
 	var note store.Artifact
@@ -125,12 +125,12 @@ func TestMockupGateAndReview(t *testing.T) {
 		t.Fatal(err)
 	}
 	note, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: note.ID, WorkspaceID: ws})
-	if _, err := svc.ReviewMockup(ctx, ws, me.ID, note.ID, *note.CurrentVersionID, "approved", ""); !isInvalid(err) {
+	if _, err := svc.ReviewMockup(ctx, ws, me.ID, note.ID, *note.CurrentVersionID, "approved", "", nil); !isInvalid(err) {
 		t.Fatalf("non-mockup: %v", err)
 	}
 
 	// Changes requested wake the run with the note.
-	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v2, "changes_requested", "Make the button bigger"); err != nil {
+	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v2, "changes_requested", "Make the button bigger", nil); err != nil {
 		t.Fatal(err)
 	}
 	if s, _ := state(); s != "running" {
@@ -152,7 +152,7 @@ func TestMockupGateAndReview(t *testing.T) {
 	}
 	m, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws})
 	v3 := *m.CurrentVersionID
-	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v3, "changes_requested", "hmm"); err != nil {
+	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v3, "changes_requested", "hmm", nil); err != nil {
 		t.Fatal(err)
 	}
 	if s, _ := state(); s != "running" {
@@ -165,7 +165,7 @@ func TestMockupGateAndReview(t *testing.T) {
 		t.Fatal(err)
 	}
 	m, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws})
-	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, *m.CurrentVersionID, "approved", "Ship it"); err != nil {
+	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, *m.CurrentVersionID, "approved", "Ship it", nil); err != nil {
 		t.Fatal(err)
 	}
 	if s, _ := state(); s != "running" {
@@ -333,7 +333,7 @@ func TestMockupAgentScopeAndReviewWake(t *testing.T) {
 		t.Fatalf("an agent's mockup must not be epic-wide: %v", out.Artifact.EpicID)
 	}
 	// Changes requested wake the run on the attached ticket.
-	if _, err := f.svc.ReviewMockup(f.ctx, f.ws, f.me.ID, out.Artifact.ID, out.Version.ID, "changes_requested", "bigger"); err != nil {
+	if _, err := f.svc.ReviewMockup(f.ctx, f.ws, f.me.ID, out.Artifact.ID, out.Version.ID, "changes_requested", "bigger", nil); err != nil {
 		t.Fatal(err)
 	}
 	if s := f.runState(t); s != "running" {

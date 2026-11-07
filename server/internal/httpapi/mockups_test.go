@@ -125,7 +125,7 @@ func TestMockupHTTP(t *testing.T) {
 		}
 		return nil
 	}
-	if it := inbox(); it == nil || it.Resolved || it.Kind != api.InboxItemKindMockup || it.TicketKey != "PAY-214" || it.Href != "/artifacts/"+art.Id.String() {
+	if it := inbox(); it == nil || it.Resolved || it.Kind != api.InboxItemKindMockup || it.TicketKey != "PAY-214" || it.Href != "/artifacts/"+art.Id.String()+"/review" {
 		t.Fatalf("inbox item = %+v", it)
 	}
 
@@ -134,17 +134,29 @@ func TestMockupHTTP(t *testing.T) {
 	want(do("POST", review, map[string]any{"decision": "changes_requested"}), 422)
 	want(do("POST", review, map[string]any{"decision": "maybe"}), 422)
 	want(do("POST", "/artifacts/"+art.Id.String()+"/versions/"+tk.Id.String()+"/review", map[string]any{"decision": "approved"}), 409)
-	rec = do("POST", review, map[string]any{"decision": "changes_requested", "note": "Add a forgot-password link"})
+	// Pins alone don't satisfy the note a change request needs; bad pins are refused.
+	pins := []map[string]any{{"x": 0.25, "y": 0.5, "text": " Bigger button "}, {"x": 1, "y": 0, "text": "Logo here"}}
+	want(do("POST", review, map[string]any{"decision": "changes_requested", "pins": pins}), 422)
+	want(do("POST", review, map[string]any{"decision": "changes_requested", "note": "x", "pins": []map[string]any{{"x": 1.5, "y": 0, "text": "off"}}}), 422)
+	want(do("POST", review, map[string]any{"decision": "changes_requested", "note": "x", "pins": []map[string]any{{"x": 0, "y": 0, "text": " "}}}), 422)
+	rec = do("POST", review, map[string]any{"decision": "changes_requested", "note": "Add a forgot-password link", "pins": pins})
 	want(rec, 200)
 	_ = json.Unmarshal(rec.Body.Bytes(), &art)
-	if r := art.CurrentVersion.Review; r == nil || r.State != api.MockupReviewStateChangesRequested || r.Note != "Add a forgot-password link" || r.ReviewedBy == nil {
+	wantNote := "Add a forgot-password link\n\nPinned comments (% across, % down the drawing):\n1. (25%, 50%) Bigger button\n2. (100%, 0%) Logo here"
+	if r := art.CurrentVersion.Review; r == nil || r.State != api.MockupReviewStateChangesRequested || r.Note != wantNote || r.ReviewedBy == nil ||
+		len(r.Pins) != 2 || r.Pins[0] != (api.MockupPin{X: 0.25, Y: 0.5, Text: "Bigger button"}) || r.Pins[1].Text != "Logo here" {
 		t.Fatalf("review = %+v", r)
+	}
+	rec = do("GET", "/tickets/PAY-214", nil)
+	_ = json.Unmarshal(rec.Body.Bytes(), &tk)
+	if g := tk.MockupGate; g.Approved || len(g.Mockups) != 1 || g.Mockups[0].ReviewState != api.MockupReviewStateChangesRequested || g.Mockups[0].ReviewNote != wantNote {
+		t.Fatalf("gate after changes requested = %+v", g)
 	}
 	rec = do("POST", review, map[string]any{"decision": "approved", "note": "Looks good"})
 	want(rec, 200)
 	_ = json.Unmarshal(rec.Body.Bytes(), &art)
-	if art.CurrentVersion.Review.State != api.MockupReviewStateApproved {
-		t.Fatalf("review = %+v", art.CurrentVersion.Review)
+	if r := art.CurrentVersion.Review; r.State != api.MockupReviewStateApproved || r.Note != "Looks good" || r.Pins == nil || len(r.Pins) != 0 {
+		t.Fatalf("review = %+v", r)
 	}
 	rec = do("GET", "/tickets/PAY-214", nil)
 	_ = json.Unmarshal(rec.Body.Bytes(), &tk)
@@ -247,7 +259,7 @@ func TestMockupAgentTools(t *testing.T) {
 		t.Fatalf("gate = %+v", g)
 	}
 	m := g.Mockups[0]
-	if _, err := rs.ReviewMockup(ctx, ws, me.ID, m.ID, m.VersionID, "approved", ""); err != nil {
+	if _, err := rs.ReviewMockup(ctx, ws, me.ID, m.ID, m.VersionID, "approved", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if code, out := call("read_artifact", map[string]any{"ticket": "PAY-214", "artifact": artifactID}); code != 200 || out["svg"] != httpSVG || out["review_state"] != "approved" || out["markdown"] != nil {
