@@ -40,10 +40,10 @@ WITH items AS (
  UNION ALL
  -- Stalled: running with no event for 30 minutes. created_at is the last activity.
  SELECT 'stalled:'||r.id,'stalled',t.title,'Running, no activity since the last event','/runs/'||r.id,p.key,t.key,
- coalesce((SELECT max(e.at) FROM run_events e WHERE e.run_id=r.id),r.started_at),false,r.agent_id,r.id,NULL
+ coalesce((SELECT e.at FROM run_events e WHERE e.run_id=r.id ORDER BY e.seq DESC LIMIT 1),r.started_at),false,r.agent_id,r.id,NULL
  FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN projects p ON p.id=t.project_id
  WHERE r.workspace_id=sqlc.arg(workspace_id) AND r.state='running'
- AND coalesce((SELECT max(e.at) FROM run_events e WHERE e.run_id=r.id),r.started_at) < now()-interval '30 minutes'
+ AND coalesce((SELECT e.at FROM run_events e WHERE e.run_id=r.id ORDER BY e.seq DESC LIMIT 1),r.started_at) < now()-interval '30 minutes'
  UNION ALL
  SELECT 'mention:'||c.id,'mention',t.title,left(c.body_md,240),'/tickets/'||t.key,p.key,t.key,c.created_at,false,
  CASE WHEN c.author_type='agent' THEN c.author_id END,NULL,NULL

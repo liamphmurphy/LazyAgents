@@ -6,6 +6,7 @@ import { useBootstrap, useRunnerStatus } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/primitives";
 import { LiveUpdates } from "./live-updates";
 import { CommandMenu } from "./command-menu";
+import { ShortcutsOverlay } from "./shortcuts";
 import { Sidebar } from "./sidebar";
 
 function isTyping(el: EventTarget | null) {
@@ -76,6 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-dvh flex-wrap bg-bg text-fg">
       <LiveUpdates />
       <CommandMenu />
+      <ShortcutsOverlay />
       {data ? (
         <Suspense fallback={<SidebarSkeleton />}>
           <Sidebar
