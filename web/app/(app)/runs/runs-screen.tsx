@@ -137,7 +137,7 @@ export function RunsScreen() {
   const clear = () => router.replace("/runs?project=");
 
   const first = results[0];
-  const runs = results.flatMap((r) => r.data?.runs ?? []);
+  const runs = [...new Map(results.flatMap((r) => r.data?.runs ?? []).map((run) => [run.id, run])).values()];
   const last = results[results.length - 1];
   const r = runner.data;
   const scopeLoading = scope.status === "loading";

@@ -121,12 +121,6 @@ function ApprovalBox({ run, approval }: { run: Run; approval: Schemas["Approval"
         value={note}
         placeholder="Note (optional)"
         onChange={(e) => setNote(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            go("approve");
-          }
-        }}
       />
       {decide.isError && (
         <Banner tone="blocked" title="Couldn't record the decision">

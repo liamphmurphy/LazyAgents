@@ -103,7 +103,22 @@ func TestListRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	var foreignWS uuid.UUID
+	if err := pool.QueryRow(ctx, "INSERT INTO workspaces (name,slug) VALUES ('Other','other-runs') RETURNING id").Scan(&foreignWS); err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: foreignWS, AgentID: atlas.ID, Mode: "managed", State: "running", ResolvedSpec: json.RawMessage(`{}`), Harness: "codex", Model: "m", Purpose: "planning"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	orphan := newRun(atlas, "running", "planning", nil, nil)
 	live := ids(list("", 200))
+	if _, ok := live[foreign.ID]; ok {
+		t.Fatal("cross-workspace run leaked")
+	}
+	if _, ok := live[orphan.ID]; !ok {
+		t.Fatal("legacy planning run without a session must not fail the index")
+	}
 	if _, ok := live[child.ID]; ok {
 		t.Fatal("delegated runs belong to their parent, not the index")
 	}

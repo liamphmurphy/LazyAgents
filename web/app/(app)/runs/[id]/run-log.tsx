@@ -100,7 +100,7 @@ function lifecycleText(p: P): ReactNode {
 type Entry = { row: Row<RunEvent>; source?: Run; runId: string; turn: number };
 
 /** A collapsed tool row: name, args, status; click for the result. MCP reads link to the page or artifact. */
-function ToolRow({ row, open, onToggle, runs }: { row: Extract<Row<RunEvent>, { kind: "tool" }>; open: boolean; onToggle: () => void; runs: Run[] }) {
+function ToolRow({ row, open, onToggle, runs, calls }: { row: Extract<Row<RunEvent>, { kind: "tool" }>; open: boolean; onToggle: () => void; runs: Run[]; calls: RunEvent[] }) {
   const { call, result } = row;
   const p = call.payload as P;
   const r = (result?.payload ?? {}) as P;
@@ -108,7 +108,7 @@ function ToolRow({ row, open, onToggle, runs }: { row: Extract<Row<RunEvent>, { 
   const failed = r.is_error === true;
   const out = str(r.output);
   const link = toolLink(str(p.tool), p.input);
-  const child = delegateChild(call, runs);
+  const child = delegateChild(call, runs, calls);
   const took = result ? Math.max(0, Date.parse(result.at) - Date.parse(call.at)) : null;
   return (
     <div className={cx("min-w-0 rounded-lg border bg-surface", denied || failed ? "border-pill-blocked-bg" : "border-border")}>
@@ -145,7 +145,7 @@ function ToolRow({ row, open, onToggle, runs }: { row: Extract<Row<RunEvent>, { 
   );
 }
 
-function EventRow({ entry, plan, tools, runs }: { entry: Entry; plan: Run["plan"]; tools: { open: (key: string) => boolean; toggle: (key: string) => void }; runs: Run[] }) {
+function EventRow({ entry, plan, tools, runs, calls }: { entry: Entry; plan: Run["plan"]; tools: { open: (key: string) => boolean; toggle: (key: string) => void }; runs: Run[]; calls: RunEvent[] }) {
   const { row, source } = entry;
   const e = rowEvent(row);
   const p = e.payload as P;
@@ -155,7 +155,7 @@ function EventRow({ entry, plan, tools, runs }: { entry: Entry; plan: Run["plan"
   let body: ReactNode;
   switch (row.kind === "tool" ? "tool" : e.type) {
     case "tool":
-      body = <ToolRow row={row as Extract<Row<RunEvent>, { kind: "tool" }>} open={tools.open(key)} onToggle={() => tools.toggle(key)} runs={runs} />;
+      body = <ToolRow row={row as Extract<Row<RunEvent>, { kind: "tool" }>} open={tools.open(key)} onToggle={() => tools.toggle(key)} runs={runs} calls={calls} />;
       break;
     case "message": {
       // Agent text from the harness, or a LazyAgents event logged by a tool
@@ -451,9 +451,9 @@ export function RunLogScreen({ id }: { id: string }) {
         }
       />
       <Header d={d} />
-      {control.isError && control.variables === "retry" && (
+      {control.isError && (
         <div className="px-6 pt-3">
-          <Banner tone="blocked" title="Couldn't retry the run">
+          <Banner tone="blocked" title={control.variables === "retry" ? "Couldn't retry the run" : "Couldn't change the run"}>
             {control.error.message}
           </Banner>
         </div>
@@ -517,7 +517,7 @@ export function RunLogScreen({ id }: { id: string }) {
                   open={isOpen(g.turn)}
                   onToggle={() => setTurnOpen((o) => ({ ...o, [g.turn]: !isOpen(g.turn) }))}
                   items={g.items.map((entry) => (
-                    <EventRow key={`${entry.runId}:${rowEvent(entry.row).seq}`} entry={entry} plan={run.plan} tools={tools} runs={d.child_runs} />
+                    <EventRow key={`${entry.runId}:${rowEvent(entry.row).seq}`} entry={entry} plan={run.plan} tools={tools} runs={d.child_runs} calls={d.events} />
                   ))}
                 />
               ))}

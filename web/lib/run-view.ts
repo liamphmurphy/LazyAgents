@@ -68,13 +68,19 @@ export function toolLink(tool: string, input: unknown): { href: string; label: s
 type ChildRef = { id: string; started_at: string; agent: { handle: string } };
 
 /** Best effort: the child run with that agent handle that started closest after the call. */
-export function delegateChild<C extends ChildRef>(call: Ev, children: C[]): C | undefined {
+export function delegateChild<C extends ChildRef>(call: Ev, children: C[], calls: Ev[] = [call]): C | undefined {
   if (toolName(str((call.payload as P).tool)) !== "lazyagents.delegate") return undefined;
   const handle = str(((call.payload as P).input as P | undefined)?.agent).replace(/^@/, "");
   if (!handle) return undefined;
+  const used = new Set<string>();
+  for (const prior of [...calls].sort((a, b) => a.seq - b.seq)) {
+    if (prior.seq >= call.seq) break;
+    const child = delegateChild(prior, children.filter((c) => !used.has(c.id)));
+    if (child) used.add(child.id);
+  }
   const at = Date.parse(call.at);
   const after = children
-    .filter((c) => c.agent.handle === handle && Date.parse(c.started_at) >= at - 1000)
+    .filter((c) => !used.has(c.id) && c.agent.handle === handle && Date.parse(c.started_at) >= at - 1000)
     .sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at));
   return after[0];
 }
@@ -165,7 +171,7 @@ export function cacheShare(input: number, cached: number | undefined): number | 
 
 // --------------------------------------------------------------- filters
 
-export const RUN_STATES = ["live", "all", "waiting", "running", "queued", "completed", "failed", "cancelled", "paused"] as const;
+export const RUN_STATES = ["live", "all", "waiting", "running", "queued", "starting", "blocked", "completed", "failed", "cancelled", "paused"] as const;
 export const RUN_PURPOSES = ["ticket", "planning", "chat"] as const;
 
 export type RunFilters = { state: string; agent?: string; project?: string; purpose?: "ticket" | "planning" | "chat" };

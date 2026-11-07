@@ -1188,9 +1188,9 @@ LEFT JOIN tickets t ON t.id = r.ticket_id
 LEFT JOIN planning_sessions ps ON ps.run_id = r.id
 LEFT JOIN LATERAL (
   SELECT c.project_id FROM chat_sessions c
-  WHERE c.current_run_id = r.id OR c.id IN (SELECT m.session_id FROM chat_messages m WHERE m.run_id = r.id)
+  WHERE r.purpose = 'chat' AND (c.current_run_id = r.id OR c.id IN (SELECT m.session_id FROM chat_messages m WHERE m.run_id = r.id))
   LIMIT 1
-) cs ON r.purpose = 'chat'
+) cs ON true
 WHERE r.workspace_id = $1 AND r.parent_run_id IS NULL
   AND r.state = ANY($2::text[])
   AND ($3::uuid IS NULL OR r.agent_id = $3)

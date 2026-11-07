@@ -58,10 +58,12 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		}
 	case r.Purpose == "planning":
 		p, err := s.Q.PlanningSessionForRun(ctx, r.ID)
-		if err != nil {
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}
-		out.PlanningId, out.WorkTitle, projectID = &p.ID, &p.Goal, p.ProjectID
+		if err == nil {
+			out.PlanningId, out.WorkTitle, projectID = &p.ID, &p.Goal, p.ProjectID
+		}
 	case r.Purpose == "chat":
 		// A chat run without its session (deleted chat) still renders.
 		if c, err := s.Q.ChatSessionOfRun(ctx, &r.ID); err == nil {

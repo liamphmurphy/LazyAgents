@@ -85,3 +85,11 @@ test("workHref never links a ticket without a key", () => {
   assert.equal(workHref({ purpose: "planning", ticket_key: "", planning_id: "p1" }), "/plans?id=p1");
   assert.equal(workHref({ purpose: "chat", ticket_key: "", chat_id: "c1", project_key: "WEB" }), "/chat/c1?project=WEB");
 });
+
+test("parallel delegations consume distinct children in call order", () => {
+  const calls = [ev(1, "tool_call", { tool: "mcp__lazyagents__delegate", input: { agent: "rev" } }), ev(2, "tool_call", { tool: "mcp__lazyagents__delegate", input: { agent: "rev" } })];
+  const children = [3, 4].map((n) => ({ id: String(n), started_at: ev(n, "", {}).at, agent: { handle: "rev" } }));
+  assert.equal(delegateChild(calls[0], children, calls)?.id, "3");
+  assert.equal(delegateChild(calls[1], children, calls)?.id, "4");
+  for (const state of ["starting", "blocked"]) assert.equal(parseRunFilters(new URLSearchParams({ state })).state, state);
+});
