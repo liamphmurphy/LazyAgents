@@ -18,6 +18,7 @@ import (
 
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/auth"
+	"github.com/liamphmurphy/lazyagents/server/internal/personas"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
@@ -81,9 +82,14 @@ func createUser(ctx context.Context, q *store.Queries, ws uuid.UUID, name, email
 	if len(initials) > 2 {
 		initials = initials[:1] + initials[len(initials)-1:]
 	}
-	return q.CreateUser(ctx, store.CreateUserParams{
+	u, err := q.CreateUser(ctx, store.CreateUserParams{
 		WorkspaceID: ws, Name: name, Email: email, Initials: initials, RoleTitle: role, AvatarColor: color, PasswordHash: hash,
 	})
+	if err != nil {
+		return u, err
+	}
+	// Every person starts with the built-in "Assistant" as their default persona.
+	return u, personas.SeedDefault(ctx, q, ws, u.ID)
 }
 
 func ptr[T any](v T) *T { return &v }

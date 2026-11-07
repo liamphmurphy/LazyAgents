@@ -210,6 +210,7 @@ type ChatSession struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	LastMessageAt *time.Time
+	PersonaID     *uuid.UUID
 }
 
 type Comment struct {
@@ -329,6 +330,23 @@ type MetricSnapshot struct {
 	Range       string
 	Payload     json.RawMessage
 	GeneratedAt time.Time
+}
+
+type Persona struct {
+	ID                 uuid.UUID
+	WorkspaceID        uuid.UUID
+	UserID             uuid.UUID
+	Name               string
+	Tone               string
+	Color              string
+	AvatarKey          *string
+	AvatarContentType  *string
+	CustomInstructions string
+	IsDefault          bool
+	LastUsedAt         *time.Time
+	Revision           int32
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 type PlanStep struct {

@@ -1,6 +1,11 @@
 -- name: CreateChatSession :one
-INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
+-- Without a persona_id the chat gets its creator's default persona (none
+-- when they have no default). Callers check that a given persona_id is the
+-- creator's own.
+INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, persona_id)
+VALUES (sqlc.arg(workspace_id), sqlc.arg(project_id), sqlc.arg(title), sqlc.arg(created_by), sqlc.arg(agent_id), sqlc.arg(harness), sqlc.arg(model),
+  COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)))
+RETURNING *;
 
 -- name: ListChatSessions :many
 SELECT * FROM chat_sessions
@@ -123,6 +128,11 @@ SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('u
 SELECT c.* FROM chat_sessions c JOIN projects p ON p.id = c.project_id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = sqlc.arg(archived)
   AND (sqlc.narg(project_key)::text IS NULL OR p.key = sqlc.narg(project_key)::text)
+  -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
+  AND CASE sqlc.arg(persona_filter)::text
+    WHEN 'all' THEN true
+    WHEN 'none' THEN c.persona_id IS NULL
+    ELSE c.persona_id = sqlc.narg(persona_id)::uuid END
 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
