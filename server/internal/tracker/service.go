@@ -61,6 +61,11 @@ type NewTicket struct {
 	DueDate         *time.Time
 	Criteria        []string
 	RequiresMockup  bool
+	// EstimatePoints (optional) is set right after creation, with
+	// EstimateRationale, attributed to EstimatedBy (default: the creating actor).
+	EstimatePoints    *int
+	EstimateRationale *string
+	EstimatedBy       *Actor
 	// CreatedAt backdates the "created" event (seeding only).
 	CreatedAt *time.Time
 }
@@ -196,6 +201,9 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 	if err := checkEnum("priority", in.Priority, Priorities); err != nil {
 		return store.Ticket{}, err
 	}
+	if err := ValidEstimate(in.EstimatePoints, in.EstimateRationale); err != nil {
+		return store.Ticket{}, err
+	}
 
 	var t store.Ticket
 	err = func(q *store.Queries) error {
@@ -281,9 +289,29 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 				return err
 			}
 		}
+		if in.EstimatePoints != nil {
+			by := actor
+			if in.EstimatedBy != nil {
+				by = *in.EstimatedBy
+			}
+			if t, err = applyPatch(ctx, q, ws, by, t.Key, Patch{EstimatePoints: SetTo(*in.EstimatePoints), EstimateRationale: emptyToNil(in.EstimateRationale)}); err != nil {
+				return err
+			}
+		}
 		return nil
 	}(q)
 	return t, err
+}
+
+// ValidEstimate checks optional points against EstimateScale and the rationale length.
+func ValidEstimate(points *int, rationale *string) error {
+	if points != nil && !slices.Contains(EstimateScale, *points) {
+		return invalid("estimate_points", "must be one of 1, 2, 3, 5, 8, 13")
+	}
+	if rationale != nil && len([]rune(*rationale)) > 2000 {
+		return invalid("estimate_rationale", "must be at most 2000 characters")
+	}
+	return nil
 }
 
 func userID(a Actor) *uuid.UUID {
@@ -522,6 +550,9 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		if !ptrEq(points, cur.EstimatePoints) || !ptrEq(rationale, cur.EstimateRationale) || ownershipChanged {
 			if actor.Type == "agent" && cur.EstimatedByType != nil && *cur.EstimatedByType == "user" {
 				return cur, apperr.Conflict("a person estimated this; comment instead")
+			}
+			if actor.Type == "agent" && (next.Status == "done" || next.Status == "canceled") {
+				return cur, apperr.Conflict("%s is %s; closed tickets can't be estimated", cur.Key, next.Status)
 			}
 			if p.EstimateRationale != nil && len([]rune(*p.EstimateRationale)) > 2000 {
 				return cur, invalid("estimate_rationale", "must be at most 2000 characters")

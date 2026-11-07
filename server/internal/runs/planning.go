@@ -27,6 +27,9 @@ type Proposal struct {
 	Criteria       []string   `json:"criteria"`
 	AgentID        *uuid.UUID `json:"agent_id,omitempty"`
 	RequiresMockup bool       `json:"requires_mockup,omitempty"`
+	// EstimatePoints is copied to the ticket on acceptance, estimated by the planning agent.
+	EstimatePoints    *int    `json:"estimate_points,omitempty"`
+	EstimateRationale *string `json:"estimate_rationale,omitempty"`
 }
 
 type PlanningInput struct {
@@ -56,7 +59,7 @@ func PlanningSpec(r agentdef.Resolved) agentdef.Resolved {
 	for i := range r.Fallbacks {
 		r.Fallbacks[i].HarnessOptions = planningOptions(r.Fallbacks[i].Harness)
 	}
-	r.Instructions = "You are a planner. Read the supplied goal, source documents, linked tickets and wiki. Propose a small, actionable set of tickets with acceptance criteria using propose_tickets. Give each a stable ref and suggest depends_on proposal refs or blocked_by existing ticket keys where work must finish first. Do not create tickets, modify files, or execute project work. Read supplied context with file tools or simple read-only shell commands. Calling propose_tickets ends this planning run; a person edits and accepts the draft. Set requires_mockup on tickets that change the UI, so a person approves a mockup before implementation.\n"
+	r.Instructions = "You are a planner. Read the supplied goal, source documents, linked tickets and wiki. Propose a small, actionable set of tickets with acceptance criteria using propose_tickets. Give each a stable ref and suggest depends_on proposal refs or blocked_by existing ticket keys where work must finish first. Do not create tickets, modify files, or execute project work. Read supplied context with file tools or simple read-only shell commands. Calling propose_tickets ends this planning run; a person edits and accepts the draft. Set requires_mockup on tickets that change the UI, so a person approves a mockup before implementation. Estimate each ticket with points on the Fibonacci scale (1, 2, 3, 5, 8, 13) and a one-line estimate_rationale; split anything bigger than 8.\n"
 	return r
 }
 
@@ -142,7 +145,7 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 		if err != nil {
 			return err
 		}
-		prompt := fmt.Sprintf("Plan %s for project %s. Goal: %s\n%s\nUse search_knowledge and get_ticket to inspect related work before proposing. Finish with propose_tickets({tickets:[{ref,title,description,criteria,agent_id?,depends_on?,blocked_by?}]}). Do not claim a ticket or call complete_run. Use unique ref strings for proposals; depends_on lists other proposal refs, and blocked_by lists existing ticket keys. Dependencies must be acyclic. The proposals remain drafts until a person accepts them.", out.ID, p.Key, in.Goal, source)
+		prompt := fmt.Sprintf("Plan %s for project %s. Goal: %s\n%s\nUse search_knowledge and get_ticket to inspect related work before proposing. Finish with propose_tickets({tickets:[{ref,title,description,criteria,points,estimate_rationale,agent_id?,depends_on?,blocked_by?}]}). points is one of 1, 2, 3, 5, 8, 13. Do not claim a ticket or call complete_run. Use unique ref strings for proposals; depends_on lists other proposal refs, and blocked_by lists existing ticket keys. Dependencies must be acyclic. The proposals remain drafts until a person accepts them.", out.ID, p.Key, in.Goal, source)
 		if _, err = q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "start", InputMessage: prompt}); err != nil {
 			return err
 		}
@@ -176,6 +179,16 @@ func validateProposals(ctx context.Context, q *store.Queries, ws uuid.UUID, item
 			criteria = append(criteria, c)
 		}
 		p.Criteria = criteria
+		if p.EstimateRationale != nil {
+			if r := strings.TrimSpace(*p.EstimateRationale); r == "" || p.EstimatePoints == nil {
+				p.EstimateRationale = nil
+			} else {
+				p.EstimateRationale = &r
+			}
+		}
+		if err := tracker.ValidEstimate(p.EstimatePoints, p.EstimateRationale); err != nil {
+			return err
+		}
 		if p.AgentID != nil {
 			sa, err := q.GetAgent(ctx, store.GetAgentParams{ID: *p.AgentID, WorkspaceID: ws})
 			if err != nil || sa.ArchivedAt != nil {
@@ -345,9 +358,16 @@ func (s *Service) ReviewPlanning(ctx context.Context, ws, user, id uuid.UUID, re
 						return err
 					}
 				}
+				run, err := q.GetRun(ctx, store.GetRunParams{ID: plan.RunID, WorkspaceID: ws})
+				if err != nil {
+					return err
+				}
+				// Draft estimates belong to the planning agent that proposed them.
+				planner := tracker.AgentActor(run.AgentID)
 				created := []store.Ticket{}
 				for _, item := range items {
-					t, err := tracker.CreateInTx(ctx, q, ws, tracker.UserActor(user), tracker.NewTicket{ProjectKey: p.Key, Title: item.Title, DescriptionMd: item.Description, Criteria: item.Criteria, AssigneeAgentID: item.AgentID, EpicID: plan.EpicID, RequiresMockup: item.RequiresMockup})
+					t, err := tracker.CreateInTx(ctx, q, ws, tracker.UserActor(user), tracker.NewTicket{ProjectKey: p.Key, Title: item.Title, DescriptionMd: item.Description, Criteria: item.Criteria, AssigneeAgentID: item.AgentID, EpicID: plan.EpicID, RequiresMockup: item.RequiresMockup,
+						EstimatePoints: item.EstimatePoints, EstimateRationale: item.EstimateRationale, EstimatedBy: &planner})
 					if err != nil {
 						return err
 					}
