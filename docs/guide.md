@@ -141,7 +141,7 @@ independent review before Done** in an agent's Runtime settings to enforce an
 approval gate for every ticket that agent runs. Acceptance criteria, scopes, and
 human approvals remain required.
 
-Managed `claim_ticket` responses no longer repeat instructions and memory already
+Managed `claim_ticket` responses include the ticket (`ticket_details`, same as `get_ticket`) but no longer repeat instructions and memory already
 available in the workspace. Agents are instructed to read only relevant context
 and reuse it on resume. New definitions default to **Selective** memory: at most
 three relevant previews, with full pages fetched only when needed, within a

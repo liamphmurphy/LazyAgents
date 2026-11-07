@@ -89,7 +89,7 @@ an unmanaged session uses an agent token from the agent's page.
 | `create_epic` | Creates an epic in the chat's project | Chat runs |
 
 No MCP tool sets ticket or epic status directly. A typical lead run: call
-`claim_ticket`, then `get_ticket` (which includes the epic's criteria), and
+`claim_ticket` (which returns the ticket, including the epic's criteria), and
 `estimate_ticket` on tickets it has sized. Once the work is verified it calls
 `check_epic_criterion` for the criteria it has met, then `complete_run`. A
 person reviews it on the board and closes the epic once the gate opens.

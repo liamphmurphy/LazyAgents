@@ -123,7 +123,7 @@ func TestMCPProfiles(t *testing.T) {
 	check("unmanaged", connect(unmanaged), all)
 
 	subIns, leadIns := sub.InitializeResult().Instructions, leadSess.InitializeResult().Instructions
-	if subIns == leadIns || strings.Contains(subIns, "claim_ticket, then") || !strings.Contains(leadIns, "claim_ticket, then") {
+	if subIns == leadIns || strings.Contains(subIns, "skip get_ticket") || !strings.Contains(leadIns, "skip get_ticket") {
 		t.Errorf("instructions not per profile:\nsub: %s\nlead: %s", subIns, leadIns)
 	}
 

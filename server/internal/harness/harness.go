@@ -171,8 +171,8 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		b.WriteString("with a short summary when you're done (or blocked). If you need a person, call request_approval or await_human and end your turn. ")
 		b.WriteString("Your task brief is self-contained: call get_ticket only if it lacks context you need, and don't post plans or step updates.\n\n")
 	} else {
-		b.WriteString("You're running headless for LazyAgents. Use the `lazyagents` MCP tools to report progress: claim_ticket first, then get_ticket once; ")
-		b.WriteString("post_plan once before editing, update_step when a step finishes, request_approval before any scope that needs it, and complete_run at the end. ")
+		b.WriteString("You're running headless for LazyAgents. Use the `lazyagents` MCP tools to report progress: claim_ticket first (it returns the ticket, so skip get_ticket); ")
+		b.WriteString("post_plan once before editing (step 1 starts current), update_step(n, done) when a step finishes (the next step becomes current), check_criterion with ns to tick verified criteria together, request_approval before any scope that needs it, and complete_run at the end. ")
 		b.WriteString("Every tool call re-reads your whole context, so skip calls that don't add information. ")
 		b.WriteString("When you need a person (an approval, an answer), call request_approval or await_human and then end your turn: ")
 		b.WriteString("you'll be resumed with their reply.\n\n")
@@ -188,6 +188,7 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		}
 	}
 
+	b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. Run the full suite once before finishing. If `TEST_DATABASE_URL` is set, database tests use it: don't start your own database.\n\n")
 	if !delegated {
 		b.WriteString(gitSection(spec))
 	}

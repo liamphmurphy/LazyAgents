@@ -434,3 +434,21 @@ func TestDirectExecutionPolicyAndSelectiveContextInstructions(t *testing.T) {
 		t.Fatal("explicit review policy was lost")
 	}
 }
+
+func TestAgentsMDTestsSection(t *testing.T) {
+	want := "## Tests\n\nRun the narrowest tests that cover your change"
+	for name, md := range map[string]string{
+		"managed":   string(AgentsMD("", spec(), nil, "PAY-1")),
+		"delegated": string(SubagentAgentsMD("", spec(), nil, "PAY-1")),
+	} {
+		if !strings.Contains(md, want) || !strings.Contains(md, "don't start your own database") {
+			t.Fatalf("%s AGENTS.md lacks the Tests section:\n%s", name, md)
+		}
+	}
+	if md := string(AgentsMD("", spec(), nil, "PAY-1")); !strings.Contains(md, "skip get_ticket") || !strings.Contains(md, "check_criterion with ns") {
+		t.Fatal("managed AGENTS.md lacks the claim/criteria guidance")
+	}
+	if strings.Contains(string(ChatAgentsMD(spec(), nil, "PAY")), "## Tests") {
+		t.Fatal("chat AGENTS.md must not carry the Tests section")
+	}
+}
