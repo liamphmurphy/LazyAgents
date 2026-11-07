@@ -143,6 +143,37 @@ func (q *Queries) CreateCriterion(ctx context.Context, arg CreateCriterionParams
 	return i, err
 }
 
+const createCriterionAt = `-- name: CreateCriterionAt :one
+INSERT INTO acceptance_criteria (ticket_id, position, text, done) VALUES ($1, $2, $3, $4) RETURNING id, ticket_id, position, text, done, created_at, updated_at
+`
+
+type CreateCriterionAtParams struct {
+	TicketID uuid.UUID
+	Position int32
+	Text     string
+	Done     bool
+}
+
+func (q *Queries) CreateCriterionAt(ctx context.Context, arg CreateCriterionAtParams) (Criterion, error) {
+	row := q.db.QueryRow(ctx, createCriterionAt,
+		arg.TicketID,
+		arg.Position,
+		arg.Text,
+		arg.Done,
+	)
+	var i Criterion
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Position,
+		&i.Text,
+		&i.Done,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createTicket = `-- name: CreateTicket :one
 INSERT INTO tickets (
   workspace_id, project_id, number, key, title, description_md, status, priority,
@@ -771,6 +802,58 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 	return items, nil
 }
 
+const lockTicketByID = `-- name: LockTicketByID :one
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at FROM tickets WHERE workspace_id = $1 AND id = $2 FOR UPDATE
+`
+
+type LockTicketByIDParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+}
+
+func (q *Queries) LockTicketByID(ctx context.Context, arg LockTicketByIDParams) (Ticket, error) {
+	row := q.db.QueryRow(ctx, lockTicketByID, arg.WorkspaceID, arg.ID)
+	var i Ticket
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Number,
+		&i.Key,
+		&i.Title,
+		&i.DescriptionMd,
+		&i.Status,
+		&i.Priority,
+		&i.EpicID,
+		&i.AssigneeAgentID,
+		&i.ReviewerUserID,
+		&i.CreatedByUserID,
+		&i.Estimate,
+		&i.DueDate,
+		&i.Branch,
+		&i.PrNumber,
+		&i.PrUrl,
+		&i.PrState,
+		&i.PrAdditions,
+		&i.PrDeletions,
+		&i.SortOrder,
+		&i.Search,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PrSyncedAt,
+		&i.PrClosedUnmerged,
+		&i.DependencyRevision,
+		&i.RequiresMockup,
+		&i.Revision,
+		&i.EstimatePoints,
+		&i.EstimateRationale,
+		&i.EstimatedByType,
+		&i.EstimatedByID,
+		&i.EstimatedAt,
+	)
+	return i, err
+}
+
 const lockTicketByKey = `-- name: LockTicketByKey :one
 SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE
 `
@@ -823,6 +906,37 @@ func (q *Queries) LockTicketByKey(ctx context.Context, arg LockTicketByKeyParams
 	return i, err
 }
 
+const saveCriterionDraft = `-- name: SaveCriterionDraft :one
+UPDATE acceptance_criteria SET position = $2, text = $3, done = $4 WHERE id = $1 RETURNING id, ticket_id, position, text, done, created_at, updated_at
+`
+
+type SaveCriterionDraftParams struct {
+	ID       uuid.UUID
+	Position int32
+	Text     string
+	Done     bool
+}
+
+func (q *Queries) SaveCriterionDraft(ctx context.Context, arg SaveCriterionDraftParams) (Criterion, error) {
+	row := q.db.QueryRow(ctx, saveCriterionDraft,
+		arg.ID,
+		arg.Position,
+		arg.Text,
+		arg.Done,
+	)
+	var i Criterion
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Position,
+		&i.Text,
+		&i.Done,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const setTicketCode = `-- name: SetTicketCode :exec
 UPDATE tickets SET branch = $2, pr_number = $3, pr_url = $4, pr_state = $5, pr_additions = $6, pr_deletions = $7
 WHERE id = $1
@@ -851,6 +965,22 @@ func (q *Queries) SetTicketCode(ctx context.Context, arg SetTicketCodeParams) er
 		arg.PrDeletions,
 	)
 	return err
+}
+
+const ticketProjectID = `-- name: TicketProjectID :one
+SELECT project_id FROM tickets WHERE workspace_id = $1 AND id = $2
+`
+
+type TicketProjectIDParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+}
+
+func (q *Queries) TicketProjectID(ctx context.Context, arg TicketProjectIDParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, ticketProjectID, arg.WorkspaceID, arg.ID)
+	var project_id uuid.UUID
+	err := row.Scan(&project_id)
+	return project_id, err
 }
 
 const updateCriterion = `-- name: UpdateCriterion :one

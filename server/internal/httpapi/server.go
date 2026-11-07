@@ -110,11 +110,12 @@ func (s *Server) localUser(next http.Handler) http.Handler {
 
 func (s *Server) responseError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve *tracker.ValidationError
+	var ce *apperr.ConflictError
 	switch {
 	case errors.As(err, &ve):
 		writeError(w, http.StatusUnprocessableEntity, api.Invalid, ve.Error(), ve.Field)
-	case errors.As(err, new(*apperr.ConflictError)):
-		writeError(w, http.StatusConflict, api.Conflict, err.Error(), "")
+	case errors.As(err, &ce):
+		writeError(w, http.StatusConflict, api.Conflict, err.Error(), ce.Field)
 	case errors.Is(err, secrets.ErrNoKey):
 		writeError(w, http.StatusConflict, api.Conflict, "Set SECRETS_KEY (openssl rand -base64 32) and restart the API to store secrets", "")
 	case errors.Is(err, tracker.ErrNotFound):
