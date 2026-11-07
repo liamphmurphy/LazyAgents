@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useDashboard, useInbox } from "@/lib/api/hooks";
 import { useBlockers, useDashboardBoards, useDashboardChats, useDashboardLiveRuns } from "@/lib/api/dashboard-hooks";
-import { blockedTickets, currentStep, epicsAtRisk, liveRuns, setupSteps, throughput, topInbox } from "@/lib/dashboard";
+import { blockedTickets, currentStep, epicsAtRisk, liveRuns, throughput, topInbox } from "@/lib/dashboard";
 import { KIND } from "@/lib/inbox";
 import { duration, runCost, spendCost } from "@/lib/format";
 import { cx } from "@/lib/cx";
@@ -16,6 +16,7 @@ import { ProgressBar } from "@/components/domain/data";
 import { AgentAvatar } from "@/components/domain/avatars";
 import { Flag } from "@/components/domain/labels";
 import { DispatchDialog } from "@/components/domain/dispatch-dialog";
+import { SetupChecklist } from "@/components/domain/setup";
 
 const PREVIEW = 5;
 
@@ -143,8 +144,6 @@ export function DashboardScreen() {
   const days = d ? throughput(d.stats.daily, new Date(d.stats.generated_at)) : undefined;
   const done = days?.reduce((n, day) => n + day.count, 0) ?? 0;
   const max = Math.max(1, ...(days?.map((day) => day.count) ?? []));
-  const steps = boot.data && d ? setupSteps({ projects: active?.length ?? 0, agents: boot.data.agents.length, runnerOnline: d.runner.online }) : undefined;
-  const nextStep = steps?.find((s) => !s.done);
 
   return (
     <>
@@ -165,15 +164,7 @@ export function DashboardScreen() {
             </p>
           </div>
 
-          {steps && nextStep && (
-            <section aria-label="Finish setup" className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-[18px] py-3 text-sm">
-              <span className="font-semibold">Finish setup</span>
-              <span className="text-fg-secondary">
-                {steps.filter((s) => s.done).length} / {steps.length} complete — {nextStep.label}
-              </span>
-              <ButtonLink href={nextStep.href} variant="primary" className="ml-auto">Continue setup →</ButtonLink>
-            </section>
-          )}
+          <SetupChecklist />
 
           <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-6">

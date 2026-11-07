@@ -30,6 +30,8 @@ import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
 import { ChatCostChip } from "@/components/domain/cost-chip";
+import { unavailableReason } from "@/lib/setup";
+import Link from "next/link";
 
 type Message = Schemas["ChatMessage"];
 type Groups = Schemas["ChatHarnessModels"][] | undefined;
@@ -110,6 +112,8 @@ export function Conversation({ id }: { id: string }) {
   const current: Selection | undefined = c && { harness: c.harness, model: c.model };
   const selection = picked ?? current;
   const pending = !!(picked && current && !sameSelection(picked, current));
+  // The next message would start a run on a harness that can't run: say why before sending.
+  const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
   const list = messages.data?.messages;
   const lastUser = list?.findLast((m) => m.role === "user");
 
@@ -141,7 +145,7 @@ export function Conversation({ id }: { id: string }) {
   }, [list?.length, running]);
 
   function submit(body: string) {
-    if (!body.trim() || locked) return;
+    if (!body.trim() || locked || unavailable) return;
     cancel.reset();
     const context_refs = toContextRefs(chips);
     setNames((n) => new Map([...n, ...chips.map((c): [string, string] => [c.key, c.label])]));
@@ -256,13 +260,26 @@ export function Conversation({ id }: { id: string }) {
               title="The last turn failed"
               actions={
                 lastUser && (
-                  <Button variant="outline" icon="refresh" disabled={locked} onClick={() => submit(lastUser.body_md)}>
+                  <Button variant="outline" icon="refresh" disabled={locked || !!unavailable} onClick={() => submit(lastUser.body_md)}>
                     Retry
                   </Button>
                 )
               }
             >
               {c.error ?? "No error details were recorded."}
+            </Banner>
+          )}
+          {unavailable && !c.archived && (
+            <Banner
+              tone="human"
+              title={`${unavailable.label} is unavailable`}
+              actions={
+                <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
+                  Add the key →
+                </Link>
+              }
+            >
+              {unavailableReason(unavailable)}. Pick another model or add the key.
             </Banner>
           )}
           {actionError && (
@@ -315,7 +332,7 @@ export function Conversation({ id }: { id: string }) {
                     {stopping ? "Stopping…" : "Stop"}
                   </Button>
                 )}
-                <Button type="submit" variant="primary" disabled={locked || !text.trim()}>
+                <Button type="submit" variant="primary" disabled={locked || !!unavailable || !text.trim()}>
                   Send
                 </Button>
               </div>

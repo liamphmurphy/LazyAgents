@@ -30,6 +30,7 @@ import {
   type AgentOverview,
 } from "@/components/domain/overview";
 import { Content, TopBar } from "@/components/shell/topbar";
+import { useMarkAgentsReviewed } from "@/components/domain/setup";
 
 const STATUSES = ["all", "running", "waiting", "blocked", "idle"] as const;
 const KINDS = [
@@ -165,6 +166,7 @@ function handleFrom(name: string) {
 /** Live assignments and recorded performance, alongside the definition editor. */
 export function AgentsScreen() {
   const boot = useBootstrap();
+  useMarkAgentsReviewed();
   const roster = useAgentOverviews();
   const [status, setStatus] = useState<string>("all");
   const [kind, setKind] = useState<(typeof KINDS)[number]["value"]>("all");

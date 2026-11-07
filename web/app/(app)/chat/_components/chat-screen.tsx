@@ -15,6 +15,7 @@ import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/
 import { Conversation } from "./conversation";
 import { AgentPicker, rememberChatAgent, useRememberedChatAgent } from "./agent-picker";
 import { RestoreChat } from "./restore";
+import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -117,6 +118,9 @@ export function ChatScreen({ id }: { id?: string }) {
   const archived = useChats(view === "archived" ? project : "", true);
   const chats = view === "archived" ? archived : active;
   const create = useCreateChat();
+  // Nothing can answer while no harness is available: say so before a chat is created.
+  const health = useHarnessHealth();
+  const noHarness = !!health && !health.ready;
 
   // The agent a new chat answers as: the last one picked, else the newest chat's, else the first main agent.
   const mainAgents = boot.data?.agents.filter((a) => a.kind === "main") ?? [];
@@ -151,7 +155,7 @@ export function ChatScreen({ id }: { id?: string }) {
           className="flex w-72 flex-none flex-col gap-3 border-r border-border-subtle p-3 max-md:max-h-64 max-md:w-full max-md:border-b max-md:border-r-0"
         >
           <div className="flex items-center gap-2">
-            <Button variant="primary" icon="plus" className="flex-1 justify-center" disabled={!project || create.isPending} onClick={newChat}>
+            <Button variant="primary" icon="plus" className="flex-1 justify-center" disabled={!project || noHarness || create.isPending} onClick={newChat}>
               New chat
             </Button>
           </div>
@@ -161,6 +165,7 @@ export function ChatScreen({ id }: { id?: string }) {
               <AgentPicker agents={mainAgents} value={agent} onChange={(a) => rememberChatAgent(a.id)} disabled={create.isPending} />
             </div>
           )}
+          {noHarness && <NoHarnessNote health={health} />}
           {create.isError && (
             <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(create.error)}</p>
           )}
@@ -219,7 +224,7 @@ export function ChatScreen({ id }: { id?: string }) {
               icon="msg"
               title="Chat with your project"
               actions={
-                <Button variant="primary" icon="plus" disabled={!project || create.isPending} onClick={newChat}>
+                <Button variant="primary" icon="plus" disabled={!project || noHarness || create.isPending} onClick={newChat}>
                   New chat
                 </Button>
               }

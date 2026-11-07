@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { AGENTS, installChatApi } from "./mock-chat-api";
+import { AGENTS, catalog, installChatApi } from "./mock-chat-api";
 
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const picker = (page: Page) => page.getByRole("button", { name: /Model for the next message/ });
@@ -282,6 +282,29 @@ test("unavailable OpenCode shows its reason and can't be selected", async ({ pag
   await item.click({ force: true });
   await page.keyboard.press("Escape");
   await expect(picker(page)).toHaveAttribute("aria-label", /Claude Code/);
+});
+
+test("with no harness available, chat says why before anything is sent", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  // The Anthropic key is removed: every harness becomes unavailable.
+  await page.route("**/api/v1/chat-models", (route) =>
+    route.fulfill({ json: catalog(false, false).map((g) => ({ ...g, available: false, unavailable_reason: g.unavailable_reason ?? "no harness:anthropic secret" })) }),
+  );
+  await page.reload();
+  const guard = page.getByRole("status").filter({ hasText: "Claude Code is unavailable" });
+  await expect(guard).toContainText("no harness:anthropic secret. Pick another model or add the key.");
+  await expect(guard.getByRole("link", { name: "Add the key →" })).toHaveAttribute("href", "/settings#secrets");
+  await composer(page).fill("hello");
+  await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
+  await composer(page).press("Enter");
+  expect(mock.posted).toEqual([]);
+  // New chat is refused up front, naming the missing secrets.
+  await expect(page.getByRole("button", { name: "New chat" }).first()).toBeDisabled();
+  await expect(page.getByRole("complementary", { name: "Chat history" })).toContainText("No harness is available: add harness:anthropic or harness:openai.");
+  // The shell banner names the same secrets on every screen.
+  await expect(page.getByRole("status", { name: /Agents can’t run/ })).toBeVisible();
 });
 
 test("a rejected OpenCode post shows the error and keeps the selection", async ({ page }) => {
