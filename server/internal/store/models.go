@@ -426,7 +426,6 @@ type Secret struct {
 	GrantsScope     *string
 	Nonce           []byte
 	Ciphertext      []byte
-	Preview         string
 	CreatedByUserID *uuid.UUID
 	CreatedAt       time.Time
 	UpdatedAt       time.Time

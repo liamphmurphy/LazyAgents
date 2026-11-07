@@ -1844,7 +1844,7 @@ components:
         key: { type: string }
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed." }
+        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
@@ -2518,13 +2518,13 @@ components:
         revoked_at: { type: string, format: date-time }
     SecretInfo:
       type: object
-      required: [id, name, preview, created_at, updated_at]
+      description: Secret metadata. Values are write-only; no part of a value is ever returned.
+      required: [id, name, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         project: { $ref: "#/components/schemas/Project" }
         grants_scope: { type: string }
-        preview: { type: string, description: "Last 4 characters, or empty for short values" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         last_used_at: { type: string, format: date-time }
@@ -3236,7 +3236,7 @@ components:
         key: { type: string }
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed." }
+        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
     ProjectUpdate:
       type: object
@@ -3244,7 +3244,7 @@ components:
       properties:
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed." }
+        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
