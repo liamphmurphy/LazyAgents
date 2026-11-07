@@ -21,8 +21,13 @@ func memoryOwner(ctx context.Context) memory.Owner {
 }
 
 func toMemory(m store.Memory) api.Memory {
-	return api.Memory{Id: m.ID, Title: m.Title, Summary: m.Summary, Body: m.Body, Tags: m.Tags, Type: m.Type, Source: m.Source,
-		SourceChatId: m.SourceChatID, SourceRunId: m.SourceRunID, SupersededBy: m.SupersededBy, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
+	out := api.Memory{Id: m.ID, Title: m.Title, Summary: m.Summary, Body: m.Body, Tags: m.Tags, Type: m.Type, Source: m.Source,
+		SourceChatId: m.SourceChatID, SourceRunId: m.SourceRunID, SupersededBy: m.SupersededBy, RetiredAt: m.RetiredAt,
+		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
+	if m.RetiredReason != "" {
+		out.RetiredReason = &m.RetiredReason
+	}
+	return out
 }
 
 func (s *Server) ListMemories(ctx context.Context, req api.ListMemoriesRequestObject) (api.ListMemoriesResponseObject, error) {
@@ -89,9 +94,9 @@ func (s *Server) UpdateMemory(ctx context.Context, req api.UpdateMemoryRequestOb
 	}
 	switch {
 	case b.SupersededBy != nil:
-		m, err = svc.Supersede(ctx, o, req.Id, b.SupersededBy)
+		m, err = svc.Supersede(ctx, o, req.Id, b.SupersededBy, "Retired by you")
 	case restore:
-		m, err = svc.Supersede(ctx, o, req.Id, nil)
+		m, err = svc.Supersede(ctx, o, req.Id, nil, "")
 	}
 	if err != nil {
 		return nil, err

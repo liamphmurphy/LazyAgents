@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -41,7 +42,7 @@ const createMemory = `-- name: CreateMemory :one
 
 INSERT INTO memories (workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id)
 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10)
-RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at
+RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at
 `
 
 type CreateMemoryParams struct {
@@ -88,6 +89,8 @@ func (q *Queries) CreateMemory(ctx context.Context, arg CreateMemoryParams) (Mem
 		&i.SupersededBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RetiredReason,
+		&i.RetiredAt,
 	)
 	return i, err
 }
@@ -127,8 +130,72 @@ func (q *Queries) DeleteMemory(ctx context.Context, arg DeleteMemoryParams) (int
 	return result.RowsAffected(), nil
 }
 
+const duplicateMemoryPairs = `-- name: DuplicateMemoryPairs :many
+SELECT a.workspace_id, a.user_id, a.id AS keep_id, a.title AS keep_title,
+  b.id AS retire_id, b.title AS retire_title, b.updated_at AS retire_updated_at,
+  greatest(similarity(lower(a.title), lower(b.title)),
+           CASE WHEN a.summary <> '' AND b.summary <> '' THEN similarity(lower(a.summary), lower(b.summary)) ELSE 0 END)::float8 AS score
+FROM memories a
+JOIN memories b ON b.workspace_id = a.workspace_id AND b.user_id = a.user_id AND b.type = a.type
+  AND (b.updated_at, b.id) < (a.updated_at, a.id) AND b.superseded_by IS NULL
+WHERE a.superseded_by IS NULL
+  AND (similarity(lower(a.title), lower(b.title)) >= $1::float8
+       OR (a.summary <> '' AND b.summary <> '' AND similarity(lower(a.summary), lower(b.summary)) >= $2::float8))
+ORDER BY a.workspace_id, a.user_id, a.updated_at DESC, a.id DESC, score DESC
+LIMIT $3
+`
+
+type DuplicateMemoryPairsParams struct {
+	TitleThreshold   float64
+	SummaryThreshold float64
+	Lim              int32
+}
+
+type DuplicateMemoryPairsRow struct {
+	WorkspaceID     uuid.UUID
+	UserID          uuid.UUID
+	KeepID          uuid.UUID
+	KeepTitle       string
+	RetireID        uuid.UUID
+	RetireTitle     string
+	RetireUpdatedAt time.Time
+	Score           float64
+}
+
+// Pairs of one person's live entries of the same type that look like the same
+// thing: a similar title or a near-identical summary. keep is the more
+// recently changed of the two. Newest keep first, best match first.
+func (q *Queries) DuplicateMemoryPairs(ctx context.Context, arg DuplicateMemoryPairsParams) ([]DuplicateMemoryPairsRow, error) {
+	rows, err := q.db.Query(ctx, duplicateMemoryPairs, arg.TitleThreshold, arg.SummaryThreshold, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuplicateMemoryPairsRow{}
+	for rows.Next() {
+		var i DuplicateMemoryPairsRow
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.KeepID,
+			&i.KeepTitle,
+			&i.RetireID,
+			&i.RetireTitle,
+			&i.RetireUpdatedAt,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const exportMemories = `-- name: ExportMemories :many
-SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at FROM memories WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at, id
+SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at FROM memories WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at, id
 `
 
 type ExportMemoriesParams struct {
@@ -161,6 +228,8 @@ func (q *Queries) ExportMemories(ctx context.Context, arg ExportMemoriesParams) 
 			&i.SupersededBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RetiredReason,
+			&i.RetiredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -173,7 +242,7 @@ func (q *Queries) ExportMemories(ctx context.Context, arg ExportMemoriesParams) 
 }
 
 const getMemory = `-- name: GetMemory :one
-SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at FROM memories WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at FROM memories WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `
 
 type GetMemoryParams struct {
@@ -200,12 +269,14 @@ func (q *Queries) GetMemory(ctx context.Context, arg GetMemoryParams) (Memory, e
 		&i.SupersededBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RetiredReason,
+		&i.RetiredAt,
 	)
 	return i, err
 }
 
 const listMemories = `-- name: ListMemories :many
-SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at FROM memories
+SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at FROM memories
 WHERE workspace_id = $1 AND user_id = $2
   AND ($3::bool OR superseded_by IS NULL)
   AND ($4::text IS NULL OR type = $4)
@@ -254,6 +325,8 @@ func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]M
 			&i.SupersededBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RetiredReason,
+			&i.RetiredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -266,7 +339,7 @@ func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]M
 }
 
 const nearDuplicateMemory = `-- name: NearDuplicateMemory :one
-SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at,
+SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at, m.retired_reason, m.retired_at,
   greatest(similarity(lower(m.title), lower($1::text)),
            CASE WHEN $2::text <> '' AND m.summary <> '' THEN similarity(lower(m.summary), lower($2::text)) ELSE 0 END)::float8 AS score,
   similarity(lower(m.title), lower($1::text))::float8 AS title_score
@@ -320,14 +393,66 @@ func (q *Queries) NearDuplicateMemory(ctx context.Context, arg NearDuplicateMemo
 		&i.Memory.SupersededBy,
 		&i.Memory.CreatedAt,
 		&i.Memory.UpdatedAt,
+		&i.Memory.RetiredReason,
+		&i.Memory.RetiredAt,
 		&i.Score,
 		&i.TitleScore,
 	)
 	return i, err
 }
 
+const retireDuplicateMemory = `-- name: RetireDuplicateMemory :one
+UPDATE memories m SET superseded_by = $1, retired_reason = $2::text, retired_at = now(), updated_at = now()
+WHERE m.id = $3 AND m.workspace_id = $4 AND m.user_id = $5
+  AND m.superseded_by IS NULL AND m.updated_at = $6
+  AND EXISTS (SELECT 1 FROM memories n WHERE n.id = $1 AND n.workspace_id = $4 AND n.user_id = $5 AND n.superseded_by IS NULL)
+RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at
+`
+
+type RetireDuplicateMemoryParams struct {
+	KeepID        *uuid.UUID
+	RetiredReason string
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	UserID        uuid.UUID
+	UpdatedAt     time.Time
+}
+
+// The consolidation pass retires a live entry in favour of another live entry
+// of the same person. No row when either was retired or changed meanwhile.
+func (q *Queries) RetireDuplicateMemory(ctx context.Context, arg RetireDuplicateMemoryParams) (Memory, error) {
+	row := q.db.QueryRow(ctx, retireDuplicateMemory,
+		arg.KeepID,
+		arg.RetiredReason,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.UpdatedAt,
+	)
+	var i Memory
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Title,
+		&i.Summary,
+		&i.Body,
+		&i.Tags,
+		&i.Type,
+		&i.Source,
+		&i.SourceChatID,
+		&i.SourceRunID,
+		&i.SupersededBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RetiredReason,
+		&i.RetiredAt,
+	)
+	return i, err
+}
+
 const searchMemories = `-- name: SearchMemories :many
-SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at,
+SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at, m.retired_reason, m.retired_at,
   (ts_rank(memory_search_vector(m.title, m.summary, m.body, m.tags), websearch_to_tsquery('english', $1::text))
    + similarity(lower(m.title), lower($1::text)))::float8 AS rank
 FROM memories m
@@ -387,6 +512,8 @@ func (q *Queries) SearchMemories(ctx context.Context, arg SearchMemoriesParams) 
 			&i.Memory.SupersededBy,
 			&i.Memory.CreatedAt,
 			&i.Memory.UpdatedAt,
+			&i.Memory.RetiredReason,
+			&i.Memory.RetiredAt,
 			&i.Rank,
 		); err != nil {
 			return nil, err
@@ -400,25 +527,31 @@ func (q *Queries) SearchMemories(ctx context.Context, arg SearchMemoriesParams) 
 }
 
 const setMemorySupersededBy = `-- name: SetMemorySupersededBy :one
-UPDATE memories m SET superseded_by = $1, updated_at = now()
-WHERE m.id = $2 AND m.workspace_id = $3 AND m.user_id = $4
+UPDATE memories m SET superseded_by = $1,
+  retired_reason = CASE WHEN $1::uuid IS NULL THEN '' ELSE $2::text END,
+  retired_at = CASE WHEN $1::uuid IS NULL THEN NULL ELSE now() END,
+  updated_at = now()
+WHERE m.id = $3 AND m.workspace_id = $4 AND m.user_id = $5
   AND ($1::uuid IS NULL OR EXISTS (
-    SELECT 1 FROM memories n WHERE n.id = $1 AND n.workspace_id = $3 AND n.user_id = $4 AND n.superseded_by IS NULL))
-RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at
+    SELECT 1 FROM memories n WHERE n.id = $1 AND n.workspace_id = $4 AND n.user_id = $5 AND n.superseded_by IS NULL))
+RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at
 `
 
 type SetMemorySupersededByParams struct {
-	SupersededBy *uuid.UUID
-	ID           uuid.UUID
-	WorkspaceID  uuid.UUID
-	UserID       uuid.UUID
+	SupersededBy  *uuid.UUID
+	RetiredReason string
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	UserID        uuid.UUID
 }
 
 // Retires an entry in favour of another of the same person's entries, or
 // restores it when superseded_by is null.
+// Retiring records the reason and time; restoring clears them.
 func (q *Queries) SetMemorySupersededBy(ctx context.Context, arg SetMemorySupersededByParams) (Memory, error) {
 	row := q.db.QueryRow(ctx, setMemorySupersededBy,
 		arg.SupersededBy,
+		arg.RetiredReason,
 		arg.ID,
 		arg.WorkspaceID,
 		arg.UserID,
@@ -439,6 +572,8 @@ func (q *Queries) SetMemorySupersededBy(ctx context.Context, arg SetMemorySupers
 		&i.SupersededBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RetiredReason,
+		&i.RetiredAt,
 	)
 	return i, err
 }
@@ -455,7 +590,7 @@ UPDATE memories SET
   source_run_id = CASE WHEN $6::text IS NULL THEN source_run_id ELSE $8 END,
   updated_at = now()
 WHERE id = $9 AND workspace_id = $10 AND user_id = $11
-RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at
+RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at
 `
 
 type UpdateMemoryParams struct {
@@ -504,6 +639,8 @@ func (q *Queries) UpdateMemory(ctx context.Context, arg UpdateMemoryParams) (Mem
 		&i.SupersededBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RetiredReason,
+		&i.RetiredAt,
 	)
 	return i, err
 }

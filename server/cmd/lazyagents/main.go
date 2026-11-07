@@ -26,6 +26,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/config"
 	"github.com/liamphmurphy/lazyagents/server/internal/db"
 	"github.com/liamphmurphy/lazyagents/server/internal/httpapi"
+	"github.com/liamphmurphy/lazyagents/server/internal/memory"
 	"github.com/liamphmurphy/lazyagents/server/internal/metrics"
 	"github.com/liamphmurphy/lazyagents/server/internal/prsync"
 	"github.com/liamphmurphy/lazyagents/server/internal/realtime"
@@ -168,6 +169,9 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		sync := &prsync.Syncer{Pool: pool, Secrets: secretsSvc, Tracker: trackerSvc, Log: log,
 			MinAge: time.Duration(cfg.PRSyncInterval) * time.Second}
 		go sync.Run(ctx, time.Duration(cfg.PRSyncInterval)*time.Second)
+	}
+	if cfg.MemoryConsolidateInterval > 0 {
+		go memory.RunConsolidation(ctx, q, log, time.Duration(cfg.MemoryConsolidateInterval)*time.Second)
 	}
 	hs := &http.Server{
 		Addr:              cfg.Addr,

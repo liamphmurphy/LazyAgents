@@ -27,6 +27,7 @@ const (
 	maxBody    = 20000
 	maxTags    = 12
 	maxTag     = 40
+	maxReason  = 300
 
 	// IndexSize caps the always-loaded index: enough to recognise what's
 	// remembered, small enough to load every turn.
@@ -173,12 +174,12 @@ func (s *Service) update(ctx context.Context, o Owner, id uuid.UUID, p Patch, sr
 }
 
 // Supersede retires an entry in favour of another live entry of the same
-// person, or restores it when by is nil.
-func (s *Service) Supersede(ctx context.Context, o Owner, id uuid.UUID, by *uuid.UUID) (store.Memory, error) {
+// person, recording why, or restores it when by is nil.
+func (s *Service) Supersede(ctx context.Context, o Owner, id uuid.UUID, by *uuid.UUID, reason string) (store.Memory, error) {
 	if by != nil && *by == id {
 		return store.Memory{}, apperr.Invalid("superseded_by", "an entry can't supersede itself")
 	}
-	m, err := s.Q.SetMemorySupersededBy(ctx, store.SetMemorySupersededByParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, SupersededBy: by})
+	m, err := s.Q.SetMemorySupersededBy(ctx, store.SetMemorySupersededByParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, SupersededBy: by, RetiredReason: truncate(oneLine(reason), maxReason)})
 	if errors.Is(err, pgx.ErrNoRows) && by != nil {
 		if _, gerr := s.Get(ctx, o, id); gerr != nil {
 			return m, gerr
@@ -383,6 +384,14 @@ func mergeTags(old, add []string) []string {
 		}
 	}
 	return out
+}
+
+// truncate cuts s to at most n runes.
+func truncate(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n-1]) + "…"
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
