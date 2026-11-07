@@ -1804,7 +1804,9 @@ export interface components {
         /**
          * @description One thing the personal assistant remembers about its person, kept apart
          *     from the shared wiki. superseded_by marks a retired entry and names the
-         *     entry that replaced it.
+         *     entry that replaced it; retired_reason and retired_at say why and when
+         *     (a periodic consolidation pass retires duplicates this way). Restoring
+         *     an entry clears all three.
          */
         Memory: {
             /** Format: uuid */
@@ -1832,6 +1834,13 @@ export interface components {
              * @description Set when retired in favour of this newer entry
              */
             superseded_by?: string;
+            /** @description Why it was retired, e.g. merged by memory consolidation; empty while current */
+            retired_reason?: string;
+            /**
+             * Format: date-time
+             * @description When it was retired
+             */
+            retired_at?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */

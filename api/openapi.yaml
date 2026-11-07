@@ -2334,7 +2334,9 @@ components:
       description: |
         One thing the personal assistant remembers about its person, kept apart
         from the shared wiki. superseded_by marks a retired entry and names the
-        entry that replaced it.
+        entry that replaced it; retired_reason and retired_at say why and when
+        (a periodic consolidation pass retires duplicates this way). Restoring
+        an entry clears all three.
       required: [id, title, summary, body, tags, type, source, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
@@ -2347,6 +2349,8 @@ components:
         source_chat_id: { type: string, format: uuid, description: The chat it came from, while that chat exists }
         source_run_id: { type: string, format: uuid, description: The run that wrote it, while that run exists }
         superseded_by: { type: string, format: uuid, description: Set when retired in favour of this newer entry }
+        retired_reason: { type: string, description: "Why it was retired, e.g. merged by memory consolidation; empty while current" }
+        retired_at: { type: string, format: date-time, description: When it was retired }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     MemoryList:

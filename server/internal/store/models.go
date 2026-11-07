@@ -293,20 +293,23 @@ type Label struct {
 }
 
 type Memory struct {
-	ID           uuid.UUID
-	WorkspaceID  uuid.UUID
-	UserID       uuid.UUID
-	Title        string
-	Summary      string
-	Body         string
-	Tags         []string
-	Type         string
-	Source       string
-	SourceChatID *uuid.UUID
-	SourceRunID  *uuid.UUID
-	SupersededBy *uuid.UUID
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	UserID              uuid.UUID
+	Title               string
+	Summary             string
+	Body                string
+	Tags                []string
+	Type                string
+	Source              string
+	SourceChatID        *uuid.UUID
+	SourceRunID         *uuid.UUID
+	SupersededBy        *uuid.UUID
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	RetiredReason       string
+	RetiredAt           *time.Time
+	ConsolidationExempt bool
 }
 
 type MetricSnapshot struct {
