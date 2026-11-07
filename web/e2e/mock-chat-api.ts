@@ -150,6 +150,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       });
     }
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, queued: 0 });
+    if (path === "/saved-views" && method === "GET") return json({ views: [] });
     if (path === "/knowledge/resolve") {
       // Only the plan page resolves, so the live activity line can link it.
       return json({ links: url.searchParams.getAll("ref").filter((r) => r === PLAN.path).map((r) => ({ ref: r, target: PLAN })) });
