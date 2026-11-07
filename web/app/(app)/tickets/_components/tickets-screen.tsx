@@ -5,7 +5,7 @@ import { DropdownMenu } from "radix-ui";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { cx } from "@/lib/cx";
 import type { TicketStatus, TicketSummary } from "@/lib/api/client";
-import { useBootstrap, useSavedViews, useTickets, type TicketView } from "@/lib/api/hooks";
+import { useBulkEach, useBootstrap, useSavedViews, useTickets, type TicketView } from "@/lib/api/hooks";
 import {
   GROUPS,
   GROUP_NAME,
@@ -68,6 +68,7 @@ function setDensity(d: Density) {
 
 function isTyping(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
+  if (el instanceof HTMLInputElement && ["checkbox", "radio", "button", "submit", "reset"].includes(el.type)) return false;
   return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.getAttribute("role") === "combobox";
 }
 
@@ -175,6 +176,7 @@ export function TicketsScreen() {
   const density = useSyncExternalStore(subscribeDensity, readDensity, () => "comfortable" as Density);
 
   const boot = useBootstrap();
+  const each = useBulkEach();
   // No ?project= resolves to the remembered project; "All projects" leaves it empty.
   const scope = useProjectScope("optional");
   const list = useTickets({ ready, project, view, status, assignee, epic, q: q || undefined });
@@ -266,6 +268,16 @@ export function TicketsScreen() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  async function applyBulk(patch: Parameters<typeof each.mutateAsync>[0]["patch"], label: string) {
+    const keys = [...selectedKeys];
+    try {
+      const outcome = await each.mutateAsync({ keys, patch });
+      onResult({ label, ...outcome });
+    } catch (error) {
+      onResult({ label, updated: [], failed: keys.map((key) => ({ key, status: 0, message: error instanceof Error ? error.message : String(error) })) });
+    }
+  }
 
   function onResult(r: BulkResult) {
     setResult(r);
@@ -469,7 +481,7 @@ export function TicketsScreen() {
       )}
       {selectedKeys.length > 0 && boot.data && (
         <>
-          <BulkBar keys={selectedKeys} agents={boot.data.agents} epics={projectEpics} onClear={() => setSelected(new Set())} onResult={onResult} />
+          <BulkBar keys={selectedKeys} agents={boot.data.agents} epics={projectEpics} onClear={() => setSelected(new Set())} onApply={applyBulk} saving={each.isPending} />
           <p aria-hidden className="pointer-events-none fixed bottom-1 left-1/2 z-40 hidden -translate-x-1/2 whitespace-nowrap text-[11.5px] text-fg-tertiary md:block">
             <Kbd>x</Kbd> select · <Kbd>Shift+x</Kbd> range · <Kbd>j</Kbd>/<Kbd>k</Kbd> move · <Kbd>Enter</Kbd> open · <Kbd>Esc</Kbd> clear
           </p>

@@ -5,7 +5,7 @@ import { DropdownMenu, Popover } from "radix-ui";
 import { useState, type ReactNode } from "react";
 import type { Schemas, TicketPatch } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
-import { useBulkEach, useBulkUpdate } from "@/lib/api/hooks";
+import { useBulkUpdate } from "@/lib/api/hooks";
 import { ESTIMATE_SCALE } from "@/lib/ticket-draft";
 import { failureReason, type BulkResult } from "@/lib/ticket-list";
 import { Button, IconButton } from "@/components/ui/button";
@@ -59,29 +59,22 @@ export function BulkBar({
   agents,
   epics,
   onClear,
-  onResult,
+  onApply,
+  saving,
 }: {
   keys: string[];
   agents: Schemas["Agent"][];
   epics: Schemas["Epic"][];
   onClear: () => void;
-  onResult: (r: BulkResult) => void;
+  onApply: (patch: TicketPatch, label: string) => void;
+  saving: boolean;
 }) {
-  const each = useBulkEach();
   const bulk = useBulkUpdate();
   const [dispatching, setDispatching] = useState(false);
   const [more, setMore] = useState(false);
-  const busy = each.isPending || bulk.isPending;
+  const busy = saving || bulk.isPending;
 
-  function apply(patch: TicketPatch, label: string) {
-    each.mutate(
-      { keys, patch },
-      {
-        onSuccess: (r) => onResult({ label, ...r }),
-        onError: (e) => onResult({ label, updated: [], failed: keys.map((key) => ({ key, status: 0, message: e.message })) }),
-      },
-    );
-  }
+  const apply = onApply;
   const agentName = (id: string | null) => (id ? agents.find((a) => a.id === id)?.name ?? "agent" : "Unassigned");
   const epicName = (id: string | null) => (id ? epics.find((e) => e.id === id)?.name ?? "epic" : "No epic");
 

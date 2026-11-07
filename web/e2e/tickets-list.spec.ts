@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { installBoardApi } from "./mock-board-api";
 
 /** Bulk edits PATCH each ticket without a revision; WEB-4 has a live run, so canceling it is a 409. */
-async function installBulkPatches(page: Page, api: Awaited<ReturnType<typeof installBoardApi>>) {
+async function installBulkPatches(page: Page, api: Awaited<ReturnType<typeof installBoardApi>>, waitForRelease?: Promise<void>) {
   const patched: Array<{ key: string; body: Record<string, unknown> }> = [];
   await page.route("**/api/v1/tickets/*", async (route) => {
     const req = route.request();
@@ -11,6 +11,7 @@ async function installBulkPatches(page: Page, api: Awaited<ReturnType<typeof ins
     if (req.method() !== "PATCH" || !t) return route.fallback();
     const body = req.postDataJSON() as Record<string, unknown>;
     patched.push({ key, body });
+    await waitForRelease;
     if (body.status === "canceled" && key === "WEB-4") {
       return route.fulfill({ status: 409, json: { code: "conflict", message: "cancel the run first" } });
     }
@@ -173,4 +174,50 @@ test("saved views are created, edited, renamed and deleted from the sidebar", as
   await expect(page).not.toHaveURL(/sv=/);
   expect(api.savedViews.map((v) => v.name)).toEqual(["Blocked"]);
   expect(api.unhandled).toEqual([]);
+});
+
+
+test("bulk results survive clearing selection during delayed mixed responses", async ({ page }) => {
+  const api = await installBoardApi(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const patched = await installBulkPatches(page, api, gate);
+  await page.goto("/tickets?project=WEB");
+  await row(page, "WEB-4").getByRole("checkbox").check();
+  await row(page, "WEB-1").getByRole("checkbox").check();
+  const bar = page.getByRole("toolbar", { name: "Bulk actions" });
+  await bar.getByRole("button", { name: "Status", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Canceled" }).click();
+  await expect.poll(() => patched.length).toBeGreaterThan(0);
+  await bar.getByRole("button", { name: "Clear selection" }).click();
+  await expect(bar).toHaveCount(0);
+  release();
+  const result = page.getByRole("alert", { name: "Bulk result" });
+  await expect(result).toContainText("1 updated, 1 failed");
+  await expect(result).toContainText("WEB-4");
+  await expect(result).toContainText("409");
+});
+
+test("row checkbox focus permits list shortcuts while search keeps typing", async ({ page }) => {
+  await installBoardApi(page);
+  await page.goto("/tickets?project=WEB");
+  const checkbox = row(page, "WEB-4").getByRole("checkbox");
+  await checkbox.focus();
+  await page.keyboard.press("Space");
+  await expect(checkbox).toBeChecked();
+  await page.keyboard.press("j");
+  await expect(row(page, "WEB-4")).toHaveAttribute("data-focused", "true");
+  await page.keyboard.press("j");
+  await expect(row(page, "WEB-5")).toHaveAttribute("data-focused", "true");
+  await page.keyboard.press("k");
+  await expect(row(page, "WEB-4")).toHaveAttribute("data-focused", "true");
+  await page.keyboard.press("x");
+  await expect(checkbox).not.toBeChecked();
+  await page.keyboard.press("x");
+  await page.keyboard.press("Escape");
+  await expect(checkbox).not.toBeChecked();
+  const search = page.getByPlaceholder("Search", { exact: true });
+  await search.fill("jkx");
+  await expect(search).toHaveValue("jkx");
+  await expect(checkbox).not.toBeChecked();
 });
