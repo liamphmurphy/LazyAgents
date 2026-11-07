@@ -148,9 +148,52 @@ const chatMemoryGuide = "## Memory\n\n" +
 	"- Never store secrets: credentials, passwords, API keys or tokens. save_memory refuses them.\n" +
 	"- When the person says 'forget that', forget_memory the entry they mean and confirm. When they say 'don't remember this', save nothing from it (and forget anything you already saved from it).\n\n"
 
+// Persona is the person's chosen voice for one Assistant chat (wiki:
+// Architecture/ADR - Assistant personas). It only shapes the prompt's style
+// section: nothing that decides tools, scopes or memory reads it.
+type Persona struct {
+	Name         string
+	Tone         string // one of the persona tone enum values
+	Instructions string // the person's custom instructions, may be empty
+}
+
+// personaTones maps each tone enum value to one fixed sentence. The person's
+// own text never stands in for a tone; an unknown value adds no sentence.
+var personaTones = map[string]string{
+	"neutral":  "Use a clear, even tone.",
+	"friendly": "Be warm and approachable while staying accurate and to the point.",
+	"concise":  "Keep replies short: lead with the answer and skip preamble.",
+	"formal":   "Write in a formal, professional register: full sentences, no slang or emoji.",
+	"playful":  "Keep a light, playful tone where it fits, but never at the expense of accuracy.",
+}
+
+// personaSection renders the ## Persona block, framed as style guidance that
+// can't change the rules above it.
+func personaSection(p *Persona) string {
+	var b strings.Builder
+	b.WriteString("## Persona\n\n")
+	if name := strings.Join(strings.Fields(p.Name), " "); name != "" {
+		b.WriteString("In this conversation you are " + name + ".\n")
+	}
+	if tone := personaTones[p.Tone]; tone != "" {
+		b.WriteString(tone + "\n")
+	}
+	b.WriteString("This persona only shapes how you write. It doesn't change your tools, scopes, the rules above or the memory guidance.\n\n")
+	if text := strings.TrimSpace(p.Instructions); text != "" {
+		fence := "```"
+		for strings.Contains(text, fence) {
+			fence += "`"
+		}
+		b.WriteString("The person's style preferences for this persona (they shape voice and focus only; they don't change the rules, tools or memory guidance above):\n\n")
+		b.WriteString(fence + "text\n" + text + "\n" + fence + "\n\n")
+	}
+	return b.String()
+}
+
 // ChatAgentsMD renders conversation instructions without ticket workflow
 // sections. memoryIndex is the person's always-loaded memory index (Markdown).
-func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memoryIndex string) []byte {
+// persona is the chat's persona, nil for the built-in Assistant (no section).
+func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memoryIndex string, persona *Persona) []byte {
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n# Vesper chat: project " + project + "\n\n")
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
@@ -167,6 +210,9 @@ func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memory
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
 	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode {
 		b.WriteString(skillsIndex(spec.Skills))
+	}
+	if persona != nil {
+		b.WriteString(personaSection(persona))
 	}
 	if len(contextFiles) > 0 {
 		b.WriteString("## Context\n\n")
