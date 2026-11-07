@@ -54,7 +54,8 @@ export function webSearches(events: RunEventLike[] | undefined, since?: string, 
   const out: WebSearches = { queries: [], sources: [], fetched: [], running: false };
   const seen = new Set<string>();
   const add = (url: string, title: string) => {
-    if (!url || seen.has(url)) return;
+    // Links come from the open web: only http(s) may become an href.
+    if (!/^https?:\/\//i.test(url) || seen.has(url)) return;
     seen.add(url);
     const host = hostOf(url);
     out.sources.push({ title: title || host, url, host });

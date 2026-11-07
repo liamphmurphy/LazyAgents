@@ -35,3 +35,13 @@ test("search links tolerate content blocks and bad JSON", () => {
   assert.deepEqual(searchLinks("Links: [oops"), []);
   assert.equal(hostOf("not a url"), "not a url");
 });
+
+test("webSearches drops non-http source links", () => {
+  const ev = [
+    { seq: 1, type: "tool_call", at: "2026-11-07T10:00:01Z", payload: { id: "a", tool: "WebSearch", input: { query: "x" } } },
+    { seq: 2, type: "tool_result", at: "2026-11-07T10:00:02Z", payload: { id: "a", tool: "WebSearch", output: 'Links: [{"title":"bad","url":"javascript:alert(1)"},{"title":"ok","url":"https://ok.example/a"}]' } },
+    { seq: 3, type: "tool_call", at: "2026-11-07T10:00:03Z", payload: { id: "b", tool: "WebFetch", input: { url: "data:text/html,hi" } } },
+  ];
+  const r = webSearches(ev);
+  assert.deepEqual(r.sources.map((s) => s.url), ["https://ok.example/a"]);
+});

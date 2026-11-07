@@ -23,32 +23,33 @@ function Badge({ name }: { name: string }) {
 export function useAttachments() {
   const [items, setItems] = useState<Item[]>([]);
   const next = useRef(0);
-  const count = useRef(0);
+  // Keys counted toward the per-message limit: uploading or uploaded, not rejected or removed.
+  const live = useRef(new Set<number>());
   const patch = (key: number, p: Partial<Item>) => setItems((xs) => xs.map((x) => (x.key === key ? { ...x, ...p } : x)));
 
   function add(files: File[]) {
     for (const f of files) {
       const key = next.current++;
-      const problem = attachmentProblem(f) ?? (count.current >= MAX_ATTACHMENTS ? `max ${MAX_ATTACHMENTS} per message` : undefined);
+      const problem = attachmentProblem(f) ?? (live.current.size >= MAX_ATTACHMENTS ? `max ${MAX_ATTACHMENTS} per message` : undefined);
       if (problem) {
         setItems((xs) => [...xs, { key, name: f.name, size: f.size, status: "error", error: problem }]);
         continue;
       }
-      count.current++;
+      live.current.add(key);
       setItems((xs) => [...xs, { key, name: f.name, size: f.size, status: "uploading" }]);
       const form = new FormData();
       form.append("file", f);
       postForm<Attachment>("/chat-attachments", form).then(
         (a) => patch(key, { status: "done", id: a.id }),
         (e: unknown) => {
-          count.current--;
+          live.current.delete(key);
           patch(key, { status: "error", error: e instanceof Error ? e.message : "upload failed" });
         },
       );
     }
   }
   function remove(key: number) {
-    if (items.find((x) => x.key === key)?.status !== "error") count.current--;
+    live.current.delete(key);
     setItems((xs) => xs.filter((x) => x.key !== key));
   }
   return {
@@ -58,7 +59,7 @@ export function useAttachments() {
     pending: items.some((x) => x.status === "uploading"),
     ids: items.flatMap((x) => (x.status === "done" && x.id ? [x.id] : [])),
     clear: () => {
-      count.current = 0;
+      live.current.clear();
       setItems([]);
     },
   };
