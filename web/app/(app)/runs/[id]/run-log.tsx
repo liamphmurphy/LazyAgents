@@ -26,6 +26,7 @@ import { RUN_ENDED, RUN_STATE as STATE, StatusPill } from "@/components/domain/r
 import { TopBar, type Crumb } from "@/components/shell/topbar";
 import { ActionBox, RunRail, confirmCancel } from "./run-panels";
 import { CostValue, SimpleHeader, SimpleView } from "./run-simple";
+import { RunGraphView } from "./run-graph-view";
 
 type RunDetail = Schemas["RunDetail"];
 type RunEvent = Schemas["RunEvent"];
@@ -417,6 +418,13 @@ export function RunLogScreen({ id }: { id: string }) {
     setTurnOpen({});
     switchMode("details", `#turn-${n}`);
   };
+  /** From Graph: open an event (an error) in Details. */
+  const openEvent = (seq: number) => {
+    setFollow(false);
+    setAllOpen(false);
+    setTurnOpen({});
+    switchMode("details", `#event-${seq}`);
+  };
 
   if (isError) {
     return (
@@ -460,6 +468,7 @@ export function RunLogScreen({ id }: { id: string }) {
   };
   const isOpen = (n: number) => turnOpen[n] ?? (allOpen || n === (focusTurn ?? lastTurn));
   const grandchildren = children.map((c) => c.data?.child_runs as Run[] | undefined);
+  const childDetails = children.map((c) => c.data);
   return (
     <div className="flex flex-col lg:h-dvh">
       <TopBar
@@ -470,7 +479,7 @@ export function RunLogScreen({ id }: { id: string }) {
               label="Run view"
               value={mode}
               onChange={(m) => switchMode(m)}
-              options={[{ value: "simple", label: "Simple" }, { value: "details", label: "Details" }]}
+              options={[{ value: "simple", label: "Simple" }, { value: "details", label: "Details" }, { value: "graph", label: "Graph" }]}
             />
             {mode === "details" && <ButtonLink href={`/settings/runner?run_id=${run.id}`} variant="outline">Environment</ButtonLink>}
             {mode === "details" && lastLog && (
@@ -507,7 +516,7 @@ export function RunLogScreen({ id }: { id: string }) {
           </>
         }
       />
-      {mode === "simple" ? <SimpleHeader d={d} /> : <Header d={d} />}
+      {mode === "details" ? <Header d={d} /> : <SimpleHeader d={d} />}
       {control.isError && (
         <div className="px-6 pt-3">
           <Banner tone="blocked" title={control.variables === "retry" ? "Couldn't retry the run" : "Couldn't change the run"}>
@@ -518,6 +527,8 @@ export function RunLogScreen({ id }: { id: string }) {
       <ActionBox d={d} />
       {mode === "simple" ? (
         <SimpleView d={d} ended={!live} onOpenTurn={openTurn} onDetails={() => switchMode("details")} />
+      ) : mode === "graph" ? (
+        <RunGraphView d={d} childDetails={childDetails} onOpenTurn={openTurn} onOpenEvent={openEvent} />
       ) : (
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section aria-label="Events" className="flex min-h-0 min-w-0 flex-1 flex-col">
