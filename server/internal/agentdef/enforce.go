@@ -49,6 +49,7 @@ var Catalog = map[string]ScopeInfo{
 	"repo:read":       {Description: "Clone and read the project repo", Secret: "git:pat"},
 	"repo:write":      {Description: "Push branches, open PRs", Secret: "git:pat"},
 	"tests:run":       {Description: "Run the test suite"},
+	"web:read":        {Description: "Fetch web pages and search the web"},
 	"db:migrate":      {Description: "Apply migrations to staging", Secret: "db:staging", Brokered: true},
 	"db:read-staging": {Description: "Query the staging snapshot", Secret: "db:staging-readonly"},
 	"deploy:staging":  {Description: "Trigger a staging deploy", Secret: "deploy:staging", Brokered: true},

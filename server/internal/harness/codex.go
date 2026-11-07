@@ -66,6 +66,13 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	} else {
 		cfg = append(cfg, "sandbox_mode="+tomlString(sandbox))
 	}
+	// Codex can't route web search through Vesper approval, so it's live only
+	// when web:read is plainly allowed.
+	web := "disabled"
+	if allowed(spec, "web:read") && spec.HarnessOptions["readonly"] != "true" {
+		web = "live"
+	}
+	cfg = append(cfg, "web_search="+tomlString(web))
 	if effort := spec.HarnessOptions["effort"]; effort != "" {
 		if effort == "xhigh" || effort == "max" {
 			effort = "high"

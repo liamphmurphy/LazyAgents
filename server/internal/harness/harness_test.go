@@ -547,3 +547,44 @@ func TestAgentsMDEpicReview(t *testing.T) {
 		t.Fatal("epic review section belongs before Git/GitHub")
 	}
 }
+
+func TestWebToolsFollowWebReadScope(t *testing.T) {
+	tools := func(argv []string, f string) []string { return strings.Split(flag(argv, f), ",") }
+	for mode, want := range map[string]bool{"allowed": true, "requires_approval": true, "denied": false, "": false} {
+		s := spec("repo:read", "allowed")
+		if mode != "" {
+			s = spec("repo:read", "allowed", "web:read", mode)
+		}
+		inv, err := ClaudeCode{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tool := range []string{"WebFetch", "WebSearch"} {
+			if got := slices.Contains(tools(inv.Argv, "--allowedTools"), tool); got != want {
+				t.Errorf("claude web:read=%q: %s allowed=%v", mode, tool, got)
+			}
+		}
+		codex, err := Codex{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		web := `web_search="disabled"`
+		if mode == "allowed" {
+			web = `web_search="live"`
+		}
+		if !slices.Contains(codex.Argv, web) {
+			t.Errorf("codex web:read=%q: want %s in %v", mode, web, codex.Argv)
+		}
+	}
+	// Planning runs never get the web, even with the scope.
+	s := spec("web:read", "allowed")
+	s.HarnessOptions = map[string]string{"readonly": "true"}
+	inv, _ := ClaudeCode{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
+	if slices.Contains(tools(inv.Argv, "--allowedTools"), "WebFetch") || !slices.Contains(tools(inv.Argv, "--disallowedTools"), "WebFetch") {
+		t.Errorf("readonly claude web tools: %v", inv.Argv)
+	}
+	codex, _ := Codex{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
+	if !slices.Contains(codex.Argv, `web_search="disabled"`) {
+		t.Errorf("readonly codex web search: %v", codex.Argv)
+	}
+}
