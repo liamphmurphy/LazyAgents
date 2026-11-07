@@ -75,8 +75,11 @@ func TestPlanningWorkflow(t *testing.T) {
 	}
 	requireStatus(request("POST", "/api/v1/planning-sessions", map[string]any{"project": "PAY", "agent_id": a.ID, "goal": ""}, ""), 422)
 	requireStatus(request("POST", "/api/v1/planning-sessions", map[string]any{"project": "UNKNOWN", "agent_id": a.ID, "goal": "Plan"}, ""), 422)
+	// Attached context must belong to the plan's project.
+	requireStatus(request("POST", "/api/v1/planning-sessions", map[string]any{"project": "PAY", "agent_id": a.ID, "goal": "Plan", "context_refs": []map[string]any{{"kind": "ticket", "key": "NOPE-1"}}}, ""), 422)
 	before := count()
-	w := request("POST", "/api/v1/planning-sessions", map[string]any{"project": "PAY", "agent_id": a.ID, "goal": "Plan reconciliation", "artifact_id": source}, "")
+	refs := []map[string]any{{"kind": "ticket", "key": "PAY-214"}, {"kind": "artifact", "id": source}}
+	w := request("POST", "/api/v1/planning-sessions", map[string]any{"project": "PAY", "agent_id": a.ID, "goal": "Plan reconciliation", "artifact_id": source, "context_refs": refs}, "")
 	requireStatus(w, 201)
 	var plan api.PlanningSession
 	if err := json.Unmarshal(w.Body.Bytes(), &plan); err != nil {
@@ -85,9 +88,21 @@ func TestPlanningWorkflow(t *testing.T) {
 	if count() != before || plan.State != "planning" || plan.RunState != "queued" || plan.SourceVersionId == nil {
 		t.Fatalf("start created work prematurely: %+v", plan)
 	}
+	if len(plan.ContextRefs) != 2 || plan.ContextRefs[0].Key == nil || *plan.ContextRefs[0].Key != "PAY-214" || plan.ProposalCount != 0 {
+		t.Fatalf("context refs not echoed: %+v", plan.ContextRefs)
+	}
 	run, err := q.GetRun(ctx, store.GetRunParams{ID: plan.RunId, WorkspaceID: me.WorkspaceID})
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The prompt lists the attached files, and the runner delivers them there.
+	var prompt string
+	if err := pool.QueryRow(ctx, "SELECT input_message FROM run_turns WHERE run_id=$1", run.ID).Scan(&prompt); err != nil {
+		t.Fatal(err)
+	}
+	refFiles, err := runner.PlanningRefFiles(ctx, q, run)
+	if err != nil || len(refFiles) != 2 || refFiles[0].Path != runs.PlanningRefPath(0) || !strings.Contains(string(refFiles[0].Body), "PAY-214") || !strings.Contains(prompt, runs.PlanningRefPath(1)) {
+		t.Fatalf("attached context not delivered: %+v, %v, prompt %q", refFiles, err, prompt)
 	}
 	spec, _ := runs.Spec(run)
 	if run.TicketID != nil || spec.Mode("repo:write") != "denied" || len(spec.Setup) != 0 || len(spec.MCPServers) != 0 || spec.HarnessOptions["sandbox"] != "read-only" {
@@ -144,7 +159,7 @@ func TestPlanningWorkflow(t *testing.T) {
 	w = request("GET", "/api/v1/planning-sessions/"+plan.Id.String(), nil, "")
 	requireStatus(w, 200)
 	_ = json.Unmarshal(w.Body.Bytes(), &plan)
-	if plan.State != "review" || plan.RunState != "completed" || len(plan.Proposals) != 2 {
+	if plan.State != "review" || plan.RunState != "completed" || len(plan.Proposals) != 2 || plan.ProposalCount != 2 {
 		t.Fatalf("not ready for review: %+v", plan)
 	}
 	inbox := request("GET", "/api/v1/inbox", nil, "")
