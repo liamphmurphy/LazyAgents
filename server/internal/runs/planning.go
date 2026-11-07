@@ -226,6 +226,9 @@ func validateProposals(ctx context.Context, q *store.Queries, ws uuid.UUID, item
 			if err != nil || sa.ArchivedAt != nil {
 				return apperr.Invalid("agent_id", "unknown suggested agent")
 			}
+			if sa.Kind == "assistant" {
+				return apperr.Invalid("agent_id", "@%s is the Personal Assistant; suggest a main agent", sa.Handle)
+			}
 			if sa.Kind == "sub" {
 				return apperr.Invalid("agent_id", "@%s is a sub agent; suggest a main agent, which can delegate to it", sa.Handle)
 			}

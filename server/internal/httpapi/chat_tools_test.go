@@ -75,7 +75,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	}
 	mobTicket := mt.Key
 
-	chat, err := rs.StartChat(ctx, ws, me.ID, runs.ChatInput{Project: "PAY", AgentID: atlas.ID, Title: "Tools", Message: &runs.ChatMessageInput{Body: "hello"}})
+	chat, err := rs.StartChat(ctx, ws, me.ID, runs.ChatInput{Project: "PAY", Title: "Tools", Message: &runs.ChatMessageInput{Body: "hello"}})
 	if err != nil {
 		t.Fatal(err)
 	}

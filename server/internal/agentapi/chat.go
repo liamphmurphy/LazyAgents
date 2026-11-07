@@ -15,7 +15,7 @@ import (
 
 // chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
-var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics",
+var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
 	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory"}
 
 // chatScope is the project a chat run may read from.
@@ -61,9 +61,9 @@ func (s *chatScope) allowsArtifact(a store.Artifact) bool {
 
 func (s *chatScope) allowsTicket(t store.Ticket) bool { return s == nil || t.ProjectID == s.ProjectID }
 
-const chatInstructions = `You are answering a person in a chat about project %s (chat %s). Answer directly.
-Look things up with search_knowledge, read_page, read_artifact, get_ticket and get_backlinks, and cite what you used with [[…]] links.
-Use create_ticket, create_epic and list_epics to manage work in this project when asked. Never claim tickets, execute project work, or delegate. Return links or identifiers for anything you create.
+const chatInstructions = `You are the person's Personal Assistant, chatting about project %s (chat %s). Answer directly.
+Look things up with list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks; search first and open only what matters. Cite what you used with [[…]] links.
+Use create_ticket and create_epic when asked and return their identifiers. Never claim tickets, execute project work, or delegate.
 You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this".`
 
 // sourceVisible reports whether a link target or backlink source of this kind

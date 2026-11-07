@@ -154,7 +154,7 @@ func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memory
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n# LazyAgents chat: project " + project + "\n\n")
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
-	b.WriteString("Use search_knowledge, read_page, read_artifact, get_ticket and get_backlinks to look up project context. Cite sources with [[…]].\n")
+	b.WriteString("Use list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks to look up project context. Cite sources with [[…]].\n")
 	b.WriteString("Use create_ticket, create_epic and list_epics to manage this project when the person asks. Return identifiers for created items. Do not call claim_ticket, complete_run or propose_tickets. Do not modify files, run shell commands, delegate work, or write wiki notes.\n\n")
 	b.WriteString(chatMemoryGuide)
 	if idx := strings.TrimSpace(memoryIndex); idx != "" {

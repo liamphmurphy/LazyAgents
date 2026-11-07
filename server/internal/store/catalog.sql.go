@@ -347,9 +347,10 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 }
 
 const listAgents = `-- name: ListAgents :many
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY color_index, name
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND archived_at IS NULL AND kind <> 'assistant' ORDER BY color_index, name
 `
 
+// The roster of agents that work on tickets; the Personal Assistant isn't one.
 func (q *Queries) ListAgents(ctx context.Context, workspaceID uuid.UUID) ([]Agent, error) {
 	rows, err := q.db.Query(ctx, listAgents, workspaceID)
 	if err != nil {

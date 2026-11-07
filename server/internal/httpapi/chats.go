@@ -233,9 +233,6 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 	}
 	b := req.Body
 	in := runs.ChatInput{Project: b.Project, Title: deref(b.Title), Model: deref(b.Model)}
-	if b.AgentId != nil {
-		in.AgentID = *b.AgentId
-	}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}

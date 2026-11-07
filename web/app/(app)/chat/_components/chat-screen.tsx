@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useChat, useChats, useCreateChat, useUpdateChat } from "@/lib/api/hooks";
-import { defaultChatAgent } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import { Button, IconButton } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/controls";
@@ -13,7 +12,6 @@ import { Banner, EmptyState, Skeleton, TextInput } from "@/components/ui/primiti
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { Conversation } from "./conversation";
-import { AgentPicker, rememberChatAgent, useRememberedChatAgent } from "./agent-picker";
 import { RestoreChat } from "./restore";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 
@@ -122,25 +120,14 @@ export function ChatScreen({ id }: { id?: string }) {
   const health = useHarnessHealth();
   const noHarness = !!health && !health.ready;
 
-  // The agent a new chat answers as: the last one picked, else the newest chat's, else the first main agent.
-  const mainAgents = boot.data?.agents.filter((a) => a.kind === "main") ?? [];
-  const agent = defaultChatAgent(mainAgents, useRememberedChatAgent(), active.data?.chats);
-
   function newChat() {
     // /chat?attach=… (from a Start chat link) carries over to the new chat.
     const q = new URLSearchParams({ project });
     for (const v of search.getAll("attach")) q.append("attach", v);
     const t = search.get("attach_title");
     if (t) q.set("attach_title", t);
-    create.mutate(
-      { project, ...(agent ? { agent_id: agent.id } : {}) },
-      {
-        onSuccess: (c) => {
-          rememberChatAgent(c.agent.id);
-          router.push(`/chat/${c.id}?${q.toString()}`);
-        },
-      },
-    );
+    // Every chat is with the Personal Assistant: there is no agent to pick.
+    create.mutate({ project }, { onSuccess: (c) => router.push(`/chat/${c.id}?${q.toString()}`) });
   }
   const list = chats.data?.chats;
   return (
@@ -159,12 +146,6 @@ export function ChatScreen({ id }: { id?: string }) {
               New chat
             </Button>
           </div>
-          {agent && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-fg-tertiary">Agent</span>
-              <AgentPicker agents={mainAgents} value={agent} onChange={(a) => rememberChatAgent(a.id)} disabled={create.isPending} />
-            </div>
-          )}
           {noHarness && <NoHarnessNote health={health} />}
           {create.isError && (
             <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(create.error)}</p>

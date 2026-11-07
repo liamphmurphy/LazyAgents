@@ -125,6 +125,34 @@ func (q *Queries) ArchiveChatSession(ctx context.Context, arg ArchiveChatSession
 	return i, err
 }
 
+const assistantAgent = `-- name: AssistantAgent :one
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND kind = 'assistant'
+`
+
+// The workspace's Personal Assistant: the agent every chat runs as.
+func (q *Queries) AssistantAgent(ctx context.Context, workspaceID uuid.UUID) (Agent, error) {
+	row := q.db.QueryRow(ctx, assistantAgent, workspaceID)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Handle,
+		&i.ColorIndex,
+		&i.Role,
+		&i.Specialty,
+		&i.Model,
+		&i.Status,
+		&i.MaxConcurrency,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentDefinitionVersionID,
+		&i.Kind,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
 const chatLastErrors = `-- name: ChatLastErrors :many
 SELECT DISTINCT ON (session_id) session_id, body_md FROM chat_messages
 WHERE session_id = ANY($1::uuid[]) AND role = 'system'
@@ -309,6 +337,55 @@ func (q *Queries) CountChatHistory(ctx context.Context, sessionID uuid.UUID) (in
 	return column_1, err
 }
 
+const createAssistantAgent = `-- name: CreateAssistantAgent :one
+INSERT INTO agents (workspace_id, name, handle, color_index, role, specialty, model, status, kind)
+VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle', 'assistant')
+ON CONFLICT DO NOTHING RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at
+`
+
+type CreateAssistantAgentParams struct {
+	WorkspaceID uuid.UUID
+	Name        string
+	Handle      string
+	ColorIndex  int32
+	Role        string
+	Specialty   string
+	Model       string
+}
+
+// Creates the workspace's Personal Assistant. Returns no row when a concurrent
+// call already made it (or the handle is taken).
+func (q *Queries) CreateAssistantAgent(ctx context.Context, arg CreateAssistantAgentParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, createAssistantAgent,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.Handle,
+		arg.ColorIndex,
+		arg.Role,
+		arg.Specialty,
+		arg.Model,
+	)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Handle,
+		&i.ColorIndex,
+		&i.Role,
+		&i.Specialty,
+		&i.Model,
+		&i.Status,
+		&i.MaxConcurrency,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentDefinitionVersionID,
+		&i.Kind,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
 const createChatSession = `-- name: CreateChatSession :one
 INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
@@ -356,11 +433,11 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 }
 
 const defaultChatAgent = `-- name: DefaultChatAgent :one
-SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND kind <> 'sub' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1
+SELECT id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at FROM agents WHERE workspace_id = $1 AND kind = 'main' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1
 `
 
-// The default agent for a chat that names none: the oldest main (non-sub) agent,
-// ties broken by name then id so the choice is deterministic.
+// The oldest main agent, ties broken by name then id so the choice is
+// deterministic. A new Personal Assistant starts on its harness and model.
 func (q *Queries) DefaultChatAgent(ctx context.Context, workspaceID uuid.UUID) (Agent, error) {
 	row := q.db.QueryRow(ctx, defaultChatAgent, workspaceID)
 	var i Agent
@@ -857,6 +934,20 @@ func (q *Queries) RenameChatSession(ctx context.Context, arg RenameChatSessionPa
 		&i.LastMessageAt,
 	)
 	return i, err
+}
+
+const setChatAgent = `-- name: SetChatAgent :exec
+UPDATE chat_sessions SET agent_id = $2 WHERE id = $1
+`
+
+type SetChatAgentParams struct {
+	ID      uuid.UUID
+	AgentID uuid.UUID
+}
+
+func (q *Queries) SetChatAgent(ctx context.Context, arg SetChatAgentParams) error {
+	_, err := q.db.Exec(ctx, setChatAgent, arg.ID, arg.AgentID)
+	return err
 }
 
 const setChatRunState = `-- name: SetChatRunState :one

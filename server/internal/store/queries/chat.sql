@@ -153,9 +153,13 @@ WHERE id = $1 RETURNING *;
 DELETE FROM chat_sessions WHERE id = $1;
 
 -- name: DefaultChatAgent :one
--- The default agent for a chat that names none: the oldest main (non-sub) agent,
--- ties broken by name then id so the choice is deterministic.
-SELECT * FROM agents WHERE workspace_id = $1 AND kind <> 'sub' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1;
+-- The oldest main agent, ties broken by name then id so the choice is
+-- deterministic. A new Personal Assistant starts on its harness and model.
+SELECT * FROM agents WHERE workspace_id = $1 AND kind = 'main' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1;
+
+-- name: AssistantAgent :one
+-- The workspace's Personal Assistant: the agent every chat runs as.
+SELECT * FROM agents WHERE workspace_id = $1 AND kind = 'assistant';
 
 -- name: OwnsChatRun :one
 SELECT EXISTS (
@@ -165,3 +169,13 @@ SELECT EXISTS (
       SELECT 1 FROM chat_messages m WHERE m.session_id = s.id AND m.run_id = sqlc.arg(run_id)::uuid
     ))
 )::boolean;
+
+-- name: CreateAssistantAgent :one
+-- Creates the workspace's Personal Assistant. Returns no row when a concurrent
+-- call already made it (or the handle is taken).
+INSERT INTO agents (workspace_id, name, handle, color_index, role, specialty, model, status, kind)
+VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle', 'assistant')
+ON CONFLICT DO NOTHING RETURNING *;
+
+-- name: SetChatAgent :exec
+UPDATE chat_sessions SET agent_id = $2 WHERE id = $1;

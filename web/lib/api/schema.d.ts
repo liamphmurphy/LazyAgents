@@ -1436,8 +1436,9 @@ export interface paths {
          * Start a chat in a project
          * @description Creates an idle chat. Nothing runs until the first message. When
          *     `message` is set it is posted as the first message (same rules as
-         *     POST /chats/{id}/messages). 422 for an unknown or archived project,
-         *     an unknown or sub agent, or a harness/model not in GET /chat-models.
+         *     POST /chats/{id}/messages). Every chat is with the workspace's
+         *     Personal Assistant, created on first use. 422 for an unknown or
+         *     archived project, or a harness/model not in GET /chat-models.
          */
         post: operations["createChat"];
         delete?: never;
@@ -1594,10 +1595,10 @@ export interface components {
             revision: number;
         };
         /**
-         * @description main agents are assigned tickets and may delegate parts of them; sub agents only run when a main agent delegates to them
+         * @description main agents are assigned tickets and may delegate parts of them; sub agents only run when a main agent delegates to them; the assistant is the workspace's Personal Assistant, which every chat runs as (it can't be created, edited, deleted or assigned tickets)
          * @enum {string}
          */
-        AgentKind: "main" | "sub";
+        AgentKind: "main" | "sub" | "assistant";
         Agent: {
             kind: components["schemas"]["AgentKind"];
             /** Format: uuid */
@@ -3370,11 +3371,6 @@ export interface components {
             /** @description Project key */
             project: string;
             title?: string;
-            /**
-             * Format: uuid
-             * @description A main agent; the server picks the default when omitted
-             */
-            agent_id?: string;
             harness?: components["schemas"]["Harness"];
             /** @description Defaults to the harness's default model in GET /chat-models */
             model?: string;

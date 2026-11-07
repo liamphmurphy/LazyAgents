@@ -33,16 +33,16 @@ func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
 	}
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
-	r.Instructions = "You are chatting with a person. Answer directly, use context tools to look things up, and cite sources with [[…]]. Use create_ticket, create_epic and list_epics for requested project changes. Do not claim tickets, execute project work, or write memory.\n\n" + r.Instructions
+	// Every chat is the Personal Assistant, whichever agent it was started with.
+	r.Instructions = agents.AssistantInstructions
 	return r
 }
 
-// ChatInput opens an idle conversation; its first message creates the segment run.
-// AgentID may be the zero UUID, which picks the default agent (see DefaultChatAgent).
-// An empty Harness/Model keeps what the agent and project resolve to.
+// ChatInput opens an idle conversation with the Personal Assistant; its first
+// message creates the segment run. An empty Harness/Model keeps what the
+// assistant and project resolve to.
 type ChatInput struct {
 	Project string
-	AgentID uuid.UUID
 	Title   string
 	Harness string
 	Model   string
@@ -83,26 +83,9 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if p.Archived {
 			return apperr.Conflict("restore the archived project before starting a chat")
 		}
-		var a store.Agent
-		if in.AgentID == uuid.Nil {
-			a, err = q.DefaultChatAgent(ctx, ws)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return apperr.Invalid("agent_id", "the workspace has no main agent to chat with")
-			}
-		} else {
-			a, err = q.GetAgent(ctx, store.GetAgentParams{ID: in.AgentID, WorkspaceID: ws})
-			if errors.Is(err, pgx.ErrNoRows) {
-				return apperr.Invalid("agent_id", "unknown agent")
-			}
-		}
+		a, err := agents.EnsureAssistant(ctx, q, ws)
 		if err != nil {
 			return err
-		}
-		if a.ArchivedAt != nil {
-			return apperr.Invalid("agent_id", "unknown agent")
-		}
-		if a.Kind == "sub" {
-			return apperr.Invalid("agent_id", "pick a main agent")
 		}
 		spec, err := agents.Resolve(ctx, q, ws, a, p.Key)
 		if err != nil {
@@ -224,9 +207,16 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		}
 	}
 	if fresh {
-		a, err := q.GetAgent(ctx, store.GetAgentParams{ID: chat.AgentID, WorkspaceID: chat.WorkspaceID})
+		// Chats started before the Personal Assistant existed move to it at their next segment.
+		a, err := agents.EnsureAssistant(ctx, q, chat.WorkspaceID)
 		if err != nil {
 			return chat, msg, err
+		}
+		if chat.AgentID != a.ID {
+			if err = q.SetChatAgent(ctx, store.SetChatAgentParams{ID: chat.ID, AgentID: a.ID}); err != nil {
+				return chat, msg, err
+			}
+			chat.AgentID = a.ID
 		}
 		spec, err := agents.Resolve(ctx, q, chat.WorkspaceID, a, p.Key)
 		if err != nil {
