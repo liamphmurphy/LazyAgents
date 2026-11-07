@@ -57,7 +57,16 @@ func TestProjectManagementAndDependencies(t *testing.T) {
 		t.Fatalf("project %+v", project)
 	}
 	call("POST", "/api/v1/projects", create, 409, nil)
-	for _, url := range []string{"https://token@github.com/example/operations", "file:///tmp/project", "git@github.com:example/repo.git?token=secret", "git@gitlab.com:example/repo.git"} {
+	// An HTTPS GitHub link is accepted and stored in SSH form (LAZYAGENTS-44).
+	https := create
+	https.Key = "WEBX"
+	https.RepoUrl = "https://github.com/example/operations"
+	var viaHTTPS api.Project
+	call("POST", "/api/v1/projects", https, 201, &viaHTTPS)
+	if viaHTTPS.RepoUrl == nil || *viaHTTPS.RepoUrl != "git@github.com:example/operations.git" {
+		t.Fatalf("https repo_url stored as %v", viaHTTPS.RepoUrl)
+	}
+	for _, url := range []string{"http://github.com/example/operations", "https://token@github.com/example/operations", "file:///tmp/project", "git@github.com:example/repo.git?token=secret", "git@gitlab.com:example/repo.git"} {
 		bad := create
 		bad.Key = "BAD"
 		bad.RepoUrl = url

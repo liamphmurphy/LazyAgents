@@ -66,8 +66,8 @@ func TestSetRevealAndProjectPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sec.GrantsScope == nil || *sec.GrantsScope != "db:migrate" || sec.Preview != "" {
-		t.Fatalf("defaults: grants=%v preview=%q", sec.GrantsScope, sec.Preview)
+	if sec.GrantsScope == nil || *sec.GrantsScope != "db:migrate" {
+		t.Fatalf("defaults: grants=%v", sec.GrantsScope)
 	}
 	// Replacing keeps one row and still decrypts (identity-bound, not id-bound).
 	if _, err := s.Set(ctx, ws, me.ID, SetInput{Name: "db:staging", Value: "postgres://ws-level-dsn-5678"}); err != nil {
@@ -90,11 +90,6 @@ func TestSetRevealAndProjectPrecedence(t *testing.T) {
 	rows, _ := q.ListSecrets(ctx, ws)
 	if len(rows) != 2 {
 		t.Fatalf("secrets = %d, want 2", len(rows))
-	}
-	// Short values get no preview, so nothing guessable is shown.
-	short, _ := s.Set(ctx, ws, me.ID, SetInput{Name: "harness:anthropic", Value: "sk-short"})
-	if short.Preview != "" {
-		t.Fatalf("preview for short value = %q", short.Preview)
 	}
 	if _, err := s.Reveal(ctx, ws, nil, "nope:missing"); !errors.Is(err, apperr.ErrNotFound) {
 		t.Fatalf("missing = %v", err)

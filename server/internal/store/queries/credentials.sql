@@ -23,11 +23,11 @@ UPDATE agent_tokens SET revoked_at = now()
 WHERE id = $1 AND agent_id = $2 AND revoked_at IS NULL;
 
 -- name: UpsertSecret :one
-INSERT INTO secrets (id, workspace_id, project_id, name, grants_scope, nonce, ciphertext, preview, created_by_user_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO secrets (id, workspace_id, project_id, name, grants_scope, nonce, ciphertext, created_by_user_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (workspace_id, coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid), name) DO UPDATE
 SET grants_scope = EXCLUDED.grants_scope, nonce = EXCLUDED.nonce, ciphertext = EXCLUDED.ciphertext,
-    preview = EXCLUDED.preview, created_by_user_id = EXCLUDED.created_by_user_id
+    created_by_user_id = EXCLUDED.created_by_user_id
 RETURNING *;
 
 -- name: FindSecret :one

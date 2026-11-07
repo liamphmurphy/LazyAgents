@@ -28,27 +28,26 @@ type Config struct {
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 var repoPattern = regexp.MustCompile(`^(?:git@github\.com:|ssh://git@github\.com/)[A-Za-z0-9][A-Za-z0-9-]{0,99}/[A-Za-z0-9._-]+$`)
+var httpsRepoPattern = regexp.MustCompile(`^https://(?:www\.)?github\.com/([A-Za-z0-9][A-Za-z0-9-]{0,99})/([A-Za-z0-9._-]+?)(?:\.git)?$`)
 var branchPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}$`)
 
-// normalize validates everything, including a GitHub repo_url (Create).
+// normalize validates everything, including a strict GitHub repo_url (Create).
 func normalize(in *Config) error {
 	if err := normalizeBase(in); err != nil {
 		return err
 	}
-	in.RepoURL = sshRepoURL(in.RepoURL)
-	return validateRepoURL(in.RepoURL)
+	return canonicalRepoURL(&in.RepoURL)
 }
 
-func sshRepoURL(u string) string {
-	if strings.HasPrefix(u, "https://github.com/") {
-		return "git@github.com:" + strings.TrimPrefix(u, "https://github.com/")
+// canonicalRepoURL accepts an SSH GitHub URL as-is, rewrites an HTTPS GitHub
+// link (https://github.com/owner/repo[.git]) to its SSH form so runs clone and
+// push with git:ssh, and rejects anything else. web/lib/repo-url.ts mirrors it.
+func canonicalRepoURL(u *string) error {
+	if m := httpsRepoPattern.FindStringSubmatch(*u); m != nil {
+		*u = "git@github.com:" + m[1] + "/" + m[2] + ".git"
 	}
-	return u
-}
-
-func validateRepoURL(u string) error {
-	if u != "" && (!repoPattern.MatchString(u) || strings.HasSuffix(u, "/..") || strings.HasSuffix(u, "/.")) {
-		return apperr.Invalid("repo_url", "use git@github.com:owner/repo.git or https://github.com/owner/repo")
+	if *u != "" && (!repoPattern.MatchString(*u) || strings.HasSuffix(*u, "/...git") || strings.HasSuffix(*u, "/..git") || strings.HasSuffix(*u, "/..") || strings.HasSuffix(*u, "/.")) {
+		return apperr.Invalid("repo_url", "use a GitHub repository URL like git@github.com:owner/repo.git or https://github.com/owner/repo")
 	}
 	return nil
 }
@@ -116,14 +115,14 @@ func (s Service) Update(ctx context.Context, ws uuid.UUID, key string, in Config
 		if p.Revision != in.Revision {
 			return apperr.Conflict("the project changed; reload before saving")
 		}
-		// Keep unchanged legacy settings; normalize and validate only changed URLs.
+		// An unchanged (possibly legacy HTTPS) value is kept as-is; a new one
+		// must be GitHub and is stored in SSH form.
 		stored := ""
 		if p.RepoUrl != nil {
 			stored = *p.RepoUrl
 		}
 		if in.RepoURL != stored {
-			in.RepoURL = sshRepoURL(in.RepoURL)
-			if err := validateRepoURL(in.RepoURL); err != nil {
+			if err := canonicalRepoURL(&in.RepoURL); err != nil {
 				return err
 			}
 		}

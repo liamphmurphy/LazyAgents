@@ -125,7 +125,7 @@ func (s *Service) Set(ctx context.Context, ws uuid.UUID, by uuid.UUID, in SetInp
 	}
 	return s.Q.UpsertSecret(ctx, store.UpsertSecretParams{
 		ID: uuid.Must(uuid.NewV7()), WorkspaceID: ws, ProjectID: in.ProjectID, Name: name, GrantsScope: grants,
-		Nonce: nonce, Ciphertext: ct, Preview: "", CreatedByUserID: &by,
+		Nonce: nonce, Ciphertext: ct, CreatedByUserID: &by,
 	})
 }
 

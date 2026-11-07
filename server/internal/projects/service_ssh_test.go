@@ -2,18 +2,32 @@ package projects
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
 )
 
 func TestRepoURLValidation(t *testing.T) {
-	ok := []string{"https://github.com/a/b", "git@github.com:liamphmurphy/LazyAgents.git", "git@github.com:a/b", "ssh://git@github.com/a/b.git", "  git@github.com:a/b.git/ ", ""}
-	bad := []string{"https://token@github.com/a/b", "https://github.com/a/..", "https://github.com/a/b?token=x", "https://github.com/a/b/c", "http://github.com/a/b.git", "git@gitlab.com:a/b.git", "git@github.com:a/b.git?x=1", "git@github.com:a/..", "git@github.com:a", "file:///tmp/x", "git@evil.com:a/b", "git@github.com:a/b/c", "ssh://git@github.com:22/a/b", "ext::sh -c touch /tmp/x", "-oProxyCommand=x"}
+	ok := []string{"git@github.com:liamphmurphy/LazyAgents.git", "git@github.com:a/b", "ssh://git@github.com/a/b.git", "  git@github.com:a/b.git/ ", ""}
+	bad := []string{"http://github.com/a/b.git", "https://gitlab.com/a/b", "https://github.com/a", "https://github.com/a/b/tree/main", "https://github.com/a/..", "https://github.com/a/b?x=1", "https://user@github.com/a/b", "git@gitlab.com:a/b.git", "git@github.com:a/b.git?x=1", "git@github.com:a/..", "git@github.com:a", "file:///tmp/x", "git@evil.com:a/b", "git@github.com:a/b/c", "ssh://git@github.com:22/a/b", "ext::sh -c touch /tmp/x", "-oProxyCommand=x"}
 	for _, u := range ok {
 		if err := normalize(&Config{Name: "N", Color: "#aabbcc", RepoURL: u}); err != nil {
 			t.Errorf("%q rejected: %v", u, err)
+		}
+	}
+	https := map[string]string{
+		"https://github.com/northwind/payments":          "git@github.com:northwind/payments.git",
+		"https://github.com/northwind/payments.git":      "git@github.com:northwind/payments.git",
+		" https://www.github.com/a/b.js/ ":               "git@github.com:a/b.js.git",
+		"https://github.com/liamphmurphy/LazyAgents.git": "git@github.com:liamphmurphy/LazyAgents.git",
+	}
+	for in, want := range https {
+		c := Config{Name: "N", Color: "#aabbcc", RepoURL: in}
+		if err := normalize(&c); err != nil || c.RepoURL != want {
+			t.Errorf("%q -> %q, %v; want %q", in, c.RepoURL, err, want)
 		}
 	}
 	for _, u := range bad {
@@ -44,17 +58,17 @@ func TestUpdateKeepsUnchangedLegacyHTTPSRepoURL(t *testing.T) {
 	if p.Name != "Renamed" || p.RepoUrl == nil || *p.RepoUrl != legacy {
 		t.Fatalf("got %+v", p)
 	}
-	if _, err := svc.Update(ctx, ws.ID, "LEG", Config{Name: "Renamed", Color: "#112233", RepoURL: "https://github.com/a/c.git", DefaultBranch: "main", Revision: p.Revision}); err != nil {
-		t.Fatalf("HTTPS change rejected: %v", err)
+	_, err = svc.Update(ctx, ws.ID, "LEG", Config{Name: "Renamed", Color: "#112233", RepoURL: "https://gitlab.com/a/c", DefaultBranch: "main", Revision: p.Revision})
+	var ae *apperr.ValidationError
+	if err == nil || !errors.As(err, &ae) || ae.Field != "repo_url" {
+		t.Fatalf("changed non-GitHub URL: err = %v", err)
 	}
-}
-
-func TestHTTPSNormalizesToSSH(t *testing.T) {
-	in := Config{Name: "N", Color: "#aabbcc", RepoURL: " https://github.com/team/repo.git/ "}
-	if err := normalize(&in); err != nil {
-		t.Fatal(err)
+	// A new HTTPS GitHub link is accepted and stored in SSH form.
+	p, err = svc.Update(ctx, ws.ID, "LEG", Config{Name: "Renamed", Color: "#112233", RepoURL: "https://github.com/a/c", DefaultBranch: "main", Revision: p.Revision})
+	if err != nil || p.RepoUrl == nil || *p.RepoUrl != "git@github.com:a/c.git" {
+		t.Fatalf("HTTPS change: %v %v", p.RepoUrl, err)
 	}
-	if in.RepoURL != "git@github.com:team/repo.git" {
-		t.Fatalf("got %q", in.RepoURL)
+	if _, err := svc.Update(ctx, ws.ID, "LEG", Config{Name: "Renamed", Color: "#112233", RepoURL: "git@github.com:a/d.git", DefaultBranch: "main", Revision: p.Revision}); err != nil {
+		t.Fatalf("SSH change rejected: %v", err)
 	}
 }

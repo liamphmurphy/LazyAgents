@@ -75,7 +75,7 @@ func (q *Queries) DeleteSecret(ctx context.Context, arg DeleteSecretParams) (int
 }
 
 const findSecret = `-- name: FindSecret :one
-SELECT id, workspace_id, project_id, name, grants_scope, nonce, ciphertext, preview, created_by_user_id, created_at, updated_at, last_used_at FROM secrets
+SELECT id, workspace_id, project_id, name, grants_scope, nonce, ciphertext, created_by_user_id, created_at, updated_at, last_used_at FROM secrets
 WHERE workspace_id = $1 AND name = $2
   AND (project_id IS NULL OR project_id = $3)
 ORDER BY project_id IS NULL
@@ -100,7 +100,6 @@ func (q *Queries) FindSecret(ctx context.Context, arg FindSecretParams) (Secret,
 		&i.GrantsScope,
 		&i.Nonce,
 		&i.Ciphertext,
-		&i.Preview,
 		&i.CreatedByUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -298,12 +297,12 @@ func (q *Queries) TouchSecret(ctx context.Context, id uuid.UUID) error {
 }
 
 const upsertSecret = `-- name: UpsertSecret :one
-INSERT INTO secrets (id, workspace_id, project_id, name, grants_scope, nonce, ciphertext, preview, created_by_user_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO secrets (id, workspace_id, project_id, name, grants_scope, nonce, ciphertext, created_by_user_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (workspace_id, coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid), name) DO UPDATE
 SET grants_scope = EXCLUDED.grants_scope, nonce = EXCLUDED.nonce, ciphertext = EXCLUDED.ciphertext,
-    preview = EXCLUDED.preview, created_by_user_id = EXCLUDED.created_by_user_id
-RETURNING id, workspace_id, project_id, name, grants_scope, nonce, ciphertext, preview, created_by_user_id, created_at, updated_at, last_used_at
+    created_by_user_id = EXCLUDED.created_by_user_id
+RETURNING id, workspace_id, project_id, name, grants_scope, nonce, ciphertext, created_by_user_id, created_at, updated_at, last_used_at
 `
 
 type UpsertSecretParams struct {
@@ -314,7 +313,6 @@ type UpsertSecretParams struct {
 	GrantsScope     *string
 	Nonce           []byte
 	Ciphertext      []byte
-	Preview         string
 	CreatedByUserID *uuid.UUID
 }
 
@@ -327,7 +325,6 @@ func (q *Queries) UpsertSecret(ctx context.Context, arg UpsertSecretParams) (Sec
 		arg.GrantsScope,
 		arg.Nonce,
 		arg.Ciphertext,
-		arg.Preview,
 		arg.CreatedByUserID,
 	)
 	var i Secret
@@ -339,7 +336,6 @@ func (q *Queries) UpsertSecret(ctx context.Context, arg UpsertSecretParams) (Sec
 		&i.GrantsScope,
 		&i.Nonce,
 		&i.Ciphertext,
-		&i.Preview,
 		&i.CreatedByUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,

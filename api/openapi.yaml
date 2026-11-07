@@ -1871,7 +1871,7 @@ components:
         key: { type: string }
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "GitHub SSH or HTTPS URL. HTTPS input is normalized to SSH for new repository settings." }
+        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
@@ -2545,6 +2545,7 @@ components:
         revoked_at: { type: string, format: date-time }
     SecretInfo:
       type: object
+      description: Secret metadata. Values are write-only; no part of a value is ever returned.
       required: [id, name, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
@@ -3284,7 +3285,7 @@ components:
         key: { type: string }
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "GitHub SSH or HTTPS URL. HTTPS input is normalized to SSH for new repository settings." }
+        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
     ProjectUpdate:
       type: object
@@ -3292,7 +3293,7 @@ components:
       properties:
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "GitHub SSH or HTTPS URL. HTTPS input is normalized to SSH for new repository settings." }
+        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
