@@ -326,6 +326,11 @@ func TestCrashFailsRun(t *testing.T) {
 	if r.Outcome == nil || !strings.Contains(*r.Outcome, "API Error: overloaded") {
 		t.Fatalf("outcome %q", deref(r.Outcome))
 	}
+	// A failed run keeps its checkout (unpushed work), even after a sweep.
+	e.runner.Sweep(e.ctx)
+	if _, err := os.Stat(e.runner.Backend.WorkspaceDir(r.ID.String())); err != nil {
+		t.Fatalf("failed run's workspace was removed: %v", err)
+	}
 	tk, _ := tracker.Get(e.ctx, e.q, e.ws, "PAY-224")
 	evs, _ := e.q.ListTicketActivity(e.ctx, &tk.ID)
 	if evs[len(evs)-1].Verb != runs.VerbRunFailed {
@@ -616,6 +621,10 @@ func TestApprovedRepositoryAndBaseBranchAreFrozen(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.runner.Sweep(e.ctx)
+	// A cancelled run keeps its checkout; only completed runs are cleaned up.
+	if _, err := os.Stat(root); err != nil {
+		t.Fatalf("cancelled run's workspace was removed: %v", err)
+	}
 }
 
 func TestDelegatedRunWorksInWorktreeOfParentWorkspace(t *testing.T) {
@@ -748,7 +757,8 @@ func TestFallbackStopsOnExhaustionOrUnrelatedErrors(t *testing.T) {
 		mode, harness, model string
 		turns                int
 	}{
-		{"quota", "claude-code", "another-model", 2},
+		// The fallback shares the exhausted harness, whose limit is recorded: skipped, so no second turn.
+		{"quota", "claude-code", "another-model", 1},
 		{"crash", "codex", "fallback-model", 1},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/links"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
@@ -61,6 +62,8 @@ type NewTicket struct {
 	DueDate         *time.Time
 	Criteria        []string
 	RequiresMockup  bool
+	// EpicReview marks the epic's final review ticket (server-created only).
+	EpicReview bool
 	// EstimatePoints (optional) is set right after creation, with
 	// EstimateRationale, attributed to EstimatedBy (default: the creating actor).
 	EstimatePoints    *int
@@ -251,7 +254,7 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			Title: title, DescriptionMd: in.DescriptionMd, Status: in.Status, Priority: in.Priority,
 			EpicID: in.EpicID, AssigneeAgentID: in.AssigneeAgentID, ReviewerUserID: in.ReviewerUserID,
 			CreatedByUserID: userID(actor), Estimate: emptyToNil(in.Estimate), DueDate: in.DueDate,
-			RequiresMockup: in.RequiresMockup,
+			RequiresMockup: in.RequiresMockup, EpicReview: in.EpicReview,
 		})
 		if err != nil {
 			return err
@@ -518,6 +521,9 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		next.ReviewerUserID = p.ReviewerUserID.Value
 	}
 	if p.EpicID.Set && !ptrEq(p.EpicID.Value, cur.EpicID) {
+		if cur.EpicReview {
+			return cur, apperr.Conflict("an epic's final review can't change epics")
+		}
 		payload := map[string]any{}
 		if p.EpicID.Value != nil {
 			e, err := r.epic(ctx, p.EpicID.Value, cur.ProjectID)
@@ -625,7 +631,140 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			return cur, err
 		}
 	}
+	if !cur.EpicReview {
+		finished := t.Status != cur.Status && (t.Status == "in_review" || t.Status == "done" || t.Status == "canceled")
+		moved := !ptrEq(t.EpicID, cur.EpicID)
+		var check []*uuid.UUID
+		if moved {
+			check = append(check, cur.EpicID) // the epic it left may now be finished
+		}
+		if finished || (moved && t.Status != "backlog" && t.Status != "todo" && t.Status != "in_progress") {
+			check = append(check, t.EpicID) // a finished ticket arrived or finished here
+		}
+		for _, id := range check {
+			if id == nil {
+				continue
+			}
+			if err := maybeCreateEpicReview(ctx, q, ws, *id); err != nil {
+				return cur, err
+			}
+		}
+	}
 	return t, nil
+}
+
+// maybeCreateEpicReview creates the epic's final review ticket once every
+// regular ticket has finished (in_review counts: its PR is consolidated by the
+// review). Runs inside the caller's transaction, which holds the project lock.
+// Anything that only means "no review needed" is a quiet no-op.
+func maybeCreateEpicReview(ctx context.Context, q *store.Queries, ws, epicID uuid.UUID) error {
+	e, err := q.GetEpic(ctx, store.GetEpicParams{ID: epicID, WorkspaceID: ws})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if e.Status != "open" {
+		return nil
+	}
+	st, err := q.EpicReviewState(ctx, &epicID)
+	if err != nil {
+		return err
+	}
+	if st.Total == 0 || st.Unfinished > 0 || st.HasReview {
+		return nil
+	}
+	p, err := q.GetProject(ctx, store.GetProjectParams{ID: e.ProjectID, WorkspaceID: ws})
+	if err != nil {
+		return err
+	}
+	if p.Archived {
+		return nil // no new tickets in an archived project
+	}
+	_, err = createEpicReview(ctx, q, ws, e, p)
+	return err
+}
+
+// EnsureEpicReview returns the epic's final review ticket, creating it on
+// demand whatever state the other tickets are in.
+func (s *Service) EnsureEpicReview(ctx context.Context, ws, epicID uuid.UUID) (store.Ticket, error) {
+	var out store.Ticket
+	err := s.tx(ctx, func(q *store.Queries) error {
+		e, err := lockEpicProject(ctx, q, ws, epicID)
+		if err != nil {
+			return err
+		}
+		if t, err := q.GetEpicReviewTicket(ctx, &epicID); err == nil {
+			out = t
+			return nil
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if e.Status != "open" {
+			return apperr.Conflict("epic is done")
+		}
+		p, err := q.GetProject(ctx, store.GetProjectParams{ID: e.ProjectID, WorkspaceID: ws})
+		if err != nil {
+			return notFound(err)
+		}
+		if p.Archived {
+			return apperr.Conflict("restore the archived project before adding tickets")
+		}
+		out, err = createEpicReview(ctx, q, ws, e, p)
+		return err
+	})
+	return out, err
+}
+
+func createEpicReview(ctx context.Context, q *store.Queries, ws uuid.UUID, e store.Epic, p store.Project) (store.Ticket, error) {
+	epicID := e.ID
+	tickets, err := q.ListEpicReviewTickets(ctx, &epicID)
+	if err != nil {
+		return store.Ticket{}, err
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "This is the final review for the epic **%s**. It runs once the epic's other tickets have finished.\n\n", e.Name)
+	fmt.Fprintf(&b, "The epic's tickets built and typechecked but did not run tests. This run consolidates any ticket branches not yet merged into the epic branch `%s`, runs the full test suite once, fixes failures and verifies the epic's acceptance criteria.\n\nTickets in this epic:\n\n", agentdef.EpicBranch(p.Key, e.ID.String()))
+	for _, t := range tickets {
+		fmt.Fprintf(&b, "- [[%s]] %s (%s)\n", t.Key, t.Title, t.Status)
+	}
+	title := "Final review: " + e.Name
+	if r := []rune(title); len(r) > 300 {
+		title = string(r[:300])
+	}
+	in := NewTicket{
+		ProjectKey: p.Key, Title: title, DescriptionMd: b.String(), Status: "todo", EpicID: &epicID, EpicReview: true,
+		Criteria: []string{
+			"Every ticket branch and PR in the epic is merged into the epic branch",
+			"The full test suite passes on the epic branch",
+			"The epic's acceptance criteria are verified and checked",
+			"The epic's pull request is marked ready for review",
+		},
+	}
+	r := refs{q, ws}
+	// The tech lead does the final review when the workspace has one.
+	if a, err := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "tech-lead"}); err == nil {
+		if _, err := r.assignee(ctx, &a.ID); err == nil {
+			in.AssigneeAgentID = &a.ID
+		} else if !errors.As(err, new(*apperr.ValidationError)) {
+			return store.Ticket{}, err
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return store.Ticket{}, err
+	}
+	if in.AssigneeAgentID == nil {
+		if id, err := q.EpicTopAssignee(ctx, &epicID); err == nil && id != nil {
+			// A deleted or non-assignable agent leaves the review unassigned.
+			if _, err := r.assignee(ctx, id); err == nil {
+				in.AssigneeAgentID = id
+			} else if !errors.As(err, new(*apperr.ValidationError)) {
+				return store.Ticket{}, err
+			}
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return store.Ticket{}, err
+		}
+	}
+	return CreateInTx(ctx, q, ws, Actor{Type: "system"}, in)
 }
 
 func setLabels(ctx context.Context, q *store.Queries, r refs, ticketID uuid.UUID, ids []uuid.UUID) (*event, error) {

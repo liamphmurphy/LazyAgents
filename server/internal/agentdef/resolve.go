@@ -30,6 +30,20 @@ type Repository struct {
 	DefaultBranch string  `json:"default_branch"`
 	EpicBranch    string  `json:"epic_branch,omitempty"`
 	EpicName      string  `json:"epic_name,omitempty"`
+	// EpicReview marks the epic's final review ticket; EpicTickets is the
+	// epic's regular tickets as of dispatch.
+	EpicReview  bool         `json:"epic_review,omitempty"`
+	EpicTickets []EpicTicket `json:"epic_tickets,omitempty"`
+}
+
+// EpicTicket is one regular ticket of the epic under final review.
+type EpicTicket struct {
+	Key     string `json:"key"`
+	Title   string `json:"title"`
+	Status  string `json:"status"`
+	Branch  string `json:"branch,omitempty"`
+	PRURL   string `json:"pr_url,omitempty"`
+	PRState string `json:"pr_state,omitempty"`
 }
 
 // EpicBranch names an epic's shared branch. It uses the epic's id, not its
@@ -42,8 +56,11 @@ func EpicBranch(projectKey, epicID string) string {
 }
 
 type Resolved struct {
-	ReviewRequired bool                         `json:"review_required,omitempty"`
-	Fallbacks      []Fallback                   `json:"fallbacks,omitempty"`
+	ReviewRequired bool       `json:"review_required,omitempty"`
+	Fallbacks      []Fallback `json:"fallbacks,omitempty"`
+	// Chain is the run's full preference order, primary first. Only the runner
+	// sets it (runs created before it existed derive it from Fallbacks).
+	Chain          []Fallback                   `json:"chain,omitempty"`
 	Repository     *Repository                  `json:"repository,omitempty"`
 	Harness        string                       `json:"harness"`
 	Model          string                       `json:"model"`

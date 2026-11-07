@@ -75,3 +75,16 @@ func (s *Server) UpdateEpic(ctx context.Context, req api.UpdateEpicRequestObject
 	}
 	return api.UpdateEpic200JSONResponse(toEpic(e, rollups[e.ID])), nil
 }
+
+func (s *Server) CreateEpicReview(ctx context.Context, req api.CreateEpicReviewRequestObject) (api.CreateEpicReviewResponseObject, error) {
+	_, _, ws := me(ctx)
+	t, err := s.Tracker.EnsureEpicReview(ctx, ws, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	return api.CreateEpicReview200JSONResponse(toWorkTicket(t)), nil
+}
+
+func toWorkTicket(t store.Ticket) api.WorkTicket {
+	return api.WorkTicket{Id: t.ID, Key: t.Key, Title: t.Title, Status: api.TicketStatus(t.Status), Priority: api.Priority(t.Priority)}
+}

@@ -107,6 +107,30 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Epic" }
         default: { $ref: "#/components/responses/Error" }
+  /epics/{id}/review:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: createEpicReview
+      summary: Add the epic's final review ticket now
+      description: |
+        The server creates an epic's final review ticket automatically once its
+        last regular ticket finishes (in review, done or canceled). This adds it
+        early so it can be dispatched at the end: until the epic's other tickets
+        finish, dispatching it is refused. Idempotent: returns the existing
+        review ticket if there is one. 409 when the epic is done or its project
+        is archived.
+      tags: [tickets]
+      responses:
+        "200":
+          description: The epic's final review ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkTicket" }
+        default: { $ref: "#/components/responses/Error" }
   /epics/{id}/criteria:
     parameters:
       - name: id
@@ -2084,6 +2108,9 @@ components:
           properties:
             open_tickets: { type: array, items: { type: string }, description: Ticket keys not done or canceled }
             unchecked_criteria: { type: array, items: { type: integer }, description: Criterion positions }
+        review:
+          description: "The epic's final review ticket, once it exists"
+          allOf: [{ $ref: "#/components/schemas/WorkTicket" }]
     Label:
       type: object
       required: [id, name, color]
@@ -2211,7 +2238,7 @@ components:
         query: { type: string, maxLength: 2000 }
     Ticket:
       type: object
-      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, blocked_by, blocks, revision, dependency_revision, requires_mockup, mockup_gate, created_at, updated_at]
+      required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, blocked_by, blocks, revision, dependency_revision, requires_mockup, epic_review, mockup_gate, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         key: { type: string }
@@ -2245,6 +2272,7 @@ components:
         branch: { type: string }
         pr: { $ref: "#/components/schemas/PullRequest" }
         requires_mockup: { type: boolean, description: This ticket itself is flagged (its epic may also require one) }
+        epic_review: { type: boolean, description: "The epic's final review: created by the server, it consolidates the epic's branches and runs its tests once" }
         mockup_gate: { $ref: "#/components/schemas/MockupGate" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }

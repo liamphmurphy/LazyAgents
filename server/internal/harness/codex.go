@@ -33,9 +33,6 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		sandbox = "workspace-write"
 	}
 	opts := []string{"--json", "--skip-git-repo-check", "--dangerously-bypass-hook-trust", "--strict-config"}
-	if ws.DependencyCacheDir != "" && (allowed(spec, "tests:run") || allowed(spec, "repo:write")) {
-		opts = append(opts, "--add-dir", ws.DependencyCacheDir)
-	}
 	if spec.Model != "" {
 		opts = append(opts, "-m", spec.Model)
 	}
@@ -79,6 +76,11 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		opts = append(opts, "-c", c)
 	}
 	argv := []string{"codex", "exec"}
+	// --add-dir belongs to exec, not its resume subcommand. Keep it before
+	// resume so later turns retain cache access without a CLI parse failure.
+	if ws.DependencyCacheDir != "" && (allowed(spec, "tests:run") || allowed(spec, "repo:write")) {
+		argv = append(argv, "--add-dir", ws.DependencyCacheDir)
+	}
 	if t.SessionID != "" {
 		argv = append(argv, "resume")
 		argv = append(argv, opts...)

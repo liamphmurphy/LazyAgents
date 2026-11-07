@@ -225,3 +225,127 @@ func TestExpiredOrUnusableLimitsAreIgnored(t *testing.T) {
 		})
 	}
 }
+
+func (e env) hasFallbackEvent(id uuid.UUID, reason, to string) bool {
+	e.t.Helper()
+	evs, _ := e.q.ListRunEvents(e.ctx, store.ListRunEventsParams{RunID: id, Seq: 0})
+	for _, ev := range evs {
+		var p map[string]any
+		_ = json.Unmarshal(ev.Payload, &p)
+		if p["state"] == "harness_fallback" && p["reason"] == reason && p["harness"] == to {
+			return true
+		}
+	}
+	return false
+}
+
+// setChain puts a run on chain[on], with the whole chain frozen into its spec.
+func (e env) setChain(id uuid.UUID, raw []byte, on int, chain ...agentdef.Fallback) {
+	e.t.Helper()
+	var spec agentdef.Resolved
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		e.t.Fatal(err)
+	}
+	spec.Chain = chain
+	spec.Harness, spec.Model, spec.HarnessOptions = chain[on].Harness, chain[on].Model, chain[on].HarnessOptions
+	spec.Fallbacks = append(append([]agentdef.Fallback{}, chain[:on]...), chain[on+1:]...)
+	b, _ := json.Marshal(spec)
+	if _, err := e.pool.Exec(e.ctx, "UPDATE runs SET resolved_spec=$2, harness=$3, model=$4 WHERE id=$1", id, b, chain[on].Harness, chain[on].Model); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+func TestRunReturnsToPrimaryWhenLimitExpires(t *testing.T) {
+	e := setup(t)
+	logPath := filepath.Join(t.TempDir(), "log.jsonl")
+	t.Setenv("FAKE_HARNESS_LOG", logPath)
+	e.dispatch("PAY-214")
+	e.until("waiting for approval", e.state("PAY-214=waiting"))
+	run := e.run("PAY-214")
+	e.setFallbacks(run.ID, run.ResolvedSpec, codexFallback)
+	e.limit(agentdef.HarnessClaudeCode, time.Now().Add(time.Hour))
+	decide := func(note string) {
+		tk, _ := e.q.GetTicketByID(e.ctx, *run.TicketID)
+		aps, _ := e.q.PendingApprovalsForTicket(e.ctx, tk.ID)
+		if _, err := e.runs.Decide(e.ctx, e.ws, e.me.ID, aps[0].ID, true, note); err != nil {
+			t.Fatal(err)
+		}
+	}
+	turnsDone := func(n int) func() bool {
+		return func() bool {
+			turns, _ := e.q.ListTurns(e.ctx, run.ID)
+			return len(turns) == n && turns[n-1].Status == "done"
+		}
+	}
+	decide("first")
+	e.until("second turn on codex", turnsDone(2))
+	if got := e.run("PAY-214"); got.Harness != "codex" {
+		t.Fatalf("harness %s", got.Harness)
+	}
+	// Claude's limit lifts: the next turn goes back to the primary.
+	e.limit(agentdef.HarnessClaudeCode, time.Now().Add(-time.Minute))
+	decide("second")
+	e.until("third turn on claude", turnsDone(3))
+	lines := readHarnessLog(t, logPath)
+	if len(lines) != 3 || lines[2].Codex != "claude" || lines[2].Resume != "" {
+		t.Fatalf("third turn must be a fresh claude session: %+v", lines)
+	}
+	if !strings.HasPrefix(lines[2].Prompt, "Continue this existing LazyAgents run after codex") {
+		t.Fatalf("no handoff prompt: %q", lines[2].Prompt)
+	}
+	got := e.run("PAY-214")
+	if got.Harness != agentdef.HarnessClaudeCode || !e.hasFallbackEvent(run.ID, "primary_available", agentdef.HarnessClaudeCode) {
+		t.Fatalf("harness %s", got.Harness)
+	}
+}
+
+func TestExhaustedFallbackReturnsToAvailablePrimary(t *testing.T) {
+	e := setup(t)
+	logPath := filepath.Join(t.TempDir(), "log.jsonl")
+	t.Setenv("FAKE_HARNESS_LOG", logPath)
+	t.Setenv("FAKE_HARNESS_MODE", "quota")
+	t.Setenv("FAKE_HARNESS_CODEX_QUOTA", "1")
+	t.Setenv("FAKE_HARNESS_QUOTA_SLEEP", "2s")
+	e.dispatch("PAY-214")
+	run := e.run("PAY-214")
+	// On codex while claude (the primary) is still limited, so the turn starts there.
+	e.setChain(run.ID, run.ResolvedSpec, 1, agentdef.Fallback{Harness: agentdef.HarnessClaudeCode, Model: "primary"}, codexFallback)
+	e.limit(agentdef.HarnessClaudeCode, time.Now().Add(time.Hour))
+	// Claude's limit lifts while the codex turn runs.
+	go func() {
+		for i := 0; i < 200; i++ {
+			if b, _ := os.ReadFile(logPath); len(b) > 0 {
+				e.limit(agentdef.HarnessClaudeCode, time.Now().Add(-time.Minute))
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
+	e.until("both exhausted", e.state("PAY-214=failed"))
+	lines := readHarnessLog(t, logPath)
+	if len(lines) != 2 || lines[0].Codex != "codex" || lines[1].Codex != "claude" {
+		t.Fatalf("codex limit must send the run back to claude: %+v", lines)
+	}
+	if !e.hasFallbackEvent(run.ID, "provider_usage_exhausted", agentdef.HarnessClaudeCode) {
+		t.Fatal("missing fallback event")
+	}
+}
+
+func TestAllTargetsLimitedFails(t *testing.T) {
+	e := setup(t)
+	logPath := filepath.Join(t.TempDir(), "log.jsonl")
+	t.Setenv("FAKE_HARNESS_LOG", logPath)
+	t.Setenv("FAKE_HARNESS_MODE", "quota")
+	e.dispatch("PAY-214")
+	run := e.run("PAY-214")
+	e.setChain(run.ID, run.ResolvedSpec, 0, agentdef.Fallback{Harness: agentdef.HarnessClaudeCode, Model: "primary"}, codexFallback)
+	e.limit(agentdef.HarnessClaudeCode, time.Now().Add(time.Hour))
+	e.limit(agentdef.HarnessCodex, time.Now().Add(time.Hour))
+	e.until("failed", e.state("PAY-214=failed"))
+	if lines := readHarnessLog(t, logPath); len(lines) != 1 || lines[0].Codex != "claude" {
+		t.Fatalf("stays on the primary and fails: %+v", lines)
+	}
+	if got := e.run("PAY-214"); got.Harness != agentdef.HarnessClaudeCode {
+		t.Fatalf("harness %s", got.Harness)
+	}
+}

@@ -417,7 +417,11 @@ func (s *Service) PostPlan(ctx context.Context, c Caller, key string, steps []st
 			return err
 		}
 		for i, st := range clean {
-			if err := q.InsertPlanStep(ctx, store.InsertPlanStepParams{RunID: run.ID, Position: int32(i + 1), Text: st, State: "pending"}); err != nil {
+			state := "pending"
+			if i == 0 {
+				state = "current"
+			}
+			if err := q.InsertPlanStep(ctx, store.InsertPlanStepParams{RunID: run.ID, Position: int32(i + 1), Text: st, State: state}); err != nil {
 				return err
 			}
 		}
@@ -436,12 +440,15 @@ func (s *Service) PostPlan(ctx context.Context, c Caller, key string, steps []st
 var stepStates = []string{"pending", "current", "done", "needs_human", "failed"}
 
 // UpdateStep sets one step's state. Marking a step current clears any other
-// current step, so the plan always shows one place the agent is at.
-func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, state string) error {
+// current step, so the plan always shows one place the agent is at. Marking a
+// step done while nothing is current promotes the next pending step; that
+// step's position is returned (0 when nothing advanced).
+func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, state string) (int, error) {
 	if !slices.Contains(stepStates, state) {
-		return apperr.Invalid("state", "must be one of %s", strings.Join(stepStates, ", "))
+		return 0, apperr.Invalid("state", "must be one of %s", strings.Join(stepStates, ", "))
 	}
-	return s.tx(ctx, func(q *store.Queries) error {
+	advanced := 0
+	err := s.tx(ctx, func(q *store.Queries) error {
 		run, _, err := s.running(ctx, q, c, key)
 		if err != nil {
 			return err
@@ -458,8 +465,35 @@ func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, s
 		if rows == 0 {
 			return apperr.Invalid("step", "no step %d in the plan", n)
 		}
-		return event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": n, "state": state})
+		if err := event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": n, "state": state}); err != nil {
+			return err
+		}
+		if state != "done" {
+			return nil
+		}
+		plan, err := q.ListPlan(ctx, run.ID)
+		if err != nil {
+			return err
+		}
+		next := int32(0)
+		for _, st := range plan {
+			if st.State == "current" {
+				return nil
+			}
+			if st.State == "pending" && int(st.Position) > n && (next == 0 || st.Position < next) {
+				next = st.Position
+			}
+		}
+		if next == 0 {
+			return nil
+		}
+		if _, err := q.SetStepState(ctx, store.SetStepStateParams{RunID: run.ID, Position: next, State: "current"}); err != nil {
+			return err
+		}
+		advanced = int(next)
+		return event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": advanced, "state": "current"})
 	})
+	return advanced, err
 }
 
 // ---------------------------------------------------------------- events
@@ -572,8 +606,15 @@ func (s *Service) SetPR(ctx context.Context, c Caller, key, url string, draft bo
 
 // CheckCriterion ticks acceptance criterion n (1-based, in display order).
 func (s *Service) CheckCriterion(ctx context.Context, c Caller, key string, n int, done bool) error {
-	var id uuid.UUID
+	return s.CheckCriteria(ctx, c, key, []int{n}, done)
+}
+
+// CheckCriteria ticks (or unticks) several criteria at once. Every number is
+// validated first, so one bad number leaves all of them untouched.
+func (s *Service) CheckCriteria(ctx context.Context, c Caller, key string, ns []int, done bool) error {
+	var ids []uuid.UUID
 	err := s.tx(ctx, func(q *store.Queries) error {
+		ids = ids[:0]
 		run, t, err := s.running(ctx, q, c, key)
 		if err != nil {
 			return err
@@ -583,21 +624,35 @@ func (s *Service) CheckCriterion(ctx context.Context, c Caller, key string, n in
 				return err
 			}
 		}
-		if n < 1 {
-			return apperr.Invalid("n", "criteria are numbered from 1")
+		seen := map[int]bool{}
+		for _, n := range ns {
+			if n < 1 {
+				return apperr.Invalid("n", "criteria are numbered from 1")
+			}
+			if seen[n] {
+				continue
+			}
+			seen[n] = true
+			cr, err := q.GetCriterionByPosition(ctx, store.GetCriterionByPositionParams{TicketID: t.ID, Offset: int32(n - 1)})
+			if errors.Is(err, pgx.ErrNoRows) {
+				return apperr.Invalid("n", "no criterion %d", n)
+			}
+			if err != nil {
+				return err
+			}
+			ids = append(ids, cr.ID)
 		}
-		cr, err := q.GetCriterionByPosition(ctx, store.GetCriterionByPositionParams{TicketID: t.ID, Offset: int32(n - 1)})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return apperr.Invalid("n", "no criterion %d", n)
-		}
-		id = cr.ID
-		return err
+		return nil
 	})
 	if err != nil {
 		return err
 	}
-	_, err = s.Tracker.UpdateCriterion(ctx, c.Agent.WorkspaceID, agentActor(c), id, nil, &done)
-	return err
+	for _, id := range ids {
+		if _, err := s.Tracker.UpdateCriterion(ctx, c.Agent.WorkspaceID, agentActor(c), id, nil, &done); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CreateReport stores an agent-authored REPORT and attaches it to the ticket
@@ -783,5 +838,19 @@ func RepositoryFor(ctx context.Context, q *store.Queries, p store.Project, t sto
 		return nil, err
 	}
 	repo.EpicBranch, repo.EpicName = agentdef.EpicBranch(p.Key, e.ID.String()), e.Name
+	if !t.EpicReview {
+		return repo, nil
+	}
+	rows, err := q.ListEpicReviewTickets(ctx, t.EpicID)
+	if err != nil {
+		return nil, err
+	}
+	repo.EpicReview = true
+	for _, r := range rows {
+		repo.EpicTickets = append(repo.EpicTickets, agentdef.EpicTicket{
+			Key: r.Key, Title: r.Title, Status: r.Status,
+			Branch: deref(r.Branch), PRURL: deref(r.PrUrl), PRState: deref(r.PrState),
+		})
+	}
 	return repo, nil
 }

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { ApiError, type Schemas } from "@/lib/api/client";
-import { useEpicCriterionMutations, useUpdateEpic } from "@/lib/api/hooks";
+import { useCreateEpicReview, useEpicCriterionMutations, useUpdateEpic } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
 import { cx } from "@/lib/cx";
 import { absoluteTime, ago } from "@/lib/format";
+import { STATUS_LABEL as TICKET_STATUS_LABEL } from "./glyphs";
 
 type BoardEpic = Schemas["BoardEpic"];
 type Criterion = Schemas["EpicCriterion"];
@@ -71,6 +72,7 @@ export function EpicCompletion({ summary }: { summary: BoardEpic }) {
             : <Button variant="primary" disabled={!ready || status.isPending} onClick={() => changeStatus("done")}
                 title={ready ? undefined : "Close the open tickets and check every criterion first"}>{status.isPending ? "Saving…" : "Mark epic done"}</Button>}
         </div>
+        <FinalReview summary={summary} />
         {statusError && <p role="alert" className="text-xs text-pill-blocked-fg">{statusError}</p>}
         {blocked && <div role="alert" aria-label="Epic cannot be marked done" className="space-y-2 rounded-md border border-state-blocked bg-surface p-3 text-xs">
           <div className="flex items-start justify-between gap-3">
@@ -86,6 +88,34 @@ export function EpicCompletion({ summary }: { summary: BoardEpic }) {
       </div>
       <CriteriaEditor criteria={criteria} closed={closed} mutations={mutations} />
     </div>
+  );
+}
+
+function FinalReview({ summary }: { summary: BoardEpic }) {
+  const { epic, review } = summary;
+  const create = useCreateEpicReview(epic.id);
+  const [error, setError] = useState<string>();
+  if (!review && epic.status === "done") return null;
+  function add() {
+    setError(undefined);
+    create.mutateAsync().catch((e: unknown) => setError(`Couldn't add final review: ${message(e)}`));
+  }
+  return (
+    <section aria-label="Final review" className="space-y-1.5 text-xs">
+      <h2 className="font-semibold text-fg-secondary">Final review</h2>
+      {review ? <>
+        <p className="flex min-w-0 flex-wrap items-center gap-x-2">
+          <Link href={`/tickets/${encodeURIComponent(review.key)}`} className="font-mono hover:text-accent">{review.key}</Link>
+          <span className="min-w-0 break-words">{review.title}</span>
+          <span className="text-fg-secondary">{TICKET_STATUS_LABEL[review.status]}</span>
+        </p>
+        <p className="text-fg-tertiary">Runs after the epic&apos;s other tickets finish: consolidates their branches, runs the tests once and readies the epic PR.</p>
+      </> : <div className="flex flex-wrap items-center gap-2">
+        <span className="text-fg-tertiary">Created automatically when the last ticket finishes.</span>
+        <Button variant="outline" disabled={create.isPending} onClick={add}>{create.isPending ? "Adding…" : "Add final review now"}</Button>
+      </div>}
+      {error && <p role="alert" className="text-pill-blocked-fg">{error}</p>}
+    </section>
   );
 }
 

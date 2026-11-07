@@ -20,6 +20,10 @@ API_PORT ?= 8000
 WEB_PORT ?= 3000
 # Host development uses CLI logins; override both API and runner for Docker.
 RUNNER_BACKEND ?= local
+# Processes the host runner runs at once; delegated runs and resumed turns share these slots.
+RUNNER_MAX_CONCURRENT ?= 4
+# Runs inherit this, so agents' DB tests use the dev Postgres (each test makes its own database) instead of starting one.
+TEST_DATABASE_URL ?= postgres://lazyagents:lazyagents@127.0.0.1:5432/postgres?sslmode=disable
 
 stop-dev: ## Kill whatever is listening on the API and web dev ports (left over from an earlier run)
 	@for port in $(API_PORT) $(WEB_PORT); do \
@@ -42,7 +46,7 @@ api: ## Run the API (hot reload if air is installed: go install github.com/air-v
 	  if command -v air >/dev/null; then air; else go run ./cmd/lazyagents serve; fi
 
 runner: ## Run dispatched tickets (default local: host claude/codex logins, no isolation)
-	cd server && RUNNER_BACKEND=$(RUNNER_BACKEND) go run ./cmd/lazyagents runner
+	cd server && RUNNER_BACKEND=$(RUNNER_BACKEND) RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/lazyagents runner
 
 web: ## Run Next dev server
 	cd web && npm run dev

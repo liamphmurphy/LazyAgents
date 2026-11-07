@@ -139,13 +139,13 @@ func (q *Queries) DropPendingTurns(ctx context.Context, runID uuid.UUID) error {
 
 const endedRunsWithWorkspace = `-- name: EndedRunsWithWorkspace :many
 SELECT id FROM runs r
-WHERE r.workspace_volume IS NOT NULL AND r.state IN ('completed', 'failed', 'cancelled')
+WHERE r.workspace_volume IS NOT NULL AND r.state = 'completed'
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
 LIMIT 20
 `
 
-// Workspaces of runs that ended while no turn was running (cancelled while
-// waiting, say); the runner removes them.
+// Workspaces of runs that completed while no turn was running; the runner
+// removes them. Failed and cancelled runs keep theirs (unpushed work).
 func (q *Queries) EndedRunsWithWorkspace(ctx context.Context) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, endedRunsWithWorkspace)
 	if err != nil {
@@ -341,11 +341,15 @@ func (q *Queries) QueuedRunsCount(ctx context.Context) (int32, error) {
 
 const requeueInterrupted = `-- name: RequeueInterrupted :exec
 UPDATE run_turns SET status = 'pending', process_started_at = NULL, ended_at = NULL, exit_code = NULL
-WHERE status = 'running' AND run_id IN (SELECT id FROM runs WHERE runner_id = $1 OR runner_id IS NULL)
+WHERE status = 'running' AND run_id IN (
+  SELECT id FROM runs WHERE runner_id = $1 OR runner_id IS NULL
+    OR runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
 `
 
 // On runner start: turns that were running when it died run again (the
 // harness resumes the session), and half-started runs go back to the queue.
+// The runner id is host-pid, so a restarted runner has a new one: also reclaim
+// turns of any runner that has stopped heartbeating (LiveRunners' window).
 func (q *Queries) RequeueInterrupted(ctx context.Context, runnerID *string) error {
 	_, err := q.db.Exec(ctx, requeueInterrupted, runnerID)
 	return err

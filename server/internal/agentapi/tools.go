@@ -163,19 +163,24 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 			return nil, err
 		}
 	}
+	details, err := getTicket(ctx, d, c, GetTicketIn{Ticket: in.Ticket})
+	if err != nil {
+		return nil, err
+	}
 	out := map[string]any{
 		"run_id": run.ID, "ticket": strings.ToUpper(in.Ticket), "state": run.State, "scopes": scopes, "agent": c.Agent.Handle,
 		"instructions": spec.Instructions,
 		"memory":       memory,
-		"next": "Read memory first: it's what you and others learned before. Call get_ticket, read the attached artifacts with read_artifact, then post_plan before editing. " +
+		"next": "Read memory first: it's what you and others learned before. The ticket is in ticket_details, so skip get_ticket; read the attached artifacts with read_artifact, then post_plan before editing. " +
 			"Before implementing, look up conventions with find_pattern (e.g. find_pattern({q: \"error wrapping\"})) and follow what it returns. " +
 			"Don't log what you did. Only write_note under " + wiki.MemoryRoot(c.Agent.Handle) + " for a durable lesson that would help a future run on this codebase, linked with [[…]] to the tickets and documents it's about. " +
 			"A general lesson that applies beyond this codebase (an architecture pattern or coding style) goes through propose_pattern instead. Project-specific decisions belong in ADR/Architecture notes.",
 	}
+	out["ticket_details"] = details
 	if run.Mode == "managed" {
 		delete(out, "instructions")
 		delete(out, "memory")
-		out["next"] = "Your instructions and available context are already in AGENTS.md. Call get_ticket once, read only context relevant to this task, and post_plan before editing. Work directly by default; delegate only when justified. Reuse existing session context on resume."
+		out["next"] = "Your instructions and available context are already in AGENTS.md. The ticket is in ticket_details, so skip get_ticket; read only context relevant to this task, and post_plan before editing. Work directly by default; delegate only when justified. Reuse existing session context on resume."
 	}
 	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil {
 		out["requires_mockup"] = t.RequiresMockup
@@ -388,7 +393,8 @@ type PRIn struct {
 
 type CriterionIn struct {
 	TicketArg
-	N    int   `json:"n" jsonschema:"Criterion number from get_ticket, from 1"`
+	N    int   `json:"n,omitempty" jsonschema:"Criterion number from get_ticket, from 1"`
+	Ns   []int `json:"ns,omitempty" jsonschema:"Several criterion numbers to tick (or untick) in one call; use instead of n"`
 	Done *bool `json:"done,omitempty" jsonschema:"Default true; false unticks"`
 }
 
@@ -897,10 +903,10 @@ var Tools = []Tool{
 			}
 			return map[string]any{"queue": items}, nil
 		}),
-	define("claim_ticket", "Start (or reconnect to) a run on a ticket assigned to you. Returns your scopes for this project.", claim),
+	define("claim_ticket", "Start (or reconnect to) a run on a ticket assigned to you. Returns your scopes and the ticket (same as get_ticket), so you don't need get_ticket.", claim),
 	define("get_ticket", "A ticket: description, numbered acceptance criteria, estimate, the parent epic with its numbered criteria, attached artifacts and recent comments.", getTicket),
 	define("read_artifact", "Read a PRD, spec, ADR, report or UI mockup (SVG) attached to a ticket, optionally one section. Reads are recorded as citations.", readArtifact),
-	define("post_plan", "Post (or replace) your execution plan. Do this before editing anything.",
+	define("post_plan", "Post (or replace) your execution plan. Do this before editing anything. Step 1 starts current.",
 		func(ctx context.Context, d Deps, c agents.Caller, in PlanIn) (any, error) {
 			steps, err := d.Runs.PostPlan(ctx, c, in.Ticket, in.Steps)
 			if err != nil {
@@ -908,9 +914,16 @@ var Tools = []Tool{
 			}
 			return ok(map[string]any{"steps": len(steps)}), nil
 		}),
-	define("update_step", "Mark a plan step current, done, needs_human or failed. One step is current at a time.",
+	define("update_step", "Mark a plan step done (the next pending step becomes current automatically), needs_human or failed, or current to jump to a step. One step is current at a time.",
 		func(ctx context.Context, d Deps, c agents.Caller, in StepIn) (any, error) {
-			return ok(nil), d.Runs.UpdateStep(ctx, c, in.Ticket, in.Step, in.State)
+			m, err := d.Runs.UpdateStep(ctx, c, in.Ticket, in.Step, in.State)
+			if err != nil {
+				return nil, err
+			}
+			if m > 0 {
+				return ok(map[string]any{"current": m}), nil
+			}
+			return ok(nil), nil
 		}),
 	define("log_event", "Record a timeline event, e.g. kind test_run with {passed, failed, duration_s, command}.",
 		func(ctx context.Context, d Deps, c agents.Caller, in LogEventIn) (any, error) {
@@ -928,10 +941,17 @@ var Tools = []Tool{
 		func(ctx context.Context, d Deps, c agents.Caller, in PRIn) (any, error) {
 			return ok(nil), d.Runs.SetPR(ctx, c, in.Ticket, in.URL, in.Draft)
 		}),
-	define("check_criterion", "Tick an acceptance criterion once you've verified it.",
+	define("check_criterion", "Tick acceptance criteria once you've verified them; pass ns to tick several in one call.",
 		func(ctx context.Context, d Deps, c agents.Caller, in CriterionIn) (any, error) {
+			if (in.N != 0) == (len(in.Ns) > 0) {
+				return nil, apperr.Invalid("n", "give exactly one of n or ns")
+			}
+			ns := in.Ns
+			if in.N != 0 {
+				ns = []int{in.N}
+			}
 			done := in.Done == nil || *in.Done
-			return ok(nil), d.Runs.CheckCriterion(ctx, c, in.Ticket, in.N, done)
+			return ok(nil), d.Runs.CheckCriteria(ctx, c, in.Ticket, ns, done)
 		}),
 	define("estimate_ticket", "Set story points (1, 2, 3, 5, 8 or 13) with a short rationale on your ticket or another open ticket in its project. A person's estimate can't be overwritten: comment instead.", estimateTicket),
 	define("check_epic_criterion", "Tick an acceptance criterion of an epic in your ticket's project (numbered as in get_ticket's epic) once you've verified it. Only for agents whose tracker:epics scope is allowed.", checkEpicCriterion),
