@@ -8,7 +8,8 @@ const composer = (page: Page) => page.getByRole("combobox", { name: "Message" })
 const picker = (page: Page) => page.getByRole("button", { name: /Model for the next message/ });
 
 async function newChat(page: Page) {
-  await page.goto("/chat");
+  // Chat needs a project (LAZYAGENTS-42 chooser otherwise); run.sh seeds E2E.
+  await page.goto("/chat?project=E2E");
   await page.getByRole("button", { name: "New chat" }).first().click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   await expect(composer(page)).toBeVisible();
