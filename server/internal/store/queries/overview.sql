@@ -32,6 +32,13 @@ ORDER BY CASE r.state WHEN 'blocked' THEN 0 WHEN 'waiting' THEN 1 WHEN 'running'
 SELECT id,title,type,path,epic_id,updated_at FROM artifacts WHERE workspace_id=$1 AND current_version_id IS NOT NULL
 ORDER BY updated_at DESC,id;
 
+-- name: WeeklySpend :one
+-- Reported cost of every run started since the week began (Monday 00:00 UTC).
+SELECT count(*)::int AS runs,
+ coalesce(sum(cost_usd_micros),0)::bigint AS cost_usd_micros,
+ (count(*) FILTER (WHERE cost_source IS NULL OR cost_source IN ('unknown','partial')))::int AS unpriced_runs
+FROM runs WHERE workspace_id=sqlc.arg(workspace_id) AND started_at>=sqlc.arg(since)::timestamptz;
+
 -- name: ReviewOverDay :one
 -- Measure the current review spell, not the last unrelated ticket edit.
 SELECT count(*)::int FROM tickets t JOIN projects p ON p.id=t.project_id
@@ -54,7 +61,9 @@ WITH completed AS (
 SELECT t.id,t.assignee_agent_id,c.completed_at::timestamptz AS completed_at,
  greatest(extract(epoch FROM (c.completed_at-coalesce((SELECT min(e.created_at) FROM activity_events e WHERE e.ticket_id=t.id AND e.verb='status_changed' AND e.payload->>'to'='in_progress' AND e.created_at<=c.completed_at),t.created_at))),0)::float8 AS cycle_seconds
 FROM completed c JOIN tickets t ON t.id=c.ticket_id
-WHERE c.completed_at>=sqlc.arg(as_of)::timestamptz-interval '30 days' ORDER BY c.completed_at;
+-- Throughput counts tickets that are done now: one reopened or canceled after
+-- reaching done is not a completion (Kanban board ADR).
+WHERE t.status='done' AND c.completed_at>=sqlc.arg(as_of)::timestamptz-interval '30 days' ORDER BY c.completed_at;
 
 -- name: RunCostMetrics :many
 -- Spend is the reported cost of runs started in the selected window.

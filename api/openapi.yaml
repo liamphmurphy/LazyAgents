@@ -3374,6 +3374,17 @@ components:
         attention: { type: array, items: { $ref: "#/components/schemas/InboxItem" } }
         recent_artifacts: { type: array, items: { $ref: "#/components/schemas/OverviewArtifact" } }
         runner: { $ref: "#/components/schemas/RunnerStatus" }
+        weekly_spend: { $ref: "#/components/schemas/WeeklySpend" }
+
+    WeeklySpend:
+      type: object
+      description: Reported cost of runs started since Monday 00:00 UTC
+      required: [since, cost_usd, runs, unpriced_runs]
+      properties:
+        since: { type: string, format: date-time, description: "Start of the week: Monday 00:00 UTC" }
+        cost_usd: { type: number, format: double }
+        runs: { type: integer, description: Runs started this week }
+        unpriced_runs: { type: integer, description: "Runs whose cost is unknown or partial, so cost_usd may be low" }
 
     AgentRunSummary:
       type: object

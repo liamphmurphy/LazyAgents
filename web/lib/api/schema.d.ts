@@ -2895,6 +2895,21 @@ export interface components {
             attention: components["schemas"]["InboxItem"][];
             recent_artifacts: components["schemas"]["OverviewArtifact"][];
             runner: components["schemas"]["RunnerStatus"];
+            weekly_spend?: components["schemas"]["WeeklySpend"];
+        };
+        /** @description Reported cost of runs started since Monday 00:00 UTC */
+        WeeklySpend: {
+            /**
+             * Format: date-time
+             * @description Start of the week: Monday 00:00 UTC
+             */
+            since: string;
+            /** Format: double */
+            cost_usd: number;
+            /** @description Runs started this week */
+            runs: number;
+            /** @description Runs whose cost is unknown or partial, so cost_usd may be low */
+            unpriced_runs: number;
         };
         AgentRunSummary: {
             /** Format: uuid */
