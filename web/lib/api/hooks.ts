@@ -4,6 +4,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import {
   api,
   ApiError,
+  contentUrl,
   postForm,
   unwrap,
   type AgentDetail,
@@ -17,6 +18,7 @@ import {
   type TicketPatch,
   type TicketStatus,
 } from "./client";
+import { runEach } from "../ticket-list";
 
 type NewTicket = Schemas["NewTicket"];
 
@@ -131,6 +133,64 @@ export function useBulkUpdate() {
       qc.invalidateQueries({ queryKey: keys.tickets });
       qc.invalidateQueries({ queryKey: keys.artifacts });
     },
+  });
+}
+
+/**
+ * Patch each ticket on its own (PATCH /tickets/{key}), so one refusal (a 409
+ * for canceling a ticket with a live run) doesn't undo the others.
+ */
+export function useBulkEach() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ keys: ks, patch }: { keys: string[]; patch: TicketPatch }) =>
+      runEach(ks, (key) => unwrap(api.PATCH("/tickets/{key}", { params: { path: { key } }, body: patch }))),
+    onSettled: (_r, _e, v) => {
+      qc.invalidateQueries({ queryKey: ["tickets", "list"] });
+      for (const k of v.keys) qc.invalidateQueries({ queryKey: keys.ticket(k) });
+      qc.invalidateQueries({ queryKey: ["boards"] });
+      qc.invalidateQueries({ queryKey: ["epics"] });
+    },
+  });
+}
+
+export type SavedView = Schemas["SavedView"];
+const savedViewsKey = ["saved-views"] as const;
+
+/** The signed-in person's saved ticket-list views. */
+export function useSavedViews() {
+  return useQuery({
+    queryKey: savedViewsKey,
+    queryFn: () => unwrap(api.GET("/saved-views")).then((d) => d.views),
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["SavedViewInput"]) => unwrap(api.POST("/saved-views", { body })),
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
+  });
+}
+
+export function useUpdateSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: Schemas["SavedViewPatch"] & { id: string }) =>
+      unwrap(api.PATCH("/saved-views/{id}", { params: { path: { id } }, body })),
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
+  });
+}
+
+export function useDeleteSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const r = await api.DELETE("/saved-views/{id}", { params: { path: { id } } });
+      if (!r.response.ok) throw new Error("Couldn't delete the view");
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
   });
 }
 
@@ -690,13 +750,51 @@ export function useKnowledgeSearch(q: string) {
 
 export const PATTERN_TOPICS = ["Go", "React", "Postgres", "Testing", "API", "Architecture", "Process"] as const;
 
-/** Fuzzy pattern finder; an empty q browses every pattern. */
-export function useFindPatterns(q: string, topic?: string) {
+/**
+ * Fuzzy pattern finder; an empty q browses every pattern. tags filters to
+ * patterns with all of them; the response's tag facet ignores that filter.
+ */
+export function useFindPatterns(q: string, topic?: string, tags: string[] = []) {
   return useQuery({
-    queryKey: [...wikiKeys.all, "patterns", q, topic ?? ""] as const,
+    queryKey: [...wikiKeys.all, "patterns", q, topic ?? "", tags.join(",")] as const,
     queryFn: () =>
-      unwrap(api.GET("/wiki/patterns", { params: { query: { q: q || undefined, topic: topic || undefined, limit: 50 } } })).then((d) => d.patterns),
+      unwrap(
+        api.GET("/wiki/patterns", {
+          params: { query: { q: q || undefined, topic: topic || undefined, tag: tags.length ? tags : undefined, limit: 50 } },
+        }),
+      ),
     placeholderData: (prev) => prev,
+  });
+}
+
+/** The ADR index: status and open questions parsed from each ADR. */
+export function useWikiADRs() {
+  return useQuery({
+    queryKey: [...wikiKeys.all, "adrs"] as const,
+    queryFn: () => unwrap(api.GET("/wiki/adrs")).then((d) => d.adrs),
+  });
+}
+
+/** Runs and chats that read a page. */
+export function useWikiCitations(id: string | undefined) {
+  return useQuery({
+    queryKey: [...wikiKeys.all, "citations", id] as const,
+    queryFn: () => unwrap(api.GET("/wiki/pages/{id}/citations", { params: { path: { id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+/** Raw text of one version (for diffs). Versions never change, so it's cached for good. */
+export function useVersionText(artifactId: string | undefined, versionId: string | undefined) {
+  return useQuery({
+    queryKey: ["artifact-version-text", artifactId, versionId] as const,
+    queryFn: async () => {
+      const res = await fetch(contentUrl(artifactId!, versionId!));
+      if (!res.ok) throw new ApiError(res.status, "internal", res.statusText);
+      return res.text();
+    },
+    enabled: !!artifactId && !!versionId,
+    staleTime: Infinity,
   });
 }
 

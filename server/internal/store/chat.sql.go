@@ -708,6 +708,29 @@ func (q *Queries) LockChatSession(ctx context.Context, arg LockChatSessionParams
 	return i, err
 }
 
+const ownsChatRun = `-- name: OwnsChatRun :one
+SELECT EXISTS (
+  SELECT 1 FROM chat_sessions s
+  WHERE s.workspace_id = $1 AND s.created_by = $2
+    AND (s.current_run_id = $3::uuid OR EXISTS (
+      SELECT 1 FROM chat_messages m WHERE m.session_id = s.id AND m.run_id = $3::uuid
+    ))
+)::boolean
+`
+
+type OwnsChatRunParams struct {
+	WorkspaceID uuid.UUID
+	Viewer      uuid.UUID
+	RunID       uuid.UUID
+}
+
+func (q *Queries) OwnsChatRun(ctx context.Context, arg OwnsChatRunParams) (bool, error) {
+	row := q.db.QueryRow(ctx, ownsChatRun, arg.WorkspaceID, arg.Viewer, arg.RunID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const pageChatMessages = `-- name: PageChatMessages :many
 SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at FROM chat_messages
 WHERE session_id = $1

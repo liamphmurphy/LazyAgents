@@ -930,6 +930,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wiki/adrs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Architecture decisions (wiki pages titled "ADR …" and ADR documents) with the status and open questions parsed from their body */
+        get: operations["listWikiADRs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/pages/{id}/citations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        /** Runs and chats that read a page (or any document), from recorded reads */
+        get: operations["getWikiCitations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wiki/pages/{id}": {
         parameters: {
             query?: never;
@@ -1170,6 +1206,44 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/saved-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's saved ticket-list views, by name */
+        get: operations["listSavedViews"];
+        put?: never;
+        /** Save a ticket-list view for the signed-in person */
+        post: operations["createSavedView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/saved-views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved view (tickets are untouched) */
+        delete: operations["deleteSavedView"];
+        options?: never;
+        head?: never;
+        /** Rename a saved view or replace its query */
+        patch: operations["updateSavedView"];
         trace?: never;
     };
     "/projects/{key}": {
@@ -1583,6 +1657,33 @@ export interface components {
         };
         TicketList: {
             tickets: components["schemas"]["TicketSummary"][];
+        };
+        /**
+         * @description A named ticket-list view owned by one person. query is the list's URL
+         *     search string without project (e.g. "view=active&group=epic"), so the
+         *     view applies to whichever project is current.
+         */
+        SavedView: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            query: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SavedViewList: {
+            views: components["schemas"]["SavedView"][];
+        };
+        SavedViewInput: {
+            /** @description Unique per person, ignoring case; a duplicate is 409 */
+            name: string;
+            query: string;
+        };
+        SavedViewPatch: {
+            name?: string;
+            query?: string;
         };
         Ticket: {
             /** Format: uuid */
@@ -2349,6 +2450,61 @@ export interface components {
             snippet: string;
             score: number;
         };
+        TagCount: {
+            tag: string;
+            count: number;
+        };
+        WikiADR: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description Wiki pages only */
+            path?: string;
+            /** @description ADR documents only, e.g. ADR-012 */
+            display_id?: string;
+            href: string;
+            /** @description From the "Status: …" line, without "with open questions" (see has_open_questions); empty when there's no Status line */
+            status: string;
+            /** @enum {string} */
+            state: "accepted" | "proposed" | "superseded" | "deprecated" | "rejected" | "other" | "none";
+            /** @description YYYY-MM-DD from the Status line */
+            date?: string;
+            /** @description Ticket key from the Status line (Ticket: [[KEY]]) */
+            ticket?: string;
+            /** @description Items of the "Open questions" section, as Markdown */
+            open_questions: string[];
+            /** @description Open questions are listed, or the Status line says "with open questions" */
+            has_open_questions: boolean;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        WikiCitation: {
+            /** Format: uuid */
+            run_id: string;
+            /** @enum {string} */
+            purpose: "ticket" | "planning" | "chat";
+            agent: components["schemas"]["AgentRef"];
+            ticket_key?: string;
+            ticket_title?: string;
+            /**
+             * Format: uuid
+             * @description Only for the caller's own chats
+             */
+            chat_id?: string;
+            chat_title?: string;
+            reads: number;
+            /** Format: date-time */
+            last_read_at: string;
+        };
+        WikiCitations: {
+            /** @description Distinct non-chat runs */
+            runs: number;
+            /** @description Distinct chats (another person's chat counts once per run) */
+            chats: number;
+            citations: components["schemas"]["WikiCitation"][];
+            /** @description Reads not tied to a run that still exists (older data), per agent */
+            unlinked: components["schemas"]["ArtifactReader"][];
+        };
         WikiPageSummary: {
             /** Format: uuid */
             id: string;
@@ -2789,6 +2945,11 @@ export interface components {
             requires_mockup?: boolean;
             estimate_points?: components["schemas"]["EstimatePoints"];
             estimate_rationale?: string;
+            /** @description Original planner estimate, preserved across reviewer saves. */
+            readonly planner_estimate?: {
+                points?: components["schemas"]["EstimatePoints"];
+                rationale?: string;
+            };
         };
         PlanningInput: {
             project: string;
@@ -4602,6 +4763,8 @@ export interface operations {
                 q?: string;
                 /** @description Go, React, Postgres, Testing, API, Architecture or Process */
                 topic?: string;
+                /** @description Only patterns with every one of these tags (repeat for several; AND) */
+                tag?: string[];
                 /** @description Default 10, at most 50 */
                 limit?: number;
             };
@@ -4619,7 +4782,55 @@ export interface operations {
                 content: {
                     "application/json": {
                         patterns: components["schemas"]["WikiPattern"][];
+                        /** @description Tag facet for q and topic (before the tag filter), most used first */
+                        tags: components["schemas"]["TagCount"][];
                     };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWikiADRs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ADRs with open questions first, then newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        adrs: components["schemas"]["WikiADR"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getWikiCitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Citations, most recent first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WikiCitations"];
                 };
             };
             default: components["responses"]["Error"];
@@ -5043,6 +5254,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSavedViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved views, ordered by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedViewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedViewInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedViewPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
                 };
             };
             default: components["responses"]["Error"];
