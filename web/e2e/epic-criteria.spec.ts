@@ -74,33 +74,30 @@ test("criteria can be added, edited, reordered, checked and deleted from the boa
   expect(api.unhandled).toEqual([]);
 });
 
-test("marking an epic done while blocked shows the server's missing items and keeps the status", async ({ page }) => {
+test("Mark epic done stays disabled and lists the blockers until both lists are empty", async ({ page }) => {
   const api = await installBoardApi(page);
   await page.goto("/board?project=WEB&epic=epic-1");
   const summary = board(page);
-  const status = summary.getByLabel("Epic status");
-  await expect(status).toHaveValue("open");
-  await status.selectOption("done");
-  const blocked = summary.getByRole("alert", { name: "Epic cannot be marked done" });
-  await expect(blocked).toContainText("Epic remains Open");
-  await expect(blocked).toContainText("epic has unchecked criteria [2] and open tickets [WEB-1 WEB-2 WEB-5]");
-  await expect(blocked.getByRole("list", { name: "Unchecked criteria" })).toHaveText("2. Cards can move");
-  await expect(blocked.getByRole("list", { name: "Open tickets" }).getByRole("link")).toHaveText(["WEB-1 ↗", "WEB-2 ↗", "WEB-5 ↗"]);
-  await expect(blocked.getByRole("link", { name: "WEB-1 ↗" })).toHaveAttribute("href", "/tickets/WEB-1");
-  await expect(status).toHaveValue("open");
+  const markDone = summary.getByRole("button", { name: "Mark epic done" });
+  await expect(markDone).toBeDisabled();
+  const blockers = summary.getByRole("region", { name: "Done blockers" });
+  await expect(blockers.getByRole("list", { name: "Unchecked criteria" })).toHaveText("2. Cards can move");
+  await expect(blockers.getByRole("list", { name: "Open tickets" }).getByRole("link")).toHaveText(["WEB-1 ↗", "WEB-2 ↗", "WEB-5 ↗"]);
+  await expect(blockers.getByRole("link", { name: "WEB-1 ↗" })).toHaveAttribute("href", "/tickets/WEB-1");
   expect(api.epics[0].status).toBe("open");
 
-  // Resolve everything elsewhere; the gate now passes.
+  // Resolve everything elsewhere; the gate opens.
   api.criteria.forEach((c) => { c.done = true; });
   for (const key of ["WEB-1", "WEB-2", "WEB-5"]) api.editTicket(key, { status: "done" });
   await api.emit("epic.updated");
   await expect(summary).toContainText("Ready to mark done");
-  await status.selectOption("done");
-  await expect(status).toHaveValue("done");
-  await expect(blocked).toHaveCount(0);
+  await expect(blockers).toHaveCount(0);
+  await markDone.click();
+  await expect(summary).toContainText("Status: Done");
+  await expect(summary.getByRole("button", { name: "Reopen epic" })).toBeEnabled();
   await expect(editor(summary)).toContainText("Reopen the epic to edit its criteria.");
   await expect(editor(summary).getByRole("button", { name: "Edit criterion 1" })).toBeDisabled();
-  expect(api.epicWrites.filter((w) => w.method === "PATCH").map((w) => w.body)).toEqual([{ status: "done" }, { status: "done" }]);
+  expect(api.epicWrites.filter((w) => w.method === "PATCH").map((w) => w.body)).toEqual([{ status: "done" }]);
   expect(api.unhandled).toEqual([]);
 });
 
@@ -110,11 +107,13 @@ test("an epic without criteria prompts for them before it can be closed", async 
   await page.goto("/board?project=WEB&epic=epic-1");
   const summary = board(page);
   await expect(editor(summary)).toContainText("Add final acceptance criteria before this epic can be marked done.");
-  await expect(summary.getByRole("option", { name: "Done" })).toHaveAttribute("disabled");
+  await expect(summary.getByRole("button", { name: "Mark epic done" })).toBeDisabled();
   await editor(summary).getByLabel("New acceptance criterion").fill("Board ships");
   await editor(summary).getByRole("button", { name: "Add criterion" }).click();
   await expect(rows(summary)).toHaveText([/1\. Board ships/]);
-  await expect(summary.getByRole("option", { name: "Done" })).not.toHaveAttribute("disabled");
+  // The new criterion is unchecked, so the gate stays closed and names it.
+  await expect(summary.getByRole("region", { name: "Done blockers" }).getByRole("list", { name: "Unchecked criteria" })).toHaveText("1. Board ships");
+  await expect(summary.getByRole("button", { name: "Mark epic done" })).toBeDisabled();
   expect(api.unhandled).toEqual([]);
 });
 
@@ -126,10 +125,9 @@ test("the epic detail panel has the same criteria editor and done gate", async (
   await expect(panel).toContainText("5 / 10 pts done");
   await editor(panel).getByLabel("Criterion 2 met").check();
   await expect(panel).toContainText("2 / 2 met");
-  await panel.getByLabel("Epic status").selectOption("done");
-  const blocked = panel.getByRole("alert", { name: "Epic cannot be marked done" });
-  await expect(blocked.getByRole("list", { name: "Open tickets" })).toContainText("WEB-1");
-  await expect(blocked.getByRole("list", { name: "Unchecked criteria" })).toHaveCount(0);
-  await expect(panel.getByLabel("Epic status")).toHaveValue("open");
-  expect(api.epicWrites.map((w) => w.body)).toEqual([{ done: true }, { status: "done" }]);
+  await expect(panel.getByRole("button", { name: "Mark epic done" })).toBeDisabled();
+  const blockers = panel.getByRole("region", { name: "Done blockers" });
+  await expect(blockers.getByRole("list", { name: "Open tickets" })).toContainText("WEB-1");
+  await expect(blockers.getByRole("list", { name: "Unchecked criteria" })).toHaveCount(0);
+  expect(api.epicWrites.map((w) => w.body)).toEqual([{ done: true }]);
 });
