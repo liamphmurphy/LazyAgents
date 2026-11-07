@@ -40,7 +40,8 @@ export async function installBoardApi(page: Page) {
   const patches: Array<{ key: string; body: S["TicketPatch"] }> = [];
   const boardRequests: string[] = [];
   const unhandled: string[] = [];
-  let rejection: { status: number; message: string } | undefined;
+  let rejection: { status: number; message: string; field?: string } | undefined;
+  const criteriaRequests: string[] = [];
   let gate: Promise<void> | undefined;
   let boardError = false;
   function epicSummary(epic: S["Epic"]): S["Epic"] {
@@ -93,10 +94,36 @@ export async function installBoardApi(page: Page) {
       const hold = gate; gate = undefined;
       if (hold) await hold;
       const reject = rejection; rejection = undefined;
-      if (reject) return json({ code: reject.status === 409 ? "conflict" : "invalid", message: reject.message }, reject.status);
+      if (reject) return json({ code: reject.status === 409 ? "conflict" : "invalid", message: reject.message, field: reject.field }, reject.status);
       if (body.revision !== t.revision) return json({ code: "conflict", message: "Revision changed elsewhere" }, 409);
-      Object.assign(t, { status: body.status, revision: t.revision + 1, updated_at: stamp(t.revision + 1) });
+      for (const f of ["title", "description_md", "status", "priority"] as const) if (body[f] !== undefined) Object.assign(t, { [f]: body[f] });
+      if (body.assignee_agent_id !== undefined) t.assignee = [builder, reviewer].find((a) => a.id === body.assignee_agent_id);
+      if (body.epic_id !== undefined) { const e = epics.find((e) => e.id === body.epic_id); t.epic = e && { id: e.id, name: e.name }; }
+      if (body.estimate_points !== undefined) Object.assign(t, { estimate_points: body.estimate_points ?? undefined, estimate_rationale: undefined,
+        estimated_by: { type: "user", id: "user", name: "Liam" }, estimated_at: stamp(t.revision + 1) });
+      Object.assign(t, { revision: t.revision + 1, updated_at: stamp(t.revision + 1) });
       return json(t);
+    }
+    // Ticket criteria have their own endpoints and never bump the ticket revision.
+    const owner = tickets.find((t) => path === `/tickets/${t.key}/criteria`);
+    if (owner && request.method() === "POST") {
+      criteriaRequests.push(`POST ${path}`);
+      const c = { id: `crit-${owner.key}-${owner.criteria.length + 1}-${Date.now()}`, position: owner.criteria.length + 1, text: (request.postDataJSON() as { text: string }).text, done: false };
+      owner.criteria.push(c);
+      return json(c, 201);
+    }
+    const crit = path.startsWith("/criteria/") && tickets.flatMap((t) => t.criteria.map((c) => ({ t, c }))).find(({ c }) => path === `/criteria/${c.id}`);
+    if (crit && request.method() === "PATCH") {
+      criteriaRequests.push(`PATCH ${path}`);
+      const body = request.postDataJSON() as { done?: boolean; text?: string };
+      if (body.done !== undefined) crit.c.done = body.done;
+      if (body.text !== undefined) crit.c.text = body.text;
+      return json(crit.c);
+    }
+    if (crit && request.method() === "DELETE") {
+      criteriaRequests.push(`DELETE ${path}`);
+      crit.t.criteria = crit.t.criteria.filter((c) => c !== crit.c).map((c, i) => ({ ...c, position: i + 1 }));
+      return route.fulfill({ status: 204 });
     }
     unhandled.push(`${request.method()} ${path}`);
     return json({ code: "not_found", message: `mock: no handler for ${path}` }, 404);
@@ -113,8 +140,8 @@ export async function installBoardApi(page: Page) {
   });
   await page.route("**/api/v1/**", handle);
   return {
-    tickets, criteria, patches, boardRequests, unhandled,
-    rejectNext: (status: number, message: string) => { rejection = { status, message }; },
+    tickets, criteria, patches, boardRequests, unhandled, criteriaRequests,
+    rejectNext: (status: number, message: string, field?: string) => { rejection = { status, message, field }; },
     failBoard: (fail: boolean) => { boardError = fail; },
     holdNextPatch: () => { let release!: () => void; gate = new Promise<void>((resolve) => { release = resolve; }); return release; },
     editTicket: (key: string, patch: Partial<S["Ticket"]>) => {

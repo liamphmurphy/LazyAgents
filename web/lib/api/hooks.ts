@@ -172,7 +172,9 @@ export function useUpdateCriterion(key: string) {
   return {
     ...m,
     mutate: (v: { id: string; done?: boolean; text?: string }) => {
-      // Tick instantly; the server response reconciles.
+      // Tick instantly; the server response reconciles. Cancel an in-flight
+      // refetch (e.g. after adding a criterion) so it can't overwrite the tick.
+      void qc.cancelQueries({ queryKey: keys.ticket(key) });
       const prev = qc.getQueryData<Ticket>(keys.ticket(key));
       if (prev) {
         qc.setQueryData(keys.ticket(key), {

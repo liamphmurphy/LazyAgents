@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { DropdownMenu } from "radix-ui";
 import { useBootstrap } from "@/lib/api/hooks";
@@ -13,6 +13,7 @@ import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
 import { floatPanel } from "@/components/domain/pickers";
+import { TicketEditModal } from "@/components/domain/ticket-edit-modal";
 
 const selectClass = "h-8 max-w-52 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg";
 
@@ -111,6 +112,7 @@ function BoardView({ project, filters }: { project: string; filters: BoardFilter
   const moves = useBoardMoves();
   const dragging = useRef<string | null>(null);
   const [over, setOver] = useState<BoardStatus>();
+  const [editing, setEditing] = useState<string>();
   const statuses = filters.include_canceled ? [...BOARD_STATUSES, "canceled" as const] : BOARD_STATUSES;
   const board = query.data && withBoardMoves(query.data, Object.values(moves.pending));
   return (
@@ -144,6 +146,7 @@ function BoardView({ project, filters }: { project: string; filters: BoardFilter
             <div className="space-y-2">
               {column?.cards.map((card) => <TicketCard key={card.key} card={card} statuses={statuses} pending={!!moves.pending[card.key]}
                 onMove={(target) => void moves.move(card, target)}
+                onOpen={() => setEditing(card.key)}
                 onDragStart={() => { dragging.current = card.key; }}
                 onDragEnd={() => { dragging.current = null; setOver(undefined); }} />)}
               {!column?.cards.length && <p className="p-1 text-xs text-fg-tertiary">No tickets</p>}
@@ -152,26 +155,26 @@ function BoardView({ project, filters }: { project: string; filters: BoardFilter
           </section>;
         })}
       </div>}
+      {editing && <TicketEditModal ticketKey={editing} onClose={() => setEditing(undefined)} />}
     </div>
   );
 }
 
-function TicketCard({ card, statuses, pending, onMove, onDragStart, onDragEnd }: {
-  card: BoardCard; statuses: BoardStatus[]; pending: boolean; onMove: (status: BoardStatus) => void; onDragStart: () => void; onDragEnd: () => void;
+function TicketCard({ card, statuses, pending, onMove, onOpen, onDragStart, onDragEnd }: {
+  card: BoardCard; statuses: BoardStatus[]; pending: boolean; onMove: (status: BoardStatus) => void; onOpen: () => void; onDragStart: () => void; onDragEnd: () => void;
 }) {
   const [menu, setMenu] = useState(false);
-  const router = useRouter();
   const href = `/tickets/${encodeURIComponent(card.key)}`;
   return <article tabIndex={0} aria-label={`Ticket ${card.key}`} aria-busy={pending} draggable={!pending}
     onDragStart={(e) => { e.dataTransfer.setData("text/plain", card.key); e.dataTransfer.effectAllowed = "move"; onDragStart(); }} onDragEnd={onDragEnd}
-    onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button,[role=menu]")) router.push(href); }}
+    onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button,[role=menu]")) onOpen(); }}
     onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ") && !pending) { e.preventDefault(); setMenu(true); } }}
     className={cx("rounded-md border border-border bg-surface p-3 shadow-sm outline-offset-2", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
     <div className="mb-2 flex items-start justify-between gap-1 text-[11px]">
       <Link href={href} className="font-mono text-fg-tertiary hover:text-fg">{card.key}</Link>
       {card.unmet_dependencies > 0 && <span className="rounded-full bg-accent-soft px-1.5 text-state-blocked" title={`${card.unmet_dependencies} open blockers`}>⛔ Blocked</span>}
     </div>
-    <Link href={href} className="mb-3 block text-[13px] font-medium leading-snug hover:underline">{card.title}</Link>
+    <button type="button" onClick={onOpen} aria-label={`Edit ${card.key}: ${card.title}`} className="mb-3 block text-left text-[13px] font-medium leading-snug hover:underline">{card.title}</button>
     <div className="flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
       <span className="flex items-center gap-1"><PriorityGlyph priority={card.priority} label={false} />{PRIORITY_NAME[card.priority]}</span>
       <span className={cx("rounded-full px-1.5 py-0.5", card.estimate_points == null ? "border border-dashed border-border-strong text-fg-tertiary" : "bg-accent-soft text-accent")}>{card.estimate_points == null ? "unestimated" : `${card.estimate_points} pt`}</span>
