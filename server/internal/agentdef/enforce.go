@@ -53,6 +53,7 @@ var Catalog = map[string]ScopeInfo{
 	"db:read-staging": {Description: "Query the staging snapshot", Secret: "db:staging-readonly"},
 	"deploy:staging":  {Description: "Trigger a staging deploy", Secret: "deploy:staging", Brokered: true},
 	"wiki:write":      {Description: "Edit wiki pages outside the agent's own memory", APIOnly: true},
+	"tracker:epics":   {Description: "Check off epic acceptance criteria (check_epic_criterion)", APIOnly: true},
 }
 
 // EnforcementFor says how a resolved scope is held on a harness, with a
@@ -61,6 +62,10 @@ func EnforcementFor(scope string, mode Mode, harness string) (Enforcement, strin
 	info := Catalog[scope]
 	caps := Capabilities[harness]
 	switch {
+	case scope == "tracker:epics" && mode == Allowed:
+		return ByBroker, "check_epic_criterion is served by LazyAgents"
+	case scope == "tracker:epics":
+		return ByBroker, "check_epic_criterion is refused unless allowed (requires_approval counts as denied in v1)"
 	case info.APIOnly && mode == Allowed:
 		return ByBroker, "Edits go through LazyAgents and publish directly"
 	case info.APIOnly && mode == RequiresApproval:

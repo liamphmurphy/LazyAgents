@@ -76,6 +76,7 @@ else
   CID="$(docker run -d --rm -e POSTGRES_USER=lazyagents -e POSTGRES_PASSWORD=lazyagents -e POSTGRES_DB=lazyagents \
     -p "127.0.0.1:$PG_PORT:5432" postgres:17-alpine)"
   CONTAINERS+=("$CID")
+  PG_CID="$CID"
   for i in $(seq 1 60); do docker exec "$CID" pg_isready -U lazyagents -d lazyagents >/dev/null 2>&1 && break; sleep 1; done
   docker exec "$CID" pg_isready -U lazyagents -d lazyagents >/dev/null
   DATABASE_URL="postgres://lazyagents:lazyagents@127.0.0.1:$PG_PORT/lazyagents?sslmode=disable"
@@ -134,6 +135,17 @@ curl -fsS -X POST "$API_URL/api/v1/projects" -H 'content-type: application/json'
 # ...and a main agent to chat with (SEED=false creates no agents).
 curl -fsS -X POST "$API_URL/api/v1/agents" -H 'content-type: application/json' \
   -d '{"handle":"e2e-main","name":"E2E main","kind":"main"}' >/dev/null
+# Board flow (board-flow.spec.ts): one epic in E2E. There is no REST endpoint
+# that creates an epic (they come from accepted planning sessions or chat
+# create_epic), so this row is the only fixture written straight to Postgres;
+# its criteria, tickets, estimates and status all go through the real API/MCP.
+psql_run() {
+  if [ -n "${PG_CID:-}" ]; then docker exec -i "$PG_CID" psql -U lazyagents -d lazyagents -v ON_ERROR_STOP=1 -qtA "$@"
+  elif command -v psql >/dev/null; then psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -qtA "$@"
+  else docker run --rm -i --network host postgres:17-alpine psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -qtA "$@"; fi
+}
+psql_run -c "INSERT INTO epics (workspace_id, project_id, name, objective, health)
+  SELECT workspace_id, id, 'Board e2e epic', 'Verify the Kanban flow end to end', 'on_track' FROM projects WHERE key = 'E2E'" >/dev/null
 CATALOG="$(curl -fsS "$API_URL/api/v1/chat-models")"
 for want in 'anthropic/claude-sonnet-5-5' 'openai/gpt-5' 'Claude Sonnet (fake)' 'GPT-5 Codex (fake)'; do
   grep -q "$want" <<<"$CATALOG" || { echo "chat-models catalog lacks '$want': $CATALOG" >&2; exit 1; }
@@ -151,4 +163,4 @@ if [ -n "${E2E_STACK_SETUP_ONLY:-}" ]; then
   echo "setup only: Ctrl-C to tear down"; wait; exit 0
 fi
 cd "$WEB"
-E2E_STACK_BASE_URL="$WEB_URL" npx playwright test -c playwright.stack.config.ts "$@"
+E2E_STACK_BASE_URL="$WEB_URL" E2E_STACK_API_URL="$API_URL" npx playwright test -c playwright.stack.config.ts "$@"

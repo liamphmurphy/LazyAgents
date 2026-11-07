@@ -61,6 +61,11 @@ type NewTicket struct {
 	DueDate         *time.Time
 	Criteria        []string
 	RequiresMockup  bool
+	// EstimatePoints (optional) is set right after creation, with
+	// EstimateRationale, attributed to EstimatedBy (default: the creating actor).
+	EstimatePoints    *int
+	EstimateRationale *string
+	EstimatedBy       *Actor
 	// CreatedAt backdates the "created" event (seeding only).
 	CreatedAt *time.Time
 }
@@ -80,6 +85,8 @@ type Patch struct {
 	DueDate           Opt[time.Time]
 	LabelIDs          *[]uuid.UUID
 	RequiresMockup    *bool
+	// Criteria replaces the ticket's criteria atomically; needs Revision. Not for bulk.
+	Criteria *CriteriaDraft
 }
 
 func validTitle(t string) (string, error) {
@@ -196,6 +203,9 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 	if err := checkEnum("priority", in.Priority, Priorities); err != nil {
 		return store.Ticket{}, err
 	}
+	if err := ValidEstimate(in.EstimatePoints, in.EstimateRationale); err != nil {
+		return store.Ticket{}, err
+	}
 
 	var t store.Ticket
 	err = func(q *store.Queries) error {
@@ -281,9 +291,29 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 				return err
 			}
 		}
+		if in.EstimatePoints != nil {
+			by := actor
+			if in.EstimatedBy != nil {
+				by = *in.EstimatedBy
+			}
+			if t, err = applyPatch(ctx, q, ws, by, t.Key, Patch{EstimatePoints: SetTo(*in.EstimatePoints), EstimateRationale: emptyToNil(in.EstimateRationale)}); err != nil {
+				return err
+			}
+		}
 		return nil
 	}(q)
 	return t, err
+}
+
+// ValidEstimate checks optional points against EstimateScale and the rationale length.
+func ValidEstimate(points *int, rationale *string) error {
+	if points != nil && !slices.Contains(EstimateScale, *points) {
+		return invalid("estimate_points", "must be one of 1, 2, 3, 5, 8, 13")
+	}
+	if rationale != nil && len([]rune(*rationale)) > 2000 {
+		return invalid("estimate_rationale", "must be at most 2000 characters")
+	}
+	return nil
 }
 
 func userID(a Actor) *uuid.UUID {
@@ -326,6 +356,9 @@ func (s *Service) Update(ctx context.Context, ws uuid.UUID, actor Actor, key str
 func (s *Service) Bulk(ctx context.Context, ws uuid.UUID, actor Actor, keys []string, p Patch, attach *uuid.UUID) (int, error) {
 	if p.Revision != nil {
 		return 0, invalid("revision", "not allowed in bulk updates")
+	}
+	if p.Criteria != nil {
+		return 0, invalid("criteria", "not allowed in bulk updates")
 	}
 	if p.Title != nil || p.DescriptionMd != nil {
 		return 0, invalid("patch", "title and description can't be bulk-edited")
@@ -375,12 +408,27 @@ func dateEq(a, b *time.Time) bool {
 }
 
 func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor, key string, p Patch) (store.Ticket, error) {
+	var draftTexts []string
+	if p.Criteria != nil {
+		if p.Revision == nil {
+			return store.Ticket{}, invalid("revision", "is required when saving criteria")
+		}
+		var err error
+		if draftTexts, err = validateDraft(p.Criteria); err != nil {
+			return store.Ticket{}, err
+		}
+	}
 	cur, err := q.LockTicketByKey(ctx, store.LockTicketByKeyParams{WorkspaceID: ws, Key: key})
 	if err != nil {
 		return cur, notFound(err)
 	}
 	if p.Revision != nil && *p.Revision != int(cur.Revision) {
-		return cur, apperr.Conflict("ticket revision is stale")
+		return cur, apperr.ConflictField("revision", "ticket revision is stale")
+	}
+	if p.Criteria != nil {
+		if err := applyCriteriaDraft(ctx, q, ws, actor, cur.ID, cur.EpicID, p.Criteria, draftTexts); err != nil {
+			return cur, err
+		}
 	}
 	r := refs{q, ws}
 	next := store.UpdateTicketParams{
@@ -522,6 +570,9 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		if !ptrEq(points, cur.EstimatePoints) || !ptrEq(rationale, cur.EstimateRationale) || ownershipChanged {
 			if actor.Type == "agent" && cur.EstimatedByType != nil && *cur.EstimatedByType == "user" {
 				return cur, apperr.Conflict("a person estimated this; comment instead")
+			}
+			if actor.Type == "agent" && (next.Status == "done" || next.Status == "canceled") {
+				return cur, apperr.Conflict("%s is %s; closed tickets can't be estimated", cur.Key, next.Status)
 			}
 			if p.EstimateRationale != nil && len([]rune(*p.EstimateRationale)) > 2000 {
 				return cur, invalid("estimate_rationale", "must be at most 2000 characters")

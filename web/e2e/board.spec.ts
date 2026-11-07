@@ -23,7 +23,8 @@ test("renders agreed columns, card anatomy, navigation and empty states", async 
   await expect(card(page, "WEB-2")).toContainText("unestimated");
   await expect(card(page, "WEB-2")).toContainText("Unassigned");
   await expect(card(page, "WEB-3")).not.toContainText("Blocked");
-  await expect(card(page).getByRole("link", { name: "Build ticket modal" })).toHaveAttribute("href", "/tickets/WEB-1");
+  await expect(card(page).getByRole("link", { name: "WEB-1" })).toHaveAttribute("href", "/tickets/WEB-1");
+  await expect(card(page).getByRole("link", { name: "Build ticket modal" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Board", exact: true })).toHaveAttribute("aria-current", "page");
   await screen(page).getByLabel("Project", { exact: true }).selectOption("OPS");
   await expect(screen(page).getByText("No tickets", { exact: true })).toHaveCount(5);
@@ -41,7 +42,8 @@ test("epic filter shows points, criteria and blockers, and assignee/canceled fil
   await expect(summary).toContainText("1 / 2 met");
   await expect(summary).toContainText("Board shows all statuses");
   await expect(summary).toContainText("Cards can move");
-  await expect(summary).toContainText("criteria 2 unchecked");
+  await expect(summary.getByRole("region", { name: "Done blockers" }).getByRole("list", { name: "Unchecked criteria" })).toHaveText("2. Cards can move");
+  await expect(summary.getByRole("button", { name: "Mark epic done" })).toBeDisabled();
   await expect(card(page, "WEB-4")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("board.png"), fullPage: true });
   await screen(page).getByLabel("Assignee", { exact: true }).selectOption("builder");
@@ -74,7 +76,7 @@ test("keyboard Move to menu optimistically PATCHes status plus detail revision",
   await page.goto("/board?project=WEB");
   const release = api.holdNextPatch();
   await card(page).focus();
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Space");
   const target = page.getByRole("menuitem", { name: "In Progress", exact: true });
   await target.focus();
   await page.keyboard.press("Enter");
@@ -108,13 +110,15 @@ for (const status of [409, 422]) test(`${status} rolls back optimistic move and 
   await expect(column(page, "done").getByRole("article", { name: "Ticket WEB-1" })).toBeVisible();
   await expect.poll(() => api.patches.length).toBe(1);
   release();
-  await expect(screen(page).getByRole("alert").filter({ hasText: message })).toBeVisible();
+  const alert = status === 409 ? page.getByRole("alert", { name: "Move conflict" }) : screen(page).getByRole("alert").filter({ hasText: message });
+  await expect(alert).toContainText(message);
+  if (status === 409) await expect(alert).toContainText("WEB-1 changed elsewhere");
   await expect(column(page, "todo").getByRole("article", { name: "Ticket WEB-1" })).toBeVisible();
   await expect(column(page, "done").getByRole("article", { name: "Ticket WEB-1" })).toHaveCount(0);
   await expect(card(page)).toHaveAttribute("aria-busy", "false");
   expect(api.tickets[0].status).toBe("todo");
-  await screen(page).getByRole("button", { name: "Dismiss move error" }).click();
-  await expect(screen(page).getByRole("alert").filter({ hasText: message })).toHaveCount(0);
+  await page.getByRole("button", { name: status === 409 ? "Dismiss move conflict" : "Dismiss move error" }).click();
+  await expect(alert).toHaveCount(0);
 });
 
 test("stale displayed card is refreshed without sending a PATCH", async ({ page }) => {
@@ -123,7 +127,7 @@ test("stale displayed card is refreshed without sending a PATCH", async ({ page 
   await expect(card(page)).toBeVisible();
   api.editTicket("WEB-1", { status: "in_review", title: "Agent changed this" });
   await move(page, "WEB-1", "Done");
-  await expect(screen(page).getByRole("alert").filter({ hasText: "Ticket changed elsewhere" })).toBeVisible();
+  await expect(page.getByRole("alert", { name: "Move conflict" })).toContainText("Ticket changed elsewhere");
   await expect(column(page, "in_review").getByRole("article", { name: "Ticket WEB-1" })).toContainText("Agent changed this");
   expect(api.patches).toEqual([]);
 });
@@ -136,7 +140,7 @@ test("an intervening revision change rejects PATCH and keeps the newer server st
   await expect.poll(() => api.patches.length).toBe(1);
   api.editTicket("WEB-1", { status: "in_review" });
   release();
-  await expect(screen(page).getByRole("alert").filter({ hasText: "Revision changed elsewhere" })).toBeVisible();
+  await expect(page.getByRole("alert", { name: "Move conflict" })).toContainText("Revision changed elsewhere");
   await expect(column(page, "in_review").getByRole("article", { name: "Ticket WEB-1" })).toBeVisible();
   expect(api.tickets[0].status).toBe("in_review");
 });

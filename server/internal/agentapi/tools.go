@@ -253,6 +253,12 @@ func getTicket(ctx context.Context, d Deps, c agents.Caller, in GetTicketIn) (an
 	if out["mockup"], err = mockupInfo(ctx, d, t); err != nil {
 		return nil, err
 	}
+	out["revision"] = t.Revision
+	out["estimate_points"] = t.EstimatePoints
+	out["estimate"] = ticketEstimate(t)
+	if out["epic"], err = ticketEpic(ctx, d, t); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -399,11 +405,31 @@ type CommentIn struct {
 
 type NewTicketIn struct {
 	TicketArg
-	EpicID         *uuid.UUID `json:"epic_id,omitempty"`
-	Title          string     `json:"title"`
-	Description    string     `json:"description,omitempty"`
-	Priority       string     `json:"priority,omitempty" jsonschema:"none, low, medium, high or urgent"`
-	RequiresMockup bool       `json:"requires_mockup,omitempty" jsonschema:"The ticket needs a person-approved UI mockup before it can be finished"`
+	EpicID            *uuid.UUID `json:"epic_id,omitempty"`
+	Title             string     `json:"title"`
+	Description       string     `json:"description,omitempty"`
+	Priority          string     `json:"priority,omitempty" jsonschema:"none, low, medium, high or urgent"`
+	RequiresMockup    bool       `json:"requires_mockup,omitempty" jsonschema:"The ticket needs a person-approved UI mockup before it can be finished"`
+	Points            *int       `json:"points,omitempty" jsonschema:"Optional story points: 1, 2, 3, 5, 8 or 13"`
+	EstimateRationale string     `json:"estimate_rationale,omitempty" jsonschema:"Why that estimate, in a sentence"`
+}
+
+// estimate is the optional estimate on create_ticket, validated up front.
+func (in NewTicketIn) estimate() (*int, *string, error) {
+	if in.Points == nil {
+		return nil, nil, nil
+	}
+	if !slices.Contains(tracker.EstimateScale, *in.Points) {
+		return nil, nil, apperr.Invalid("points", "%d is off the scale: use one of 1, 2, 3, 5, 8, 13", *in.Points)
+	}
+	r := strings.TrimSpace(in.EstimateRationale)
+	if len([]rune(r)) > 2000 {
+		return nil, nil, apperr.Invalid("estimate_rationale", "must be at most 2000 characters")
+	}
+	if r == "" {
+		return in.Points, nil, nil
+	}
+	return in.Points, &r, nil
 }
 
 type MockupIn struct {
@@ -816,14 +842,16 @@ func ok(extra map[string]any) map[string]any {
 
 // Tools is the whole Agent API.
 type TicketProposalIn struct {
-	Ref            string   `json:"ref,omitempty" jsonschema:"Unique stable proposal reference, such as schema or api"`
-	DependsOn      []string `json:"depends_on,omitempty" jsonschema:"Other proposal refs that must finish first"`
-	BlockedBy      []string `json:"blocked_by,omitempty" jsonschema:"Existing ticket keys that must be Done first"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	Criteria       []string `json:"criteria"`
-	AgentID        string   `json:"agent_id,omitempty" jsonschema:"Optional suggested agent UUID; omit for unassigned"`
-	RequiresMockup bool     `json:"requires_mockup,omitempty" jsonschema:"the ticket changes UI: a person must approve a mockup before implementation"`
+	Ref               string   `json:"ref,omitempty" jsonschema:"Unique stable proposal reference, such as schema or api"`
+	DependsOn         []string `json:"depends_on,omitempty" jsonschema:"Other proposal refs that must finish first"`
+	BlockedBy         []string `json:"blocked_by,omitempty" jsonschema:"Existing ticket keys that must be Done first"`
+	Title             string   `json:"title"`
+	Description       string   `json:"description"`
+	Criteria          []string `json:"criteria"`
+	AgentID           string   `json:"agent_id,omitempty" jsonschema:"Optional suggested agent UUID; omit for unassigned"`
+	RequiresMockup    bool     `json:"requires_mockup,omitempty" jsonschema:"the ticket changes UI: a person must approve a mockup before implementation"`
+	Points            *int     `json:"points,omitempty" jsonschema:"Story points: 1, 2, 3, 5, 8 or 13. Copied to the ticket when a person accepts the draft."`
+	EstimateRationale string   `json:"estimate_rationale,omitempty" jsonschema:"Why that estimate, in a sentence"`
 }
 
 type ProposeTicketsIn struct {
@@ -834,7 +862,13 @@ var Tools = []Tool{
 	define("propose_tickets", "Submit draft tickets for human review and finish this planning run. Creates no tickets.", func(ctx context.Context, d Deps, c agents.Caller, in ProposeTicketsIn) (any, error) {
 		items := make([]runs.Proposal, 0, len(in.Tickets))
 		for _, item := range in.Tickets {
-			p := runs.Proposal{Ref: item.Ref, DependsOn: item.DependsOn, BlockedBy: item.BlockedBy, Title: item.Title, Description: item.Description, Criteria: item.Criteria, RequiresMockup: item.RequiresMockup}
+			p := runs.Proposal{Ref: item.Ref, DependsOn: item.DependsOn, BlockedBy: item.BlockedBy, Title: item.Title, Description: item.Description, Criteria: item.Criteria, RequiresMockup: item.RequiresMockup, EstimatePoints: item.Points}
+			if item.Points != nil && !slices.Contains(tracker.EstimateScale, *item.Points) {
+				return nil, apperr.Invalid("points", "%q: %d is off the scale: use one of 1, 2, 3, 5, 8, 13", item.Title, *item.Points)
+			}
+			if r := strings.TrimSpace(item.EstimateRationale); r != "" {
+				p.EstimateRationale = &r
+			}
 			if item.AgentID != "" {
 				id, err := parseUUID("agent_id", item.AgentID)
 				if err != nil {
@@ -864,7 +898,7 @@ var Tools = []Tool{
 			return map[string]any{"queue": items}, nil
 		}),
 	define("claim_ticket", "Start (or reconnect to) a run on a ticket assigned to you. Returns your scopes for this project.", claim),
-	define("get_ticket", "A ticket: description, numbered acceptance criteria, attached artifacts and recent comments.", getTicket),
+	define("get_ticket", "A ticket: description, numbered acceptance criteria, estimate, the parent epic with its numbered criteria, attached artifacts and recent comments.", getTicket),
 	define("read_artifact", "Read a PRD, spec, ADR, report or UI mockup (SVG) attached to a ticket, optionally one section. Reads are recorded as citations.", readArtifact),
 	define("post_plan", "Post (or replace) your execution plan. Do this before editing anything.",
 		func(ctx context.Context, d Deps, c agents.Caller, in PlanIn) (any, error) {
@@ -899,6 +933,8 @@ var Tools = []Tool{
 			done := in.Done == nil || *in.Done
 			return ok(nil), d.Runs.CheckCriterion(ctx, c, in.Ticket, in.N, done)
 		}),
+	define("estimate_ticket", "Set story points (1, 2, 3, 5, 8 or 13) with a short rationale on your ticket or another open ticket in its project. A person's estimate can't be overwritten: comment instead.", estimateTicket),
+	define("check_epic_criterion", "Tick an acceptance criterion of an epic in your ticket's project (numbered as in get_ticket's epic) once you've verified it. Only for agents whose tracker:epics scope is allowed.", checkEpicCriterion),
 	define("create_artifact", "Attach a REPORT you wrote (dry-run results, analysis). Agents only create reports.",
 		func(ctx context.Context, d Deps, c agents.Caller, in ReportIn) (any, error) {
 			a, err := d.Runs.CreateReport(ctx, c, in.Ticket, in.Title, in.Body)
@@ -916,12 +952,17 @@ var Tools = []Tool{
 	define("create_epic", "Create an epic in the current chat project.", createChatEpic),
 	define("create_ticket", "Open a follow-up ticket in the same project (unassigned, in the backlog).",
 		func(ctx context.Context, d Deps, c agents.Caller, in NewTicketIn) (any, error) {
+			points, rationale, err := in.estimate()
+			if err != nil {
+				return nil, err
+			}
 			scope, err := chatScopeFor(ctx, d, c)
 			if err != nil {
 				return nil, err
 			}
 			if scope != nil {
-				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: scope.ProjectKey, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID, RequiresMockup: in.RequiresMockup})
+				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: scope.ProjectKey, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID, RequiresMockup: in.RequiresMockup,
+					EstimatePoints: points, EstimateRationale: rationale})
 				if err != nil {
 					return nil, err
 				}
@@ -938,6 +979,7 @@ var Tools = []Tool{
 			nt, err := d.Tracker.Create(ctx, t.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{
 				ProjectKey: p.Key, Title: in.Title, DescriptionMd: in.Description + "\n\nOpened by @" + c.Agent.Handle + " from " + t.Key + ".",
 				Priority: in.Priority, EpicID: t.EpicID, RequiresMockup: in.RequiresMockup,
+				EstimatePoints: points, EstimateRationale: rationale,
 			})
 			if err != nil {
 				return nil, err

@@ -1,7 +1,6 @@
 import type { Priority, TicketStatus } from "@/lib/api/client";
 
-// "canceled" joins the picker and list groups once the backend accepts it (board backend ticket).
-export const STATUS_ORDER: TicketStatus[] = ["in_progress", "in_review", "todo", "backlog", "done"];
+export const STATUS_ORDER: TicketStatus[] = ["in_progress", "in_review", "todo", "backlog", "done", "canceled"];
 export const STATUS_NAME: Record<TicketStatus, string> = {
   backlog: "Backlog",
   todo: "Todo",

@@ -78,9 +78,21 @@ func (s *chatScope) sourceVisible(ctx context.Context, d Deps, kind string, id u
 }
 
 type NewEpicIn struct {
-	Name           string `json:"name"`
-	Objective      string `json:"objective,omitempty"`
-	RequiresMockup bool   `json:"requires_mockup,omitempty" jsonschema:"Tickets in the epic need a person-approved UI mockup before they can be finished"`
+	Name           string   `json:"name"`
+	Objective      string   `json:"objective,omitempty"`
+	RequiresMockup bool     `json:"requires_mockup,omitempty" jsonschema:"Tickets in the epic need a person-approved UI mockup before they can be finished"`
+	Criteria       []string `json:"criteria,omitempty" jsonschema:"Optional final acceptance criteria for the epic, one checkable sentence each"`
+}
+
+// chatEpic is a list_epics row: the epic plus its status, points and criteria counts.
+type chatEpic struct {
+	store.Epic
+	CriteriaTotal int32
+	CriteriaDone  int32
+	PointsTotal   int32
+	PointsDone    int32
+	TicketsTotal  int32
+	TicketsOpen   int32
 }
 
 func listChatEpics(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
@@ -95,11 +107,27 @@ func listChatEpics(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, 
 	if err != nil {
 		return nil, err
 	}
-	out := []store.Epic{}
+	out := []chatEpic{}
+	ids := []uuid.UUID{}
 	for _, e := range rows {
 		if e.ProjectID == s.ProjectID {
-			out = append(out, e)
+			out = append(out, chatEpic{Epic: e})
+			ids = append(ids, e.ID)
 		}
+	}
+	rolls, err := d.Q.EpicRollups(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[uuid.UUID]store.EpicRollupsRow, len(rolls))
+	for _, r := range rolls {
+		byID[r.EpicID] = r
+	}
+	for i := range out {
+		r := byID[out[i].ID]
+		out[i].CriteriaTotal, out[i].CriteriaDone = r.CriteriaTotal, r.CriteriaDone
+		out[i].PointsTotal, out[i].PointsDone = r.PointsTotal, r.PointsDone
+		out[i].TicketsTotal, out[i].TicketsOpen = r.TicketsTotal, r.TicketsOpen
 	}
 	return map[string]any{"epics": out}, nil
 }
@@ -123,9 +151,9 @@ func createChatEpic(ctx context.Context, d Deps, c agents.Caller, in NewEpicIn) 
 	if p.Archived {
 		return nil, apperr.Conflict("restore the archived project before creating an epic")
 	}
-	e, err := d.Q.CreateEpic(ctx, store.CreateEpicParams{WorkspaceID: c.Agent.WorkspaceID, ProjectID: s.ProjectID, Name: name, Objective: in.Objective, Health: "on_track", RequiresMockup: in.RequiresMockup})
+	e, err := d.Tracker.CreateEpic(ctx, store.CreateEpicParams{WorkspaceID: c.Agent.WorkspaceID, ProjectID: s.ProjectID, Name: name, Objective: in.Objective, Health: "on_track", RequiresMockup: in.RequiresMockup}, in.Criteria)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"epic_id": e.ID, "name": e.Name}, nil
+	return map[string]any{"epic_id": e.ID, "name": e.Name, "criteria": len(in.Criteria)}, nil
 }

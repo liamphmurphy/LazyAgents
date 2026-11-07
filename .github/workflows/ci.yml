@@ -70,7 +70,7 @@ jobs:
       - run: cd web && npm ci
       - run: make gen-check
 
-  # Real-stack OpenCode chat e2e (no API mocks). Fake CLIs stand in for
+  # Real-stack board/MCP and OpenCode chat e2e (no API mocks). Fake CLIs stand in for
   # opencode/claude/codex, so this is NOT real-provider evidence; see
   # web/e2e-stack/README.md. The script starts SeaweedFS itself via docker.
   e2e-stack:
