@@ -241,10 +241,26 @@ func TestChatLifecycleAndArchive(t *testing.T) {
 	e.invalid("PATCH", "/chats/"+id, map[string]any{"revision": 2, "title": "   "}, "title", "1–200")
 	e.invalid("PATCH", "/chats/"+id, map[string]any{"revision": 2}, "title", "provide")
 
+	// Global search (the ⌘K palette) finds the user's chats by title, scoped by project.
+	chatHits := func(path string) (n int) {
+		for _, h := range e.want("GET", path, nil, 200)["hits"].([]any) {
+			if tg := h.(map[string]any)["target"].(map[string]any); tg["kind"] == "chat" && tg["href"] == "/chat/"+id {
+				n++
+			}
+		}
+		return n
+	}
+	if chatHits("/search?q=renam") != 1 || chatHits("/search?q=renam&project=PAY") != 1 || chatHits("/search?q=renam&project=BIL") != 0 {
+		t.Fatal("search did not find the renamed chat in its project only")
+	}
+
 	// Archive: out of the default list, in ?archived=true; restore reverses it.
 	e.want("PATCH", "/chats/"+id, map[string]any{"revision": 2, "archived": true}, 200)
 	if n := len(e.want("GET", "/chats", nil, 200)["chats"].([]any)); n != 0 {
 		t.Fatalf("archived chat still in the default list (%d)", n)
+	}
+	if chatHits("/search?q=renam") != 0 {
+		t.Fatal("archived chat still in search")
 	}
 	arch := e.want("GET", "/chats?archived=true", nil, 200)
 	if cs := ids(arch["chats"], "id"); len(cs) != 1 || cs[0] != id {
