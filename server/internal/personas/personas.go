@@ -307,6 +307,43 @@ func (s *Service) Delete(ctx context.Context, o Owner, id uuid.UUID, revision *i
 	return out, err
 }
 
+// SetAvatar points the persona at an avatar already stored under key with the
+// sniffed content type, or clears it when key is nil (a no-op without an
+// avatar, so removing is idempotent). It returns the row and the key it
+// replaced: that blob is the caller's to delete once this has committed. The
+// owner lock serializes concurrent uploads, so each replaced key is returned
+// to exactly one caller. Its chats get chat.updated, since their embedded
+// summary carries the avatar URL.
+func (s *Service) SetAvatar(ctx context.Context, o Owner, id uuid.UUID, key, contentType *string) (store.Persona, *string, error) {
+	var out store.Persona
+	var old *string
+	if (key == nil) != (contentType == nil) {
+		return out, nil, errors.New("personas: avatar key and content type go together")
+	}
+	err := s.tx(ctx, o, func(q *store.Queries) error {
+		cur, err := get(ctx, q, o, id)
+		if err != nil {
+			return err
+		}
+		if key == nil && cur.AvatarKey == nil {
+			out = cur
+			return nil
+		}
+		out, err = q.SetPersonaAvatar(ctx, store.SetPersonaAvatarParams{
+			ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, AvatarKey: key, AvatarContentType: contentType,
+		})
+		if err != nil {
+			return err
+		}
+		old = cur.AvatarKey
+		return NotifyChats(ctx, q, id)
+	})
+	if err != nil {
+		return out, nil, err
+	}
+	return out, old, nil
+}
+
 // notifyBatch keeps each payload well under pg_notify's 8000 byte limit.
 const notifyBatch = 50
 

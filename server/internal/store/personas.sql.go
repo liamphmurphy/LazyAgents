@@ -512,6 +512,52 @@ func (q *Queries) SeedDefaultPersona(ctx context.Context, arg SeedDefaultPersona
 	return i, err
 }
 
+const setPersonaAvatar = `-- name: SetPersonaAvatar :one
+UPDATE personas SET
+  avatar_key = $1::text,
+  avatar_content_type = $2::text,
+  revision = revision + 1, updated_at = now()
+WHERE id = $3 AND workspace_id = $4 AND user_id = $5
+RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at
+`
+
+type SetPersonaAvatarParams struct {
+	AvatarKey         *string
+	AvatarContentType *string
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	UserID            uuid.UUID
+}
+
+// Points the persona at a stored avatar, or clears it with both args null.
+func (q *Queries) SetPersonaAvatar(ctx context.Context, arg SetPersonaAvatarParams) (Persona, error) {
+	row := q.db.QueryRow(ctx, setPersonaAvatar,
+		arg.AvatarKey,
+		arg.AvatarContentType,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+	)
+	var i Persona
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Name,
+		&i.Tone,
+		&i.Color,
+		&i.AvatarKey,
+		&i.AvatarContentType,
+		&i.CustomInstructions,
+		&i.IsDefault,
+		&i.LastUsedAt,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const touchPersonaUsed = `-- name: TouchPersonaUsed :exec
 UPDATE personas SET last_used_at = now()
 WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')

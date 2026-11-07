@@ -108,3 +108,12 @@ ON CONFLICT DO NOTHING RETURNING *;
 -- chat.updated for chats whose embedded persona summary changed without a
 -- chat_sessions write (rename, colour, avatar). Delivered on commit.
 SELECT pg_notify('lazyagents_changes', json_build_object('type', 'chat.updated', 'ids', sqlc.arg(ids)::text[])::text);
+
+-- name: SetPersonaAvatar :one
+-- Points the persona at a stored avatar, or clears it with both args null.
+UPDATE personas SET
+  avatar_key = sqlc.narg(avatar_key)::text,
+  avatar_content_type = sqlc.narg(avatar_content_type)::text,
+  revision = revision + 1, updated_at = now()
+WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
+RETURNING *;

@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/google/uuid"
 
@@ -15,12 +14,7 @@ import (
 
 // Persona endpoints (wiki: Architecture/ADR - Assistant personas). Personas
 // are private to their owner: every call is scoped to the signed-in person,
-// so another person's persona is a 404. The avatar endpoints still answer 501
-// until the avatar ticket implements them.
-
-func personasNotImplemented() (int, api.Error) {
-	return http.StatusNotImplemented, api.Error{Code: api.Internal, Message: "persona avatars are not implemented yet"}
-}
+// so another person's persona is a 404. Avatars are in persona_avatar.go.
 
 func (s *Server) personas() *personas.Service { return &personas.Service{Pool: s.Pool} }
 
@@ -160,10 +154,7 @@ func (s *Server) DeletePersona(ctx context.Context, req api.DeletePersonaRequest
 	if err != nil {
 		return nil, err
 	}
-	if p.AvatarKey != nil && s.Blobs != nil {
-		// The row is gone; a leftover blob is unreachable, so a failure here only costs storage.
-		_ = s.Blobs.Delete(context.WithoutCancel(ctx), s.ArtifactBucket, *p.AvatarKey)
-	}
+	s.deleteAvatarBlob(ctx, p.AvatarKey)
 	return api.DeletePersona204Response{}, nil
 }
 
@@ -174,19 +165,4 @@ func (s *Server) SetDefaultPersona(ctx context.Context, req api.SetDefaultPerson
 	}
 	out, err := s.toPersona(ctx, p)
 	return api.SetDefaultPersona200JSONResponse(out), err
-}
-
-func (s *Server) GetPersonaAvatar(ctx context.Context, _ api.GetPersonaAvatarRequestObject) (api.GetPersonaAvatarResponseObject, error) {
-	code, body := personasNotImplemented()
-	return api.GetPersonaAvatardefaultJSONResponse{StatusCode: code, Body: body}, nil
-}
-
-func (s *Server) UploadPersonaAvatar(ctx context.Context, _ api.UploadPersonaAvatarRequestObject) (api.UploadPersonaAvatarResponseObject, error) {
-	code, body := personasNotImplemented()
-	return api.UploadPersonaAvatardefaultJSONResponse{StatusCode: code, Body: body}, nil
-}
-
-func (s *Server) DeletePersonaAvatar(ctx context.Context, _ api.DeletePersonaAvatarRequestObject) (api.DeletePersonaAvatarResponseObject, error) {
-	code, body := personasNotImplemented()
-	return api.DeletePersonaAvatardefaultJSONResponse{StatusCode: code, Body: body}, nil
 }
