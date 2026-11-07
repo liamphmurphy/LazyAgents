@@ -322,6 +322,11 @@ func TestChatUnknownAndForeignChatsAre404(t *testing.T) {
 	if n := len(e.want("GET", "/chats", nil, 200)["chats"].([]any)); n != 0 {
 		t.Fatalf("list leaked %d foreign chats", n)
 	}
+	for _, h := range e.want("GET", "/search?q=hello", nil, 200)["hits"].([]any) {
+		if h.(map[string]any)["target"].(map[string]any)["kind"] == "chat" {
+			t.Fatalf("search leaked a foreign chat: %v", h)
+		}
+	}
 }
 
 func TestChatMessagesPostCancelAndHistory(t *testing.T) {

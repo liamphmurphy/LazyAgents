@@ -47,7 +47,8 @@ function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project 
     qc = useQueryClient();
   const project = scoped.key;
   const [agent, setAgent] = useState(data.agents[0]?.id || "");
-  const [goal, setGoal] = useState("");
+  // ?goal= prefills from the command palette ("Start planning: …").
+  const [goal, setGoal] = useState(search.get("goal") ?? "");
   const selected = data.agents.find((a) => a.id === agent);
   const epic = search.get("epic") || undefined,
     artifact = search.get("artifact") || undefined;
