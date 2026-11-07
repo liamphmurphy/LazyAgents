@@ -1,0 +1,96 @@
+-- Personas are private to one person: every query filters on (workspace_id, user_id).
+
+-- name: LockPersonaOwner :exec
+-- Serializes one person's persona writes (default swap, the per-person cap,
+-- name checks) for the rest of the transaction.
+SELECT pg_advisory_xact_lock(hashtextextended('personas:' || sqlc.arg(workspace_id)::uuid::text || ':' || sqlc.arg(user_id)::uuid::text, 0));
+
+-- name: ListPersonas :many
+-- The default first, then most recently used, then by name.
+SELECT * FROM personas WHERE workspace_id = $1 AND user_id = $2
+ORDER BY is_default DESC, last_used_at DESC NULLS LAST, lower(btrim(name)), id;
+
+-- name: CountPersonas :one
+SELECT count(*)::int FROM personas WHERE workspace_id = $1 AND user_id = $2;
+
+-- name: GetPersona :one
+SELECT * FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3;
+
+-- name: DefaultPersona :one
+SELECT * FROM personas WHERE workspace_id = $1 AND user_id = $2 AND is_default;
+
+-- name: PersonaNameTaken :one
+-- Whether another of the person's personas already uses this name (case-insensitive, trimmed).
+SELECT EXISTS (
+  SELECT 1 FROM personas
+  WHERE workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
+    AND lower(btrim(name)) = lower(btrim(sqlc.arg(name)::text))
+    AND id IS DISTINCT FROM sqlc.narg(except_id)::uuid
+)::bool;
+
+-- name: CreatePersona :one
+INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
+
+-- name: UpdatePersona :one
+-- Returns no row when the persona isn't the caller's or the revision is stale.
+UPDATE personas SET
+  name = COALESCE(sqlc.narg(name)::text, name),
+  tone = COALESCE(sqlc.narg(tone)::text, tone),
+  color = COALESCE(sqlc.narg(color)::text, color),
+  custom_instructions = COALESCE(sqlc.narg(custom_instructions)::text, custom_instructions),
+  revision = revision + 1, updated_at = now()
+WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND revision = sqlc.arg(revision)
+RETURNING *;
+
+-- name: ClearDefaultPersona :exec
+-- Step one of a default swap: unset the current default unless it is keep_id.
+UPDATE personas SET is_default = false, revision = revision + 1, updated_at = now()
+WHERE workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND is_default AND id <> sqlc.arg(keep_id);
+
+-- name: MarkDefaultPersona :one
+-- Step two of a default swap. A persona that is already the default is returned unchanged.
+UPDATE personas SET is_default = true,
+  revision = CASE WHEN is_default THEN revision ELSE revision + 1 END,
+  updated_at = CASE WHEN is_default THEN updated_at ELSE now() END
+WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+RETURNING *;
+
+-- name: DeletePersona :one
+DELETE FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3 RETURNING *;
+
+-- name: PromoteDefaultPersona :exec
+-- After the default is deleted: the most recently used remaining persona
+-- (ties to the most recently created) becomes the default. No-op when none remain.
+UPDATE personas SET is_default = true, revision = revision + 1, updated_at = now()
+WHERE id = (
+  SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(user_id)
+  ORDER BY p.last_used_at DESC NULLS LAST, p.created_at DESC, p.id DESC LIMIT 1
+);
+
+-- name: PersonaChatCounts :many
+-- Chats (archived included) per persona.
+SELECT persona_id::uuid AS persona_id, count(*)::int AS n FROM chat_sessions
+WHERE persona_id = ANY(sqlc.arg(ids)::uuid[]) GROUP BY persona_id;
+
+-- name: PersonaChatIDs :many
+SELECT id FROM chat_sessions WHERE persona_id = $1 ORDER BY id;
+
+-- name: PersonasByIDs :many
+-- The summaries chat payloads embed; only the caller's own personas.
+SELECT * FROM personas WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id);
+
+-- name: TouchPersonaUsed :exec
+-- A chat with this persona got a message; drives ordering and promotion on delete.
+UPDATE personas SET last_used_at = now() WHERE id = $1;
+
+-- name: SeedDefaultPersona :one
+-- A new person's built-in "Assistant" default; no row when they already have a default.
+INSERT INTO personas (workspace_id, user_id, name, is_default)
+VALUES ($1, $2, 'Assistant', true)
+ON CONFLICT DO NOTHING RETURNING *;
+
+-- name: NotifyChatsUpdated :exec
+-- chat.updated for chats whose embedded persona summary changed without a
+-- chat_sessions write (rename, colour, avatar). Delivered on commit.
+SELECT pg_notify('lazyagents_changes', json_build_object('type', 'chat.updated', 'ids', sqlc.arg(ids)::text[])::text);
