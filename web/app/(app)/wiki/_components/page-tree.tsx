@@ -163,6 +163,7 @@ function FolderRow({
         <button
           type="button"
           aria-expanded={expanded}
+          aria-disabled={forced || undefined}
           aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           title={forced ? "Contains the current page" : undefined}
           onClick={() => !forced && ctx.toggle(id, !expanded)}
@@ -246,7 +247,7 @@ function Reports({ depth, ctx }: { depth: number; ctx: TreeCtx }) {
   const total = reports.data?.counts.report ?? list.length;
   const newest = [...list].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5);
   return (
-    <FolderRow id="reports" name="Reports" count={total} countLabel={`${total} reports`} depth={depth} ctx={ctx}>
+    <FolderRow id="ns:reports" name="Reports" count={total} countLabel={`${total} reports`} depth={depth} ctx={ctx}>
       <ul className="flex flex-col">
         {reports.isError ? (
           <li className="py-1 text-xs text-fg-tertiary" style={{ paddingLeft: 44 + depth * 12 }}>

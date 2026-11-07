@@ -45,10 +45,12 @@ const patterns: S["WikiPattern"][] = [
 ];
 const adrs: S["WikiADR"][] = [
   { id: "page-0", title: "ADR - Chat sessions", path: pages[0].path, href: "/wiki/Architecture/ADR%20-%20Chat%20sessions", status: "Accepted", state: "accepted",
-    date: "2026-11-02", ticket: "WEB-6", updated_at: stamp(10), open_questions: ["Which agent identity chats use ([[WEB-6]]).", "Memory writes.", "Idle TTL."] },
+    date: "2026-11-02", ticket: "WEB-6", updated_at: stamp(10), open_questions: ["Which agent identity chats use ([[WEB-6]]).", "Memory writes.", "Idle TTL."], has_open_questions: true },
+  { id: "page-9", title: "ADR - Board", path: "Architecture/ADR - Board", href: "/wiki/Architecture/ADR%20-%20Board", status: "Accepted", state: "accepted",
+    updated_at: stamp(15), open_questions: [], has_open_questions: true },
   { id: "page-1", title: "ADR - Push branches", path: pages[1].path, href: "/wiki/Architecture/ADR%20-%20Push%20branches", status: "Accepted", state: "accepted",
-    date: "2026-11-01", updated_at: stamp(20), open_questions: [] },
-  { id: "adr-7", title: "Old storage", display_id: "ADR-007", href: "/artifacts/adr-7", status: "Superseded", state: "superseded", updated_at: stamp(30), open_questions: [] },
+    date: "2026-11-01", updated_at: stamp(20), open_questions: [], has_open_questions: false },
+  { id: "adr-7", title: "Old storage", display_id: "ADR-007", href: "/artifacts/adr-7", status: "Superseded", state: "superseded", updated_at: stamp(30), open_questions: [], has_open_questions: false },
 ];
 
 async function installWikiApi(p: Page) {
@@ -85,10 +87,11 @@ async function installWikiApi(p: Page) {
     }
     if (path === "/wiki/adrs") return json({ adrs });
     if (path === `/wiki/pages/${page.id}/citations`) return json({
-      runs: 1, chats: 1,
+      runs: 1, chats: 2,
       citations: [
         { run_id: "run-1", purpose: "ticket", agent: builder, ticket_key: "WEB-9", ticket_title: "MCP allowlist", reads: 3, last_read_at: stamp(60) },
         { run_id: "run-2", purpose: "chat", agent: builder, chat_id: "chat-1", chat_title: "Why are chat runs read-only?", reads: 1, last_read_at: stamp(30) },
+        { run_id: "run-3", purpose: "chat", agent: builder, reads: 1, last_read_at: stamp(20) },
       ],
       unlinked: [{ agent: builder, reads: 2, last_read_at: stamp(9000) }],
     } satisfies S["WikiCitations"]);
@@ -178,7 +181,9 @@ test("a page's rail shows tags, backlinks, linked tickets, cited by and history 
   const tickets = rail.locator("section", { has: p.getByRole("heading", { name: /^Linked tickets/ }) });
   await expect(tickets.getByRole("link")).toHaveText([/WEB-8.*Runner: run purpose.*Done/, /WEB-9.*MCP allowlist.*In progress/, /WEB-12.*Mentioned in a comment/]);
   const cited = rail.locator("section", { has: p.getByRole("heading", { name: /^Cited by/ }) });
-  await expect(cited.getByRole("heading")).toHaveText("Cited by 1 run · 1 chat");
+  await expect(cited.getByRole("heading")).toHaveText("Cited by 1 run · 2 chats");
+  await expect(cited.getByText("Chat · someone else's chat")).toBeVisible();
+  await expect(cited.locator('a[href="/runs/run-3"]')).toHaveCount(0);
   await expect(cited.getByRole("link", { name: "WEB-9" })).toHaveAttribute("href", "/runs/run-1");
   await expect(cited.getByRole("link", { name: "Why are chat runs read-only?" })).toHaveAttribute("href", "/chat/chat-1");
   await expect(cited.getByText("2 earlier reads aren't linked to a run.")).toBeVisible();
@@ -226,9 +231,12 @@ test("the Pattern index filters by tag in the URL, and the ADR index shows statu
   await tree(p).getByRole("link", { name: "ADR index" }).click();
   await expect(p).toHaveURL(/\/wiki\?index=adrs$/);
   await expect(p.getByRole("heading", { level: 1, name: "Architecture decisions" })).toBeVisible();
-  await expect(p.getByText("3 ADRs · 1 with open questions")).toBeVisible();
+  await expect(p.getByText("4 ADRs · 2 with open questions")).toBeVisible();
   const adrList = p.getByRole("list", { name: "ADRs" });
-  await expect(adrList.locator("> li")).toHaveCount(3);
+  await expect(adrList.locator("> li")).toHaveCount(4);
+  // A Status line that says "with open questions" is highlighted even without a list.
+  await expect(adrList.locator("> li").nth(1)).toContainText("ADR - Board");
+  await expect(adrList.locator("> li").nth(1)).toContainText("Accepted · open questions");
   const first = adrList.locator("> li").first();
   await expect(first).toContainText("Accepted · open questions");
   await expect(first).toContainText("2026-11-02 · WEB-6 · 3 open questions");
@@ -237,7 +245,7 @@ test("the Pattern index filters by tag in the URL, and the ADR index shows statu
   await expect(qs).not.toContainText("Idle TTL.");
   await qs.getByRole("button", { name: "+ 1 more" }).click();
   await expect(qs).toContainText("Idle TTL.");
-  await expect(adrList.locator("> li").nth(2)).toContainText("ADR-007Old storageSuperseded");
+  await expect(adrList.locator("> li").nth(3)).toContainText("ADR-007Old storageSuperseded");
   await p.getByRole("group", { name: "Filter ADRs" }).getByRole("button", { name: /^Accepted/ }).click();
   await expect(adrList.getByRole("link")).toHaveText(["ADR - Push branches"]);
   expect(api.unhandled).toEqual([]);

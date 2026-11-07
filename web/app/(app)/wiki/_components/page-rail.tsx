@@ -165,7 +165,7 @@ export function CitedBy({ id }: { id: string }) {
           {data.citations.length > 0 && (
             <ul className="flex flex-col gap-1.5">
               {shown.map((c) => {
-                const chat = c.purpose === "chat" && c.chat_id;
+                const chat = c.purpose === "chat";
                 return (
                   <li key={c.run_id} className="flex items-center gap-2 text-[12.5px]">
                     {chat ? (
@@ -175,12 +175,17 @@ export function CitedBy({ id }: { id: string }) {
                     )}
                     <span className="min-w-0 flex-1 truncate">
                       {chat ? (
-                        <>
-                          Chat ·{" "}
-                          <Link href={`/chat/${c.chat_id}`} className="text-accent hover:underline">
-                            {c.chat_title || "Untitled chat"}
-                          </Link>
-                        </>
+                        c.chat_id ? (
+                          <>
+                            Chat ·{" "}
+                            <Link href={`/chat/${c.chat_id}`} className="text-accent hover:underline">
+                              {c.chat_title || "Untitled chat"}
+                            </Link>
+                          </>
+                        ) : (
+                          // Chats are private: someone else's is counted, not shown.
+                          <span className="text-fg-secondary">Chat · someone else&apos;s chat</span>
+                        )
                       ) : (
                         <>
                           <Link href={`/runs/${c.run_id}`} className="font-mono text-[11.5px] text-accent hover:underline">

@@ -32,6 +32,9 @@ type ADRStatus struct {
 	Date          string   // YYYY-MM-DD, or ""
 	Ticket        string   // ticket key from "Ticket: [[KEY]]", or ""
 	OpenQuestions []string // items of the "Open questions" section, as Markdown
+	// HasOpenQuestions: questions are listed, or the Status line says
+	// "with open questions" (some ADRs list them elsewhere).
+	HasOpenQuestions bool
 }
 
 var (
@@ -44,16 +47,18 @@ var (
 )
 
 // ParseADR reads the Status line (status, date, ticket) and the Open
-// questions section of an ADR body. Without parsed questions, a status that
-// says "with open questions" keeps saying so.
+// questions section of an ADR body. "with open questions" moves from the
+// status to HasOpenQuestions.
 func ParseADR(body string) ADRStatus {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	out := ADRStatus{State: ADRNone, OpenQuestions: openQuestions(body)}
+	out.HasOpenQuestions = len(out.OpenQuestions) > 0
 	m := statusLineRe.FindStringSubmatch(body)
 	if m == nil {
 		return out
 	}
 	line := strings.TrimSpace(m[1])
+	out.HasOpenQuestions = out.HasOpenQuestions || withOpenQRe.MatchString(line)
 	out.Date = dateRe.FindString(line)
 	if t := ticketRe.FindStringSubmatch(line); t != nil {
 		out.Ticket = strings.ToUpper(t[1])
@@ -66,9 +71,7 @@ func ParseADR(body string) ADRStatus {
 	if i := strings.Index(st, ". "); i >= 0 {
 		st = st[:i]
 	}
-	if len(out.OpenQuestions) > 0 {
-		st = withOpenQRe.ReplaceAllString(st, "")
-	}
+	st = withOpenQRe.ReplaceAllString(st, "") // HasOpenQuestions carries it
 	st = strings.Trim(strings.TrimSpace(st), ".,;:*_ ")
 	out.Status = st
 	first := strings.ToLower(strings.Trim(strings.SplitN(st+" ", " ", 2)[0], ".,;:"))
@@ -161,8 +164,6 @@ func ListADRs(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]ADR, error
 		}
 		out = append(out, a)
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return len(out[i].OpenQuestions) > 0 && len(out[j].OpenQuestions) == 0
-	})
+	sort.SliceStable(out, func(i, j int) bool { return out[i].HasOpenQuestions && !out[j].HasOpenQuestions })
 	return out, nil
 }

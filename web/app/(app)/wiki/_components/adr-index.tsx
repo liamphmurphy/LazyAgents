@@ -32,8 +32,7 @@ function Plain({ text }: { text: string }) {
 }
 
 function StatusPill({ a }: { a: WikiADR }) {
-  const open = a.open_questions.length > 0;
-  if (open) return <SmallPill tone="human">{a.status || "No status"} · open questions</SmallPill>;
+  if (a.has_open_questions) return <SmallPill tone="human">{a.status || "No status"} · open questions</SmallPill>;
   if (a.state === "accepted") return <SmallPill tone="done">{a.status}</SmallPill>;
   return <SmallPill tone="neutral">{a.status || "No status"}</SmallPill>;
 }
@@ -42,7 +41,7 @@ function ADRRow({ a }: { a: WikiADR }) {
   const [all, setAll] = useState(false);
   const qs = a.open_questions;
   const shown = all ? qs : qs.slice(0, 2);
-  const open = qs.length > 0;
+  const open = a.has_open_questions;
   return (
     <li className="relative flex flex-col gap-1.5 border-b border-border-subtle px-4 py-3 last:border-0">
       {open && <span aria-hidden className="absolute top-0 bottom-0 left-0 w-[3px] bg-pill-human-fg" />}
@@ -62,7 +61,7 @@ function ADRRow({ a }: { a: WikiADR }) {
                 {a.ticket}
               </Link>
             ),
-            open && `${qs.length} open ${qs.length === 1 ? "question" : "questions"}`,
+            qs.length > 0 && `${qs.length} open ${qs.length === 1 ? "question" : "questions"}`,
           ]
             .filter(Boolean)
             .map((x, i) => (
@@ -73,7 +72,7 @@ function ADRRow({ a }: { a: WikiADR }) {
             ))}
         </span>
       )}
-      {open && (
+      {qs.length > 0 && (
         <ol aria-label={`Open questions in ${a.title}`} className="flex flex-col gap-1 text-[12.5px] text-fg-2">
           {shown.map((q, i) => (
             <li key={i} className="flex gap-1.5">
@@ -104,8 +103,8 @@ export function ADRIndex() {
   const { data, isError, error } = useWikiADRs();
   const [filter, setFilter] = useState<Filter>("all");
   const adrs = data ?? [];
-  const open = adrs.filter((a) => a.open_questions.length > 0);
-  const accepted = adrs.filter((a) => a.state === "accepted" && a.open_questions.length === 0);
+  const open = adrs.filter((a) => a.has_open_questions);
+  const accepted = adrs.filter((a) => a.state === "accepted" && !a.has_open_questions);
   const list = filter === "open" ? open : filter === "accepted" ? accepted : adrs;
   const tabs: Array<[Filter, string, number]> = [
     ["all", "All", adrs.length],

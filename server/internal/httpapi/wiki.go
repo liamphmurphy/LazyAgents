@@ -346,20 +346,20 @@ func (s *Server) ListWikiADRs(ctx context.Context, _ api.ListWikiADRsRequestObje
 		out.Adrs[i] = api.WikiADR{
 			Id: a.ID, Title: a.Title, Path: nonEmpty(a.Path), DisplayId: nonEmpty(a.DisplayID), Href: a.Href,
 			Status: a.Status, State: api.WikiADRState(a.State), Date: nonEmpty(a.Date), Ticket: nonEmpty(a.Ticket),
-			OpenQuestions: qs, UpdatedAt: a.UpdatedAt,
+			OpenQuestions: qs, HasOpenQuestions: a.HasOpenQuestions, UpdatedAt: a.UpdatedAt,
 		}
 	}
 	return out, nil
 }
 
 func (s *Server) GetWikiCitations(ctx context.Context, req api.GetWikiCitationsRequestObject) (api.GetWikiCitationsResponseObject, error) {
-	_, _, ws := me(ctx)
+	u, _, ws := me(ctx)
 	if _, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.Id, WorkspaceID: ws}); errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.ErrNotFound
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := s.Q.ListArtifactCitations(ctx, req.Id)
+	rows, err := s.Q.ListArtifactCitations(ctx, store.ListArtifactCitationsParams{ArtifactID: req.Id, WorkspaceID: ws, Viewer: u.ID})
 	if err != nil {
 		return nil, err
 	}
@@ -368,6 +368,7 @@ func (s *Server) GetWikiCitations(ctx context.Context, req api.GetWikiCitationsR
 		return nil, err
 	}
 	out := api.GetWikiCitations200JSONResponse{Citations: make([]api.WikiCitation, 0, len(rows)), Unlinked: make([]api.ArtifactReader, len(readers))}
+	// Chats count by chat; another person's chat (not shown) by run.
 	chats := map[string]bool{}
 	for _, r := range rows {
 		c := api.WikiCitation{
@@ -379,6 +380,8 @@ func (s *Server) GetWikiCitations(ctx context.Context, req api.GetWikiCitationsR
 			c.ChatId = &id
 			c.ChatTitle = &r.ChatTitle
 			chats[r.ChatID] = true
+		} else if r.Purpose == "chat" {
+			chats["run:"+r.RunID.String()] = true
 		}
 		if r.Purpose != "chat" {
 			out.Runs++

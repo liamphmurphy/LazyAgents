@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -93,6 +94,9 @@ func TestWikiIndexes(t *testing.T) {
 		len(chat.OpenQuestions) != 2 || chat.OpenQuestions[0] != "Which agent identity chats use." || chat.Href != "/wiki/Architecture/ADR%20-%20Chat%20sessions" {
 		t.Fatalf("chat ADR: %+v", chat)
 	}
+	if !chat.HasOpenQuestions || push.HasOpenQuestions {
+		t.Fatalf("has_open_questions: %v %v", chat.HasOpenQuestions, push.HasOpenQuestions)
+	}
 	if push.Status != "Accepted" || len(push.OpenQuestions) != 0 || deref(push.Date) != "2026-11-01" {
 		t.Fatalf("push ADR: %+v", push)
 	}
@@ -124,19 +128,38 @@ func TestWikiIndexes(t *testing.T) {
 	if _, err := q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: sess.ID, CurrentRunID: &chatRun.ID, State: "idle"}); err != nil {
 		t.Fatal(err)
 	}
+	// Another person's private chat read the page too: it's counted, never named.
+	other, err := q.CreateUser(ctx, store.CreateUserParams{WorkspaceID: ws, Name: "Sam", Email: "sam@example.com", Initials: "S"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherRun, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, AgentID: atlas.ID, Mode: "managed", State: "waiting", ResolvedSpec: json.RawMessage(`{}`), Harness: "codex", Model: "fake", Purpose: "chat"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherSess, err := q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: ticket.ProjectID, Title: "Sam's secret plans", CreatedBy: other.ID, AgentID: atlas.ID, Harness: "codex", Model: "fake"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: otherSess.ID, CurrentRunID: &otherRun.ID, State: "idle"}); err != nil {
+		t.Fatal(err)
+	}
 	a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: page.Note.ID, WorkspaceID: ws})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, rid := range []*uuid.UUID{&ticketRun.ID, &ticketRun.ID, &chatRun.ID, nil} {
+	for _, rid := range []*uuid.UUID{&ticketRun.ID, &ticketRun.ID, &chatRun.ID, nil, &otherRun.ID} {
 		if err := artifacts.RecordRead(ctx, q, a, atlas.ID, rid, "", nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var cites api.GetWikiCitations200JSONResponse
 	get("/api/v1/wiki/pages/"+a.ID.String()+"/citations", 200, &cites)
-	if cites.Runs != 1 || cites.Chats != 1 || len(cites.Citations) != 2 || len(cites.Unlinked) != 1 || cites.Unlinked[0].Reads != 1 {
+	if cites.Runs != 1 || cites.Chats != 2 || len(cites.Citations) != 3 || len(cites.Unlinked) != 1 || cites.Unlinked[0].Reads != 1 {
 		t.Fatalf("citations: %+v", cites)
+	}
+	if body, _ := json.Marshal(cites); strings.Contains(string(body), "secret") || strings.Contains(string(body), otherSess.ID.String()) {
+		t.Fatalf("another person's chat leaked: %s", body)
 	}
 	for _, c := range cites.Citations {
 		switch c.Purpose {
@@ -145,6 +168,12 @@ func TestWikiIndexes(t *testing.T) {
 				t.Fatalf("ticket citation: %+v", c)
 			}
 		case api.WikiCitationPurposeChat:
+			if c.RunId == otherRun.ID {
+				if c.ChatId != nil || c.ChatTitle != nil {
+					t.Fatalf("other chat citation: %+v", c)
+				}
+				continue
+			}
 			if c.ChatId == nil || *c.ChatId != sess.ID || deref(c.ChatTitle) != "Why read-only?" || c.Reads != 1 {
 				t.Fatalf("chat citation: %+v", c)
 			}

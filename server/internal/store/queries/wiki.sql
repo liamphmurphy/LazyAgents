@@ -297,23 +297,24 @@ ORDER BY ar.updated_at DESC;
 
 -- name: ListArtifactCitations :many
 -- Reads of an artifact grouped by the run that made them (runs that still
--- exist), with the run's ticket or chat.
+-- exist, in the workspace), with the run's ticket or chat. Chats are private
+-- to their creator: another person's chat run keeps its purpose but no chat.
 SELECT ru.id AS run_id, ru.purpose, a.id AS agent_id, a.name AS agent_name, a.handle AS agent_handle, a.color_index AS agent_color_index,
   t.key AS ticket_key, t.title AS ticket_title,
   coalesce(cs.id::text, '')::text AS chat_id, coalesce(cs.title, '')::text AS chat_title,
   count(*)::int AS reads, max(r.read_at)::timestamptz AS last_read_at
 FROM artifact_reads r
 JOIN artifact_versions v ON v.id = r.version_id
-JOIN runs ru ON ru.id = r.run_id
+JOIN runs ru ON ru.id = r.run_id AND ru.workspace_id = sqlc.arg(workspace_id)
 JOIN agents a ON a.id = r.agent_id
 LEFT JOIN tickets t ON t.id = ru.ticket_id
 LEFT JOIN LATERAL (
   SELECT s.id, s.title FROM chat_sessions s
-  WHERE ru.purpose = 'chat'
+  WHERE ru.purpose = 'chat' AND s.workspace_id = ru.workspace_id AND s.created_by = sqlc.arg(viewer)::uuid
     AND (s.current_run_id = ru.id OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.session_id = s.id AND m.run_id = ru.id))
   LIMIT 1
 ) cs ON true
-WHERE v.artifact_id = $1
+WHERE v.artifact_id = sqlc.arg(artifact_id)
 GROUP BY ru.id, a.id, t.id, cs.id, cs.title
 ORDER BY max(r.read_at) DESC;
 

@@ -843,19 +843,25 @@ SELECT ru.id AS run_id, ru.purpose, a.id AS agent_id, a.name AS agent_name, a.ha
   count(*)::int AS reads, max(r.read_at)::timestamptz AS last_read_at
 FROM artifact_reads r
 JOIN artifact_versions v ON v.id = r.version_id
-JOIN runs ru ON ru.id = r.run_id
+JOIN runs ru ON ru.id = r.run_id AND ru.workspace_id = $1
 JOIN agents a ON a.id = r.agent_id
 LEFT JOIN tickets t ON t.id = ru.ticket_id
 LEFT JOIN LATERAL (
   SELECT s.id, s.title FROM chat_sessions s
-  WHERE ru.purpose = 'chat'
+  WHERE ru.purpose = 'chat' AND s.workspace_id = ru.workspace_id AND s.created_by = $2::uuid
     AND (s.current_run_id = ru.id OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.session_id = s.id AND m.run_id = ru.id))
   LIMIT 1
 ) cs ON true
-WHERE v.artifact_id = $1
+WHERE v.artifact_id = $3
 GROUP BY ru.id, a.id, t.id, cs.id, cs.title
 ORDER BY max(r.read_at) DESC
 `
+
+type ListArtifactCitationsParams struct {
+	WorkspaceID uuid.UUID
+	Viewer      uuid.UUID
+	ArtifactID  uuid.UUID
+}
 
 type ListArtifactCitationsRow struct {
 	RunID           uuid.UUID
@@ -873,9 +879,10 @@ type ListArtifactCitationsRow struct {
 }
 
 // Reads of an artifact grouped by the run that made them (runs that still
-// exist), with the run's ticket or chat.
-func (q *Queries) ListArtifactCitations(ctx context.Context, artifactID uuid.UUID) ([]ListArtifactCitationsRow, error) {
-	rows, err := q.db.Query(ctx, listArtifactCitations, artifactID)
+// exist, in the workspace), with the run's ticket or chat. Chats are private
+// to their creator: another person's chat run keeps its purpose but no chat.
+func (q *Queries) ListArtifactCitations(ctx context.Context, arg ListArtifactCitationsParams) ([]ListArtifactCitationsRow, error) {
+	rows, err := q.db.Query(ctx, listArtifactCitations, arg.WorkspaceID, arg.Viewer, arg.ArtifactID)
 	if err != nil {
 		return nil, err
 	}

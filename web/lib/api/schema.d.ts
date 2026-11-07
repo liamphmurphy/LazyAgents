@@ -2357,7 +2357,7 @@ export interface components {
             /** @description ADR documents only, e.g. ADR-012 */
             display_id?: string;
             href: string;
-            /** @description From the "Status: …" line, without "with open questions"; empty when there's no Status line */
+            /** @description From the "Status: …" line, without "with open questions" (see has_open_questions); empty when there's no Status line */
             status: string;
             /** @enum {string} */
             state: "accepted" | "proposed" | "superseded" | "deprecated" | "rejected" | "other" | "none";
@@ -2367,6 +2367,8 @@ export interface components {
             ticket?: string;
             /** @description Items of the "Open questions" section, as Markdown */
             open_questions: string[];
+            /** @description Open questions are listed, or the Status line says "with open questions" */
+            has_open_questions: boolean;
             /** Format: date-time */
             updated_at: string;
         };
@@ -2378,7 +2380,10 @@ export interface components {
             agent: components["schemas"]["AgentRef"];
             ticket_key?: string;
             ticket_title?: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Only for the caller's own chats
+             */
             chat_id?: string;
             chat_title?: string;
             reads: number;
@@ -2388,7 +2393,7 @@ export interface components {
         WikiCitations: {
             /** @description Distinct non-chat runs */
             runs: number;
-            /** @description Distinct chats */
+            /** @description Distinct chats (another person's chat counts once per run) */
             chats: number;
             citations: components["schemas"]["WikiCitation"][];
             /** @description Reads not tied to a run that still exists (older data), per agent */
