@@ -2,28 +2,21 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap } from "@/lib/api/client";
-import { hasLiveRun, keys, useBootstrap, useBulkUpdate, useDispatch, useEpicOverviews, useTickets, useUpdateEpic } from "@/lib/api/hooks";
-import { useBoard } from "@/lib/api/board-hooks";
+import { useEffect, useState } from "react";
+import { useEpicOverviews } from "@/lib/api/hooks";
 import { dueDate } from "@/lib/format";
+import {
+  EPIC_SORTS, HEALTH_LABEL, epicFilterQuery, filterEpics, isOverdue, parseEpicFilters, ratio, sortEpics, statusCounts, ymd,
+  type EpicFilters, type EpicHealthFilter, type EpicSort, type EpicStatusFilter,
+} from "@/lib/epics";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
-import { Toggle } from "@/components/ui/controls";
-import { Icon } from "@/components/ui/icon";
+import { Segmented } from "@/components/ui/controls";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
-import {
-  AgentStack,
-  HealthPill,
-  WorkflowBar,
-  WorkRow,
-  type EpicOverview,
-} from "@/components/domain/overview";
+import { HealthPill, type EpicOverview } from "@/components/domain/overview";
 import { HumanAvatar } from "@/components/domain/avatars";
-import { DocTypeTag } from "@/components/domain/labels";
-import { EpicCompletion } from "@/components/domain/epic-completion";
+import { SmallPill } from "@/components/domain/labels";
 import { cx } from "@/lib/cx";
 
 function Timeline({
@@ -167,217 +160,79 @@ function Timeline({
     </Card>
   );
 }
-function EpicDispatch({ epic }: { epic: EpicOverview }) {
-  const [agentId, setAgentId] = useState("");
-  const bootstrap = useBootstrap();
-  const agents = (bootstrap.data?.agents ?? []).filter((a) => a.kind === "main");
-  const selectedAgent = agents.find((a) => a.id === agentId) ?? agents[0];
-  const bulk = useBulkUpdate();
-  const dispatch = useDispatch();
-  const qc = useQueryClient();
-  const start = useMutation({
-    mutationFn: async ({ ticketKeys, unassignedKeys, assignee }: { ticketKeys: string[]; unassignedKeys: string[]; assignee?: string }) => {
-      if (unassignedKeys.length) {
-        if (!assignee) throw new Error("Choose a main agent for unassigned tickets.");
-        await bulk.mutateAsync({ keys: unassignedKeys, patch: { assignee_agent_id: assignee } });
-      }
-      return dispatch.mutateAsync(ticketKeys);
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["epics"] }),
-  });
-  // The overview only contains a sample of tickets. Fetch the whole epic.
-  const list = useTickets({ epic: epic.epic.id, view: "all" });
-  const remaining = (list.data ?? []).filter((t) => t.status !== "done");
-  const details = useQueries({ queries: remaining.map((t) => ({
-    queryKey: keys.ticket(t.key),
-    queryFn: () => unwrap(api.GET("/tickets/{key}", { params: { path: { key: t.key } } })),
-  })) });
-  const loading = list.isPending || details.some((q) => q.isPending);
-  const failed = list.isError || details.some((q) => q.isError);
-  const incomplete = !!list.data && list.data.length < epic.counts.total;
-  const candidates = details.flatMap((q) => q.data && q.data.status !== "done" && !hasLiveRun(q.data) ? [q.data] : []);
-  const dispatchKeys = candidates.map((t) => t.key);
-  const unassignedKeys = candidates.filter((t) => !t.assignee).map((t) => t.key);
-  const unassigned = unassignedKeys.length;
+
+/** One row of the card: label, value and a bar. */
+function Meter({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-2 border-t border-border-subtle px-5 py-3">
-      <div className="flex flex-wrap items-center gap-3">
-        {unassigned > 0 && (
-          <label className="flex items-center gap-2 text-xs text-fg-secondary">
-            Agent for unassigned tickets
-            <select aria-label="Agent for unassigned tickets" value={selectedAgent?.id ?? ""}
-              disabled={start.isPending || bootstrap.isPending}
-              onChange={(e) => { setAgentId(e.target.value); start.reset(); }}
-              className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-fg">
-              {!agents.length && <option value="">No main agents available</option>}
-              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </label>
-        )}
-        <Button variant="approve" disabled={loading || failed || incomplete || !dispatchKeys.length || start.isPending || (unassigned > 0 && !selectedAgent)}
-          onClick={() => start.mutate({ ticketKeys: dispatchKeys, unassignedKeys, assignee: selectedAgent?.id })}>
-          {start.isPending ? "Dispatching…" : loading ? "Loading tickets…" : `${unassigned ? "Assign & dispatch epic" : "Dispatch epic"} (${dispatchKeys.length})`}
-        </Button>
-        <p className="text-xs text-fg-secondary">
-          Queue all remaining tickets. Existing agent assignments are kept. Runs start automatically as dependencies finish and runner slots become available.
-        </p>
+    <div className="space-y-1.5">
+      <div className="flex justify-between gap-3 text-xs">
+        <span className="text-fg-tertiary">{label}</span>
+        <span className="font-mono text-fg-secondary">{value}</span>
       </div>
-      {unassigned > 0 && <p className="text-xs text-fg-secondary">{unassigned} tickets will be assigned to {selectedAgent?.name ?? "the agent you choose"} before dispatch.</p>}
-      {unassigned > 0 && !bootstrap.isPending && !agents.length && <p role="alert" className="text-xs text-pill-blocked-fg">{bootstrap.isError ? "Couldn’t load agents. Refresh to try again." : "Create a main agent to assign and dispatch these tickets."}</p>}
-      {start.isError && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t dispatch the epic: {start.error.message}{bulk.isSuccess && " Agent assignments were saved; retry to dispatch."}</p>}
-      {failed && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load all ticket details. Refresh to try again.</p>}
-      {incomplete && <p role="alert" className="text-xs text-pill-blocked-fg">The ticket list is incomplete. Open the ticket list to dispatch in smaller batches.</p>}
-      {start.isSuccess && <p role="status" className="text-xs text-fg-secondary">{start.data} epic tickets queued. Follow their progress below.</p>}
+      {children}
     </div>
   );
 }
 
-function CardMockupToggle({ epic: e }: { epic: EpicOverview }) {
-  const updateEpic = useUpdateEpic(e.epic.id);
+export function EpicCard({ epic: e, today }: { epic: EpicOverview; today: string }) {
+  const { epic } = e;
+  const pct = Math.round(ratio(epic.points_done, epic.points_total) * 100);
+  const overdue = isOverdue(e, today);
+  const segments = Math.min(epic.criteria_total, 12);
+  // More than 12 criteria collapse into a proportional bar.
+  const met = epic.criteria_total > 12 ? Math.round((epic.criteria_done / epic.criteria_total) * segments) : epic.criteria_done;
   return (
-    <div className="flex items-center gap-2" onClick={(ev) => ev.stopPropagation()}>
-      <Toggle
-        checked={e.epic.requires_mockup}
-        disabled={updateEpic.isPending}
-        onChange={(v) => updateEpic.mutate({ requires_mockup: v })}
-        label={
-          <>
-            <span aria-hidden>Mockup</span>
-            <span className="sr-only">Requires mockup for {e.epic.name}</span>
-          </>
-        }
-      />
-      {updateEpic.isError && (
-        <span role="alert" className="text-xs text-pill-blocked-fg">
-          {updateEpic.error.message}
+    <article aria-label={epic.name} className="relative flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-surface p-[18px] hover:border-border-hover">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-fg-tertiary">{e.project.name}</span>
+        <span className="flex gap-1.5">
+          <SmallPill tone={epic.status === "done" ? "done" : "neutral"}>{epic.status === "done" ? "Done" : "Open"}</SmallPill>
+          <HealthPill health={epic.health} />
         </span>
-      )}
-    </div>
+      </div>
+      <h3 className="type-heading">
+        {/* The stretched link makes the whole card open the epic. */}
+        <Link href={`/epics/${epic.id}`} className="after:absolute after:inset-0 after:rounded-xl hover:text-accent">
+          {epic.name}
+        </Link>
+      </h3>
+      <p className="line-clamp-2 min-h-10 text-[13px] text-fg-secondary">{e.objective || "No objective yet."}</p>
+      <Meter label="Points" value={epic.points_total ? `${epic.points_done} / ${epic.points_total} pts · ${pct}%` : "No estimates yet"}>
+        <div role="progressbar" aria-label={`Points for ${epic.name}`} aria-valuemin={0} aria-valuemax={epic.points_total || 1} aria-valuenow={epic.points_done}
+          className="h-1.5 overflow-hidden rounded-full bg-surface-sunken">
+          <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+        </div>
+      </Meter>
+      <Meter label="Criteria" value={epic.criteria_total ? `${epic.criteria_done} / ${epic.criteria_total} met` : "None yet"}>
+        {epic.criteria_total ? (
+          <div role="progressbar" aria-label={`Criteria for ${epic.name}`} aria-valuemin={0} aria-valuemax={epic.criteria_total} aria-valuenow={epic.criteria_done} className="flex gap-1">
+            {Array.from({ length: segments }, (_, i) => (
+              <span key={i} className={cx("h-1.5 flex-1 rounded-full", i < met ? "bg-state-done" : "bg-surface-sunken")} />
+            ))}
+          </div>
+        ) : epic.status === "open" ? (
+          <p className="text-[11px] text-pill-human-fg">Add acceptance criteria before it can be marked done</p>
+        ) : null}
+      </Meter>
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-3 text-xs">
+        <span className="text-fg-secondary"><span className="font-mono text-fg">{epic.tickets_open}</span> open tickets</span>
+        <span className="flex items-center gap-2 text-fg-secondary">
+          {e.owner ? <><HumanAvatar name={e.owner.name} initials={e.owner.initials} color={e.owner.avatar_color} />{e.owner.name}</>
+            : <span className="text-fg-tertiary">No owner</span>}
+        </span>
+        <span className={overdue ? "text-pill-blocked-fg" : "text-fg-tertiary"}>
+          {e.target_date ? `${overdue ? "Overdue ·" : "Target"} ${dueDate(e.target_date)}` : "No target date"}
+        </span>
+      </div>
+    </article>
   );
 }
 
-function Featured({ epic: e }: { epic: EpicOverview }) {
-  const updateEpic = useUpdateEpic(e.epic.id);
-  return (
-    <Card bodyClassName="p-0" className="overflow-hidden rounded-[14px]">
-      <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <div className="min-w-0 space-y-4">
-          <div className="flex items-start gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-border-strong bg-selected text-fg-secondary">
-              <Icon name="epics" size={22} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <h2 className="type-title">{e.epic.name}</h2>
-                <ButtonLink variant="outline" href={`/plans?epic=${e.epic.id}&project=${e.project.key}${e.source ? `&artifact=${e.source.id}` : ""}`}>Plan with an agent</ButtonLink>
-                <HealthPill health={e.epic.health} />
-              </div>
-              <p className="text-xs text-fg-tertiary">
-                {e.project.name} ·{" "}
-                {e.target_date
-                  ? `Target ${dueDate(e.target_date)}`
-                  : "No target date"}
-              </p>
-            </div>
-          </div>
-          <p className="text-sm text-fg-secondary">
-            {e.objective || "No objective has been written yet."}
-          </p>
-          <div className="space-y-2">
-            <WorkflowBar counts={e.counts} />
-            <div className="flex justify-between text-xs text-fg-tertiary">
-              <span>
-                <span className="font-mono text-fg">
-                  {e.counts.done} of {e.counts.total}
-                </span>{" "}
-                tickets done
-              </span>
-              <span className="font-mono">
-                {e.counts.total
-                  ? Math.round((e.counts.done / e.counts.total) * 100)
-                  : 0}
-                %
-              </span>
-            </div>
-          </div>
-        </div>
-        <dl className="grid grid-cols-[75px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 text-xs">
-          <dt className="text-fg-tertiary">Agents</dt>
-          <dd>
-            <AgentStack agents={e.agents} />
-          </dd>
-          <dt className="text-fg-tertiary">Owner</dt>
-          <dd>
-            {e.owner ? (
-              <span className="flex items-center gap-2">
-                <HumanAvatar name={e.owner.name} initials={e.owner.initials} />
-                {e.owner.name}
-              </span>
-            ) : (
-              "Unassigned"
-            )}
-          </dd>
-          <dt className="text-fg-tertiary">Source</dt>
-          <dd>
-            {e.source ? (
-              <Link
-                href={e.source.href}
-                className="flex items-start gap-2 hover:text-accent"
-              >
-                <DocTypeTag type={e.source.type} />
-                <span>{e.source.title}</span>
-              </Link>
-            ) : (
-              <span className="text-fg-tertiary">No linked PRD</span>
-            )}
-          </dd>
-          <dt className="text-fg-tertiary">Mockup</dt>
-          <dd className="space-y-1">
-            <Toggle
-              checked={e.epic.requires_mockup}
-              disabled={updateEpic.isPending}
-              onChange={(v) => updateEpic.mutate({ requires_mockup: v })}
-              label="Requires mockup"
-            />
-            <span className="block text-fg-tertiary">Tickets need an approved UI mockup before an agent can finish.</span>
-            {updateEpic.isError && <span role="alert" className="block text-pill-blocked-fg">{updateEpic.error.message}</span>}
-          </dd>
-          <dt className="text-fg-tertiary">Agent hours</dt>
-          <dd className="font-mono">{(e.agent_seconds / 3600).toFixed(1)}h</dd>
-        </dl>
-      </div>
-      <FeaturedCompletion projectKey={e.project.key} epicId={e.epic.id} />
-      <EpicDispatch key={e.epic.id} epic={e} />
-      <div className="flex items-center justify-between border-t border-border-subtle bg-surface-sunken px-5 py-3">
-        <h3 className="text-xs font-medium text-fg-secondary">Tickets</h3>
-        <Link
-          className="text-xs text-fg-secondary hover:text-accent"
-          href={`/tickets?view=all&epic=${e.epic.id}&project=${encodeURIComponent(e.project.key)}`}
-        >
-          View all {e.counts.total} →
-        </Link>
-      </div>
-      {e.tickets.length ? (
-        e.tickets.map((t) => <WorkRow key={t.id} ticket={t} />)
-      ) : (
-        <p className="p-5 text-sm text-fg-tertiary">
-          No tickets in this epic yet.
-        </p>
-      )}
-    </Card>
-  );
-}
-/** Same criteria editor and done gate as the board header, sourced from the epic's board summary. */
-function FeaturedCompletion({ projectKey, epicId }: { projectKey: string; epicId: string }) {
-  const board = useBoard(projectKey, { epic: epicId, include_canceled: false });
-  return (
-    <section aria-label="Epic completion" className="border-t border-border-subtle px-5 py-4">
-      {board.data?.epic ? <EpicCompletion summary={board.data.epic} />
-        : board.isError ? <p role="alert" className="text-xs">Couldn&apos;t load acceptance criteria: {board.error.message} <button type="button" className="underline" onClick={() => void board.refetch()}>Retry</button></p>
-        : <p role="status" className="text-xs text-fg-tertiary">Loading acceptance criteria…</p>}
-    </section>
-  );
-}
+const HEALTH_OPTIONS: EpicHealthFilter[] = ["any", "on_track", "at_risk", "off_track"];
+const HEALTH_DOT: Record<Exclude<EpicHealthFilter, "any">, string> = {
+  on_track: "bg-state-done", at_risk: "bg-state-human", off_track: "bg-state-blocked",
+};
+
 export function EpicsScreen() {
   const query = useEpicOverviews();
   const params = useSearchParams(),
@@ -386,23 +241,18 @@ export function EpicsScreen() {
   const scope = useProjectScope("optional");
   const current = scope.status === "ready" ? scope.project : undefined;
   const project = current?.key ?? "";
-  const epics = (query.data ?? []).filter(
-    (e) => !project || e.project.key === project,
-  );
-  const selected =
-    epics.find((e) => e.epic.id === params.get("epic")) ??
-    epics.find(
-      (e) => e.counts.total > e.counts.done && e.epic.health !== "on_track",
-    ) ??
-    epics[0];
-  const active = epics.filter(
-    (e) => e.counts.total === 0 || e.counts.done < e.counts.total,
-  );
-  const select = (id: string) =>
-    router.replace(
-      `/epics?${new URLSearchParams({ ...(project && { project }), epic: id })}`,
-      { scroll: false },
-    );
+  const legacy = params.get("epic");
+  // Old links (/epics?epic=…) open the detail page.
+  useEffect(() => {
+    if (legacy) router.replace(`/epics/${encodeURIComponent(legacy)}`);
+  }, [legacy, router]);
+  const filters = parseEpicFilters(params);
+  const setFilters = (patch: Partial<EpicFilters>) =>
+    router.replace(`/epics${epicFilterQuery({ ...filters, ...patch }, project)}`, { scroll: false });
+  const inProject = (query.data ?? []).filter((e) => !project || e.project.key === project);
+  const counts = statusCounts(inProject);
+  const shown = sortEpics(filterEpics(inProject, filters), filters.sort);
+  const today = ymd(new Date());
   return (
     <>
       <TopBar
@@ -415,13 +265,11 @@ export function EpicsScreen() {
       />
       <Content>
         <div className="space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="type-display">Epics</h1>
-              <p className="text-sm text-fg-secondary">
-                Objectives, progress and the work ahead.
-              </p>
-            </div>
+          <div className="space-y-1">
+            <h1 className="type-display">Epics</h1>
+            <p className="text-sm text-fg-secondary">
+              Objectives, progress and the done gate for every epic in this project.
+            </p>
           </div>
           {scope.status !== "ready" ? (
             <ProjectScopeState base="/epics" scope={scope} />
@@ -433,77 +281,57 @@ export function EpicsScreen() {
             >
               {query.error.message}
             </Banner>
-          ) : query.isLoading ? (
-            <div aria-busy="true" className="space-y-4">
-              <Skeleton className="h-72 rounded-xl" />
-              <Skeleton className="h-56 rounded-xl" />
+          ) : query.isLoading || legacy ? (
+            <div aria-busy="true" className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
+              {[0, 1, 2].map((i) => <Skeleton key={i} className="h-60 rounded-xl" />)}
             </div>
-          ) : !epics.length ? (
+          ) : !inProject.length ? (
             <EmptyState icon="epics" title="No epics here yet">
               Epics and their objectives will appear here once they’re created.
             </EmptyState>
           ) : (
             <>
-              {selected && <Featured epic={selected} />}
-              <Timeline epics={epics} onSelect={select} />
-              <div className="flex items-baseline justify-between">
-                <h2 className="type-heading">All active epics</h2>
-                <span className="font-mono text-xs text-fg-tertiary">
-                  {active.length}
-                </span>
-              </div>
-              {active.length ? (
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-4">
-                  {active.map((e) => (
-                    <article
-                      key={e.epic.id}
-                      className={cx(
-                        "flex min-w-0 flex-col gap-3 rounded-xl border bg-surface p-[18px]",
-                        selected?.epic.id === e.epic.id
-                          ? "border-accent/50"
-                          : "border-border hover:border-border-hover",
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs text-fg-tertiary">
-                          {e.project.name}
-                        </span>
-                        <HealthPill health={e.epic.health} />
-                      </div>
-                      <button
-                        onClick={() => select(e.epic.id)}
-                        className="text-left type-heading hover:text-accent"
-                      >
-                        {e.epic.name}
-                      </button>
-                      <p className="line-clamp-2 min-h-10 text-[13px] text-fg-secondary">
-                        {e.objective || "No objective yet."}
-                      </p>
-                      <div className="mt-auto space-y-2">
-                        <WorkflowBar counts={e.counts} />
-                        <p className="font-mono text-xs text-fg-tertiary">
-                          {e.counts.done}/{e.counts.total} done ·{" "}
-                          {e.counts.total
-                            ? Math.round((e.counts.done / e.counts.total) * 100)
-                            : 0}
-                          %
-                        </p>
-                      </div>
-                      <CardMockupToggle epic={e} />
-                      <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-3">
-                        <AgentStack agents={e.agents} />
-                        <span className="text-xs text-fg-tertiary">
-                          {e.target_date ? dueDate(e.target_date) : "No target"}
-                        </span>
-                      </div>
-                    </article>
+              <div className="flex flex-wrap items-center gap-3">
+                <Segmented<EpicStatusFilter>
+                  label="Epic status"
+                  value={filters.status}
+                  onChange={(status) => setFilters({ status })}
+                  options={(["open", "done", "all"] as const).map((s) => ({
+                    value: s,
+                    label: <>{s === "open" ? "Open" : s === "done" ? "Done" : "All"} <span className="font-mono text-fg-tertiary">{counts[s]}</span></>,
+                  }))}
+                />
+                <div role="radiogroup" aria-label="Health" className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-fg-tertiary">Health</span>
+                  {HEALTH_OPTIONS.map((h) => (
+                    <button key={h} type="button" role="radio" aria-checked={filters.health === h} onClick={() => setFilters({ health: h })}
+                      className={cx("flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs",
+                        filters.health === h ? "border-border-strong bg-selected text-fg" : "border-border text-fg-secondary hover:text-fg")}>
+                      {h !== "any" && <span aria-hidden className={cx("size-2 rounded-full", HEALTH_DOT[h])} />}
+                      {h === "any" ? "Any" : HEALTH_LABEL[h]}
+                    </button>
                   ))}
                 </div>
+                <span className="ml-auto font-mono text-xs text-fg-tertiary" role="status">{shown.length} {shown.length === 1 ? "epic" : "epics"}</span>
+                <label className="flex items-center gap-2 text-xs text-fg-secondary">
+                  Sort
+                  <select aria-label="Sort epics" value={filters.sort} onChange={(ev) => setFilters({ sort: ev.target.value as EpicSort })}
+                    className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-fg">
+                    {(Object.keys(EPIC_SORTS) as EpicSort[]).map((s) => <option key={s} value={s}>{EPIC_SORTS[s]}</option>)}
+                  </select>
+                </label>
+              </div>
+              {shown.length ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
+                  {shown.map((e) => <EpicCard key={e.epic.id} epic={e} today={today} />)}
+                </div>
               ) : (
-                <p className="text-sm text-fg-tertiary">
-                  All epics are complete.
-                </p>
+                <EmptyState icon="epics" title="No epics match"
+                  actions={<Button onClick={() => setFilters({ status: "all", health: "any" })}>Clear filters</Button>}>
+                  No {filters.status === "all" ? "" : `${filters.status} `}epics{filters.health === "any" ? "" : ` are ${HEALTH_LABEL[filters.health].toLowerCase()}`}.
+                </EmptyState>
               )}
+              <Timeline epics={shown} onSelect={(id) => router.push(`/epics/${id}`)} />
             </>
           )}
         </div>
