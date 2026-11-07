@@ -258,11 +258,11 @@ export function useUpdateArtifact(id: string) {
 export function useReviewMockup(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { versionId: string; decision: "approved" | "changes_requested"; note?: string }) =>
+    mutationFn: (v: { versionId: string; decision: "approved" | "changes_requested"; note?: string; pins?: Schemas["MockupPin"][] }) =>
       unwrap(
         api.POST("/artifacts/{id}/versions/{versionId}/review", {
           params: { path: { id, versionId: v.versionId } },
-          body: { decision: v.decision, note: v.note },
+          body: { decision: v.decision, note: v.note, pins: v.pins },
         }),
       ),
     onSuccess: (a) => {

@@ -674,6 +674,11 @@ paths:
               properties:
                 decision: { type: string, enum: [approved, changes_requested] }
                 note: { type: string, maxLength: 2000, description: Required when requesting changes }
+                pins:
+                  type: array
+                  maxItems: 50
+                  description: Comments pinned on the drawing. They're saved with the review and appended to its note as a numbered list.
+                  items: { $ref: "#/components/schemas/MockupPin" }
       responses:
         "200":
           description: The reviewed mockup
@@ -2091,12 +2096,23 @@ components:
       enum: [pending, approved, changes_requested]
     MockupReview:
       type: object
-      required: [state, note]
+      required: [state, note, pins]
       properties:
         state: { $ref: "#/components/schemas/MockupReviewState" }
-        note: { type: string }
+        note: { type: string, description: "The reviewer's note, followed by the pinned comments as a numbered list" }
+        pins:
+          type: array
+          description: Comments pinned on this version, numbered by position (the first is 1)
+          items: { $ref: "#/components/schemas/MockupPin" }
         reviewed_by: { $ref: "#/components/schemas/UserRef" }
         reviewed_at: { type: string, format: date-time }
+    MockupPin:
+      type: object
+      required: [x, y, text]
+      properties:
+        x: { type: number, format: double, minimum: 0, maximum: 1, description: Horizontal position as a fraction of the drawing's width }
+        y: { type: number, format: double, minimum: 0, maximum: 1, description: Vertical position as a fraction of the drawing's height }
+        text: { type: string, minLength: 1, maxLength: 500 }
     Criterion:
       type: object
       required: [id, position, text, done]

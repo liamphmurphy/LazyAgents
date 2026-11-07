@@ -1635,10 +1635,26 @@ export interface components {
         MockupReviewState: "pending" | "approved" | "changes_requested";
         MockupReview: {
             state: components["schemas"]["MockupReviewState"];
+            /** @description The reviewer's note, followed by the pinned comments as a numbered list */
             note: string;
+            /** @description Comments pinned on this version, numbered by position (the first is 1) */
+            pins: components["schemas"]["MockupPin"][];
             reviewed_by?: components["schemas"]["UserRef"];
             /** Format: date-time */
             reviewed_at?: string;
+        };
+        MockupPin: {
+            /**
+             * Format: double
+             * @description Horizontal position as a fraction of the drawing's width
+             */
+            x: number;
+            /**
+             * Format: double
+             * @description Vertical position as a fraction of the drawing's height
+             */
+            y: number;
+            text: string;
         };
         Criterion: {
             /** Format: uuid */
@@ -3819,6 +3835,8 @@ export interface operations {
                     decision: "approved" | "changes_requested";
                     /** @description Required when requesting changes */
                     note?: string;
+                    /** @description Comments pinned on the drawing. They're saved with the review and appended to its note as a numbered list. */
+                    pins?: components["schemas"]["MockupPin"][];
                 };
             };
         };

@@ -211,7 +211,7 @@ func TestMockupGate(t *testing.T) {
 	approve := func() {
 		m, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: m.ID, WorkspaceID: f.ws})
 		state := "approved"
-		if _, err := f.q.ReviewArtifactVersion(ctx, store.ReviewArtifactVersionParams{ID: *m.CurrentVersionID, ReviewState: &state, ReviewedByUserID: &f.maya.ID}); err != nil {
+		if _, err := f.q.ReviewArtifactVersion(ctx, store.ReviewArtifactVersionParams{ID: *m.CurrentVersionID, ReviewState: &state, ReviewedByUserID: &f.maya.ID, ReviewPins: []byte("[]")}); err != nil {
 			t.Fatal(err)
 		}
 	}

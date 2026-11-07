@@ -163,6 +163,7 @@ type ArtifactVersion struct {
 	ReviewedByUserID *uuid.UUID
 	ReviewedAt       *time.Time
 	ReviewNote       string
+	ReviewPins       json.RawMessage
 }
 
 type ChatMessage struct {
