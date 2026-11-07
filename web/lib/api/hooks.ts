@@ -1063,11 +1063,94 @@ export function useCancelChat(id: string) {
 }
 
 /** The current turn's tool calls/results, read from the segment run's events. */
-export function useChatRunEvents(runId?: string, enabled = true) {
+export function useChatRunEvents(runId?: string, enabled = true, poll = true) {
   return useQuery({
     enabled: !!runId && enabled,
     queryKey: ["runs", "chat", runId ?? ""] as const,
     queryFn: () => unwrap(api.GET("/runs/{id}", { params: { path: { id: runId! } } })).then((d) => d.events),
-    refetchInterval: 2_000,
+    refetchInterval: poll ? 2_000 : false,
+  });
+}
+
+// ---- Assistant memory (LAZYAGENTS-71): the signed-in person's private memory store ----
+
+type MemoryPatch = Schemas["MemoryPatch"];
+export type MemoryType = Schemas["MemoryType"];
+
+export const memoryKeys = {
+  all: ["memories"] as const,
+  list: (q: string, type?: string) => ["memories", "list", q, type ?? ""] as const,
+  detail: (id: string) => ["memories", "detail", id] as const,
+};
+
+/** First 50 matches (ranked when q is set); `total` counts every entry of the type. */
+export function useMemories(q = "", type?: MemoryType, offset = 0) {
+  return useQuery({
+    queryKey: [...memoryKeys.list(q, type), offset] as const,
+    queryFn: () =>
+      unwrap(api.GET("/memories", { params: { query: { ...(q ? { q } : {}), ...(type ? { type } : {}), ...(offset ? { offset } : {}) } } })),
+  });
+}
+
+/** One entry. A forgotten (or someone else's) entry is a 404, not retried. */
+export function useMemory(id?: string) {
+  return useQuery({
+    enabled: !!id,
+    queryKey: memoryKeys.detail(id ?? ""),
+    queryFn: () => unwrap(api.GET("/memories/{id}", { params: { path: { id: id! } } })),
+    retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 2,
+  });
+}
+
+function useMemoryInvalidate() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: memoryKeys.all });
+}
+
+export function useUpdateMemory() {
+  const done = useMemoryInvalidate();
+  return useMutation({
+    mutationFn: (v: { id: string; patch: MemoryPatch }) =>
+      unwrap(api.PATCH("/memories/{id}", { params: { path: { id: v.id } }, body: v.patch })),
+    onSettled: done,
+  });
+}
+
+/** Forgets one entry. Already gone counts as done. */
+export function useDeleteMemory() {
+  const done = useMemoryInvalidate();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE("/memories/{id}", { params: { path: { id } } });
+      if (response.ok || response.status === 404) return;
+      const e = (error ?? {}) as Partial<Schemas["Error"]>;
+      throw new ApiError(response.status, e.code ?? "internal", e.message ?? response.statusText, e.field);
+    },
+    onSettled: done,
+  });
+}
+
+export function useDeleteAllMemories() {
+  const done = useMemoryInvalidate();
+  return useMutation({
+    mutationFn: () => unwrap(api.DELETE("/memories", { params: { query: { confirm: true } } })),
+    onSettled: done,
+  });
+}
+
+export function exportMemories() {
+  return unwrap(api.GET("/memories/export"));
+}
+
+/** The first message of a new conversation: create the chat, then send into it. */
+export function useStartChat() {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: async (v: { project: string; message: Schemas["NewChatMessage"] }) => {
+      const chat = await unwrap(api.POST("/chats", { body: { project: v.project } }));
+      await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id: chat.id } }, body: v.message }));
+      return chat;
+    },
+    onSettled: done,
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tooltip } from "radix-ui";
 import { ApiError, type Schemas } from "@/lib/api/client";
@@ -19,13 +19,13 @@ import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { LinkEditor } from "@/components/domain/link-editor";
-import { AgentAvatar } from "@/components/domain/avatars";
 import { ChatMarkdown } from "./chat-markdown";
 import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
 import { RunActivity } from "./activity";
+import { MemoryNotices } from "./memory-notices";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
@@ -60,7 +60,10 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project: string; agent: { name: string } };
 
-function Bubble({ m, groups, chat, saveable, names }: { m: Message; groups: Groups; chat: ChatInfo; saveable: boolean; names: Map<string, string> }) {
+/** The window of run events that belongs to an assistant reply: from its turn's message to the next one. */
+type Turn = { since?: string; until?: string };
+
+function Bubble({ m, groups, chat, saveable, names, turn }: { m: Message; groups: Groups; chat: ChatInfo; saveable: boolean; names: Map<string, string>; turn?: Turn }) {
   if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
   const mine = m.role === "user";
   return (
@@ -80,12 +83,33 @@ function Bubble({ m, groups, chat, saveable, names }: { m: Message; groups: Grou
       </div>
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
       {!mine && <Sources citations={m.citations} />}
+      {turn && <MemoryNotices runId={m.run_id} since={turn.since} until={turn.until} />}
       {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
     </li>
   );
 }
 
-export function Conversation({ id }: { id: string }) {
+/**
+ * Each turn's last assistant reply gets the window of events between its user
+ * message and the next one, so a turn's memory notices show once, under its answer.
+ */
+function turnWindows(list: Message[] | undefined): Map<string, Turn> {
+  const out = new Map<string, Turn>();
+  let since: string | undefined;
+  let reply: Message | undefined;
+  const close = (until?: string) => reply && out.set(reply.id, { since, until });
+  for (const m of list ?? []) {
+    if (m.role === "user") {
+      close(m.created_at);
+      since = m.created_at;
+      reply = undefined;
+    } else if (m.role === "assistant") reply = m;
+  }
+  close(undefined);
+  return out;
+}
+
+export function Conversation({ id, actions }: { id: string; actions?: ReactNode }) {
   const chat = useChat(id);
   const messages = useChatMessages(id);
   const models = useChatModels();
@@ -116,6 +140,7 @@ export function Conversation({ id }: { id: string }) {
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
   const list = messages.data?.messages;
   const lastUser = list?.findLast((m) => m.role === "user");
+  const turns = turnWindows(list);
 
   useEffect(() => {
     if (!search.has("attach")) return;
@@ -134,7 +159,10 @@ export function Conversation({ id }: { id: string }) {
   // Refetch the transcript when the chat changes (also covers polling without SSE).
   const stamp = c && `${c.state}:${c.message_count}:${c.revision}`;
   useEffect(() => {
-    if (stamp) void qc.invalidateQueries({ queryKey: chatKeys.messages(id) });
+    if (!stamp) return;
+    void qc.invalidateQueries({ queryKey: chatKeys.messages(id) });
+    // A finished turn's last tool results (memory notices) may have landed after the final poll.
+    void qc.invalidateQueries({ queryKey: ["runs", "chat"] });
   }, [stamp, id, qc]);
   // Focus returns to the composer on load and whenever a turn ends.
   useEffect(() => {
@@ -198,16 +226,6 @@ export function Conversation({ id }: { id: string }) {
         <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
           <h1 className="type-heading truncate">{c.title}</h1>
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
-          {c.agent.name && (
-            <span
-              data-testid="chat-agent"
-              title={`This chat answers as ${c.agent.name}`}
-              className="flex flex-none items-center gap-1.5 rounded-full border border-border-strong py-0.5 pl-1 pr-2.5 text-[12.5px]"
-            >
-              <AgentAvatar name={c.agent.name} colorIndex={c.agent.color_index} size="sm" label={false} />
-              {c.agent.name}
-            </span>
-          )}
           <ChatCostChip chatId={c.id} project={c.project} />
           <span className="flex-1" />
           {c.archived ? (
@@ -219,6 +237,7 @@ export function Conversation({ id }: { id: string }) {
               </span>
             )
           )}
+          {actions}
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {messages.isError ? (
@@ -229,14 +248,14 @@ export function Conversation({ id }: { id: string }) {
               <Skeleton className="h-16 w-2/3" />
             </div>
           ) : list.length === 0 && !running ? (
-            <EmptyState icon="msg" title="Ask anything about this project">
-              The assistant can search the wiki, artifacts and tickets. Write a message below to begin.
+            <EmptyState icon="msg" title="A new conversation">
+              Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do.
             </EmptyState>
           ) : (
             <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m) => (
-                <Bubble key={m.id} m={m} groups={groups} chat={c} saveable={!running} names={names} />
+                <Bubble key={m.id} m={m} groups={groups} chat={c} saveable={!running} names={names} turn={turns.get(m.id)} />
               ))}
               {pending && selection && (
                 <Divider testId="pending-switch">
@@ -315,7 +334,7 @@ export function Conversation({ id }: { id: string }) {
                 onPick={attach}
                 accept={acceptTarget}
                 disabled={locked}
-                placeholder={locked ? "Waiting for the reply…" : "Message the assistant. Type [[ to attach context. Enter sends, Shift+Enter adds a line."}
+                placeholder={locked ? "Waiting for the reply…" : "Message your assistant… Type [[ to attach context. Enter sends, Shift+Enter adds a line."}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();

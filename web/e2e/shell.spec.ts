@@ -20,7 +20,7 @@ test("switching projects from the board rescopes the board and project nav, and 
   await expect(crumbs.getByRole("link", { name: "Web app" })).toBeVisible();
   await expect(crumbs.locator('[aria-current="page"]')).toHaveText("Board");
   for (const group of ["Personal", "Project", "Workspace"]) await expect(nav(page).getByRole("group", { name: group })).toBeVisible();
-  await expect(nav(page).getByRole("group", { name: "Project" }).getByRole("link")).toHaveText(["Board", "Tickets", "Epics", "Plans", "Chat", "Artifacts"]);
+  await expect(nav(page).getByRole("group", { name: "Project" }).getByRole("link")).toHaveText(["Board", "Tickets", "Epics", "Plans", "Assistant", "Artifacts"]);
   await expect(nav(page).locator('[aria-current="page"]')).toHaveText("Board");
 
   await switcher(page).click();
@@ -37,7 +37,7 @@ test("switching projects from the board rescopes the board and project nav, and 
   await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
   for (const [label, href] of [
     ["Board", "/board?project=OPS"], ["Tickets", "/tickets?project=OPS"], ["Epics", "/epics?project=OPS"],
-    ["Plans", "/plans?project=OPS"], ["Chat", "/chat?project=OPS"], ["Artifacts", "/artifacts?project=OPS"],
+    ["Plans", "/plans?project=OPS"], ["Assistant", "/chat?project=OPS"], ["Artifacts", "/artifacts?project=OPS"],
     ["Dashboard", "/"], ["Agents", "/agents"], ["Wiki", "/wiki"], ["Settings", "/settings"],
   ]) await expect(nav(page).getByRole("link", { name: label, exact: true })).toHaveAttribute("href", href);
 
