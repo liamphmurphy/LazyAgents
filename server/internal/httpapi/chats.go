@@ -141,6 +141,15 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 			if json.Unmarshal(m.Usage, &usage) == nil && m.Role == "assistant" {
 				in, outTok, cost := usage.InputTokens, usage.OutputTokens, float32(usage.CostUSD)
 				item.InputTokens, item.OutputTokens, item.CostUsd = &in, &outTok, &cost
+				var saved map[string]json.RawMessage
+				_ = json.Unmarshal(m.Usage, &saved)
+				reported := usage.CacheReportedInputTokens
+				legacySupported := m.Harness != nil && (*m.Harness == "codex" || *m.Harness == "claude-code")
+				if _, modern := saved["cache_reported_input_tokens"]; !modern && legacySupported && saved["cached_tokens"] != nil && (usage.SessionInputTokens > 0 || usage.CostSource == "harness") {
+					reported = usage.InputTokens
+				}
+				cached, uncached, unknown := cacheBreakdown(in, usage.CachedTokens, reported)
+				item.CachedInputTokens, item.UncachedInputTokens, item.UnreportedInputTokens = &cached, &uncached, &unknown
 			}
 		}
 		out = append(out, item)

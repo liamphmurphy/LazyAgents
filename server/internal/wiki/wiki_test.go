@@ -305,7 +305,7 @@ func TestRunContext(t *testing.T) {
 	e.save(t, "Payments/Unrelated", "Nothing to do with ledgers.")
 	tk, _ := tracker.Get(e.ctx, e.q, e.ws, "PAY-224")
 
-	pages, err := wiki.RunContext(e.ctx, e.q, e.atlas, tk, agentdef.DefaultMemory)
+	pages, err := wiki.RunContext(e.ctx, e.q, e.atlas, tk, agentdef.Memory{Enabled: true, Inject: "linked", MaxTokens: 4000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,5 +499,32 @@ func TestRunContextPatternsNeedRealOverlap(t *testing.T) {
 	got := patterns("Fix harness tool policy for chat runs", "")
 	if len(got) != 1 || got[0] != "Patterns/Architecture/Isolate harness tool policy" {
 		t.Fatalf("policy ticket: %v", got)
+	}
+}
+
+func TestSelectiveMemoryUsesBoundedRelevantPreviews(t *testing.T) {
+	e := setup(t)
+	tr := &tracker.Service{Pool: e.svc.Pool}
+	tk, _ := tracker.Get(e.ctx, e.q, e.ws, "PAY-214")
+	long := strings.Repeat("Partition rollback locking guidance. ", 200)
+	for _, name := range []string{"One", "Two", "Three", "Four"} {
+		if _, err := e.svc.AgentWrite(e.ctx, e.atlas, nil, wiki.Save{Path: "agents/atlas/" + name, Body: long + " [[PAY-214]]"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tr.AttachArtifact(e.ctx, e.ws, tracker.UserActor(e.me.ID), "PAY-214", e.adr.ID, "context"); err != nil {
+		t.Fatal(err)
+	}
+	pages, err := wiki.RunContext(e.ctx, e.q, e.atlas, tk, agentdef.DefaultMemory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) == 0 || len(pages) > 3 {
+		t.Fatalf("%d previews", len(pages))
+	}
+	for _, p := range pages {
+		if p.Ref == "agents/atlas/Memory" || !p.Preview || len([]rune(p.Markdown)) > 1100 || !strings.Contains(p.Markdown, "read_page(") {
+			t.Fatalf("%+v", p)
+		}
 	}
 }

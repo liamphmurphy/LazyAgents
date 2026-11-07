@@ -25,7 +25,7 @@ type ToolCheck struct {
 }
 
 // ToolScopes mirrors the shared tool rules. Shell matching is deliberately
-// conservative: only simple read commands avoid the tests:run scope. Hooks
+// conservative: only parsed, recognized reads avoid the tests:run scope. Hooks
 // are best-effort CLI enforcement, not an OS security boundary.
 func ToolScopes(tool string, input map[string]any) []string {
 	switch tool {
@@ -38,28 +38,7 @@ func ToolScopes(tool string, input map[string]any) []string {
 		if command == "" {
 			command, _ = input["cmd"].(string)
 		}
-		lower := strings.ToLower(command)
-		scopes := []string{"tests:run"}
-		// No shell operators, substitutions or redirection in a simple read.
-		if !strings.Contains(command, "--pre") && !strings.Contains(command, "--ext-diff") && !strings.ContainsAny(command, ";&|<>`$\\\n") {
-			fields := strings.Fields(command)
-			if len(fields) > 0 {
-				switch fields[0] {
-				case "cat", "ls", "pwd", "rg", "grep", "head", "tail", "wc":
-					scopes = []string{"repo:read"}
-				}
-				if len(fields) > 1 && fields[0] == "git" {
-					switch fields[1] {
-					case "status", "diff", "log", "show":
-						scopes = []string{"repo:read"}
-					}
-				}
-			}
-		}
-		if strings.Contains(lower, "git") && (strings.Contains(lower, "push") || strings.Contains(lower, "commit") || strings.Contains(lower, "checkout") || strings.Contains(lower, "reset")) || strings.Contains(lower, "gh") && (strings.Contains(lower, "create") || strings.Contains(lower, "merge") || strings.Contains(lower, "edit")) {
-			scopes = append(scopes, "repo:write")
-		}
-		return scopes
+		return shellScopes(command, 0)
 	}
 	// MCP tools enforce permissions in the service, not via a shell heuristic.
 	if strings.HasPrefix(tool, "mcp__") || (tool == "TodoWrite" || tool == "Skill") {

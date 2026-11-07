@@ -34,6 +34,73 @@ compose, with Claude Code and Codex installed). Before dispatching:
 > the host. v1 is meant for a single developer laptop. Works with Docker Desktop
 > and OrbStack.
 
+### Runner tools and project libraries
+
+Keep the running dependency list in Git:
+
+- Shared tools: [`deploy/agent-base/Dockerfile`](../deploy/agent-base/Dockerfile)
+  installs the toolchains and pinned harness CLIs, Go, sqlc, and Chromium system
+  libraries once per image build. Rebuild with `docker compose build agent-base`.
+- Local runners use host tools. Install missing tools with
+  `brew bundle --file=deploy/agent-base/Brewfile` (or your existing package
+  manager). Put Node 24, Go 1.26+, sqlc 1.31+, and the harness CLIs on the runner's
+  PATH. The Brewfile does not replace your CLI logins.
+- Project libraries: add `.lazyagents-deps.json` to the repository root. The
+  manifest lists tool requirements and directories; exact library versions stay
+  in `go.mod`/`go.sum` and `package-lock.json`. This repository includes an example:
+
+```json
+{
+  "version": 1,
+  "required_tools": ["git", "gh", "go", "node", "npm", "python3", "rg", "make", "sqlc"],
+  "go_modules": ["server"],
+  "npm_projects": ["web"],
+  "playwright": ["web"]
+}
+```
+
+The runner checks tools, downloads Go modules, installs locked npm packages
+(including dev dependencies), and installs Chromium before starting model work.
+It also prepares delegated worktrees, even for read-only agents. A continued
+worktree reuses npm packages when its lockfile, package manifest, and Node/npm
+versions match. A missing tool or failed install fails workspace setup with an
+`Environment setup failed` message. Repositories without the manifest retain
+existing setup behavior. Agent/project setup commands run after dependency setup.
+Changes take effect after updating the API/runner binaries; repository manifests
+must be on the branch that new runs clone. Existing workspaces are not rewritten.
+
+All local runs share download/browser caches under `$RUNNER_DATA_DIR/cache`
+(default `server/.lazyagents/runs/cache` when launched with `make runner`). Docker
+runs share the named volume `lazyagents-dependency-cache` at `/cache`; workspace
+cleanup preserves it. Each checkout owns its own `node_modules` and writable Go
+build cache under `.lazyagents/cache/go-build`. Codex grants cache writes to
+execution/repository writers; scoper keeps read-only tool permissions. Shared
+caches are intended for projects trusted by the same user, not unrelated tenants.
+Playwright browser versions follow the project lockfile; Linux OS library changes
+require rebuilding the agent image. Database servers/credentials remain explicit
+project configuration, not package dependencies.
+
+The tool policy recognizes read-only shell sequences, pipelines, numeric `sed`
+print ranges, and system-shell wrappers such as `/bin/zsh -lc 'rg ...'`. Dynamic
+commands, file writes, and unknown programs still require `tests:run`. Ordinary
+`git push` requires `repo:write`; combining it with test execution requires both.
+Hooks are a best-effort check; the harness/OS sandbox remains the isolation boundary.
+
+### View the runner environment
+
+Open **Settings → Runner environment**, or follow **Environment** from a run log.
+The page shows live runner capacity alongside the latest recorded setup per
+runner and project: tool versions, direct Go/npm dependencies, Chromium setup,
+and shared versus workspace cache availability. Select a project/runner to
+inspect its report, or use a run's link for its historical snapshot. Reports are
+stored in run events and survive workspace cleanup and runner shutdown.
+
+These are observations from setup, not a live scan of the host. New reports
+require the updated runner and a new workspace setup; older runs show a clear
+empty state. Failed dependency installs retain their error and any inventory
+collected before the failure. Refresh only reloads reports; it does not install
+packages or start agent work.
+
 ### Chat
 
 Select a project, open **Chat** in the sidebar, and choose **New chat**. Select
@@ -62,6 +129,34 @@ Verification status and known gaps are recorded in
 [`verification/LAZYAGENTS-14-report.md`](../verification/LAZYAGENTS-14-report.md).
 The real Claude Code → Codex smoke is still pending API/runner mode alignment and
 a chat-capable runner; automated fake-harness coverage does not establish provider parity.
+
+### Token-efficient execution
+
+Ticket agents work directly in their persistent harness session by default.
+Routine scoping, implementation, and shipping do not require separate agents.
+Delegation remains available for substantial independent work, missing
+capabilities, explicit requests, and independent review of risky or large changes.
+Existing review requests for changes still block Done. Enable **Require
+independent review before Done** in an agent's Runtime settings to enforce an
+approval gate for every ticket that agent runs. Acceptance criteria, scopes, and
+human approvals remain required.
+
+Managed `claim_ticket` responses no longer repeat instructions and memory already
+available in the workspace. Agents are instructed to read only relevant context
+and reuse it on resume. New definitions default to **Selective** memory: at most
+three relevant previews, with full pages fetched only when needed, within a
+1,500-token budget. Existing explicit Index/Linked/Search settings are preserved;
+choose Selective on an existing agent's Memory card to use the new selection.
+Attached artifacts are still available locally, and duplicate memory/artifact
+copies are skipped.
+
+Run logs, usage events, chat replies, and agent run history distinguish cached
+input, uncached input, output, and input with an unavailable cache breakdown.
+Total tokens include cache reads; cache hits are not added again. Historical
+breakdowns are recovered from saved turn usage where available. Unsupported or
+self-reported usage stays unknown rather than being labeled uncached. Prices and
+provider limits still depend on the harness/provider; cache counts are not a
+spend or subscription-limit estimate.
 
 ### Skills
 

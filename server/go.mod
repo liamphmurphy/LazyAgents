@@ -18,6 +18,7 @@ require (
 	github.com/riverqueue/river v0.51.0
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.51.0
 	golang.org/x/crypto v0.58.0
+	mvdan.cc/sh/v3 v3.14.1
 )
 
 require (
@@ -47,7 +48,6 @@ require (
 	github.com/riverqueue/river/riverdriver v0.51.0 // indirect
 	github.com/riverqueue/river/rivershared v0.51.0 // indirect
 	github.com/riverqueue/river/rivertype v0.51.0 // indirect
-	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect

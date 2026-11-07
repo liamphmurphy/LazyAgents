@@ -29,6 +29,7 @@ type Repository struct {
 }
 
 type Resolved struct {
+	ReviewRequired bool                         `json:"review_required,omitempty"`
 	Fallbacks      []Fallback                   `json:"fallbacks,omitempty"`
 	Repository     *Repository                  `json:"repository,omitempty"`
 	Harness        string                       `json:"harness"`
@@ -120,7 +121,7 @@ func minPositive(a, b int) int {
 // Both inputs must be normalized. o may be nil.
 func Resolve(s Spec, o *Override) Resolved {
 	r := Resolved{
-		Harness: s.Harness, Model: s.Model, Instructions: s.Instructions,
+		Harness: s.Harness, Model: s.Model, Instructions: s.Instructions, ReviewRequired: s.ReviewRequired,
 		Fallbacks: append([]Fallback{}, s.Fallbacks...),
 		Budget:    s.Budget, MaxConcurrency: s.MaxConcurrency, Memory: s.MemoryOrDefault(),
 		MCPServers: append([]MCPServer{}, s.MCPServers...), Skills: append([]Skill{}, s.Skills...),

@@ -273,6 +273,9 @@ func (p *opencodeParser) realStep(pt *opencodePart) []Event {
 	add(&p.res.Usage.OutputTokens, t.Output, t.Reasoning)
 	if t.Cache != nil {
 		add(&p.res.Usage.CachedTokens, t.Cache.Read)
+		if t.Input != nil && t.Cache.Read != nil && *t.Cache.Read >= 0 && *t.Cache.Read <= *t.Input {
+			p.res.Usage.CacheReportedInputTokens += *t.Input
+		}
 	}
 	if pt.Cost != nil && *pt.Cost >= 0 && !math.IsInf(*pt.Cost, 0) && !math.IsNaN(*pt.Cost) {
 		p.partialCost += *pt.Cost
@@ -282,7 +285,7 @@ func (p *opencodeParser) realStep(pt *opencodePart) []Event {
 	}
 	return []Event{{"usage", map[string]any{
 		"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens,
-		"cached_tokens": p.res.Usage.CachedTokens, "tool_calls": p.res.Usage.ToolCalls,
+		"cached_tokens": p.res.Usage.CachedTokens, "cache_reported_input_tokens": p.res.Usage.CacheReportedInputTokens, "tool_calls": p.res.Usage.ToolCalls,
 		"cost_source": "unknown", "cost_known": false, "usage_partial": true,
 		"partial_native_cost_usd": p.partialCost,
 	}}}
@@ -301,6 +304,12 @@ func (p *opencodeParser) usage(l opencodeLine) []Event {
 				pl[c.key] = *c.v
 			}
 		}
+		if u.Input != nil {
+			p.res.Usage.CacheReportedInputTokens = 0
+			if u.Cached != nil && *u.Cached >= 0 && *u.Cached <= *u.Input {
+				p.res.Usage.CacheReportedInputTokens = *u.Input
+			}
+		}
 		if u.Cost != nil && *u.Cost >= 0 && !math.IsInf(*u.Cost, 0) && !math.IsNaN(*u.Cost) {
 			// Explicit native cost, including zero. Prices are not guessed:
 			// computed cost needs verified accounting units.
@@ -308,6 +317,7 @@ func (p *opencodeParser) usage(l opencodeLine) []Event {
 			pl["cost_source"], pl["cost_known"], pl["cost_usd"] = "harness", true, *u.Cost
 		}
 	}
+	pl["cache_reported_input_tokens"] = p.res.Usage.CacheReportedInputTokens
 	if p.res.Usage.CostSource == "" {
 		// No native cost: price it only from an exact, operator-supplied
 		// provider/model[#variant] entry. Anything else stays unknown, which

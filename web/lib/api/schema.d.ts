@@ -785,6 +785,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runner/environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Observed tools, dependencies and caches from workspace setup */
+        get: operations["getRunnerEnvironment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/turns/{seq}/log": {
         parameters: {
             query?: never;
@@ -1853,6 +1870,11 @@ export interface components {
             model: string;
             fallbacks?: components["schemas"]["HarnessFallback"][];
             instructions: string;
+            /**
+             * @description Require independent reviewer or QA approval before Done
+             * @default false
+             */
+            review_required: boolean;
             scopes: {
                 [key: string]: components["schemas"]["ScopeMode"];
             };
@@ -2043,6 +2065,21 @@ export interface components {
             input_tokens: number;
             /** Format: int64 */
             output_tokens: number;
+            /**
+             * Format: int64
+             * @description Input served from cache where the provider reported cache usage
+             */
+            cached_input_tokens?: number;
+            /**
+             * Format: int64
+             * @description Reported input not served from cache
+             */
+            uncached_input_tokens?: number;
+            /**
+             * Format: int64
+             * @description Input whose cache breakdown was not reported
+             */
+            unreported_input_tokens?: number;
             cost_usd: number;
             /** @description harness, computed, self_reported, unknown, or partial */
             cost_source?: string;
@@ -2295,10 +2332,10 @@ export interface components {
         AgentMemory: {
             enabled: boolean;
             /**
-             * @description index: the Memory page; linked: plus pages linked to or from the ticket; search: plus title search hits
+             * @description selective: bounded relevant previews loaded on demand; index: the Memory page; linked: full linked pages; search: plus title search hits
              * @enum {string}
              */
-            inject: "index" | "linked" | "search";
+            inject: "selective" | "index" | "linked" | "search";
             max_tokens: number;
         };
         RunnerInfo: {
@@ -2317,6 +2354,52 @@ export interface components {
             slots: number;
             busy: number;
             queued: number;
+        };
+        EnvironmentTool: {
+            name: string;
+            available: boolean;
+            version?: string;
+        };
+        EnvironmentCache: {
+            name: string;
+            path: string;
+            shared: boolean;
+            exists: boolean;
+            writable: boolean;
+        };
+        EnvironmentPackage: {
+            project: string;
+            ecosystem: string;
+            name: string;
+            version: string;
+        };
+        EnvironmentReport: {
+            /** @enum {string} */
+            status: "ready" | "failed" | "unconfigured";
+            manifest: string;
+            tools: components["schemas"]["EnvironmentTool"][];
+            caches: components["schemas"]["EnvironmentCache"][];
+            packages: components["schemas"]["EnvironmentPackage"][];
+            go_modules: string[];
+            npm_projects: string[];
+            playwright: string[];
+            error?: string;
+        };
+        EnvironmentSnapshot: {
+            /** Format: uuid */
+            run_id: string;
+            runner_id: string;
+            backend: string;
+            /** Format: date-time */
+            recorded_at: string;
+            ticket_key: string;
+            project_key: string;
+            project_name: string;
+            report: components["schemas"]["EnvironmentReport"];
+        };
+        RunnerEnvironment: {
+            runner: components["schemas"]["RunnerStatus"];
+            snapshots: components["schemas"]["EnvironmentSnapshot"][];
         };
         DispatchScope: {
             scope: string;
@@ -2571,6 +2654,21 @@ export interface components {
             started_at: string;
             /** Format: date-time */
             ended_at?: string;
+            /**
+             * Format: int64
+             * @description Input served from cache where the provider reported cache usage
+             */
+            cached_input_tokens?: number;
+            /**
+             * Format: int64
+             * @description Reported input not served from cache
+             */
+            uncached_input_tokens?: number;
+            /**
+             * Format: int64
+             * @description Input whose cache breakdown was not reported
+             */
+            unreported_input_tokens?: number;
             /** Format: double */
             cost_usd: number;
             cost_source?: string;
@@ -2776,6 +2874,21 @@ export interface components {
             input_tokens?: number;
             /** Format: int64 */
             output_tokens?: number;
+            /**
+             * Format: int64
+             * @description Input served from cache where the provider reported cache usage
+             */
+            cached_input_tokens?: number;
+            /**
+             * Format: int64
+             * @description Reported input not served from cache
+             */
+            uncached_input_tokens?: number;
+            /**
+             * Format: int64
+             * @description Input whose cache breakdown was not reported
+             */
+            unreported_input_tokens?: number;
             cost_usd?: number;
             /** Format: date-time */
             created_at: string;
@@ -4173,6 +4286,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunnerStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getRunnerEnvironment: {
+        parameters: {
+            query?: {
+                /** @description Return the environment recorded for this exact run */
+                run_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Live runner capacity and the latest setup snapshots per runner and project (up to 50) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunnerEnvironment"];
                 };
             };
             default: components["responses"]["Error"];

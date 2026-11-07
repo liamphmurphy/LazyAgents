@@ -72,6 +72,7 @@ type Fallback struct {
 
 // Spec is one immutable definition version, stored as jsonb.
 type Spec struct {
+	ReviewRequired bool                         `json:"review_required,omitempty"`
 	Fallbacks      []Fallback                   `json:"fallbacks,omitempty"`
 	Harness        string                       `json:"harness"`
 	Model          string                       `json:"model"`
@@ -102,7 +103,8 @@ const (
 )
 
 // Memory says what wiki context a run gets (PLAN.md §12.3). Inject levels
-// are cumulative: index (the agent's Memory page) → linked (plus pages
+// default to selective previews. Legacy full-page modes are cumulative:
+// index (the agent's Memory page) → linked (plus pages
 // linked to or from the ticket and its artifacts) → search (plus the top
 // search hits for the ticket title).
 type Memory struct {
@@ -112,13 +114,14 @@ type Memory struct {
 }
 
 const (
-	InjectIndex  = "index"
-	InjectLinked = "linked"
-	InjectSearch = "search"
+	InjectSelective = "selective"
+	InjectIndex     = "index"
+	InjectLinked    = "linked"
+	InjectSearch    = "search"
 )
 
 // DefaultMemory applies when a definition doesn't say.
-var DefaultMemory = Memory{Enabled: true, Inject: InjectLinked, MaxTokens: 4000}
+var DefaultMemory = Memory{Enabled: true, Inject: InjectSelective, MaxTokens: 1500}
 
 // Override is a project's partial definition, merged over the agent's.
 type Override struct {
@@ -326,10 +329,10 @@ func (s *Spec) Normalize() error {
 	}
 	switch s.Memory.Inject {
 	case "":
-		s.Memory.Inject = InjectLinked
-	case InjectIndex, InjectLinked, InjectSearch:
+		s.Memory.Inject = InjectSelective
+	case InjectSelective, InjectIndex, InjectLinked, InjectSearch:
 	default:
-		return invalid("memory.inject", "must be index, linked or search")
+		return invalid("memory.inject", "must be selective, index, linked or search")
 	}
 	if s.Memory.MaxTokens == 0 {
 		s.Memory.MaxTokens = DefaultMemory.MaxTokens

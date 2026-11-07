@@ -42,6 +42,7 @@ test("parent timeline includes historical and live delegated logs with independe
     } });
   });
   await page.goto(`/runs/${parentId}`);
+  await expect(page.getByRole("link", { name: "Environment", exact: true })).toHaveAttribute("href", `/settings/runner?run_id=${parentId}`);
   const timeline = page.getByRole("region", { name: "Events" });
   await expect(timeline.getByText("Delegated review findings", { exact: true })).toBeVisible();
   await expect(timeline.getByText("parent output", { exact: true })).toBeVisible();
@@ -81,4 +82,22 @@ test("opencode run shows its harness and model; usage without cost source is unk
   const timeline = page.getByRole("region", { name: "Events" });
   await expect(timeline.getByText(/turn total/)).toContainText("Unknown");
   await expect(timeline.getByText("$0.00")).toHaveCount(0);
+});
+
+test("run usage separates cached, uncached and unreported input", async ({ page }) => {
+  await installChatApi(page);
+  const usage = { ...run(parentId, "Lead"), input_tokens: 1000, output_tokens: 100,
+    cached_input_tokens: 900, uncached_input_tokens: 50, unreported_input_tokens: 50 };
+  await page.route("**/api/v1/runs/*", (route) => route.fulfill({ json: {
+    run: usage, child_runs: [], turns: [], approvals: [],
+    events: [event(1, "usage", { input_tokens: 1000, output_tokens: 100, cached_tokens: 900, cache_reported_input_tokens: 950 }, 1)],
+  } }));
+  await page.goto(`/runs/${parentId}`);
+  const breakdown = page.getByLabel("Token breakdown");
+  await expect(breakdown).toContainText("Cached input 900");
+  await expect(breakdown).toContainText("Uncached input 50");
+  await expect(breakdown).toContainText("Cache breakdown unavailable for 50 input");
+  await expect(breakdown).toContainText("Total includes cached input");
+  await expect(page.getByRole("region", { name: "Events" })).toContainText("900 cached");
+  await page.screenshot({ path: "test-results/token-breakdown.png", fullPage: true });
 });

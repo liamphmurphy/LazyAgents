@@ -155,7 +155,7 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 	// Wiki memory this run starts with (PLAN.md §12.3); delivered pages
 	// count as one read each.
 	memory := []wiki.ContextPage{}
-	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil {
+	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil && run.Mode != "managed" {
 		if memory, err = wiki.RunContext(ctx, d.Q, c.Agent, t, spec.Memory); err != nil {
 			return nil, err
 		}
@@ -164,13 +164,18 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 		}
 	}
 	out := map[string]any{
-		"run_id": run.ID, "ticket": strings.ToUpper(in.Ticket), "state": run.State, "scopes": scopes,
+		"run_id": run.ID, "ticket": strings.ToUpper(in.Ticket), "state": run.State, "scopes": scopes, "agent": c.Agent.Handle,
 		"instructions": spec.Instructions,
 		"memory":       memory,
 		"next": "Read memory first: it's what you and others learned before. Call get_ticket, read the attached artifacts with read_artifact, then post_plan before editing. " +
 			"Before implementing, look up conventions with find_pattern (e.g. find_pattern({q: \"error wrapping\"})) and follow what it returns. " +
 			"Don't log what you did. Only write_note under " + wiki.MemoryRoot(c.Agent.Handle) + " for a durable lesson that would help a future run on this codebase, linked with [[…]] to the tickets and documents it's about. " +
 			"A general lesson that applies beyond this codebase (an architecture pattern or coding style) goes through propose_pattern instead. Project-specific decisions belong in ADR/Architecture notes.",
+	}
+	if run.Mode == "managed" {
+		delete(out, "instructions")
+		delete(out, "memory")
+		out["next"] = "Your instructions and available context are already in AGENTS.md. Call get_ticket once, read only context relevant to this task, and post_plan before editing. Work directly by default; delegate only when justified. Reuse existing session context on resume."
 	}
 	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil {
 		out["requires_mockup"] = t.RequiresMockup

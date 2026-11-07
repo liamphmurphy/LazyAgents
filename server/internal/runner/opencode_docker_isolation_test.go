@@ -57,10 +57,14 @@ func TestDockerOpenCodeExternalVolumeAndCleanup(t *testing.T) {
 		t.Fatal(cmd)
 	}
 	mounts := created["HostConfig"].(map[string]any)["Mounts"].([]any)
-	if len(mounts) != 2 {
+	if len(mounts) != 3 {
 		t.Fatal(mounts)
 	}
-	state := mounts[1].(map[string]any)
+	cache := mounts[1].(map[string]any)
+	if cache["Source"] != "lazyagents-dependency-cache" || cache["Target"] != "/cache" {
+		t.Fatal(cache)
+	}
+	state := mounts[2].(map[string]any)
 	if state["Source"] != stateVolumeName("one") || state["Target"] != "/.lazyagents/opencode" {
 		t.Fatal(state)
 	}
@@ -79,6 +83,9 @@ func TestDockerOpenCodeExternalVolumeAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := strings.Join(deleted, "\n")
+	if strings.Contains(all, "lazyagents-dependency-cache") {
+		t.Fatal("shared cache deleted")
+	}
 	if !strings.Contains(all, volumeName("one")) || !strings.Contains(all, stateVolumeName("one")) {
 		t.Fatal(all)
 	}

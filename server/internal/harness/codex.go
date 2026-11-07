@@ -33,6 +33,9 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		sandbox = "workspace-write"
 	}
 	opts := []string{"--json", "--skip-git-repo-check", "--dangerously-bypass-hook-trust", "--strict-config"}
+	if ws.DependencyCacheDir != "" && (allowed(spec, "tests:run") || allowed(spec, "repo:write")) {
+		opts = append(opts, "--add-dir", ws.DependencyCacheDir)
+	}
 	if spec.Model != "" {
 		opts = append(opts, "-m", spec.Model)
 	}
@@ -130,9 +133,9 @@ type codexLine struct {
 	Message  string     `json:"message"`
 	Item     *codexItem `json:"item"`
 	Usage    *struct {
-		InputTokens       int64 `json:"input_tokens"`
-		CachedInputTokens int64 `json:"cached_input_tokens"`
-		OutputTokens      int64 `json:"output_tokens"`
+		InputTokens       int64  `json:"input_tokens"`
+		CachedInputTokens *int64 `json:"cached_input_tokens"`
+		OutputTokens      int64  `json:"output_tokens"`
 	} `json:"usage"`
 	Error *struct {
 		Message string `json:"message"`
@@ -150,27 +153,47 @@ func (p *codexParser) Line(b []byte) []Event {
 		return []Event{{"lifecycle", map[string]any{"state": "harness_started", "harness": agentdef.HarnessCodex, "model": p.model, "session_id": l.ThreadID}}}
 	case "turn.completed":
 		if l.Usage != nil {
+			cached := int64(0)
+			if l.Usage.CachedInputTokens != nil {
+				cached = *l.Usage.CachedInputTokens
+			}
 			baseline := p.baseline
 			if baseline.SessionID != "" && baseline.SessionID != p.res.SessionID {
 				baseline = Usage{}
 			}
-			if l.Usage.InputTokens < baseline.SessionInputTokens || l.Usage.OutputTokens < baseline.SessionOutputTokens || l.Usage.CachedInputTokens < baseline.SessionCachedTokens {
+			if l.Usage.InputTokens < baseline.SessionInputTokens || l.Usage.OutputTokens < baseline.SessionOutputTokens || (l.Usage.CachedInputTokens != nil && cached < baseline.SessionCachedTokens) {
 				baseline = Usage{}
 			}
 			p.res.Usage.InputTokens = l.Usage.InputTokens - baseline.SessionInputTokens
 			p.res.Usage.OutputTokens = l.Usage.OutputTokens - baseline.SessionOutputTokens
-			p.res.Usage.CachedTokens = l.Usage.CachedInputTokens - baseline.SessionCachedTokens
+			p.res.Usage.CachedTokens = 0
+			if l.Usage.CachedInputTokens != nil {
+				p.res.Usage.CachedTokens = max(0, cached-baseline.SessionCachedTokens)
+			}
 			p.res.Usage.SessionID = p.res.SessionID
 			p.res.Usage.SessionInputTokens = l.Usage.InputTokens
 			p.res.Usage.SessionOutputTokens = l.Usage.OutputTokens
-			p.res.Usage.SessionCachedTokens = l.Usage.CachedInputTokens
+			p.res.Usage.SessionCachedTokens = cached
+			p.res.Usage.SessionCacheKnown = l.Usage.CachedInputTokens != nil && cached >= 0 && cached <= l.Usage.InputTokens
+			if l.Usage.CachedInputTokens != nil && cached >= 0 && cached <= l.Usage.InputTokens && (baseline.SessionInputTokens == 0 || baseline.SessionCacheKnown) && p.res.Usage.CachedTokens <= p.res.Usage.InputTokens {
+				p.res.Usage.CacheReportedInputTokens = p.res.Usage.InputTokens
+			}
 		}
 		p.res.Usage.CostSource = "unknown"
 		cost, known := computeCost(p.model, p.res.Usage, p.prices)
+		if known && (p.res.Usage.CacheReportedInputTokens < p.res.Usage.InputTokens || p.res.Usage.CachedTokens > p.res.Usage.InputTokens) {
+			price, ok := p.prices[p.model]
+			if !ok {
+				price = Prices[p.model]
+			}
+			if price.Input != price.CachedInput || p.res.Usage.CachedTokens > p.res.Usage.InputTokens {
+				known = false
+			}
+		}
 		if known {
 			p.res.Usage.CostUSD, p.res.Usage.CostSource = cost, "computed"
 		}
-		payload := map[string]any{"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens, "cached_tokens": p.res.Usage.CachedTokens, "cost_source": p.res.Usage.CostSource, "cost_known": known}
+		payload := map[string]any{"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens, "cached_tokens": p.res.Usage.CachedTokens, "cache_reported_input_tokens": p.res.Usage.CacheReportedInputTokens, "cost_source": p.res.Usage.CostSource, "cost_known": known}
 		if known {
 			payload["cost_usd"] = p.res.Usage.CostUSD
 		}

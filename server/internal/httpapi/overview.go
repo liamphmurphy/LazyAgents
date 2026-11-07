@@ -359,8 +359,22 @@ func (s *Server) ListAgentRuns(ctx context.Context, req api.ListAgentRunsRequest
 	if len(rows) > 50 {
 		rows = rows[:50]
 	}
+	ids := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+	}
+	cacheRows, err := s.Q.CacheUsageForRuns(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	cache := map[uuid.UUID]store.CacheUsageForRunsRow{}
+	for _, row := range cacheRows {
+		cache[row.RunID] = row
+	}
 	for _, r := range rows {
-		out.Runs = append(out.Runs, api.AgentRunSummary{Id: r.ID, Ticket: workTicket(r.TicketID, r.Key, r.Title, r.Status, r.Priority), State: r.State, Harness: r.Harness, Model: r.Model, StartedAt: r.StartedAt, EndedAt: r.EndedAt, CostUsd: float64(r.CostUsdMicros) / 1e6, CostSource: r.CostSource, ToolCalls: int(r.ToolCalls), Tokens: r.Tokens})
+		c := cache[r.ID]
+		cached, uncached, unknown := cacheBreakdown(r.InputTokens, c.CachedInputTokens, c.ReportedInputTokens)
+		out.Runs = append(out.Runs, api.AgentRunSummary{CachedInputTokens: &cached, UncachedInputTokens: &uncached, UnreportedInputTokens: &unknown, Id: r.ID, Ticket: workTicket(r.TicketID, r.Key, r.Title, r.Status, r.Priority), State: r.State, Harness: r.Harness, Model: r.Model, StartedAt: r.StartedAt, EndedAt: r.EndedAt, CostUsd: float64(r.CostUsdMicros) / 1e6, CostSource: r.CostSource, ToolCalls: int(r.ToolCalls), Tokens: r.Tokens})
 	}
 	return out, nil
 }

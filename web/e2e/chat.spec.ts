@@ -12,6 +12,14 @@ async function newChat(page: Page) {
   await expect(composer(page)).toBeVisible();
 }
 
+async function contextCaretReady(page: Page) {
+  // Picking context restores focus/caret on the next paint. Wait for that
+  // transition before simulating the next burst of typing.
+  await composer(page).evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  await expect(composer(page)).toBeFocused();
+  await expect.poll(() => composer(page).evaluate((el: HTMLTextAreaElement) => el.selectionStart === el.value.length)).toBe(true);
+}
+
 async function send(page: Page, text: string) {
   await composer(page).fill(text);
   await composer(page).press("Enter");
@@ -113,6 +121,7 @@ test("[[ picks context as removable chips and sends them as context_refs", async
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 
   // Enter on the highlighted suggestion picks it with the keyboard.
+  await contextCaretReady(page);
   await composer(page).pressSequentially("[[WEB-");
   await expect(page.getByRole("option", { name: /WEB-3/ })).toBeVisible();
   await composer(page).press("Enter");
@@ -125,6 +134,7 @@ test("[[ picks context as removable chips and sends them as context_refs", async
   await expect(chips(page)).toHaveCount(3);
 
   // Picking the same thing twice doesn't duplicate; chips can be removed.
+  await contextCaretReady(page);
   await composer(page).pressSequentially("[[WEB-");
   await composer(page).press("Enter");
   await expect(chips(page)).toHaveCount(3);

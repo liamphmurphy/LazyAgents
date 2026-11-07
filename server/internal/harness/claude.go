@@ -138,10 +138,10 @@ type claudeLine struct {
 }
 
 type claudeUsage struct {
-	InputTokens         int64 `json:"input_tokens"`
-	OutputTokens        int64 `json:"output_tokens"`
-	CacheReadTokens     int64 `json:"cache_read_input_tokens"`
-	CacheCreationTokens int64 `json:"cache_creation_input_tokens"`
+	InputTokens         int64  `json:"input_tokens"`
+	OutputTokens        int64  `json:"output_tokens"`
+	CacheReadTokens     *int64 `json:"cache_read_input_tokens"`
+	CacheCreationTokens int64  `json:"cache_creation_input_tokens"`
 }
 
 type claudeBlock struct {
@@ -229,8 +229,15 @@ func (p *claudeParser) Line(b []byte) []Event {
 			}
 		}
 		if l.Usage != nil {
-			p.res.Usage.InputTokens = l.Usage.InputTokens + l.Usage.CacheCreationTokens + l.Usage.CacheReadTokens
-			p.res.Usage.CachedTokens = l.Usage.CacheReadTokens
+			cached := int64(0)
+			if l.Usage.CacheReadTokens != nil {
+				cached = *l.Usage.CacheReadTokens
+			}
+			p.res.Usage.InputTokens = l.Usage.InputTokens + l.Usage.CacheCreationTokens + cached
+			p.res.Usage.CachedTokens = cached
+			if l.Usage.CacheReadTokens != nil && cached >= 0 && cached <= p.res.Usage.InputTokens {
+				p.res.Usage.CacheReportedInputTokens = p.res.Usage.InputTokens
+			}
 			p.res.Usage.OutputTokens = l.Usage.OutputTokens
 		}
 		p.res.Usage.CostSource = "unknown"
@@ -247,7 +254,7 @@ func (p *claudeParser) Line(b []byte) []Event {
 			cost = p.res.Usage.CostUSD
 		}
 		out := []Event{{"usage", map[string]any{
-			"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens, "cached_tokens": p.res.Usage.CachedTokens,
+			"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens, "cached_tokens": p.res.Usage.CachedTokens, "cache_reported_input_tokens": p.res.Usage.CacheReportedInputTokens,
 			"cost_usd": cost, "cost_source": p.res.Usage.CostSource, "cost_known": l.TotalCost != nil, "num_turns": l.NumTurns, "duration_ms": l.DurationMS,
 		}}}
 		for _, d := range l.Denials {

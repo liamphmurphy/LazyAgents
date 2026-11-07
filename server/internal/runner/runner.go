@@ -523,7 +523,8 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		_ = c.Close()
 	}
 	r.addTiming(run.ID, time.Since(setupStart), 0, 0)
-	tail := lastLines(redact(out.String(), env), 30)
+	output := r.recordEnvironment(ctx, c, redact(out.String(), env), err != nil || code != 0)
+	tail := lastLines(output, 30)
 	if err != nil || code != 0 {
 		fail(fmt.Sprintf("Workspace setup failed (exit %d):\n%s", code, tail))
 		return
@@ -704,13 +705,18 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 				if json.Unmarshal(turns[i].Usage, &usage) != nil {
 					continue
 				}
+				var saved map[string]json.RawMessage
+				_ = json.Unmarshal(turns[i].Usage, &saved)
+				if _, modern := saved["cache_reported_input_tokens"]; !modern && usage.SessionInputTokens > 0 {
+					usage.SessionCacheKnown = true // legacy Codex stored explicit cached counters
+				}
 				if usage.SessionID == *c.run.HarnessSessionID {
 					baseline = usage
 					break
 				}
 				// Older Codex turns stored cumulative usage without a session marker.
 				if c.spec.Harness == agentdef.HarnessCodex && usage.SessionID == "" && usage.CostSource != "harness" && usage.InputTokens > 0 {
-					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionInputTokens: usage.InputTokens, SessionOutputTokens: usage.OutputTokens, SessionCachedTokens: usage.CachedTokens}
+					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionInputTokens: usage.InputTokens, SessionOutputTokens: usage.OutputTokens, SessionCachedTokens: usage.CachedTokens, SessionCacheKnown: true}
 					break
 				}
 				// Older Claude turns stored the session's total_cost_usd as the turn's cost.
@@ -830,8 +836,12 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.spec.Harness == agentdef.HarnessOpenCode {
 		stateDir = r.Backend.(ConfigIsolator).OpenCodeStateDir(wsID(c.run), dir)
 	}
+	cacheDir := ""
+	if backend, ok := r.Backend.(CacheBackend); ok {
+		cacheDir = backend.DependencyCacheDir()
+	}
 	inv, err := h.Invocation(harness.Workspace{
-		OpenCodeStateDir: stateDir, Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
+		DependencyCacheDir: cacheDir, OpenCodeStateDir: stateDir, Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
 	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)

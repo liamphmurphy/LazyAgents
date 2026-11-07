@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -42,9 +43,18 @@ func (r *Runner) prepareWorktree(ctx context.Context, c runCtx, env map[string]s
 		_ = json.Unmarshal(c.run.Contract, &contract)
 	}
 	ws := wsID(c.run)
-	defer r.wtLock(ws)()
+	unlock := r.wtLock(ws)
+	defer func() {
+		if unlock != nil {
+			unlock()
+		}
+	}()
 	run := func(name, dir, script string) (string, error) {
-		cctx, cancel := context.WithTimeout(ctx, 2*checkTimeout)
+		timeout := 2 * checkTimeout
+		if name == "lazyagents-wt-dependencies" {
+			timeout = 15 * time.Minute
+		}
+		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		out, code, err := r.execIn(cctx, ws, dir, name+"-"+c.run.ID.String(), script, env)
 		if err != nil {
@@ -93,6 +103,13 @@ git rev-parse HEAD
 	}
 	contract.BaseSHA = lastLines(out, 1)
 	contract.BaseUncommitted = nil
+	unlock()
+	unlock = nil
+	output, setupErr := run("lazyagents-wt-dependencies", contract.Worktree, dependencySetupScript())
+	output = r.recordEnvironment(ctx, c, output, setupErr != nil)
+	if setupErr != nil {
+		return contract, fmt.Errorf("environment setup failed: %s", lastLines(output, 15))
+	}
 	return contract, nil
 }
 

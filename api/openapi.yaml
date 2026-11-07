@@ -1034,6 +1034,24 @@ paths:
               schema: { $ref: "#/components/schemas/RunnerStatus" }
         default: { $ref: "#/components/responses/Error" }
 
+  /runner/environment:
+    get:
+      operationId: getRunnerEnvironment
+      summary: Observed tools, dependencies and caches from workspace setup
+      tags: [runs]
+      parameters:
+        - name: run_id
+          in: query
+          schema: { type: string, format: uuid }
+          description: Return the environment recorded for this exact run
+      responses:
+        "200":
+          description: Live runner capacity and the latest setup snapshots per runner and project (up to 50)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunnerEnvironment" }
+        default: { $ref: "#/components/responses/Error" }
+
   /runs/{id}/turns/{seq}/log:
     parameters:
       - name: id
@@ -2325,6 +2343,7 @@ components:
         model: { type: string }
         fallbacks: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/HarnessFallback" } }
         instructions: { type: string }
+        review_required: { type: boolean, default: false, description: Require independent reviewer or QA approval before Done }
         scopes:
           type: object
           additionalProperties: { $ref: "#/components/schemas/ScopeMode" }
@@ -2512,6 +2531,9 @@ components:
         tool_calls: { type: integer }
         input_tokens: { type: integer, format: int64 }
         output_tokens: { type: integer, format: int64 }
+        cached_input_tokens: { type: integer, format: int64, description: Input served from cache where the provider reported cache usage }
+        uncached_input_tokens: { type: integer, format: int64, description: Reported input not served from cache }
+        unreported_input_tokens: { type: integer, format: int64, description: Input whose cache breakdown was not reported }
         cost_usd: { type: number }
         cost_source: { type: string, description: "harness, computed, self_reported, unknown, or partial" }
         setup_ms: { type: integer, format: int64, description: "Cumulative workspace setup time in milliseconds; absent if not timed" }
@@ -2761,7 +2783,7 @@ components:
       required: [enabled, inject, max_tokens]
       properties:
         enabled: { type: boolean }
-        inject: { type: string, enum: [index, linked, search], description: "index: the Memory page; linked: plus pages linked to or from the ticket; search: plus title search hits" }
+        inject: { type: string, enum: [selective, index, linked, search], description: "selective: bounded relevant previews loaded on demand; index: the Memory page; linked: full linked pages; search: plus title search hits" }
         max_tokens: { type: integer, minimum: 500, maximum: 50000 }
     RunnerInfo:
       type: object
@@ -2782,6 +2804,61 @@ components:
         slots: { type: integer }
         busy: { type: integer }
         queued: { type: integer }
+    EnvironmentTool:
+      type: object
+      required: [name, available]
+      properties:
+        name: { type: string }
+        available: { type: boolean }
+        version: { type: string }
+    EnvironmentCache:
+      type: object
+      required: [name, path, shared, exists, writable]
+      properties:
+        name: { type: string }
+        path: { type: string }
+        shared: { type: boolean }
+        exists: { type: boolean }
+        writable: { type: boolean }
+    EnvironmentPackage:
+      type: object
+      required: [project, ecosystem, name, version]
+      properties:
+        project: { type: string }
+        ecosystem: { type: string }
+        name: { type: string }
+        version: { type: string }
+    EnvironmentReport:
+      type: object
+      required: [status, manifest, tools, caches, packages, go_modules, npm_projects, playwright]
+      properties:
+        status: { type: string, enum: [ready, failed, unconfigured] }
+        manifest: { type: string }
+        tools: { type: array, items: { $ref: "#/components/schemas/EnvironmentTool" } }
+        caches: { type: array, items: { $ref: "#/components/schemas/EnvironmentCache" } }
+        packages: { type: array, items: { $ref: "#/components/schemas/EnvironmentPackage" } }
+        go_modules: { type: array, items: { type: string } }
+        npm_projects: { type: array, items: { type: string } }
+        playwright: { type: array, items: { type: string } }
+        error: { type: string }
+    EnvironmentSnapshot:
+      type: object
+      required: [run_id, runner_id, backend, recorded_at, ticket_key, project_key, project_name, report]
+      properties:
+        run_id: { type: string, format: uuid }
+        runner_id: { type: string }
+        backend: { type: string }
+        recorded_at: { type: string, format: date-time }
+        ticket_key: { type: string }
+        project_key: { type: string }
+        project_name: { type: string }
+        report: { $ref: "#/components/schemas/EnvironmentReport" }
+    RunnerEnvironment:
+      type: object
+      required: [runner, snapshots]
+      properties:
+        runner: { $ref: "#/components/schemas/RunnerStatus" }
+        snapshots: { type: array, items: { $ref: "#/components/schemas/EnvironmentSnapshot" } }
     DispatchScope:
       type: object
       required: [scope, mode, source, enforcement, how]
@@ -3049,6 +3126,9 @@ components:
         model: { type: string }
         started_at: { type: string, format: date-time }
         ended_at: { type: string, format: date-time }
+        cached_input_tokens: { type: integer, format: int64, description: Input served from cache where the provider reported cache usage }
+        uncached_input_tokens: { type: integer, format: int64, description: Reported input not served from cache }
+        unreported_input_tokens: { type: integer, format: int64, description: Input whose cache breakdown was not reported }
         cost_usd: { type: number, format: double }
         cost_source: { type: string }
         tool_calls: { type: integer }
@@ -3222,6 +3302,9 @@ components:
         author: { $ref: "#/components/schemas/UserRef" }
         input_tokens: { type: integer, format: int64 }
         output_tokens: { type: integer, format: int64 }
+        cached_input_tokens: { type: integer, format: int64, description: Input served from cache where the provider reported cache usage }
+        uncached_input_tokens: { type: integer, format: int64, description: Reported input not served from cache }
+        unreported_input_tokens: { type: integer, format: int64, description: Input whose cache breakdown was not reported }
         cost_usd: { type: number }
         created_at: { type: string, format: date-time }
     ChatModel:

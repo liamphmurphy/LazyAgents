@@ -190,8 +190,20 @@ func tarFiles(files map[string][]byte) (*bytes.Buffer, error) {
 }
 
 func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Process, error) {
+	if spec.Env == nil {
+		spec.Env = map[string]string{}
+	}
+	workspace := path.Join(workspacePath, spec.Dir)
+	for k, v := range dependencyEnv(d.DependencyCacheDir(), workspace) {
+		if _, exists := spec.Env[k]; !exists {
+			spec.Env[k] = v
+		}
+	}
 	oc := isOpenCode(spec.Argv)
 	mounts := []map[string]any{{"Type": "volume", "Source": volumeName(runID), "Target": workspacePath}}
+	// A persistent volume is shared by all runs and deliberately has no run
+	// label, so workspace cleanup never removes downloaded dependencies.
+	mounts = append(mounts, map[string]any{"Type": "volume", "Source": "lazyagents-dependency-cache", "Target": "/cache"})
 	if oc {
 		if !d.OpenCodeIsolated {
 			return nil, fmt.Errorf("runner: OpenCode requires OS-isolated config")

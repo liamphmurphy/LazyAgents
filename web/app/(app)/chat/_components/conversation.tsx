@@ -1,5 +1,8 @@
 "use client";
 
+import { compact } from "@/lib/format";
+import { tokenBreakdown } from "@/lib/token-usage";
+
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -72,6 +75,10 @@ function Bubble({ m, groups, chat, saveable, names }: { m: Message; groups: Grou
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
       {!mine && <Sources citations={m.citations} />}
       {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
+      {!mine && m.input_tokens !== undefined && <span className="text-[11px] text-fg-tertiary">{(() => {
+        const t = tokenBreakdown(m);
+        return `${compact(t.input)} input · ${compact(t.output)} output${t.hasBreakdown ? ` · ${compact(t.cached)} cached · ${compact(t.uncached)} uncached` : ""}${t.unknown ? ` · ${compact(t.unknown)} cache unknown` : ""}`;
+      })()}</span>}
     </li>
   );
 }

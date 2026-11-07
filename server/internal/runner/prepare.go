@@ -114,6 +114,7 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 	b.WriteString("grep -qx '.lazyagents/' .git/info/exclude 2>/dev/null || echo '.lazyagents/' >> .git/info/exclude\n")
 	b.WriteString("if [ -f AGENTS.md ] && ! grep -q 'lazyagents:start' AGENTS.md; then cp AGENTS.md .lazyagents/AGENTS.repo.md; fi\n")
 	b.WriteString("if git ls-files --error-unmatch AGENTS.md >/dev/null 2>&1; then git update-index --skip-worktree AGENTS.md; else grep -qx 'AGENTS.md' .git/info/exclude || echo 'AGENTS.md' >> .git/info/exclude; fi\n")
+	b.WriteString(dependencySetupScript())
 	for _, c := range setup {
 		b.WriteString("echo " + shellQuote("→ "+c) + "\n")
 		b.WriteString(c + "\n")
@@ -201,6 +202,9 @@ func ContextFiles(ctx context.Context, q *store.Queries, agent store.Agent, t st
 		return nil, err
 	}
 	for _, p := range pages {
+		if slices.Contains(ids, *p.Target.ID) {
+			continue
+		} // attached artifacts are already staged
 		header := fmt.Sprintf("<!-- wiki page %s (%s) -->\n", p.Ref, p.Reason)
 		add(contextName("wiki", strings.ReplaceAll(p.Ref, "/", " ")), header+p.Markdown, *p.Target.ID)
 	}

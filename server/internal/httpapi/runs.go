@@ -36,6 +36,16 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		SetupMs: r.SetupMs, HarnessMs: r.HarnessMs, ChecksMs: r.ChecksMs,
 		Plan: []api.PlanStep{}, Scopes: []string{}, ApprovalScopes: []string{},
 	}
+	cacheRows, err := s.Q.CacheUsageForRuns(ctx, []uuid.UUID{r.ID})
+	if err != nil {
+		return out, err
+	}
+	var cached, reported int64
+	if len(cacheRows) > 0 {
+		cached, reported = cacheRows[0].CachedInputTokens, cacheRows[0].ReportedInputTokens
+	}
+	cached, uncached, unknown := cacheBreakdown(r.InputTokens, cached, reported)
+	out.CachedInputTokens, out.UncachedInputTokens, out.UnreportedInputTokens = &cached, &uncached, &unknown
 	if r.TicketID == nil && r.Purpose == "planning" {
 		p, err := s.Q.PlanningSessionForRun(ctx, r.ID)
 		if err != nil {

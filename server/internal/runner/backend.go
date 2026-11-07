@@ -200,6 +200,13 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 	if runtime.GOOS == "darwin" && !l.OnlyBins && program != "opencode" {
 		cmd.Env = append(cmd.Env, "PATH="+os.Getenv("PATH")+":/opt/homebrew/bin:/usr/local/bin")
 	}
+	cache := l.DependencyCacheDir()
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		return nil, err
+	}
+	for k, v := range dependencyEnv(cache, dir) {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
 	for k, v := range spec.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

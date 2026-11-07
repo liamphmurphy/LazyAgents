@@ -381,3 +381,34 @@ func TestEffortOption(t *testing.T) {
 		t.Fatalf("opencode: %v", err)
 	}
 }
+
+func TestCodexDependencyCachePermissions(t *testing.T) {
+	workspace := ws
+	workspace.DependencyCacheDir = "/runner/cache"
+	for _, scope := range []string{"repo:read", "repo:write", "tests:run"} {
+		inv, err := (Codex{}).Invocation(workspace, Turn{Spec: spec(scope, "allowed"), Prompt: "go"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		hasCache := strings.Contains(strings.Join(inv.Argv, " "), "--add-dir /runner/cache")
+		if hasCache != (scope != "repo:read") {
+			t.Fatalf("%s: %v", scope, inv.Argv)
+		}
+	}
+}
+
+func TestDirectExecutionPolicyAndSelectiveContextInstructions(t *testing.T) {
+	s := spec()
+	s.Instructions = "Standing role routine: hand implementation to an implementer."
+	md := string(AgentsMD("", s, []string{".lazyagents/context/one.md"}, "PAY-214"))
+	for _, want := range []string{"Work directly", "optional", "skip whoami", "Read only the files relevant", "Your own diff review"} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("missing %q", want)
+		}
+	}
+	s.ReviewRequired = true
+	md = string(AgentsMD("", s, nil, "PAY-214"))
+	if !strings.Contains(md, "Independent review is required") {
+		t.Fatal("explicit review policy was lost")
+	}
+}

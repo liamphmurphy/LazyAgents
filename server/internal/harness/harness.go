@@ -18,11 +18,12 @@ import (
 
 // Workspace is where a turn runs, as seen from inside its environment.
 type Workspace struct {
-	OpenCodeStateDir string // backend-owned persistent path outside the checkout; required by OpenCode
-	Dir              string // absolute path of the checkout, e.g. /workspace
-	MCPURL           string // the LazyAgents MCP endpoint, reachable from the turn
-	Token            string // the run's agent token (la_…)
-	TokenEnv         string // env var that carries it, e.g. LAZYAGENTS_TOKEN
+	DependencyCacheDir string // shared runner cache; execution scopes may write it
+	OpenCodeStateDir   string // backend-owned persistent path outside the checkout; required by OpenCode
+	Dir                string // absolute path of the checkout, e.g. /workspace
+	MCPURL             string // the LazyAgents MCP endpoint, reachable from the turn
+	Token              string // the run's agent token (la_…)
+	TokenEnv           string // env var that carries it, e.g. LAZYAGENTS_TOKEN
 }
 
 // Turn is one headless invocation.
@@ -48,17 +49,19 @@ type Event struct {
 
 // Usage is what one turn consumed.
 type Usage struct {
-	SessionID           string  `json:"session_id,omitempty"`
-	SessionInputTokens  int64   `json:"session_input_tokens,omitempty"`
-	SessionOutputTokens int64   `json:"session_output_tokens,omitempty"`
-	SessionCachedTokens int64   `json:"session_cached_tokens,omitempty"`
-	SessionCostUSD      float64 `json:"session_cost_usd,omitempty"` // claude-code: session total so far
-	InputTokens         int64   `json:"input_tokens"`
-	OutputTokens        int64   `json:"output_tokens"`
-	CachedTokens        int64   `json:"cached_tokens"`
-	ToolCalls           int64   `json:"tool_calls"`
-	CostUSD             float64 `json:"cost_usd"`
-	CostSource          string  `json:"cost_source"` // harness | computed | unknown | ""
+	SessionID                string  `json:"session_id,omitempty"`
+	SessionInputTokens       int64   `json:"session_input_tokens,omitempty"`
+	SessionOutputTokens      int64   `json:"session_output_tokens,omitempty"`
+	SessionCachedTokens      int64   `json:"session_cached_tokens,omitempty"`
+	SessionCacheKnown        bool    `json:"session_cache_known,omitempty"`
+	SessionCostUSD           float64 `json:"session_cost_usd,omitempty"` // claude-code: session total so far
+	InputTokens              int64   `json:"input_tokens"`
+	OutputTokens             int64   `json:"output_tokens"`
+	CacheReportedInputTokens int64   `json:"cache_reported_input_tokens"`
+	CachedTokens             int64   `json:"cached_tokens"`
+	ToolCalls                int64   `json:"tool_calls"`
+	CostUSD                  float64 `json:"cost_usd"`
+	CostSource               string  `json:"cost_source"` // harness | computed | unknown | ""
 }
 
 // Result is what a parser learned by the end of a turn.
@@ -177,6 +180,15 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 	}
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
 	if !delegated {
+		b.WriteString("## Execution policy\n\nWork directly in this persistent session by default, within your scopes. Standing role routines to call a scoper, hand implementation to an implementer, hand shipping to a shipper, or curate memory after every ticket are optional; do not perform them mechanically. Delegate only substantial independent work, a capability you lack, an explicit task request, or a necessary independent review. Do not start fresh agents for small fixes, routine shipping, or checks already completed. AGENTS.md already contains your instructions and scopes; claim_ticket returns your handle, so skip whoami. Search conventions only when needed and not already available. Write memory only for a durable new lesson.\n\n")
+		if spec.ReviewRequired {
+			b.WriteString("Independent review is required for Done: obtain delegated reviewer/QA approval.\n\n")
+		} else {
+			b.WriteString("Your own diff review is sufficient for small, low-risk changes. Obtain independent review for security/auth, concurrency, migrations, broad public API changes, or substantial changes. Existing reviewer requests for changes must be resolved before Done.\n\n")
+		}
+	}
+
+	if !delegated {
 		b.WriteString(gitSection(spec))
 	}
 	if len(spec.Scopes) > 0 {
@@ -190,7 +202,7 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		b.WriteString(skillsIndex(spec.Skills))
 	}
 	if len(contextFiles) > 0 {
-		b.WriteString("## Context\n\nRead these before planning. They're also available through `read_artifact` and `read_page`, which record citations.\n\n")
+		b.WriteString("## Available context\n\nRead only the files relevant to this task, not every listed file. Reuse context already read in this session. Full sources are available through `read_artifact` and `read_page`, which record citations.\n\n")
 		sort.Strings(contextFiles)
 		for _, f := range contextFiles {
 			b.WriteString("- `" + f + "`\n")
@@ -198,7 +210,7 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		b.WriteString("\n")
 	}
 	if !delegated {
-		b.WriteString("For non-trivial work, look up team conventions once with `find_pattern` and name the relevant ones in sub agents' briefs. ")
+		b.WriteString("For non-trivial work, use relevant supplied conventions; use `find_pattern` only for missing guidance, and include applicable rules in any delegated brief. ")
 	}
 	b.WriteString("Don't log what you did: use `write_note` under your memory folder only for durable lessons that would help a future run on this codebase, linked with [[…]] to what they're about. Reusable, general lessons go through `propose_pattern`; project-specific decisions belong in ADR/Architecture notes.\n")
 	b.WriteString(sectionEnd + "\n")
@@ -263,15 +275,8 @@ func gitSection(spec agentdef.Resolved) string {
 
 // delegationSection tells a main agent it can hand work to sub agents.
 func delegationSection(agentdef.Resolved) string {
-	return fmt.Sprintf("If sub agents exist (`list_subagents`), you may hand them self-contained parts of the ticket such as implementation or documentation with "+
-		"`delegate`. Commit your work first: a delegated run fails to start if your checkout has uncommitted changes. Each sub agent works in its own git worktree and branch, and the server merges the branch into yours when its checks pass; "+
-		"you may run up to %d in parallel if their allowed_paths don't overlap (call `delegate` once per sub agent, then end your turn), and you're resumed once when all have finished. "+
-		"Review the diff before relying on it, and send fixes back to the same sub agent with continue_run_id. "+
-		"Delegating costs a fresh agent that re-reads the code, a handoff, a verification pass, and a resume that re-reads your whole context: do small, few-file or tightly coupled changes yourself, and delegate only substantial, separable work. "+
-		"Give `delegate` acceptance_criteria, allowed_paths and a test_command; the server runs those checks and hands you the results, so you don't repeat them. "+
-		"You stay responsible for the ticket: only you call claim_ticket and complete_run for it. Before finishing, verify every acceptance criterion against evidence; use check_criterion only for verified criteria. If any criterion is unmet, implement it yourself or delegate it to a suitable agent and inspect the result. Continue until all criteria are satisfied. "+
-		"Delegate a review only when the change is risky (security, auth, concurrency, data migrations, broad public APIs) or large; otherwise your own review of the diff is enough. "+
-		"Commit and push any changes, record the PR with set_pr, then call complete_run with status=done. Do not stop at In Review when you can finish this workflow. If you need a person, use await_human or request_approval; status=todo explicitly hands back unfinished work.\n\n", runs.MaxParallelDelegations)
+	return fmt.Sprintf("Before finishing, verify every acceptance criterion against evidence and call check_criterion only when satisfied. If anything is missing, implement it yourself or delegate a substantial independent slice. Commit and push changes, record the PR with set_pr, and complete_run(status=done). Use await_human or request_approval for a person; status=todo hands back unfinished work.\n\n"+
+		"Only when delegation is justified, use list_subagents then delegate with acceptance_criteria, allowed_paths and test_command. Commit first. Each child gets a worktree; the server checks and merges successful results. Up to %d children may run in parallel on disjoint paths. End your turn after delegating. Review the returned diff, reuse passing checks, and use continue_run_id for follow-up fixes.\n\n", runs.MaxParallelDelegations)
 }
 
 // UsageLimit reports provider exhaustion from an error, never ordinary tool output.

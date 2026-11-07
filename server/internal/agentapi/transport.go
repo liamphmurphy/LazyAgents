@@ -187,8 +187,7 @@ var profileInstructions = map[string]string{
 Call get_ticket only if the brief lacks context you need. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval.
 When you need a person, call request_approval or await_human and end your turn. Finish with complete_run and a short summary.`,
 	profileLead: `You are working through LazyAgents, the tracker your team uses to supervise agents.
-Your run instructions are in AGENTS.md, so you don't need whoami. Call claim_ticket, then get_ticket once; read attached artifacts with read_artifact before
-planning. post_plan once before editing and call update_step when a step finishes.
+Your run instructions are in AGENTS.md, so you don't need whoami. Call claim_ticket, then get_ticket once. Read only relevant attached context; reuse local context instead of fetching it again. post_plan once before editing and call update_step when a step finishes.
 Scopes marked requires_approval need request_approval first; brokered ones (like db:migrate) run via
 run_gated after approval. When you need a person, comment and call await_human.
 Verify every acceptance criterion and check it only with evidence. Implement or delegate any gaps.

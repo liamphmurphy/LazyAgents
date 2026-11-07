@@ -100,3 +100,22 @@ test("override dialog: offers OpenCode, saves it, reload shows it", async ({ pag
   await panel.getByRole("button", { name: /Web app \d+ change/ }).click();
   await expect(page.getByRole("dialog").getByRole("radiogroup", { name: "Harness" }).getByRole("radio", { name: "OpenCode" })).toBeChecked();
 });
+
+test("editor saves selective memory and an explicit independent-review policy", async ({ page }) => {
+  const mock = await installAgentApi(page);
+  await page.goto("/agents/atlas");
+  await expect(page.getByRole("radio", { name: "Selective", exact: true })).toBeChecked();
+  await expect(page.getByLabel("Token budget", { exact: true })).toHaveValue("1500");
+  await page.getByRole("switch", { name: "Require independent review before Done" }).click();
+  // Commit the displayed memory defaults into this new definition explicitly.
+  await page.getByRole("radio", { name: "Linked", exact: true }).click();
+  await page.getByRole("radio", { name: "Selective", exact: true }).click();
+  await save(page).click();
+  await expect(save(page)).toBeDisabled();
+  const spec = (mock.saved.definition.at(-1) as { spec: { review_required: boolean; memory: { inject: string; max_tokens: number } } }).spec;
+  expect(spec.review_required).toBe(true);
+  expect(spec.memory).toMatchObject({ inject: "selective", max_tokens: 1500 });
+  await page.reload();
+  await expect(page.getByRole("switch", { name: "Require independent review before Done" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Selective", exact: true })).toBeChecked();
+});

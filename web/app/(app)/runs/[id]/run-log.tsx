@@ -1,5 +1,7 @@
 "use client";
 
+import { TokenUsage } from "@/components/domain/token-usage";
+import { eventTokenUsage, tokenBreakdown } from "@/lib/token-usage";
 import { runCost } from "@/lib/format";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -100,6 +102,8 @@ function lifecycleText(p: P): ReactNode {
           Preparing the workspace on <code className="inline">{str(p.backend)}</code> ({str(p.runner)})
         </>
       );
+    case "environment_snapshot":
+      return <Link href="/settings/runner" className="underline underline-offset-2">Runner environment recorded</Link>;
     case "workspace_ready":
       return (
         <>
@@ -203,6 +207,7 @@ function EventRow({ row, source }: { row: Row; source?: Schemas["Run"] }) {
       body = (
         <span className="font-mono text-[12px] text-fg-secondary">
           turn total · {compact(Number(p.input_tokens ?? 0))} in · {compact(Number(p.output_tokens ?? 0))} out
+          {(() => { const t = tokenBreakdown(eventTokenUsage(p)); return t.hasBreakdown ? ` · ${compact(t.cached)} cached · ${compact(t.uncached)} uncached${t.unknown ? ` · ${compact(t.unknown)} cache unknown` : ""}` : " · cache breakdown unavailable"; })()}
           {` · ${runCost(Number(p.cost_usd ?? 0), p.cost_source === "harness" || p.cost_source === "computed" ? String(p.cost_source) : p.cost_known === true || (p.cost_known === undefined && Number(p.cost_usd ?? 0) > 0) ? "harness" : "unknown")}`}
         </span>
       );
@@ -438,6 +443,7 @@ export function RunLogScreen({ id }: { id: string }) {
         crumbs={[{ label: run.planning_id ? "Plan" : run.ticket_key, href: run.planning_id ? `/plans?id=${run.planning_id}` : `/tickets/${run.ticket_key}`, mono: true }, { label: "Run log" }]}
         actions={
           <>
+            <ButtonLink href={`/settings/runner?run_id=${run.id}`} variant="outline">Environment</ButtonLink>
             {lastLog && (
               <ButtonLink href={`/api/v1/runs/${run.id}/turns/${lastLog.seq}/log`} prefetch={false} variant="outline" icon="download">
                 Raw log
@@ -497,6 +503,7 @@ export function RunLogScreen({ id }: { id: string }) {
         <Stat label="Tokens" value={compact(run.input_tokens + run.output_tokens)} />
         <Stat label="Spend" value={runCost(run.cost_usd, run.cost_source)} />
       </div>
+      <TokenUsage usage={run} />
       {control.isError && (
         <div className="px-6 pt-3">
           <Banner tone="blocked" title={control.variables === "retry" ? "Couldn't retry the run" : "Couldn't change the run"}>

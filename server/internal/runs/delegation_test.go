@@ -148,6 +148,14 @@ func TestDelegationToSubagents(t *testing.T) {
 		t.Fatalf("parent turn = %+v", last)
 	}
 
+	// Direct work is the default; an explicit policy still requires review.
+	if err := runs.ReviewClear(ctx, q, parent); err != nil {
+		t.Fatalf("default direct review: %v", err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE runs SET resolved_spec=jsonb_set(resolved_spec,'{review_required}','true') WHERE id=$1", parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	parent, _ = q.GetRun(ctx, store.GetRunParams{ID: parent.ID, WorkspaceID: ws})
 	// Done needs a reviewer's all clear: none yet, then a rejection, then approval.
 	if err := svc.Complete(ctx, main, "", "all good", "done", ""); !isConflict(err) {
 		t.Fatalf("done without a verdict: %v", err)
@@ -161,6 +169,15 @@ func TestDelegationToSubagents(t *testing.T) {
 	if err := runs.ReviewClear(ctx, q, parent); !isConflict(err) {
 		t.Fatalf("clear after changes requested: %v", err)
 	}
+	optional := parent
+	var optionalSpec map[string]any
+	_ = json.Unmarshal(parent.ResolvedSpec, &optionalSpec)
+	optionalSpec["review_required"] = false
+	optional.ResolvedSpec, _ = json.Marshal(optionalSpec)
+	if err := runs.ReviewClear(ctx, q, optional); !isConflict(err) {
+		t.Fatalf("optional review ignored a rejection: %v", err)
+	}
+
 	if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: child.ID, Type: "lifecycle", Payload: []byte(`{"state":"completed","verdict":"` + runs.VerdictApproved + `"}`)}); err != nil {
 		t.Fatal(err)
 	}

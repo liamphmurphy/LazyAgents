@@ -72,8 +72,9 @@ const MODEL_SUGGESTIONS: Record<Harness, string[]> = {
 };
 const OPENCODE_HINT = "Use provider/model, e.g. anthropic/claude-sonnet-5-5";
 
-const DEFAULT_MEMORY: NonNullable<AgentSpec["memory"]> = { enabled: true, inject: "linked", max_tokens: 4000 };
+const DEFAULT_MEMORY: NonNullable<AgentSpec["memory"]> = { enabled: true, inject: "selective", max_tokens: 1500 };
 const INJECT_HELP = {
+  selective: "Up to three relevant previews; load full pages only when needed.",
   index: "Only the agent's Memory page.",
   linked: "The Memory page, plus pages linked to or from the ticket and its documents.",
   search: "Everything in Linked, plus the best wiki matches for the ticket title.",
@@ -102,6 +103,7 @@ function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; se
               value={m.inject}
               onChange={(inject) => put({ inject })}
               options={[
+                { value: "selective", label: "Selective" },
                 { value: "index", label: "Index" },
                 { value: "linked", label: "Linked" },
                 { value: "search", label: "Search" },
@@ -271,6 +273,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
       </SectionCard>
 
       <SectionCard title="Runtime">
+        <Toggle checked={spec.review_required ?? false} onChange={(review_required) => set({ review_required })} label="Require independent review before Done" />
         <div className="flex flex-col gap-2">
           <span className="text-[12.5px] font-medium text-fg-2">Harness</span>
           <div className="flex flex-wrap items-center gap-3">

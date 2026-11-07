@@ -101,7 +101,7 @@ func TestToolPolicyExactApproval(t *testing.T) {
 	if _, err := pool.Exec(ctx, "UPDATE runs SET resolved_spec=$2 WHERE id=$1", run.ID, raw); err != nil {
 		t.Fatal(err)
 	}
-	multi := runs.ToolCheck{Tool: "Bash", Input: map[string]any{"command": "git push origin HEAD"}}
+	multi := runs.ToolCheck{Tool: "Bash", Input: map[string]any{"command": "go test ./... && git push origin HEAD"}}
 	for i := 0; i < 2; i++ {
 		decision, err := svc.CheckTool(ctx, c, multi)
 		if err != nil || decision.Decision != "deny" {
@@ -110,7 +110,7 @@ func TestToolPolicyExactApproval(t *testing.T) {
 		all, _ := q.ListApprovalsForRun(ctx, run.ID)
 		latest := all[len(all)-1]
 		for _, a := range all {
-			if a.ActionSummary == "Allow Bash for tests:run: git push origin HEAD" && a.ExecutedAt != nil {
+			if a.ActionSummary == "Allow Bash for tests:run: go test ./... && git push origin HEAD" && a.ExecutedAt != nil {
 				t.Fatal("first scope consumed before second approval")
 			}
 		}

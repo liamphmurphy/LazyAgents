@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { Schemas } from "@/lib/api/client";
 import { useRunnerStatus } from "@/lib/api/hooks";
 import { ProgressBar } from "./data";
@@ -14,7 +15,7 @@ export function RunnerCapacity({
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-fg-secondary">Runner capacity</span>
+        <Link href="/settings/runner" className="text-fg-secondary hover:text-fg">Runner capacity</Link>
         <span
           className={cx(
             "font-mono",

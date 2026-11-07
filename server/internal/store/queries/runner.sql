@@ -135,3 +135,22 @@ SELECT id FROM runs r
 WHERE r.workspace_volume IS NOT NULL AND r.state IN ('completed', 'failed', 'cancelled')
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
 LIMIT 20;
+
+-- name: RunnerEnvironments :many
+-- Latest observed setup per runner and project, or the exact run requested.
+SELECT * FROM (
+  SELECT DISTINCT ON (coalesce(nullif(e.payload->>'runner_id', ''), r.runner_id, ''), t.project_id)
+    r.id AS run_id, coalesce(nullif(e.payload->>'runner_id', ''), r.runner_id, '')::text AS runner_id,
+    e.at AS recorded_at, e.payload,
+    t.key AS ticket_key, p.key AS project_key, p.name AS project_name
+  FROM run_events e
+  JOIN runs r ON r.id = e.run_id
+  JOIN tickets t ON t.id = r.ticket_id
+  JOIN projects p ON p.id = t.project_id
+  WHERE r.workspace_id = sqlc.arg(workspace_id)
+    AND e.type = 'lifecycle' AND e.payload->>'state' = 'environment_snapshot'
+    AND (sqlc.narg(run_id)::uuid IS NULL OR r.id = sqlc.narg(run_id))
+  ORDER BY coalesce(nullif(e.payload->>'runner_id', ''), r.runner_id, ''), t.project_id, e.at DESC, e.seq DESC
+) AS snapshots
+ORDER BY recorded_at DESC
+LIMIT 50;

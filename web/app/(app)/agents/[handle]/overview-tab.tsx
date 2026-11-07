@@ -149,7 +149,10 @@ export function RunsTab({ handle }: { handle: string }) {
               </div>
               <p className="font-mono text-[11px] text-fg-tertiary">
                 {r.harness} · {r.model} · {r.tool_calls} tools ·{" "}
-                {compact(r.tokens)} tokens · {runCost(r.cost_usd,r.cost_source)}
+                {compact(r.tokens)} tokens (includes cache) · {runCost(r.cost_usd,r.cost_source)}
+                {r.cached_input_tokens !== undefined && ` · ${compact(r.cached_input_tokens)} cached input`}
+                {r.uncached_input_tokens !== undefined && ` · ${compact(r.uncached_input_tokens)} uncached input`}
+                {!!r.unreported_input_tokens && ` · ${compact(r.unreported_input_tokens)} cache unknown`}
               </p>
               <p className="text-xs text-fg-tertiary">
                 Started {ago(r.started_at)} ·{" "}

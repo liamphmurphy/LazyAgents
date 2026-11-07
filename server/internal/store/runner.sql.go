@@ -8,6 +8,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -376,6 +377,69 @@ func (q *Queries) RunActiveSeconds(ctx context.Context, runID uuid.UUID) (RunAct
 	var i RunActiveSecondsRow
 	err := row.Scan(&i.Turns, &i.Seconds)
 	return i, err
+}
+
+const runnerEnvironments = `-- name: RunnerEnvironments :many
+SELECT run_id, runner_id, recorded_at, payload, ticket_key, project_key, project_name FROM (
+  SELECT DISTINCT ON (coalesce(nullif(e.payload->>'runner_id', ''), r.runner_id, ''), t.project_id)
+    r.id AS run_id, coalesce(nullif(e.payload->>'runner_id', ''), r.runner_id, '')::text AS runner_id,
+    e.at AS recorded_at, e.payload,
+    t.key AS ticket_key, p.key AS project_key, p.name AS project_name
+  FROM run_events e
+  JOIN runs r ON r.id = e.run_id
+  JOIN tickets t ON t.id = r.ticket_id
+  JOIN projects p ON p.id = t.project_id
+  WHERE r.workspace_id = $1
+    AND e.type = 'lifecycle' AND e.payload->>'state' = 'environment_snapshot'
+    AND ($2::uuid IS NULL OR r.id = $2)
+  ORDER BY coalesce(nullif(e.payload->>'runner_id', ''), r.runner_id, ''), t.project_id, e.at DESC, e.seq DESC
+) AS snapshots
+ORDER BY recorded_at DESC
+LIMIT 50
+`
+
+type RunnerEnvironmentsParams struct {
+	WorkspaceID uuid.UUID
+	RunID       *uuid.UUID
+}
+
+type RunnerEnvironmentsRow struct {
+	RunID       uuid.UUID
+	RunnerID    string
+	RecordedAt  time.Time
+	Payload     json.RawMessage
+	TicketKey   string
+	ProjectKey  string
+	ProjectName string
+}
+
+// Latest observed setup per runner and project, or the exact run requested.
+func (q *Queries) RunnerEnvironments(ctx context.Context, arg RunnerEnvironmentsParams) ([]RunnerEnvironmentsRow, error) {
+	rows, err := q.db.Query(ctx, runnerEnvironments, arg.WorkspaceID, arg.RunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RunnerEnvironmentsRow{}
+	for rows.Next() {
+		var i RunnerEnvironmentsRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.RunnerID,
+			&i.RecordedAt,
+			&i.Payload,
+			&i.TicketKey,
+			&i.ProjectKey,
+			&i.ProjectName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const secretsForRun = `-- name: SecretsForRun :many

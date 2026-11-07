@@ -79,7 +79,7 @@ ON CONFLICT(workspace_id,range) DO UPDATE SET payload=EXCLUDED.payload,generated
 SELECT * FROM metric_snapshots WHERE workspace_id=$1 AND range=$2;
 
 -- name: AgentRunHistory :many
-SELECT r.id,r.state,r.harness,r.model,r.started_at,r.ended_at,r.cost_usd_micros,r.cost_source,r.tool_calls,
+SELECT r.id,r.state,r.harness,r.model,r.started_at,r.ended_at,r.cost_usd_micros,r.cost_source,r.tool_calls,r.input_tokens,
  (r.input_tokens+r.output_tokens)::bigint AS tokens,t.id AS ticket_id,t.key,t.title,t.status,t.priority
 FROM runs r JOIN tickets t ON t.id=r.ticket_id
 WHERE r.workspace_id=$1 AND r.agent_id=$2 ORDER BY r.started_at DESC,r.id DESC LIMIT 51 OFFSET sqlc.arg(skip)::int;

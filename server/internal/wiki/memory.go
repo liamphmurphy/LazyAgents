@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -24,6 +25,7 @@ type ContextPage struct {
 	Reason    string       `json:"reason"` // why it's here
 	Markdown  string       `json:"markdown"`
 	Truncated bool         `json:"truncated,omitempty"`
+	Preview   bool         `json:"preview,omitempty"`
 }
 
 // approxTokens is a rough count (4 bytes a token) for trimming context.
@@ -36,6 +38,7 @@ type candidate struct {
 
 // RunContext picks the wiki pages a run on ticket starts with, most
 // relevant first, trimmed to mem.MaxTokens:
+//   - selective: up to three relevant previews, without the broad memory index;
 //   - index:  the agent's Memory page;
 //   - linked: up to maxPatterns published patterns sharing at least two words
 //     with the ticket (one in the pattern's title or tags), then
@@ -62,13 +65,13 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 	}
 
 	idx, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: MemoryIndex(agent.Handle)})
-	if err == nil {
+	if err == nil && mem.Inject != agentdef.InjectSelective {
 		add(idx, "Your memory index")
-	} else if !errors.Is(err, pgx.ErrNoRows) {
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
 
-	if mem.Inject == agentdef.InjectLinked || mem.Inject == agentdef.InjectSearch {
+	if mem.Inject == agentdef.InjectSelective || mem.Inject == agentdef.InjectLinked || mem.Inject == agentdef.InjectSearch {
 		// Patterns are short, curated and the most reusable guidance, so they
 		// come right after the index.
 		if words := ticketWords(ticket); len(words) > 0 {
@@ -158,7 +161,7 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 		}
 	}
 
-	if mem.Inject == agentdef.InjectSearch && strings.TrimSpace(ticket.Title) != "" {
+	if (mem.Inject == agentdef.InjectSelective || mem.Inject == agentdef.InjectSearch) && strings.TrimSpace(ticket.Title) != "" {
 		hits, err := Search(ctx, q, ws, orQuery(ticket.Title), []string{"note"}, nil, 5)
 		if err != nil {
 			return nil, err
@@ -180,7 +183,18 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 		if err != nil {
 			return nil, err
 		}
-		p := ContextPage{Target: links.ArtifactTarget(c.a, ""), Ref: *c.a.Path, Reason: c.reason, Markdown: body}
+		if mem.Inject == agentdef.InjectSelective {
+			// Stage a bounded preview, with the full source available on demand.
+			if len(pages) >= 3 {
+				break
+			}
+			preview := []rune(body)
+			if len(preview) > 800 {
+				body = string(preview[:800]) + "\n…"
+			}
+			body += "\n\nRead the full page with read_page(" + strconv.Quote(*c.a.Path) + ") only when relevant."
+		}
+		p := ContextPage{Target: links.ArtifactTarget(c.a, ""), Ref: *c.a.Path, Reason: c.reason, Markdown: body, Preview: mem.Inject == agentdef.InjectSelective}
 		if n := approxTokens(body); n > budget {
 			cut := min(budget*4, len(body))
 			for cut > 0 && !utf8.RuneStart(body[cut]) && cut < len(body) {

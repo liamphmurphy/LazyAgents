@@ -300,9 +300,9 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 // agent needs is in AGENTS.md and the LazyAgents tools.
 func StartPrompt(key string) string {
 	return "You've been dispatched to work on " + key + ". Follow AGENTS.md: call claim_ticket(\"" + key +
-		"\") first, read the memory and context it gives you, post_plan, then work. When you need a person, " +
+		"\") first, use relevant context already available in AGENTS.md, post_plan, then work directly. When you need a person, " +
 		"call request_approval or await_human and end your turn. Verify every acceptance criterion; implement or delegate any gaps. " +
-		"Once all criteria are verified and checked, commit and push any changes within your authorized scopes, record the PR, obtain delegated reviewer/QA approval, and finish with complete_run(status=done)."
+		"Once all criteria are verified and checked, commit and push any changes within your authorized scopes, record the PR, obtain independent review when required by the run policy or risk, and finish with complete_run(status=done)."
 }
 
 // Active resolves which run a tool call acts on: the token's run, the run on
@@ -645,9 +645,8 @@ const (
 	VerdictChangesRequested = "changes_requested"
 )
 
-// ReviewClear is nil when a main run may mark its ticket Done: at least one
-// delegated reviewer/QA run reported a verdict, and each such agent's latest
-// verdict is an all clear.
+// ReviewClear requires independent approval only when configured. Any existing
+// reviewer rejection remains a veto, even for a run with optional review.
 func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
 	children, err := q.ChildRuns(ctx, &run.ID)
 	if err != nil {
@@ -666,7 +665,11 @@ func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
 		}
 		latest[ch.AgentID] = v
 	}
-	if len(latest) == 0 {
+	spec, err := Spec(run)
+	if err != nil {
+		return err
+	}
+	if len(latest) == 0 && spec.ReviewRequired {
 		return apperr.Conflict("a ticket can only be marked done after a delegated reviewer or QA agent gives the all clear (complete_run with verdict=approved). Delegate a review first, or finish with status in_review")
 	}
 	for _, v := range latest {
@@ -678,7 +681,7 @@ func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
 }
 
 // Complete ends the run and moves the ticket (default: In Review). Done needs
-// the reviewers' all clear; verdict is only for delegated reviewer/QA runs.
+// configured independent-review approval; existing review rejections always block Done.
 func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, verdict string) error {
 	if status == "" {
 		status = "in_review"

@@ -263,7 +263,7 @@ func main() {
 			case "-m":
 				model = args[i+1]
 				i++
-			case "-s", "-C":
+			case "-s", "-C", "--add-dir":
 				i++
 			default:
 				if !strings.HasPrefix(args[i], "-") {

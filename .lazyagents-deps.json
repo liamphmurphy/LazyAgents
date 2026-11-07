@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "required_tools": ["git", "gh", "go", "node", "npm", "python3", "rg", "make", "sqlc"],
+  "go_modules": ["server"],
+  "npm_projects": ["web"],
+  "playwright": ["web"]
+}

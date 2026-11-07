@@ -195,3 +195,23 @@ FROM kids k LEFT JOIN runs p ON p.id = k.parent_run_id GROUP BY k.agent_id;
 -- Top-level runs parked on a mockup review, with their ticket.
 SELECT r.* FROM runs r
 WHERE r.workspace_id = $1 AND r.parent_run_id IS NULL AND r.state = 'waiting' AND r.wait_reason = 'mockup_review';
+
+-- name: CacheUsageForRuns :many
+-- New turns explicitly record cache coverage; older Codex/Claude turns can be
+-- recovered from the saved counters. Unsupported/unmanaged input stays unknown.
+WITH counters AS (
+  SELECT t.run_id,
+    greatest(coalesce((t.usage->>'input_tokens')::bigint, 0), 0) AS input,
+    greatest(coalesce((t.usage->>'cached_tokens')::bigint, 0), 0) AS cached,
+    CASE WHEN t.usage ? 'cache_reported_input_tokens'
+      THEN greatest(coalesce((t.usage->>'cache_reported_input_tokens')::bigint, 0), 0)
+      WHEN t.usage ? 'cached_tokens' AND (t.usage ? 'session_input_tokens' OR t.usage->>'cost_source' = 'harness')
+        AND r.harness IN ('codex','claude-code')
+      THEN greatest(coalesce((t.usage->>'input_tokens')::bigint, 0), 0)
+      ELSE 0 END AS reported
+  FROM run_turns t JOIN runs r ON r.id=t.run_id
+  WHERE t.run_id = ANY(sqlc.arg(run_ids)::uuid[])
+)
+SELECT run_id, sum(least(cached, reported, input))::bigint AS cached_input_tokens,
+  sum(least(reported, input))::bigint AS reported_input_tokens
+FROM counters GROUP BY run_id;
