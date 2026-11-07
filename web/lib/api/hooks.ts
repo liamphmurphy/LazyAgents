@@ -18,6 +18,7 @@ import {
   type TicketPatch,
   type TicketStatus,
 } from "./client";
+import { runEach } from "../ticket-list";
 
 type NewTicket = Schemas["NewTicket"];
 
@@ -132,6 +133,64 @@ export function useBulkUpdate() {
       qc.invalidateQueries({ queryKey: keys.tickets });
       qc.invalidateQueries({ queryKey: keys.artifacts });
     },
+  });
+}
+
+/**
+ * Patch each ticket on its own (PATCH /tickets/{key}), so one refusal (a 409
+ * for canceling a ticket with a live run) doesn't undo the others.
+ */
+export function useBulkEach() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ keys: ks, patch }: { keys: string[]; patch: TicketPatch }) =>
+      runEach(ks, (key) => unwrap(api.PATCH("/tickets/{key}", { params: { path: { key } }, body: patch }))),
+    onSettled: (_r, _e, v) => {
+      qc.invalidateQueries({ queryKey: ["tickets", "list"] });
+      for (const k of v.keys) qc.invalidateQueries({ queryKey: keys.ticket(k) });
+      qc.invalidateQueries({ queryKey: ["boards"] });
+      qc.invalidateQueries({ queryKey: ["epics"] });
+    },
+  });
+}
+
+export type SavedView = Schemas["SavedView"];
+const savedViewsKey = ["saved-views"] as const;
+
+/** The signed-in person's saved ticket-list views. */
+export function useSavedViews() {
+  return useQuery({
+    queryKey: savedViewsKey,
+    queryFn: () => unwrap(api.GET("/saved-views")).then((d) => d.views),
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["SavedViewInput"]) => unwrap(api.POST("/saved-views", { body })),
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
+  });
+}
+
+export function useUpdateSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: Schemas["SavedViewPatch"] & { id: string }) =>
+      unwrap(api.PATCH("/saved-views/{id}", { params: { path: { id } }, body })),
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
+  });
+}
+
+export function useDeleteSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const r = await api.DELETE("/saved-views/{id}", { params: { path: { id } } });
+      if (!r.response.ok) throw new Error("Couldn't delete the view");
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: savedViewsKey }),
   });
 }
 

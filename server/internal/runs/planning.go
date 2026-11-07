@@ -17,16 +17,23 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
 
+// PlannerEstimate preserves the planner’s estimate across human edits.
+type PlannerEstimate struct {
+	Points    *int    `json:"points,omitempty"`
+	Rationale *string `json:"rationale,omitempty"`
+}
+
 // Proposal is deliberately separate from a ticket. Only a person can accept it.
 type Proposal struct {
-	Ref            string     `json:"ref,omitempty"`
-	DependsOn      []string   `json:"depends_on,omitempty"`
-	BlockedBy      []string   `json:"blocked_by,omitempty"`
-	Title          string     `json:"title"`
-	Description    string     `json:"description"`
-	Criteria       []string   `json:"criteria"`
-	AgentID        *uuid.UUID `json:"agent_id,omitempty"`
-	RequiresMockup bool       `json:"requires_mockup,omitempty"`
+	PlannerEstimate *PlannerEstimate `json:"planner_estimate,omitempty"`
+	Ref             string           `json:"ref,omitempty"`
+	DependsOn       []string         `json:"depends_on,omitempty"`
+	BlockedBy       []string         `json:"blocked_by,omitempty"`
+	Title           string           `json:"title"`
+	Description     string           `json:"description"`
+	Criteria        []string         `json:"criteria"`
+	AgentID         *uuid.UUID       `json:"agent_id,omitempty"`
+	RequiresMockup  bool             `json:"requires_mockup,omitempty"`
 	// EstimatePoints is copied to the ticket on acceptance, estimated by the planning agent.
 	EstimatePoints    *int    `json:"estimate_points,omitempty"`
 	EstimateRationale *string `json:"estimate_rationale,omitempty"`
@@ -303,6 +310,9 @@ func (s *Service) ProposeTickets(ctx context.Context, c Caller, items []Proposal
 		if err := validateProposals(ctx, q, run.WorkspaceID, items); err != nil {
 			return err
 		}
+		for i := range items {
+			items[i].PlannerEstimate = &PlannerEstimate{Points: items[i].EstimatePoints, Rationale: items[i].EstimateRationale}
+		}
 		raw, _ := json.Marshal(items)
 		out, err = q.UpdatePlanningSession(ctx, store.UpdatePlanningSessionParams{ID: plan.ID, Proposals: raw, State: "review", TicketKeys: []string{}})
 		if err != nil {
@@ -350,6 +360,23 @@ func (s *Service) ReviewPlanning(ctx context.Context, ws, user, id uuid.UUID, re
 		if plan.State != "review" {
 			return apperr.Conflict("only a draft awaiting review can be changed")
 		}
+		// Trust only the stored baseline, never reviewer-supplied metadata.
+		var stored []Proposal
+		_ = json.Unmarshal(plan.Proposals, &stored)
+		proposed := map[string]*PlannerEstimate{}
+		for _, sp := range stored {
+			baseline := sp.PlannerEstimate
+			if baseline == nil {
+				baseline = &PlannerEstimate{Points: sp.EstimatePoints, Rationale: sp.EstimateRationale}
+			}
+			proposed[sp.Ref] = baseline
+		}
+		for i := range items {
+			items[i].PlannerEstimate = proposed[items[i].Ref]
+			if items[i].PlannerEstimate == nil {
+				items[i].PlannerEstimate = &PlannerEstimate{}
+			}
+		}
 		state := "review"
 		keys := []string{}
 		if action == "dismiss" {
@@ -394,16 +421,10 @@ func (s *Service) ReviewPlanning(ctx context.Context, ws, user, id uuid.UUID, re
 				// Draft estimates belong to the planning agent that proposed them,
 				// unless the reviewer changed them before accepting.
 				planner := tracker.AgentActor(run.AgentID)
-				var stored []Proposal
-				_ = json.Unmarshal(plan.Proposals, &stored)
-				proposed := map[string]*int{}
-				for _, sp := range stored {
-					proposed[sp.Ref] = sp.EstimatePoints
-				}
 				created := []store.Ticket{}
 				for _, item := range items {
 					estimator := tracker.UserActor(user)
-					if prev, ok := proposed[item.Ref]; ok && prev != nil && item.EstimatePoints != nil && *prev == *item.EstimatePoints {
+					if prev, ok := proposed[item.Ref]; ok && prev.Points != nil && item.EstimatePoints != nil && *prev.Points == *item.EstimatePoints {
 						estimator = planner
 					}
 					t, err := tracker.CreateInTx(ctx, q, ws, tracker.UserActor(user), tracker.NewTicket{ProjectKey: p.Key, Title: item.Title, DescriptionMd: item.Description, Criteria: item.Criteria, AssigneeAgentID: item.AgentID, EpicID: plan.EpicID, RequiresMockup: item.RequiresMockup,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { DropdownMenu } from "radix-ui";
 import { useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -13,6 +13,7 @@ import { Kbd } from "@/components/ui/primitives";
 import { floatPanel } from "@/components/domain/pickers";
 import { SidebarCapacity } from "@/components/domain/runner-capacity";
 import { HumanAvatar } from "@/components/domain/avatars";
+import { SidebarSavedViews } from "@/components/domain/saved-views";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
 export type SidebarProps = {
@@ -192,11 +193,14 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           <div key={g.label} role="group" aria-labelledby={`nav-${g.label}`} className="flex flex-col gap-px">
             <span id={`nav-${g.label}`} className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</span>
             {g.items.map((n) => (
-              <NavLink key={n.href} href={withProject(n.href, current?.key)} active={isActive(pathname, n.href)}>
-                <Icon name={n.icon} />
-                <span className="flex-1">{n.label}</span>
-                <Badge kind={n.badge} counts={counts} />
-              </NavLink>
+              <Fragment key={n.href}>
+                <NavLink href={withProject(n.href, current?.key)} active={isActive(pathname, n.href) && !(n.href === "/tickets" && search.get("sv"))}>
+                  <Icon name={n.icon} />
+                  <span className="flex-1">{n.label}</span>
+                  <Badge kind={n.badge} counts={counts} />
+                </NavLink>
+                {n.href === "/tickets" && <SidebarSavedViews project={current?.key} />}
+              </Fragment>
             ))}
           </div>
         ))}

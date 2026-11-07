@@ -310,6 +310,7 @@ func TestPlanningProposalPoints(t *testing.T) {
 	drafts := []map[string]any{
 		{"ref": "a", "title": "Estimated", "description": "d", "criteria": []string{"c"}, "points": 5, "estimate_rationale": " Two endpoints "},
 		{"ref": "b", "title": "Unestimated", "description": "d", "criteria": []string{"c"}},
+		{"ref": "c", "title": "Not selected", "description": "d", "criteria": []string{"c"}},
 	}
 	bad := []map[string]any{{"title": "Bad", "description": "d", "criteria": []string{"c"}, "points": 4}}
 	code, body = e.tool(token, "propose_tickets", map[string]any{"tickets": bad})
@@ -319,7 +320,7 @@ func TestPlanningProposalPoints(t *testing.T) {
 
 	code, body = e.request("GET", "/api/v1/planning-sessions/"+plan.Id.String(), nil, "")
 	_ = json.Unmarshal([]byte(body), &plan)
-	if len(plan.Proposals) != 2 || plan.Proposals[0].EstimatePoints == nil || *plan.Proposals[0].EstimatePoints != 5 ||
+	if len(plan.Proposals) != 3 || plan.Proposals[0].EstimatePoints == nil || *plan.Proposals[0].EstimatePoints != 5 ||
 		plan.Proposals[0].EstimateRationale == nil || *plan.Proposals[0].EstimateRationale != "Two endpoints" || plan.Proposals[1].EstimatePoints != nil {
 		t.Fatalf("draft estimates not persisted: %d %s", code, body)
 	}
@@ -330,8 +331,22 @@ func TestPlanningProposalPoints(t *testing.T) {
 	code, body = e.request("PATCH", "/api/v1/planning-sessions/"+plan.Id.String(), map[string]any{"revision": plan.Revision, "action": "save", "proposals": edited}, "")
 	e.expect("save off scale", code, body, 422, "estimate_points")
 
+	// Saving a changed estimate must not replace the planner's baseline.
+	eightSaved := api.EstimatePoints(8)
+	saved := append([]api.TicketProposal{}, plan.Proposals...)
+	saved[0].EstimatePoints = &eightSaved
+	saved[1].EstimatePoints = &eightSaved
+	saved[1].PlannerEstimate = plan.Proposals[0].PlannerEstimate
+	code, body = e.request("PATCH", "/api/v1/planning-sessions/"+plan.Id.String(), map[string]any{"revision": plan.Revision, "action": "save", "proposals": saved}, "")
+	e.expect("save estimate", code, body, 200, "planner_estimate")
+	_ = json.Unmarshal([]byte(body), &plan)
+	if plan.Proposals[0].PlannerEstimate == nil || *plan.Proposals[0].PlannerEstimate.Points != 5 {
+		t.Fatal("planner baseline lost")
+	}
+	// Resetting to the original value after saving still credits the planner.
+	plan.Proposals[0].EstimatePoints = ptr(api.EstimatePoints(5))
 	// The reviewer adds an estimate to the second draft: that one is the person's.
-	accepted := append([]api.TicketProposal{}, plan.Proposals...)
+	accepted := append([]api.TicketProposal{}, plan.Proposals[:2]...)
 	eight := api.EstimatePoints(8)
 	accepted[1].EstimatePoints = &eight
 	code, body = e.request("PATCH", "/api/v1/planning-sessions/"+plan.Id.String(), map[string]any{"revision": plan.Revision, "action": "accept", "proposals": accepted}, "")
@@ -339,6 +354,9 @@ func TestPlanningProposalPoints(t *testing.T) {
 		t.Fatalf("accept = %d %s", code, body)
 	}
 	_ = json.Unmarshal([]byte(body), &plan)
+	if len(plan.TicketKeys) != 2 || plan.ProposalCount != 3 {
+		t.Fatalf("subset count: %+v", plan)
+	}
 	estimated, _ := tracker.Get(e.ctx, e.q, e.ws, plan.TicketKeys[0])
 	if estimated.EstimatePoints == nil || *estimated.EstimatePoints != 5 || *estimated.EstimateRationale != "Two endpoints" ||
 		*estimated.EstimatedByType != "agent" || *estimated.EstimatedByID != e.atlas.ID {

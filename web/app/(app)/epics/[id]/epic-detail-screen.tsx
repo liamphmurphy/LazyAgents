@@ -18,6 +18,7 @@ import { DocTypeTag, Pill } from "@/components/domain/labels";
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { STATUS_NAME, STATUS_ORDER } from "@/components/domain/meta";
 import { EpicCompletion } from "@/components/domain/epic-completion";
+import { DependencyMap } from "@/components/domain/dependency-map";
 
 type TicketSummary = Schemas["TicketSummary"];
 
@@ -64,6 +65,7 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
 const boardHref = (e: EpicOverview) => `/board?project=${encodeURIComponent(e.project.key)}&epic=${encodeURIComponent(e.epic.id)}`;
 
 function EpicDetail({ epic: e }: { epic: EpicOverview }) {
+  const [tab, setTab] = useState("overview");
   const today = ymd(new Date());
   const overdue = isOverdue(e, today);
   const tickets = useTickets({ epic: e.epic.id, view: "all" });
@@ -90,6 +92,11 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
         </div>
       </header>
 
+      <nav aria-label="Epic views" className="flex gap-5 border-b border-border pb-3 text-sm">
+        <button aria-current={tab === "overview" ? "page" : undefined} className={tab === "overview" ? "font-semibold text-accent" : ""} onClick={() => setTab("overview")}>Overview</button>
+        <button aria-current={tab === "map" ? "page" : undefined} className={tab === "map" ? "font-semibold text-accent" : ""} onClick={() => setTab("map")}>Map</button>
+      </nav>
+      {tab === "map" ? <DependencyMap key={e.epic.id} project={e.project.key} epic={e.epic.id} /> : <>
       <Card title="Done gate and acceptance criteria" as="section">
         <Completion projectKey={e.project.key} epicId={e.epic.id} />
       </Card>
@@ -126,6 +133,7 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
           <TicketGroups tickets={tickets.data} />
         )}
       </Card>
+      </>}
     </div>
   );
 }
