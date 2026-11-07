@@ -208,8 +208,33 @@ func (s *Server) DecideApproval(ctx context.Context, req api.DecideApprovalReque
 	return api.DecideApproval200JSONResponse(out), err
 }
 
+// readableRun applies the chat's creator boundary to generic run surfaces too.
+func (s *Server) readableRun(ctx context.Context, id uuid.UUID) (store.Run, error) {
+	u, _, ws := me(ctx)
+	r, err := s.Q.GetRun(ctx, store.GetRunParams{ID: id, WorkspaceID: ws})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return r, apperr.ErrNotFound
+	}
+	if err != nil {
+		return r, err
+	}
+	if r.Purpose == "chat" {
+		owns, err := s.Q.OwnsChatRun(ctx, store.OwnsChatRunParams{WorkspaceID: ws, Viewer: u.ID, RunID: r.ID})
+		if err != nil {
+			return r, err
+		}
+		if !owns {
+			return r, apperr.ErrNotFound
+		}
+	}
+	return r, nil
+}
+
 func (s *Server) ControlRun(ctx context.Context, req api.ControlRunRequestObject) (api.ControlRunResponseObject, error) {
 	u, _, ws := me(ctx)
+	if _, err := s.readableRun(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	r, err := s.Runs.SetRunControl(ctx, ws, u.ID, req.Id, string(req.Action))
 	if err != nil {
 		return nil, err
@@ -220,7 +245,7 @@ func (s *Server) ControlRun(ctx context.Context, req api.ControlRunRequestObject
 
 func (s *Server) GetRun(ctx context.Context, req api.GetRunRequestObject) (api.GetRunResponseObject, error) {
 	_, _, ws := me(ctx)
-	r, err := s.Q.GetRun(ctx, store.GetRunParams{ID: req.Id, WorkspaceID: ws})
+	r, err := s.readableRun(ctx, req.Id)
 	if err != nil {
 		return nil, apperr.ErrNotFound
 	}
