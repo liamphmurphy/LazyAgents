@@ -23,7 +23,7 @@ func toSavedView(v store.SavedView) api.SavedView {
 
 func savedViewName(name string) (string, error) {
 	name = strings.TrimSpace(name)
-	if name == "" || utf8.RuneCountInString(name) > 80 {
+	if name == "" || utf8.RuneCountInString(name) > 80 || strings.ContainsRune(name, 0) {
 		return "", apperr.Invalid("name", "must be 1 to 80 characters")
 	}
 	return name, nil
@@ -31,8 +31,8 @@ func savedViewName(name string) (string, error) {
 
 func savedViewQuery(query string) (string, error) {
 	query = strings.TrimPrefix(strings.TrimSpace(query), "?")
-	if len(query) > 2000 {
-		return "", apperr.Invalid("query", "must be at most 2000 characters")
+	if len(query) > 2000 || strings.ContainsRune(query, 0) {
+		return "", apperr.Invalid("query", "must be at most 2000 characters, without NUL")
 	}
 	return query, nil
 }

@@ -61,6 +61,8 @@ func TestSavedViewsCRUD(t *testing.T) {
 	decode(sendJSON(h, http.MethodPost, "/api/v1/saved-views", `{"name":"blocked","query":""}`), http.StatusConflict, nil)
 	decode(sendJSON(h, http.MethodPatch, "/api/v1/saved-views/"+a.ID.String(), `{"name":"BLOCKED"}`), http.StatusConflict, nil)
 	decode(sendJSON(h, http.MethodPost, "/api/v1/saved-views", `{"name":"   ","query":""}`), http.StatusUnprocessableEntity, nil)
+	decode(sendJSON(h, http.MethodPost, "/api/v1/saved-views", `{"name":"a\u0000b","query":""}`), http.StatusUnprocessableEntity, nil)
+	decode(sendJSON(h, http.MethodPost, "/api/v1/saved-views", `{"name":"ok","query":"q=\u0000"}`), http.StatusUnprocessableEntity, nil)
 
 	// Rename keeps the query; a query-only patch keeps the name.
 	var renamed view

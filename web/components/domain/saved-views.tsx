@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Dialog, DropdownMenu } from "radix-ui";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { ApiError } from "@/lib/api/client";
 import { useCreateSavedView, useDeleteSavedView, useSavedViews, useUpdateSavedView, type SavedView } from "@/lib/api/hooks";
@@ -41,34 +41,6 @@ function useCurrentQuery() {
  * fill the name and filters. Opens the new view on save.
  */
 export function SaveViewDialog({ query, open, onOpenChange }: { query: string; open: boolean; onOpenChange: (o: boolean) => void }) {
-  const create = useCreateSavedView();
-  const router = useRouter();
-  const search = useSearchParams();
-  const [name, setName] = useState("");
-  const [q, setQ] = useState(query);
-  const [lastOpen, setLastOpen] = useState(false);
-  // Reset the form each time the dialog opens.
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      setName("");
-      setQ(query);
-      create.reset();
-    }
-  }
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    create.mutate(
-      { name: name.trim(), query: q },
-      {
-        onSuccess: (v) => {
-          onOpenChange(false);
-          router.push(savedViewHref(v, search.get("project")));
-        },
-      },
-    );
-  }
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -77,6 +49,34 @@ export function SaveViewDialog({ query, open, onOpenChange }: { query: string; o
           aria-describedby="save-view-desc"
           className="fixed left-1/2 top-[14vh] z-50 w-[min(420px,calc(100%-32px))] -translate-x-1/2 rounded-xl border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)] outline-none"
         >
+          <SaveViewForm query={query} onSaved={() => onOpenChange(false)} />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+/** Mounted with each open, so the name, query and save error start fresh. */
+function SaveViewForm({ query, onSaved }: { query: string; onSaved: () => void }) {
+  const create = useCreateSavedView();
+  const router = useRouter();
+  const search = useSearchParams();
+  const [name, setName] = useState("");
+  const [q, setQ] = useState(query);
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    create.mutate(
+      { name: name.trim(), query: q },
+      {
+        onSuccess: (v) => {
+          onSaved();
+          router.push(savedViewHref(v, search.get("project")));
+        },
+      },
+    );
+  }
+  return (
           <form onSubmit={submit} className="flex flex-col gap-3">
             <Dialog.Title className="type-heading">Save view</Dialog.Title>
             <label className="flex flex-col gap-1.5 text-xs text-fg-secondary">
@@ -114,9 +114,6 @@ export function SaveViewDialog({ query, open, onOpenChange }: { query: string; o
               </Button>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
   );
 }
 
@@ -136,12 +133,25 @@ export function SavedViewMenu({
   const router = useRouter();
   const search = useSearchParams();
   const project = search.get("project");
+  // Rename mounts an autofocused input, so it starts once the menu has closed,
+  // instead of focus returning to the trigger and blurring (closing) it.
+  const renaming = useRef(false);
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[210px]")}>
-          <DropdownMenu.Item className={menuItem} onSelect={onRename}>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={6}
+          className={cx(floatPanel, "w-[210px]")}
+          onCloseAutoFocus={(e) => {
+            if (!renaming.current) return;
+            renaming.current = false;
+            e.preventDefault();
+            onRename();
+          }}
+        >
+          <DropdownMenu.Item className={menuItem} onSelect={() => { renaming.current = true; }}>
             Rename
             <span className="ml-auto text-[11px] text-fg-tertiary">F2</span>
           </DropdownMenu.Item>
@@ -262,6 +272,17 @@ export function SavedViewHeader({ view }: { view: SavedView }) {
   const [saving, setSaving] = useState(false);
   const now = viewQuery(new URLSearchParams(search.toString()));
   const saved = viewQuery(view.query);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "F2" || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || document.querySelector('[role="dialog"], [role="menu"]')) return;
+      const el = e.target;
+      if (el instanceof HTMLElement && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      e.preventDefault();
+      setRenaming(true);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const edited = now !== saved;
   return (
     <div className="flex min-h-10 flex-wrap items-center gap-2.5 border-b border-border-subtle px-6 py-1.5">
@@ -288,7 +309,7 @@ export function SavedViewHeader({ view }: { view: SavedView }) {
         </>
       )}
       <SavedViewMenu view={view} onRename={() => setRenaming(true)} onSaveAs={() => setSaving(true)}>
-        <IconButton icon="dots" label={`${view.name} view actions`} bordered size={26} />
+        <IconButton icon="dots" label="Saved view actions" bordered size={26} />
       </SavedViewMenu>
       <SaveViewDialog query={now} open={saving} onOpenChange={setSaving} />
     </div>

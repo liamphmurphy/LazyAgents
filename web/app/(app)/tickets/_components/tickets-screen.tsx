@@ -164,11 +164,13 @@ export function TicketsScreen() {
   const group = parseGroup(params.get("group"));
   const svId = params.get("sv");
   const [search, setSearch] = useState(q);
-  // Opening a saved view (or Discard) changes ?q= from outside the box.
+  // Opening a saved view (or Discard) changes ?q= from outside the box; the
+  // box's own debounced writes (pushedQ) must not overwrite what's typed since.
   const [urlQ, setUrlQ] = useState(q);
+  const [pushedQ, setPushedQ] = useState(q);
   if (q !== urlQ) {
     setUrlQ(q);
-    setSearch(q);
+    if (q !== pushedQ) setSearch(q);
   }
   const density = useSyncExternalStore(subscribeDensity, readDensity, () => "comfortable" as Density);
 
@@ -182,7 +184,10 @@ export function TicketsScreen() {
   // Debounced search → URL, so views are shareable.
   useEffect(() => {
     if (search === q) return;
-    const id = setTimeout(() => setParam("q", search || null), 250);
+    const id = setTimeout(() => {
+      setPushedQ(search);
+      setParam("q", search || null);
+    }, 250);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);

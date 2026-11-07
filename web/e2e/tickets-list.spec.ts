@@ -139,10 +139,26 @@ test("saved views are created, edited, renamed and deleted from the sidebar", as
   await expect(page.getByText("Edited", { exact: true })).toHaveCount(0);
   expect(api.savedViews[0].query).toBe("view=active&group=priority");
 
-  // Inline rename; a duplicate name is a 409.
-  await views.getByRole("button", { name: "UX epic triage view actions" }).click();
+  // Rename from the view header keeps the box open and focused.
+  await page.getByRole("button", { name: "Saved view actions" }).click();
   await page.getByRole("menuitem", { name: "Rename" }).click();
-  const input = views.getByRole("textbox", { name: "Rename UX epic triage" });
+  const header = page.getByRole("textbox", { name: "Rename UX epic triage" });
+  await expect(header).toBeFocused();
+  await page.waitForTimeout(100);
+  await expect(header).toBeFocused();
+  await header.fill("UX board");
+  await header.press("Enter");
+  await expect(page.getByRole("heading", { name: "UX board" })).toBeVisible();
+  // F2 renames the open view too; Esc cancels.
+  await page.keyboard.press("F2");
+  await expect(page.getByRole("textbox", { name: "Rename UX board" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("textbox", { name: "Rename UX board" })).toHaveCount(0);
+
+  // Inline rename in the sidebar; a duplicate name is a 409.
+  await views.getByRole("button", { name: "UX board view actions" }).click();
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  const input = views.getByRole("textbox", { name: "Rename UX board" });
   await input.fill("blocked");
   await input.press("Enter");
   await expect(views.getByRole("alert")).toHaveText("You already have a view with that name");
