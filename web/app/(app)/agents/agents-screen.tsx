@@ -3,7 +3,7 @@
 import { spendCost } from "@/lib/format";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   useBootstrap,
   useCreateAgent,
@@ -20,141 +20,126 @@ import {
   TextInput,
 } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
-import {
-  EnforcementChip,
-  MonoChip,
-  ScopeMode,
-} from "@/components/domain/labels";
+import { Flag, MonoChip } from "@/components/domain/labels";
 import { ago } from "@/lib/format";
+import { countModes, liveCounts } from "@/lib/agent-scopes";
 import { cx } from "@/lib/cx";
 import {
   AgentStatus,
-  Assignment,
   PlanningAssignment,
-  merged,
-  seconds,
   type AgentOverview,
 } from "@/components/domain/overview";
-import { Stat } from "@/components/domain/data";
 import { Content, TopBar } from "@/components/shell/topbar";
 
 const STATUSES = ["all", "running", "waiting", "blocked", "idle"] as const;
+const KINDS = [
+  { value: "all", label: "All kinds" },
+  { value: "main", label: "Main" },
+  { value: "sub", label: "Sub" },
+] as const;
+
+function CardStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="truncate text-[11.5px] text-fg-tertiary">{label}</dt>
+      <dd className="font-mono text-[15px] font-medium text-fg">{value}</dd>
+    </div>
+  );
+}
+
+/** One live ticket run: key, title and where it is. */
+function LiveWork({ work }: { work: AgentOverview["assignments"][number] }) {
+  const step = work.steps_total > 0 ? `Step ${work.step_position || work.steps_done}/${work.steps_total} · ` : "";
+  return (
+    <Link href={`/runs/${work.run_id}`} className="flex flex-col gap-0.5 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2.5 hover:border-border-hover">
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className="flex-none font-mono text-xs text-fg-secondary">{work.ticket.key}</span>
+        <span className="min-w-0 truncate text-[13px] text-fg-2">{work.ticket.title}</span>
+      </span>
+      <span className="truncate text-xs text-fg-tertiary">
+        {step}
+        {work.step || work.state.replaceAll("_", " ")}
+      </span>
+    </Link>
+  );
+}
 
 export function AgentCard({ overview: o }: { overview: AgentOverview }) {
   const a = o.agent;
-  const waiting = o.assignments.filter((w) => w.state === "queued").length;
+  const sub = a.kind === "sub";
+  const { live, open } = liveCounts(o);
+  const modes = countModes(o.scopes);
+  const href = `/agents/${a.handle}`;
   return (
-    <article className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-[18px] hover:border-border-hover">
+    <article aria-label={a.name} className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-[18px] hover:border-border-hover">
       <div className="flex items-center gap-3">
-        <AgentAvatar
-          name={a.name}
-          colorIndex={a.color_index}
-          size="lg"
-          label={false}
-        />
+        <AgentAvatar name={a.name} colorIndex={a.color_index} size="lg" label={false} />
         <div className="min-w-0 flex-1">
-          <Link
-            href={`/agents/${a.handle}?tab=overview`}
-            className="block truncate type-heading hover:text-accent"
-          >
+          <Link href={`${href}?tab=overview`} className="block truncate type-heading hover:text-accent">
             {a.name}
           </Link>
           <p className="truncate text-xs text-fg-secondary">
-            {a.kind === "sub" ? "Sub agent · " : ""}
-            {a.role}
+            {sub ? "Sub agent" : "Main"}
+            {a.role && ` · ${a.role}`}
           </p>
         </div>
         <AgentStatus status={a.status} />
       </div>
-      <div className="space-y-2">
-        {o.planning_runs.map(work => <PlanningAssignment key={work.id} work={work} />)}
-        {o.assignments.length ? (
-          o.assignments
-            .slice(0, 2)
-            .map((work) => <Assignment key={work.run_id} work={work} />)
-        ) : o.planning_runs.length ? null : (
-          <div className="rounded-lg border border-dashed border-border-strong p-3">
-            <p className="mb-2 text-[13px] text-fg-secondary">
-              {o.queue_count
-                ? `${o.queue_count} assigned tickets are waiting for dispatch.`
-                : "Ready for the next assignment."}
-            </p>
-            <Link
-              href={
-                o.queue_count
-                  ? `/tickets?view=all&assignee=${a.handle}`
-                  : "/tickets?view=all"
-              }
-              className="text-xs font-medium text-accent"
-            >
-              {o.queue_count
-                ? "Review assigned tickets →"
-                : "Assign a ticket →"}
-            </Link>
-          </div>
-        )}
-        {o.assignments.length > 2 && (
-          <Link
-            className="text-xs text-fg-tertiary hover:text-accent"
-            href={`/agents/${a.handle}?tab=overview`}
-          >
-            +{o.assignments.length - 2} other assignments →
-          </Link>
-        )}
-      </div>
-      <div
-        className="grid grid-cols-4 gap-2"
-        title="Last 7 days. Cycle: first In Progress (or creation) to latest Done. Spend: runs started in the window."
-      >
-        <Stat label="Done 7d" value={o.stats.completed} />
-        <Stat label="Merged" value={merged(o.stats)} />
-        <Stat label="Cycle" value={seconds(o.stats.median_cycle_seconds)} />
-        <Stat label="Spend" value={spendCost(o.stats.spend_usd,o.stats.unpriced_runs)} />
-      </div>
-      <details className="text-xs">
-        <summary className="cursor-pointer text-fg-tertiary">
-          Definition permissions · {o.scopes.length} scopes
-        </summary>
-        <div className="mt-3 space-y-2">
-          {o.scopes.map((scope) => (
-            <div
-              key={scope.scope}
-              title={scope.how}
-              className="flex flex-wrap items-center gap-x-2 gap-y-1"
-            >
-              <span className="min-w-0 flex-1 font-mono text-[11px]">
-                {scope.scope}
-              </span>
-              <ScopeMode mode={scope.mode} />
-              <EnforcementChip level={scope.enforcement} />
-            </div>
-          ))}
-          <p className="pt-1 text-fg-tertiary">
-            Project overrides may tighten these permissions. Open the definition
-            to inspect them.
-          </p>
-        </div>
-      </details>
-      <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+      <div className="flex flex-wrap items-center gap-1.5">
         <MonoChip>{a.model}</MonoChip>
         <MonoChip variant="outline">{o.harness}</MonoChip>
-        <span className="ml-auto text-xs text-fg-tertiary">
-          {o.max_concurrency} slots · {waiting} queued
-        </span>
+        <span className="font-mono text-[11px] text-fg-tertiary">@{a.handle}</span>
       </div>
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <Link
-          href={`/agents/${a.handle}`}
-          className="text-fg-secondary hover:text-accent"
-        >
-          Edit definition →
+      <dl className="grid grid-cols-4 gap-2 border-y border-border-subtle py-3" title="Live runs include planning runs. Done and spend cover the last 7 days.">
+        <CardStat label="Live runs" value={live} />
+        <CardStat label="Open tickets" value={sub ? "—" : open} />
+        <CardStat label="Done · 7d" value={sub ? "—" : o.stats.completed} />
+        <CardStat label="Spend · 7d" value={spendCost(o.stats.spend_usd, o.stats.unpriced_runs)} />
+      </dl>
+      <div className="space-y-2">
+        {o.planning_runs.map((work) => (
+          <PlanningAssignment key={work.id} work={work} />
+        ))}
+        {o.assignments.slice(0, 1).map((work) => (
+          <LiveWork key={work.run_id} work={work} />
+        ))}
+        {o.assignments.length > 1 && (
+          <Link className="block text-xs text-fg-tertiary hover:text-accent" href={`${href}?tab=overview`}>
+            +{o.assignments.length - 1} more live run{o.assignments.length > 2 ? "s" : ""} →
+          </Link>
+        )}
+        {!live && (
+          <p className="rounded-lg border border-dashed border-border-strong px-3 py-2.5 text-[13px] text-fg-secondary">
+            {sub
+              ? "Runs only when a main agent delegates a task to it. Sub agents can't take tickets."
+              : o.queue_count
+                ? `${o.queue_count} assigned ticket${o.queue_count === 1 ? " is" : "s are"} waiting for dispatch.`
+                : "Ready for the next assignment."}
+          </p>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="mr-1 text-fg-tertiary">Scopes</span>
+        {modes.allowed > 0 && <Flag tone="done">{modes.allowed} allowed</Flag>}
+        {modes.requires_approval > 0 && <Flag tone="human">{modes.requires_approval} approval</Flag>}
+        {modes.denied > 0 && <Flag tone="blocked">{modes.denied} denied</Flag>}
+        {!o.scopes.length && <span className="text-fg-tertiary">none granted</span>}
+        <Link href={`${href}?tab=scopes`} className="ml-auto text-fg-secondary hover:text-accent">
+          Scopes →
         </Link>
-        {o.queue_count > 0 && (
-          <Link
-            href={`/tickets?view=all&assignee=${a.handle}`}
-            className="text-fg-tertiary hover:text-accent"
-          >
+      </div>
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-subtle pt-3 text-xs">
+        <Link href={`${href}?tab=overview`} className="font-medium text-accent">
+          Open agent →
+        </Link>
+        {!sub && o.queue_count > 0 && (
+          <Link href={`/tickets?view=all&assignee=${a.handle}`} className="text-fg-tertiary hover:text-accent">
             {o.queue_count} awaiting dispatch →
+          </Link>
+        )}
+        {!sub && !o.queue_count && !live && (
+          <Link href="/tickets?view=all" className="text-fg-tertiary hover:text-accent">
+            Assign a ticket →
           </Link>
         )}
       </div>
@@ -182,12 +167,14 @@ export function AgentsScreen() {
   const boot = useBootstrap();
   const roster = useAgentOverviews();
   const [status, setStatus] = useState<string>("all");
+  const [kind, setKind] = useState<(typeof KINDS)[number]["value"]>("all");
   const router = useRouter();
   const create = useCreateAgent();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<{ name: string; handle: string; kind: AgentKind }>({ name: "", handle: "", kind: "main" });
   const agents = roster.data?.agents ?? [];
-  const visible = agents.filter(
+  const ofKind = agents.filter((o) => kind === "all" || o.agent.kind === kind);
+  const visible = ofKind.filter(
     (o) => status === "all" || o.agent.status === status,
   );
   // An empty Handle field means "use the one derived from the name", which
@@ -212,8 +199,8 @@ export function AgentsScreen() {
           <div className="flex flex-col gap-1">
             <h1 className="type-display">Agents</h1>
             <p className="text-sm text-fg-secondary">
-              Live assignments, permissions and performance over the last 7
-              days.
+              Who does the work, what each agent may do, and what it costs.
+              Live counts refresh every 30 seconds.
             </p>
           </div>
           {adding && (
@@ -286,31 +273,37 @@ export function AgentsScreen() {
             </form>
           )}
 
-          <div
-            className="flex flex-wrap gap-2"
-            aria-label="Filter agents by status"
-          >
-            {STATUSES.map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatus(st)}
-                aria-pressed={status === st}
-                className={cx(
-                  "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs",
-                  status === st
-                    ? "border-border-strong bg-selected text-fg"
-                    : "border-border text-fg-secondary hover:bg-hover",
-                )}
-              >
-                <span className="capitalize">{st}</span>
-                <span className="font-mono text-fg-tertiary">
-                  {
-                    agents.filter((a) => st === "all" || a.agent.status === st)
-                      .length
-                  }
-                </span>
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              role="group"
+              className="flex flex-wrap gap-2"
+              aria-label="Filter agents by status"
+            >
+              {STATUSES.map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatus(st)}
+                  aria-pressed={status === st}
+                  className={cx(
+                    "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs",
+                    status === st
+                      ? "border-border-strong bg-selected text-fg"
+                      : "border-border text-fg-secondary hover:bg-hover",
+                  )}
+                >
+                  <span className="capitalize">{st}</span>
+                  <span className="font-mono text-fg-tertiary">
+                    {
+                      ofKind.filter((a) => st === "all" || a.agent.status === st)
+                        .length
+                    }
+                  </span>
+                </button>
+              ))}
+            </div>
+            <span className="ml-auto">
+              <Segmented label="Filter agents by kind" value={kind} onChange={setKind} options={KINDS} />
+            </span>
           </div>
           {roster.isError ? (
             <Banner
@@ -333,11 +326,11 @@ export function AgentsScreen() {
             <EmptyState
               icon="agents"
               title={
-                agents.length ? "No agents with this status" : "No agents yet"
+                agents.length ? "No agents match these filters" : "No agents yet"
               }
               actions={
                 agents.length ? (
-                  <Button onClick={() => setStatus("all")}>
+                  <Button onClick={() => { setStatus("all"); setKind("all"); }}>
                     Show all agents
                   </Button>
                 ) : (
@@ -348,7 +341,7 @@ export function AgentsScreen() {
               }
             >
               {agents.length
-                ? "Try another status to see the rest of your team."
+                ? "Try another status or kind to see the rest of your team."
                 : "Create an agent to define its model, instructions and permissions."}
             </EmptyState>
           ) : (
@@ -360,9 +353,10 @@ export function AgentsScreen() {
           )}
           {roster.data && (
             <p className="text-xs text-fg-tertiary">
-              Performance refreshed {ago(roster.data.stats_as_of)}. Queued runs
-              wait for runner capacity; assigned tickets require a person to
-              dispatch them.
+              Live runs include planning runs. Open tickets are assigned tickets
+              awaiting dispatch plus tickets with a live run. Spend counts runs
+              started in the last 7 days; refreshed{" "}
+              {ago(roster.data.stats_as_of)}.
             </p>
           )}
         </div>

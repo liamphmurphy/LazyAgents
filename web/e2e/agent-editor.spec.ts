@@ -3,7 +3,14 @@ import { installAgentApi } from "./mock-agent-api";
 
 const harness = (page: Page) => page.getByRole("radiogroup", { name: "Harness", exact: true });
 const model = (page: Page) => page.getByLabel("Model", { exact: true });
-const save = (page: Page) => page.getByRole("button", { name: /Save as v/ });
+const review = (page: Page) => page.getByRole("button", { name: /Review changes/ });
+const save = (page: Page) => page.getByRole("dialog").getByRole("button", { name: /Save as v/ });
+
+/** Saving is two steps: review the changes, then save from the dialog. */
+async function saveDefinition(page: Page) {
+  await review(page).click();
+  await save(page).click();
+}
 
 async function pickOpenCodeByKeyboard(page: Page) {
   await harness(page).getByRole("radio", { name: "Claude Code" }).focus();
@@ -14,7 +21,7 @@ async function pickOpenCodeByKeyboard(page: Page) {
 
 test("editor: choose OpenCode by keyboard, save, reload keeps it", async ({ page }) => {
   const mock = await installAgentApi(page);
-  await page.goto("/agents/atlas");
+  await page.goto("/agents/atlas?tab=settings");
   await expect(harness(page).getByRole("radio", { name: "OpenCode" })).toBeVisible();
   await expect(page.locator("#ag-models option[value='opus-5.5']")).toHaveCount(1);
 
@@ -26,8 +33,9 @@ test("editor: choose OpenCode by keyboard, save, reload keeps it", async ({ page
   await expect(page.locator("#ag-models option[value='opus-5.5']")).toHaveCount(0);
 
   await model(page).fill("anthropic/claude-sonnet-5-5");
-  await save(page).click();
-  await expect(save(page)).toBeDisabled();
+  await saveDefinition(page);
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(review(page)).toBeDisabled();
   const spec = (mock.saved.definition.at(-1) as { spec: { harness: string; model: string } }).spec;
   expect(spec.harness).toBe("opencode");
   expect(spec.model).toBe("anthropic/claude-sonnet-5-5");
@@ -40,7 +48,7 @@ test("editor: choose OpenCode by keyboard, save, reload keeps it", async ({ page
 
 test("editor: codex suggests codex models", async ({ page }) => {
   await installAgentApi(page);
-  await page.goto("/agents/atlas");
+  await page.goto("/agents/atlas?tab=settings");
   await harness(page).getByRole("radio", { name: "Codex" }).click();
   await expect(page.locator("#ag-models option[value='gpt-5-codex']")).toHaveCount(1);
   await expect(page.locator("#ag-models option[value='opus-5.5']")).toHaveCount(0);
@@ -49,7 +57,7 @@ test("editor: codex suggests codex models", async ({ page }) => {
 
 test("editor: fallback offers OpenCode and its default harness is not hardcoded", async ({ page }) => {
   await installAgentApi(page);
-  await page.goto("/agents/atlas");
+  await page.goto("/agents/atlas?tab=settings");
   await pickOpenCodeByKeyboard(page);
   await page.getByRole("button", { name: "Add fallback" }).click();
   const fb = page.getByRole("radiogroup", { name: "Fallback 1 harness" });
@@ -65,21 +73,23 @@ test("editor: fallback offers OpenCode and its default harness is not hardcoded"
 
 test("editor: 422 shows the error and keeps the draft", async ({ page }) => {
   const mock = await installAgentApi(page);
-  await page.goto("/agents/atlas");
+  await page.goto("/agents/atlas?tab=settings");
   await pickOpenCodeByKeyboard(page);
   await model(page).fill("sonnet-5.5");
-  await save(page).click();
-  await expect(page.getByRole("alert").filter({ hasText: "provider-qualified" })).toContainText("must be provider-qualified");
+  await saveDefinition(page);
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("must be provider-qualified");
   expect(mock.saved.definition).toHaveLength(1);
+  await expect(save(page)).toBeEnabled();
+  await page.getByRole("button", { name: "Back to editing" }).last().click();
   await expect(model(page)).toHaveValue("sonnet-5.5");
   await expect(harness(page).getByRole("radio", { name: "OpenCode" })).toBeChecked();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-  await expect(save(page)).toBeEnabled();
+  await expect(page.getByText(/\d+ unsaved changes?/)).toBeVisible();
+  await expect(review(page)).toBeEnabled();
 });
 
 test("override dialog: offers OpenCode, saves it, reload shows it", async ({ page }) => {
   const mock = await installAgentApi(page);
-  await page.goto("/agents/atlas");
+  await page.goto("/agents/atlas?tab=settings");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("menuitem", { name: "Web app" }).click();
   const dialog = page.getByRole("dialog");
@@ -103,15 +113,15 @@ test("override dialog: offers OpenCode, saves it, reload shows it", async ({ pag
 
 test("editor saves selective memory and an explicit independent-review policy", async ({ page }) => {
   const mock = await installAgentApi(page);
-  await page.goto("/agents/atlas");
+  await page.goto("/agents/atlas?tab=settings");
   await expect(page.getByRole("radio", { name: "Selective", exact: true })).toBeChecked();
   await expect(page.getByLabel("Token budget", { exact: true })).toHaveValue("1500");
   await page.getByRole("switch", { name: "Require independent review before Done" }).click();
   // Commit the displayed memory defaults into this new definition explicitly.
   await page.getByRole("radio", { name: "Linked", exact: true }).click();
   await page.getByRole("radio", { name: "Selective", exact: true }).click();
-  await save(page).click();
-  await expect(save(page)).toBeDisabled();
+  await saveDefinition(page);
+  await expect(review(page)).toBeDisabled();
   const spec = (mock.saved.definition.at(-1) as { spec: { review_required: boolean; memory: { inject: string; max_tokens: number } } }).spec;
   expect(spec.review_required).toBe(true);
   expect(spec.memory).toMatchObject({ inject: "selective", max_tokens: 1500 });
