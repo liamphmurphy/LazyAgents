@@ -52,8 +52,8 @@ export function DependencyMap({ project, epic, assignee, includeCanceled = true,
   });
   const open = (key: string) => onOpen ? onOpen(key) : setSelected(key);
   if (query.isPending) return <p role="status" className="p-5">Loading dependency map…</p>;
-  if (query.isError) return <p role="alert" className="p-5">Couldn&apos;t load dependency map: {query.error.message} <button onClick={() => void query.refetch()} className="underline">Retry</button></p>;
-  const graph = dependencyMap(query.data);
+  if (query.isError && !query.data) return <p role="alert" className="p-5">Couldn&apos;t load dependency map: {query.error.message} <button onClick={() => void query.refetch()} className="underline">Retry</button></p>;
+  const graph = dependencyMap(query.data ?? []);
   const positions = new Map(graph.columns.flatMap((column, d) => column.map((t, row) => [t.key, { x: d * 270 + 20, y: row * 108 + 44 }] as const)));
   const criticalEdge = (from: string, to: string) => graph.chain.keys.indexOf(to) > 0 && graph.chain.keys[graph.chain.keys.indexOf(to) - 1] === from;
   const width = Math.max(1, graph.columns.length) * 270;
@@ -90,7 +90,7 @@ export function DependencyMap({ project, epic, assignee, includeCanceled = true,
           {graph.columns.map((_, d) => <span key={d} className="absolute text-xs text-fg-tertiary" style={{ left: d * 270 + 20, top: 12 }}>DEPTH {d}</span>)}
           {graph.nodes.map((t) => {
             const p = positions.get(t.key)!;
-            return <button key={t.key} ref={(el) => { if (el) refs.current.set(t.key, el); else refs.current.delete(t.key); }} onClick={() => open(t.key)}
+            return <button key={t.key} data-ticket-key={t.key} ref={(el) => { if (el) refs.current.set(t.key, el); else refs.current.delete(t.key); }} onClick={() => open(t.key)}
               onKeyDown={(e) => {
                 const column = graph.columns[graph.depth.get(t.key)!];
                 const row = column.indexOf(t);
@@ -108,10 +108,10 @@ export function DependencyMap({ project, epic, assignee, includeCanceled = true,
     </>}
     <div className={list ? "overflow-auto" : "sr-only focus-within:not-sr-only"}>
       <table className="w-full text-left text-xs"><caption>Dependency list</caption><thead><tr>{["Depth", "Ticket", "Status", "Points", "Blocked by"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr></thead>
-        <tbody>{graph.nodes.map((t) => <tr key={t.key}><td className="p-2">{graph.depth.get(t.key)}</td><td className="p-2"><button className="underline" onClick={() => open(t.key)}>{t.key} {t.title}</button>{graph.chain.keys.includes(t.key) && " · critical path"}{t.external && " · outside filter"}</td><td className="p-2">{STATUS_NAME[t.status]}</td><td className="p-2">{t.estimate_points ?? "—"}</td><td className="p-2">{t.blocked_by.map((b) => `${b.key} (${STATUS_NAME[b.status]})`).join(", ") || "—"}</td></tr>)}</tbody>
+        <tbody>{graph.nodes.map((t) => <tr key={t.key}><td className="p-2">{graph.depth.get(t.key)}</td><td className="p-2"><button data-ticket-key={t.key} className="underline" onClick={() => open(t.key)}>{t.key} {t.title}</button>{graph.chain.keys.includes(t.key) && " · critical path"}{t.external && " · outside filter"}</td><td className="p-2">{STATUS_NAME[t.status]}</td><td className="p-2">{t.estimate_points ?? "—"}</td><td className="p-2">{t.blocked_by.map((b) => `${b.key} (${STATUS_NAME[b.status]})`).join(", ") || "—"}</td></tr>)}</tbody>
       </table>
     </div>
-    {selected && editor.isError && <p role="alert">Couldn&apos;t open {selected}: {editor.error.message} <button onClick={() => setSelected(undefined)}>Dismiss</button></p>}
-    {selected && !editor.isError && bootstrap.data && <TicketEditorDialog key={selected} ticketKey={selected} detail={editor.data as Ticket | undefined} bootstrap={bootstrap.data} onClose={() => setSelected(undefined)} onReload={async () => { const r = await editor.refetch(); return r.isError ? undefined : r.data; }} />}
+    {selected && editor.isError && !editor.data && <p role="alert">Couldn&apos;t open {selected}: {editor.error.message} <button onClick={() => setSelected(undefined)}>Dismiss</button></p>}
+    {selected && (!editor.isError || editor.data) && bootstrap.data && <TicketEditorDialog key={selected} ticketKey={selected} detail={editor.data as Ticket | undefined} bootstrap={bootstrap.data} onClose={() => setSelected(undefined)} onReload={async () => { const r = await editor.refetch(); return r.isError ? undefined : r.data; }} />}
   </section>;
 }

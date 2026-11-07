@@ -17,6 +17,9 @@ test("board map lays out chains, traverses dependencies, and opens the existing 
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Edit WEB-1" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(child).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(root).toBeFocused();
   await m.getByRole("button", { name: "List", exact: true }).click();
   await expect(m.getByRole("table")).toBeVisible();
   await expect(m.getByRole("row").filter({ hasText: "WEB-1 Build ticket modal" })).toContainText("WEB-2 (Backlog)");
@@ -67,4 +70,28 @@ test("epic Map tab offers the same map, accessible list, and editor", async ({ p
   await m.getByRole("button", { name: "List", exact: true }).click();
   await m.getByRole("button", { name: "WEB-1 Build ticket modal", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Edit WEB-1" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(m.getByRole("button", { name: "WEB-1 Build ticket modal", exact: true })).toBeFocused();
+});
+
+test("epic editor retains a dirty draft when background map and detail refetches fail", async ({ page }) => {
+  await installBoardApi(page);
+  await page.goto("/epics/epic-1");
+  await page.getByRole("navigation", { name: "Epic views" }).getByRole("button", { name: "Map", exact: true }).click();
+  await map(page).getByRole("button", { name: /WEB-1 Todo/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit WEB-1" });
+  await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Unsaved map draft");
+  let failed = 0;
+  await page.route("**/api/v1/tickets**", async (route) => {
+    failed++;
+    await route.fulfill({ status: 500, json: { code: "internal", message: "Refetch failed" } });
+  });
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("blur"));
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("offline"));
+    window.dispatchEvent(new Event("online"));
+  });
+  await expect.poll(() => failed, { timeout: 20_000 }).toBeGreaterThanOrEqual(5);
+  await expect(dialog.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Unsaved map draft");
 });
