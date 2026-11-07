@@ -16,6 +16,7 @@ import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
 import { floatPanel } from "@/components/domain/pickers";
 import { EpicCompletion } from "@/components/domain/epic-completion";
 import { TicketEditorDialog } from "@/components/domain/ticket-editor-dialog";
+import { DependencyMap } from "@/components/domain/dependency-map";
 
 const selectClass = "h-8 max-w-52 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg";
 
@@ -39,6 +40,7 @@ export function BoardScreen() {
     if (value) next.set(name, value); else next.delete(name);
     window.history.replaceState(null, "", `/board?${next}`);
   }
+  const map = params.get("tab") === "map";
   const ticketKey = params.get("ticket") || undefined;
   const editor = useTicketEditorDetail(ticketKey);
   // Only a failed first load closes the editor; a failed background refetch keeps the draft.
@@ -67,7 +69,12 @@ export function BoardScreen() {
           <Link href={`/tickets${project ? `?project=${encodeURIComponent(project.key)}` : ""}`} className="text-xs text-fg-secondary hover:text-fg">Tickets view ↗</Link>
         </>
       } />
+      {project && <nav aria-label="Board views" className="flex gap-5 border-b border-border px-5 py-3 text-sm">
+        <button aria-current={!map ? "page" : undefined} className={!map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "")}>Board</button>
+        <button aria-current={map ? "page" : undefined} className={map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "map")}>Map</button>
+      </nav>}
       {!project ? <ProjectScopeState base="/board" scope={scope} />
+        : map ? <div className="p-5"><DependencyMap key={JSON.stringify([project.key, filters])} project={project.key} epic={filters.epic} assignee={filters.assignee} includeCanceled={filters.include_canceled} onOpen={setTicket} /></div>
         : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} onOpen={setTicket} />}
       {ticketKey && loadFailed && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
         <span>Couldn&apos;t open {ticketKey}: {editor.error.message}</span>
