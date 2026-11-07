@@ -96,6 +96,8 @@ export async function installBoardApi(page: Page) {
     }) } satisfies S["EpicOverviewList"]);
     if (path === "/tickets" && request.method() === "GET") return json({ tickets: tickets.filter((t) => !url.searchParams.get("epic") || t.epic?.id === url.searchParams.get("epic")).map(summary) });
     if (path === "/runner") return json(runner);
+    // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
+    if (path === "/secrets") return json({ key_configured: true, known: [], secrets: ["harness:anthropic", "harness:openai"].map((name, i) => ({ id: `secret-${i}`, name, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" })) });
     // Saved views: per person, names unique ignoring case (409).
     if (path === "/saved-views" && request.method() === "GET") return json({ views: [...savedViews].sort((a, b) => a.name.localeCompare(b.name)) });
     const view = savedViews.find((v) => path === `/saved-views/${v.id}`);

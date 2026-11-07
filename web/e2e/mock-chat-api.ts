@@ -42,7 +42,7 @@ const USAGE = { input_tokens: 48200, output_tokens: 1300, cached_input_tokens: 4
 export type Posted = { chat: string; body: Record<string, unknown> };
 export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number };
 
-const catalog = (codexAvailable: boolean, opencodeAvailable = true) => [
+export const catalog = (codexAvailable: boolean, opencodeAvailable = true) => [
   {
     harness: "claude-code", label: "Claude Code", available: true,
     models: [
@@ -150,6 +150,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       });
     }
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, queued: 0 });
+    // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
+    if (path === "/secrets") return json({ key_configured: true, known: [], secrets: ["harness:anthropic", "harness:openai"].map((name, i) => ({ id: `secret-${i}`, name, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" })) });
     if (path === "/saved-views" && method === "GET") return json({ views: [] });
     if (path === "/knowledge/resolve") {
       // Only the plan page resolves, so the live activity line can link it.

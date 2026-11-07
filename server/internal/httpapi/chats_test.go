@@ -196,7 +196,7 @@ func TestChatModelsUnavailableWithoutKey(t *testing.T) {
 		}
 	}
 	// Only the secret's existence is read: store one and codex turns available.
-	if _, err := e.pool.Exec(ctx, `INSERT INTO secrets (workspace_id, name, nonce, ciphertext, preview) VALUES ($1, 'harness:openai', '\x00', '\x00', '…')`, e.me.WorkspaceID); err != nil {
+	if _, err := e.pool.Exec(ctx, `INSERT INTO secrets (workspace_id, name, nonce, ciphertext) VALUES ($1, 'harness:openai', '\x00', '\x00')`, e.me.WorkspaceID); err != nil {
 		t.Fatal(err)
 	}
 	list, _ = cat.List(ctx, e.q, e.me.WorkspaceID)
