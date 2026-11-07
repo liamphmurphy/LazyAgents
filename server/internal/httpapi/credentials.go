@@ -95,7 +95,7 @@ func (s *Server) ListSecrets(ctx context.Context, _ api.ListSecretsRequestObject
 	}
 	out := api.ListSecrets200JSONResponse{Secrets: make([]api.SecretInfo, 0, len(rows)), KeyConfigured: s.Secrets.Box != nil}
 	for _, r := range rows {
-		si := api.SecretInfo{Id: r.ID, Name: r.Name, GrantsScope: r.GrantsScope, Preview: r.Preview, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, LastUsedAt: r.LastUsedAt}
+		si := api.SecretInfo{Id: r.ID, Name: r.Name, GrantsScope: r.GrantsScope, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, LastUsedAt: r.LastUsedAt}
 		if r.ProjectID != nil {
 			si.Project = &api.Project{Id: *r.ProjectID, Key: deref(r.ProjectKey), Name: deref(r.ProjectName), Color: deref(r.ProjectColor)}
 		}
@@ -134,7 +134,7 @@ func (s *Server) SetSecret(ctx context.Context, req api.SetSecretRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	return api.SetSecret200JSONResponse{Id: r.ID, Name: r.Name, Project: project, GrantsScope: r.GrantsScope, Preview: r.Preview,
+	return api.SetSecret200JSONResponse{Id: r.ID, Name: r.Name, Project: project, GrantsScope: r.GrantsScope,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, LastUsedAt: r.LastUsedAt}, nil
 }
 

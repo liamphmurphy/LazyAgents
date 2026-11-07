@@ -1496,7 +1496,7 @@ export interface components {
             key: string;
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
             repo_url?: string;
             default_branch: string;
             archived: boolean;
@@ -2079,6 +2079,10 @@ export interface components {
             harness?: components["schemas"]["Harness"];
             model?: string;
             instructions_append?: string;
+            /** @description Skills appended after removals; existing names are skipped unless removed first. */
+            skills_add?: components["schemas"]["AgentSkill"][];
+            /** @description Agent skill names to remove; unknown names are ignored. */
+            skills_remove?: string[];
             scopes?: {
                 [key: string]: components["schemas"]["ScopeMode"];
             };
@@ -2172,14 +2176,13 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string;
         };
+        /** @description Secret metadata. Values are write-only; no part of a value is ever returned. */
         SecretInfo: {
             /** Format: uuid */
             id: string;
             name: string;
             project?: components["schemas"]["Project"];
             grants_scope?: string;
-            /** @description Last 4 characters, or empty for short values */
-            preview: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2996,6 +2999,21 @@ export interface components {
             attention: components["schemas"]["InboxItem"][];
             recent_artifacts: components["schemas"]["OverviewArtifact"][];
             runner: components["schemas"]["RunnerStatus"];
+            weekly_spend?: components["schemas"]["WeeklySpend"];
+        };
+        /** @description Reported cost of runs started since Monday 00:00 UTC */
+        WeeklySpend: {
+            /**
+             * Format: date-time
+             * @description Start of the week: Monday 00:00 UTC
+             */
+            since: string;
+            /** Format: double */
+            cost_usd: number;
+            /** @description Runs started this week */
+            runs: number;
+            /** @description Runs whose cost is unknown or partial, so cost_usd may be low */
+            unpriced_runs: number;
         };
         AgentRunSummary: {
             /** Format: uuid */
@@ -3101,14 +3119,14 @@ export interface components {
             key: string;
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
             repo_url: string;
             default_branch: string;
         };
         ProjectUpdate: {
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
             repo_url: string;
             default_branch: string;
             archived: boolean;

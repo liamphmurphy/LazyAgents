@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { DropdownMenu } from "radix-ui";
 import { useBootstrap } from "@/lib/api/hooks";
 import { useBoard, useBoardMoves, useTicketEditorDetail, type BoardFilters } from "@/lib/api/board-hooks";
-import { BOARD_STATUSES, withBoardMoves, type Board, type BoardCard, type BoardStatus } from "@/lib/board";
+import { BOARD_STATUSES, onlyBlocked, withBoardMoves, type Board, type BoardCard, type BoardStatus } from "@/lib/board";
 import { cx } from "@/lib/cx";
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
@@ -31,6 +31,8 @@ export function BoardScreen() {
     assignee: params.get("assignee") || undefined,
     include_canceled: params.get("include_canceled") === "true",
   };
+  // Client-side: the board returns open columns complete, so filtering loses nothing.
+  const blockedOnly = params.get("blocked") === "true";
   const epics = bootstrap.data?.epics.filter((e) => e.project_id === project?.id) ?? [];
   function setParam(name: string, value: string) {
     // These filters only fetch client data. Native history integrates with
@@ -66,6 +68,9 @@ export function BoardScreen() {
           <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
             <input key={String(filters.include_canceled)} type="checkbox" defaultChecked={filters.include_canceled} onChange={(e) => setParam("include_canceled", e.target.checked ? "true" : "")} /> Show canceled
           </label>
+          <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
+            <input key={String(blockedOnly)} type="checkbox" defaultChecked={blockedOnly} onChange={(e) => setParam("blocked", e.target.checked ? "true" : "")} /> Blocked only
+          </label>
           <Link href={`/tickets${project ? `?project=${encodeURIComponent(project.key)}` : ""}`} className="text-xs text-fg-secondary hover:text-fg">Tickets view ↗</Link>
         </>
       } />
@@ -75,7 +80,7 @@ export function BoardScreen() {
       </nav>}
       {!project ? <ProjectScopeState base="/board" scope={scope} />
         : map ? <div className="p-5"><DependencyMap key={JSON.stringify([project.key, filters])} project={project.key} epic={filters.epic} assignee={filters.assignee} includeCanceled={filters.include_canceled} onOpen={setTicket} /></div>
-        : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} onOpen={setTicket} />}
+        : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} blockedOnly={blockedOnly} onOpen={setTicket} />}
       {ticketKey && loadFailed && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
         <span>Couldn&apos;t open {ticketKey}: {editor.error.message}</span>
         <button type="button" aria-label="Dismiss ticket error" onClick={() => setTicket()}>×</button>
@@ -100,13 +105,14 @@ function EpicHeader({ summary }: { summary: NonNullable<Board["epic"]> }) {
   );
 }
 
-function BoardView({ project, filters, onOpen }: { project: string; filters: BoardFilters; onOpen: (key: string) => void }) {
+function BoardView({ project, filters, blockedOnly, onOpen }: { project: string; filters: BoardFilters; blockedOnly: boolean; onOpen: (key: string) => void }) {
   const query = useBoard(project, filters);
   const moves = useBoardMoves();
   const dragging = useRef<string | null>(null);
   const [over, setOver] = useState<BoardStatus>();
   const statuses = filters.include_canceled ? [...BOARD_STATUSES, "canceled" as const] : BOARD_STATUSES;
-  const board = query.data && withBoardMoves(query.data, Object.values(moves.pending));
+  const moved = query.data && withBoardMoves(query.data, Object.values(moves.pending));
+  const board = moved && (blockedOnly ? onlyBlocked(moved) : moved);
   return (
     <div className="p-5 max-sm:p-3">
       {moves.error && <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">

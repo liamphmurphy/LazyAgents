@@ -146,3 +146,23 @@ test("old definition and runs links open Settings and Activity", async ({ page }
   await page.goto("/agents/atlas?tab=runs");
   await expect(tab(page, "Activity")).toHaveAttribute("aria-current", "page");
 });
+
+test("project overrides save skill additions and removals without replacing defaults", async ({ page }) => {
+  const mock = await installAgentApi(page, { override: { model: "sonnet-5.5" } });
+  await page.goto("/agents/atlas?tab=skills");
+  await page.locator("#overrides").getByRole("button").filter({ hasText: "Web app" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Remove agent skills").fill("release-notes");
+  await dialog.getByLabel("Added skill name").fill("project-release");
+  await dialog.getByLabel("When to use this skill").fill("When releasing this project");
+  await dialog.getByLabel("Skill instructions").fill("Read the project release guide.");
+  await expect(dialog.getByRole("button", { name: "Save override" })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Add project skill" }).click();
+  await dialog.getByRole("button", { name: "Save override" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(mock.saved.overrides[0].body).toMatchObject({
+    model: "sonnet-5.5",
+    skills_remove: ["release-notes"],
+    skills_add: [{ name: "project-release", description: "When releasing this project", body: "Read the project release guide." }],
+  });
+});

@@ -10,7 +10,7 @@ export type ScopedProject = { key: string; name: string; color: string; archived
 /** required: the page needs one project (chooser otherwise). optional: no project means all projects. */
 export type ProjectMode = "required" | "optional";
 
-export type NavBadge = "inbox" | "runs" | "wiki";
+export type NavBadge = "inbox" | "runs" | "wiki" | "settings";
 export type NavItem = { href: string; label: string; icon: IconName; badge?: NavBadge };
 export type NavGroup = { label: "Personal" | "Project" | "Workspace"; items: NavItem[] };
 
@@ -41,7 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/costs", label: "Costs", icon: "dollar" },
       { href: "/agents", label: "Agents", icon: "agents" },
       { href: "/wiki", label: "Wiki", icon: "wiki", badge: "wiki" },
-      { href: "/settings", label: "Settings", icon: "gear" },
+      { href: "/settings", label: "Settings", icon: "gear", badge: "settings" },
     ],
   },
 ];
