@@ -1,19 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useChat, useChats, useCreateChat, useUpdateChat } from "@/lib/api/hooks";
+import { defaultChatAgent } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import { Button, IconButton } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/controls";
 import { Banner, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { Conversation } from "./conversation";
+import { AgentPicker, rememberChatAgent, useRememberedChatAgent } from "./agent-picker";
+import { RestoreChat } from "./restore";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
+
+/** An archived chat: open it read-only, or restore it to the active list. */
+function ArchivedRow({ chat, active, project }: { chat: Chat; active: boolean; project: string }) {
+  return (
+    <li className={cx("flex items-center gap-1 rounded-md pr-1", active ? "bg-selected" : "hover:bg-hover")}>
+      <Link
+        href={`/chat/${chat.id}?project=${encodeURIComponent(project)}&view=archived`}
+        aria-current={active ? "page" : undefined}
+        className="min-w-0 flex-1 truncate px-2 py-1.5 text-[13px]"
+      >
+        {chat.title}
+      </Link>
+      <RestoreChat chat={chat} compact />
+    </li>
+  );
+}
 
 function ChatRow({ chat, active, project, onArchived }: { chat: Chat; active: boolean; project: string; onArchived: () => void }) {
   const update = useUpdateChat();
@@ -84,8 +104,23 @@ export function ChatScreen({ id }: { id?: string }) {
     ? (current.data?.project ?? search.get("project") ?? "")
     : scope.status === "ready" ? (scope.project?.key ?? "") : "";
   const scoped = boot.data?.projects.find((p) => p.key === project);
-  const chats = useChats(project);
+  // The filter lives in the URL so it survives opening a chat (a new route).
+  const pathname = usePathname();
+  const view = search.get("view") === "archived" ? "archived" : "active";
+  const setView = (v: "active" | "archived") => {
+    const q = new URLSearchParams(search.toString());
+    if (v === "archived") q.set("view", "archived");
+    else q.delete("view");
+    router.replace(`${pathname}?${q.toString()}`);
+  };
+  const active = useChats(project);
+  const archived = useChats(view === "archived" ? project : "", true);
+  const chats = view === "archived" ? archived : active;
   const create = useCreateChat();
+
+  // The agent a new chat answers as: the last one picked, else the newest chat's, else the first main agent.
+  const mainAgents = boot.data?.agents.filter((a) => a.kind === "main") ?? [];
+  const agent = defaultChatAgent(mainAgents, useRememberedChatAgent(), active.data?.chats);
 
   function newChat() {
     // /chat?attach=… (from a Start chat link) carries over to the new chat.
@@ -93,7 +128,15 @@ export function ChatScreen({ id }: { id?: string }) {
     for (const v of search.getAll("attach")) q.append("attach", v);
     const t = search.get("attach_title");
     if (t) q.set("attach_title", t);
-    create.mutate({ project }, { onSuccess: (c) => router.push(`/chat/${c.id}?${q.toString()}`) });
+    create.mutate(
+      { project, ...(agent ? { agent_id: agent.id } : {}) },
+      {
+        onSuccess: (c) => {
+          rememberChatAgent(c.agent.id);
+          router.push(`/chat/${c.id}?${q.toString()}`);
+        },
+      },
+    );
   }
   const list = chats.data?.chats;
   return (
@@ -112,9 +155,25 @@ export function ChatScreen({ id }: { id?: string }) {
               New chat
             </Button>
           </div>
+          {agent && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-fg-tertiary">Agent</span>
+              <AgentPicker agents={mainAgents} value={agent} onChange={(a) => rememberChatAgent(a.id)} disabled={create.isPending} />
+            </div>
+          )}
           {create.isError && (
             <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(create.error)}</p>
           )}
+          <Segmented
+            label="Show chats"
+            small
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "archived", label: "Archived" },
+            ]}
+          />
           <nav aria-label="Chats" className="min-h-0 flex-1 overflow-y-auto">
             {chats.isError ? (
               <Banner tone="blocked" title="Couldn’t load chats">{errorText(chats.error)}</Banner>
@@ -125,7 +184,18 @@ export function ChatScreen({ id }: { id?: string }) {
                 ))}
               </div>
             ) : list.length === 0 ? (
-              <p className="px-2 py-4 text-[13px] text-fg-secondary">No chats yet. Start one with New chat.</p>
+              <p className="px-2 py-4 text-[13px] text-fg-secondary">
+                {view === "archived" ? "No archived chats." : "No chats yet. Start one with New chat."}
+              </p>
+            ) : view === "archived" ? (
+              <>
+                <ul className="flex flex-col gap-px">
+                  {list.map((c) => (
+                    <ArchivedRow key={c.id} chat={c} project={project} active={c.id === id} />
+                  ))}
+                </ul>
+                <p className="px-2 py-3 text-xs text-fg-tertiary">Archived chats are read-only. Restore one to continue it.</p>
+              </>
             ) : (
               <ul className="flex flex-col gap-px">
                 {list.map((c) => (
