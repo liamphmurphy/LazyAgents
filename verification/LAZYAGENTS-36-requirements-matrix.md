@@ -50,3 +50,25 @@ reachable from this branch, but each command below returned **1**, so criterion
 
 Re-fetch and repeat these exact ancestry checks after the dependency PRs merge.
 Do not substitute ticket status or a branch merge for proof of delivery to main.
+
+
+## Consolidation verification (2026-11-06)
+
+The consolidation branch includes every head commit from PRs #27–#34. The two
+competing ticket editors are reconciled into `TicketEditorDialog`: atomic draft
+criteria, URL deep links, Markdown preview, estimate provenance, conflict reapply,
+unsaved-discard confirmation and Cmd/Ctrl+Enter save. The real-stack board flow
+now exercises the explicit Mark epic done button and checks the server's 409 gate.
+
+Checks on the combined implementation:
+
+- All Go packages passed `TEST_DATABASE_URL=... go test -count=1 ./...` with local Postgres; every database test uses a disposable database.
+- `go vet ./...` passed.
+- Web lint, typecheck and 47 unit tests passed.
+- Full mocked browser regression suite: 57 passed.
+- Real-stack suite: 3 passed (10.1s), including board flow (946ms); fake CLIs are used for chat.
+- `make gen` produced no changes in generated API or store bindings.
+
+The earlier delivery table and CI links above are historical evidence for the
+original verification PR. Consolidation does not represent product-manager
+sign-off or delivery to main.

@@ -46,12 +46,12 @@ Columns, in order: **Backlog → To do → In progress → In review → Done**.
 Each epic has an ordered list of final acceptance criteria and a status,
 **Open** or **Done**. Filter the board by an epic (the *Epic* picker) to see
 its header: points and criteria progress bars, the criteria editor and the
-status control. The epic page (`/epics`) has the same editor and gate.
+**Mark epic done** button. The epic page (`/epics`) has the same editor and gate.
 
 - People add, edit, reorder, tick and delete criteria in the header.
 - **Gate:** an epic can be set to Done only when every criterion is checked
   and every ticket in it is done or canceled. The header says what blocks it
-  ("Blocks done: PAY-3 open · criteria 2 unchecked"). If you try anyway, the
+  in the **Can’t mark done yet** panel, and disables the button. If a stale request reaches the
   server refuses (409) and the header lists the unchecked criteria and open
   tickets. Once nothing blocks it, the header reads "Ready to mark done".
 - The board and epics page require at least one criterion before offering Done.
@@ -68,8 +68,10 @@ priority, point estimate, assignee, epic and the ticket's acceptance criteria
 (add, edit, reorder, tick, delete). **Save changes** sends one revision-checked
 `PATCH /tickets/{key}` with only the changed fields; criteria changes are
 saved in the same request, atomically. If the ticket changed meanwhile, a
-banner keeps your draft and offers to reload the latest version. Esc or
-Cancel closes it without saving.
+banner keeps your draft and offers **Reapply mine** against the latest version
+or a reload that replaces the draft. Description supports Write/Preview;
+Cmd/Ctrl+Enter saves. Esc or Cancel closes without saving, asking before
+discarding unsaved edits.
 
 ## How agents use it (MCP)
 

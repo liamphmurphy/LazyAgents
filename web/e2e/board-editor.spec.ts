@@ -227,3 +227,30 @@ test("Markdown preview and keyboard save keep criteria atomic", async ({ page })
   expect(api.patches).toHaveLength(1);
   expect(api.patches[0].body).toMatchObject({ description_md: "**Verified** description", criteria: { items: [{ text: "Verified criterion", done: true }] } });
 });
+
+
+test("conflict reapply keeps only my changed fields over the latest server version", async ({ page }) => {
+  const api = await installBoardApi(page);
+  await page.goto("/board?project=WEB&ticket=WEB-1");
+  const d = dialog(page);
+  await d.getByLabel("Title", { exact: true }).fill("My title");
+  api.editTicket("WEB-1", { title: "Their title", description_md: "Their description" });
+  await save(page).click();
+  await d.getByRole("button", { name: "Reapply mine" }).click();
+  await expect(d.getByLabel("Title", { exact: true })).toHaveValue("My title");
+  await expect(d.getByLabel("Description · Markdown")).toHaveValue("Their description");
+  await save(page).click();
+  await expect(d).toHaveCount(0);
+  expect(api.patches.at(-1)?.body).toEqual({ revision: 2, title: "My title" });
+});
+
+test("declining discard keeps the unsaved draft open", async ({ page }) => {
+  const api = await installBoardApi(page);
+  await page.goto("/board?project=WEB&ticket=WEB-1");
+  const d = dialog(page);
+  await d.getByLabel("Title", { exact: true }).fill("Keep me");
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await d.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(d.getByLabel("Title", { exact: true })).toHaveValue("Keep me");
+  expect(api.patches).toEqual([]);
+});
