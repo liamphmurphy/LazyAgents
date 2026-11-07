@@ -97,23 +97,22 @@ test("Inbox and Runs nav counts refresh on live updates", async ({ page }) => {
 test("Runs lists live work and marks the nav item current", async ({ page }) => {
   const api = await installBoardApi(page);
   api.runner.busy = 1;
-  const agent = { id: "agent-builder", name: "Builder", handle: "builder", kind: "main", color_index: 0, role: "Developer", specialty: "UI", model: "test", status: "running" };
-  await page.route("**/api/v1/agent-overviews", (route) => route.fulfill({ json: {
-    stats_as_of: new Date().toISOString(),
-    agents: [{
-      agent, max_concurrency: 1, harness: "claude-code", queue: [], queue_count: 0, scopes: [], stats: {},
-      planning_runs: [],
-      assignments: [{ run_id: "11111111-1111-4111-8111-111111111111", ticket: { id: "ticket-1", key: "WEB-1", title: "Build ticket modal", status: "in_progress", priority: "high" },
-        state: "running", harness: "claude-code", model: "opus", started_at: new Date().toISOString(), step: "", step_position: 0, steps_done: 0, steps_total: 0 }],
-    }],
-  } }));
+  const agent = { id: "agent-builder", name: "Builder", handle: "builder", color_index: 0 };
+  const listed = [{
+    id: "11111111-1111-4111-8111-111111111111", ticket_key: "WEB-1", purpose: "ticket", work_title: "Build ticket modal", project_key: "WEB",
+    agent, mode: "managed", state: "running", harness: "claude-code", model: "opus", started_at: new Date().toISOString(),
+    tool_calls: 0, input_tokens: 0, output_tokens: 0, cost_usd: 0, plan: [], scopes: [], approval_scopes: [],
+  }];
+  await page.route("**/api/v1/runs?*", (route) => route.fulfill({ json: { runs: listed, has_more: false } }));
   await page.goto("/runs");
   await expect(nav(page).locator('[aria-current="page"]')).toHaveText(/^Runs/);
   await expect(page.getByRole("status").filter({ hasText: "1 running · 0 queued · 3 slots" })).toBeVisible();
-  const row = page.getByRole("list", { name: "Live runs" }).getByRole("link");
-  await expect(row).toHaveCount(1);
-  await expect(row).toContainText("WEB-1");
-  await expect(row).toHaveAttribute("href", "/runs/11111111-1111-4111-8111-111111111111");
+  const table = page.getByRole("table", { name: "Runs, newest first" });
+  await expect(table.getByRole("row")).toHaveCount(2);
+  await expect(table).toContainText("WEB-1");
+  await expect(table).toContainText("Build ticket modal");
+  await expect(table.getByRole("link", { name: "Builder" })).toHaveAttribute("href", "/runs/11111111-1111-4111-8111-111111111111");
+  await expect(page.getByText("1 run · newest first")).toBeVisible();
   expect(api.unhandled).toEqual([]);
 });
 

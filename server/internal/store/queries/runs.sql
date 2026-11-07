@@ -215,3 +215,28 @@ WITH counters AS (
 SELECT run_id, sum(least(cached, reported, input))::bigint AS cached_input_tokens,
   sum(least(reported, input))::bigint AS reported_input_tokens
 FROM counters GROUP BY run_id;
+
+-- name: ListRuns :many
+-- Top-level runs for the Runs index. A run's project comes from its ticket,
+-- planning session or chat session; delegated runs are left to their parent.
+SELECT r.* FROM runs r
+LEFT JOIN tickets t ON t.id = r.ticket_id
+LEFT JOIN planning_sessions ps ON ps.run_id = r.id
+LEFT JOIN LATERAL (
+  SELECT c.project_id FROM chat_sessions c
+  WHERE c.current_run_id = r.id OR c.id IN (SELECT m.session_id FROM chat_messages m WHERE m.run_id = r.id)
+  LIMIT 1
+) cs ON r.purpose = 'chat'
+WHERE r.workspace_id = sqlc.arg(workspace_id) AND r.parent_run_id IS NULL
+  AND r.state = ANY(sqlc.arg(states)::text[])
+  AND (sqlc.narg(agent_id)::uuid IS NULL OR r.agent_id = sqlc.narg(agent_id))
+  AND (sqlc.narg(purpose)::text IS NULL OR r.purpose = sqlc.narg(purpose))
+  AND (sqlc.narg(project_id)::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = sqlc.narg(project_id))
+ORDER BY r.started_at DESC, r.id DESC
+LIMIT 51 OFFSET sqlc.arg(skip)::int;
+
+-- name: ChatSessionOfRun :one
+-- The chat a chat run belongs to: its current run or an earlier segment.
+SELECT * FROM chat_sessions
+WHERE current_run_id = sqlc.arg(run_id) OR id IN (SELECT session_id FROM chat_messages WHERE run_id = sqlc.arg(run_id))
+LIMIT 1;

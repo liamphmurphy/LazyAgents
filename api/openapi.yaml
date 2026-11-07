@@ -1079,6 +1079,33 @@ paths:
               schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
 
+  /runs:
+    get:
+      operationId: listRuns
+      summary: Top-level runs, newest first, 50 per page (delegated runs are counted in child_count)
+      tags: [runs]
+      parameters:
+        - name: state
+          in: query
+          description: "live (queued to waiting, the default), all, or one run state"
+          schema: { type: string, enum: [live, all, queued, starting, running, waiting, paused, blocked, completed, failed, cancelled], default: live }
+        - { name: agent, in: query, description: Agent handle, schema: { type: string } }
+        - { name: project, in: query, description: Project key, schema: { type: string } }
+        - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat] } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+      responses:
+        "200":
+          description: A page of runs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs, has_more]
+                properties:
+                  runs: { type: array, items: { $ref: "#/components/schemas/Run" } }
+                  has_more: { type: boolean }
+        default: { $ref: "#/components/responses/Error" }
+
   /runs/{id}:
     parameters:
       - name: id
@@ -2554,11 +2581,20 @@ components:
         state: { type: string, enum: [pending, current, done, needs_human, failed] }
     Run:
       type: object
-      required: [id, ticket_key, agent, mode, state, harness, model, started_at, tool_calls, input_tokens, output_tokens, cost_usd, plan, approval_scopes, scopes]
+      required: [id, ticket_key, purpose, agent, mode, state, harness, model, started_at, tool_calls, input_tokens, output_tokens, cost_usd, plan, approval_scopes, scopes]
       properties:
         id: { type: string, format: uuid }
         ticket_key: { type: string, description: Empty for standalone planning runs }
+        purpose: { type: string, enum: [ticket, planning, chat], description: "What the run works on: a ticket, a plan or a chat" }
         planning_id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid, description: The chat session of a chat run }
+        project_key: { type: string, description: "Project of the ticket, plan or chat" }
+        work_title: { type: string, description: "Ticket title, plan goal or chat title" }
+        branch: { type: string, description: "Ticket runs: the ticket's branch" }
+        pr_number: { type: integer }
+        pr_url: { type: string }
+        pr_state: { type: string }
+        child_count: { type: integer, description: "Direct delegated runs" }
         agent: { $ref: "#/components/schemas/AgentRef" }
         mode: { type: string, enum: [managed, unmanaged] }
         state: { type: string, enum: [queued, starting, running, waiting, paused, blocked, completed, failed, cancelled] }
