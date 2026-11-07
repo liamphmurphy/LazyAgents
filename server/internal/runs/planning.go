@@ -362,12 +362,23 @@ func (s *Service) ReviewPlanning(ctx context.Context, ws, user, id uuid.UUID, re
 				if err != nil {
 					return err
 				}
-				// Draft estimates belong to the planning agent that proposed them.
+				// Draft estimates belong to the planning agent that proposed them,
+				// unless the reviewer changed them before accepting.
 				planner := tracker.AgentActor(run.AgentID)
+				var stored []Proposal
+				_ = json.Unmarshal(plan.Proposals, &stored)
+				proposed := map[string]*int{}
+				for _, sp := range stored {
+					proposed[sp.Ref] = sp.EstimatePoints
+				}
 				created := []store.Ticket{}
 				for _, item := range items {
+					estimator := tracker.UserActor(user)
+					if prev, ok := proposed[item.Ref]; ok && prev != nil && item.EstimatePoints != nil && *prev == *item.EstimatePoints {
+						estimator = planner
+					}
 					t, err := tracker.CreateInTx(ctx, q, ws, tracker.UserActor(user), tracker.NewTicket{ProjectKey: p.Key, Title: item.Title, DescriptionMd: item.Description, Criteria: item.Criteria, AssigneeAgentID: item.AgentID, EpicID: plan.EpicID, RequiresMockup: item.RequiresMockup,
-						EstimatePoints: item.EstimatePoints, EstimateRationale: item.EstimateRationale, EstimatedBy: &planner})
+						EstimatePoints: item.EstimatePoints, EstimateRationale: item.EstimateRationale, EstimatedBy: &estimator})
 					if err != nil {
 						return err
 					}

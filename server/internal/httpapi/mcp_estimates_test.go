@@ -161,6 +161,25 @@ func TestMCPEstimateTicket(t *testing.T) {
 	code, body = e.tool(e.runToken(&own.ID, &leadRun.ID, "ticket", `{}`), "estimate_ticket", map[string]any{"ticket": own.Key, "points": 2, "rationale": "x"})
 	e.expect("delegated", code, body, 409, "isn't available to delegated runs")
 
+	// Unmanaged sessions (no run token) must hold a live run on a ticket in the project.
+	unmanaged, _, _ := agents.IssueToken(e.ctx, e.q, e.atlas.ID, "unmanaged", "estimates", nil, nil, nil)
+	code, body = e.tool(unmanaged, "estimate_ticket", map[string]any{"ticket": own.Key, "points": 8, "rationale": "Bigger than thought"})
+	e.expect("unmanaged own", code, body, 200, `"estimate_points":8`)
+	if code, body = e.tool(unmanaged, "estimate_ticket", map[string]any{"ticket": other.Key, "points": 2, "rationale": "x"}); code == 200 {
+		t.Errorf("unmanaged other project = %d %s", code, body)
+	}
+	if code, body = e.tool(unmanaged, "check_epic_criterion", map[string]any{"ticket": own.Key, "epic": "anything", "n": 1}); code != 422 || !strings.Contains(body, "tracker:epics") {
+		t.Errorf("unmanaged check_epic_criterion without scope = %d %s", code, body)
+	}
+	// A finished run's token can't estimate.
+	finished, err := e.q.CreateRun(e.ctx, store.CreateRunParams{WorkspaceID: e.ws, TicketID: &sibling.ID, AgentID: e.atlas.ID, Mode: "managed", State: "completed", ResolvedSpec: json.RawMessage(`{}`), Harness: "claude", Model: "test", Purpose: "ticket"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finishedTok, _, _ := agents.IssueToken(e.ctx, e.q, e.atlas.ID, "run", "finished", &finished.ID, nil, nil)
+	code, body = e.tool(finishedTok, "estimate_ticket", map[string]any{"ticket": own.Key, "points": 2, "rationale": "x"})
+	e.expect("completed run", code, body, 409, "the run is completed")
+
 	// create_ticket validates and stores optional points.
 	code, body = e.tool(lead, "create_ticket", map[string]any{"title": "Follow-up", "points": 4})
 	e.expect("create_ticket off scale", code, body, 422, "off the scale")
@@ -311,7 +330,11 @@ func TestPlanningProposalPoints(t *testing.T) {
 	code, body = e.request("PATCH", "/api/v1/planning-sessions/"+plan.Id.String(), map[string]any{"revision": plan.Revision, "action": "save", "proposals": edited}, "")
 	e.expect("save off scale", code, body, 422, "estimate_points")
 
-	code, body = e.request("PATCH", "/api/v1/planning-sessions/"+plan.Id.String(), map[string]any{"revision": plan.Revision, "action": "accept", "proposals": plan.Proposals}, "")
+	// The reviewer adds an estimate to the second draft: that one is the person's.
+	accepted := append([]api.TicketProposal{}, plan.Proposals...)
+	eight := api.EstimatePoints(8)
+	accepted[1].EstimatePoints = &eight
+	code, body = e.request("PATCH", "/api/v1/planning-sessions/"+plan.Id.String(), map[string]any{"revision": plan.Revision, "action": "accept", "proposals": accepted}, "")
 	if code != 200 {
 		t.Fatalf("accept = %d %s", code, body)
 	}
@@ -321,9 +344,9 @@ func TestPlanningProposalPoints(t *testing.T) {
 		*estimated.EstimatedByType != "agent" || *estimated.EstimatedByID != e.atlas.ID {
 		t.Fatalf("accepted estimate: %+v", estimated)
 	}
-	plain, _ := tracker.Get(e.ctx, e.q, e.ws, plan.TicketKeys[1])
-	if plain.EstimatePoints != nil || plain.EstimatedByType != nil {
-		t.Fatalf("unestimated draft got an estimate: %+v", plain)
+	reviewed, _ := tracker.Get(e.ctx, e.q, e.ws, plan.TicketKeys[1])
+	if reviewed.EstimatePoints == nil || *reviewed.EstimatePoints != 8 || *reviewed.EstimatedByType != "user" || *reviewed.EstimatedByID != e.me.ID {
+		t.Fatalf("reviewer's estimate not credited to the reviewer: %+v", reviewed)
 	}
 }
 

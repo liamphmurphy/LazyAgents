@@ -65,7 +65,7 @@ func EnforcementFor(scope string, mode Mode, harness string) (Enforcement, strin
 	case scope == "tracker:epics" && mode == Allowed:
 		return ByBroker, "check_epic_criterion is served by LazyAgents"
 	case scope == "tracker:epics":
-		return ByBroker, "check_epic_criterion refuses (requires_approval counts as denied in v1)"
+		return ByBroker, "check_epic_criterion is refused unless allowed (requires_approval counts as denied in v1)"
 	case info.APIOnly && mode == Allowed:
 		return ByBroker, "Edits go through LazyAgents and publish directly"
 	case info.APIOnly && mode == RequiresApproval:
