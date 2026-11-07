@@ -52,6 +52,13 @@ func newChatEnv(t *testing.T) *chatEnv { return newChatEnvWith(t, nil) }
 // newChatEnvWith lets a test adjust the runs service (secrets, isolation).
 func newChatEnvWith(t *testing.T, tweak func(*runs.Service)) *chatEnv {
 	t.Helper()
+	return newChatEnvServer(t, tweak, nil)
+}
+
+// newChatEnvServer also lets a test adjust the Server (e.g. blob storage)
+// before it starts serving.
+func newChatEnvServer(t *testing.T, tweak func(*runs.Service), tweakServer func(*Server)) *chatEnv {
+	t.Helper()
 	pool := testdb.New(t)
 	ctx := context.Background()
 	q := store.New(pool)
@@ -72,6 +79,9 @@ func newChatEnvWith(t *testing.T, tweak func(*runs.Service)) *chatEnv {
 	}
 	s := &Server{Events: hub, Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Agents: &agents.Service{Pool: pool}, Runs: rs,
 		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if tweakServer != nil {
+		tweakServer(s)
+	}
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
 	e := &chatEnv{t: t, pool: pool, q: q, srv: ts, hub: hub, me: me, runs: rs}
