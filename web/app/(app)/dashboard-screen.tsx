@@ -1,490 +1,286 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
-import {
-  useBootstrap,
-  useDashboard,
-  type DashboardRange,
-} from "@/lib/api/hooks";
-import { ago, absoluteTime } from "@/lib/format";
+import { useBootstrap, useDashboard, useInbox } from "@/lib/api/hooks";
+import { useBlockers, useDashboardBoards, useDashboardChats, useDashboardLiveRuns } from "@/lib/api/dashboard-hooks";
+import { blockedTickets, currentStep, epicsAtRisk, liveRuns, setupSteps, throughput, topInbox } from "@/lib/dashboard";
+import { KIND } from "@/lib/inbox";
+import { duration, runCost, spendCost } from "@/lib/format";
+import { cx } from "@/lib/cx";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Segmented } from "@/components/ui/controls";
-import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { Card, Skeleton } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
-import { KpiTile, ProgressBar } from "@/components/domain/data";
-import {
-  AGENT_STATUS,
-  AgentStack,
-  AgentStatus,
-  Assignment,
-  PlanningAssignment,
-  seconds,
-  WorkflowBar,
-} from "@/components/domain/overview";
+import { ProgressBar } from "@/components/domain/data";
 import { AgentAvatar } from "@/components/domain/avatars";
-import { DocTypeTag, Flag } from "@/components/domain/labels";
-import { RunnerCapacity } from "@/components/domain/runner-capacity";
+import { Flag } from "@/components/domain/labels";
 import { DispatchDialog } from "@/components/domain/dispatch-dialog";
-import { Greeting } from "./greeting";
 
-function AttentionRow({ item }: { item: Schemas["InboxItem"] }) {
-  const [dispatch, setDispatch] = useState(false);
-  const names = {
-    approval: "Approval",
-    dispatch: "Dispatch",
-    review: "Review",
-    blocked: "Blocked",
-    question: "Question",
-    stalled: "Stalled",
-    mention: "Mention",
-    planning: "Review plan",
-    suggestion: "Wiki edit",
-    mockup: "Mockup",
-  };
+const PREVIEW = 5;
+
+type PanelQuery = { isPending: boolean; isError: boolean; error: Error | null; refetch: () => unknown };
+
+/**
+ * One dashboard panel: a header with its count and a link to the full view,
+ * then loading, error (with retry), empty or content. A failed background
+ * refresh keeps the last data on screen under the error.
+ */
+function Panel({ title, count, href, link, q, hasData, empty, children }: {
+  title: string; count?: number | string; href: string; link: string;
+  q: PanelQuery; hasData: boolean; empty: string | false; children: ReactNode;
+}) {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-[18px] py-3 last:border-0">
-      <div className="min-w-0 flex-[1_1_230px]">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="font-mono text-xs text-fg-tertiary">
-            {item.ticket_key || item.project || "Wiki"}
-          </span>
-          <Flag tone={item.kind === "blocked" || item.kind === "stalled" ? "blocked" : "human"}>
-            {names[item.kind]}
-          </Flag>
-        </div>
-        <Link
-          href={item.href}
-          className="line-clamp-1 text-[13px] font-medium hover:text-accent"
-        >
-          {item.title}
-        </Link>
-        <p
-          className="mt-1 truncate text-xs text-fg-tertiary"
-          title={item.summary}
-        >
-          {item.summary} · {ago(item.created_at)}
-        </p>
-      </div>
-      <div className="flex gap-1">
-        {item.kind === "dispatch" ? (
-          <Button variant="approve" onClick={() => setDispatch(true)}>
-            Review &amp; dispatch
-          </Button>
-        ) : (
-          <ButtonLink
-            href={item.href}
-            variant={item.kind === "approval" || item.kind === "mockup" ? "approve" : "outline"}
-          >
-            {item.kind === "approval"
-              ? "Review request"
-              : item.kind === "suggestion"
-                ? "Review edit"
-                : item.kind === "mockup"
-                  ? "Review mockup"
-                  : "Open"}
-          </ButtonLink>
+    <div role="region" aria-label={title}>
+      <Card
+        title={<>{title}{count !== undefined && hasData && <span className="ml-1.5 font-mono text-fg-tertiary">· {count}</span>}</>}
+        action={<Link href={href} className="text-xs text-fg-secondary hover:text-accent">{link} →</Link>}
+        bodyClassName="p-0"
+      >
+        {q.isError && (
+          <div role="alert" className="flex items-center justify-between gap-3 border-b border-border-subtle px-[18px] py-2.5 text-xs text-pill-blocked-fg">
+            <span>{hasData ? "Couldn’t refresh" : "Couldn’t load"}: {q.error?.message ?? "request failed"}</span>
+            <Button onClick={() => void q.refetch()}>Retry</Button>
+          </div>
         )}
-        <ButtonLink href="/inbox" variant="ghost">
-          Inbox
-        </ButtonLink>
-      </div>
-      {dispatch && (
-        <DispatchDialog
-          keys={[item.ticket_key]}
-          open={dispatch}
-          onOpenChange={setDispatch}
-        />
-      )}
+        {!hasData ? (
+          q.isError ? null : (
+            <div aria-busy="true" aria-label={`Loading ${title.toLowerCase()}`} className="space-y-3 px-[18px] py-4">
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          )
+        ) : empty !== false ? (
+          <p className="px-[18px] py-4 text-sm text-fg-tertiary">{empty}</p>
+        ) : (
+          children
+        )}
+      </Card>
     </div>
   );
 }
+
+function Row({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-[18px] py-3 last:border-0">{children}</div>;
+}
+
+function NeedsYouRow({ item }: { item: Schemas["InboxItem"] }) {
+  const [dispatch, setDispatch] = useState(false);
+  const kind = KIND[item.kind] ?? { label: item.kind, tone: "human" as const };
+  const action = { approval: "Review request", question: "Answer", mockup: "Review mockup", planning: "Review plan", suggestion: "Review edit" }[item.kind as string] ?? "Open";
+  return (
+    <Row>
+      <div className="min-w-0 flex-[1_1_230px]">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="font-mono text-xs text-fg-tertiary">{item.ticket_key || item.project || "Wiki"}</span>
+          <Flag tone={kind.tone === "blocked" ? "blocked" : kind.tone === "info" ? "review" : "human"}>{kind.label}</Flag>
+        </div>
+        <Link href={item.href} className="line-clamp-1 text-[13px] font-medium hover:text-accent">{item.title}</Link>
+      </div>
+      {item.kind === "dispatch" ? (
+        <Button variant="approve" onClick={() => setDispatch(true)}>Review &amp; dispatch</Button>
+      ) : (
+        <ButtonLink href={item.href} variant={item.kind === "approval" || item.kind === "mockup" ? "approve" : "outline"}>{action}</ButtonLink>
+      )}
+      {dispatch && <DispatchDialog keys={[item.ticket_key]} open={dispatch} onOpenChange={setDispatch} />}
+    </Row>
+  );
+}
+
+function RunRow({ run }: { run: Schemas["Run"] }) {
+  const step = currentStep(run.plan);
+  return (
+    <Row>
+      <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} />
+      <div className="min-w-0 flex-1">
+        <Link href={`/runs/${run.id}`} className="line-clamp-1 text-[13px] font-medium hover:text-accent">
+          {run.agent.name} · {run.ticket_key || run.work_title || (run.purpose === "chat" ? "Chat" : "Plan")}
+        </Link>
+        <p className="truncate text-xs text-fg-tertiary">
+          {step ? `${step.text} · step ${step.position} of ${step.total}` : run.state}
+        </p>
+      </div>
+      <p className="whitespace-nowrap text-right text-xs text-fg-secondary">
+        {duration(run.started_at)} elapsed · {runCost(run.cost_usd, run.cost_source)} so far
+      </p>
+    </Row>
+  );
+}
+
+const CHAT_STATE: Record<string, string> = { idle: "waiting for your next turn", running: "agent responding", failed: "last turn failed" };
+
+const HEALTH: Record<string, { label: string; tone: "human" | "blocked" }> = {
+  at_risk: { label: "At risk", tone: "human" },
+  off_track: { label: "Off track", tone: "blocked" },
+};
+
 export function DashboardScreen() {
-  const [range, setRange] = useState<DashboardRange>("7d");
-  const query = useDashboard(range),
-    boot = useBootstrap();
-  const d = query.data;
-  const live = d?.agents.filter((a) => a.agent.status !== "idle") ?? [];
-  const running =
-    d?.agents.filter((a) => a.agent.status === "running").length ?? 0;
-  const period =
-    range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days";
-  const max = Math.max(1, ...(d?.stats.daily.map((day) => day.count) ?? []));
+  const boot = useBootstrap();
+  const dash = useDashboard("30d");
+  const inbox = useInbox();
+  const runsQ = useDashboardLiveRuns();
+  const chatsQ = useDashboardChats();
+  const active = boot.data?.projects.filter((p) => !p.archived);
+  const boards = useDashboardBoards(active?.map((p) => p.key));
+
+  const needs = inbox.data ? topInbox(inbox.data, PREVIEW) : undefined;
+  const live = runsQ.data ? liveRuns(runsQ.data.runs) : undefined;
+  const liveCount = live && `${live.length}${runsQ.data?.complete ? "" : "+"}`;
+  const chats = chatsQ.data?.chats;
+  const chatCount = chats && `${chats.length}${chatsQ.data?.complete ? "" : "+"}`;
+  const blocked = boards.data ? blockedTickets(boards.data) : undefined;
+  const blockers = useBlockers(blocked?.slice(0, PREVIEW).map((t) => t.key) ?? []);
+  const blockedProjects = new Set(blocked?.map((t) => t.project_key));
+  const blockedHref = blockedProjects.size === 1 ? `/board?project=${encodeURIComponent([...blockedProjects][0])}&blocked=true` : "/board?blocked=true";
+  const risky = boot.data ? epicsAtRisk(boot.data.epics) : undefined;
+  const projectOf = (id: string) => boot.data?.projects.find((p) => p.id === id);
+  // The board query waits for the project list, so its state follows bootstrap's first.
+  const blockedQ: PanelQuery = boot.isError && !boot.data
+    ? { isPending: false, isError: true, error: boot.error, refetch: () => Promise.all([boot.refetch(), boards.refetch()]) }
+    : { isPending: boards.isPending, isError: boards.isError, error: boards.error, refetch: () => boards.refetch() };
+
+  const d = dash.data;
+  const days = d ? throughput(d.stats.daily, new Date(d.stats.generated_at)) : undefined;
+  const done = days?.reduce((n, day) => n + day.count, 0) ?? 0;
+  const max = Math.max(1, ...(days?.map((day) => day.count) ?? []));
+  const steps = boot.data && d ? setupSteps({ projects: active?.length ?? 0, agents: boot.data.agents.length, runnerOnline: d.runner.online }) : undefined;
+  const nextStep = steps?.find((s) => !s.done);
+
   return (
     <>
       <TopBar
         crumbs={[{ label: "Dashboard" }]}
-        actions={
-          <ButtonLink
-            href="/tickets/new"
-            variant="primary"
-            icon="plus"
-            hint="C"
-          >
-            New ticket
-          </ButtonLink>
-        }
+        actions={<ButtonLink href="/tickets/new" variant="primary" icon="plus" hint="C">New ticket</ButtonLink>}
       />
       <Content>
         <div className="flex flex-col gap-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-1">
-              <Greeting />
-              <p className="text-sm text-fg-secondary">
-                {d
-                  ? `${d.counts.in_progress + d.counts.in_review} tickets in motion · ${boot.data?.counts.inbox ?? d.attention.length} items need your attention.`
-                  : "Your workspace at a glance."}
-              </p>
-            </div>
-            <Segmented
-              label="Statistics range"
-              value={range}
-              onChange={setRange}
-              options={[
-                { value: "24h", label: "24h" },
-                { value: "7d", label: "7d" },
-                { value: "30d", label: "30d" },
-              ]}
-            />
+          <div className="space-y-1">
+            <h1 className="type-display">Your team at a glance</h1>
+            <p className="text-sm text-fg-secondary">
+              {[
+                needs && `${needs.open} ${needs.open === 1 ? "item needs" : "items need"} you`,
+                liveCount !== undefined && `${liveCount} live ${live?.length === 1 ? "run" : "runs"}`,
+                chatCount !== undefined && `${chatCount} active ${chats?.length === 1 ? "chat" : "chats"}`,
+              ].filter(Boolean).join(" · ") || "What the team is doing and what needs you."}
+            </p>
           </div>
-          {query.isError && (
-            <Banner
-              tone="blocked"
-              title="Couldn’t load the dashboard"
-              actions={<Button onClick={() => query.refetch()}>Retry</Button>}
-            >
-              {query.error.message}
-            </Banner>
+
+          {steps && nextStep && (
+            <section aria-label="Finish setup" className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-[18px] py-3 text-sm">
+              <span className="font-semibold">Finish setup</span>
+              <span className="text-fg-secondary">
+                {steps.filter((s) => s.done).length} / {steps.length} complete — {nextStep.label}
+              </span>
+              <ButtonLink href={nextStep.href} variant="primary" className="ml-auto">Continue setup →</ButtonLink>
+            </section>
           )}
-          {!d && !query.isError ? (
-            <div
-              aria-busy="true"
-              className="grid grid-cols-2 gap-4 max-sm:grid-cols-1"
-            >
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-32 rounded-xl" />
-              ))}
-            </div>
-          ) : (
-            d && (
-              <>
-                <div className="grid grid-cols-2 gap-4 xl:grid-cols-4 max-sm:grid-cols-1">
-                  <KpiTile
-                    label="Active agents"
-                    value={running}
-                    context={`of ${d.agents.length} agents`}
-                    visual={
-                      <div
-                        role="img"
-                        aria-label={d.agents
-                          .map((a) => `${a.agent.name}: ${a.agent.status}`)
-                          .join(", ")}
-                        className="mt-1 flex flex-wrap gap-1.5"
-                      >
-                        {d.agents.map((a) => (
-                          <span
-                            key={a.agent.id}
-                            title={`${a.agent.name}: ${a.agent.status}`}
-                            className="size-2 rounded-full"
-                            style={{
-                              background: AGENT_STATUS[a.agent.status].color,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    }
-                  />
-                  <KpiTile
-                    label="In progress"
-                    value={d.counts.in_progress}
-                    context={`${d.counts.in_review} in review`}
-                    visual={
-                      <WorkflowBar
-                        counts={{ ...d.counts, done: 0, todo: 0, backlog: 0 }}
-                      />
-                    }
-                  />
-                  <KpiTile
-                    label="Awaiting review"
-                    value={d.counts.in_review}
-                    context={
-                      <span
-                        className={
-                          d.review_over_day ? "text-pill-human-fg" : undefined
-                        }
-                      >
-                        {d.review_over_day} older than a day
-                      </span>
-                    }
-                    visual={
-                      <Link
-                        href="/tickets?status=in_review&view=all"
-                        className="text-xs text-fg-secondary hover:text-accent"
-                      >
-                        Review tickets →
-                      </Link>
-                    }
-                  />
-                  <KpiTile
-                    label={`Completed · ${period}`}
-                    value={d.stats.performance.completed}
-                    context={`${seconds(d.stats.performance.median_cycle_seconds)} median cycle`}
-                    visual={
-                      <div
-                        role="img"
-                        aria-label={`Daily completions (UTC): ${d.stats.daily.map((day) => `${day.date}: ${day.count}`).join(", ")}`}
-                        className="flex h-7 items-end gap-1"
-                      >
-                        {d.stats.daily.map((day) => (
-                          <span
-                            key={day.date}
-                            title={`${day.date}: ${day.count}`}
-                            className="min-w-0 flex-1 rounded-t-sm bg-accent/70 last:bg-accent"
-                            style={{
-                              height: `${Math.max(8, (day.count / max) * 100)}%`,
-                              opacity: day.count ? 1 : 0.2,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    }
-                  />
-                </div>
-                <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                  <div className="min-w-0 space-y-6">
-                    <Card
-                      title="Needs your attention"
-                      action={
-                        <Link
-                          href="/inbox"
-                          className="text-xs text-fg-secondary hover:text-accent"
-                        >
-                          View inbox →
+
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-6">
+              <Panel title="Needs you" count={needs?.open} href="/inbox" link="View Inbox" q={inbox} hasData={!!needs}
+                empty={!!needs && !needs.items.length && "You’re all caught up. Approvals, questions and reviews appear here."}>
+                {needs?.items.map((item) => <NeedsYouRow key={item.id} item={item} />)}
+              </Panel>
+
+              <Panel title="Live runs" count={liveCount} href="/runs" link="All Runs" q={runsQ} hasData={!!live}
+                empty={!!live && !live.length && "No agents are working right now. Dispatch a ticket to start one."}>
+                {live?.slice(0, PREVIEW).map((run) => <RunRow key={run.id} run={run} />)}
+              </Panel>
+
+              <Panel title="Blocked tickets" count={blocked?.length} href={blockedHref} link="Blocked Board" q={blockedQ} hasData={!!blocked}
+                empty={!!blocked && !blocked.length && "Nothing is waiting on another ticket."}>
+                {blocked?.slice(0, PREVIEW).map((t) => {
+                  const by = blockers.data?.[t.key];
+                  return (
+                    <Row key={t.key}>
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="line-clamp-1 text-[13px] font-medium hover:text-accent">
+                          <span className="mr-2 font-mono text-xs text-fg-tertiary">{t.key}</span>{t.title}
                         </Link>
-                      }
-                      bodyClassName="p-0"
-                    >
-                      {d.attention.length ? (
-                        d.attention.map((item) => (
-                          <AttentionRow key={item.id} item={item} />
-                        ))
-                      ) : (
-                        <EmptyState icon="inbox" title="You’re all caught up">
-                          Requests and reviews will appear here when work needs
-                          you.
-                        </EmptyState>
-                      )}
-                    </Card>
-                    <Card title="Projects" bodyClassName="p-0">
-                      {d.projects.length ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[570px] text-left text-xs">
-                            <thead className="text-fg-tertiary">
-                              <tr>
-                                {[
-                                  "Project",
-                                  "Progress",
-                                  "Open",
-                                  "Agents",
-                                  "Updated",
-                                ].map((t) => (
-                                  <th key={t} className="px-4 py-3 font-medium">
-                                    {t}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {d.projects.map((p) => (
-                                <tr
-                                  key={p.project.id}
-                                  className="border-t border-border-subtle hover:bg-row-hover"
-                                >
-                                  <td className="max-w-[200px] px-4 py-3">
-                                    <Link
-                                      href={`/tickets?project=${p.project.key}`}
-                                      className="flex items-center gap-2 text-[13px] font-medium"
-                                    >
-                                      <span
-                                        className="size-2.5 shrink-0 rounded-sm"
-                                        style={{ background: p.project.color }}
-                                      />
-                                      <span className="truncate">
-                                        {p.project.name}
-                                      </span>
-                                    </Link>
-                                  </td>
-                                  <td className="min-w-28 px-4 py-3">
-                                    <div className="mb-1.5 font-mono">
-                                      {p.counts.total
-                                        ? Math.round(
-                                            (p.counts.done / p.counts.total) *
-                                              100,
-                                          )
-                                        : 0}
-                                      %
-                                    </div>
-                                    <ProgressBar
-                                      value={
-                                        p.counts.total
-                                          ? p.counts.done / p.counts.total
-                                          : 0
-                                      }
-                                      color={p.project.color}
-                                      label={`${p.project.name} completed`}
-                                    />
-                                  </td>
-                                  <td className="px-4 py-3 font-mono">
-                                    {p.counts.total - p.counts.done}
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <AgentStack agents={p.agents} />
-                                  </td>
-                                  <td className="whitespace-nowrap px-4 py-3 text-fg-tertiary">
-                                    {ago(p.updated_at)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <EmptyState icon="tickets" title="No projects yet">
-                          Projects and their progress will appear here.
-                        </EmptyState>
-                      )}
-                    </Card>
-                  </div>
-                  <div className="min-w-0 space-y-6">
-                    <Card
-                      title="Live agents"
-                      action={
-                        <Link
-                          href="/agents"
-                          className="text-xs text-fg-secondary hover:text-accent"
-                        >
-                          All agents →
-                        </Link>
-                      }
-                    >
-                      {live.length ? (
-                        <div className="space-y-4">
-                          {live.map((a) => (
-                            <div key={a.agent.id} className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <AgentAvatar
-                                  name={a.agent.name}
-                                  colorIndex={a.agent.color_index}
-                                />
-                                <Link
-                                  href={`/agents/${a.agent.handle}`}
-                                  className="flex-1 font-medium hover:text-accent"
-                                >
-                                  {a.agent.name}
-                                </Link>
-                                <AgentStatus status={a.agent.status} />
-                              </div>
-                              {a.planning_runs.map(p => <PlanningAssignment key={p.id} work={p} />)}
-                              {a.assignments
-                                .filter((w) => w.state !== "queued")
-                                .slice(0, 2)
-                                .map((w) => (
-                                  <Assignment key={w.run_id} work={w} compact />
-                                ))}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="py-2 text-sm text-fg-tertiary">
-                          No agents are running. Assign and dispatch a ticket to
-                          start work.
+                        <p className="truncate text-xs text-fg-tertiary">
+                          {by?.length
+                            ? <>Blocked by <Link href={`/tickets/${encodeURIComponent(by[0].key)}`} className="font-mono hover:text-accent">{by[0].key}</Link> · {by[0].title}{by.length > 1 && ` and ${by.length - 1} more`}</>
+                            : `Blocked by ${t.unmet_dependencies} unfinished ${t.unmet_dependencies === 1 ? "ticket" : "tickets"}`}
                         </p>
-                      )}
-                    </Card>
-                    <Card title="Ticket flow">
-                      <div className="space-y-3">
-                        <WorkflowBar counts={d.counts} />
-                        <div className="grid grid-cols-2 gap-2 text-xs text-fg-secondary">
-                          {(
-                            [
-                              ["Done", d.counts.done, "done"],
-                              ["In review", d.counts.in_review, "review"],
-                              ["In progress", d.counts.in_progress, "progress"],
-                              ["Todo", d.counts.todo, "todo"],
-                              ["Backlog", d.counts.backlog, "backlog"],
-                            ] as const
-                          ).map(([name, n, color]) => (
-                            <div
-                              key={name}
-                              className="flex items-center gap-1.5"
-                            >
-                              <span
-                                className="size-1.5 rounded-full"
-                                style={{ background: `var(--state-${color})` }}
-                              />
-                              {name}
-                              <span className="ml-auto font-mono text-fg-tertiary">
-                                {n}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
                       </div>
-                    </Card>
-                    <Card title="Runner">
-                      <RunnerCapacity runner={d.runner} />
-                    </Card>
-                    <Card
-                      title="Recent artifacts"
-                      action={
-                        <Link
-                          href="/artifacts"
-                          className="text-xs text-fg-secondary hover:text-accent"
-                        >
-                          All →
-                        </Link>
-                      }
-                    >
-                      <div className="space-y-3">
-                        {d.recent_artifacts.length ? (
-                          d.recent_artifacts.map((a) => (
-                            <Link
-                              key={a.id}
-                              href={a.href}
-                              className="flex items-start gap-2 rounded-sm hover:text-accent"
-                            >
-                              <DocTypeTag type={a.type} />
-                              <span className="min-w-0">
-                                <span className="line-clamp-2 text-[13px]">
-                                  {a.title}
-                                </span>
-                                <span className="mt-1 block text-xs text-fg-tertiary">
-                                  {ago(a.updated_at)}
-                                </span>
-                              </span>
-                            </Link>
-                          ))
-                        ) : (
-                          <p className="text-sm text-fg-tertiary">
-                            No artifacts yet.
-                          </p>
-                        )}
+                    </Row>
+                  );
+                })}
+              </Panel>
+            </div>
+
+            <div className="min-w-0 space-y-6">
+              <Panel title="Chats active" count={chatCount} href="/chat" link="All Chats" q={chatsQ} hasData={!!chats}
+                empty={!!chats && !chats.length && "No open chats. Ask an agent about a project from Chat."}>
+                {chats?.slice(0, PREVIEW).map((c) => (
+                  <Row key={c.id}>
+                    <div className="min-w-0 flex-1">
+                      <Link href={`/chat/${c.id}`} className="line-clamp-1 text-[13px] font-medium hover:text-accent">{c.title || "Untitled chat"}</Link>
+                      <p className={cx("truncate text-xs", c.state === "failed" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>
+                        <span className="font-mono">{c.project}</span> · {CHAT_STATE[c.state] ?? c.state}
+                      </p>
+                    </div>
+                  </Row>
+                ))}
+              </Panel>
+
+              <Panel title="Epics at risk" count={risky?.length} href="/epics" link="All Epics" q={boot} hasData={!!risky}
+                empty={!!risky && !risky.length && "Every open epic is on track."}>
+                {risky?.slice(0, PREVIEW).map((e) => {
+                  const project = projectOf(e.project_id);
+                  return (
+                    <div key={e.id} className="space-y-2 border-b border-border-subtle px-[18px] py-3 last:border-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{e.name}</span>
+                        <Flag tone={HEALTH[e.health].tone}>{HEALTH[e.health].label}</Flag>
+                        <Link href={`/epics/${e.id}`} className="text-xs text-fg-secondary hover:text-accent">Open epic →</Link>
                       </div>
-                    </Card>
-                  </div>
+                      <ProgressBar value={e.points_total ? e.points_done / e.points_total : 0} color={project?.color} label={`${e.name} points done`} />
+                      <p className="text-xs text-fg-tertiary">{e.points_done} / {e.points_total} points done · {e.tickets_open} {e.tickets_open === 1 ? "ticket" : "tickets"} open</p>
+                    </div>
+                  );
+                })}
+              </Panel>
+            </div>
+          </div>
+
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <Panel title="Spend this week" href="/costs" link="View Costs" q={dash} hasData={!!d?.weekly_spend} empty={false}>
+              {d?.weekly_spend && (
+                <div className="space-y-1 px-[18px] py-4">
+                  <p className="font-mono text-2xl font-semibold">{spendCost(d.weekly_spend.cost_usd, d.weekly_spend.unpriced_runs)}</p>
+                  <p className="text-xs text-fg-tertiary">Since Monday · UTC</p>
+                  <p className="text-xs text-fg-secondary">
+                    Across {d.weekly_spend.runs} {d.weekly_spend.runs === 1 ? "run" : "runs"}
+                    {d.weekly_spend.unpriced_runs > 0 && ` · ${d.weekly_spend.unpriced_runs} not fully priced`}
+                  </p>
                 </div>
-                <p
-                  className="text-xs text-fg-tertiary"
-                  title={absoluteTime(d.stats.generated_at)}
-                >
-                  Performance refreshed {ago(d.stats.generated_at)}. Cycles:
-                  first In Progress to latest Done, or creation to Done when no
-                  start was recorded. Daily bars use UTC.
-                </p>
-              </>
-            )
-          )}
+              )}
+            </Panel>
+
+            <Panel title="Throughput · last 14 days" href="/tickets?status=done&view=all" link="Done tickets" q={dash} hasData={!!days}
+              empty={!!days && done === 0 && "No tickets done in the last 14 days."}>
+              {days && (
+                <div className="space-y-2 px-[18px] py-4">
+                  <div
+                    role="img"
+                    aria-label={`Tickets done per day (UTC): ${days.map((day) => `${day.date}: ${day.count}`).join(", ")}`}
+                    className="flex h-24 items-end gap-1"
+                  >
+                    {days.map((day) => (
+                      <span key={day.date} title={`${day.date}: ${day.count}`} className="min-w-0 flex-1 rounded-t-sm bg-accent/70 last:bg-accent"
+                        style={{ height: `${Math.max(4, (day.count / max) * 100)}%`, opacity: day.count ? 1 : 0.25 }} />
+                    ))}
+                  </div>
+                  <div className="flex justify-between font-mono text-[11px] text-fg-tertiary">
+                    <span>{days[0].date}</span>
+                    <span>{days[days.length - 1].date}</span>
+                  </div>
+                  <p className="text-xs text-fg-secondary">{done} {done === 1 ? "ticket" : "tickets"} done · canceled excluded · UTC</p>
+                </div>
+              )}
+            </Panel>
+          </div>
         </div>
       </Content>
     </>

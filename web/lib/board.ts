@@ -29,6 +29,17 @@ export function withBoardMoves(board: Board, moves: PendingMove[]): Board {
   return { ...board, columns };
 }
 
+/** Only cards with open blockers; counts and points describe what is shown. */
+export function onlyBlocked(board: Board): Board {
+  return {
+    ...board,
+    columns: board.columns.map((c) => {
+      const cards = c.cards.filter((t) => t.unmet_dependencies > 0);
+      return { ...c, cards, count: cards.length, points: cards.reduce((n, t) => n + (t.estimate_points ?? 0), 0), truncated: false };
+    }),
+  };
+}
+
 /** The summary has no revision; a fresh detail supplies it, without overwriting a stale display. */
 export function moveRevision(card: BoardCard, detail: { key: string; status: BoardStatus; updated_at: string; revision: number }): number {
   if (detail.key !== card.key || detail.status !== card.status || detail.updated_at !== card.updated_at) {

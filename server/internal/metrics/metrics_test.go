@@ -71,6 +71,13 @@ func TestRecordedMetricsAndWindows(t *testing.T) {
 	event(c, "done", now.Add(-20*24*time.Hour))
 	future := ticket(4, now)
 	event(future, "done", now.Add(time.Hour))
+	// Done, then canceled: throughput counts only tickets that are done now.
+	canceled := ticket(5, now.Add(-6*24*time.Hour))
+	event(canceled, "done", now.Add(-3*24*time.Hour))
+	event(canceled, "canceled", now.Add(-3*time.Hour))
+	if _, err = pool.Exec(ctx, "UPDATE tickets SET status='canceled' WHERE id=$1", canceled); err != nil {
+		t.Fatal(err)
+	}
 	// A closed PR is counted once despite duplicate sync events.
 	if _, err = pool.Exec(ctx, "UPDATE tickets SET pr_state='merged' WHERE id=$1", a); err != nil {
 		t.Fatal(err)
