@@ -79,6 +79,7 @@ services:
       RUNNER_NETWORK: lazyagents_default
       RUNNER_MCP_URL: http://api:8000/mcp
       RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-2}
+      RUNNER_CHAT_IDLE_TTL_S: ${RUNNER_CHAT_IDLE_TTL_S:-14400}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:

@@ -220,6 +220,7 @@ FROM counters GROUP BY run_id;
 -- Top-level runs for the Runs index. A run's project comes from its ticket,
 -- planning session or chat session; delegated runs are left to their parent
 -- unless the list is filtered to one ticket, where every run is listed.
+-- hide_chat leaves out Personal Assistant chat runs (they live in Chat).
 SELECT r.* FROM runs r
 LEFT JOIN tickets t ON t.id = r.ticket_id
 LEFT JOIN planning_sessions ps ON ps.run_id = r.id
@@ -234,6 +235,7 @@ WHERE r.workspace_id = sqlc.arg(workspace_id)
   AND r.state = ANY(sqlc.arg(states)::text[])
   AND (sqlc.narg(agent_id)::uuid IS NULL OR r.agent_id = sqlc.narg(agent_id))
   AND (sqlc.narg(purpose)::text IS NULL OR r.purpose = sqlc.narg(purpose))
+  AND (NOT sqlc.arg(hide_chat)::bool OR r.purpose <> 'chat')
   AND (sqlc.narg(project_id)::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = sqlc.narg(project_id))
 ORDER BY r.started_at DESC, r.id DESC
 LIMIT 51 OFFSET sqlc.arg(skip)::int;

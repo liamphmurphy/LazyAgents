@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -53,6 +54,9 @@ type Runner struct {
 	// (managed config, no ~/.config/opencode, no repo/ancestor config).
 	// Without it every OpenCode run is rejected before setup.
 	OpenCodeIsolated bool
+	// ChatIdleTTL is how long an idle Personal Assistant chat keeps its run
+	// and workspace (RUNNER_CHAT_IDLE_TTL_S).
+	ChatIdleTTL time.Duration
 }
 
 type S3 struct {
@@ -138,6 +142,14 @@ func Load() (Config, error) {
 			}
 		}
 	}
+	ttl, err := intEnv("RUNNER_CHAT_IDLE_TTL_S", 4*60*60)
+	if err != nil {
+		return c, err
+	}
+	if ttl < 60 {
+		return c, fmt.Errorf("config: RUNNER_CHAT_IDLE_TTL_S must be at least 60")
+	}
+	r.ChatIdleTTL = time.Duration(ttl) * time.Second
 	c.Runner = r
 	if c.PRSyncInterval, err = intEnv("PR_SYNC_INTERVAL_S", 60); err != nil {
 		return c, err

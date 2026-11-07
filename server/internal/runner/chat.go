@@ -3,7 +3,10 @@ package runner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/lazyagents/server/internal/harness"
@@ -116,4 +119,70 @@ func (r *Runner) failChat(ctx context.Context, c runCtx, outcome string) {
 	if err != nil {
 		r.Log.Error("fail chat turn", "run", c.run.ID, "err", err)
 	}
+}
+
+// expireIdleChats completes chat segments that have waited on the person
+// longer than ChatIdleTTL, so a runner doesn't keep their workspace forever.
+// The chat itself stays usable: its next message starts a new segment that
+// gets the conversation so far as a handoff.
+func (r *Runner) expireIdleChats(ctx context.Context) {
+	ttl := r.Cfg.ChatIdleTTL
+	if ttl <= 0 {
+		ttl = DefaultChatIdleTTL
+	}
+	ids, err := r.q().IdleChatRuns(ctx, time.Now().Add(-ttl))
+	if err != nil {
+		r.Log.Warn("idle chat runs", "err", err)
+		return
+	}
+	for _, row := range ids {
+		if err := r.expireIdleChat(ctx, store.Run{ID: row.ID, WorkspaceID: row.WorkspaceID}); err != nil {
+			r.Log.Warn("end idle chat", "run", row.ID, "err", err)
+		}
+	}
+}
+
+func (r *Runner) expireIdleChat(ctx context.Context, run store.Run) error {
+	id := run.ID
+	return pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		// Session lock before run lock, like every chat mutation.
+		chat, err := lockRunChat(ctx, q, run)
+		if errors.Is(err, pgx.ErrNoRows) {
+			chat = store.ChatSession{} // no chat holds this segment any more; still end it
+		} else if err != nil {
+			return err
+		}
+		if run, err = q.LockRun(ctx, id); err != nil {
+			return err
+		}
+		// A message may have arrived since the scan.
+		if run.State != "waiting" || chat.State == "running" {
+			return nil
+		}
+		busy, err := q.HasRunningChatTurn(ctx, id)
+		if err != nil || busy {
+			return err
+		}
+		outcome := "The chat went idle."
+		if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: id, State: "completed", Outcome: &outcome}); err != nil {
+			return err
+		}
+		if err = q.DropPendingTurns(ctx, id); err != nil {
+			return err
+		}
+		if err = q.ExpireRunApprovals(ctx, id); err != nil {
+			return err
+		}
+		payload, _ := json.Marshal(map[string]any{"state": "chat_segment_ended", "reason": "idle"})
+		if err = q.AddRunEvent(ctx, store.AddRunEventParams{RunID: id, Type: "lifecycle", Payload: payload}); err != nil {
+			return err
+		}
+		if chat.CurrentRunID != nil && *chat.CurrentRunID == id && slices.Contains([]string{"idle", "failed"}, chat.State) {
+			if _, err = q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: chat.ID, State: chat.State}); err != nil {
+				return err
+			}
+		}
+		return runs.RecomputeAgentStatus(ctx, q, run.AgentID)
+	})
 }
