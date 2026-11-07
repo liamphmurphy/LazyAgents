@@ -1687,6 +1687,28 @@ export interface components {
             due_date?: string | null;
             label_ids?: string[];
             requires_mockup?: boolean;
+            criteria?: components["schemas"]["TicketCriteriaDraft"];
+        };
+        /**
+         * @description Replaces the ticket's acceptance criteria atomically with the ticket
+         *     fields (ADR-034). Requires revision. expected is the complete criteria
+         *     list the client started from; if it no longer matches, nothing changes
+         *     and the server answers 409 with field criteria. items order defines the
+         *     final positions; existing IDs are kept, items without id are created and
+         *     omitted IDs are deleted. Not allowed in BulkUpdate.patch (422).
+         */
+        TicketCriteriaDraft: {
+            expected: components["schemas"]["Criterion"][];
+            items: components["schemas"]["TicketCriterionDraft"][];
+        };
+        TicketCriterionDraft: {
+            /**
+             * Format: uuid
+             * @description Existing criterion of this ticket; omit to create
+             */
+            id?: string;
+            text: string;
+            done: boolean;
         };
         BulkUpdate: {
             keys: string[];
