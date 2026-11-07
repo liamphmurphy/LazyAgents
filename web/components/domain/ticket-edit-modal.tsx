@@ -100,7 +100,8 @@ function EditBody({ latest, refetch, onDirty, onClose, onCancel }: {
     setBase(latest);
     setForm(formOf(latest));
   }
-  useEffect(() => onDirty(isDirty), [isDirty, onDirty]);
+  // Edits held aside during a conflict count as unsaved too.
+  useEffect(() => onDirty(isDirty || !!conflict), [isDirty, conflict, onDirty]);
 
   const set = <F extends EditField>(f: F, v: EditForm[F]) => {
     setForm((prev) => ({ ...prev, [f]: v }));
@@ -152,7 +153,7 @@ function EditBody({ latest, refetch, onDirty, onClose, onCancel }: {
           <Banner
             title={`Someone else changed this ticket (now rev ${conflict.revision}).`}
             actions={<>
-              <Button variant="outline" onClick={() => { setForm(reapply(formOf(base), conflict.mine)); setConflict(undefined); }}>Reapply mine</Button>
+              <Button variant="outline" onClick={() => { setForm((f) => reapply(f, conflict.mine)); setConflict(undefined); }}>Reapply mine</Button>
               <Button variant="outline" onClick={() => setConflict(undefined)}>Discard mine</Button>
             </>}
           >
@@ -305,10 +306,10 @@ function CriteriaEditor({ t }: { t: Ticket }) {
             {editing?.id === c.id ? (
               <input autoFocus data-local-escape aria-label={`Edit criterion ${c.position}`} value={editing.text}
                 onChange={(e) => setEditing({ id: c.id, text: e.target.value })}
-                onBlur={commitEdit}
+                onBlur={(e) => { if (!e.currentTarget.dataset.canceled) commitEdit(); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); commitEdit(); }
-                  if (e.key === "Escape") setEditing(undefined);
+                  if (e.key === "Escape") { e.currentTarget.dataset.canceled = "1"; setEditing(undefined); }
                 }}
                 className="h-7 flex-1 rounded border border-accent bg-surface px-2 text-[13px] outline-none" />
             ) : (

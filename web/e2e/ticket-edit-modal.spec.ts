@@ -119,8 +119,11 @@ test("criteria are added, edited, ticked and removed without a ticket PATCH", as
   await expect(section).toContainText("2 of 2");
   await section.getByRole("listitem").filter({ hasText: "Second check" }).hover();
   await section.getByRole("button", { name: "Edit criterion 2" }).click();
+  await section.getByLabel("Edit criterion 2").fill("Should not save");
   await section.getByLabel("Edit criterion 2").press("Escape");
   await expect(m).toBeVisible();
+  await expect(section).toContainText("2. Second check");
+  await expect(section).not.toContainText("Should not save");
   await section.getByRole("button", { name: "Edit criterion 2" }).click();
   await section.getByLabel("Edit criterion 2").fill("Second check, edited");
   await section.getByLabel("Edit criterion 2").press("Enter");
