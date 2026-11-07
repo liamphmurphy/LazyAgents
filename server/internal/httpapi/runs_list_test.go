@@ -158,6 +158,19 @@ func TestListRuns(t *testing.T) {
 	if got := list("?state=all&agent=atlas", 200); len(got.Runs) < 4 {
 		t.Fatalf("agent filter dropped runs: %d", len(got.Runs))
 	}
+	// A ticket filter lists every run on that ticket, delegated runs included.
+	byTicket := ids(list("?state=all&ticket=PAY-214", 200))
+	if byTicket[ticketRun.ID].Id == uuid.Nil || byTicket[child.ID].Id == uuid.Nil {
+		t.Fatalf("ticket filter missed the ticket's runs: %+v", byTicket)
+	}
+	for _, r := range byTicket {
+		if r.TicketKey != "PAY-214" {
+			t.Fatalf("ticket filter leaked %s run %s", r.Purpose, r.Id)
+		}
+	}
+	if got := list("?ticket=NOPE-1", 200); len(got.Runs) != 0 {
+		t.Fatal("unknown ticket must match nothing")
+	}
 	if got := list("?agent=nobody", 200); len(got.Runs) != 0 {
 		t.Fatal("unknown agent must match nothing")
 	}

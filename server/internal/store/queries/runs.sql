@@ -218,7 +218,8 @@ FROM counters GROUP BY run_id;
 
 -- name: ListRuns :many
 -- Top-level runs for the Runs index. A run's project comes from its ticket,
--- planning session or chat session; delegated runs are left to their parent.
+-- planning session or chat session; delegated runs are left to their parent
+-- unless the list is filtered to one ticket, where every run is listed.
 SELECT r.* FROM runs r
 LEFT JOIN tickets t ON t.id = r.ticket_id
 LEFT JOIN planning_sessions ps ON ps.run_id = r.id
@@ -227,7 +228,9 @@ LEFT JOIN LATERAL (
   WHERE r.purpose = 'chat' AND (c.current_run_id = r.id OR c.id IN (SELECT m.session_id FROM chat_messages m WHERE m.run_id = r.id))
   LIMIT 1
 ) cs ON true
-WHERE r.workspace_id = sqlc.arg(workspace_id) AND r.parent_run_id IS NULL
+WHERE r.workspace_id = sqlc.arg(workspace_id)
+  AND (r.parent_run_id IS NULL OR sqlc.narg(ticket_id)::uuid IS NOT NULL)
+  AND (sqlc.narg(ticket_id)::uuid IS NULL OR r.ticket_id = sqlc.narg(ticket_id))
   AND r.state = ANY(sqlc.arg(states)::text[])
   AND (sqlc.narg(agent_id)::uuid IS NULL OR r.agent_id = sqlc.narg(agent_id))
   AND (sqlc.narg(purpose)::text IS NULL OR r.purpose = sqlc.narg(purpose))
