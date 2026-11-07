@@ -199,37 +199,37 @@ export function Composer() {
             {boot.data && (
               <div className="flex flex-wrap gap-1.5">
                 <StatusMenu value={status} onChange={setStatus}>
-                  <Chip aria-label="Status">
+                  <Chip>
                     <StatusGlyph state={status} size={12} surface="var(--surface-raised)" label={false} />
                     {STATUS_NAME[status]}
                   </Chip>
                 </StatusMenu>
                 <PriorityMenu value={priority} onChange={setPriority}>
-                  <Chip aria-label="Priority">
+                  <Chip>
                     <PriorityGlyph priority={priority} label={false} />
                     {PRIORITY_NAME[priority]}
                   </Chip>
                 </PriorityMenu>
                 <EpicMenu epics={epics} value={epicId} onChange={setEpicId}>
-                  <Chip aria-label="Epic">
+                  <Chip>
                     <Icon name="epics" size={13} className="text-fg-tertiary" />
                     {epic?.name ?? <span className="text-fg-tertiary">Epic</span>}
                   </Chip>
                 </EpicMenu>
                 <AgentPicker agents={boot.data.agents.filter((a) => a.kind === "main")} value={agentId} onChange={setAgentId}>
-                  <Chip aria-label="Agent">
+                  <Chip>
                     {agent ? <AgentAvatar name={agent.name} colorIndex={agent.color_index} label={false} /> : <Icon name="agents" size={13} className="text-fg-tertiary" />}
                     {agent?.name ?? <span className="text-fg-tertiary">Agent</span>}
                   </Chip>
                 </AgentPicker>
                 <UserMenu users={boot.data.users} value={reviewerId} onChange={setReviewerId}>
-                  <Chip aria-label="Reviewer">
+                  <Chip>
                     {reviewer ? <HumanAvatar name={reviewer.name} initials={reviewer.initials} color={reviewer.avatar_color} size={16} label={false} /> : <Icon name="users" size={13} className="text-fg-tertiary" />}
                     {reviewer?.name ?? <span className="text-fg-tertiary">Reviewer</span>}
                   </Chip>
                 </UserMenu>
                 <LabelPicker labels={boot.data.labels} value={labelIds} onChange={setLabelIds}>
-                  <Chip aria-label="Labels">
+                  <Chip>
                     {labels.length ? (
                       labels.map((l) => (
                         <span key={l.id} className="inline-flex items-center gap-1.5">

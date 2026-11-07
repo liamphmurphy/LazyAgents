@@ -91,7 +91,7 @@ export function BulkBar({
       <StatusMenu onChange={(status) => apply({ status }, `Status → ${STATUS_NAME[status]}`)} align="end">
         <Button variant="ghost" disabled={busy}>Status</Button>
       </StatusMenu>
-      <AgentPicker agents={agents.filter((a) => a.kind === "main")} onChange={(id) => apply({ assignee_agent_id: id }, `Assignee → ${agentName(id)}`)}>
+      <AgentPicker label="Assignee" agents={agents.filter((a) => a.kind === "main")} onChange={(id) => apply({ assignee_agent_id: id }, `Assignee → ${agentName(id)}`)}>
         <Button variant="ghost" disabled={busy}>Assignee</Button>
       </AgentPicker>
       <EpicMenu epics={epics} onChange={(id) => apply({ epic_id: id }, `Epic → ${epicName(id)}`)}>

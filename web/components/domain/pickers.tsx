@@ -1,7 +1,7 @@
 "use client";
 
 import { DropdownMenu, Popover } from "radix-ui";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Priority, Schemas, TicketStatus } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icon";
@@ -19,12 +19,23 @@ function Check({ on }: { on: boolean }) {
   return <span className="ml-auto w-4 text-accent">{on && <Icon name="check" size={14} strokeWidth={1.8} />}</span>;
 }
 
-type MenuProps<T> = { value?: T; onChange: (v: T) => void; children: ReactNode; align?: "start" | "end" };
+/**
+ * `label` names the trigger for assistive tech: what the picker sets, then its
+ * current value ("Status: In progress"). Triggers shouldn't set their own
+ * aria-label; the picker's wins only when the child has none.
+ */
+type MenuProps<T> = { value?: T; onChange: (v: T) => void; children: ReactNode; align?: "start" | "end"; label?: string };
 
-export function StatusMenu({ value, onChange, children, align = "start", statuses = STATUS_ORDER }: MenuProps<TicketStatus> & { statuses?: TicketStatus[] }) {
+/** "Label: value", "Label: none" for a cleared value, or just "Label" with no value (bulk edits). */
+export function pickerName(label: string, value: string | null | undefined) {
+  if (value === undefined) return label;
+  return `${label}: ${value === null || value === "" ? "none" : value}`;
+}
+
+export function StatusMenu({ value, onChange, children, align = "start", label = "Status", statuses = STATUS_ORDER }: MenuProps<TicketStatus> & { statuses?: TicketStatus[] }) {
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild aria-label={pickerName(label, value && STATUS_NAME[value])}>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align={align} sideOffset={6} className={cx(floatPanel, "w-52")}>
           {statuses.map((s) => (
@@ -40,10 +51,10 @@ export function StatusMenu({ value, onChange, children, align = "start", statuse
   );
 }
 
-export function PriorityMenu({ value, onChange, children, align = "start" }: MenuProps<Priority>) {
+export function PriorityMenu({ value, onChange, children, align = "start", label = "Priority" }: MenuProps<Priority>) {
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild aria-label={pickerName(label, value && PRIORITY_NAME[value])}>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align={align} sideOffset={6} className={cx(floatPanel, "w-48")}>
           {PRIORITY_ORDER.map((p) => (
@@ -60,10 +71,10 @@ export function PriorityMenu({ value, onChange, children, align = "start" }: Men
 }
 
 /** Choose whether tickets need a person-approved mockup (bulk edits). */
-export function MockupRequirementMenu({ onChange, children, align = "start" }: Omit<MenuProps<boolean>, "value">) {
+export function MockupRequirementMenu({ onChange, children, align = "start", label = "Mockup requirement" }: Omit<MenuProps<boolean>, "value">) {
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild aria-label={label}>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align={align} sideOffset={6} className={cx(floatPanel, "w-52")}>
           <DropdownMenu.Item className={item} onSelect={() => onChange(true)}>
@@ -83,10 +94,12 @@ export function UserMenu({
   value,
   onChange,
   children,
+  label = "Reviewer",
 }: MenuProps<string | null> & { users: Schemas["User"][] }) {
+  const current = value ? (users.find((u) => u.id === value)?.name ?? null) : value;
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild aria-label={pickerName(label, current)}>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-56")}>
           {users.map((u) => (
@@ -111,10 +124,12 @@ export function EpicMenu({
   value,
   onChange,
   children,
+  label = "Epic",
 }: MenuProps<string | null> & { epics: Schemas["Epic"][] }) {
+  const current = value ? (epics.find((e) => e.id === value)?.name ?? null) : value;
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild aria-label={pickerName(label, current)}>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-56")}>
           {epics.length === 0 && <div className="px-2 py-1.5 text-fg-tertiary">No epics in this project</div>}
@@ -153,6 +168,7 @@ export function AgentPicker({
   children,
   open,
   onOpenChange,
+  label = "Agent",
 }: {
   agents: Schemas["Agent"][];
   value?: string | null;
@@ -160,6 +176,7 @@ export function AgentPicker({
   children: ReactNode;
   open?: boolean;
   onOpenChange?: (o: boolean) => void;
+  label?: string;
 }) {
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
@@ -189,7 +206,7 @@ export function AgentPicker({
 
   return (
     <Popover.Root open={isOpen} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>{children}</Popover.Trigger>
+      <Popover.Trigger asChild aria-label={pickerName(label, value ? (agents.find((a) => a.id === value)?.name ?? null) : value)}>{children}</Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={6} className={cx(floatPanel, "w-[300px] p-0")}>
           <div className="flex items-center gap-2 border-b border-border-subtle px-3">
@@ -267,15 +284,18 @@ export function LabelPicker({
   value,
   onChange,
   children,
+  label = "Labels",
 }: {
   labels: Schemas["Label"][];
   value: string[];
   onChange: (ids: string[]) => void;
   children: ReactNode;
+  label?: string;
 }) {
+  const names = labels.filter((l) => value.includes(l.id)).map((l) => l.name).join(", ");
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild aria-label={pickerName(label, names || null)}>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "max-h-[360px] w-52 overflow-y-auto")}>
           {labels.map((l) => {
@@ -297,5 +317,64 @@ export function LabelPicker({
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
+  );
+}
+
+/**
+ * Story-point radiogroup with a roving tabindex (WAI-ARIA radio group): one
+ * Tab stop, on the checked option (or the first when none is), arrow keys
+ * move focus and check, Home/End jump to the ends.
+ */
+export function EstimatePicker({
+  scale,
+  value,
+  onChange,
+  label = "Estimate",
+  disabled,
+}: {
+  scale: readonly number[];
+  value: number | null | undefined;
+  onChange: (points: number) => void;
+  label?: string;
+  disabled?: boolean;
+}) {
+  const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const checked = value == null ? -1 : scale.indexOf(value);
+  const stop = checked >= 0 ? checked : 0;
+  function move(e: KeyboardEvent, i: number) {
+    const last = scale.length - 1;
+    const next =
+      e.key === "ArrowRight" || e.key === "ArrowDown" ? (i === last ? 0 : i + 1)
+      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? (i === 0 ? last : i - 1)
+      : e.key === "Home" ? 0
+      : e.key === "End" ? last
+      : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    refs.current[next]?.focus();
+    onChange(scale[next]);
+  }
+  return (
+    <div role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} className="inline-flex overflow-hidden rounded-md border border-border-strong">
+      {scale.map((n, i) => (
+        <button
+          key={n}
+          ref={(el) => { refs.current[i] = el; }}
+          type="button"
+          role="radio"
+          aria-checked={i === checked}
+          tabIndex={i === stop ? 0 : -1}
+          disabled={disabled}
+          onClick={() => i !== checked && onChange(n)}
+          onKeyDown={(e) => move(e, i)}
+          className={cx(
+            "h-7 min-w-7 border-l border-border-strong px-1.5 font-mono text-xs first:border-l-0 focus-visible:relative focus-visible:z-10 disabled:opacity-50",
+            i === checked ? "bg-accent text-on-accent" : "text-fg-2 hover:bg-hover",
+          )}
+        >
+          {n}
+        </button>
+      ))}
+    </div>
   );
 }
