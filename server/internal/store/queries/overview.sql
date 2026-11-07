@@ -9,7 +9,7 @@ WITH ranked AS (
  count(*) OVER (PARTITION BY t.assignee_agent_id)::int AS queue_count,
  row_number() OVER (PARTITION BY t.assignee_agent_id ORDER BY
  CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,t.sort_order,t.key) AS pos
- FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.workspace_id=$1 AND NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
+ FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.workspace_id=$1 AND NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status NOT IN ('done', 'canceled')
  AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
 ) SELECT id,key,title,status,priority,assignee_agent_id,queue_count FROM ranked WHERE pos<=10 ORDER BY assignee_agent_id,pos;
 

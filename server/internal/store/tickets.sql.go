@@ -31,7 +31,7 @@ func (q *Queries) AddTicketLabels(ctx context.Context, arg AddTicketLabelsParams
 
 const agentQueue = `-- name: AgentQueue :many
 SELECT t.key, t.title, t.status, t.priority FROM tickets t JOIN projects p ON p.id=t.project_id
-WHERE NOT p.archived AND t.assignee_agent_id = $1 AND t.status <> 'done'
+WHERE NOT p.archived AND t.assignee_agent_id = $1 AND t.status NOT IN ('done', 'canceled')
 ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
   CASE t.status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 ELSE 3 END, t.created_at
 LIMIT 20
@@ -150,7 +150,7 @@ INSERT INTO tickets (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
   (SELECT coalesce(max(sort_order), 0) + 1 FROM tickets WHERE project_id = $2), $15
-) RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup
+) RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at
 `
 
 type CreateTicketParams struct {
@@ -220,6 +220,12 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Tic
 		&i.PrClosedUnmerged,
 		&i.DependencyRevision,
 		&i.RequiresMockup,
+		&i.Revision,
+		&i.EstimatePoints,
+		&i.EstimateRationale,
+		&i.EstimatedByType,
+		&i.EstimatedByID,
+		&i.EstimatedAt,
 	)
 	return i, err
 }
@@ -285,7 +291,7 @@ func (q *Queries) GetCriterion(ctx context.Context, arg GetCriterionParams) (Cri
 }
 
 const getTicketByID = `-- name: GetTicketByID :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup FROM tickets WHERE id = $1
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at FROM tickets WHERE id = $1
 `
 
 func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, error) {
@@ -321,12 +327,18 @@ func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, erro
 		&i.PrClosedUnmerged,
 		&i.DependencyRevision,
 		&i.RequiresMockup,
+		&i.Revision,
+		&i.EstimatePoints,
+		&i.EstimateRationale,
+		&i.EstimatedByType,
+		&i.EstimatedByID,
+		&i.EstimatedAt,
 	)
 	return i, err
 }
 
 const getTicketByKey = `-- name: GetTicketByKey :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup FROM tickets WHERE workspace_id = $1 AND key = $2
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at FROM tickets WHERE workspace_id = $1 AND key = $2
 `
 
 type GetTicketByKeyParams struct {
@@ -367,6 +379,12 @@ func (q *Queries) GetTicketByKey(ctx context.Context, arg GetTicketByKeyParams) 
 		&i.PrClosedUnmerged,
 		&i.DependencyRevision,
 		&i.RequiresMockup,
+		&i.Revision,
+		&i.EstimatePoints,
+		&i.EstimateRationale,
+		&i.EstimatedByType,
+		&i.EstimatedByID,
+		&i.EstimatedAt,
 	)
 	return i, err
 }
@@ -617,7 +635,7 @@ func (q *Queries) ListTicketComments(ctx context.Context, ticketID uuid.UUID) ([
 
 const listTickets = `-- name: ListTickets :many
 SELECT
-  t.id, t.key, t.number, t.title, t.status, t.priority, t.due_date, t.estimate,
+  t.id, t.key, t.number, t.title, t.status, t.priority, t.due_date, t.estimate, t.estimate_points,
   t.pr_number, t.pr_state, t.sort_order, t.created_at, t.updated_at,
   (SELECT count(*) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')::int AS unmet_dependencies,
   p.key AS project_key, p.color AS project_color,
@@ -632,7 +650,7 @@ LEFT JOIN agents a ON a.id = t.assignee_agent_id
 WHERE t.workspace_id = $1
   AND (NOT p.archived OR $2::uuid IS NOT NULL)
   AND (NOT $3::boolean OR (
-    NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
+    NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status NOT IN ('done', 'canceled')
     AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
     AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
   ))
@@ -677,6 +695,7 @@ type ListTicketsRow struct {
 	Priority          string
 	DueDate           *time.Time
 	Estimate          *string
+	EstimatePoints    *int32
 	PrNumber          *int32
 	PrState           *string
 	SortOrder         float64
@@ -724,6 +743,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 			&i.Priority,
 			&i.DueDate,
 			&i.Estimate,
+			&i.EstimatePoints,
 			&i.PrNumber,
 			&i.PrState,
 			&i.SortOrder,
@@ -752,7 +772,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 }
 
 const lockTicketByKey = `-- name: LockTicketByKey :one
-SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE
 `
 
 type LockTicketByKeyParams struct {
@@ -793,6 +813,12 @@ func (q *Queries) LockTicketByKey(ctx context.Context, arg LockTicketByKeyParams
 		&i.PrClosedUnmerged,
 		&i.DependencyRevision,
 		&i.RequiresMockup,
+		&i.Revision,
+		&i.EstimatePoints,
+		&i.EstimateRationale,
+		&i.EstimatedByType,
+		&i.EstimatedByID,
+		&i.EstimatedAt,
 	)
 	return i, err
 }
@@ -855,23 +881,30 @@ func (q *Queries) UpdateCriterion(ctx context.Context, arg UpdateCriterionParams
 const updateTicket = `-- name: UpdateTicket :one
 UPDATE tickets SET
   title = $2, description_md = $3, status = $4, priority = $5, epic_id = $6,
-  assignee_agent_id = $7, reviewer_user_id = $8, estimate = $9, due_date = $10, requires_mockup = $11
+  assignee_agent_id = $7, reviewer_user_id = $8, estimate = $9, due_date = $10, requires_mockup = $11,
+  revision = revision + 1, estimate_points = $12, estimate_rationale = $13,
+  estimated_by_type = $14, estimated_by_id = $15, estimated_at = $16
 WHERE id = $1
-RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup
+RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at
 `
 
 type UpdateTicketParams struct {
-	ID              uuid.UUID
-	Title           string
-	DescriptionMd   string
-	Status          string
-	Priority        string
-	EpicID          *uuid.UUID
-	AssigneeAgentID *uuid.UUID
-	ReviewerUserID  *uuid.UUID
-	Estimate        *string
-	DueDate         *time.Time
-	RequiresMockup  bool
+	ID                uuid.UUID
+	Title             string
+	DescriptionMd     string
+	Status            string
+	Priority          string
+	EpicID            *uuid.UUID
+	AssigneeAgentID   *uuid.UUID
+	ReviewerUserID    *uuid.UUID
+	Estimate          *string
+	DueDate           *time.Time
+	RequiresMockup    bool
+	EstimatePoints    *int32
+	EstimateRationale *string
+	EstimatedByType   *string
+	EstimatedByID     *uuid.UUID
+	EstimatedAt       *time.Time
 }
 
 // Callers load the row, apply the patch in Go and write every field back.
@@ -888,6 +921,11 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Tic
 		arg.Estimate,
 		arg.DueDate,
 		arg.RequiresMockup,
+		arg.EstimatePoints,
+		arg.EstimateRationale,
+		arg.EstimatedByType,
+		arg.EstimatedByID,
+		arg.EstimatedAt,
 	)
 	var i Ticket
 	err := row.Scan(
@@ -920,6 +958,12 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Tic
 		&i.PrClosedUnmerged,
 		&i.DependencyRevision,
 		&i.RequiresMockup,
+		&i.Revision,
+		&i.EstimatePoints,
+		&i.EstimateRationale,
+		&i.EstimatedByType,
+		&i.EstimatedByID,
+		&i.EstimatedAt,
 	)
 	return i, err
 }

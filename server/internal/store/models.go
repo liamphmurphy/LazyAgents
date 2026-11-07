@@ -235,6 +235,20 @@ type Epic struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	RequiresMockup bool
+	Status         string
+}
+
+type EpicCriterion struct {
+	ID            uuid.UUID
+	EpicID        uuid.UUID
+	Position      int32
+	Text          string
+	Done          bool
+	CheckedByType *string
+	CheckedByID   *uuid.UUID
+	CheckedAt     *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type InboxRead struct {
@@ -448,6 +462,12 @@ type Ticket struct {
 	PrClosedUnmerged   bool
 	DependencyRevision int32
 	RequiresMockup     bool
+	Revision           int32
+	EstimatePoints     *int32
+	EstimateRationale  *string
+	EstimatedByType    *string
+	EstimatedByID      *uuid.UUID
+	EstimatedAt        *time.Time
 }
 
 type TicketArtifact struct {

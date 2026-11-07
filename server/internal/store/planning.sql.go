@@ -266,7 +266,7 @@ func (q *Queries) PlanningSessionForRun(ctx context.Context, runID uuid.UUID) (P
 const readyPlanningTickets = `-- name: ReadyPlanningTickets :many
 SELECT t.key FROM tickets t JOIN projects p ON p.id=t.project_id
 WHERE t.workspace_id=$1 AND t.key=ANY($2::text[]) AND NOT p.archived
-AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
+AND t.assignee_agent_id IS NOT NULL AND t.status NOT IN ('done', 'canceled')
 AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
 AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
 ORDER BY t.key

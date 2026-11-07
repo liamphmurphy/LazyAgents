@@ -3014,6 +3014,8 @@ export interface operations {
                 "application/json": {
                     text?: string;
                     done?: boolean;
+                    /** @description Move to this 1-based position; other criteria shift to keep positions contiguous. */
+                    position?: number;
                 };
             };
         };

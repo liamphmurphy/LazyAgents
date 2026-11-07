@@ -100,6 +100,10 @@ func (s *Server) ListTickets(ctx context.Context, req api.ListTicketsRequestObje
 			Pr:            toPR(r.PrNumber, r.PrState, nil, nil, nil),
 			CriteriaTotal: int(r.CriteriaTotal), CriteriaDone: int(r.CriteriaDone), UpdatedAt: r.UpdatedAt,
 		}
+		if r.EstimatePoints != nil {
+			v := int(*r.EstimatePoints)
+			t.EstimatePoints = &v
+		}
 		if r.EpicID != nil {
 			t.Epic = &api.EpicRef{Id: *r.EpicID, Name: deref(r.EpicName)}
 		}
@@ -138,6 +142,20 @@ func (s *Server) ticketDetail(ctx context.Context, ws uuid.UUID, t store.Ticket)
 		Estimate: t.Estimate, DueDate: toDate(t.DueDate), Branch: t.Branch,
 		Pr:        withSync(toPR(t.PrNumber, t.PrState, t.PrUrl, t.PrAdditions, t.PrDeletions), t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, RequiresMockup: t.RequiresMockup,
+	}
+	out.Revision = int(t.Revision)
+	if t.EstimatePoints != nil {
+		v := int(*t.EstimatePoints)
+		out.EstimatePoints = &v
+	}
+	out.EstimateRationale, out.EstimatedAt = t.EstimateRationale, t.EstimatedAt
+	if t.EstimatedByType != nil {
+		dir, err := s.directory(ctx, ws)
+		if err != nil {
+			return api.Ticket{}, err
+		}
+		a := dir.actor(*t.EstimatedByType, t.EstimatedByID)
+		out.EstimatedBy = &a
 	}
 	out.DependencyRevision = int(t.DependencyRevision)
 	out.BlockedBy = []api.TicketDependency{}
@@ -262,7 +280,7 @@ func optUUID(n nullable.Nullable[openapi_types.UUID]) tracker.Opt[uuid.UUID] {
 
 func toPatch(b api.TicketPatch) tracker.Patch {
 	p := tracker.Patch{
-		Title: b.Title, DescriptionMd: b.DescriptionMd,
+		Title: b.Title, DescriptionMd: b.DescriptionMd, Revision: b.Revision,
 		EpicID: optUUID(b.EpicId), AssigneeAgentID: optUUID(b.AssigneeAgentId), ReviewerUserID: optUUID(b.ReviewerUserId),
 		LabelIDs: b.LabelIds, RequiresMockup: b.RequiresMockup,
 	}
@@ -273,6 +291,13 @@ func toPatch(b api.TicketPatch) tracker.Patch {
 	if b.Priority != nil {
 		v := string(*b.Priority)
 		p.Priority = &v
+	}
+	if b.EstimatePoints.IsSpecified() {
+		if b.EstimatePoints.IsNull() {
+			p.EstimatePoints = tracker.Clear[int]()
+		} else {
+			p.EstimatePoints = tracker.SetTo(b.EstimatePoints.MustGet())
+		}
 	}
 	if b.Estimate.IsSpecified() {
 		if b.Estimate.IsNull() {

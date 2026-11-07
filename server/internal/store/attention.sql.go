@@ -29,7 +29,7 @@ WITH items AS (
  UNION ALL
  SELECT 'dispatch:'||t.id,'dispatch',t.title,ag.name||' is waiting for dispatch','/tickets/'||t.key,p.key,t.key,greatest(t.updated_at,(SELECT max(b.updated_at) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id))::timestamptz,false
  FROM tickets t JOIN projects p ON p.id=t.project_id JOIN agents ag ON ag.id=t.assignee_agent_id
- WHERE t.workspace_id=$3 AND NOT p.archived AND t.status <> 'done'
+ WHERE t.workspace_id=$3 AND NOT p.archived AND t.status NOT IN ('done', 'canceled')
  AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
  UNION ALL
@@ -39,7 +39,7 @@ WITH items AS (
  UNION ALL
  SELECT 'blocked:'||r.id,'blocked',t.title,coalesce(r.outcome,'Run needs a person'),'/runs/'||r.id,p.key,t.key,r.updated_at,false
  FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN projects p ON p.id=t.project_id
- WHERE r.workspace_id=$3 AND t.status<>'done' AND (r.state IN ('blocked','failed') OR (r.state='waiting' AND r.wait_reason='human_reply'))
+ WHERE r.workspace_id=$3 AND t.status NOT IN ('done', 'canceled') AND (r.state IN ('blocked','failed') OR (r.state='waiting' AND r.wait_reason='human_reply'))
  AND NOT EXISTS (SELECT 1 FROM runs newer WHERE newer.ticket_id=r.ticket_id AND newer.started_at>r.started_at)
  UNION ALL
  SELECT 'mention:'||c.id,'mention',t.title,left(c.body_md,240),'/tickets/'||t.key,p.key,t.key,c.created_at,false

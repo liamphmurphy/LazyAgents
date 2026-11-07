@@ -161,6 +161,10 @@ func (s *Server) overview(ctx context.Context, ws uuid.UUID) (overview, error) {
 	if err != nil {
 		return out, err
 	}
+	rollups, err := s.epicRollups(ctx, epics)
+	if err != nil {
+		return out, err
+	}
 	counts, err := s.Q.OverviewTicketCounts(ctx, ws)
 	if err != nil {
 		return out, err
@@ -215,7 +219,7 @@ func (s *Server) overview(ctx context.Context, ws uuid.UUID) (overview, error) {
 		if !activeProjects[e.ProjectID] {
 			continue
 		}
-		o := api.EpicOverview{Epic: toEpic(e), Objective: e.Objective, StartDate: toDate(e.StartDate), TargetDate: toDate(e.TargetDate), Agents: []api.AgentRef{}, Tickets: []api.WorkTicket{}}
+		o := api.EpicOverview{Epic: toEpic(e, rollups[e.ID]), Objective: e.Objective, StartDate: toDate(e.StartDate), TargetDate: toDate(e.TargetDate), Agents: []api.AgentRef{}, Tickets: []api.WorkTicket{}}
 		for _, p := range projects {
 			if p.ID == e.ProjectID {
 				o.Project = toProject(p)

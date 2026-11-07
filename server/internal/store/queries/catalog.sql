@@ -28,7 +28,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce(sqlc.narg(kind), 'main')) RETUR
 SELECT * FROM agents WHERE workspace_id = $1 AND kind = 'sub' AND archived_at IS NULL ORDER BY handle;
 
 -- name: CountOpenTicketsForAgent :one
-SELECT count(*) FROM tickets WHERE assignee_agent_id = $1 AND status <> 'done';
+SELECT count(*) FROM tickets WHERE assignee_agent_id = $1 AND status NOT IN ('done', 'canceled');
 
 -- name: ListAgents :many
 SELECT * FROM agents WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY color_index, name;

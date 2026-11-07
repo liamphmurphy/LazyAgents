@@ -11,6 +11,12 @@ import (
 
 func TestCommitNotifications(t *testing.T) {
 	pool := testdb.New(t)
+	// Ticket triggers send nothing for statements that touch no rows, so seed one.
+	if _, err := pool.Exec(context.Background(), `WITH w AS (INSERT INTO workspaces(name,slug) VALUES('W','w') RETURNING id),
+		p AS (INSERT INTO projects(workspace_id,key,name,color) SELECT id,'PRJ','P','#000' FROM w RETURNING id, workspace_id)
+		INSERT INTO tickets(workspace_id,project_id,number,key,title) SELECT workspace_id,id,1,'PRJ-1','T' FROM p`); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	h := New()
 	ch := make(chan string, 32)

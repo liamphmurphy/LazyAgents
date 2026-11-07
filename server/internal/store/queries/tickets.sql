@@ -17,13 +17,15 @@ SELECT * FROM tickets WHERE workspace_id = $1 AND key = $2 FOR UPDATE;
 -- Callers load the row, apply the patch in Go and write every field back.
 UPDATE tickets SET
   title = $2, description_md = $3, status = $4, priority = $5, epic_id = $6,
-  assignee_agent_id = $7, reviewer_user_id = $8, estimate = $9, due_date = $10, requires_mockup = $11
+  assignee_agent_id = $7, reviewer_user_id = $8, estimate = $9, due_date = $10, requires_mockup = $11,
+  revision = revision + 1, estimate_points = $12, estimate_rationale = $13,
+  estimated_by_type = $14, estimated_by_id = $15, estimated_at = $16
 WHERE id = $1
 RETURNING *;
 
 -- name: ListTickets :many
 SELECT
-  t.id, t.key, t.number, t.title, t.status, t.priority, t.due_date, t.estimate,
+  t.id, t.key, t.number, t.title, t.status, t.priority, t.due_date, t.estimate, t.estimate_points,
   t.pr_number, t.pr_state, t.sort_order, t.created_at, t.updated_at,
   (SELECT count(*) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')::int AS unmet_dependencies,
   p.key AS project_key, p.color AS project_color,
@@ -38,7 +40,7 @@ LEFT JOIN agents a ON a.id = t.assignee_agent_id
 WHERE t.workspace_id = sqlc.arg(workspace_id)
   AND (NOT p.archived OR sqlc.narg(project_id)::uuid IS NOT NULL)
   AND (NOT sqlc.arg(ready)::boolean OR (
-    NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status<>'done'
+    NOT p.archived AND t.assignee_agent_id IS NOT NULL AND t.status NOT IN ('done', 'canceled')
     AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
     AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
   ))
@@ -138,7 +140,7 @@ LIMIT 20;
 -- name: AgentQueue :many
 -- Tickets assigned to an agent that aren't done, most urgent first.
 SELECT t.key, t.title, t.status, t.priority FROM tickets t JOIN projects p ON p.id=t.project_id
-WHERE NOT p.archived AND t.assignee_agent_id = $1 AND t.status <> 'done'
+WHERE NOT p.archived AND t.assignee_agent_id = $1 AND t.status NOT IN ('done', 'canceled')
 ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
   CASE t.status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 ELSE 3 END, t.created_at
 LIMIT 20;

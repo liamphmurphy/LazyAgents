@@ -21,6 +21,10 @@ func TestCostAndCumulativeUsageMigration(t *testing.T) {
 	// ...and tickets/epics.requires_mockup (migration 24).
 	mustExec(t, pool, `ALTER TABLE tickets ADD COLUMN requires_mockup boolean NOT NULL DEFAULT false`)
 	mustExec(t, pool, `ALTER TABLE epics ADD COLUMN requires_mockup boolean NOT NULL DEFAULT false`)
+	// ...and the ticket revision/estimate and epic status columns (migration 25).
+	mustExec(t, pool, `ALTER TABLE tickets ADD COLUMN revision integer NOT NULL DEFAULT 1, ADD COLUMN estimate_points integer,
+		ADD COLUMN estimate_rationale text, ADD COLUMN estimated_by_type text, ADD COLUMN estimated_by_id uuid, ADD COLUMN estimated_at timestamptz`)
+	mustExec(t, pool, `ALTER TABLE epics ADD COLUMN status text NOT NULL DEFAULT 'open'`)
 	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
 		t.Fatal(err)
 	}

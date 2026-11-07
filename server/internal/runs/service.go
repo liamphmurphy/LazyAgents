@@ -122,6 +122,12 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 	var run store.Run
 	moved := false
 	err := s.tx(ctx, func(q *store.Queries) error {
+		if err := tracker.LockTicketProjects(ctx, q, ws, []string{key}); err != nil {
+			if errors.Is(err, tracker.ErrNotFound) {
+				return apperr.Invalid("ticket", "no ticket %s", key)
+			}
+			return err
+		}
 		t, err := q.LockTicketByKey(ctx, store.LockTicketByKeyParams{WorkspaceID: ws, Key: strings.ToUpper(strings.TrimSpace(key))})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.Invalid("ticket", "no ticket %s", key)
@@ -133,6 +139,9 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		}
 		if t.AssigneeAgentID == nil || *t.AssigneeAgentID != c.Agent.ID {
 			return apperr.Conflict("%s isn't assigned to @%s. A person assigns tickets; ask for it in a comment.", t.Key, c.Agent.Handle)
+		}
+		if t.Status == "canceled" {
+			return apperr.Conflict("%s is canceled", t.Key)
 		}
 		if live, err := q.ActiveRunForTicket(ctx, &t.ID); err == nil {
 			if live.AgentID != c.Agent.ID {
@@ -152,7 +161,7 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		if t.Status == "done" {
 			return apperr.Conflict("%s is done", t.Key)
 		}
-		p, err := q.LockProject(ctx, store.LockProjectParams{ID: t.ProjectID, WorkspaceID: ws})
+		p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: ws})
 		if err != nil {
 			return err
 		}
@@ -207,6 +216,12 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 	}
 	var out []store.Run
 	err := s.tx(ctx, func(q *store.Queries) error {
+		if err := tracker.LockTicketProjects(ctx, q, ws, keys); err != nil {
+			if errors.Is(err, tracker.ErrNotFound) {
+				return apperr.Invalid("keys", "unknown ticket")
+			}
+			return err
+		}
 		for _, key := range keys {
 			t, err := q.LockTicketByKey(ctx, store.LockTicketByKeyParams{WorkspaceID: ws, Key: strings.ToUpper(strings.TrimSpace(key))})
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -217,8 +232,8 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			if t.AssigneeAgentID == nil {
 				return apperr.Invalid("keys", "%s has no agent; assign one first", t.Key)
 			}
-			if t.Status == "done" {
-				return apperr.Conflict("%s is done", t.Key)
+			if t.Status == "done" || t.Status == "canceled" {
+				return apperr.Conflict("%s is %s", t.Key, t.Status)
 			}
 			if live, err := q.ActiveRunForTicket(ctx, &t.ID); err == nil {
 				return apperr.Conflict("%s already has a %s run", t.Key, live.State)
@@ -232,7 +247,7 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			if agent.Kind == agents.KindSub {
 				return apperr.Conflict("%s is assigned to @%s, a sub agent; assign a main agent, which can delegate to it", t.Key, agent.Handle)
 			}
-			p, err := q.LockProject(ctx, store.LockProjectParams{ID: t.ProjectID, WorkspaceID: ws})
+			p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: ws})
 			if err != nil {
 				return err
 			}
