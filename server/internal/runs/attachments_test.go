@@ -1,9 +1,12 @@
 package runs
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 )
 
 func TestChatAttachmentName(t *testing.T) {
@@ -89,5 +92,15 @@ func TestSearchResultLinks(t *testing.T) {
 	echo := "Web search results for query: \"" + q + "\"\n\nLinks: []"
 	if got := SearchResultLinks(q, echo); len(got) != 0 {
 		t.Fatalf("query echo whitelisted %v", got)
+	}
+}
+
+func TestCheckChatAttachmentQuota(t *testing.T) {
+	if err := CheckChatAttachmentQuota(MaxChatAttachmentStorageBytes-10, 10); err != nil {
+		t.Fatalf("at the cap: %v", err)
+	}
+	var ve *apperr.ValidationError
+	if err := CheckChatAttachmentQuota(MaxChatAttachmentStorageBytes-10, 11); !errors.As(err, &ve) || ve.Field != "file" {
+		t.Fatalf("over the cap: %v", err)
 	}
 }

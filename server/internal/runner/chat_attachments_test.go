@@ -27,6 +27,11 @@ func (m memBlobs) Get(_ context.Context, bucket, key string) (blob.Object, error
 	return blob.Object{Body: io.NopCloser(bytes.NewReader(b)), ContentLength: int64(len(b))}, nil
 }
 
+func (m memBlobs) Delete(_ context.Context, bucket, key string) error {
+	delete(m, bucket+"/"+key)
+	return nil
+}
+
 // Uploads are bound only to their owner's next message and delivered to that
 // turn's workspace under .lazyagents/attachments/ (LAZYAGENTS-72).
 func TestChatAttachmentsAreBoundAndDelivered(t *testing.T) {
@@ -91,5 +96,60 @@ func TestChatAttachmentsAreBoundAndDelivered(t *testing.T) {
 	_, err = e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "again", AttachmentIDs: []uuid.UUID{mine.ID}})
 	if !errors.As(err, &ve) || ve.Field != "attachment_ids" {
 		t.Fatalf("reused attachment: %v", err)
+	}
+}
+
+// The sweep deletes uploads never sent, and those a chat's deletion detached,
+// once they're a day old, objects included; sent and fresh ones stay
+// (LAZYAGENTS-77).
+func TestSweepDeletesStaleChatAttachments(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	blobs := memBlobs{}
+	e.runner.Attachments, e.runner.Cfg.AttachmentBucket = blobs, "artifacts"
+	upload := func(name string) store.ChatAttachment {
+		key := "chat-attachments/" + uuid.NewString()
+		blobs["artifacts/"+key] = []byte("body")
+		a, err := e.q.CreateChatAttachment(e.ctx, store.CreateChatAttachmentParams{WorkspaceID: e.ws, UserID: e.me.ID, Filename: name,
+			ContentType: "text/plain; charset=utf-8", SizeBytes: 4, BlobKey: key})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	age := func(a store.ChatAttachment) {
+		if _, err := e.pool.Exec(e.ctx, "UPDATE chat_attachments SET created_at = now() - interval '25 hours' WHERE id = $1", a.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unsent, fresh, sent, deleted := upload("unsent.txt"), upload("fresh.txt"), upload("sent.txt"), upload("deleted.txt")
+	start := func(a store.ChatAttachment) store.ChatSession {
+		c, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY",
+			Message: &runs.ChatMessageInput{Body: "read this", AttachmentIDs: []uuid.UUID{a.ID}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.until("reply", func() bool { return e.chat(c.ID).State == "idle" })
+		return c
+	}
+	start(sent)
+	gone := start(deleted)
+	if err := e.runs.DeleteChat(e.ctx, e.ws, e.me.ID, gone.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []store.ChatAttachment{unsent, sent, deleted} {
+		age(a)
+	}
+
+	e.runner.Sweep(e.ctx)
+	for _, c := range []struct {
+		a    store.ChatAttachment
+		kept bool
+	}{{unsent, false}, {deleted, false}, {fresh, true}, {sent, true}} {
+		_, err := e.q.GetChatAttachment(e.ctx, store.GetChatAttachmentParams{ID: c.a.ID, WorkspaceID: e.ws, UserID: e.me.ID})
+		_, obj := blobs["artifacts/"+c.a.BlobKey]
+		if (err == nil) != c.kept || obj != c.kept {
+			t.Errorf("%s: row err %v, object %v, want kept %v", c.a.Filename, err, obj, c.kept)
+		}
 	}
 }
