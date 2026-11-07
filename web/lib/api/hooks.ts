@@ -159,8 +159,10 @@ export function useRevisionCheckedUpdate(key: string, onFailed?: (e: Error, v: R
     },
     // Hook-level, not per-mutate: queued saves each report their own failure.
     onError: (e, v, ctx) => {
+      // A queued save snapshots `prev` when mutate() is called, possibly before an
+      // earlier save landed, so always refetch after rolling back.
       if (ctx?.prev) qc.setQueryData(keys.ticket(key), ctx.prev);
-      if (e instanceof ApiError && e.status === 409) void qc.invalidateQueries({ queryKey: keys.ticket(key) });
+      void qc.invalidateQueries({ queryKey: keys.ticket(key) });
       onFailed?.(e, v);
     },
     onSuccess: (t) => {

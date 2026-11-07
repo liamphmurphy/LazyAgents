@@ -1,7 +1,7 @@
 "use client";
 
 import { DropdownMenu, Popover } from "radix-ui";
-import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Priority, Schemas, TicketStatus } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icon";
@@ -323,7 +323,8 @@ export function LabelPicker({
 /**
  * Story-point radiogroup with a roving tabindex (WAI-ARIA radio group): one
  * Tab stop, on the checked option (or the first when none is), arrow keys
- * move focus and check, Home/End jump to the ends.
+ * move focus and check, Home/End jump to the ends. Keyboard moves report one
+ * change once the person settles (or leaves the group), not one per key.
  */
 export function EstimatePicker({
   scale,
@@ -339,7 +340,26 @@ export function EstimatePicker({
   disabled?: boolean;
 }) {
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
-  const checked = value == null ? -1 : scale.indexOf(value);
+  const [pending, setPending] = useState<number | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const latest = useRef({ pending, value, onChange });
+  useEffect(() => {
+    latest.current = { pending, value, onChange };
+  });
+  const flush = () => {
+    clearTimeout(timer.current);
+    const { pending: p, value: v, onChange: change } = latest.current;
+    if (p != null && p !== v) change(p);
+    setPending(null);
+  };
+  // Don't drop a settled keyboard choice when the panel unmounts.
+  useEffect(() => () => {
+    clearTimeout(timer.current);
+    const { pending: p, value: v, onChange: change } = latest.current;
+    if (p != null && p !== v) change(p);
+  }, []);
+  const shown = pending ?? value;
+  const checked = shown == null ? -1 : scale.indexOf(shown);
   const stop = checked >= 0 ? checked : 0;
   function move(e: KeyboardEvent, i: number) {
     const last = scale.length - 1;
@@ -352,10 +372,20 @@ export function EstimatePicker({
     if (next < 0) return;
     e.preventDefault();
     refs.current[next]?.focus();
-    onChange(scale[next]);
+    setPending(scale[next]);
+    latest.current.pending = scale[next];
+    clearTimeout(timer.current);
+    timer.current = setTimeout(flush, 600);
   }
   return (
-    <div role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} className="inline-flex overflow-hidden rounded-md border border-border-strong">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flush();
+      }}
+      className="inline-flex overflow-hidden rounded-md border border-border-strong">
       {scale.map((n, i) => (
         <button
           key={n}
@@ -365,7 +395,12 @@ export function EstimatePicker({
           aria-checked={i === checked}
           tabIndex={i === stop ? 0 : -1}
           disabled={disabled}
-          onClick={() => i !== checked && onChange(n)}
+          onClick={() => {
+            clearTimeout(timer.current);
+            setPending(null);
+            latest.current.pending = null;
+            if (n !== value) onChange(n);
+          }}
           onKeyDown={(e) => move(e, i)}
           className={cx(
             "h-7 min-w-7 border-l border-border-strong px-1.5 font-mono text-xs first:border-l-0 focus-visible:relative focus-visible:z-10 disabled:opacity-50",

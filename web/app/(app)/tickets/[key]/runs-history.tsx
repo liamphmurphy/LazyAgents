@@ -16,7 +16,7 @@ export function RunsHistory({ t }: { t: Ticket }) {
   const list = runs.data?.runs ?? [];
   const priced = list.filter((r) => r.cost_source && r.cost_source !== "unknown");
   const total = priced.reduce((sum, r) => sum + r.cost_usd, 0);
-  const partial = priced.length < list.length || priced.some((r) => r.cost_source === "partial");
+  const partial = !!runs.data?.has_more || priced.length < list.length || priced.some((r) => r.cost_source === "partial");
 
   return (
     <section aria-labelledby="runs-title" className="flex flex-col gap-1.5">
@@ -26,7 +26,7 @@ export function RunsHistory({ t }: { t: Ticket }) {
         </h2>
         {list.length > 0 && <span className="font-mono text-[12.5px] text-fg-tertiary">{list.length}{runs.data?.has_more && "+"}</span>}
         {priced.length > 0 && (
-          <span className="ml-auto font-mono text-xs text-fg-secondary" title={partial ? "Some runs have no reported cost" : undefined}>
+          <span className="ml-auto font-mono text-xs text-fg-secondary" title={partial ? "Some runs have no reported cost, or older runs aren't loaded" : undefined}>
             {partial ? "≥ " : ""}${total.toFixed(2)} total
           </span>
         )}
@@ -70,6 +70,11 @@ export function RunsHistory({ t }: { t: Ticket }) {
             );
           })}
         </ul>
+      )}
+      {runs.data?.has_more && (
+        <Link href={`/runs?state=all&project=${encodeURIComponent(t.project.key)}`} className="px-2 text-xs text-accent hover:underline">
+          Showing the latest 50. All runs in {t.project.name} →
+        </Link>
       )}
     </section>
   );

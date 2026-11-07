@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas, type Ticket } from "@/lib/api/client";
-import { hasLiveRun } from "@/lib/api/hooks";
+import { hasLiveRun, keys as queryKeys } from "@/lib/api/hooks";
 import { Button, IconButton } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/primitives";
 import { StatusGlyph } from "@/components/domain/glyphs";
@@ -35,9 +35,11 @@ export function Dependencies({ ticket: t }: { ticket: Ticket }) {
       const keys = other.blocked_by.map((d) => d.key);
       return putBlockers(other.key, other.dependency_revision, c.op === "add" ? [...keys, t.key] : keys.filter((k) => k !== t.key));
     },
-    onSettled: () => {
-      for (const key of ["tickets", "planning", "inbox", "bootstrap", "dashboard", "agent-overviews", "boards"]) void qc.invalidateQueries({ queryKey: [key] });
-    },
+    // The saved ticket carries the new dependency_revision; cache it before the
+    // buttons re-enable so a quick second edit doesn't send a stale revision.
+    onSuccess: (saved) => qc.setQueryData(queryKeys.ticket(saved.key), saved),
+    onSettled: () =>
+      Promise.all(["tickets", "planning", "inbox", "bootstrap", "dashboard", "agent-overviews", "boards"].map((key) => qc.invalidateQueries({ queryKey: [key] }))),
   });
   const live = hasLiveRun(t);
   return (

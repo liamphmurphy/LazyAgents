@@ -129,7 +129,7 @@ export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstra
           {PRIORITY_NAME[t.priority]}
         </PropButton>
       </PriorityMenu>
-      <AgentPicker agents={boot.agents.filter((a) => a.kind === "main")} value={t.assignee?.id} onChange={(id) => save({ assignee_agent_id: id }, `Agent → ${agentName(id)}`)}>
+      <AgentPicker agents={boot.agents.filter((a) => a.kind === "main")} value={t.assignee?.id ?? null} onChange={(id) => save({ assignee_agent_id: id }, `Agent → ${agentName(id)}`)}>
         <PropButton label="Agent">
           {t.assignee ? (
             <>
@@ -195,7 +195,7 @@ export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstra
         </span>
       </div>
       <div className="flex min-h-[34px] items-start gap-2.5 px-2 py-1">
-        <span id="prop-estimate" className="w-[88px] flex-none pt-1.5 text-[12.5px] text-fg-tertiary">
+        <span aria-hidden className="w-[88px] flex-none pt-1.5 text-[12.5px] text-fg-tertiary">
           Estimate
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">

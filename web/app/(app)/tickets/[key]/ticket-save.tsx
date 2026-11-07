@@ -22,7 +22,8 @@ export function useTicketSave(t: Ticket | undefined) {
   const [error, setError] = useState<string | null>(null);
   const update = useRevisionCheckedUpdate(t?.key ?? "", (e, { patch, what }) => {
     const c = e instanceof ApiError ? classifyError(e.status, e.field, e.message) : { conflict: false, fields: {}, general: e.message };
-    if (c.conflict) setConflict({ patch, what });
+    // Several queued edits can each hit the 409: keep them all for Reapply.
+    if (c.conflict) setConflict((prev) => (prev ? { patch: { ...prev.patch, ...patch }, what: `${prev.what}, ${what}` } : { patch, what }));
     else setError(c.general ?? Object.values(c.fields)[0] ?? e.message);
   });
 
