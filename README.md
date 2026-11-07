@@ -12,7 +12,7 @@
   <p><strong>Self-hosted</strong> &nbsp; / &nbsp; Claude Code · Codex · OpenCode &nbsp; / &nbsp; Automatic fallbacks &nbsp; / &nbsp; Human approvals</p>
 </div>
 
-![LazyAgents dashboard showing project progress, the review inbox, agent activity, and ticket flow](docs/images/homepage.png)
+![LazyAgents dashboard showing setup status, items that need you, live runs, blocked tickets, active chats, and epics at risk](docs/images/homepage.png)
 
 ## A shared harness for every model
 
