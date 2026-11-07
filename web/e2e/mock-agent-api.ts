@@ -3,7 +3,8 @@ import type { Page, Route } from "@playwright/test";
 /**
  * In-memory stand-in for the agent REST contract (api/openapi.yaml, tag `agents`):
  * GET /agents/{handle}, PUT /agents/{handle}/definition,
- * PUT /agents/{handle}/overrides/{project}, GET /agents/{handle}/resolved.
+ * PUT /agents/{handle}/overrides/{project}, GET /agents/{handle}/resolved,
+ * GET /agents/{handle}/runs, GET /agent-overviews and GET /wiki/pages.
  * State is kept across page reloads. A definition whose harness is opencode
  * must have a provider-qualified model, like the server (agentdef/opencode.go).
  */
@@ -13,8 +14,10 @@ type Spec = {
   harness: Harness; model: string; instructions: string; scopes: Record<string, string>;
   budget: Record<string, unknown>; max_concurrency: number; mcp_servers: unknown[];
   harness_options: Record<string, Record<string, string>>; fallbacks?: Array<{ harness: Harness; model: string }>;
+  skills?: Array<{ name: string; description: string; body: string }>;
 };
-type Override = { harness?: Harness; model?: string; [k: string]: unknown };
+type Override = { harness?: Harness; model?: string; scopes?: Record<string, string>; [k: string]: unknown };
+type Skill = { name: string; description: string; body: string };
 
 const HARNESSES = [
   { name: "claude-code", label: "Claude Code", tool_gating: true, permission_prompt: true, native_cost: true, resume: true },
@@ -26,15 +29,32 @@ const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0
 
 export type Saved = { definition: Array<Record<string, unknown>>; overrides: Array<{ project: string; body: Override }> };
 
-export async function installAgentApi(page: Page) {
+const CATALOG = [
+  { scope: "repo:read", description: "Clone and read the project repo", brokered: false, secret: "repo-token" },
+  { scope: "tests:run", description: "Run the test suite", brokered: false },
+  { scope: "db:migrate", description: "Apply migrations to staging", brokered: true },
+  { scope: "wiki:write", description: "Edit wiki pages outside the agent's own memory", brokered: true, api_only: true },
+];
+const RANK: Record<string, number> = { allowed: 0, requires_approval: 1, denied: 2 };
+
+/** Options seed state the default tests don't need: a project override, skills, more scopes. */
+export type AgentApiOptions = {
+  spec?: Partial<Spec>;
+  override?: Override;
+  /** Skills the project override adds and removes, applied only in resolved. */
+  skillsAdd?: Skill[];
+  skillsRemove?: string[];
+};
+
+export async function installAgentApi(page: Page, opts: AgentApiOptions = {}) {
   const now = () => new Date().toISOString();
   const agent = { id: UUID(1), kind: "main", name: "Atlas", handle: "atlas", color_index: 0, role: "Backend", specialty: "APIs", model: "opus-5.5", status: "idle" };
   let spec: Spec = {
     harness: "claude-code", model: "opus-5.5", instructions: "Be helpful.", scopes: { "repo:read": "allowed" },
-    budget: {}, max_concurrency: 1, mcp_servers: [], harness_options: {},
+    budget: {}, max_concurrency: 1, mcp_servers: [], harness_options: {}, ...opts.spec,
   };
   let version = 1;
-  let override: Override | undefined;
+  let override: Override | undefined = opts.override;
   const unhandled: string[] = [];
   const saved: Saved = { definition: [], overrides: [] };
 
@@ -46,8 +66,44 @@ export async function installAgentApi(page: Page) {
     versions: [{ id: UUID(100 + version), version, note: "", created_at: now() }],
     overrides: override ? [{ project: PROJECT, override, changes: Object.keys(override).map((k) => `${k} = ${String(override![k])}`), version: 1, updated_at: now() }] : [],
     harnesses: HARNESSES,
-    catalog: [{ scope: "repo:read", description: "Read the repo", brokered: false }],
+    catalog: CATALOG,
   });
+
+  // Mirrors agentdef.Resolve for exact scope names (enough for these tests).
+  const resolvedScopes = () => {
+    const names = [...new Set([...Object.keys(spec.scopes), ...Object.keys(override?.scopes ?? {})])].sort();
+    return names.map((name) => {
+      const base = spec.scopes[name];
+      const p = override?.scopes?.[name];
+      const mode = p && (!base || RANK[p] > RANK[base]) ? p : (base ?? "denied");
+      const source = p && (!base || RANK[p] > RANK[base]) ? "project" : "agent";
+      return { scope: name, mode, source, enforcement: "harness", how: "", description: "" };
+    });
+  };
+  const resolvedSkills = () => [
+    ...(spec.skills ?? []).filter((k) => !(override && opts.skillsRemove?.includes(k.name))),
+    ...(override ? (opts.skillsAdd ?? []) : []),
+  ];
+
+  const overview = () => ({
+    agent: { ...agent, model: spec.model, status: "running" },
+    max_concurrency: 2,
+    harness: spec.harness,
+    planning_runs: [],
+    assignments: [
+      { run_id: UUID(500), ticket: { id: UUID(600), key: "WEB-7", title: "Agents directory", status: "in_progress" }, state: "running", harness: spec.harness, model: spec.model, started_at: now(), step: "Write the scopes tab", step_position: 2, steps_done: 1, steps_total: 4 },
+    ],
+    queue: [{ id: UUID(601), key: "WEB-8", title: "Next thing", status: "todo" }],
+    queue_count: 3,
+    stats: { completed: 5, median_cycle_seconds: 3600, merged_prs: 4, closed_prs: 5, spend_usd: 12.5 },
+    scopes: Object.entries(spec.scopes).map(([scope, mode]) => ({ scope, mode, enforcement: "harness", how: "" })),
+  });
+  const helper = {
+    agent: { id: UUID(9), kind: "sub", name: "Scout", handle: "scout", color_index: 2, role: "Read-only fact gathering", specialty: "", model: "haiku-5.5", status: "idle" },
+    max_concurrency: 1, harness: "claude-code", planning_runs: [], assignments: [], queue: [], queue_count: 0,
+    stats: { completed: 0, median_cycle_seconds: null, merged_prs: 0, closed_prs: 0, spend_usd: 0.4 },
+    scopes: [{ scope: "repo:read", mode: "allowed", enforcement: "credential", how: "" }],
+  };
 
   async function handle(route: Route) {
     const req = route.request();
@@ -85,10 +141,28 @@ export async function installAgentApi(page: Page) {
       override = Object.keys(b).some((k) => b[k] !== undefined && !(Array.isArray(b[k]) && (b[k] as unknown[]).length === 0)) ? b : undefined;
       return json(detail());
     }
+    if (path === "/agent-overviews") return json({ agents: [overview(), helper], stats_as_of: now() });
+    if (path === "/agents/atlas/runs") {
+      const run = (n: number, state: string, key: string, title: string, cost: number, source: string) => ({
+        id: UUID(700 + n), ticket: { id: UUID(800 + n), key, title, status: "done" }, state, harness: "claude-code", model: "opus-5.5",
+        started_at: new Date(Date.now() - n * 3_600_000).toISOString(), ended_at: new Date(Date.now() - n * 3_600_000 + 360_000).toISOString(),
+        cost_usd: cost, cost_source: source, tool_calls: 14, tokens: 1000,
+      });
+      return json({ runs: [run(1, "completed", "WEB-5", "Mockup review", 0.31, "reported"), run(2, "failed", "WEB-4", "Board drag and drop", 0.44, "reported"), run(3, "cancelled", "WEB-3", "Runs filters", 0, "unknown")], has_more: false });
+    }
+    if (path === "/wiki/pages") {
+      const pg = (n: number, path: string, title: string, extra: Record<string, unknown> = {}) => ({
+        id: UUID(900 + n), path, title, author: { type: "agent", name: "Atlas" }, updated_at: new Date(Date.now() - n * 86_400_000).toISOString(), published: true, suggestions: 0, ...extra,
+      });
+      return json({
+        pages: [pg(3, "agents/atlas/Epic stacking", "Epic stacking"), pg(1, "agents/atlas/Memory", "Memory"), pg(2, "agents/atlas/Signing commits", "Signing commits", { suggestions: 1 }), pg(4, "agents/scout/Memory", "Memory"), pg(5, "Patterns/Go/Wrap errors", "Wrap errors")],
+        suggestions: 1,
+      });
+    }
     if (path === "/agents/atlas/resolved") {
       return json({
         harness: override?.harness ?? spec.harness, model: override?.model ?? spec.model, instructions: spec.instructions,
-        scopes: [], budget: {}, max_concurrency: 1, mcp_servers: [], harness_options: {}, setup: [],
+        scopes: resolvedScopes(), skills: resolvedSkills(), budget: {}, max_concurrency: 1, mcp_servers: [], harness_options: {}, setup: [],
         provenance: { ...(override?.harness ? { harness: "project" } : {}), ...(override?.model ? { model: "project" } : {}) },
       });
     }

@@ -55,8 +55,8 @@ func (q *Queries) ActivePlanningWork(ctx context.Context, workspaceID uuid.UUID)
 }
 
 const createPlanningSession = `-- name: CreatePlanningSession :one
-INSERT INTO planning_sessions(workspace_id,project_id,epic_id,artifact_id,source_version_id,goal,run_id,created_by)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at
+INSERT INTO planning_sessions(workspace_id,project_id,epic_id,artifact_id,source_version_id,goal,run_id,created_by,context_refs)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at, context_refs, proposal_count
 `
 
 type CreatePlanningSessionParams struct {
@@ -68,6 +68,7 @@ type CreatePlanningSessionParams struct {
 	Goal            string
 	RunID           uuid.UUID
 	CreatedBy       uuid.UUID
+	ContextRefs     json.RawMessage
 }
 
 func (q *Queries) CreatePlanningSession(ctx context.Context, arg CreatePlanningSessionParams) (PlanningSession, error) {
@@ -80,6 +81,7 @@ func (q *Queries) CreatePlanningSession(ctx context.Context, arg CreatePlanningS
 		arg.Goal,
 		arg.RunID,
 		arg.CreatedBy,
+		arg.ContextRefs,
 	)
 	var i PlanningSession
 	err := row.Scan(
@@ -98,12 +100,14 @@ func (q *Queries) CreatePlanningSession(ctx context.Context, arg CreatePlanningS
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContextRefs,
+		&i.ProposalCount,
 	)
 	return i, err
 }
 
 const getPlanningSession = `-- name: GetPlanningSession :one
-SELECT id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at FROM planning_sessions WHERE id=$1 AND workspace_id=$2
+SELECT id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at, context_refs, proposal_count FROM planning_sessions WHERE id=$1 AND workspace_id=$2
 `
 
 type GetPlanningSessionParams struct {
@@ -130,12 +134,14 @@ func (q *Queries) GetPlanningSession(ctx context.Context, arg GetPlanningSession
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContextRefs,
+		&i.ProposalCount,
 	)
 	return i, err
 }
 
 const listPlanningSessions = `-- name: ListPlanningSessions :many
-SELECT id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at FROM planning_sessions WHERE workspace_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100
+SELECT id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at, context_refs, proposal_count FROM planning_sessions WHERE workspace_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100
 `
 
 func (q *Queries) ListPlanningSessions(ctx context.Context, workspaceID uuid.UUID) ([]PlanningSession, error) {
@@ -163,6 +169,8 @@ func (q *Queries) ListPlanningSessions(ctx context.Context, workspaceID uuid.UUI
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ContextRefs,
+			&i.ProposalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -175,7 +183,7 @@ func (q *Queries) ListPlanningSessions(ctx context.Context, workspaceID uuid.UUI
 }
 
 const lockPlanningSession = `-- name: LockPlanningSession :one
-SELECT id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at FROM planning_sessions WHERE id=$1 AND workspace_id=$2 FOR UPDATE
+SELECT id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at, context_refs, proposal_count FROM planning_sessions WHERE id=$1 AND workspace_id=$2 FOR UPDATE
 `
 
 type LockPlanningSessionParams struct {
@@ -202,6 +210,8 @@ func (q *Queries) LockPlanningSession(ctx context.Context, arg LockPlanningSessi
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContextRefs,
+		&i.ProposalCount,
 	)
 	return i, err
 }
@@ -237,7 +247,7 @@ func (q *Queries) PlanningEpicTickets(ctx context.Context, epicID *uuid.UUID) ([
 }
 
 const planningSessionForRun = `-- name: PlanningSessionForRun :one
-SELECT id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at FROM planning_sessions WHERE run_id=$1
+SELECT id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at, context_refs, proposal_count FROM planning_sessions WHERE run_id=$1
 `
 
 func (q *Queries) PlanningSessionForRun(ctx context.Context, runID uuid.UUID) (PlanningSession, error) {
@@ -259,6 +269,8 @@ func (q *Queries) PlanningSessionForRun(ctx context.Context, runID uuid.UUID) (P
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContextRefs,
+		&i.ProposalCount,
 	)
 	return i, err
 }
@@ -297,6 +309,20 @@ func (q *Queries) ReadyPlanningTickets(ctx context.Context, arg ReadyPlanningTic
 	return items, nil
 }
 
+const setPlanningProposalCount = `-- name: SetPlanningProposalCount :exec
+UPDATE planning_sessions SET proposal_count=$2 WHERE id=$1
+`
+
+type SetPlanningProposalCountParams struct {
+	ID            uuid.UUID
+	ProposalCount int32
+}
+
+func (q *Queries) SetPlanningProposalCount(ctx context.Context, arg SetPlanningProposalCountParams) error {
+	_, err := q.db.Exec(ctx, setPlanningProposalCount, arg.ID, arg.ProposalCount)
+	return err
+}
+
 const setPlanningSessionEpic = `-- name: SetPlanningSessionEpic :exec
 UPDATE planning_sessions SET epic_id=$2 WHERE id=$1
 `
@@ -312,7 +338,7 @@ func (q *Queries) SetPlanningSessionEpic(ctx context.Context, arg SetPlanningSes
 }
 
 const updatePlanningSession = `-- name: UpdatePlanningSession :one
-UPDATE planning_sessions SET proposals=$2,state=$3,ticket_keys=$4,revision=revision+1,updated_at=now() WHERE id=$1 RETURNING id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at
+UPDATE planning_sessions SET proposals=$2,state=$3,ticket_keys=$4,revision=revision+1,updated_at=now() WHERE id=$1 RETURNING id, workspace_id, project_id, epic_id, artifact_id, source_version_id, goal, run_id, state, proposals, ticket_keys, revision, created_by, created_at, updated_at, context_refs, proposal_count
 `
 
 type UpdatePlanningSessionParams struct {
@@ -346,6 +372,8 @@ func (q *Queries) UpdatePlanningSession(ctx context.Context, arg UpdatePlanningS
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContextRefs,
+		&i.ProposalCount,
 	)
 	return i, err
 }

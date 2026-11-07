@@ -64,7 +64,7 @@ func ResolveChatRefs(ctx context.Context, q *store.Queries, ws, project uuid.UUI
 
 func resolveChatRef(ctx context.Context, q *store.Queries, ws, project uuid.UUID, r ChatContextRef) (ChatRefDoc, error) {
 	r.Key, r.Anchor = strings.TrimSpace(r.Key), strings.TrimSpace(r.Anchor)
-	unknown := apperr.Invalid("context_refs", "%s is not in this chat's project", r)
+	unknown := apperr.Invalid("context_refs", "%s is not in this project", r)
 	bad := func(why string) error { return apperr.Invalid("context_refs", "%s: %s", r, why) }
 	d := ChatRefDoc{Ref: r}
 	switch r.Kind {

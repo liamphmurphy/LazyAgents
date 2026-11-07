@@ -9,7 +9,7 @@ import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 
 /** The page or ticket the newest call reads, linked once it resolves. Unknown refs stay plain text (no ghost "create" link). */
-function ActivityRef({ refText, label }: { refText: string; label: string }) {
+export function ActivityRef({ refText, label }: { refText: string; label: string }) {
   const resolved = useResolvedLinks([refText]);
   const targets = useMemo(() => {
     const m = new Map<string, LinkTarget>();
