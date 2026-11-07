@@ -205,3 +205,34 @@ func TestCommentRepliesStayOneLevel(t *testing.T) {
 		t.Fatalf("reply to a reply should attach to the root comment")
 	}
 }
+
+func TestTicketRevisionAndEstimate(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	ticket, err := f.svc.Create(ctx, f.ws, f.maya, tracker.NewTicket{ProjectKey: "PAY", Title: "revision"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := int(ticket.Revision)
+	unchanged, err := f.svc.Update(ctx, f.ws, f.maya, ticket.Key, tracker.Patch{Revision: &revision, Title: &ticket.Title})
+	if err != nil || unchanged.Revision != ticket.Revision {
+		t.Fatalf("no-op: %+v %v", unchanged, err)
+	}
+	updated, err := f.svc.Update(ctx, f.ws, f.maya, ticket.Key, tracker.Patch{Revision: &revision, EstimatePoints: tracker.SetTo(5)})
+	if err != nil || updated.Revision != ticket.Revision+1 || updated.EstimatePoints == nil || *updated.EstimatePoints != 5 {
+		t.Fatalf("estimate: %+v %v", updated, err)
+	}
+	if _, err := f.svc.Update(ctx, f.ws, f.maya, ticket.Key, tracker.Patch{Revision: &revision}); err == nil {
+		t.Fatal("stale no-op accepted")
+	}
+	if _, err := f.svc.Update(ctx, f.ws, f.maya, ticket.Key, tracker.Patch{EstimatePoints: tracker.SetTo(4)}); err == nil {
+		t.Fatal("off-scale estimate accepted")
+	}
+	if _, err := f.svc.Bulk(ctx, f.ws, f.maya, []string{ticket.Key}, tracker.Patch{Revision: &revision}, nil); err == nil {
+		t.Fatal("bulk revision accepted")
+	}
+	agent := f.agent["quill"].ID
+	if _, err := f.svc.Update(ctx, f.ws, tracker.Actor{Type: "agent", ID: &agent}, ticket.Key, tracker.Patch{EstimatePoints: tracker.SetTo(8)}); err == nil {
+		t.Fatal("agent overwrote human estimate")
+	}
+}

@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	Statuses   = []string{"backlog", "todo", "in_progress", "in_review", "done"}
-	Priorities = []string{"none", "low", "medium", "high", "urgent"}
+	Statuses      = []string{"backlog", "todo", "in_progress", "in_review", "done", "canceled"}
+	EstimateScale = []int{1, 2, 3, 5, 8, 13}
+	Priorities    = []string{"none", "low", "medium", "high", "urgent"}
 )
 
 type Service struct {
@@ -65,17 +66,20 @@ type NewTicket struct {
 }
 
 type Patch struct {
-	Title           *string
-	DescriptionMd   *string
-	Status          *string
-	Priority        *string
-	EpicID          Opt[uuid.UUID]
-	AssigneeAgentID Opt[uuid.UUID]
-	ReviewerUserID  Opt[uuid.UUID]
-	Estimate        Opt[string]
-	DueDate         Opt[time.Time]
-	LabelIDs        *[]uuid.UUID
-	RequiresMockup  *bool
+	Revision          *int
+	EstimatePoints    Opt[int]
+	EstimateRationale *string
+	Title             *string
+	DescriptionMd     *string
+	Status            *string
+	Priority          *string
+	EpicID            Opt[uuid.UUID]
+	AssigneeAgentID   Opt[uuid.UUID]
+	ReviewerUserID    Opt[uuid.UUID]
+	Estimate          Opt[string]
+	DueDate           Opt[time.Time]
+	LabelIDs          *[]uuid.UUID
+	RequiresMockup    *bool
 }
 
 func validTitle(t string) (string, error) {
@@ -185,6 +189,9 @@ func CreateInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 	}
 	if err := checkEnum("status", in.Status, Statuses); err != nil {
 		return store.Ticket{}, err
+	}
+	if in.Status == "canceled" && actor.Type != "user" {
+		return store.Ticket{}, apperr.Conflict("only a person may cancel a ticket")
 	}
 	if err := checkEnum("priority", in.Priority, Priorities); err != nil {
 		return store.Ticket{}, err
@@ -312,6 +319,9 @@ func (s *Service) Update(ctx context.Context, ws uuid.UUID, actor Actor, key str
 // attaching one artifact to each. Title and description are per-ticket and
 // rejected here.
 func (s *Service) Bulk(ctx context.Context, ws uuid.UUID, actor Actor, keys []string, p Patch, attach *uuid.UUID) (int, error) {
+	if p.Revision != nil {
+		return 0, invalid("revision", "not allowed in bulk updates")
+	}
 	if p.Title != nil || p.DescriptionMd != nil {
 		return 0, invalid("patch", "title and description can't be bulk-edited")
 	}
@@ -358,11 +368,16 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 	if err != nil {
 		return cur, notFound(err)
 	}
+	if p.Revision != nil && *p.Revision != int(cur.Revision) {
+		return cur, apperr.Conflict("ticket revision is stale")
+	}
 	r := refs{q, ws}
 	next := store.UpdateTicketParams{
 		ID: cur.ID, Title: cur.Title, DescriptionMd: cur.DescriptionMd, Status: cur.Status, Priority: cur.Priority,
 		EpicID: cur.EpicID, AssigneeAgentID: cur.AssigneeAgentID, ReviewerUserID: cur.ReviewerUserID,
 		Estimate: cur.Estimate, DueDate: cur.DueDate, RequiresMockup: cur.RequiresMockup,
+		EstimatePoints: cur.EstimatePoints, EstimateRationale: cur.EstimateRationale,
+		EstimatedByType: cur.EstimatedByType, EstimatedByID: cur.EstimatedByID, EstimatedAt: cur.EstimatedAt,
 	}
 	var events []event
 	add := func(verb string, payload map[string]any) {
@@ -386,6 +401,16 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 	if p.Status != nil && *p.Status != cur.Status {
 		if err := checkEnum("status", *p.Status, Statuses); err != nil {
 			return cur, err
+		}
+		if *p.Status == "canceled" {
+			if actor.Type != "user" {
+				return cur, apperr.Conflict("only a person may cancel a ticket")
+			}
+			if _, err := q.ActiveRunForTicket(ctx, &cur.ID); err == nil {
+				return cur, apperr.Conflict("cancel the run first")
+			} else if !errors.Is(err, pgx.ErrNoRows) {
+				return cur, err
+			}
 		}
 		next.Status = *p.Status
 		add(VerbStatusChanged, map[string]any{"from": cur.Status, "to": *p.Status})
@@ -445,6 +470,32 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			add(VerbEstimateChanged, map[string]any{"to": v})
 		}
 	}
+	if p.EstimatePoints.Set {
+		var points *int32
+		if p.EstimatePoints.Value != nil {
+			if !slices.Contains(EstimateScale, *p.EstimatePoints.Value) {
+				return cur, invalid("estimate_points", "must be one of 1, 2, 3, 5, 8, 13")
+			}
+			v := int32(*p.EstimatePoints.Value)
+			points = &v
+		}
+		if !ptrEq(points, cur.EstimatePoints) || !ptrEq(p.EstimateRationale, cur.EstimateRationale) {
+			if actor.Type == "agent" && cur.EstimatedByType != nil && *cur.EstimatedByType == "user" {
+				return cur, apperr.Conflict("a person estimated this; comment instead")
+			}
+			if p.EstimateRationale != nil && len([]rune(*p.EstimateRationale)) > 2000 {
+				return cur, invalid("estimate_rationale", "must be at most 2000 characters")
+			}
+			next.EstimatePoints, next.EstimateRationale = points, p.EstimateRationale
+			if points == nil {
+				next.EstimatedByType, next.EstimatedByID, next.EstimatedAt = nil, nil, nil
+			} else {
+				now := time.Now()
+				next.EstimatedByType, next.EstimatedByID, next.EstimatedAt = &actor.Type, actor.ID, &now
+			}
+			add(VerbEstimateChanged, map[string]any{"to_points": points, "rationale": p.EstimateRationale})
+		}
+	}
 	if p.DueDate.Set && !dateEq(p.DueDate.Value, cur.DueDate) {
 		next.DueDate = p.DueDate.Value
 		var to any
@@ -458,6 +509,15 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		add(VerbMockupRequirementChanged, map[string]any{"from": cur.RequiresMockup, "to": *p.RequiresMockup})
 	}
 
+	if p.LabelIDs != nil {
+		ev, err := setLabels(ctx, q, r, cur.ID, *p.LabelIDs)
+		if err != nil {
+			return cur, err
+		}
+		if ev != nil {
+			events = append(events, *ev)
+		}
+	}
 	t := cur
 	if len(events) > 0 {
 		if t, err = q.UpdateTicket(ctx, next); err != nil {
@@ -467,16 +527,6 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 			if err := links.Index(ctx, q, ws, links.Source{Kind: links.SourceTicket, ID: t.ID, TicketID: &t.ID}, t.DescriptionMd); err != nil {
 				return cur, err
 			}
-		}
-	}
-
-	if p.LabelIDs != nil {
-		ev, err := setLabels(ctx, q, r, cur.ID, *p.LabelIDs)
-		if err != nil {
-			return cur, err
-		}
-		if ev != nil {
-			events = append(events, *ev)
 		}
 	}
 	for _, e := range events {

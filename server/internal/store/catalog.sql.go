@@ -26,7 +26,7 @@ func (q *Queries) AllocateTicketNumber(ctx context.Context, id uuid.UUID) (int32
 }
 
 const countOpenTicketsForAgent = `-- name: CountOpenTicketsForAgent :one
-SELECT count(*) FROM tickets WHERE assignee_agent_id = $1 AND status <> 'done'
+SELECT count(*) FROM tickets WHERE assignee_agent_id = $1 AND status NOT IN ('done', 'canceled')
 `
 
 func (q *Queries) CountOpenTicketsForAgent(ctx context.Context, assigneeAgentID *uuid.UUID) (int64, error) {

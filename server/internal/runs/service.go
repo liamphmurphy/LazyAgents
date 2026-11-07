@@ -134,6 +134,9 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		if t.AssigneeAgentID == nil || *t.AssigneeAgentID != c.Agent.ID {
 			return apperr.Conflict("%s isn't assigned to @%s. A person assigns tickets; ask for it in a comment.", t.Key, c.Agent.Handle)
 		}
+		if t.Status == "canceled" {
+			return apperr.Conflict("%s is canceled", t.Key)
+		}
 		if live, err := q.ActiveRunForTicket(ctx, &t.ID); err == nil {
 			if live.AgentID != c.Agent.ID {
 				return apperr.Conflict("%s already has a run by another agent", t.Key)
@@ -217,8 +220,8 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			if t.AssigneeAgentID == nil {
 				return apperr.Invalid("keys", "%s has no agent; assign one first", t.Key)
 			}
-			if t.Status == "done" {
-				return apperr.Conflict("%s is done", t.Key)
+			if t.Status == "done" || t.Status == "canceled" {
+				return apperr.Conflict("%s is %s", t.Key, t.Status)
 			}
 			if live, err := q.ActiveRunForTicket(ctx, &t.ID); err == nil {
 				return apperr.Conflict("%s already has a %s run", t.Key, live.State)
