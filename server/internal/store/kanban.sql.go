@@ -7,9 +7,124 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const boardTickets = `-- name: BoardTickets :many
+WITH ranked AS (
+ SELECT t.id, t.key, t.number, t.title, t.status, t.priority, t.due_date, t.estimate_points,
+ t.pr_number, t.pr_state, t.updated_at, t.sort_order,
+ p.key AS project_key, e.id AS epic_id, e.name AS epic_name,
+ a.id AS agent_id, a.name AS agent_name, a.handle AS agent_handle, a.color_index AS agent_color_index,
+ (SELECT count(*) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status <> 'done')::int AS unmet_dependencies,
+ (SELECT count(*) FROM acceptance_criteria c WHERE c.ticket_id=t.id)::int AS criteria_total,
+ (SELECT count(*) FROM acceptance_criteria c WHERE c.ticket_id=t.id AND c.done)::int AS criteria_done,
+ count(*) OVER (PARTITION BY t.status)::int AS column_count,
+ coalesce(sum(t.estimate_points) OVER (PARTITION BY t.status),0)::int AS column_points,
+ row_number() OVER (PARTITION BY t.status ORDER BY
+   CASE WHEN t.status IN ('done','canceled') THEN t.updated_at END DESC,
+   CASE WHEN t.status NOT IN ('done','canceled') THEN CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END END,
+   t.sort_order, t.number, t.id) AS row_num
+ FROM tickets t JOIN projects p ON p.id=t.project_id
+ LEFT JOIN epics e ON e.id=t.epic_id LEFT JOIN agents a ON a.id=t.assignee_agent_id
+ WHERE t.workspace_id=$1 AND t.project_id=$2
+ AND ($3::uuid IS NULL OR t.epic_id=$3)
+ AND ($4::text IS NULL OR a.handle=$4)
+ AND ($5::bool OR t.status <> 'canceled')
+)
+SELECT id, key, number, title, status, priority, due_date, estimate_points, pr_number, pr_state, updated_at, sort_order, project_key, epic_id, epic_name, agent_id, agent_name, agent_handle, agent_color_index, unmet_dependencies, criteria_total, criteria_done, column_count, column_points, row_num FROM ranked WHERE status NOT IN ('done','canceled') OR row_num <= 50
+ORDER BY status, row_num
+`
+
+type BoardTicketsParams struct {
+	WorkspaceID     uuid.UUID
+	ProjectID       uuid.UUID
+	EpicID          *uuid.UUID
+	Assignee        *string
+	IncludeCanceled bool
+}
+
+type BoardTicketsRow struct {
+	ID                uuid.UUID
+	Key               string
+	Number            int32
+	Title             string
+	Status            string
+	Priority          string
+	DueDate           *time.Time
+	EstimatePoints    *int32
+	PrNumber          *int32
+	PrState           *string
+	UpdatedAt         time.Time
+	SortOrder         float64
+	ProjectKey        string
+	EpicID            *uuid.UUID
+	EpicName          *string
+	AgentID           *uuid.UUID
+	AgentName         *string
+	AgentHandle       *string
+	AgentColorIndex   *int32
+	UnmetDependencies int32
+	CriteriaTotal     int32
+	CriteriaDone      int32
+	ColumnCount       int32
+	ColumnPoints      int32
+	RowNum            int64
+}
+
+func (q *Queries) BoardTickets(ctx context.Context, arg BoardTicketsParams) ([]BoardTicketsRow, error) {
+	rows, err := q.db.Query(ctx, boardTickets,
+		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.EpicID,
+		arg.Assignee,
+		arg.IncludeCanceled,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BoardTicketsRow{}
+	for rows.Next() {
+		var i BoardTicketsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Key,
+			&i.Number,
+			&i.Title,
+			&i.Status,
+			&i.Priority,
+			&i.DueDate,
+			&i.EstimatePoints,
+			&i.PrNumber,
+			&i.PrState,
+			&i.UpdatedAt,
+			&i.SortOrder,
+			&i.ProjectKey,
+			&i.EpicID,
+			&i.EpicName,
+			&i.AgentID,
+			&i.AgentName,
+			&i.AgentHandle,
+			&i.AgentColorIndex,
+			&i.UnmetDependencies,
+			&i.CriteriaTotal,
+			&i.CriteriaDone,
+			&i.ColumnCount,
+			&i.ColumnPoints,
+			&i.RowNum,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const compactEpicCriteria = `-- name: CompactEpicCriteria :exec
 UPDATE epic_criteria SET position = position - 1 WHERE epic_id = $1 AND position > $2

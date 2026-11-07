@@ -115,6 +115,15 @@ func (d actorDirectory) event(e store.ActivityEvent) api.ActivityEvent {
 	return api.ActivityEvent{Id: e.ID, Actor: d.actor(e.ActorType, e.ActorID), Verb: e.Verb, Payload: payload, CreatedAt: e.CreatedAt}
 }
 
-func toEpic(e store.Epic) api.Epic {
-	return api.Epic{Id: e.ID, ProjectId: e.ProjectID, Name: e.Name, Health: api.EpicHealth(e.Health), RequiresMockup: e.RequiresMockup, Status: api.EpicStatusOpen}
+func toEpic(e store.Epic, r store.EpicRollupsRow) api.Epic {
+	return api.Epic{Id: e.ID, ProjectId: e.ProjectID, Name: e.Name, Health: api.EpicHealth(e.Health), RequiresMockup: e.RequiresMockup, Status: api.EpicStatus(e.Status), CriteriaTotal: int(r.CriteriaTotal), CriteriaDone: int(r.CriteriaDone), PointsTotal: int(r.PointsTotal), PointsDone: int(r.PointsDone), TicketsTotal: int(r.TicketsTotal), TicketsOpen: int(r.TicketsOpen)}
+}
+
+func toEpicCriterion(c store.EpicCriterion, d actorDirectory) api.EpicCriterion {
+	out := api.EpicCriterion{Id: c.ID, EpicId: c.EpicID, Position: int(c.Position), Text: c.Text, Done: c.Done, CheckedAt: c.CheckedAt}
+	if c.CheckedByType != nil {
+		a := d.actor(*c.CheckedByType, c.CheckedByID)
+		out.CheckedBy = &a
+	}
+	return out
 }

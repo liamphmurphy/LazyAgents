@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/liamphmurphy/lazyagents/server/internal/api"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
@@ -64,8 +66,12 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 			out.Counts.LiveAgents++
 		}
 	}
+	rollups, err := s.epicRollups(ctx, epics)
+	if err != nil {
+		return nil, err
+	}
 	for _, x := range epics {
-		out.Epics = append(out.Epics, toEpic(x))
+		out.Epics = append(out.Epics, toEpic(x, rollups[x.ID]))
 	}
 	for _, x := range labels {
 		out.Labels = append(out.Labels, toLabel(x))
@@ -82,5 +88,21 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 		return nil, err
 	}
 	out.Counts.WikiSuggestions = int(sugg)
+	return out, nil
+}
+
+func (s *Server) epicRollups(ctx context.Context, epics []store.Epic) (map[uuid.UUID]store.EpicRollupsRow, error) {
+	ids := make([]uuid.UUID, 0, len(epics))
+	for _, e := range epics {
+		ids = append(ids, e.ID)
+	}
+	rows, err := s.Q.EpicRollups(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID]store.EpicRollupsRow, len(rows))
+	for _, r := range rows {
+		out[r.EpicID] = r
+	}
 	return out, nil
 }

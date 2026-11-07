@@ -2,12 +2,8 @@ package httpapi
 
 import (
 	"context"
-	"errors"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
@@ -40,22 +36,23 @@ func (s *Server) ReviewArtifactVersion(ctx context.Context, req api.ReviewArtifa
 
 func (s *Server) UpdateEpic(ctx context.Context, req api.UpdateEpicRequestObject) (api.UpdateEpicResponseObject, error) {
 	_, _, ws := me(ctx)
-	e, err := s.Q.GetEpic(ctx, store.GetEpicParams{ID: req.Id, WorkspaceID: ws})
+	var status *string
+	if req.Body.Status != nil {
+		v := string(*req.Body.Status)
+		status = &v
+	}
+	e, err := s.Tracker.UpdateEpic(ctx, ws, req.Id, status, req.Body.RequiresMockup)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperr.ErrNotFound
-		}
 		return nil, err
 	}
-	if req.Body.RequiresMockup != nil {
-		if e, err = s.Tracker.SetEpicRequiresMockup(ctx, ws, e.ID, *req.Body.RequiresMockup); err != nil {
+	if req.Body.RequiresMockup != nil && !*req.Body.RequiresMockup {
+		if err := s.Runs.ReleaseMockupWaiters(ctx, ws, nil, &e.ID, ""); err != nil {
 			return nil, err
 		}
-		if !*req.Body.RequiresMockup {
-			if err := s.Runs.ReleaseMockupWaiters(ctx, ws, nil, &e.ID, ""); err != nil {
-				return nil, err
-			}
-		}
 	}
-	return api.UpdateEpic200JSONResponse(toEpic(e)), nil
+	rollups, err := s.epicRollups(ctx, []store.Epic{e})
+	if err != nil {
+		return nil, err
+	}
+	return api.UpdateEpic200JSONResponse(toEpic(e, rollups[e.ID])), nil
 }
