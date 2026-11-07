@@ -6,13 +6,15 @@ import type { Page, Route } from "@playwright/test";
  * the selected harness/model. Swap `installChatApi` for the real stack once
  * LAZYAGENTS-11 lands; the spec only talks to the UI.
  *
- * A message starting with "slow:" keeps the turn running until it is cancelled.
+ * A message starting with "slow:" keeps the turn running until it is cancelled;
+ * its run reports one tool call (read_page Eng/Plan) for the live activity line.
+ * Replies carry token usage and cost.
  */
 
 type Harness = "claude-code" | "codex" | "opencode";
 type State = "idle" | "running" | "failed";
 type Chat = {
-  id: string; project: string; title: string; harness: Harness; model: string; state: State;
+  id: string; project: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
   created_at: string; updated_at: string; last_message_at?: string;
 };
@@ -28,6 +30,14 @@ const REPORT = { kind: "artifact", id: "22222222-2222-4222-8222-222222222222", t
 const TICKET = { kind: "ticket", id: "33333333-3333-4333-8333-333333333333", title: "Fix payouts", display_id: "WEB-3", href: "/tickets/WEB-3", status: "todo" };
 const OTHER = { kind: "ticket", id: "44444444-4444-4444-8444-444444444444", title: "Elsewhere", display_id: "OTHER-9", href: "/tickets/OTHER-9", status: "todo" };
 const TARGETS: Array<{ title: string; path?: string; display_id?: string }> = [PLAN, REPORT, TICKET, OTHER];
+
+// Bootstrap agents: two main agents a chat can answer as, and a sub agent that can't.
+export const AGENTS = [
+  { id: "aaaaaaaa-0000-4000-8000-000000000001", name: "Atlas", handle: "atlas", kind: "main", color_index: 0, role: "Tech lead", specialty: "Plans and reviews", model: "opus-5.5", status: "idle" },
+  { id: "aaaaaaaa-0000-4000-8000-000000000002", name: "Juno", handle: "juno", kind: "main", color_index: 3, role: "Mastermind", specialty: "Product and UX", model: "opus-5.5", status: "idle" },
+  { id: "aaaaaaaa-0000-4000-8000-000000000003", name: "Helper", handle: "helper", kind: "sub", color_index: 5, role: "Implementer", specialty: "Code", model: "sonnet-5.5", status: "idle" },
+];
+const USAGE = { input_tokens: 48200, output_tokens: 1300, cached_input_tokens: 41000, uncached_input_tokens: 7200, unreported_input_tokens: 0, cost_usd: 0.0421 };
 
 export type Posted = { chat: string; body: Record<string, unknown> };
 export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number };
@@ -67,8 +77,10 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const chats: Chat[] = [];
   const messages = new Map<string, Message[]>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const runEvents = new Map<string, Array<{ seq: number; type: string; at: string; payload: Record<string, unknown> }>>();
   const unhandled: string[] = [];
   const posted: Posted[] = [];
+  const created: Array<Record<string, unknown>> = [];
   const artifactForms: string[] = [];
   const wikiPages: Array<{ path: string; body_md: string; project_key?: string }> = [];
   let n = 0;
@@ -110,14 +122,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
           { target: TICKET, title: TICKET.title },
         ]
       : undefined;
-    add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, ...(citations ? { citations } : {}) });
+    add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, ...USAGE, ...(citations ? { citations } : {}) });
     void emit(c);
   }
   function ref(c: Chat) {
-    return {
-      ...c,
-      agent: { id: uuid(), name: "Atlas", handle: "atlas", color_index: 0 },
-    };
+    const a = AGENTS.find((x) => x.id === c.agent_id)!;
+    return { ...c, agent_id: undefined, agent: { id: a.id, name: a.name, handle: a.handle, color_index: a.color_index } };
   }
 
   async function handle(route: Route) {
@@ -134,13 +144,16 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return json({
         workspace: { id: uuid(), name: "Acme", slug: "acme" },
         me: { id: uuid(), name: "Liam", email: "liam@example.com", initials: "L", role_title: "Owner" },
-        users: [], agents: [], epics: [], labels: [],
+        users: [], agents: AGENTS, epics: [], labels: [],
         projects: [{ id: uuid(), key: "WEB", name: "Web app", color: "#6e56cf", default_branch: "main", archived: false, revision: 1 }],
         counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
       });
     }
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, queued: 0 });
-    if (path === "/knowledge/resolve") return json({ links: [] });
+    if (path === "/knowledge/resolve") {
+      // Only the plan page resolves, so the live activity line can link it.
+      return json({ links: url.searchParams.getAll("ref").filter((r) => r === PLAN.path).map((r) => ({ ref: r, target: PLAN })) });
+    }
     if (path === "/knowledge/suggest") {
       const q = (url.searchParams.get("q") ?? "").toLowerCase();
       return json({ targets: TARGETS.filter((t) => !q || `${t.title} ${t.path ?? ""} ${t.display_id ?? ""}`.toLowerCase().includes(q)) });
@@ -171,8 +184,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     }
     if (path === "/chats" && method === "POST") {
       const b = body();
+      const agent = b.agent_id === undefined ? AGENTS[0] : AGENTS.find((a) => a.id === b.agent_id);
+      if (!agent) return fail(err(422, "invalid", "unknown agent", "agent_id"));
+      if (agent.kind === "sub") return fail(err(422, "invalid", "pick a main agent", "agent_id"));
+      created.push(b);
       const c: Chat = {
-        id: uuid(), project: String(b.project), title: String(b.title ?? "New chat"),
+        id: uuid(), project: String(b.project), title: String(b.title ?? "New chat"), agent_id: agent.id,
         harness: (b.harness as Harness) ?? "claude-code", model: String(b.model ?? "opus-5.5"),
         state: "idle", archived: false, revision: 1, message_count: 0, created_at: now(), updated_at: now(),
       };
@@ -226,6 +243,11 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         c.error = undefined;
         c.current_run_id = c.current_run_id ?? uuid();
         touch(c);
+        if (text.startsWith("slow:")) {
+          const events = runEvents.get(c.current_run_id) ?? [];
+          events.push({ seq: events.length + 1, type: "tool_call", at: now(), payload: { id: `call-${events.length + 1}`, tool: "mcp__lazyagents__read_page", input: { ref: PLAN.path } } });
+          runEvents.set(c.current_run_id, events);
+        }
         if (!text.startsWith("slow:")) timers.set(c.id, setTimeout(() => finishTurn(c, text), delay));
         void emit(c);
         return json({ chat: ref(c), message: user }, 202);
@@ -243,7 +265,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
 
     const run = /^\/runs\/([^/]+)$/.exec(path);
     if (run) {
-      return json({ run: {}, turns: [], approvals: [], events: [] });
+      return json({ run: {}, turns: [], approvals: [], events: runEvents.get(run[1]) ?? [] });
     }
     unhandled.push(`${method} ${path}`);
     return fail(err(404, "not_found", `mock: no handler for ${method} ${path}`));
@@ -270,6 +292,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { unhandled, posted, wikiPages, artifactForms };
+    return { unhandled, posted, created, wikiPages, artifactForms };
   })();
 }

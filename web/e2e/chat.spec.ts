@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installChatApi } from "./mock-chat-api";
+import { AGENTS, installChatApi } from "./mock-chat-api";
 
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const picker = (page: Page) => page.getByRole("button", { name: /Model for the next message/ });
@@ -49,9 +49,10 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
   await expect(composer(page)).toBeEnabled();
   await expect(composer(page)).toBeFocused();
 
-  // Switch model: a pending indicator shows until the message is sent.
+  // Switch model: another harness asks first, then a pending indicator shows until the message is sent.
   await picker(page).click();
   await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
+  await page.getByRole("dialog", { name: "Switch to Codex · gpt-5-codex?" }).getByRole("button", { name: "Switch harness" }).click();
   await expect(page.getByTestId("pending-switch")).toContainText("Next message will use Codex · gpt-5-codex");
   await send(page, "second");
   await expect(page.getByTestId("assistant-message").nth(1)).toContainText("Echo: second");
@@ -299,4 +300,141 @@ test("a rejected OpenCode post shows the error and keeps the selection", async (
   await expect(picker(page)).toHaveAttribute("aria-label", /OpenCode, anthropic\/claude-sonnet-4-5/);
   await expect(composer(page)).toHaveValue("will fail");
   expect(mock.posted).toEqual([]);
+});
+
+test("a new chat answers as the picked main agent, remembered for the next one", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  // No pick and no chats yet: the first main agent.
+  const agentPicker = page.getByRole("button", { name: /Agent for new chats/ });
+  await expect(agentPicker).toHaveAccessibleName("Agent for new chats: Atlas");
+  await agentPicker.click();
+  await expect(page.getByRole("menuitem")).toHaveText([/Atlas/, /Juno/]); // sub agents can't chat
+  await page.getByRole("menuitem", { name: "Juno" }).click();
+  await expect(agentPicker).toHaveAccessibleName("Agent for new chats: Juno");
+
+  await newChat(page);
+  expect(mock.created.at(-1)).toMatchObject({ project: "WEB", agent_id: AGENTS[1].id });
+  await expect(page.getByTestId("chat-agent")).toContainText("Juno");
+  await expect(page.getByTestId("chat-agent")).toHaveAttribute("title", "This chat answers as Juno");
+  await send(page, "hello");
+  await expect(page.getByTestId("assistant-message")).toContainText("Juno · Claude Code · Opus 5.5");
+
+  // The pick sticks across reloads.
+  await page.goto("/chat?project=WEB");
+  await expect(agentPicker).toHaveAccessibleName("Agent for new chats: Juno");
+  await newChat(page);
+  expect(mock.created.at(-1)).toMatchObject({ agent_id: AGENTS[1].id });
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("archived chats are listed under Archived and can be restored", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "keep me");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: keep me");
+  await page.getByRole("button", { name: "Archive keep me" }).click();
+  const nav = page.getByRole("navigation", { name: "Chats" });
+  await expect(nav.getByText("No chats yet")).toBeVisible();
+
+  await page.getByRole("radio", { name: "Archived" }).click();
+  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
+  await expect(nav.getByText("Archived chats are read-only")).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Archive keep me" })).toHaveCount(0);
+
+  // Opened, an archived chat is read-only with Restore in the header and in place of the composer.
+  await nav.getByRole("link", { name: "keep me" }).click();
+  const chat = page.getByRole("region", { name: "keep me" });
+  await expect(chat.getByText("This chat is archived. Restore it to continue.")).toBeVisible();
+  await expect(composer(page)).toHaveCount(0);
+  await expect(chat.getByRole("button", { name: "Restore keep me" })).toHaveCount(2);
+  await chat.getByRole("button", { name: "Restore keep me" }).last().click();
+  await expect(composer(page)).toBeVisible();
+  await expect(nav.getByText("No archived chats.")).toBeVisible();
+  await page.getByRole("radio", { name: "Active" }).click();
+  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
+
+  // Restore straight from the list too. Archiving the open chat navigates back to the index first.
+  await page.getByRole("button", { name: "Archive keep me" }).click();
+  await expect(nav.getByText("No chats yet")).toBeVisible();
+  await page.getByRole("radio", { name: "Archived" }).click();
+  await expect(page).toHaveURL(/view=archived/);
+  await nav.getByRole("button", { name: "Restore keep me" }).click();
+  await expect(nav.getByText("No archived chats.")).toBeVisible();
+});
+
+test("a running turn shows its newest tool call as a live line with a linked page", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "slow: dig in");
+  const live = page.getByTestId("live-activity");
+  await expect(live).toHaveText("Reading Plan…");
+  await expect(live.getByRole("link", { name: /Plan/ })).toHaveAttribute("href", "/wiki/Eng/Plan");
+  await expect(page.getByText("Tool calls (1)")).toBeVisible();
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(live).toHaveCount(0);
+});
+
+test("switching harness asks first and lists what is lost; same harness doesn't", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  const dialog = page.getByRole("dialog");
+  const pending = page.getByTestId("pending-switch");
+
+  // An empty chat has no session to lose.
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
+  await expect(picker(page)).toHaveAttribute("aria-label", /Codex, gpt-5-codex/);
+  await expect(dialog).toHaveCount(0);
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /Claude Code Opus 5.5/ }).click();
+  await send(page, "hello");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello");
+
+  // Same harness, new model: no question.
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /Claude Code Sonnet 5.5/ }).click();
+  await expect(pending).toContainText("Claude Code · Sonnet 5.5");
+  await expect(dialog).toHaveCount(0);
+
+  // Another harness: what carries over and what is lost; Cancel keeps the previous pick.
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
+  await expect(dialog).toHaveAccessibleName("Switch to Codex · gpt-5-codex?");
+  await expect(dialog.getByRole("region", { name: "Carries over" })).toContainText("The latest messages, up to 40 or 24,000 characters");
+  await expect(dialog.getByRole("region", { name: "Is lost" })).toContainText("Claude Code’s hidden reasoning");
+  await expect(dialog.getByRole("region", { name: "Is lost" })).toContainText("The prompt cache, so the first reply costs more");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(pending).toContainText("Claude Code · Sonnet 5.5");
+
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
+  await dialog.getByRole("button", { name: "Switch harness" }).click();
+  await expect(pending).toContainText("Codex · gpt-5-codex");
+  await expect(composer(page)).toBeEnabled();
+});
+
+test("each reply shows its tokens and cost on hover or focus", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "hello");
+  const reply = page.getByTestId("assistant-message");
+  await expect(reply).toContainText("Claude Code · Opus 5.5 · $0.042");
+  const tooltip = page.getByTestId("usage-tooltip");
+  await expect(tooltip).toHaveCount(0);
+
+  await reply.getByTestId("model-tag").focus();
+  await expect(tooltip).toContainText("Input48.2K41K cached · 7.2K uncached");
+  await expect(tooltip).toContainText("Output1.3K");
+  await expect(tooltip).toContainText("Cost$0.042");
+  await page.keyboard.press("Escape");
+  await expect(tooltip).toHaveCount(0);
+
+  await reply.getByTestId("model-tag").hover();
+  await expect(tooltip).toContainText("Cost$0.042");
 });
