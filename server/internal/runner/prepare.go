@@ -18,6 +18,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
 	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/harness"
+	"github.com/liamphmurphy/lazyagents/server/internal/memory"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
@@ -443,4 +444,19 @@ func derefID(id *uuid.UUID) uuid.UUID {
 		return uuid.Nil
 	}
 	return *id
+}
+
+// chatMemoryIndex renders the always-loaded index of the memory of the person
+// the chat belongs to: titles and summaries only, never another person's.
+func chatMemoryIndex(ctx context.Context, q *store.Queries, run store.Run) (string, error) {
+	chat, err := q.ChatSessionForRun(ctx, &run.ID)
+	if err != nil {
+		return "", err
+	}
+	o := memory.Owner{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy}
+	entries, total, err := memory.New(q).Index(ctx, o)
+	if err != nil {
+		return "", err
+	}
+	return memory.IndexMarkdown(entries, total), nil
 }

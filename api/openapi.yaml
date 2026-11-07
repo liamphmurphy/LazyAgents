@@ -31,6 +31,7 @@ tags:
   - name: secrets
   - name: runs
   - name: chats
+  - name: memories
 paths:
   /agents/{handle}/runs:
     get:
@@ -1679,6 +1680,94 @@ paths:
       responses:
         "204": { description: Deleted }
         default: { $ref: "#/components/responses/Error" }
+  /memories:
+    get:
+      operationId: listMemories
+      summary: The signed-in person's assistant memories, newest change first (or ranked by q)
+      description: |
+        Memory is strictly per person: only the signed-in person's entries are
+        ever returned. With q, results are ranked by full-text relevance over
+        title, tags, summary and body (plus fuzzy title matching).
+      tags: [memories]
+      parameters:
+        - { name: q, in: query, description: Search text, schema: { type: string, maxLength: 500 } }
+        - { name: type, in: query, description: Only entries of this type, schema: { $ref: "#/components/schemas/MemoryType" } }
+        - { name: include_retired, in: query, description: Also list entries superseded by newer ones, schema: { type: boolean, default: false } }
+        - { name: offset, in: query, description: "Skip this many (listing only; search returns the top 50)", schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+      responses:
+        "200":
+          description: Memories, 50 per page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryList" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteAllMemories
+      summary: Forget everything the assistant remembers about the signed-in person
+      tags: [memories]
+      parameters:
+        - { name: confirm, in: query, required: true, description: Must be true; guards against accidental wipes, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: integer, description: Entries deleted (not counting retired entries they superseded) }
+        default: { $ref: "#/components/responses/Error" }
+  /memories/export:
+    get:
+      operationId: exportMemories
+      summary: Every memory of the signed-in person, retired entries included, oldest first
+      tags: [memories]
+      responses:
+        "200":
+          description: Export
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryExport" }
+        default: { $ref: "#/components/responses/Error" }
+  /memories/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getMemory
+      summary: One memory entry; another person's entry is a 404
+      tags: [memories]
+      responses:
+        "200":
+          description: Memory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateMemory
+      summary: Edit a memory entry, retire it (superseded_by) or restore it (restore)
+      description: Text that looks like a credential or token is refused with 422.
+      tags: [memories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteMemory
+      summary: Forget a memory entry and the retired entries it superseded
+      tags: [memories]
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
   /projects/{key}:
     parameters:
       - { name: key, in: path, required: true, schema: { type: string } }
@@ -2236,6 +2325,52 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
         query: { type: string, maxLength: 2000 }
+    MemoryType:
+      type: string
+      description: "One of preference, project, person, life, work, fact, other"
+    Memory:
+      type: object
+      description: |
+        One thing the personal assistant remembers about its person, kept apart
+        from the shared wiki. superseded_by marks a retired entry and names the
+        entry that replaced it.
+      required: [id, title, summary, body, tags, type, source, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        summary: { type: string, description: One line }
+        body: { type: string }
+        tags: { type: array, items: { type: string } }
+        type: { $ref: "#/components/schemas/MemoryType" }
+        source: { type: string, description: "Where it came from in words, e.g. chat <id> or manual" }
+        source_chat_id: { type: string, format: uuid, description: The chat it came from, while that chat exists }
+        source_run_id: { type: string, format: uuid, description: The run that wrote it, while that run exists }
+        superseded_by: { type: string, format: uuid, description: Set when retired in favour of this newer entry }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MemoryList:
+      type: object
+      required: [memories, total, has_more]
+      properties:
+        memories: { type: array, items: { $ref: "#/components/schemas/Memory" } }
+        total: { type: integer, description: "Entries matching type and include_retired (q not applied)" }
+        has_more: { type: boolean }
+    MemoryExport:
+      type: object
+      required: [exported_at, memories]
+      properties:
+        exported_at: { type: string, format: date-time }
+        memories: { type: array, items: { $ref: "#/components/schemas/Memory" } }
+    MemoryPatch:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, maxLength: 300 }
+        body: { type: string, maxLength: 20000 }
+        tags: { type: array, maxItems: 12, items: { type: string, maxLength: 40 } }
+        type: { $ref: "#/components/schemas/MemoryType" }
+        superseded_by: { type: string, format: uuid, description: Retire this entry in favour of another current entry }
+        restore: { type: boolean, description: true clears superseded_by }
     Ticket:
       type: object
       required: [id, key, project, title, description_md, status, priority, labels, criteria, artifacts, approvals, blocked_by, blocks, revision, dependency_revision, requires_mockup, epic_review, mockup_gate, created_at, updated_at]

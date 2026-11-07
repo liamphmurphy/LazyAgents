@@ -292,6 +292,23 @@ type Label struct {
 	UpdatedAt   time.Time
 }
 
+type Memory struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	UserID       uuid.UUID
+	Title        string
+	Summary      string
+	Body         string
+	Tags         []string
+	Type         string
+	Source       string
+	SourceChatID *uuid.UUID
+	SourceRunID  *uuid.UUID
+	SupersededBy *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type MetricSnapshot struct {
 	WorkspaceID uuid.UUID
 	Range       string

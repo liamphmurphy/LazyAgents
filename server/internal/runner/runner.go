@@ -866,7 +866,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		files[".lazyagents/agents-section.md"] = harness.SubagentAgentsMD("", c.spec, paths, c.ticket.Key)
 	}
 	if c.run.Purpose == "chat" {
-		files[".lazyagents/agents-section.md"] = harness.ChatAgentsMD(c.spec, paths, c.project.Key)
+		// The person's memory index, refreshed every turn so saves and forgets show.
+		idx, err := chatMemoryIndex(ctx, q, c.run)
+		if err != nil {
+			r.Log.Warn("chat memory index", "run", c.run.ID, "err", err)
+			r.failChat(ctx, c, "Could not load the assistant's memory index.")
+			return
+		}
+		files[".lazyagents/agents-section.md"] = harness.ChatAgentsMD(c.spec, paths, c.project.Key, idx)
 	}
 	if c.run.Purpose == "planning" {
 		files[".lazyagents/agents-section.md"] = []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n"))

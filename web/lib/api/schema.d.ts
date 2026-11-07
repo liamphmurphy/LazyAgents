@@ -1293,6 +1293,70 @@ export interface paths {
         patch: operations["updateSavedView"];
         trace?: never;
     };
+    "/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in person's assistant memories, newest change first (or ranked by q)
+         * @description Memory is strictly per person: only the signed-in person's entries are
+         *     ever returned. With q, results are ranked by full-text relevance over
+         *     title, tags, summary and body (plus fuzzy title matching).
+         */
+        get: operations["listMemories"];
+        put?: never;
+        post?: never;
+        /** Forget everything the assistant remembers about the signed-in person */
+        delete: operations["deleteAllMemories"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memories/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every memory of the signed-in person, retired entries included, oldest first */
+        get: operations["exportMemories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** One memory entry; another person's entry is a 404 */
+        get: operations["getMemory"];
+        put?: never;
+        post?: never;
+        /** Forget a memory entry and the retired entries it superseded */
+        delete: operations["deleteMemory"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a memory entry, retire it (superseded_by) or restore it (restore)
+         * @description Text that looks like a credential or token is refused with 422.
+         */
+        patch: operations["updateMemory"];
+        trace?: never;
+    };
     "/projects/{key}": {
         parameters: {
             query?: never;
@@ -1733,6 +1797,69 @@ export interface components {
         SavedViewPatch: {
             name?: string;
             query?: string;
+        };
+        /** @description One of preference, project, person, life, work, fact, other */
+        MemoryType: string;
+        /**
+         * @description One thing the personal assistant remembers about its person, kept apart
+         *     from the shared wiki. superseded_by marks a retired entry and names the
+         *     entry that replaced it.
+         */
+        Memory: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description One line */
+            summary: string;
+            body: string;
+            tags: string[];
+            type: components["schemas"]["MemoryType"];
+            /** @description Where it came from in words, e.g. chat <id> or manual */
+            source: string;
+            /**
+             * Format: uuid
+             * @description The chat it came from
+             */
+            source_chat_id?: string;
+            /**
+             * Format: uuid
+             * @description The run that wrote it
+             */
+            source_run_id?: string;
+            /**
+             * Format: uuid
+             * @description Set when retired in favour of this newer entry
+             */
+            superseded_by?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        MemoryList: {
+            memories: components["schemas"]["Memory"][];
+            /** @description Entries matching type and include_retired (q not applied) */
+            total: number;
+            has_more: boolean;
+        };
+        MemoryExport: {
+            /** Format: date-time */
+            exported_at: string;
+            memories: components["schemas"]["Memory"][];
+        };
+        MemoryPatch: {
+            title?: string;
+            summary?: string;
+            body?: string;
+            tags?: string[];
+            type?: components["schemas"]["MemoryType"];
+            /**
+             * Format: uuid
+             * @description Retire this entry in favour of another current entry
+             */
+            superseded_by?: string;
+            /** @description true clears superseded_by */
+            restore?: boolean;
         };
         Ticket: {
             /** Format: uuid */
@@ -5555,6 +5682,155 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMemories: {
+        parameters: {
+            query?: {
+                /** @description Search text */
+                q?: string;
+                /** @description Only entries of this type */
+                type?: components["schemas"]["MemoryType"];
+                /** @description Also list entries superseded by newer ones */
+                include_retired?: boolean;
+                /** @description Skip this many (listing only; search returns the top 50) */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memories, 50 per page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteAllMemories: {
+        parameters: {
+            query: {
+                /** @description Must be true; guards against accidental wipes */
+                confirm: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Entries deleted (not counting retired entries they superseded) */
+                        deleted: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    exportMemories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryExport"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
                 };
             };
             default: components["responses"]["Error"];
