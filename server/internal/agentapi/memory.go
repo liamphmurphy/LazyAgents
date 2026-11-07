@@ -125,12 +125,15 @@ func saveMemory(ctx context.Context, d Deps, c agents.Caller, in SaveMemoryIn) (
 	if err != nil {
 		return nil, err
 	}
-	action, verb := "created", "Remembered"
+	out := map[string]any{"id": r.Memory.ID, "action": "created", "title": r.Memory.Title,
+		"tell_the_person": "Remembered: " + r.Memory.Title + ". Say so in your reply, and that they can ask you to forget it."}
 	if r.Updated {
-		action, verb = "updated", "Updated what I remember"
+		p := r.Previous
+		out["action"] = "updated"
+		out["previous"] = map[string]any{"id": p.ID, "title": p.Title, "summary": p.Summary, "type": p.Type}
+		out["tell_the_person"] = "Updated what I remember: '" + p.Title + "' is now '" + r.Memory.Title + "'. Say so in your reply; if this wasn't the same thing, save it again with a more distinct title and restore the old entry with update_memory."
 	}
-	return map[string]any{"id": r.Memory.ID, "action": action, "title": r.Memory.Title,
-		"tell_the_person": verb + ": " + r.Memory.Title + ". Say so in your reply, and that they can ask you to forget it."}, nil
+	return out, nil
 }
 
 func updateMemory(ctx context.Context, d Deps, c agents.Caller, in UpdateMemoryIn) (any, error) {

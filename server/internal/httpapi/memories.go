@@ -49,7 +49,7 @@ func (s *Server) ListMemories(ctx context.Context, req api.ListMemoriesRequestOb
 	if err != nil {
 		return nil, err
 	}
-	out := api.ListMemories200JSONResponse{Memories: make([]api.Memory, 0, len(hits)), Total: total, HasMore: len(hits) > memoryPageSize}
+	out := api.ListMemories200JSONResponse{Memories: make([]api.Memory, 0, len(hits)), Total: total, HasMore: q.Text == "" && len(hits) > memoryPageSize}
 	for i, h := range hits {
 		if i == memoryPageSize {
 			break

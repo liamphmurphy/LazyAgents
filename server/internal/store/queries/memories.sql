@@ -69,7 +69,8 @@ LIMIT @lim;
 -- have one) a near-identical summary.
 SELECT sqlc.embed(m),
   greatest(similarity(lower(m.title), lower(@title::text)),
-           CASE WHEN @summary::text <> '' AND m.summary <> '' THEN similarity(lower(m.summary), lower(@summary::text)) ELSE 0 END)::float8 AS score
+           CASE WHEN @summary::text <> '' AND m.summary <> '' THEN similarity(lower(m.summary), lower(@summary::text)) ELSE 0 END)::float8 AS score,
+  similarity(lower(m.title), lower(@title::text))::float8 AS title_score
 FROM memories m
 WHERE m.workspace_id = @workspace_id AND m.user_id = @user_id AND m.superseded_by IS NULL
   AND (similarity(lower(m.title), lower(@title::text)) >= @title_threshold::float8

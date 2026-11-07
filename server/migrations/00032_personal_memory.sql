@@ -42,8 +42,6 @@ CREATE TABLE memories (
 -- Serves the index and listings: one person's entries, newest change first.
 CREATE INDEX memories_owner ON memories (workspace_id, user_id, updated_at DESC, id DESC);
 CREATE INDEX memories_search ON memories USING gin (memory_search_vector(title, summary, body, tags));
--- Near-duplicate checks compare titles by trigram similarity.
-CREATE INDEX memories_title_trgm ON memories USING gin (lower(title) gin_trgm_ops);
 
 -- +goose Down
 DROP TABLE memories;

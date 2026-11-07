@@ -71,15 +71,18 @@ type Service struct{ Q *store.Queries }
 
 func New(q *store.Queries) *Service { return &Service{Q: q} }
 
-// SaveResult says whether Save added an entry or updated a near-duplicate.
+// SaveResult says whether Save added an entry or updated a near-duplicate;
+// Previous is that entry as it was before the update.
 type SaveResult struct {
-	Memory  store.Memory
-	Updated bool
+	Memory   store.Memory
+	Updated  bool
+	Previous *store.Memory
 }
 
 // Save adds a memory, or updates the person's near-duplicate entry instead.
 // Secrets are refused.
 func (s *Service) Save(ctx context.Context, o Owner, in Input, src Source) (SaveResult, error) {
+	typeGiven := strings.TrimSpace(in.Type) != ""
 	in, err := normalizeInput(in)
 	if err != nil {
 		return SaveResult{}, err
@@ -90,16 +93,23 @@ func (s *Service) Save(ctx context.Context, o Owner, in Input, src Source) (Save
 	})
 	switch {
 	case err == nil:
-		m := dup.Memory
-		p := Patch{Title: &in.Title, Summary: &in.Summary, Tags: new(mergeTags(m.Tags, in.Tags)), Type: &in.Type}
+		prev := dup.Memory
+		p := Patch{Tags: new(mergeTags(prev.Tags, in.Tags))}
+		// A match on the summary alone keeps the entry's title.
+		if dup.TitleScore >= dupTitle {
+			p.Title = &in.Title
+		}
+		if in.Summary != "" {
+			p.Summary = &in.Summary
+		}
 		if in.Body != "" {
 			p.Body = &in.Body
 		}
-		if in.Summary == "" {
-			p.Summary = nil
+		if typeGiven {
+			p.Type = &in.Type
 		}
-		u, err := s.update(ctx, o, m.ID, p, src)
-		return SaveResult{Memory: u, Updated: true}, err
+		u, err := s.update(ctx, o, prev.ID, p, src)
+		return SaveResult{Memory: u, Updated: true, Previous: &prev}, err
 	case !errors.Is(err, pgx.ErrNoRows):
 		return SaveResult{}, err
 	}
@@ -140,8 +150,8 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch, sr
 	if p.Type != nil && !slices.Contains(Types, *p.Type) {
 		return store.Memory{}, apperr.Invalid("type", "must be one of %s", strings.Join(Types, ", "))
 	}
-	if kind := DetectSecret(deref(p.Title), deref(p.Summary), deref(p.Body), strings.Join(derefTags(p.Tags), " ")); kind != "" {
-		return store.Memory{}, secretError(kind)
+	if err := checkSecrets(deref(p.Title), deref(p.Summary), deref(p.Body), derefTags(p.Tags)); err != nil {
+		return store.Memory{}, err
 	}
 	return s.update(ctx, o, id, p, src)
 }
@@ -266,7 +276,7 @@ func (s *Service) Index(ctx context.Context, o Owner) ([]IndexEntry, int, error)
 // IndexMarkdown renders the index for an assistant's context.
 func IndexMarkdown(entries []IndexEntry, total int) string {
 	var b strings.Builder
-	b.WriteString("# Your memory of this person\n\n")
+	b.WriteString("### Memory index\n\n")
 	if total == 0 {
 		b.WriteString("Nothing remembered yet.\n")
 		return b.String()
@@ -330,14 +340,20 @@ func normalizeInput(in Input) (Input, error) {
 		return in, err
 	}
 	in.Tags = tags
-	if kind := DetectSecret(in.Title, in.Summary, in.Body, strings.Join(in.Tags, " ")); kind != "" {
-		return in, secretError(kind)
+	if err := checkSecrets(in.Title, in.Summary, in.Body, in.Tags); err != nil {
+		return in, err
 	}
 	return in, nil
 }
 
-func secretError(kind string) error {
-	return apperr.Invalid("body", "looks like it contains a %s; credentials and tokens are never stored in memory. Leave the secret out and save the rest", kind)
+// checkSecrets refuses any field that looks like it holds a credential.
+func checkSecrets(title, summary, body string, tags []string) error {
+	for _, f := range [][2]string{{"title", title}, {"summary", summary}, {"body", body}, {"tags", strings.Join(tags, " ")}} {
+		if kind := DetectSecret(f[1]); kind != "" {
+			return apperr.Invalid(f[0], "looks like it contains a %s; credentials and tokens are never stored in memory. Leave the secret out and save the rest", kind)
+		}
+	}
+	return nil
 }
 
 // normalizeTags lowercases, trims, dedupes and caps tags. Never nil.

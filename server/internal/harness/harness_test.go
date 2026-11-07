@@ -343,7 +343,7 @@ func TestAgentsMDGitHubSection(t *testing.T) {
 
 func TestChatAgentsMD(t *testing.T) {
 	spec := agentdef.Resolved{Harness: agentdef.HarnessCodex, Instructions: "Agent persona", Skills: []agentdef.Skill{{Name: "context", Description: "Read context"}}}
-	got := string(ChatAgentsMD(spec, []string{".lazyagents/context/memory.md"}, "PAY"))
+	got := string(ChatAgentsMD(spec, []string{".lazyagents/context/memory.md"}, "PAY", ""))
 	for _, want := range []string{"project PAY", "conversation with a person", "Answer directly", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "Do not call claim_ticket, complete_run or propose_tickets", "Agent persona", ".lazyagents/context/memory.md", "context"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in %s", want, got)
@@ -479,7 +479,7 @@ func TestAgentsMDTestsSection(t *testing.T) {
 	if md := string(AgentsMD("", spec(), nil, "PAY-1")); !strings.Contains(md, "skip get_ticket") || !strings.Contains(md, "check_criterion with ns") {
 		t.Fatal("managed AGENTS.md lacks the claim/criteria guidance")
 	}
-	if strings.Contains(string(ChatAgentsMD(spec(), nil, "PAY")), "## Tests") {
+	if strings.Contains(string(ChatAgentsMD(spec(), nil, "PAY", "")), "## Tests") {
 		t.Fatal("chat AGENTS.md must not carry the Tests section")
 	}
 }

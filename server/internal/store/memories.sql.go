@@ -268,7 +268,8 @@ func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]M
 const nearDuplicateMemory = `-- name: NearDuplicateMemory :one
 SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at,
   greatest(similarity(lower(m.title), lower($1::text)),
-           CASE WHEN $2::text <> '' AND m.summary <> '' THEN similarity(lower(m.summary), lower($2::text)) ELSE 0 END)::float8 AS score
+           CASE WHEN $2::text <> '' AND m.summary <> '' THEN similarity(lower(m.summary), lower($2::text)) ELSE 0 END)::float8 AS score,
+  similarity(lower(m.title), lower($1::text))::float8 AS title_score
 FROM memories m
 WHERE m.workspace_id = $3 AND m.user_id = $4 AND m.superseded_by IS NULL
   AND (similarity(lower(m.title), lower($1::text)) >= $5::float8
@@ -287,8 +288,9 @@ type NearDuplicateMemoryParams struct {
 }
 
 type NearDuplicateMemoryRow struct {
-	Memory Memory
-	Score  float64
+	Memory     Memory
+	Score      float64
+	TitleScore float64
 }
 
 // The person's live entry most like a new one: a similar title, or (when both
@@ -319,6 +321,7 @@ func (q *Queries) NearDuplicateMemory(ctx context.Context, arg NearDuplicateMemo
 		&i.Memory.CreatedAt,
 		&i.Memory.UpdatedAt,
 		&i.Score,
+		&i.TitleScore,
 	)
 	return i, err
 }
