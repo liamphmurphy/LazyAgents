@@ -83,6 +83,9 @@ func TestAttentionAndCrossTabApproval(t *testing.T) {
 			if item.Read || item.Resolved {
 				t.Fatal("new approval should be unread and pending")
 			}
+			if item.Agent == nil || item.Agent.Handle != "atlas" || item.RunId == nil || *item.RunId != run.ID {
+				t.Fatalf("approval should carry its agent and run: %+v", item)
+			}
 		}
 	}
 	if !found {
@@ -250,5 +253,108 @@ func TestAttentionAndCrossTabApproval(t *testing.T) {
 		if hit.Target.Kind == api.LinkTargetKindTicket {
 			t.Fatal("project scope leaked ticket")
 		}
+	}
+}
+
+// await_human questions and stalled runs are their own Inbox kinds, with the
+// agent's question as the summary and the run to reply to, retry or cancel.
+func TestInboxQuestionsAndStalledRuns(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true, Artifacts: &artifacts.Service{Pool: pool}}); err != nil {
+		t.Fatal(err)
+	}
+	q := store.New(pool)
+	u, err := q.GetLocalUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := &tracker.Service{Pool: pool}
+	svc := &runs.Service{Pool: pool, Tracker: tr}
+	srv := &Server{Pool: pool, Q: q, Tracker: tr, Runs: svc}
+	atlas, err := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: u.WorkspaceID, Handle: "atlas"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, _, err := agents.IssueToken(ctx, q, atlas.ID, "unmanaged", "test", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller, err := agents.ResolveToken(ctx, q, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := svc.Claim(ctx, caller, "PAY-214")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.AwaitHuman(ctx, caller, "PAY-214", "Should retries cap at 5 or 8?"); err != nil {
+		t.Fatal(err)
+	}
+	authctx := auth.WithUser(ctx, u)
+	find := func(id string) *api.InboxItem {
+		t.Helper()
+		res, err := srv.ListInbox(authctx, api.ListInboxRequestObject{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range res.(api.ListInbox200JSONResponse).Items {
+			if item.Id == id {
+				return &item
+			}
+		}
+		return nil
+	}
+	question := find("question:" + run.ID.String())
+	if question == nil {
+		t.Fatal("await_human run missing from inbox")
+	}
+	if question.Kind != api.InboxItemKindQuestion || question.Summary != "Should retries cap at 5 or 8?" || question.TicketKey != "PAY-214" {
+		t.Fatalf("question item: %+v", question)
+	}
+	if question.Agent == nil || question.Agent.Handle != "atlas" || question.RunId == nil || *question.RunId != run.ID {
+		t.Fatalf("question should carry its agent and run: %+v", question)
+	}
+	if find("blocked:"+run.ID.String()) != nil {
+		t.Fatal("a question must not also be listed as a blocked run")
+	}
+
+	// A running run with no event for 30 minutes is stalled; a fresh event clears it.
+	if _, err := pool.Exec(ctx, `UPDATE runs SET state='running', wait_reason=NULL, started_at=now()-interval '2 hours' WHERE id=$1`, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE run_events SET at=now()-interval '45 minutes' WHERE run_id=$1`, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if find("question:"+run.ID.String()) != nil {
+		t.Fatal("answered question still listed")
+	}
+	stalled := find("stalled:" + run.ID.String())
+	if stalled == nil || stalled.Kind != api.InboxItemKindStalled || stalled.Resolved || time.Since(stalled.CreatedAt) < 30*time.Minute {
+		t.Fatalf("stalled run missing or wrong: %+v", stalled)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO run_events(run_id,type,payload) VALUES($1,'message','{}')`, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if find("stalled:"+run.ID.String()) != nil {
+		t.Fatal("a run with recent activity is not stalled")
+	}
+
+	// A failed delegated child is its parent's business (and can't be retried);
+	// it must not hide the parent's own failure either.
+	var child string
+	err = pool.QueryRow(ctx, `INSERT INTO runs (workspace_id,ticket_id,agent_id,mode,state,resolved_spec,harness,model,purpose,parent_run_id,started_at)
+ SELECT workspace_id,ticket_id,agent_id,'managed','failed',resolved_spec,harness,model,'ticket',id,now() FROM runs WHERE id=$1 RETURNING id::text`, run.ID).Scan(&child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if find("blocked:"+child) != nil {
+		t.Fatal("a failed delegated child is listed as a failed run")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE runs SET state='failed', outcome='Harness error' WHERE id=$1`, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if failed := find("blocked:" + run.ID.String()); failed == nil || failed.Summary != "Harness error" {
+		t.Fatalf("parent failure hidden by its child: %+v", failed)
 	}
 }

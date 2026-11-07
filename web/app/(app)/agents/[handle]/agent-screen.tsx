@@ -3,22 +3,38 @@
 import { useSearchParams } from "next/navigation";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useMemo, useState } from "react";
-import type { AgentDetail } from "@/lib/api/client";
-import { useAgent, useBootstrap, useResolved, useSaveDefinition } from "@/lib/api/hooks";
+import type { AgentDetail, Schemas } from "@/lib/api/client";
+import { useAgent, useAgentOverviews, useBootstrap, useResolved, useSaveDefinition, useWikiTree } from "@/lib/api/hooks";
+import { liveCounts, scopeRows } from "@/lib/agent-scopes";
 import { cx } from "@/lib/cx";
 import { ago, timelineTime } from "@/lib/format";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/controls";
-import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
 import { MonoChip, Pill, type PillTone } from "@/components/domain/labels";
 import { floatPanel } from "@/components/domain/pickers";
+import { useRememberedProject } from "@/components/shell/project-scope";
 import { TopBar } from "@/components/shell/topbar";
 import { DefinitionEditor, describeChanges, draftOf, type Draft } from "./definition-editor";
+import { MemoryTab } from "./memory-tab";
 import { OverrideDialog } from "./override-dialog";
-import { OverviewTab, RunsTab } from "./overview-tab";
+import { ActivityTab, OverviewTab } from "./overview-tab";
+import { ProjectPicker } from "./project-picker";
+import { ReviewDialog } from "./review-dialog";
+import { ScopesTab } from "./scopes-tab";
+import { SkillsTab } from "./skills-tab";
 import { TokensTab } from "./tokens-tab";
+
+const TABS = ["overview", "scopes", "skills", "memory", "activity", "settings", "tokens"] as const;
+type Tab = (typeof TABS)[number];
+/** Links from before the tabs were split keep working. */
+const LEGACY: Record<string, Tab> = { definition: "settings", runs: "activity" };
+
+export function tabFrom(param: string | null): Tab {
+  if (param && (TABS as readonly string[]).includes(param)) return param as Tab;
+  return (param && LEGACY[param]) || "overview";
+}
 
 const STATUS: Record<AgentDetail["agent"]["status"], { tone: PillTone; label: string }> = {
   running: { tone: "done", label: "Running" },
@@ -27,12 +43,8 @@ const STATUS: Record<AgentDetail["agent"]["status"], { tone: PillTone; label: st
   idle: { tone: "neutral", label: "Idle" },
 };
 
-function ResolvedPanel({ detail }: { detail: AgentDetail }) {
-  const boot = useBootstrap();
-  const projects = boot.data?.projects ?? [];
-  const [project, setProject] = useState<string | undefined>(detail.overrides[0]?.project.key ?? projects[0]?.key);
+function ResolvedPanel({ detail, projects, project, onProject }: { detail: AgentDetail; projects: Schemas["Project"][]; project?: string; onProject: (key: string) => void }) {
   const r = useResolved(detail.agent.handle, project);
-  const p = projects.find((x) => x.key === project);
   const fromProject = (f: string) => r.data?.provenance[f] === "project" && <MonoChip variant="outline">project</MonoChip>;
   const extraLines = r.data ? r.data.instructions.trim().split("\n").length - detail.spec.instructions.trim().split("\n").length : 0;
 
@@ -40,25 +52,7 @@ function ResolvedPanel({ detail }: { detail: AgentDetail }) {
     <section className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-surface p-4">
       <div className="flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">Resolved for</h2>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button type="button" className="flex h-7 flex-1 items-center gap-2 rounded-md border border-border-strong px-2 text-[12.5px] hover:bg-hover">
-              {p && <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: p.color }} />}
-              <span className="flex-1 truncate text-left">{p?.name ?? "Pick a project"}</span>
-              <Icon name="chev" size={12} className="text-fg-tertiary" />
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content align="end" sideOffset={4} className={cx(floatPanel, "w-56")}>
-              {projects.map((x) => (
-                <DropdownMenu.Item key={x.key} onSelect={() => setProject(x.key)} className="flex h-8 items-center gap-2.5 rounded-md px-2 outline-none data-[highlighted]:bg-hover">
-                  <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: x.color }} />
-                  {x.name}
-                </DropdownMenu.Item>
-              ))}
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
+        <ProjectPicker label="Resolved for" projects={projects} value={project} onChange={onProject} className="min-w-0 flex-1" />
       </div>
       {!r.data ? (
         <Skeleton className="h-24" />
@@ -155,28 +149,42 @@ function OverridesPanel({ detail, onEdit }: { detail: AgentDetail; onEdit: (key:
 
 export function AgentScreen({ handle }: { handle: string }) {
   const { data: detail, isError, error } = useAgent(handle);
-  const requestedTab = useSearchParams().get("tab") ?? "definition";
- const tab = ["tokens", "overview", "runs"].includes(requestedTab) ? requestedTab : "definition";
+  const tab = tabFrom(useSearchParams().get("tab"));
   const boot = useBootstrap();
+  const projects = useMemo(() => boot.data?.projects.filter((p) => !p.archived) ?? [], [boot.data]);
+  const remembered = useRememberedProject();
+  const [picked, setPicked] = useState<string>();
+  // Follows the project you're in; switch to compare.
+  const project =
+    picked ??
+    (projects.some((p) => p.key === remembered) ? remembered! : undefined) ??
+    detail?.overrides[0]?.project.key ??
+    projects[0]?.key;
+  const overviews = useAgentOverviews();
+  const overview = overviews.data?.agents.find((a) => a.agent.handle === handle);
+  const wiki = useWikiTree();
   const save = useSaveDefinition(handle);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const base = useMemo(() => (detail ? draftOf(detail) : null), [detail]);
   const current = draft ?? base;
   const dirty = !!draft && !!base && JSON.stringify(draft) !== JSON.stringify(base);
-  const nextVersion = (detail?.definition.version ?? 0) + 1;
+  const changes = dirty && base && draft ? describeChanges(base, draft).split("; ").length : 0;
 
-  function doSave() {
-    if (!dirty || !draft || !base || save.isPending) return;
-    save.mutate({ ...draft, note: describeChanges(base, draft) }, { onSuccess: () => setDraft(null) });
+  function review() {
+    // Already reviewing: resetting the mutation would drop its error and its onSuccess.
+    if (!dirty || reviewing) return;
+    save.reset();
+    setReviewing(true);
   }
 
-  // ⌘S saves the definition (DESIGN.md §6).
+  // ⌘S opens the review; saving happens there (DESIGN.md §6).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (tab === "definition" && (e.metaKey || e.ctrlKey) && e.key === "s") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && detail && !editing) {
         e.preventDefault();
-        doSave();
+        review();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -206,6 +214,7 @@ export function AgentScreen({ handle }: { handle: string }) {
   }
 
   const editingProject = editing ? boot.data?.projects.find((p) => p.key === editing) : undefined;
+  const status = STATUS[boot.data?.agents.find((a) => a.handle === handle)?.status ?? detail?.agent.status ?? "idle"];
 
   return (
     <>
@@ -216,16 +225,13 @@ export function AgentScreen({ handle }: { handle: string }) {
             <>
               {dirty && (
                 <span className="flex items-center gap-1.5 text-[12.5px] text-pill-human-fg">
-                  <span aria-hidden className="size-1.5 rounded-full bg-state-human" /> Unsaved changes
+                  <span aria-hidden className="size-1.5 rounded-full bg-state-human" /> {changes} unsaved change{changes === 1 ? "" : "s"}
                 </span>
               )}
-              {save.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{save.error.message}</span>}
               {dirty && <Button variant="ghost" onClick={() => setDraft(null)}>Discard</Button>}
-              {tab === "definition" && (
-                <Button variant="primary" disabled={!dirty || save.isPending} onClick={doSave} hint="⌘S">
-                  Save as v{nextVersion}
-                </Button>
-              )}
+              <Button variant="primary" disabled={!dirty} onClick={review} hint="⌘S">
+                Review changes
+              </Button>
             </>
           )
         }
@@ -243,10 +249,11 @@ export function AgentScreen({ handle }: { handle: string }) {
               <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-2.5">
                   <h1 className="type-display">{detail.agent.name}</h1>
-                  <Pill tone={STATUS[boot.data?.agents.find(a => a.handle === handle)?.status ?? detail.agent.status].tone}>{STATUS[boot.data?.agents.find(a => a.handle === handle)?.status ?? detail.agent.status].label}</Pill>
+                  <Pill tone={status.tone}>{status.label}</Pill>
                 </div>
                 <span className="text-[13px] text-fg-secondary">
-                  {detail.agent.role} · definition <b className="font-mono font-medium text-fg">v{detail.definition.version}</b>
+                  {detail.agent.kind === "sub" ? "Sub agent" : "Main"}
+                  {detail.agent.role && ` · ${detail.agent.role}`} · definition <b className="font-mono font-medium text-fg">v{detail.definition.version}</b>
                   {detail.definition.created_by && ` saved by ${detail.definition.created_by.name}`} {ago(detail.definition.created_at)}
                 </span>
               </div>
@@ -256,9 +263,11 @@ export function AgentScreen({ handle }: { handle: string }) {
               value={tab}
               items={[
                 { key: "overview", label: "Overview", href: `/agents/${handle}?tab=overview` },
-                { key: "runs", label: "Runs", href: `/agents/${handle}?tab=runs` },
-                { key: "definition", label: "Definition", href: `/agents/${handle}` },
-                { key: "overrides", label: "Project overrides", count: detail.overrides.length, href: `/agents/${handle}#overrides` },
+                { key: "scopes", label: "Scopes", count: scopeRows(detail.catalog.map((c) => c.scope), current.spec.scopes, detail.overrides.find((o) => o.project.key === project)?.override.scopes).length, href: `/agents/${handle}?tab=scopes` },
+                { key: "skills", label: "Skills", count: current.spec.skills?.length ?? 0, href: `/agents/${handle}?tab=skills` },
+                { key: "memory", label: "Memory", count: wiki.data?.pages.filter((p) => p.path.startsWith(`agents/${handle}/`)).length, href: `/agents/${handle}?tab=memory` },
+                { key: "activity", label: "Activity", href: `/agents/${handle}?tab=activity` },
+                { key: "settings", label: "Settings", href: `/agents/${handle}?tab=settings` },
                 { key: "tokens", label: "Tokens", href: `/agents/${handle}?tab=tokens` },
               ]}
             />
@@ -266,14 +275,28 @@ export function AgentScreen({ handle }: { handle: string }) {
           <div className="flex flex-1 flex-wrap">
             <div className="min-w-0 flex-[999_1_560px] px-7 py-6 max-sm:px-4">
               <div className="mx-auto max-w-[760px]">
-                {tab === "overview" ? <OverviewTab handle={handle} /> : tab === "runs" ? <RunsTab handle={handle} /> : tab === "tokens" ? <TokensTab detail={detail} /> : <DefinitionEditor detail={detail} draft={current} onChange={setDraft} />}
+                {tab === "overview" ? (
+                  <OverviewTab detail={detail} draft={current} onChange={setDraft} project={projects.find((p) => p.key === project)} onPreview={review} />
+                ) : tab === "scopes" ? (
+                  <ScopesTab detail={detail} draft={current} onChange={setDraft} projects={projects} project={project} onProject={setPicked} />
+                ) : tab === "skills" ? (
+                  <SkillsTab detail={detail} draft={current} onChange={setDraft} projects={projects} project={project} onProject={setPicked} />
+                ) : tab === "memory" ? (
+                  <MemoryTab handle={handle} memory={current.spec.memory} />
+                ) : tab === "activity" ? (
+                  <ActivityTab handle={handle} />
+                ) : tab === "tokens" ? (
+                  <TokensTab detail={detail} />
+                ) : (
+                  <DefinitionEditor detail={detail} draft={current} onChange={setDraft} />
+                )}
               </div>
             </div>
             <aside aria-label="Overrides and versions" className="flex min-w-0 flex-[1_1_300px] flex-col gap-5 border-l border-border-subtle bg-panel px-4 py-6 lg:max-w-[340px]">
               <div id="overrides">
                 <OverridesPanel detail={detail} onEdit={setEditing} />
               </div>
-              <ResolvedPanel detail={detail} />
+              <ResolvedPanel detail={detail} projects={projects} project={project} onProject={setPicked} />
               <section className="flex flex-col gap-1">
                 <h2 className="px-1 text-[12.5px] text-fg-tertiary">Versions</h2>
                 <ol>
@@ -289,6 +312,28 @@ export function AgentScreen({ handle }: { handle: string }) {
             </aside>
           </div>
         </>
+      )}
+      {reviewing && detail && base && draft && dirty && (
+        <ReviewDialog
+          detail={detail}
+          base={base}
+          draft={draft}
+          liveRuns={overview ? liveCounts(overview).live : 0}
+          pending={save.isPending}
+          error={save.isError ? save.error.message : undefined}
+          onClose={() => setReviewing(false)}
+          onSave={(note) =>
+            save.mutate(
+              { ...draft, note },
+              {
+                onSuccess: () => {
+                  setDraft(null);
+                  setReviewing(false);
+                },
+              },
+            )
+          }
+        />
       )}
       {editing && detail && editingProject && <OverrideDialog detail={detail} project={editingProject} onOpenChange={(o) => !o && setEditing(null)} />}
     </>

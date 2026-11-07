@@ -12,11 +12,12 @@ const stamp = (revision: number) => new Date(Date.UTC(2026, 10, 6, 12, 0, revisi
 /** In-memory LAZYAGENTS-29 contract, not a substitute for real-backend integration. */
 export async function installBoardApi(page: Page) {
   const epics: S["Epic"][] = ["Kanban board", "Other epic"].map((name, i) => ({
-    id: `epic-${i + 1}`, project_id: project.id, name, health: "on_track", requires_mockup: false,
+    id: `epic-${i + 1}`, project_id: project.id, name, health: i ? "at_risk" : "on_track", requires_mockup: false,
     status: "open", criteria_total: 2, criteria_done: 1, points_total: 0, points_done: 0, tickets_total: 0, tickets_open: 0,
   }));
   const criteria: S["EpicCriterion"][] = [
-    { id: "criterion-1", epic_id: "epic-1", position: 1, text: "Board shows all statuses", done: true },
+    { id: "criterion-1", epic_id: "epic-1", position: 1, text: "Board shows all statuses", done: true,
+      checked_by: { type: "agent", id: "agent-builder", name: "Builder" }, checked_at: stamp(1) },
     { id: "criterion-2", epic_id: "epic-1", position: 2, text: "Cards can move", done: false },
   ];
   function make(n: number, status: S["TicketStatus"], title: string, extra: Partial<S["Ticket"]> = {}): S["Ticket"] {
@@ -41,6 +42,10 @@ export async function installBoardApi(page: Page) {
   tickets[0].estimated_by = { type: "agent", id: builder.id, name: builder.name };
   tickets[2].estimated_by = { type: "user", id: "other-user", name: "Sam" };
   const me = { type: "user" as const, id: "user", name: "Liam" };
+  // Mutable so specs can archive projects or bump the shell's live counts.
+  const projects: S["Project"][] = [project, ops];
+  const counts: S["Bootstrap"]["counts"] = { inbox: 0, wiki_suggestions: 0, live_agents: 0 };
+  const runner: S["RunnerStatus"] = { online: true, runners: [], slots: 3, busy: 0, queued: 0 };
   let newCriterionId = 0;
   const patches: Array<{ key: string; body: S["TicketPatch"] }> = [];
   const boardRequests: string[] = [];
@@ -77,18 +82,19 @@ export async function installBoardApi(page: Page) {
     if (path === "/bootstrap") return json({
       workspace: { id: "workspace", name: "LazyAgents", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
-      users: [], agents: [builder, reviewer], epics: epics.map(epicSummary), projects: [project, ops], labels: [],
-      counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
+      users: [], agents: [builder, reviewer], epics: epics.map(epicSummary), projects, labels: [],
+      counts,
     } satisfies S["Bootstrap"]);
-    if (path === "/epics" && request.method() === "GET") return json({ epics: [epics[0]].map((e) => {
+    if (path === "/epics" && request.method() === "GET") return json({ epics: epics.map((e, i) => {
       const ts = tickets.filter((t) => t.epic?.id === e.id && t.status !== "canceled");
       const count = (s: S["TicketStatus"]) => ts.filter((t) => t.status === s).length;
-      return { epic: epicSummary(e), project, objective: "Ship the board", agents: [], agent_seconds: 0,
+      return { epic: epicSummary(e), project, objective: i ? "Other work" : "Ship the board", agents: [], agent_seconds: 0,
+        ...(i ? { target_date: "2026-01-15" } : { owner: { id: "user", name: "Liam", initials: "LM" }, start_date: "2026-11-01", target_date: "2099-12-01" }),
         counts: { total: ts.length, backlog: count("backlog"), todo: count("todo"), in_progress: count("in_progress"), in_review: count("in_review"), done: count("done") },
         tickets: ts.map((t) => ({ id: t.id, key: t.key, title: t.title, status: t.status, priority: t.priority })) };
     }) } satisfies S["EpicOverviewList"]);
     if (path === "/tickets" && request.method() === "GET") return json({ tickets: tickets.filter((t) => !url.searchParams.get("epic") || t.epic?.id === url.searchParams.get("epic")).map(summary) });
-    if (path === "/runner") return json({ online: true, slots: 3, busy: 0, queued: 0 });
+    if (path === "/runner") return json(runner);
     if (/^\/projects\/(WEB|OPS)\/board$/.test(path)) {
       boardRequests.push(request.url());
       if (boardError) return json({ code: "internal", message: "Board service unavailable" }, 501);
@@ -140,7 +146,10 @@ export async function installBoardApi(page: Page) {
         return route.fulfill({ status: 204 });
       }
       if (body.text !== undefined) criterion.text = body.text;
-      if (body.done !== undefined) criterion.done = body.done;
+      if (body.done !== undefined) {
+        criterion.done = body.done;
+        Object.assign(criterion, body.done ? { checked_by: { type: "user", id: "user", name: "Liam" }, checked_at: new Date().toISOString() } : { checked_by: undefined, checked_at: undefined });
+      }
       if (body.position !== undefined) {
         const siblings = sorted().filter((c) => c.epic_id === criterion.epic_id && c !== criterion);
         siblings.splice(body.position - 1, 0, criterion);
@@ -213,7 +222,7 @@ export async function installBoardApi(page: Page) {
   });
   await page.route("**/api/v1/**", handle);
   return {
-    epics, tickets, criteria, patches, boardRequests, unhandled, epicWrites, criteriaRequests,
+    epics, tickets, criteria, patches, projects, counts, runner, boardRequests, unhandled, epicWrites, criteriaRequests,
     failCriteria: (message?: string) => { criterionError = message; },
     rejectNext: (status: number, message: string, field?: string) => { rejection = { status, message, field }; },
     failBoard: (fail: boolean) => { boardError = fail; },

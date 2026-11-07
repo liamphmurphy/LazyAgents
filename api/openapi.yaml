@@ -241,7 +241,7 @@ paths:
   /search:
     get:
       operationId: search
-      summary: Search tickets, artifacts, wiki pages, epics and agents
+      summary: Search tickets, artifacts, wiki pages, epics, agents and the local user's chats
       parameters:
         - { name: q, in: query, required: true, schema: { type: string, maxLength: 500 } }
         - { name: project, in: query, schema: { type: string } }
@@ -674,6 +674,11 @@ paths:
               properties:
                 decision: { type: string, enum: [approved, changes_requested] }
                 note: { type: string, maxLength: 2000, description: Required when requesting changes }
+                pins:
+                  type: array
+                  maxItems: 50
+                  description: Comments pinned on the drawing. They're saved with the review and appended to its note as a numbered list.
+                  items: { $ref: "#/components/schemas/MockupPin" }
       responses:
         "200":
           description: The reviewed mockup
@@ -1072,6 +1077,33 @@ paths:
           content:
             application/x-ndjson:
               schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
+  /runs:
+    get:
+      operationId: listRuns
+      summary: Top-level runs, newest first, 50 per page (delegated runs are counted in child_count)
+      tags: [runs]
+      parameters:
+        - name: state
+          in: query
+          description: "live (queued to waiting, the default), all, or one run state"
+          schema: { type: string, enum: [live, all, queued, starting, running, waiting, paused, blocked, completed, failed, cancelled], default: live }
+        - { name: agent, in: query, description: Agent handle, schema: { type: string } }
+        - { name: project, in: query, description: Project key, schema: { type: string } }
+        - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat] } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+      responses:
+        "200":
+          description: A page of runs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs, has_more]
+                properties:
+                  runs: { type: array, items: { $ref: "#/components/schemas/Run" } }
+                  has_more: { type: boolean }
         default: { $ref: "#/components/responses/Error" }
 
   /runs/{id}:
@@ -2091,12 +2123,23 @@ components:
       enum: [pending, approved, changes_requested]
     MockupReview:
       type: object
-      required: [state, note]
+      required: [state, note, pins]
       properties:
         state: { $ref: "#/components/schemas/MockupReviewState" }
-        note: { type: string }
+        note: { type: string, description: "The reviewer's note, followed by the pinned comments as a numbered list" }
+        pins:
+          type: array
+          description: Comments pinned on this version, numbered by position (the first is 1)
+          items: { $ref: "#/components/schemas/MockupPin" }
         reviewed_by: { $ref: "#/components/schemas/UserRef" }
         reviewed_at: { type: string, format: date-time }
+    MockupPin:
+      type: object
+      required: [x, y, text]
+      properties:
+        x: { type: number, format: double, minimum: 0, maximum: 1, description: Horizontal position as a fraction of the drawing's width }
+        y: { type: number, format: double, minimum: 0, maximum: 1, description: Vertical position as a fraction of the drawing's height }
+        text: { type: string, minLength: 1, maxLength: 500 }
     Criterion:
       type: object
       required: [id, position, text, done]
@@ -2538,11 +2581,20 @@ components:
         state: { type: string, enum: [pending, current, done, needs_human, failed] }
     Run:
       type: object
-      required: [id, ticket_key, agent, mode, state, harness, model, started_at, tool_calls, input_tokens, output_tokens, cost_usd, plan, approval_scopes, scopes]
+      required: [id, ticket_key, purpose, agent, mode, state, harness, model, started_at, tool_calls, input_tokens, output_tokens, cost_usd, plan, approval_scopes, scopes]
       properties:
         id: { type: string, format: uuid }
         ticket_key: { type: string, description: Empty for standalone planning runs }
+        purpose: { type: string, enum: [ticket, planning, chat], description: "What the run works on: a ticket, a plan or a chat" }
         planning_id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid, description: The chat session of a chat run }
+        project_key: { type: string, description: "Project of the ticket, plan or chat" }
+        work_title: { type: string, description: "Ticket title, plan goal or chat title" }
+        branch: { type: string, description: "Ticket runs: the ticket's branch" }
+        pr_number: { type: integer }
+        pr_url: { type: string }
+        pr_state: { type: string }
+        child_count: { type: integer, description: "Direct delegated runs" }
         agent: { $ref: "#/components/schemas/AgentRef" }
         mode: { type: string, enum: [managed, unmanaged] }
         state: { type: string, enum: [queued, starting, running, waiting, paused, blocked, completed, failed, cancelled] }
@@ -2678,7 +2730,7 @@ components:
       required: [kind, title]
       description: What a [[link]] points at, with enough to render it
       properties:
-        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, unresolved] }
+        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, chat, unresolved], description: "chat only appears in GET /search hits (the asking user's own chats)" }
         id: { type: string, format: uuid }
         anchor: { type: string }
         title: { type: string }
@@ -2948,15 +3000,21 @@ components:
       required: [id, kind, title, summary, href, project, ticket_key, created_at, resolved, read]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [approval, dispatch, mention, review, blocked, suggestion, planning, mockup] }
+        kind:
+          type: string
+          description: "question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes"
+          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion]
         title: { type: string }
         summary: { type: string }
         href: { type: string }
         project: { type: string }
         ticket_key: { type: string }
-        created_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time, description: "When the item last changed; the wait starts here" }
         resolved: { type: boolean }
-        read: { type: boolean }
+        read: { type: boolean, description: "Marked done by this person since the item last changed" }
+        agent: { $ref: "#/components/schemas/AgentRef" }
+        run_id: { type: string, format: uuid, description: "The run to reply to, retry or cancel" }
+        artifact_id: { type: string, format: uuid, description: "The mockup or wiki page under review" }
 
     WorkflowCounts:
       type: object
@@ -3186,9 +3244,14 @@ components:
         goal: { type: string, maxLength: 20000 }
         epic_id: { type: string, format: uuid }
         artifact_id: { type: string, format: uuid }
+        context_refs:
+          type: array
+          maxItems: 20
+          description: Wiki pages, sections, artifacts and tickets in the project for the planner to read; delivered as context files when the run starts.
+          items: { $ref: "#/components/schemas/ChatContextRef" }
     PlanningSession:
       type: object
-      required: [id, project, goal, run_id, run_state, state, revision, proposals, ticket_keys, ready_keys, created_at, updated_at, harness, model]
+      required: [id, project, goal, run_id, run_state, state, revision, proposals, proposal_count, context_refs, ticket_keys, ready_keys, created_at, updated_at, harness, model]
       properties:
         id: { type: string, format: uuid }
         project: { type: string }
@@ -3206,6 +3269,8 @@ components:
         proposals:
           type: array
           items: { $ref: '#/components/schemas/TicketProposal' }
+        proposal_count: { type: integer, description: How many proposals the planner submitted (0 until it does); ticket_keys counts the accepted ones }
+        context_refs: { type: array, items: { $ref: "#/components/schemas/ChatContextRef" }, description: What the person attached when starting the plan }
         ready_keys: { type: array, items: { type: string }, description: Created tickets currently ready for manual dispatch }
         ticket_keys:
           type: array

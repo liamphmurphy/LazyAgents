@@ -901,7 +901,7 @@ func (q *Queries) ListSuggestions(ctx context.Context, arg ListSuggestionsParams
 }
 
 const lockSuggestion = `-- name: LockSuggestion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
 WHERE v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v
 `
 
@@ -935,6 +935,7 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 		&i.ReviewedByUserID,
 		&i.ReviewedAt,
 		&i.ReviewNote,
+		&i.ReviewPins,
 	)
 	return i, err
 }

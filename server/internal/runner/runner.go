@@ -794,6 +794,12 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		if source != nil {
 			ctxFiles = append(ctxFiles, *source)
 		}
+		refFiles, err := PlanningRefFiles(ctx, q, c.run)
+		if err != nil {
+			r.end(ctx, c, "failed", "Could not load the plan's attached context: "+err.Error(), runs.VerbRunFailed)
+			return
+		}
+		ctxFiles = append(ctxFiles, refFiles...)
 	}
 	prompt := turn.InputMessage
 	if handoff != "" {

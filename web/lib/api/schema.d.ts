@@ -196,7 +196,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search tickets, artifacts, wiki pages, epics and agents */
+        /** Search tickets, artifacts, wiki pages, epics, agents and the local user's chats */
         get: operations["search"];
         put?: never;
         post?: never;
@@ -814,6 +814,23 @@ export interface paths {
         };
         /** The raw harness stream of one turn (JSONL) */
         get: operations["getTurnLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Top-level runs, newest first, 50 per page (delegated runs are counted in child_count) */
+        get: operations["listRuns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1635,10 +1652,26 @@ export interface components {
         MockupReviewState: "pending" | "approved" | "changes_requested";
         MockupReview: {
             state: components["schemas"]["MockupReviewState"];
+            /** @description The reviewer's note, followed by the pinned comments as a numbered list */
             note: string;
+            /** @description Comments pinned on this version, numbered by position (the first is 1) */
+            pins: components["schemas"]["MockupPin"][];
             reviewed_by?: components["schemas"]["UserRef"];
             /** Format: date-time */
             reviewed_at?: string;
+        };
+        MockupPin: {
+            /**
+             * Format: double
+             * @description Horizontal position as a fraction of the drawing's width
+             */
+            x: number;
+            /**
+             * Format: double
+             * @description Vertical position as a fraction of the drawing's height
+             */
+            y: number;
+            text: string;
         };
         Criterion: {
             /** Format: uuid */
@@ -2055,8 +2088,29 @@ export interface components {
             id: string;
             /** @description Empty for standalone planning runs */
             ticket_key: string;
+            /**
+             * @description What the run works on: a ticket, a plan or a chat
+             * @enum {string}
+             */
+            purpose: "ticket" | "planning" | "chat";
             /** Format: uuid */
             planning_id?: string;
+            /**
+             * Format: uuid
+             * @description The chat session of a chat run
+             */
+            chat_id?: string;
+            /** @description Project of the ticket, plan or chat */
+            project_key?: string;
+            /** @description Ticket title, plan goal or chat title */
+            work_title?: string;
+            /** @description Ticket runs: the ticket's branch */
+            branch?: string;
+            pr_number?: number;
+            pr_url?: string;
+            pr_state?: string;
+            /** @description Direct delegated runs */
+            child_count?: number;
             agent: components["schemas"]["AgentRef"];
             /** @enum {string} */
             mode: "managed" | "unmanaged";
@@ -2232,8 +2286,11 @@ export interface components {
         NodeKind: "artifact" | "ticket" | "epic" | "agent";
         /** @description What a [[link]] points at, with enough to render it */
         LinkTarget: {
-            /** @enum {string} */
-            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "unresolved";
+            /**
+             * @description chat only appears in GET /search hits (the asking user's own chats)
+             * @enum {string}
+             */
+            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "chat" | "unresolved";
             /** Format: uuid */
             id?: string;
             anchor?: string;
@@ -2471,17 +2528,35 @@ export interface components {
         };
         InboxItem: {
             id: string;
-            /** @enum {string} */
-            kind: "approval" | "dispatch" | "mention" | "review" | "blocked" | "suggestion" | "planning" | "mockup";
+            /**
+             * @description question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes
+             * @enum {string}
+             */
+            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion";
             title: string;
             summary: string;
             href: string;
             project: string;
             ticket_key: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the item last changed; the wait starts here
+             */
             created_at: string;
             resolved: boolean;
+            /** @description Marked done by this person since the item last changed */
             read: boolean;
+            agent?: components["schemas"]["AgentRef"];
+            /**
+             * Format: uuid
+             * @description The run to reply to, retry or cancel
+             */
+            run_id?: string;
+            /**
+             * Format: uuid
+             * @description The mockup or wiki page under review
+             */
+            artifact_id?: string;
         };
         WorkflowCounts: {
             total: number;
@@ -2724,6 +2799,8 @@ export interface components {
             epic_id?: string;
             /** Format: uuid */
             artifact_id?: string;
+            /** @description Wiki pages, sections, artifacts and tickets in the project for the planner to read; delivered as context files when the run starts. */
+            context_refs?: components["schemas"]["ChatContextRef"][];
         };
         PlanningSession: {
             /** Format: uuid */
@@ -2746,6 +2823,10 @@ export interface components {
             state: "planning" | "review" | "accepted" | "dismissed";
             revision: number;
             proposals: components["schemas"]["TicketProposal"][];
+            /** @description How many proposals the planner submitted (0 until it does); ticket_keys counts the accepted ones */
+            proposal_count: number;
+            /** @description What the person attached when starting the plan */
+            context_refs: components["schemas"]["ChatContextRef"][];
             /** @description Created tickets currently ready for manual dispatch */
             ready_keys: string[];
             ticket_keys: string[];
@@ -3819,6 +3900,8 @@ export interface operations {
                     decision: "approved" | "changes_requested";
                     /** @description Required when requesting changes */
                     note?: string;
+                    /** @description Comments pinned on the drawing. They're saved with the review and appended to its note as a numbered list. */
+                    pins?: components["schemas"]["MockupPin"][];
                 };
             };
         };
@@ -4356,6 +4439,39 @@ export interface operations {
                 };
                 content: {
                     "application/x-ndjson": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: {
+                /** @description live (queued to waiting, the default), all, or one run state */
+                state?: "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+                /** @description Agent handle */
+                agent?: string;
+                /** @description Project key */
+                project?: string;
+                purpose?: "ticket" | "planning" | "chat";
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        runs: components["schemas"]["Run"][];
+                        has_more: boolean;
+                    };
                 };
             };
             default: components["responses"]["Error"];

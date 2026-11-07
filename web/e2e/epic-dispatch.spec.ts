@@ -51,7 +51,7 @@ for (const mixed of [false, true]) {
       if (ticket) return route.fulfill({ json: { ...ticket, project } });
       return route.fallback();
     });
-    await page.goto("/epics");
+    await page.goto("/epics/epic-1");
     const select = page.getByRole("combobox", { name: "Agent for unassigned tickets" });
     await expect(select).toHaveValue(agent.id);
     await expect(select.getByRole("option", { name: "Sub agent" })).toHaveCount(0);

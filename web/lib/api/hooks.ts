@@ -258,11 +258,11 @@ export function useUpdateArtifact(id: string) {
 export function useReviewMockup(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { versionId: string; decision: "approved" | "changes_requested"; note?: string }) =>
+    mutationFn: (v: { versionId: string; decision: "approved" | "changes_requested"; note?: string; pins?: Schemas["MockupPin"][] }) =>
       unwrap(
         api.POST("/artifacts/{id}/versions/{versionId}/review", {
           params: { path: { id, versionId: v.versionId } },
-          body: { decision: v.decision, note: v.note },
+          body: { decision: v.decision, note: v.note, pins: v.pins },
         }),
       ),
     onSuccess: (a) => {
@@ -510,6 +510,39 @@ export function useControlRunById(id: string) {
   });
 }
 
+/** Decide an approval from the run page; works for runs without a ticket. */
+export function useDecideRunApproval(runId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; decision: "approve" | "deny"; note?: string }) =>
+      unwrap(api.POST("/approvals/{id}/{decision}", { params: { path: { id: v.id, decision: v.decision } }, body: { note: v.note } })),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["runs", runId] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: keys.tickets });
+    },
+  });
+}
+
+export type RunListFilters = { state: string; agent?: string; project?: string; purpose?: "ticket" | "planning" | "chat" };
+
+type ListRunsState = "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+
+function runListOptions(f: RunListFilters, offset: number) {
+  return {
+    queryKey: ["runs", "list", f, offset] as const,
+    queryFn: () => unwrap(api.GET("/runs", { params: { query: { state: f.state as ListRunsState, agent: f.agent, project: f.project, purpose: f.purpose, offset } } })),
+    refetchInterval: f.state === "live" ? 10_000 : (false as const),
+  };
+}
+
+/** Top-level runs, newest first, one query per loaded page. Under ["runs"] so SSE invalidation refreshes them. */
+export function useRunPages(f: RunListFilters, pages: number) {
+  return useQueries({ queries: Array.from({ length: pages }, (_, i) => runListOptions(f, i * RUNS_PAGE)) });
+}
+
+export const RUNS_PAGE = 50;
+
 // ------------------------------------------------------------- wiki (§12)
 
 export const wikiKeys = {
@@ -668,8 +701,8 @@ export function useFindPatterns(q: string, topic?: string) {
 }
 
 // ------------------------------------------------------------- attention
-export function useInbox(project?: string) {
-  return useQuery({queryKey:["inbox",project??""],queryFn:()=>unwrap(api.GET("/inbox",{params:{query:{project}}})).then(d=>d.items)});
+export function useInbox(project?: string, enabled = true) {
+  return useQuery({enabled,queryKey:["inbox",project??""],queryFn:()=>unwrap(api.GET("/inbox",{params:{query:{project}}})).then(d=>d.items)});
 }
 export function useReadInbox() {
  const qc=useQueryClient();

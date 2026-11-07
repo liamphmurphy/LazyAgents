@@ -213,7 +213,7 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 			Content:   contentOf(isMD, &v.ContentType, &v.SizeBytes, v.Filename, nSections),
 		}
 		if v.ReviewState != nil {
-			av.Review = &api.MockupReview{State: api.MockupReviewState(*v.ReviewState), Note: v.ReviewNote, ReviewedAt: v.ReviewedAt}
+			av.Review = &api.MockupReview{State: api.MockupReviewState(*v.ReviewState), Note: v.ReviewNote, ReviewedAt: v.ReviewedAt, Pins: reviewPins(v.ReviewPins)}
 			if v.ReviewedByUserID != nil {
 				if u, err := s.Q.GetUser(ctx, store.GetUserParams{ID: *v.ReviewedByUserID, WorkspaceID: ws}); err == nil {
 					av.Review.ReviewedBy = toUserRef(u)

@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap, contentUrl, type Schemas } from "@/lib/api/client";
-import { useBootstrap, useResolved } from "@/lib/api/hooks";
+import { api, unwrap, contentUrl, type LinkTarget, type Schemas } from "@/lib/api/client";
+import { useBootstrap, useChatRunEvents, useResolved } from "@/lib/api/hooks";
 import { Button, ButtonLink } from "@/components/ui/button";
 import {
   Banner,
@@ -16,12 +16,32 @@ import {
   TextInput,
 } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
+import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { DispatchDialog } from "@/components/domain/dispatch-dialog";
+import { LinkEditor } from "@/components/domain/link-editor";
+import { Pill, SmallPill } from "@/components/domain/labels";
+import { Icon } from "@/components/ui/icon";
+import { AddContext, ChipList, SentChips, acceptTarget } from "@/app/(app)/chat/_components/context-chips";
+import { ActivityRef } from "@/app/(app)/chat/_components/activity";
+import {
+  MAX_CONTEXT_REFS,
+  addChip,
+  chipFromRef,
+  chipFromTarget,
+  parseAttach,
+  removeChip,
+  toContextRefs,
+  type Chip,
+  type ContextRef,
+} from "@/lib/chat-context";
+import { firstLine, planCount, planLive, planStatus, readSources } from "@/lib/plans";
+import { ago } from "@/lib/format";
 import { cx } from "@/lib/cx";
 
 type Plan = Schemas["PlanningSession"];
 type Proposal = Schemas["TicketProposal"];
 type Bootstrap = Schemas["Bootstrap"];
+type Project = Schemas["Project"];
 const control =
   "w-full rounded-md border border-border-strong bg-surface px-2.5 py-2 text-sm text-fg";
 const message = (e: unknown) =>
@@ -38,19 +58,31 @@ function Runtime({ handle, project }: { handle: string; project: string }) {
   );
 }
 
-function NewPlan({ data }: { data: Bootstrap }) {
+/** project comes from the sidebar switcher (?project=, then the remembered one). */
+function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project }) {
   const search = useSearchParams(),
     router = useRouter(),
     qc = useQueryClient();
-  const projects = data.projects.filter((p) => !p.archived);
-  const [project, setProject] = useState(
-    search.get("project") || projects[0]?.key || "",
-  );
-  const [agent, setAgent] = useState(data.agents[0]?.id || "");
-  const [goal, setGoal] = useState("");
-  const selected = data.agents.find((a) => a.id === agent);
-  const epic = search.get("epic") || undefined,
-    artifact = search.get("artifact") || undefined;
+  const project = scoped.key;
+  // Planner agents are main agents: sub agents only run when delegated to.
+  const planners = data.agents.filter((a) => a.kind === "main");
+  const [agent, setAgent] = useState(planners[0]?.id || "");
+  // ?goal= prefills from the command palette ("Start planning: …").
+  const [goal, setGoal] = useState(search.get("goal") ?? "");
+  // "Plan with agent" links arrive with ?attach=, ?epic= or ?artifact= (a PRD/SPEC whose version is pinned).
+  const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
+  const epics = data.epics.filter((e) => e.project_id === scoped.id && e.status === "open");
+  const [epic, setEpic] = useState(() => {
+    const id = search.get("epic");
+    return id && data.epics.some((e) => e.id === id && e.project_id === scoped.id) ? id : "";
+  });
+  const [artifact, setArtifact] = useState(search.get("artifact") || undefined);
+  const area = useRef<HTMLTextAreaElement | null>(null);
+  const selected = planners.find((a) => a.id === agent);
+  const attach = (t: LinkTarget) => {
+    const chip = chipFromTarget(t);
+    if (chip) setChips((cs) => addChip(cs, chip));
+  };
   const create = useMutation({
     mutationFn: () =>
       unwrap(
@@ -59,8 +91,9 @@ function NewPlan({ data }: { data: Bootstrap }) {
             project,
             agent_id: agent,
             goal,
-            epic_id: epic,
+            epic_id: epic || undefined,
             artifact_id: artifact,
+            context_refs: toContextRefs(chips),
           },
         }),
       ),
@@ -69,100 +102,130 @@ function NewPlan({ data }: { data: Bootstrap }) {
       router.push(`/plans?id=${p.id}`);
     },
   });
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    create.mutate();
+  const needsGoal = !artifact && !epic;
+  const ready = !!agent && (!needsGoal || !!goal.trim()) && !create.isPending;
+  function submit(e?: FormEvent) {
+    e?.preventDefault();
+    if (ready) create.mutate();
   }
   return (
-    <Card title="Plan with an agent">
-      <form onSubmit={submit} className="space-y-5">
+    <Card
+      title="New plan"
+      action={
+        <span className="flex h-6 items-center gap-2 rounded-md border border-border-strong bg-surface-sunken px-2 text-xs" title="Switch projects in the sidebar">
+          <span aria-hidden className="size-2 flex-none rounded-[2px]" style={{ background: scoped.color }} />
+          <span className="max-w-[140px] truncate">{scoped.name}</span>
+          <span className="font-mono text-[10.5px] text-fg-tertiary">{scoped.key}</span>
+        </span>
+      }
+    >
+      <form onSubmit={submit} className="space-y-5" aria-label="New plan">
         <p className="text-sm text-fg-secondary">
-          Turn a goal or source document into draft tickets. You review the
-          proposals before any tickets are created.
+          Describe the goal and attach what the planner should read. You review
+          proposals before any tickets exist.
         </p>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="plan-goal" className="text-[12.5px] font-medium text-fg-2">
+            {needsGoal ? "Goal" : "Additional goal (optional)"}
+          </label>
+          <div className="flex flex-col gap-2 rounded-lg border border-border-strong bg-surface-sunken p-2 focus-within:border-accent">
+            <LinkEditor
+              id="plan-goal"
+              inputRef={(el) => {
+                area.current = el;
+              }}
+              mono={false}
+              aria-label="Goal"
+              rows={8}
+              maxLength={20000}
+              value={goal}
+              onChange={setGoal}
+              onPick={attach}
+              accept={acceptTarget}
+              disabled={create.isPending}
+              placeholder="What should this plan accomplish? Type [[ to attach wiki pages, artifacts and tickets."
+              className="!border-0 !bg-transparent !p-1 focus-visible:!outline-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+            />
+            {(artifact || chips.length > 0) && (
+              <div className="flex flex-wrap items-center gap-1.5 px-1">
+                {artifact && (
+                  <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs text-fg-secondary" data-testid="plan-source">
+                    <Link href={`/artifacts/${artifact}`} className="hover:text-fg">Source document (pinned version)</Link>
+                    <button
+                      type="button"
+                      aria-label="Remove source document"
+                      onClick={() => setArtifact(undefined)}
+                      className="grid size-4 cursor-pointer place-items-center rounded-xs text-fg-tertiary hover:bg-hover hover:text-fg"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={create.isPending} />
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2 border-t border-border px-1 pt-2">
+              <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={create.isPending || chips.length >= MAX_CONTEXT_REFS} />
+              <span className="text-xs text-fg-tertiary">
+                or type [[ to attach wiki pages, artifacts and tickets · {chips.length} of {MAX_CONTEXT_REFS}
+              </span>
+              <span className="flex-1" />
+              <span className="text-xs text-fg-tertiary">⌘↵ to start</span>
+            </div>
+          </div>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Project">
+          <Field label="Planner agent">
             <select
               className={control}
-              aria-label="Project"
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              disabled={!!epic || !!artifact}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.key}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Planning agent">
-            <select
-              className={control}
-              aria-label="Planning agent"
+              aria-label="Planner agent"
               value={agent}
               onChange={(e) => setAgent(e.target.value)}
             >
-              {data.agents.map((a) => (
+              {planners.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name}
+                  {a.name} · @{a.handle}
+                </option>
+              ))}
+            </select>
+            {selected && <Runtime handle={selected.handle} project={project} />}
+          </Field>
+          <Field
+            label="Epic (optional)"
+            hint={epic ? "Accepted tickets join this epic." : "Accepting creates a new epic. Pick one to extend it instead."}
+          >
+            <select className={control} aria-label="Epic" value={epic} onChange={(e) => setEpic(e.target.value)}>
+              <option value="">No epic</option>
+              {epics.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
                 </option>
               ))}
             </select>
           </Field>
         </div>
-        {!projects.some((p) => p.key === project) && (
-          <Banner tone="human" title="Choose an active project">
-            This project is archived or unavailable. Restore it in Settings
-            before starting a plan.
-          </Banner>
-        )}
-        {selected && <Runtime handle={selected.handle} project={project} />}
-        {epic && (
-          <p className="text-sm text-fg-secondary">
-            Epic: {data.epics.find((e) => e.id === epic)?.name || epic}
-          </p>
-        )}
-        {artifact && (
-          <ButtonLink variant="ghost" href={`/artifacts/${artifact}`}>
-            View source document
-          </ButtonLink>
-        )}
-        <Field label={artifact || epic ? "Additional goal (optional)" : "Goal"}>
-          <textarea
-            className={control}
-            aria-label="Goal"
-            rows={5}
-            maxLength={20000}
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            required={!artifact && !epic}
-            placeholder="What should this plan accomplish?"
-          />
-        </Field>
         <Banner tone="human" title="Approve a restricted planning run">
-          The planner can read context and submit proposals. Project setup,
-          repository cloning, write credentials and extra MCP servers are
-          excluded. Starting a plan may incur model costs. It waits in the queue
-          if no runner is online.
+          The planner can read context and submit proposals. Repository writes,
+          setup, credentials and extra MCP servers are excluded. Starting a plan
+          may incur model costs; it waits in the queue if no runner is online.
         </Banner>
         {create.error && (
           <p role="alert" className="text-sm text-pill-blocked-fg">
             {message(create.error)}
           </p>
         )}
-        <Button
-          type="submit"
-          variant="approve"
-          disabled={
-            create.isPending ||
-            !agent ||
-            !project ||
-            !projects.some((p) => p.key === project)
-          }
-        >
-          {create.isPending ? "Starting…" : "Approve & start planning"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" variant="approve" disabled={!ready}>
+            {create.isPending ? "Starting…" : "Approve & start planning"}
+          </Button>
+          <span className="text-xs text-fg-tertiary">The planner gets the attached documents when its run starts.</span>
+        </div>
       </form>
     </Card>
   );
@@ -236,7 +299,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
             once their blockers are Done.
           </p>
           {plan.epic_id && (
-            <ButtonLink variant="outline" href={`/epics?epic=${plan.epic_id}`}>
+            <ButtonLink variant="outline" href={`/epics/${plan.epic_id}`}>
               View epic
             </ButtonLink>
           )}
@@ -459,51 +522,141 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
   );
 }
 
+/** What the planner has read, from its run's tool calls (polled while live). */
+function SourcesRead({ plan, live }: { plan: Plan; live: boolean }) {
+  const events = useChatRunEvents(plan.run_id);
+  const sources = useMemo(() => readSources(events.data), [events.data]);
+  if (!live && sources.length === 0) return null;
+  const list = (
+    <ul className="flex flex-col gap-1.5" data-testid="plan-sources">
+      {sources.map((src) => (
+        <li key={src.key} className="flex min-w-0 items-center gap-2 text-[12.5px] text-fg-secondary">
+          {src.done ? (
+            <Icon name="check" size={12} className="flex-none text-pill-done-fg" />
+          ) : (
+            <span aria-hidden className="size-3 flex-none animate-spin rounded-full border-2 border-border-strong border-t-accent" />
+          )}
+          <span className="min-w-0 truncate">
+            {src.activity.verb}{" "}
+            {src.activity.ref && src.activity.label ? (
+              <ActivityRef refText={src.activity.ref} label={src.activity.label} />
+            ) : (
+              <span className="text-fg">{src.activity.text}</span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+  if (!live)
+    return (
+      <details className="rounded-lg border border-border bg-surface px-3 py-2">
+        <summary className="cursor-pointer text-[12.5px] text-fg-secondary">Sources read ({sources.length})</summary>
+        <div className="mt-2">{list}</div>
+      </details>
+    );
+  return (
+    <section aria-label="Sources read so far" className="space-y-2">
+      <h3 className="type-micro text-fg-tertiary">SOURCES READ SO FAR</h3>
+      {sources.length === 0 ? (
+        <p role="status" className="text-[12.5px] text-fg-tertiary">
+          {plan.run_state === "queued" ? "Waiting for a runner…" : "The planner hasn’t read anything yet."}
+        </p>
+      ) : (
+        list
+      )}
+    </section>
+  );
+}
+
 function PlanDetail({ plan, data }: { plan: Plan; data: Bootstrap }) {
+  const live = planLive(plan);
+  const status = planStatus(plan);
+  const attached = plan.context_refs.map((r) => chipFromRef(r as ContextRef));
+  const epicName = plan.epic_id && data.epics.find((e) => e.id === plan.epic_id)?.name;
   return (
     <div className="space-y-5">
       <Card
-        title={plan.state === "planning" ? "Planning run" : "Plan review"}
+        title={live ? "Planning run" : "Plan"}
         action={
           <ButtonLink href={`/runs/${plan.run_id}`} variant="outline">
             View run log
           </ButtonLink>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Pill tone={status.tone}>{status.label}</Pill>
+            <span className="font-mono text-xs text-fg-tertiary">
+              {plan.project} · {plan.harness} · {plan.model}
+            </span>
+          </div>
           <h2 className="type-heading whitespace-pre-wrap break-words">
             {plan.goal}
           </h2>
-          <p className="font-mono text-xs text-fg-tertiary">
-            {plan.project} · {plan.harness} · {plan.model} ·{" "}
-            {plan.state === "planning" ? plan.run_state : plan.state}
-          </p>
-          {plan.artifact_id && (
-            <ButtonLink href={`/artifacts/${plan.artifact_id}`} variant="ghost">
-              Source document
-            </ButtonLink>
-          )}
-          {plan.source_version_id && plan.artifact_id && (
-            <ButtonLink
-              variant="ghost"
-              href={contentUrl(plan.artifact_id, plan.source_version_id)}
-            >
-              View the source version used by the planner
-            </ButtonLink>
+          {epicName && <p className="text-sm text-fg-secondary">Epic: {epicName}</p>}
+          {(plan.artifact_id || attached.length > 0) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {plan.artifact_id && (
+                <ButtonLink
+                  href={plan.source_version_id ? contentUrl(plan.artifact_id, plan.source_version_id) : `/artifacts/${plan.artifact_id}`}
+                  variant="ghost"
+                >
+                  Source document
+                </ButtonLink>
+              )}
+              <SentChips chips={attached} />
+            </div>
           )}
           {plan.state === "planning" && (
             <p role="status" className="text-sm text-fg-secondary">
-              {["failed", "cancelled", "blocked"].includes(plan.run_state)
-                ? plan.outcome || "Planning stopped. Start a new plan to retry."
-                : "The planner will submit draft tickets here. No tickets have been created."}
+              {live
+                ? "The planner will submit draft tickets here. No tickets have been created."
+                : plan.outcome || "Planning stopped. Start a new plan to retry."}
             </p>
           )}
+          {plan.state === "review" && (
+            <Banner tone="human" title={`${plan.proposals.length} proposals ready for review`}>
+              <a href="#proposal-review" className="text-accent hover:underline">
+                Review the proposals
+              </a>{" "}
+              below; no tickets exist until you accept them.
+            </Banner>
+          )}
+          <SourcesRead plan={plan} live={live} />
         </div>
       </Card>
       {plan.state !== "planning" && (
-        <Review key={plan.id} plan={plan} data={data} />
+        <section id="proposal-review" aria-label="Proposal review" className="scroll-mt-4">
+          <Review key={plan.id} plan={plan} data={data} />
+        </section>
       )}
     </div>
+  );
+}
+
+function PlanRow({ plan, active }: { plan: Plan; active: boolean }) {
+  const status = planStatus(plan);
+  return (
+    <Link
+      href={`/plans?id=${plan.id}`}
+      aria-current={active ? "page" : undefined}
+      className={cx(
+        "block rounded-md border border-border px-3 py-2.5 hover:bg-hover",
+        active && "bg-selected",
+      )}
+      data-testid="plan-row"
+    >
+      <span className="flex items-center gap-2">
+        <SmallPill tone={status.tone}>{status.label}</SmallPill>
+        <span className="flex-1" />
+        <span className="text-[11px] text-fg-tertiary">{planCount(plan)}</span>
+      </span>
+      <span className="mt-1.5 block truncate text-sm">{firstLine(plan.goal)}</span>
+      <span className="mt-0.5 block text-xs text-fg-tertiary">
+        {plan.project} · {ago(plan.created_at)}
+      </span>
+    </Link>
   );
 }
 
@@ -511,6 +664,9 @@ export function PlansScreen() {
   const search = useSearchParams();
   const id = search.get("id");
   const bootstrap = useBootstrap();
+  // A new plan needs one project; an open plan (?id=) carries its own.
+  const scope = useProjectScope("required", { skip: !!id });
+  const scoped = scope.status === "ready" ? scope.project : undefined;
   const list = useQuery({
     queryKey: ["planning", "list"],
     queryFn: () => unwrap(api.GET("/planning-sessions")),
@@ -528,7 +684,10 @@ export function PlansScreen() {
   return (
     <>
       <TopBar
-        crumbs={[{ label: "Plans" }]}
+        crumbs={projectCrumbs(
+          id ? bootstrap.data?.projects.find((p) => p.key === detail.data?.project) : scoped,
+          "Plans",
+        )}
         actions={
           <ButtonLink href="/plans" variant="outline">
             New plan
@@ -538,7 +697,10 @@ export function PlansScreen() {
       <Content>
         <div className="grid min-w-0 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="space-y-2">
-            <h2 className="type-micro mb-3 text-fg-tertiary">RECENT PLANS</h2>
+            <h2 className="type-micro mb-3 flex text-fg-tertiary">
+              <span className="flex-1">PLANS</span>
+              {list.data && <span>{list.data.length}</span>}
+            </h2>
             {list.isLoading && <Skeleton className="h-24" />}
             {list.isError && (
               <p role="alert" className="text-sm text-pill-blocked-fg">
@@ -551,20 +713,13 @@ export function PlansScreen() {
               </p>
             )}
             {list.data?.map((p) => (
-              <Link
-                key={p.id}
-                href={`/plans?id=${p.id}`}
-                className={cx(
-                  "block rounded-md border border-border px-3 py-2 hover:bg-hover",
-                  p.id === id && "bg-selected",
-                )}
-              >
-                <span className="line-clamp-2 text-sm">{p.goal}</span>
-                <span className="mt-1 block text-xs text-fg-tertiary">
-                  {p.project} · {p.state === "planning" ? p.run_state : p.state}
-                </span>
-              </Link>
+              <PlanRow key={p.id} plan={p} active={p.id === id} />
             ))}
+            {!!list.data?.length && (
+              <p className="pt-1 text-[11.5px] text-fg-tertiary">
+                Status · first line of the goal · tickets accepted / proposals made
+              </p>
+            )}
           </aside>
           <main className="min-w-0 max-w-[900px]">
             {(bootstrap.isLoading || (id && detail.isLoading)) && (
@@ -584,30 +739,21 @@ export function PlansScreen() {
                     data={bootstrap.data}
                   />
                 )
-              ) : bootstrap.data.agents.length &&
-                bootstrap.data.projects.some((p) => !p.archived) ? (
-                <NewPlan key={search.toString()} data={bootstrap.data} />
+              ) : !scoped ? (
+                <ProjectScopeState base="/plans" scope={scope} />
+              ) : bootstrap.data.agents.some((a) => a.kind === "main") ? (
+                <NewPlan key={search.toString()} data={bootstrap.data} project={scoped} />
               ) : (
                 <EmptyState
                   icon="epics"
-                  title={
-                    bootstrap.data.projects.some((p) => !p.archived)
-                      ? "Create an agent first"
-                      : "Create a project first"
-                  }
+                  title="Create an agent first"
                   actions={
-                    bootstrap.data.projects.some((p) => !p.archived) ? (
-                      <ButtonLink href="/agents" variant="outline">
-                        Go to agents
-                      </ButtonLink>
-                    ) : (
-                      <ButtonLink href="/settings/projects" variant="outline">
-                        Create a project
-                      </ButtonLink>
-                    )
+                    <ButtonLink href="/agents" variant="outline">
+                      Go to agents
+                    </ButtonLink>
                   }
                 >
-                  Planning needs an active project and at least one agent.
+                  Planning needs an active project and at least one main agent.
                 </EmptyState>
               ))}
           </main>

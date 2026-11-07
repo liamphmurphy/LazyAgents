@@ -16,6 +16,7 @@ import { NewMockupDialog, UploadDialog } from "@/components/domain/artifact-dial
 import { DocTypeTag } from "@/components/domain/labels";
 import { ReviewChip } from "@/components/domain/mockup";
 import { TopBar } from "@/components/shell/topbar";
+import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { ArtifactPreview } from "./preview";
 
 const TABS: Array<{ key: "all" | ArtifactType; label: string }> = [
@@ -68,6 +69,9 @@ export function ArtifactsScreen() {
   const [mockup, setMockup] = useState(false);
 
   const boot = useBootstrap();
+  // ?project= or the remembered project; "All projects" lists every artifact.
+  const scope = useProjectScope("optional");
+  const current = scope.status === "ready" ? scope.project : undefined;
   const list = useArtifacts({ type, q: q || undefined, project });
 
   function setParams(changes: Record<string, string | null>) {
@@ -99,7 +103,7 @@ export function ArtifactsScreen() {
   return (
     <>
       <TopBar
-        crumbs={[{ label: boot.data?.workspace.name ?? "Workspace" }, { label: "Artifacts" }]}
+        crumbs={current ? projectCrumbs(current, "Artifacts") : [{ label: boot.data?.workspace.name ?? "Workspace" }, { label: "Artifacts" }]}
         actions={
           <>
             <Button variant="outline" icon="plus" onClick={() => setMockup(true)}>
@@ -166,7 +170,9 @@ export function ArtifactsScreen() {
             </span>
           </button>
 
-          {list.isError ? (
+          {scope.status !== "ready" ? (
+            <ProjectScopeState base="/artifacts" scope={scope} />
+          ) : list.isError ? (
             <Banner tone="blocked" title="Couldn't load artifacts">
               {list.error.message}
             </Banner>

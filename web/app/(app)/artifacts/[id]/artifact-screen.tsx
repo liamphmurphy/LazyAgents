@@ -151,9 +151,14 @@ export function ArtifactScreen({ id }: { id: string }) {
           a && !editing && (
             <>
               {isMockup && (
-                <Button variant="primary" icon="edit" onClick={() => setEditing(true)}>
-                  Edit
-                </Button>
+                <>
+                  <ButtonLink variant="primary" href={`/artifacts/${a.id}/review${isOld && viewing ? `?version=${viewing.id}` : ""}`}>
+                    Review
+                  </ButtonLink>
+                  <Button variant="outline" icon="edit" onClick={() => setEditing(true)}>
+                    Edit
+                  </Button>
+                </>
               )}
               <StartChatButton attach={{ kind: a.type === "note" ? "page" : "artifact", id: a.id }} title={artifactTitle(a)} project={a.project?.key} />
               <ButtonLink href={contentUrl(a.id, (viewing ?? a.current_version).id, true)} variant="outline" icon="download">

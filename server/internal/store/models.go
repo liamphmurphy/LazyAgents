@@ -163,6 +163,7 @@ type ArtifactVersion struct {
 	ReviewedByUserID *uuid.UUID
 	ReviewedAt       *time.Time
 	ReviewNote       string
+	ReviewPins       json.RawMessage
 }
 
 type ChatMessage struct {
@@ -322,6 +323,8 @@ type PlanningSession struct {
 	CreatedBy       uuid.UUID
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	ContextRefs     json.RawMessage
+	ProposalCount   int32
 }
 
 type Project struct {
