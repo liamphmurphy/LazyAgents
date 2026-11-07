@@ -1,4 +1,4 @@
-# Real-stack OpenCode chat e2e
+# Real-stack browser e2e
 
 Browser → Next → **real Go API** → **real runner** (`RUNNER_BACKEND=local`) →
 **real Postgres**. Unlike `web/e2e/*.spec.ts`, nothing is mocked: the specs
@@ -24,6 +24,15 @@ contain no `page.route` and the chat REST/SSE traffic is the real thing.
    and get a reply; history survives a reload.
 
 ## The disposable fixture (`run.sh`)
+
+`board-flow.spec.ts` covers an agent claiming a ticket and estimating a sibling
+through the real MCP endpoint, live SSE updates on the open board, a person's
+modal edit to Done, and the epic gate refusing closure until all final criteria
+are checked. It then verifies the saved ticket and epic through REST. This flow
+does not invoke a model. The fixture inserts one epic directly into the disposable
+database because epic creation has no standalone REST endpoint; criteria,
+tickets, estimates and status changes use the real API/MCP. The script provides
+both `E2E_STACK_BASE_URL` (web) and `E2E_STACK_API_URL` (API) to Playwright.
 
 Everything lives under a fresh temp dir and is torn down on exit (success,
 failure or Ctrl-C):

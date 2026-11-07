@@ -224,6 +224,12 @@ list's **Ready to dispatch** filter and an accepted plan's dispatch action show 
 work. Later waves become available as prerequisites finish, with human approval for
 every dispatch.
 
+### Kanban board
+
+Open **Board** to see project tickets by status, edit a ticket in its modal,
+or filter by epic to manage final acceptance criteria and the done gate.
+See [the board guide](board.md) for estimates, statuses and the agent MCP tools.
+
 ## Develop
 
 Requires Go 1.26+, Node 24+ and Docker for Postgres and SeaweedFS.
