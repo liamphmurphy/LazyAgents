@@ -35,6 +35,7 @@ import {
   type ContextRef,
 } from "@/lib/chat-context";
 import { firstLine, planCount, planLive, planStatus, readSources } from "@/lib/plans";
+import { dependencyProblems } from "@/lib/proposals";
 import { ago } from "@/lib/format";
 import { cx } from "@/lib/cx";
 
@@ -267,14 +268,42 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
   const [items, setItems] = useState<Proposal[]>(() =>
     plan.proposals.map((p, i) => ({ ...p, ref: p.ref || `ticket-${i + 1}` })),
   );
+  const [selected, setSelected] = useState(
+    () => new Set(items.map((p) => p.ref!)),
+  );
+  const [active, setActive] = useState(items[0]?.ref);
+  const baseline = (p: Proposal) =>
+    p.planner_estimate ??
+    plan.proposals.find((original) => original.ref === p.ref)
+      ?.planner_estimate ?? {
+      points: plan.proposals.find((original) => original.ref === p.ref)
+        ?.estimate_points,
+      rationale: plan.proposals.find((original) => original.ref === p.ref)
+        ?.estimate_rationale,
+    };
+  const changed = (p: Proposal) => p.estimate_points !== baseline(p).points;
+  const problems = dependencyProblems(items, selected);
+  const allProblems = dependencyProblems(
+    items,
+    new Set(items.map((p) => p.ref!)),
+  );
+  const chosen = items.filter((p) => selected.has(p.ref!));
+  const archived = !!data.projects.find((p) => p.key === plan.project)
+    ?.archived;
   const [revision, setRevision] = useState(plan.revision);
   const [dispatch, setDispatch] = useState(false);
   const review = useMutation({
-    mutationFn: (action: "save" | "accept" | "dismiss") =>
+    mutationFn: ({
+      action,
+      proposals = items,
+    }: {
+      action: "save" | "accept" | "dismiss";
+      proposals?: Proposal[];
+    }) =>
       unwrap(
         api.PATCH("/planning-sessions/{id}", {
           params: { path: { id: plan.id } },
-          body: { revision, action, proposals: items },
+          body: { revision, action, proposals },
         }),
       ),
     onSuccess: (p) => {
@@ -291,12 +320,12 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
   if (plan.state === "accepted") {
     const assigned = plan.ready_keys;
     return (
-      <Card title="Tickets created">
+      <Card title={`Tickets created · ${planCount(plan)}`}>
         <div className="space-y-4">
           <p className="text-sm text-fg-secondary">
-            Assigned tickets whose blockers are Done are ready now.
-            Dependent tickets can be dispatched too: they queue and start
-            once their blockers are Done.
+            Assigned tickets whose blockers are Done are ready now. Dependent
+            tickets can be dispatched too: they queue and start once their
+            blockers are Done.
           </p>
           {plan.epic_id && (
             <ButtonLink variant="outline" href={`/epics/${plan.epic_id}`}>
@@ -351,127 +380,370 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
           Restore the project in Settings before accepting these proposals.
         </Banner>
       )}
-      <p className="text-sm text-fg-secondary">
-        Edit, reassign or drop proposals. To merge two, combine their text and
-        criteria in one proposal, then drop the other.
-      </p>
-      {items.map((item, index) => (
-        <Card
-          key={item.ref}
-          title={`Ticket ${index + 1}`}
-          action={
-            <Button
-              variant="ghost"
-              disabled={
-                review.isPending ||
-                items.some(
-                  (p, i) => i !== index && p.depends_on?.includes(item.ref!),
-                )
-              }
-              title="Remove dependencies on this proposal before dropping it"
-              onClick={() => setItems(items.filter((_, i) => i !== index))}
-            >
-              Drop
-            </Button>
-          }
-        >
-          <div className="space-y-3">
-            <Field label="Title">
-              <TextInput
-                aria-label={`Ticket ${index + 1} title`}
-                value={item.title}
-                maxLength={300}
-                onChange={(e) => edit(index, { title: e.target.value })}
-              />
-            </Field>
-            <Field label="Description">
-              <textarea
-                className={control}
-                aria-label={`Ticket ${index + 1} description`}
-                rows={5}
-                value={item.description}
-                onChange={(e) => edit(index, { description: e.target.value })}
-              />
-            </Field>
-            <Field label="Acceptance criteria (one per line)">
-              <textarea
-                className={control}
-                aria-label={`Ticket ${index + 1} criteria`}
-                rows={3}
-                value={item.criteria.join("\n")}
-                onChange={(e) =>
-                  edit(index, { criteria: e.target.value.split("\n") })
-                }
-              />
-            </Field>
-            <Field
-              label="Waits for these proposals"
-              hint="Blockers must be Done before this ticket can be dispatched."
-            >
-              {items.length < 2 && (
-                <p className="text-xs text-fg-tertiary">No other proposals.</p>
-              )}
-              {items.map((other, i) =>
-                i === index ? null : (
-                  <label
-                    key={other.ref}
-                    className="flex items-start gap-2 text-sm"
+      <div className="grid gap-4 lg:grid-cols-[minmax(240px,1fr)_2fr]">
+        <aside className="space-y-4">
+          <Card title={`Drafts · ${items.length}`}>
+            <div className="space-y-2">
+              {items.map((p, i) => (
+                <div
+                  key={p.ref}
+                  className={cx(
+                    "flex items-start gap-2 rounded-md p-2",
+                    active === p.ref && "bg-surface-raised",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={`Select draft ${i + 1}`}
+                    checked={selected.has(p.ref!)}
+                    disabled={review.isPending}
+                    onChange={(e) =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(p.ref!);
+                        else next.delete(p.ref!);
+                        return next;
+                      })
+                    }
+                  />
+                  <button
+                    className="flex-1 text-left text-sm"
+                    aria-pressed={active === p.ref}
+                    onClick={() => setActive(p.ref)}
                   >
-                    <input
-                      type="checkbox"
-                      className="mt-1 accent-[var(--accent)]"
-                      checked={item.depends_on?.includes(other.ref!) ?? false}
-                      onChange={(e) =>
-                        edit(index, {
-                          depends_on: e.target.checked
-                            ? [...(item.depends_on ?? []), other.ref!]
-                            : (item.depends_on ?? []).filter(
-                                (ref) => ref !== other.ref,
-                              ),
-                        })
-                      }
-                    />
-                    <span>
-                      Ticket {i + 1} · {other.title || "Untitled"}
+                    {i + 1} · {p.title || "Untitled"}
+                    <span className="block text-xs text-fg-secondary">
+                      {p.estimate_points ?? "—"} pts{" "}
+                      {changed(p) ? "● estimate changed" : ""} ·{" "}
+                      {p.requires_mockup ? "needs mockup · " : ""}
+                      {(p.depends_on?.length ?? 0) +
+                        (p.blocked_by?.length ?? 0)}{" "}
+                      dependencies
                     </span>
-                  </label>
-                ),
-              )}
-            </Field>
-            <ExistingBlockers
-              initial={item.blocked_by ?? []}
-              onChange={(blocked_by) => edit(index, { blocked_by })}
-            />
-            <Field label="Assign to">
-              <select
-                className={control}
-                aria-label={`Ticket ${index + 1} agent`}
-                value={item.agent_id || ""}
-                onChange={(e) =>
-                  edit(index, { agent_id: e.target.value || undefined })
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card title="Dependencies">
+            <p className="mb-2 text-xs text-fg-secondary">
+              Blocker → blocked draft
+            </p>
+            <ul className="space-y-2 text-sm" aria-label="Dependency links">
+              {items.map((p) => (
+                <li key={p.ref}>
+                  {[
+                    ...(p.depends_on ?? []).map(
+                      (ref) =>
+                        items.find((other) => other.ref === ref)?.title || ref,
+                    ),
+                    ...(p.blocked_by ?? []),
+                  ].join(", ") || "No blockers"}{" "}
+                  → {p.title || p.ref}
+                </li>
+              ))}
+            </ul>
+            {problems.map((problem) => (
+              <p
+                key={problem}
+                role="alert"
+                className="mt-2 text-sm text-pill-blocked-fg"
+              >
+                {problem}
+              </p>
+            ))}
+          </Card>
+        </aside>
+        <fieldset disabled={review.isPending} className="min-w-0 space-y-4">
+          {items.map((item, index) =>
+            active !== item.ref ? null : (
+              <Card
+                key={item.ref}
+                title={`Ticket ${index + 1}`}
+                action={
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      aria-label="Move draft up"
+                      disabled={index === 0 || review.isPending}
+                      onClick={() => {
+                        const next = [...items];
+                        [next[index - 1], next[index]] = [
+                          next[index],
+                          next[index - 1],
+                        ];
+                        setItems(next);
+                      }}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      aria-label="Move draft down"
+                      disabled={index === items.length - 1 || review.isPending}
+                      onClick={() => {
+                        const next = [...items];
+                        [next[index + 1], next[index]] = [
+                          next[index],
+                          next[index + 1],
+                        ];
+                        setItems(next);
+                      }}
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={
+                        review.isPending ||
+                        items.some(
+                          (p, i) =>
+                            i !== index && p.depends_on?.includes(item.ref!),
+                        )
+                      }
+                      title="Remove dependencies on this proposal before dropping it"
+                      onClick={() => {
+                        setItems(items.filter((_, i) => i !== index));
+                        setActive(items.find((_, i) => i !== index)?.ref);
+                        setSelected((prev) => {
+                          const next = new Set(prev);
+                          next.delete(item.ref!);
+                          return next;
+                        });
+                      }}
+                    >
+                      Drop
+                    </Button>
+                  </div>
                 }
               >
-                <option value="">Unassigned</option>
-                {data.agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <label className="flex items-center gap-2 text-sm text-fg-secondary">
-              <input
-                type="checkbox"
-                checked={!!item.requires_mockup}
-                onChange={(e) =>
-                  edit(index, { requires_mockup: e.target.checked })
-                }
-              />
-              Requires mockup
-            </label>
-          </div>
-        </Card>
-      ))}
+                <div className="space-y-3">
+                  <Field label="Title">
+                    <TextInput
+                      aria-label={`Ticket ${index + 1} title`}
+                      value={item.title}
+                      maxLength={300}
+                      onChange={(e) => edit(index, { title: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Description">
+                    <textarea
+                      className={control}
+                      aria-label={`Ticket ${index + 1} description`}
+                      rows={5}
+                      value={item.description}
+                      onChange={(e) =>
+                        edit(index, { description: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Acceptance criteria">
+                    <div className="space-y-2">
+                      {item.criteria.map((criterion, c) => (
+                        <div key={c} className="flex gap-1">
+                          <TextInput
+                            aria-label={`Criterion ${c + 1}`}
+                            value={criterion}
+                            maxLength={2000}
+                            onChange={(e) =>
+                              edit(index, {
+                                criteria: item.criteria.map((v, n) =>
+                                  n === c ? e.target.value : v,
+                                ),
+                              })
+                            }
+                          />
+                          <Button
+                            variant="ghost"
+                            aria-label={`Move criterion ${c + 1} up`}
+                            disabled={c === 0}
+                            onClick={() => {
+                              const criteria = [...item.criteria];
+                              [criteria[c - 1], criteria[c]] = [
+                                criteria[c],
+                                criteria[c - 1],
+                              ];
+                              edit(index, { criteria });
+                            }}
+                          >
+                            ↑
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            aria-label={`Move criterion ${c + 1} down`}
+                            disabled={c === item.criteria.length - 1}
+                            onClick={() => {
+                              const criteria = [...item.criteria];
+                              [criteria[c + 1], criteria[c]] = [
+                                criteria[c],
+                                criteria[c + 1],
+                              ];
+                              edit(index, { criteria });
+                            }}
+                          >
+                            ↓
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            aria-label={`Remove criterion ${c + 1}`}
+                            onClick={() =>
+                              edit(index, {
+                                criteria: item.criteria.filter(
+                                  (_, n) => n !== c,
+                                ),
+                              })
+                            }
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        variant="outline"
+                        disabled={item.criteria.length >= 30}
+                        onClick={() =>
+                          edit(index, { criteria: [...item.criteria, ""] })
+                        }
+                      >
+                        Add criterion
+                      </Button>
+                    </div>
+                  </Field>
+                  <Field label="Estimate">
+                    <div
+                      className="flex flex-wrap gap-2"
+                      role="group"
+                      aria-label="Points"
+                    >
+                      {([1, 2, 3, 5, 8, 13, undefined] as const).map(
+                        (points) => (
+                          <Button
+                            key={points ?? "none"}
+                            variant={
+                              item.estimate_points === points
+                                ? "primary"
+                                : "outline"
+                            }
+                            aria-pressed={item.estimate_points === points}
+                            onClick={() =>
+                              edit(index, { estimate_points: points })
+                            }
+                          >
+                            {points ?? "Unestimated"}
+                          </Button>
+                        ),
+                      )}
+                    </div>
+                    {changed(item) && (
+                      <p className="mt-2 text-sm text-pill-human-fg">
+                        Changed from {baseline(item).points ?? "unestimated"}.{" "}
+                        <button
+                          className="text-accent"
+                          onClick={() =>
+                            edit(index, {
+                              estimate_points: baseline(item).points,
+                            })
+                          }
+                        >
+                          Reset estimate
+                        </button>
+                      </p>
+                    )}
+                    <p className="mt-2 text-sm text-fg-secondary">
+                      Planner’s rationale ({baseline(item).points ?? "—"} pts):{" "}
+                      {baseline(item).rationale || "No rationale supplied."}
+                    </p>
+                  </Field>
+                  <Field label="Estimate rationale">
+                    <TextInput
+                      aria-label="Estimate rationale"
+                      value={item.estimate_rationale ?? ""}
+                      maxLength={2000}
+                      onChange={(e) =>
+                        edit(index, { estimate_rationale: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <p className="text-sm text-fg-secondary">
+                    Epic:{" "}
+                    {data.epics.find((e) => e.id === plan.epic_id)?.name ||
+                      "New epic from this plan’s goal"}
+                  </p>
+                  <Field
+                    label="Waits for these proposals"
+                    hint="Blockers must be Done before this ticket can be dispatched."
+                  >
+                    {items.length < 2 && (
+                      <p className="text-xs text-fg-tertiary">
+                        No other proposals.
+                      </p>
+                    )}
+                    {items.map((other, i) =>
+                      i === index ? null : (
+                        <label
+                          key={other.ref}
+                          className="flex items-start gap-2 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 accent-[var(--accent)]"
+                            checked={
+                              item.depends_on?.includes(other.ref!) ?? false
+                            }
+                            onChange={(e) =>
+                              edit(index, {
+                                depends_on: e.target.checked
+                                  ? [...(item.depends_on ?? []), other.ref!]
+                                  : (item.depends_on ?? []).filter(
+                                      (ref) => ref !== other.ref,
+                                    ),
+                              })
+                            }
+                          />
+                          <span>
+                            Ticket {i + 1} · {other.title || "Untitled"}
+                          </span>
+                        </label>
+                      ),
+                    )}
+                  </Field>
+                  <ExistingBlockers
+                    initial={item.blocked_by ?? []}
+                    onChange={(blocked_by) => edit(index, { blocked_by })}
+                  />
+                  <Field label="Assign to">
+                    <select
+                      className={control}
+                      aria-label={`Ticket ${index + 1} agent`}
+                      value={item.agent_id || ""}
+                      onChange={(e) =>
+                        edit(index, { agent_id: e.target.value || undefined })
+                      }
+                    >
+                      <option value="">Unassigned</option>
+                      {data.agents.filter((a) => a.kind === "main").map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <label className="flex items-center gap-2 text-sm text-fg-secondary">
+                    <input
+                      type="checkbox"
+                      checked={!!item.requires_mockup}
+                      onChange={(e) =>
+                        edit(index, { requires_mockup: e.target.checked })
+                      }
+                    />
+                    Requires mockup
+                  </label>
+                </div>
+              </Card>
+            ),
+          )}
+        </fieldset>
+      </div>
       {review.error && (
         <p role="alert" className="text-sm text-pill-blocked-fg">
           {message(review.error)}
@@ -481,41 +753,65 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
         <Button
           variant="outline"
           disabled={review.isPending || items.length >= 50}
-          onClick={() =>
+          onClick={() => {
+            const ref = crypto.randomUUID();
             setItems([
               ...items,
-              {
-                ref: crypto.randomUUID(),
-                title: "",
-                description: "",
-                criteria: [],
-                depends_on: [],
-              },
-            ])
-          }
+              { ref, title: "", description: "", criteria: [], depends_on: [] },
+            ]);
+            setActive(ref);
+            setSelected((prev) => new Set([...prev, ref]));
+          }}
         >
           Add proposal
         </Button>
         <Button
           variant="ghost"
           disabled={review.isPending}
-          onClick={() => review.mutate("dismiss")}
+          onClick={() => review.mutate({ action: "dismiss" })}
         >
           Dismiss plan
         </Button>
         <Button
           variant="secondary"
           disabled={review.isPending || !items.length}
-          onClick={() => review.mutate("save")}
+          onClick={() => review.mutate({ action: "save" })}
         >
           Save draft
         </Button>
+        <p className="w-full text-sm text-fg-secondary">
+          {chosen.length} of {items.length} selected ·{" "}
+          {chosen.reduce((sum, p) => sum + (p.estimate_points ?? 0), 0)} points
+          · {chosen.filter((p) => p.requires_mockup).length} need mockups ·{" "}
+          {chosen.filter(changed).length} estimates changed
+        </p>
+        <p className="w-full text-xs text-fg-secondary">
+          Acceptance finishes this review. Unselected drafts will not create
+          tickets.
+        </p>
         <Button
           variant="primary"
-          disabled={review.isPending || !items.length}
-          onClick={() => review.mutate("accept")}
+          disabled={
+            review.isPending ||
+            archived ||
+            !chosen.length ||
+            problems.length > 0
+          }
+          onClick={() => review.mutate({ action: "accept", proposals: chosen })}
         >
-          Accept & create {items.length} tickets{plan.epic_id ? "" : " + epic"}
+          Accept selected ({chosen.length})
+        </Button>
+        <Button
+          variant="outline"
+          disabled={
+            review.isPending ||
+            archived ||
+            !items.length ||
+            allProblems.length > 0
+          }
+          onClick={() => review.mutate({ action: "accept", proposals: items })}
+        >
+          Accept all ({items.length})
         </Button>
       </div>
     </div>
