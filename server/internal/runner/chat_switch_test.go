@@ -41,7 +41,7 @@ func (e env) say(id uuid.UUID, body string) store.ChatMessage {
 func (e env) switchSetup(h, model string) store.ChatSession {
 	e.t.Helper()
 	e.t.Setenv("FAKE_HARNESS_MODE", "chat")
-	if err := (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, "atlas", "PAY", agentdef.Override{Harness: h, Model: model}); err != nil {
+	if err := (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, e.assistant().Handle, "PAY", agentdef.Override{Harness: h, Model: model}); err != nil {
 		e.t.Fatal(err)
 	}
 	chat := e.startChat("Message one")

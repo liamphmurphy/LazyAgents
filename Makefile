@@ -1,4 +1,4 @@
-# LazyAgents developer tasks. `make help` lists them.
+# Vesper developer tasks. `make help` lists them.
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 

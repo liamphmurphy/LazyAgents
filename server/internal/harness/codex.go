@@ -46,7 +46,7 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		// These are the service's own authenticated workflow tools. MCP's
 		// approval policy is separate from shell approval_policy: without
 		// this, unannotated tools prompt and are rejected headless. Scope
-		// checks and human approvals still happen inside LazyAgents.
+		// checks and human approvals still happen inside Vesper.
 		"mcp_servers." + lazyagentsServer + ".default_tools_approval_mode=" + tomlString("approve"),
 		"mcp_servers." + lazyagentsServer + ".required=true",
 	}
@@ -66,13 +66,19 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	} else {
 		cfg = append(cfg, "sandbox_mode="+tomlString(sandbox))
 	}
+	// Codex can't route web search through Vesper approval, so it's live only
+	// when web:read is plainly allowed.
+	web := "disabled"
 	if spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
-		// Codex's own search tool (checked against codex-cli 0.167.0, which
-		// accepts disabled, cached, indexed or live under --strict-config).
+		// The assistant's own search option (checked against codex-cli 0.167.0,
+		// which accepts disabled, cached, indexed or live under --strict-config).
 		// cached searches OpenAI's index without live fetches of arbitrary
 		// URLs, which could carry data out (ADR "Assistant web access").
-		cfg = append(cfg, "web_search="+tomlString("cached"))
+		web = "cached"
+	} else if allowed(spec, "web:read") && spec.HarnessOptions["readonly"] != "true" {
+		web = "live"
 	}
+	cfg = append(cfg, "web_search="+tomlString(web))
 	if effort := spec.HarnessOptions["effort"]; effort != "" {
 		if effort == "xhigh" || effort == "max" {
 			effort = "high"

@@ -203,6 +203,22 @@ export function hasActiveFilters(f: RunFilters): boolean {
   return f.state !== "live" || !!f.agent || !!f.project || !!f.purpose;
 }
 
+/** How many of the filters behind the Filters popover (agent, purpose) are set. */
+export function advancedFilterCount(f: RunFilters): number {
+  return (f.agent ? 1 : 0) + (f.purpose ? 1 : 0);
+}
+
+// --------------------------------------------------------------- index columns
+
+export type RunColumns = "default" | "more";
+export const RUN_COLUMNS_KEY = "lazyagents.runs.columns";
+
+/** ?columns= wins; otherwise the remembered choice; otherwise the default set. */
+export function runColumns(param: string | null, stored: string | null | undefined): RunColumns {
+  if (param === "more" || param === "default") return param;
+  return stored === "more" ? "more" : "default";
+}
+
 // ------------------------------------------------------------ work links
 
 type WorkRun = { purpose: string; ticket_key: string; planning_id?: string; chat_id?: string; project_key?: string };
@@ -216,3 +232,147 @@ export function workHref(r: WorkRun): string | null {
 }
 
 export const PURPOSE_LABEL: Record<string, string> = { ticket: "Ticket run", planning: "Planning run", chat: "Chat run" };
+
+// ------------------------------------------------------------- view mode
+
+/** Run page modes. "graph" joins this list with the Graph view ticket. */
+export const RUN_VIEW_MODES = ["simple", "details", "graph"] as const;
+export type RunViewMode = (typeof RUN_VIEW_MODES)[number];
+export const RUN_VIEW_STORAGE_KEY = "lazyagents.runs.view";
+
+const isMode = (v: string | null | undefined): v is RunViewMode => (RUN_VIEW_MODES as readonly string[]).includes(v ?? "");
+
+/** The turn or event a hash deep-links to: `#turn-3` or `#event-42`. */
+export function parseRunAnchor(hash: string): { kind: "turn" | "event"; n: number } | null {
+  const m = /^#?(turn|event)-(\d+)$/.exec(hash);
+  return m ? { kind: m[1] as "turn" | "event", n: Number(m[2]) } : null;
+}
+
+/**
+ * Deep links to a turn or event open in Details; otherwise `?view=` wins,
+ * then the last choice saved in localStorage, then Simple.
+ */
+export function pickRunView(view: string | null, hash: string, stored: string | null): RunViewMode {
+  if (parseRunAnchor(hash)) return "details";
+  if (isMode(view)) return view;
+  if (isMode(stored)) return stored;
+  return "simple";
+}
+
+// ------------------------------------------------------- condensed feed
+
+/** Tools that are notable on their own; every other call folds into the turn's count. */
+const GATE_TOOLS: Record<string, "approval" | "reply" | "mockup"> = {
+  "lazyagents.request_approval": "approval",
+  "lazyagents.await_human": "reply",
+  "lazyagents.create_mockup": "mockup",
+};
+
+export type FeedItem =
+  | { kind: "turn"; turn: number; at: string; text: string; tools: number }
+  | { kind: "step"; turn: number; at: string; step: number; state: string }
+  | { kind: "delegation"; turn: number; at: string; call: Ev; agent: string; task: string }
+  | { kind: "error"; turn: number; at: string; text: string }
+  | { kind: "gate"; turn: number; at: string; gate: "approval" | "reply" | "mockup"; text: string };
+
+const firstLine = (s: string) => s.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+
+/** What a failed tool row says in one line. */
+function failText(r: ToolRow): string {
+  const p = r.call.payload as P;
+  const res = (r.result?.payload ?? {}) as P;
+  const name = toolName(str(p.tool));
+  if (p.denied_by_harness) return `${name} denied by the harness`;
+  const line = firstLine(str(res.output));
+  return `${name} failed${res.exit_code != null ? ` (exit ${str(res.exit_code)})` : ""}${line ? `: ${line}` : ""}`;
+}
+
+/**
+ * The Simple view's activity: one line per turn (first line of its first agent
+ * message, or the fallback) with its routine tool calls counted, plus the
+ * notable events in order: finished plan steps, delegations, errors and human
+ * gates. Errors and gates are never folded. Setup (turn 0) has no turn line.
+ */
+export function condenseFeed<E extends Ev>(events: E[], fallback: (turn: number) => string = (n) => `Turn ${n}`): FeedItem[] {
+  const turnOf = turnByEvent(events);
+  const out: FeedItem[] = [];
+  const lines = new Map<number, Extract<FeedItem, { kind: "turn" }>>();
+  const line = (turn: number, at: string) => {
+    let l = lines.get(turn);
+    if (!l && turn > 0) {
+      l = { kind: "turn", turn, at, text: "", tools: 0 };
+      lines.set(turn, l);
+      out.push(l);
+    }
+    return l;
+  };
+  for (const row of rowsOf(events)) {
+    const e = rowEvent(row);
+    const p = e.payload as P;
+    const turn = turnOf.get(e.seq) ?? 0;
+    if (e.type === "lifecycle" && p.state === "turn_started") {
+      line(turn, e.at);
+      continue;
+    }
+    const l = line(turn, e.at);
+    if (row.kind === "tool") {
+      const name = toolName(str(p.tool));
+      const input = (p.input ?? {}) as P;
+      if (name === "lazyagents.delegate") {
+        out.push({ kind: "delegation", turn, at: e.at, call: e, agent: str(input.agent).replace(/^@/, ""), task: firstLine(str(input.task)) });
+      } else if (GATE_TOOLS[name]) {
+        const text = firstLine(str(input.action ?? input.reason ?? input.title ?? ""));
+        out.push({ kind: "gate", turn, at: e.at, gate: GATE_TOOLS[name], text: GATE_TOOLS[name] === "approval" && input.scope ? `${str(input.scope)}${text ? ` · ${text}` : ""}` : text });
+      } else if (l) {
+        l.tools += 1;
+      }
+      if (isFailedRow(row)) out.push({ kind: "error", turn, at: e.at, text: failText(row) });
+    } else if (e.type === "error") {
+      out.push({ kind: "error", turn, at: e.at, text: firstLine(str(p.message)) || "Error" });
+    } else if (e.type === "message" && p.kind === "step" && ["done", "failed", "needs_human"].includes(str(p.state))) {
+      out.push({ kind: "step", turn, at: e.at, step: Number(p.step), state: str(p.state) });
+    } else if (e.type === "message" && !p.kind && l && !l.text) {
+      l.text = firstLine(str(p.text));
+    }
+  }
+  for (const l of lines.values()) if (!l.text) l.text = fallback(l.turn);
+  return out;
+}
+
+type NowRun = { state: string; wait_reason?: string | null; plan: { position: number; text: string; state: string }[] };
+
+const WAIT_NOW: Record<string, string> = {
+  approval: "Waiting for a person to decide on an approval",
+  human_reply: "Waiting for your reply",
+  mockup_review: "Waiting for a person to review a mockup",
+  delegation: "Waiting for sub agents to finish",
+};
+
+/**
+ * The Simple view's "Now" line: the wait reason (with the current plan step)
+ * while waiting, else the latest agent message or tool call, else the current
+ * plan step. Null once the run has ended.
+ */
+export function nowLine(run: NowRun, events: Ev[]): string | null {
+  if (["completed", "failed", "cancelled"].includes(run.state)) return null;
+  const i = run.plan.findIndex((s) => s.state === "current");
+  const step = i >= 0 ? `plan step ${i + 1} of ${run.plan.length}: ${run.plan[i].text}` : "";
+  if (run.state === "queued") return "Waiting for a runner slot";
+  if (run.state === "paused") return `Paused${step ? ` · ${step}` : ""}`;
+  if (run.state === "waiting") return `${WAIT_NOW[run.wait_reason ?? ""] ?? "Waiting"}${step ? ` · ${step}` : ""}`;
+  for (const e of [...events].sort((a, b) => b.seq - a.seq)) {
+    const p = e.payload as P;
+    if (e.type === "message" && !p.kind && firstLine(str(p.text))) return firstLine(str(p.text));
+    if (e.type === "tool_call") return `${toolName(str(p.tool))} ${argSummary(p.input)}`.trim();
+  }
+  return step ? step[0].toUpperCase() + step.slice(1) : null;
+}
+
+/** The last agent message of the run, for the ended-run outcome card. */
+export function finalMessage(events: Ev[]): string | null {
+  for (const e of [...events].sort((a, b) => b.seq - a.seq)) {
+    const p = e.payload as P;
+    if (e.type === "message" && !p.kind && str(p.text).trim()) return str(p.text).trim();
+  }
+  return null;
+}

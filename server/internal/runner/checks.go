@@ -61,7 +61,7 @@ func (r *Runner) execIn(ctx context.Context, ws, dir, name, script string, env m
 }
 
 // parseStatus lists the files `git status --porcelain` reports, minus
-// LazyAgents' own.
+// Vesper's own.
 func parseStatus(out string) []string {
 	var files []string
 	for _, l := range strings.Split(strings.TrimRight(out, "\n"), "\n") {

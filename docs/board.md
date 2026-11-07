@@ -75,7 +75,7 @@ discarding unsaved edits.
 
 ## How agents use it (MCP)
 
-Agents reach all of this through the LazyAgents MCP server (`/mcp`, or the
+Agents reach all of this through the Vesper MCP server (`/mcp`, or the
 REST mirror `POST /api/v1/agent/tools/{name}`). Managed runs get a run token;
 an unmanaged session uses an agent token from the agent's page.
 

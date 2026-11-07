@@ -80,7 +80,7 @@ func (e env) chatSystemNotice(id uuid.UUID) string {
 // chat's read-only shape.
 func TestOpenCodeChatTurnsResume(t *testing.T) {
 	e := openCodeChatEnv(t, "harness:anthropic")
-	e.useOpenCode(ocSonnet)
+	e.useOpenCodeChat(ocSonnet)
 	chat := e.startChat("First question")
 	e.until("first reply", func() bool { return e.chat(chat.ID).State == "idle" })
 	first := e.chatRun(chat.ID)
@@ -105,7 +105,7 @@ func TestOpenCodeChatTurnsResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Read-only: no edit/write/bash grants; only the LazyAgents MCP server.
+	// Read-only: no edit/write/bash grants; only the Vesper MCP server.
 	for _, bad := range []string{`"edit"`, `"write"`, `"bash"`} {
 		if strings.Contains(string(cfg), bad) {
 			t.Errorf("chat opencode.json grants %s:\n%s", bad, cfg)
@@ -146,7 +146,7 @@ func TestOpenCodeChatTurnsResume(t *testing.T) {
 func TestOpenCodeChatReadsThroughChatToken(t *testing.T) {
 	e := openCodeChatEnv(t, "harness:anthropic")
 	t.Setenv("FAKE_HARNESS_MODE", "chat-read")
-	e.useOpenCode(ocSonnet)
+	e.useOpenCodeChat(ocSonnet)
 	var art uuid.UUID
 	if err := e.pool.QueryRow(e.ctx, `SELECT a.id FROM artifacts a JOIN artifact_versions v ON v.id = a.current_version_id
 		WHERE a.type = 'prd' AND a.project_id = (SELECT id FROM projects WHERE key = 'PAY') LIMIT 1`).Scan(&art); err != nil {
@@ -214,8 +214,17 @@ func TestOpenCodeChatHarnessSwitches(t *testing.T) {
 	}
 }
 
+// useOpenCodeChat points the Personal Assistant, which every chat runs as, at
+// OpenCode.
+func (e env) useOpenCodeChat(model string) {
+	e.t.Helper()
+	if err := e.setOverride(agentdef.Override{Harness: agentdef.HarnessOpenCode, Model: model}); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
 func (e env) setOverride(o agentdef.Override) error {
-	return (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, "atlas", "PAY", o)
+	return (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, e.assistant().Handle, "PAY", o)
 }
 
 // Within OpenCode a model change keeps the run and resumes the session.
@@ -230,7 +239,7 @@ func TestOpenCodeChatModelChangeResumesSession(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := openCodeChatEnv(t, "harness:anthropic", "harness:openai")
-			e.useOpenCode(ocSonnet)
+			e.useOpenCodeChat(ocSonnet)
 			chat := e.startChat("Message one")
 			e.until("first reply", func() bool { return e.chat(chat.ID).State == "idle" })
 			first := e.chatRun(chat.ID)
@@ -259,7 +268,7 @@ func TestOpenCodeChatModelChangeResumesSession(t *testing.T) {
 // leaves the chat idle and the next post answers once, with no late reply.
 func TestOpenCodeChatCancelMidTurn(t *testing.T) {
 	e := openCodeChatEnv(t, "harness:anthropic")
-	e.useOpenCode(ocSonnet)
+	e.useOpenCodeChat(ocSonnet)
 	chat := e.startChat("slow")
 	deadline := time.Now().Add(15 * time.Second)
 	for e.chatRun(chat.ID).HarnessSessionID == nil {
@@ -338,7 +347,7 @@ func TestOpenCodeChatStartupFailures(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := openCodeChatEnv(t, tc.secrets...)
-			e.useOpenCode(ocSonnet)
+			e.useOpenCodeChat(ocSonnet)
 			goodBin := local(e).Bins["opencode"]
 			tc.break_(e)
 			chat := e.startChat("hello")

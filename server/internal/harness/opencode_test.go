@@ -553,3 +553,23 @@ func TestOpenCodeExternalStateRequiredAndProtectedRulesOrdered(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenCodeWebToolsFollowWebReadScope(t *testing.T) {
+	for mode, want := range map[agentdef.Mode]string{agentdef.Allowed: "allow", agentdef.Denied: "deny"} {
+		spec := ocSpec("anthropic/claude-sonnet-5-5", nil, ocScope("web:read", mode))
+		inv, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: spec, Prompt: "p"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := ocConfig(t, inv)
+		for _, tool := range []string{"webfetch", "websearch"} {
+			if effective(c.Policies, "tool.use", tool) != want || effective(c.Permissions, tool, "*") != want {
+				t.Errorf("web:read=%s: %s want %s", mode, tool, want)
+			}
+		}
+	}
+	spec := ocSpec("anthropic/claude-sonnet-5-5", nil, ocScope("web:read", agentdef.RequiresApproval))
+	if _, err := (OpenCode{ConfigIsolated: true}).Invocation(ocWS(), Turn{Spec: spec, Prompt: "p"}); err == nil {
+		t.Error("opencode accepted web:read requires_approval it can't enforce")
+	}
+}

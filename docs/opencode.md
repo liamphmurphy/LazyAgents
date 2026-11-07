@@ -81,7 +81,7 @@ passed through unchanged (no Claude/Codex aliasing):
 
 `RUNNER_OPENCODE_ISOLATED=true` is an operator statement that the backend has no
 system, ancestor or repository OpenCode config that could override the policy
-LazyAgents generates for a run. The runner cannot check this itself. Without it:
+Vesper generates for a run. The runner cannot check this itself. Without it:
 
 - every run that uses OpenCode (as primary or usage-fallback target) fails before
   setup and credentials;
@@ -148,7 +148,7 @@ natural place for the claim to hold; on local, only if you have verified it.
   OpenCode permission rules are not a security boundary for shell access.
 - **No approvals:** with no authenticated pre-tool bridge, scopes set to
   require approval are rejected, except brokered/API-only ones. A CLI prompt is
-  not LazyAgents approval. No sandbox guarantees; no `permission_mode`.
+  not Vesper approval. No sandbox guarantees; no `permission_mode`.
 - **No unmanaged mode:** OpenCode never runs without the attestation and a key.
 - **Chat is read-only** (scratch workspace, project-scoped context tools).
 - Docker backend runs against a real image are unexercised; only the local backend

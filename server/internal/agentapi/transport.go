@@ -188,19 +188,19 @@ func profileTools(profile string) []Tool {
 }
 
 var profileInstructions = map[string]string{
-	profileChat:     `You are answering a person in a LazyAgents chat. Your instructions are in AGENTS.md. Use the LazyAgents tools to look up project context and manage tickets when asked.`,
-	profilePlanning: `This is a LazyAgents planning run. Follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.`,
-	profileSubagent: `You are a sub agent: a main agent delegated one task to you through LazyAgents. Your task brief and AGENTS.md are your instructions; don't call claim_ticket.
+	profileChat:     `You are answering a person in a Vesper chat. Your instructions are in AGENTS.md. Use the Vesper tools to look up project context and manage tickets when asked.`,
+	profilePlanning: `This is a Vesper planning run. Follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.`,
+	profileSubagent: `You are a sub agent: a main agent delegated one task to you through Vesper. Your task brief and AGENTS.md are your instructions; don't call claim_ticket.
 Call get_ticket only if the brief lacks context you need. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval.
 When you need a person, call request_approval or await_human and end your turn. Finish with complete_run and a short summary.`,
-	profileLead: `You are working through LazyAgents, the tracker your team uses to supervise agents.
+	profileLead: `You are working through Vesper, the tracker your team uses to supervise agents.
 Your run instructions are in AGENTS.md, so you don't need whoami. Call claim_ticket; it returns the ticket, so skip get_ticket. Read only relevant attached context; reuse local context instead of fetching it again. post_plan once before editing (step 1 starts current); update_step(n, done) advances to the next step. Tick several criteria at once with check_criterion ns.
 Scopes marked requires_approval need request_approval first; brokered ones (like db:migrate) run via
 run_gated after approval. When you need a person, comment and call await_human.
 Verify every acceptance criterion and check it only with evidence. Implement or delegate any gaps.
 Once all criteria are satisfied, commit and push changes within your authorized scopes, record the PR with set_pr,
 and finish with complete_run(status=done). Delegate a review only when the change is risky or large.`,
-	profileFull: `You are working through LazyAgents, the tracker your team uses to supervise agents.
+	profileFull: `You are working through Vesper, the tracker your team uses to supervise agents.
 For planning runs, follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.
 For ticket execution, start with whoami, then claim_ticket (it returns the ticket, so skip get_ticket). Read attached artifacts with read_artifact before
 planning, then post_plan before editing anything and call update_step(n, done) as steps finish (done advances to the next step).

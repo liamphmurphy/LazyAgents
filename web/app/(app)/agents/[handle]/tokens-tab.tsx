@@ -23,7 +23,7 @@ function Command({ label, text }: { label: string; text: string }) {
 
 /**
  * Tokens for unmanaged sessions (PLAN.md §1): someone runs Claude Code or
- * Codex themselves and attaches it to this agent's identity. LazyAgents
+ * Codex themselves and attaches it to this agent's identity. Vesper
  * can't enforce budgets or isolation on those, only brokered scopes.
  */
 export function TokensTab({ detail }: { detail: AgentDetail }) {
@@ -37,7 +37,7 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
   return (
     <div className="flex flex-col gap-4">
       <Banner tone="human" title="Unmanaged sessions">
-        A token lets a Claude Code or Codex session you run yourself act as {detail.agent.name}: same instructions, same Agent API. LazyAgents
+        A token lets a Claude Code or Codex session you run yourself act as {detail.agent.name}: same instructions, same Agent API. Vesper
         can&apos;t enforce budgets, isolation or harness rules on those sessions; only brokered scopes still need approval.
       </Banner>
 

@@ -254,11 +254,11 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
     case "gated_action_ran":
       return p.ok ? (
         <>
-          ran <code className="inline">{str(p.scope)}</code> through LazyAgents: <span className="text-pill-done-fg">{str(p.summary)}</span>
+          ran <code className="inline">{str(p.scope)}</code> through Vesper: <span className="text-pill-done-fg">{str(p.summary)}</span>
         </>
       ) : (
         <>
-          ran <code className="inline">{str(p.scope)}</code> through LazyAgents: <span className="text-pill-blocked-fg">{str(p.summary)}</span>
+          ran <code className="inline">{str(p.scope)}</code> through Vesper: <span className="text-pill-blocked-fg">{str(p.summary)}</span>
           {p.error ? <span className="block font-mono text-xs text-fg-tertiary">{str(p.error)}</span> : null}
         </>
       );

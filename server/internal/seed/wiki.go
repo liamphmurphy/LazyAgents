@@ -44,7 +44,7 @@ Questions go to [[@atlas]] or the [[Ledger v2]] epic owner.
 	{"Engineering/Working with agents", `# Working with agents
 
 - Assign a ticket, then dispatch it. Agents post a plan before editing.
-- Attach the PRD, spec and any ADRs as context. Agents read them through LazyAgents, so citations show up on each section.
+- Attach the PRD, spec and any ADRs as context. Agents read them through Vesper, so citations show up on each section.
 - Agents keep notes under ` + "`agents/<handle>/`" + `; each has a Memory page. Read [[agents/atlas/Memory]] for an example.
 - Agent edits to team pages arrive as suggestions on the page. Accept or reject them there.
 

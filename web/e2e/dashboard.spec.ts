@@ -75,7 +75,7 @@ async function installDashboardApi(page: Page, init: Partial<State> = {}) {
     requests.push(`${path}${url.search}`);
     const json = (data: unknown, status = 200) => route.fulfill({ status, json: data });
     if (path === "/bootstrap") return json({
-      workspace: { id: "workspace", name: "LazyAgents", slug: "lazyagents" },
+      workspace: { id: "workspace", name: "Vesper", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
       users: [], agents: [{ ...atlas, kind: "main", role: "Tech lead", specialty: "", model: "opus", status: "running" }],
       epics: [epic("Refresh", "at_risk"), epic("Healthy", "on_track")], projects: [state.repo ? { ...project, repo_url: "git@github.com:acme/web.git" } : project], labels: [],

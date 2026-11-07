@@ -2,15 +2,21 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Popover } from "radix-ui";
+import { useState, useSyncExternalStore } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useRunnerStatus, useRunPages } from "@/lib/api/hooks";
 import { absoluteTime, ago, duration, runCost } from "@/lib/format";
-import { PURPOSE_LABEL, hasActiveFilters, parseRunFilters, runFilterQuery, workHref, type RunFilters } from "@/lib/run-view";
+import { cx } from "@/lib/cx";
+import {
+  PURPOSE_LABEL, RUN_COLUMNS_KEY, advancedFilterCount, hasActiveFilters, parseRunFilters, runColumns, runFilterQuery, workHref,
+  type RunColumns, type RunFilters,
+} from "@/lib/run-view";
 import { AgentAvatar } from "@/components/domain/avatars";
+import { floatPanel } from "@/components/domain/pickers";
 import { StatusPill } from "@/components/domain/run-status";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Segmented } from "@/components/ui/controls";
+import { Segmented, Toggle } from "@/components/ui/controls";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { useProjectScope } from "@/components/shell/project-scope";
 import { Content, TopBar } from "@/components/shell/topbar";
@@ -37,23 +43,58 @@ const PURPOSES = [
 
 const selectClass = "h-8 rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg";
 
-function RunRow({ run }: { run: Run }) {
+/** The More columns choice: remembered in localStorage, overridden by ?columns=. */
+const COLUMNS_CHANGED = "lazyagents:runs-columns";
+function subscribeColumns(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(COLUMNS_CHANGED, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(COLUMNS_CHANGED, onChange);
+  };
+}
+function readColumns(): string | null {
+  try {
+    return window.localStorage.getItem(RUN_COLUMNS_KEY);
+  } catch {
+    return null;
+  }
+}
+function rememberColumns(c: RunColumns) {
+  try {
+    if (c === "more") window.localStorage.setItem(RUN_COLUMNS_KEY, c);
+    else window.localStorage.removeItem(RUN_COLUMNS_KEY);
+  } catch {
+    /* Storage unavailable: the URL still carries the choice. */
+  }
+  window.dispatchEvent(new Event(COLUMNS_CHANGED));
+}
+
+function RunRow({ run, more }: { run: Run; more: boolean }) {
   const href = workHref(run);
   const title = run.work_title || (run.purpose === "ticket" ? "" : PURPOSE_LABEL[run.purpose]);
+  // In the default set the Work cell carries the purpose: the ticket key, or "Planning" / "Chat".
+  const prefix = run.ticket_key || (more || !run.work_title ? "" : PURPOSE_LABEL[run.purpose]);
   return (
     <tr className="relative border-b border-border-row last:border-b-0 hover:bg-hover">
-      <td className="px-3 py-2.5"><StatusPill run={run} /></td>
       <td className="px-3 py-2.5">
+        <StatusPill run={run} />
+        {/* Under 768px the Agent column is hidden, so this link covers the row instead. */}
+        <Link href={`/runs/${run.id}`} className="after:absolute after:inset-0 after:content-[''] md:hidden">
+          <span className="sr-only">{run.agent.name}</span>
+        </Link>
+      </td>
+      <td className="px-3 py-2.5 max-md:hidden">
         <span className="flex items-center gap-2">
           <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} />
           {/* The row link lives on the agent name; its ::after covers the whole row. */}
           <Link href={`/runs/${run.id}`} className="truncate font-medium after:absolute after:inset-0 after:content-['']">{run.agent.name}</Link>
         </span>
       </td>
-      <td className="px-3 py-2.5 text-fg-secondary">{PURPOSE_LABEL[run.purpose]}</td>
+      {more && <td className="px-3 py-2.5 text-fg-secondary max-md:hidden">{PURPOSE_LABEL[run.purpose]}</td>}
       <td className="max-w-0 px-3 py-2.5">
         <span className="flex min-w-0 items-baseline gap-2">
-          {run.ticket_key && <span className="flex-none font-mono text-xs text-fg-secondary">{run.ticket_key}</span>}
+          {prefix && <span className={cx("flex-none text-fg-secondary", run.ticket_key ? "font-mono text-xs" : "text-xs")}>{run.ticket_key || `${prefix} ·`}</span>}
           {href ? (
             <Link href={href} className="relative z-10 min-w-0 truncate text-fg-2 hover:underline">{title || run.ticket_key}</Link>
           ) : (
@@ -61,32 +102,28 @@ function RunRow({ run }: { run: Run }) {
           )}
         </span>
       </td>
-      <td className="px-3 py-2.5 max-md:hidden"><span title={run.harness} className="font-mono text-xs text-fg-secondary">{run.model}</span></td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-fg-tertiary max-md:hidden" title={absoluteTime(run.started_at)}>{ago(run.started_at)}</td>
+      {more && <td className="px-3 py-2.5 max-md:hidden"><span title={run.harness} className="font-mono text-xs text-fg-secondary">{run.model}</span></td>}
+      {more && <td className="whitespace-nowrap px-3 py-2.5 text-xs text-fg-tertiary max-md:hidden" title={absoluteTime(run.started_at)}>{ago(run.started_at)}</td>}
       <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-fg-secondary">{duration(run.started_at, run.ended_at)}</td>
-      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-fg-secondary">{runCost(run.cost_usd, run.cost_source)}</td>
-      <td className="px-3 py-2.5 text-right font-mono text-xs text-fg-tertiary max-md:hidden">{run.child_count || "–"}</td>
+      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-fg-secondary max-md:hidden">{runCost(run.cost_usd, run.cost_source)}</td>
+      {more && <td className="px-3 py-2.5 text-right font-mono text-xs text-fg-tertiary max-md:hidden">{run.child_count || "–"}</td>}
     </tr>
   );
 }
 
-function Filters({ filters, set }: { filters: RunFilters; set: (patch: Partial<RunFilters>) => void }) {
+function Filters({ filters, set, clear }: { filters: RunFilters; set: (patch: Partial<RunFilters>) => void; clear: () => void }) {
   const boot = useBootstrap();
   const agents = boot.data?.agents ?? [];
   const projects = (boot.data?.projects ?? []).filter((p) => !p.archived || p.key === filters.project);
+  const count = advancedFilterCount(filters);
+  // ?state=starting or ?state=blocked from older links: keep it selectable so the select shows it.
+  const states = STATUS.some((s) => s.value === filters.state) ? STATUS : [...STATUS, { value: filters.state, label: filters.state[0].toUpperCase() + filters.state.slice(1) }];
   return (
     <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
       <label className="flex flex-col gap-1 text-xs text-fg-tertiary">
         Status
         <select className={selectClass} value={filters.state} onChange={(e) => set({ state: e.target.value })}>
-          {STATUS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-fg-tertiary">
-        Agent
-        <select className={selectClass} value={filters.agent ?? ""} onChange={(e) => set({ agent: e.target.value || undefined })}>
-          <option value="">All agents</option>
-          {agents.map((a) => <option key={a.handle} value={a.handle}>{a.name}</option>)}
+          {states.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-1 text-xs text-fg-tertiary">
@@ -96,18 +133,39 @@ function Filters({ filters, set }: { filters: RunFilters; set: (patch: Partial<R
           {projects.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
         </select>
       </label>
-      <div className="flex flex-col gap-1 text-xs text-fg-tertiary">
-        Purpose
-        <Segmented
-          label="Purpose"
-          options={PURPOSES}
-          value={filters.purpose ?? "all"}
-          onChange={(v) => set({ purpose: v === "all" ? undefined : v })}
-        />
-      </div>
-      {hasActiveFilters(filters) && (
-        <Button variant="ghost" onClick={() => set({ state: "live", agent: undefined, project: undefined, purpose: undefined })}>Clear filters</Button>
-      )}
+      <Popover.Root>
+        <Popover.Trigger asChild>
+          <Button variant="outline" icon="sliders" aria-label={count ? `Filters, ${count} active` : "Filters"}>
+            Filters
+            {count > 0 && <span aria-hidden className="ml-0.5 rounded-full bg-accent px-1.5 text-[11px] font-medium leading-4 text-on-accent">{count}</span>}
+          </Button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content align="start" sideOffset={6} aria-label="Filters" className={cx(floatPanel, "flex w-[280px] flex-col gap-3 p-3")}>
+            <label className="flex flex-col gap-1 text-xs text-fg-tertiary">
+              Agent
+              <select className={selectClass} value={filters.agent ?? ""} onChange={(e) => set({ agent: e.target.value || undefined })}>
+                <option value="">All agents</option>
+                {agents.map((a) => <option key={a.handle} value={a.handle}>{a.name}</option>)}
+              </select>
+            </label>
+            <div className="flex flex-col gap-1 text-xs text-fg-tertiary">
+              Purpose
+              <Segmented
+                label="Purpose"
+                options={PURPOSES}
+                value={filters.purpose ?? "all"}
+                onChange={(v) => set({ purpose: v === "all" ? undefined : v })}
+              />
+            </div>
+            <div className="flex items-center justify-between border-t border-border pt-3">
+              <Button variant="ghost" disabled={!hasActiveFilters(filters)} onClick={clear}>Clear filters</Button>
+              <Popover.Close asChild><Button variant="outline">Done</Button></Popover.Close>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+      {hasActiveFilters(filters) && <Button variant="ghost" onClick={clear}>Clear filters</Button>}
     </div>
   );
 }
@@ -126,15 +184,32 @@ export function RunsScreen() {
   const [loaded, setLoaded] = useState({ query, pages: 1 });
   const pages = loaded.query === query ? loaded.pages : 1;
   const results = useRunPages(filters, pages);
+  const stored = useSyncExternalStore(subscribeColumns, readColumns, () => undefined);
+  const columns = runColumns(params.get("columns"), stored);
+  const more = columns === "more";
 
+  // ?columns= is a view setting, not a filter: carry it over when the filters change.
+  const go = (q: URLSearchParams) => {
+    const c = params.get("columns");
+    if (c) q.set("columns", c);
+    router.replace(`/runs${q.size ? `?${q}` : ""}`);
+  };
   const set = (patch: Partial<RunFilters>) => {
     const next = { ...filters, ...patch };
     // Picking "All projects" must stay explicit, so it is not re-defaulted from the shell scope.
     const q = new URLSearchParams(runFilterQuery(next));
     if (!next.project && "project" in patch) q.set("project", "");
+    go(q);
+  };
+  const clear = () => go(new URLSearchParams("project="));
+  const setColumns = (on: boolean) => {
+    const c: RunColumns = on ? "more" : "default";
+    rememberColumns(c);
+    const q = new URLSearchParams(params);
+    if (on) q.set("columns", c);
+    else q.delete("columns");
     router.replace(`/runs${q.size ? `?${q}` : ""}`);
   };
-  const clear = () => router.replace("/runs?project=");
 
   const first = results[0];
   const runs = [...new Map(results.flatMap((r) => r.data?.runs ?? []).map((run) => [run.id, run])).values()];
@@ -156,7 +231,10 @@ export function RunsScreen() {
               <span className="flex items-center gap-1.5 text-pill-done-fg"><span aria-hidden className="size-1.5 rounded-full bg-state-done" />Live</span>
             </p>
           </div>
-          <Filters filters={filters} set={set} />
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <Filters filters={filters} set={set} clear={clear} />
+            <Toggle checked={more} onChange={setColumns} label="More columns" />
+          </div>
           {first.isError ? (
             <Banner tone="blocked" title="Couldn’t load runs" actions={<Button onClick={() => first.refetch()}>Retry</Button>}>
               {first.error.message}
@@ -176,17 +254,17 @@ export function RunsScreen() {
                 <thead className="border-b border-border text-xs text-fg-tertiary">
                   <tr>
                     <th scope="col" className="w-36 px-3 py-2 font-medium">Status</th>
-                    <th scope="col" className="w-40 px-3 py-2 font-medium">Agent</th>
-                    <th scope="col" className="w-28 px-3 py-2 font-medium">Purpose</th>
+                    <th scope="col" className="w-40 px-3 py-2 font-medium max-md:hidden">Agent</th>
+                    {more && <th scope="col" className="w-28 px-3 py-2 font-medium max-md:hidden">Purpose</th>}
                     <th scope="col" className="px-3 py-2 font-medium">Work</th>
-                    <th scope="col" className="w-40 px-3 py-2 font-medium max-md:hidden">Model</th>
-                    <th scope="col" className="w-24 px-3 py-2 font-medium max-md:hidden">Started</th>
+                    {more && <th scope="col" className="w-40 px-3 py-2 font-medium max-md:hidden">Model</th>}
+                    {more && <th scope="col" className="w-24 px-3 py-2 font-medium max-md:hidden">Started</th>}
                     <th scope="col" className="w-20 px-3 py-2 font-medium">Elapsed</th>
-                    <th scope="col" className="w-24 px-3 py-2 font-medium">Cost</th>
-                    <th scope="col" className="w-20 px-3 py-2 text-right font-medium max-md:hidden">Sub runs</th>
+                    <th scope="col" className="w-24 px-3 py-2 font-medium max-md:hidden">Cost</th>
+                    {more && <th scope="col" className="w-20 px-3 py-2 text-right font-medium max-md:hidden">Sub runs</th>}
                   </tr>
                 </thead>
-                <tbody>{runs.map((run) => <RunRow key={run.id} run={run} />)}</tbody>
+                <tbody>{runs.map((run) => <RunRow key={run.id} run={run} more={more} />)}</tbody>
               </table>
               <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs text-fg-tertiary">
                 <span>{runs.length} {runs.length === 1 ? "run" : "runs"} · newest first</span>

@@ -31,7 +31,7 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func main() {
-	url := flag.String("url", "http://localhost:8000/mcp", "LazyAgents MCP endpoint")
+	url := flag.String("url", "http://localhost:8000/mcp", "Vesper MCP endpoint")
 	ticket := flag.String("ticket", "PAY-214", "ticket to work on (must be assigned to the token's agent)")
 	sql := flag.String("sql", "CREATE TABLE IF NOT EXISTS ledger_entries_demo (id bigint, posted_at date) PARTITION BY RANGE (posted_at);",
 		"SQL to request approval for (db:migrate)")
@@ -115,7 +115,7 @@ func main() {
 		"detail": map[string]any{"sql": *sql}, "risk": "staging · 18.2M rows · est. 4 min, no table lock",
 	})
 	if ap["state"] == "pending" {
-		say("waiting for a person to approve db:migrate in LazyAgents…")
+		say("waiting for a person to approve db:migrate in Vesper…")
 		for {
 			w := call("wait_for_approval", map[string]any{"approval_id": ap["approval_id"], "timeout_s": 50})
 			if w["state"] == "pending" {

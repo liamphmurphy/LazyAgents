@@ -1,16 +1,16 @@
-# LazyAgents — Implementation Plan
+# Vesper — Implementation Plan
 
-LazyAgents is an issue tracker for autonomous coding agents. It holds projects, epics, tickets, agent assignments, approvals and the context documents (PRDs, specs, ADRs, reports) that agents read and write.
+Vesper is an issue tracker for autonomous coding agents. It holds projects, epics, tickets, agent assignments, approvals and the context documents (PRDs, specs, ADRs, reports) that agents read and write.
 
 The visual source of truth is `lazyagents-design/`. `DESIGN.md` there wins over the HTML mockups. This file covers everything else: architecture, data, APIs, infrastructure and the order we build in.
 
 ---
 
-## 1. Key decision: what LazyAgents is to an agent
+## 1. Key decision: what Vesper is to an agent
 
-The design shows run time, tool calls, tokens, spend, "Pause agent", "View run log", plans with live step state, approval gates, and "comments mentioning @atlas resume the run". So LazyAgents is more than a place where agents look up tickets. It has to talk to agents while they run.
+The design shows run time, tool calls, tokens, spend, "Pause agent", "View run log", plans with live step state, approval gates, and "comments mentioning @atlas resume the run". So Vesper is more than a place where agents look up tickets. It has to talk to agents while they run.
 
-**Decision: LazyAgents is the control plane. Agents are defined in LazyAgents and run on a harness of your choice.**
+**Decision: Vesper is the control plane. Agents are defined in Vesper and run on a harness of your choice.**
 
 - An **agent definition** (identity, role, instructions, harness, model, scopes, budget, MCP servers) is a core entity. It doesn't depend on any harness, and each project can override parts of it (§6).
 - The **runner** is a Go worker that resolves the definition for a ticket's project, prepares an isolated workspace, and launches the agent headless through a **harness adapter**. v1 ships adapters for **Claude Code** and **Codex**, so the abstraction is tested against two real harnesses from the start.
@@ -245,7 +245,7 @@ type Harness interface {
 | Invocation | `claude -p --output-format stream-json` | `codex exec --json` |
 | Instructions | Write `AGENTS.md` into the workspace (Claude Code falls back to it when there's no `CLAUDE.md`) | `AGENTS.md` |
 | MCP | `--mcp-config` file with the lazyagents server and run token | `-c mcp_servers.…` overrides |
-| Tool gating | `--allowedTools` / `--disallowedTools` from scopes. `--permission-prompt-tool` routes permission prompts to LazyAgents. | `--sandbox` mode and approval policy (coarser) |
+| Tool gating | `--allowedTools` / `--disallowedTools` from scopes. `--permission-prompt-tool` routes permission prompts to Vesper. | `--sandbox` mode and approval policy (coarser) |
 | Resume | `--resume <session_id>` | `codex exec resume <session_id>` |
 | Cost | Read from the result event | Computed from tokens × `model_prices` |
 
@@ -258,7 +258,7 @@ The exact CLI flags will be checked against current harness docs while building 
 Harnesses understand tools, not our scopes. A `requires_approval` scope only holds if the agent *can't* perform the action without us, so enforcement happens in three layers:
 
 1. **Credentials:** the runner injects a secret into the container only when its `grants_scope` is `allowed`. An agent with no staging DB credentials can't migrate staging, whatever its shell access.
-2. **Brokered actions:** `requires_approval` scopes are carried out through LazyAgents MCP tools (`run_gated`), which hold the credential on the server side and run only after approval.
+2. **Brokered actions:** `requires_approval` scopes are carried out through Vesper MCP tools (`run_gated`), which hold the credential on the server side and run only after approval.
 3. **Harness controls:** sandbox mode, allowed tools and network policy, mapped from scopes on a best-effort basis.
 
 Each adapter declares its `Capabilities()`, and the agent page shows how closely each scope is enforced on that harness (for example, "db:migrate: brokered" or "repo:write: harness-gated"). Unmanaged sessions get only the brokered layer.
@@ -288,7 +288,7 @@ queued → starting (workspace + container) → running (turn 1)
 - **Context delivery:** the ticket's attached artifacts are written to `.lazyagents/context/<type>-<slug>.md` (git-excluded) and listed in `AGENTS.md`, so any harness can read them as files. They are also available through MCP `read_artifact`. Only MCP reads count toward the "Read by" chips and section citation counts. Reading the files counts as one read per file when the run starts.
 - **Git credentials (v1): a personal access token** stored as a workspace secret (`git:pat`, granting `repo:write`). The runner sets it up as a git credential helper plus `GH_TOKEN` (or the host's equivalent) so the agent can clone, push and open PRs with `gh`. **v1 supports only GitHub as a Git host.** Other hosts would come later through a per-project provider setting. It's injected only when `repo:write` is allowed. A project can override it with its own token. Known limitation: every agent shares one identity and the token's full repo access. A GitHub App with short-lived tokens limited to one repo is the planned upgrade (Phase 8).
 - **Repos are SSH-only.** `projects.repo_url` must be `git@github.com:owner/repo[.git]` or `ssh://git@github.com/owner/repo[.git]`; HTTPS is rejected for new or changed values (legacy stored values are kept until changed). The `git:ssh` secret is an SSH private key that grants `repo:write` and is injected as `LAZYAGENTS_SSH_KEY`; it is also revealed to `repo:read` runs so the setup clone works. GitHub's host keys are pinned in a per-workspace `known_hosts`, so there is no trust-on-first-use. The local runner falls back to the user's own `~/.ssh` keys and ssh-agent when no key is stored; Docker has no such fallback and needs the `git:ssh` secret. Because the agent can read the key file, per-project read-only deploy keys are recommended.
-- The container receives the per-run LazyAgents token, the harness API key (a workspace secret such as `harness:anthropic` or `harness:openai`) and any scope-granted secrets. Nothing else. Headless runs use API-key authentication, not personal logins.
+- The container receives the per-run Vesper token, the harness API key (a workspace secret such as `harness:anthropic` or `harness:openai`) and any scope-granted secrets. Nothing else. Headless runs use API-key authentication, not personal logins.
 - The runner manages containers through the Docker socket (Docker Desktop on a laptop). **v1 targets a single developer laptop**, where that's acceptable. It's still effectively root on the host, so it's documented as such. No TLS, no backups beyond the Docker volumes. A shared server, or a rootless or remote runner (Kubernetes job, Firecracker), can come later behind the same `runner` interface.
 - Normalized events go to `run_events` (and the UI over SSE). The raw stream is archived to SeaweedFS for the run-log viewer.
 
@@ -554,7 +554,7 @@ There's a new scope, `wiki:write`, using the usual modes (§6.3). Enforcement is
 
 ## 13. Chat (planned)
 
-A ChatGPT/Claude-style chat per project: a person talks to a model that can read the project's artifacts, wiki and tickets through the LazyAgents MCP, keeps a history, and can switch harness or model mid-chat. Decision record: wiki `[[Architecture/ADR - Project chat sessions]]` (LAZYAGENTS-6). Contract: `api/openapi.yaml`, tag `chats`.
+A ChatGPT/Claude-style chat per project: a person talks to a model that can read the project's artifacts, wiki and tickets through the Vesper MCP, keeps a history, and can switch harness or model mid-chat. Decision record: wiki `[[Architecture/ADR - Project chat sessions]]` (LAZYAGENTS-6). Contract: `api/openapi.yaml`, tag `chats`.
 
 - **Data:** `chat_sessions` (project, title, creator, agent, current harness/model, state `idle|running|failed`, archived) and `chat_messages` (seq, role `user|assistant|system`, body, harness, model, run/turn, context refs, citations, usage). `runs.purpose` (`ticket|planning|chat`) replaces "ticket-less means planning" in the runner (§6.4).
 - **Runs:** one ticket-less run per *harness segment*. Each message is a turn that resumes the segment's session (§6.4). Between messages the run waits (wait reason `chat`). Chat runs ignore `max_turns` and don't take the agent's ticket slot (§6.6).

@@ -257,7 +257,7 @@ func TestApprovalRoundTrip(t *testing.T) {
 	// The workspace is a git checkout on the branch, with our files excluded.
 	wsDir := filepath.Join(e.dir, "work", "runs", run.ID.String(), "workspace")
 	agentsMD, err := os.ReadFile(filepath.Join(wsDir, "AGENTS.md"))
-	if err != nil || !strings.Contains(string(agentsMD), "LazyAgents run: PAY-214") || !strings.Contains(string(agentsMD), ".lazyagents/context/") {
+	if err != nil || !strings.Contains(string(agentsMD), "Vesper run: PAY-214") || !strings.Contains(string(agentsMD), ".lazyagents/context/") {
 		t.Fatalf("AGENTS.md: %v\n%s", err, agentsMD)
 	}
 	if out, _ := exec.Command("git", "-C", wsDir, "status", "--porcelain").CombinedOutput(); strings.TrimSpace(string(out)) != "" {

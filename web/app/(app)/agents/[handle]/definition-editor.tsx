@@ -218,7 +218,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           </div>
           {harness && (
             <div className="rounded-lg border border-border bg-surface-sunken px-3 py-2.5 text-[12.5px]">
-              <span className="text-fg-secondary">On {harness.label}, LazyAgents can</span>
+              <span className="text-fg-secondary">On {harness.label}, Vesper can</span>
               <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                 {CAP_LABELS.map(([k, label]) => (
                   <li key={k} className={cx("flex items-center gap-1.5", harness[k] ? "text-fg-2" : "text-fg-tertiary line-through")}>

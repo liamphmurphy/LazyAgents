@@ -1,10 +1,10 @@
 <div align="center">
-  <img src="web/public/logo.svg" width="88" height="88" alt="LazyAgents logo" />
-  <h1>LazyAgents</h1>
+  <img src="web/public/logo.svg" width="88" height="88" alt="Vesper logo" />
+  <h1>Vesper</h1>
   <p><strong>One shared harness for your coding agents, whichever model runs them.</strong></p>
   <p>Plan the work, mock up the UI, dispatch tickets, and review what needs you, all from the browser.</p>
   <p>
-    <a href="#a-shared-harness-for-every-model">Why LazyAgents</a> ·
+    <a href="#a-shared-harness-for-every-model">Why Vesper</a> ·
     <a href="#what-you-can-do">Features</a> ·
     <a href="#get-started">Get started</a> ·
     <a href="docs/guide.md">Documentation</a>
@@ -12,12 +12,12 @@
   <p><strong>Self-hosted</strong> &nbsp; / &nbsp; Claude Code · Codex · OpenCode &nbsp; / &nbsp; Automatic fallbacks &nbsp; / &nbsp; Human approvals</p>
 </div>
 
-![LazyAgents dashboard showing setup status, items that need you, live runs, blocked tickets, active chats, and epics at risk](docs/images/homepage.png)
+![Vesper dashboard showing setup status, items that need you, live runs, blocked tickets, active chats, and epics at risk](docs/images/homepage.png)
 
 ## A shared harness for every model
 
-LazyAgents is a control plane for coding agents. You define an agent once (role,
-instructions, skills, scopes, model) and LazyAgents runs it headless on the
+Vesper is a control plane for coding agents. You define an agent once (role,
+instructions, skills, scopes, model) and Vesper runs it headless on the
 frontier labs' own harnesses: **Claude Code**, **Codex**, and optionally
 **OpenCode**. Every agent reports back through the same MCP server, so tickets,
 plans, approvals, knowledge, and costs look the same no matter which model did
@@ -97,7 +97,7 @@ repository. Agent runs use your configured providers and can incur model costs.
 
 ### Current scope
 
-LazyAgents does not have a login yet: everyone who can reach it acts as the
+Vesper does not have a login yet: everyone who can reach it acts as the
 workspace's first user. The Docker runner also mounts the Docker socket, which
 is root-equivalent on the host. On a server, keep it on a private network or
 behind your own authenticating proxy, and only run projects you trust. See the

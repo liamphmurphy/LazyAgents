@@ -48,3 +48,11 @@ func TestShippingDoesNotRequireTests(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestWebToolsNeedWebRead(t *testing.T) {
+	for _, tool := range []string{"WebFetch", "WebSearch", "webfetch", "websearch", "web_search"} {
+		if got := runs.ToolScopes(tool, map[string]any{"url": "https://example.com"}); !slices.Equal(got, []string{"web:read"}) {
+			t.Errorf("%s: %v", tool, got)
+		}
+	}
+}

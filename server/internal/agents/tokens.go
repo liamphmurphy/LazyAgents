@@ -16,7 +16,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
-// TokenPrefix marks LazyAgents agent tokens so secret scanners can find them.
+// TokenPrefix marks Vesper agent tokens so secret scanners can find them.
 const TokenPrefix = "la_"
 
 func hashToken(t string) []byte {
