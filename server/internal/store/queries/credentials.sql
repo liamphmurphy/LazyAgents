@@ -39,7 +39,7 @@ ORDER BY project_id IS NULL
 LIMIT 1;
 
 -- name: ListSecrets :many
-SELECT s.id, s.project_id, s.name, s.grants_scope, s.preview, s.created_at, s.updated_at, s.last_used_at,
+SELECT s.id, s.project_id, s.name, s.grants_scope, s.created_at, s.updated_at, s.last_used_at,
        p.key AS project_key, p.name AS project_name, p.color AS project_color
 FROM secrets s LEFT JOIN projects p ON p.id = s.project_id
 WHERE s.workspace_id = $1

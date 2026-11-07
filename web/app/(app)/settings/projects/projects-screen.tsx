@@ -22,7 +22,7 @@ function ProjectForm({
   onDone,
 }: {
   project?: Project;
-  onDone: () => void;
+  onDone: (saved?: boolean) => void;
 }) {
   const qc = useQueryClient();
   const [revision] = useState(project?.revision ?? 1);
@@ -31,6 +31,8 @@ function ProjectForm({
   const [color, setColor] = useState(project?.color ?? "#7c8aff");
   const [repo, setRepo] = useState(project?.repo_url ?? "");
   const [branch, setBranch] = useState(project?.default_branch ?? "main");
+  const cleanRepo = repo.trim().replace(/\/+$/, "");
+  const repoValid = !cleanRepo || /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/)[A-Za-z0-9][A-Za-z0-9-]{0,99}\/[A-Za-z0-9._-]+$/.test(cleanRepo) && !/\/\.\.?$/.test(cleanRepo);
   const save = useMutation({
     mutationFn: (archived: boolean) => {
       const config = {
@@ -61,11 +63,12 @@ function ProjectForm({
         "agent-overviews",
       ])
         void qc.invalidateQueries({ queryKey: [prefix] });
-      onDone();
+      onDone(true);
     },
   });
   function submit(e: FormEvent) {
     e.preventDefault();
+    if (!repoValid) return;
     save.mutate(project?.archived ?? false);
   }
   return (
@@ -107,10 +110,12 @@ function ProjectForm({
       </Field>
       <Field
         label="GitHub repository"
-        hint="Optional SSH URL, like git@github.com:owner/repo.git. Leave empty for an empty run workspace. Store the SSH key and a GitHub token (for gh) in Connections & secrets."
+        hint="Accepts GitHub SSH or HTTPS. HTTPS is saved as SSH; runs need git:ssh to clone and push. Leave empty for an empty workspace."
       >
         <TextInput
           aria-label="GitHub repository"
+          aria-invalid={!repoValid}
+          aria-describedby="repo-validation"
           type="text"
           spellCheck={false}
           autoCapitalize="off"
@@ -120,6 +125,7 @@ function ProjectForm({
           onChange={(e) => setRepo(e.target.value)}
         />
       </Field>
+      <p id="repo-validation" role={repoValid ? "status" : "alert"} className="text-xs text-fg-secondary">{!repoValid ? "Only GitHub repositories work. Use git@github.com:owner/repo.git or https://github.com/owner/repo." : cleanRepo ? "Valid GitHub repository. HTTPS links are saved as SSH." : "No repository: runs start in an empty workspace and cannot push."}</p>
       <Field
         label="Default branch"
         hint="New runs clone this branch. Approved runs keep the repository settings they were dispatched with."
@@ -145,16 +151,16 @@ function ProjectForm({
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="primary" disabled={save.isPending}>
+        <Button type="submit" variant="primary" disabled={save.isPending || !repoValid}>
           {project ? "Save changes" : "Create project"}
         </Button>
-        <Button variant="ghost" disabled={save.isPending} onClick={onDone}>
+        <Button variant="ghost" disabled={save.isPending || !repoValid} onClick={() => onDone()}>
           Cancel
         </Button>
         {project && (
           <Button
             variant="outline"
-            disabled={save.isPending}
+            disabled={save.isPending || !repoValid}
             onClick={() => save.mutate(!project.archived)}
           >
             {project.archived ? "Restore project" : "Archive project"}
@@ -173,6 +179,7 @@ function ProjectForm({
 
 export function ProjectsScreen() {
   const [editing, setEditing] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const query = useQuery({
     queryKey: ["projects"],
@@ -196,6 +203,7 @@ export function ProjectsScreen() {
       <Content>
         <div className="max-w-[900px] space-y-5">
           <h1 className="type-display">Projects & repositories</h1>
+          {saved && <p role="status">Project saved. Project data refreshed.</p>}
           <p className="text-sm text-fg-secondary">
             Manage where your agents work. One project maps to one GitHub
             repository.
@@ -205,7 +213,7 @@ export function ProjectsScreen() {
           </ButtonLink>
           {editing === "new" && (
             <Card title="New project">
-              <ProjectForm onDone={() => setEditing(null)} />
+              <ProjectForm onDone={(saved) => { setEditing(null); setSaved(!!saved); }} />
             </Card>
           )}
           <div className="flex gap-2">
@@ -271,7 +279,7 @@ export function ProjectsScreen() {
                 <ProjectForm
                   key={`${p.id}-${editing}`}
                   project={p}
-                  onDone={() => setEditing(null)}
+                  onDone={(saved) => { setEditing(null); setSaved(!!saved); }}
                 />
               ) : (
                 <div className="space-y-2 text-sm">

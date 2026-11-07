@@ -57,7 +57,7 @@ func TestProjectManagementAndDependencies(t *testing.T) {
 		t.Fatalf("project %+v", project)
 	}
 	call("POST", "/api/v1/projects", create, 409, nil)
-	for _, url := range []string{"https://github.com/example/operations", "https://token@github.com/example/operations", "file:///tmp/project", "git@github.com:example/repo.git?token=secret", "git@gitlab.com:example/repo.git"} {
+	for _, url := range []string{"https://token@github.com/example/operations", "file:///tmp/project", "git@github.com:example/repo.git?token=secret", "git@gitlab.com:example/repo.git"} {
 		bad := create
 		bad.Key = "BAD"
 		bad.RepoUrl = url

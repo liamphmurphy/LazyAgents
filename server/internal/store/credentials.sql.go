@@ -147,7 +147,7 @@ func (q *Queries) ListAgentTokens(ctx context.Context, agentID uuid.UUID) ([]Age
 }
 
 const listSecrets = `-- name: ListSecrets :many
-SELECT s.id, s.project_id, s.name, s.grants_scope, s.preview, s.created_at, s.updated_at, s.last_used_at,
+SELECT s.id, s.project_id, s.name, s.grants_scope, s.created_at, s.updated_at, s.last_used_at,
        p.key AS project_key, p.name AS project_name, p.color AS project_color
 FROM secrets s LEFT JOIN projects p ON p.id = s.project_id
 WHERE s.workspace_id = $1
@@ -159,7 +159,6 @@ type ListSecretsRow struct {
 	ProjectID    *uuid.UUID
 	Name         string
 	GrantsScope  *string
-	Preview      string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	LastUsedAt   *time.Time
@@ -182,7 +181,6 @@ func (q *Queries) ListSecrets(ctx context.Context, workspaceID uuid.UUID) ([]Lis
 			&i.ProjectID,
 			&i.Name,
 			&i.GrantsScope,
-			&i.Preview,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastUsedAt,

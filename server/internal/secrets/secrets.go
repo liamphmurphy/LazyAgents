@@ -123,13 +123,9 @@ func (s *Service) Set(ctx context.Context, ws uuid.UUID, by uuid.UUID, in SetInp
 	if err != nil {
 		return store.Secret{}, err
 	}
-	preview := ""
-	if r := []rune(in.Value); len(r) >= 12 {
-		preview = string(r[len(r)-4:])
-	}
 	return s.Q.UpsertSecret(ctx, store.UpsertSecretParams{
 		ID: uuid.Must(uuid.NewV7()), WorkspaceID: ws, ProjectID: in.ProjectID, Name: name, GrantsScope: grants,
-		Nonce: nonce, Ciphertext: ct, Preview: preview, CreatedByUserID: &by,
+		Nonce: nonce, Ciphertext: ct, Preview: "", CreatedByUserID: &by,
 	})
 }
 

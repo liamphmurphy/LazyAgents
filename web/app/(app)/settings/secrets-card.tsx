@@ -20,8 +20,7 @@ const CONNECTIONS = [
 
 /**
  * Connections & secrets (settings.html). Values are write-only: the API
- * stores them encrypted and only returns names, grants and a 4-character
- * preview. A secret with a grant is injected only when that scope is allowed.
+ * stores them encrypted and only returns names, grants and timestamps. A secret with a grant is injected only when that scope is allowed.
  */
 export function SecretsCard() {
   const list = useSecrets();
@@ -31,17 +30,24 @@ export function SecretsCard() {
   const [form, setForm] = useState({ name: "", value: "", project: "" });
   const valueRef = useRef<HTMLInputElement>(null);
   const d = list.data;
-  const disabled = d && !d.key_configured;
+  const disabled = !d || !d.key_configured;
+  const [saved, setSaved] = useState("");
   const has = (name: string) => d?.secrets.some((s) => s.name === name && !s.project);
 
-  function prefill(name: string) {
-    setForm({ name, value: "", project: "" });
+  function prefill(name: string, project = "") {
+    setSaved("");
+    setForm({ name, value: "", project });
     valueRef.current?.focus();
   }
 
   return (
     <>
-      {disabled && (
+      <p className="text-sm text-fg-secondary">Values are write-only: stored encrypted, never fetched or shown. Missing provider keys prevent Docker harness runs; local runners use CLI logins.</p>
+      {list.isError && <Banner tone="blocked" title="Couldn’t load secrets" actions={<Button onClick={() => void list.refetch()}>Retry</Button>}>Secret status is unknown. {list.error.message}</Banner>}
+      {boot.isError && <Banner tone="blocked" title="Couldn’t load project scopes" actions={<Button onClick={() => void boot.refetch()}>Retry</Button>}>Workspace secrets remain available; retry to select a project.</Banner>}
+      {saved && <p role="status" className="text-sm text-pill-done-fg">{saved}</p>}
+      {del.isError && <p role="alert">Couldn’t delete the secret. Try again.</p>}
+      {d && !d.key_configured && (
         <Banner tone="human" title="Secrets are read-only until SECRETS_KEY is set">
           Add <code>SECRETS_KEY=$(openssl rand -base64 32)</code> to <code>.env</code> and restart the API. The key encrypts every stored secret and never touches the database.
         </Banner>
@@ -59,15 +65,18 @@ export function SecretsCard() {
                   {c.what} · <span className="font-mono">{c.name}</span>
                 </span>
               </span>
-              {!d ? (
+              {list.isPending ? (
                 <Skeleton className="h-4 w-20" />
-              ) : has(c.name) ? (
+              ) : !d ? (<span className="text-xs text-fg-tertiary">Unknown</span>) : has(c.name) ? (
                 <span className="flex items-center gap-1.5 text-xs text-pill-done-fg">
-                  <Icon name="check" size={12} /> Connected
+                  <Icon name="check" size={12} /> Set
                 </span>
               ) : (
+                <span className="text-xs text-pill-human-fg">Not set</span>
+              )}
+              {d && (
                 <Button variant="outline" disabled={disabled} onClick={() => prefill(c.name)}>
-                  Add key
+                  {has(c.name) ? "Replace" : "Add key"}
                 </Button>
               )}
             </li>
@@ -82,7 +91,7 @@ export function SecretsCard() {
             e.preventDefault();
             set.mutate(
               { name: form.name.trim(), value: form.value, project_key: form.project || undefined },
-              { onSuccess: () => setForm({ name: "", value: "", project: "" }) },
+              { onSuccess: () => { setSaved(`${form.name.trim()} saved. Availability refreshes for the next run.`); setForm({ name: "", value: "", project: "" }); set.reset(); } },
             );
           }}
         >
@@ -129,9 +138,9 @@ export function SecretsCard() {
           </Button>
           {set.isError && <span role="alert" className="col-span-full text-xs text-pill-blocked-fg">{set.error.message}</span>}
         </form>
-        {!d ? (
+        {list.isPending ? (
           <div className="p-4"><Skeleton className="h-16" /></div>
-        ) : d.secrets.length === 0 ? (
+        ) : !d ? (<p className="p-4 text-sm">Secret metadata unavailable. Retry above.</p>) : d.secrets.length === 0 ? (
           <p className="px-[18px] py-4 text-[13px] text-fg-tertiary">No secrets yet. Harness keys, the GitHub token and staging credentials go here.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -141,7 +150,7 @@ export function SecretsCard() {
                   <th className="px-[18px] py-2.5 font-normal">Name</th>
                   <th className="px-2 py-2.5 font-normal">Scope</th>
                   <th className="px-2 py-2.5 font-normal">Backs</th>
-                  <th className="px-2 py-2.5 font-normal">Value</th>
+                  <th className="px-2 py-2.5 font-normal">Updated</th>
                   <th className="px-2 py-2.5 font-normal">Last used</th>
                   <th className="w-10" />
                 </tr>
@@ -161,9 +170,9 @@ export function SecretsCard() {
                       )}
                     </td>
                     <td className="px-2">{s.grants_scope ? <MonoChip>{s.grants_scope}</MonoChip> : <span className="text-fg-tertiary">–</span>}</td>
-                    <td className="px-2 font-mono text-xs text-fg-tertiary">•••• {s.preview}</td>
+                    <td className="px-2 text-xs text-fg-tertiary">{ago(s.updated_at)}</td>
                     <td className="whitespace-nowrap px-2 text-xs text-fg-secondary">{s.last_used_at ? ago(s.last_used_at) : "Never"}</td>
-                    <td className="pr-3">
+                    <td className="pr-3"><Button variant="ghost" disabled={disabled} onClick={() => prefill(s.name, s.project?.key)}>Replace</Button>
                       <IconButton icon="trash" label={`Delete ${s.name}`} onClick={() => del.mutate(s.id)} />
                     </td>
                   </tr>

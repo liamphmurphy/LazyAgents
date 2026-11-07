@@ -1402,7 +1402,7 @@ export interface components {
             key: string;
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub SSH or HTTPS URL. HTTPS input is normalized to SSH for new repository settings. */
             repo_url?: string;
             default_branch: string;
             archived: boolean;
@@ -2057,8 +2057,6 @@ export interface components {
             name: string;
             project?: components["schemas"]["Project"];
             grants_scope?: string;
-            /** @description Last 4 characters, or empty for short values */
-            preview: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2839,14 +2837,14 @@ export interface components {
             key: string;
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub SSH or HTTPS URL. HTTPS input is normalized to SSH for new repository settings. */
             repo_url: string;
             default_branch: string;
         };
         ProjectUpdate: {
             name: string;
             color: string;
-            /** @description SSH GitHub URL: git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git]. Legacy HTTPS values are kept until changed. */
+            /** @description GitHub SSH or HTTPS URL. HTTPS input is normalized to SSH for new repository settings. */
             repo_url: string;
             default_branch: string;
             archived: boolean;

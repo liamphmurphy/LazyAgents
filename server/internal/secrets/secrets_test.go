@@ -66,7 +66,7 @@ func TestSetRevealAndProjectPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sec.GrantsScope == nil || *sec.GrantsScope != "db:migrate" || sec.Preview != "1234" {
+	if sec.GrantsScope == nil || *sec.GrantsScope != "db:migrate" || sec.Preview != "" {
 		t.Fatalf("defaults: grants=%v preview=%q", sec.GrantsScope, sec.Preview)
 	}
 	// Replacing keeps one row and still decrypts (identity-bound, not id-bound).

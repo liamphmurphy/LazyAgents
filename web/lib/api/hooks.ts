@@ -386,7 +386,7 @@ export function useSetSecret() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { name: string; value: string; grants_scope?: string; project_key?: string }) => unwrap(api.PUT("/secrets", { body })),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["secrets"] }),
+    onSettled: () => Promise.all(["secrets", "chats", "tickets", "bootstrap"].map((key) => qc.invalidateQueries({ queryKey: [key] }))),
   });
 }
 
@@ -397,7 +397,7 @@ export function useDeleteSecret() {
       const r = await api.DELETE("/secrets/{id}", { params: { path: { id } } });
       if (!r.response.ok) throw new Error("Couldn't delete the secret");
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["secrets"] }),
+    onSettled: () => Promise.all(["secrets", "chats", "tickets", "bootstrap"].map((key) => qc.invalidateQueries({ queryKey: [key] }))),
   });
 }
 
