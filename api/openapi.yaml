@@ -15,8 +15,13 @@ info:
     Types include `ticket.updated` (ids: the changed ticket ids),
     `epic.updated` (ids: the changed epic ids, sent when an epic, its
     criteria or its tickets' status/estimate change), `activity.created`,
-    `approval.created`, `run.updated`, and `chat.updated` (ids: the chat id)
-    when a chat's messages, state, title, archive flag or harness/model change.
+    `approval.created`, `run.updated`, `chat.updated` (ids: the chat id)
+    when a chat's messages, state, title, archive flag, harness/model or
+    embedded persona summary change, and `persona.updated` (ids: the persona
+    ids) when one of the caller's personas is created, edited, deleted, made
+    default (old and new default) or gets a new avatar.
+
+    Personas: see the wiki page `Architecture/ADR - Assistant personas`.
 
     Board, estimates and epic criteria: see the wiki page
     `Architecture/ADR - Kanban board, estimates and epic criteria`.
@@ -32,6 +37,7 @@ tags:
   - name: runs
   - name: chats
   - name: memories
+  - name: personas
 paths:
   /agents/{handle}/runs:
     get:
@@ -1865,6 +1871,14 @@ paths:
       parameters:
         - { name: project, in: query, description: Project key; omit for all projects, schema: { type: string } }
         - { name: archived, in: query, description: "true lists archived chats instead", schema: { type: boolean, default: false } }
+        - name: persona_id
+          in: query
+          description: |
+            Only chats with this persona: a persona id of the caller's, `all`
+            for every persona, or `none` for chats without one (the built-in
+            Assistant). Omitted: the caller's default persona, or `none` when
+            they have no default. 422 for an unknown id or another person's.
+          schema: { type: string, pattern: "^(all|none|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$" }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
       responses:
         "200":
@@ -1885,8 +1899,10 @@ paths:
         Creates an idle chat. Nothing runs until the first message. When
         `message` is set it is posted as the first message (same rules as
         POST /chats/{id}/messages). Every chat is with the workspace's
-        Personal Assistant, created on first use. 422 for an unknown or
-        archived project, or a harness/model not in GET /chat-models.
+        Personal Assistant, created on first use. The chat keeps `persona_id`
+        (default: the caller's default persona, or none) for its whole life.
+        422 for an unknown or archived project, a harness/model not in
+        GET /chat-models, or a persona_id that isn't one of the caller's.
       tags: [chats]
       requestBody:
         required: true
@@ -2084,6 +2100,182 @@ paths:
                 items: { $ref: "#/components/schemas/ChatHarnessModels" }
         default: { $ref: "#/components/responses/Error" }
 
+  /personas:
+    get:
+      operationId: listPersonas
+      summary: The caller's assistant personas, default first, then most recently used
+      description: |
+        Personas are private to the person who made them: only the caller's
+        are ever returned. At most 20 per person, so there's no paging.
+      tags: [personas]
+      responses:
+        "200":
+          description: Personas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonaList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createPersona
+      summary: Create a persona
+      description: |
+        422 for an empty, over-long or already used name (case-insensitive),
+        an unknown tone, a color that isn't #rrggbb, custom instructions over
+        2,000 characters or that look like a credential, or a 21st persona.
+        With is_default it replaces the current default.
+      tags: [personas]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewPersona" }
+      responses:
+        "201":
+          description: The persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Persona" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /personas/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/PersonaId" }
+    get:
+      operationId: getPersona
+      summary: One persona; another person's is a 404
+      tags: [personas]
+      responses:
+        "200":
+          description: The persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Persona" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updatePersona
+      summary: Edit a persona (revision-checked)
+      description: |
+        Changes apply from the next turn of every chat using the persona.
+        404 for another person's persona, 409 on a stale revision, 422 under
+        the same rules as POST /personas.
+      tags: [personas]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersonaPatch" }
+      responses:
+        "200":
+          description: The updated persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Persona" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deletePersona
+      summary: Delete a persona and its avatar
+      description: |
+        Its chats keep their history and fall back to the built-in Assistant
+        (no persona). Deleting the default promotes the most recently used
+        remaining persona; with none left, the built-in Assistant is the
+        default. 404 for another person's persona, 409 when revision is given
+        and stale.
+      tags: [personas]
+      parameters:
+        - { name: revision, in: query, description: The revision the caller saw; omit to delete regardless, schema: { type: integer, minimum: 1 } }
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /personas/{id}/default:
+    parameters:
+      - { $ref: "#/components/parameters/PersonaId" }
+    post:
+      operationId: setDefaultPersona
+      summary: Make this the caller's default persona (idempotent)
+      description: New chats and the unfiltered chat list use the default. 404 for another person's persona.
+      tags: [personas]
+      responses:
+        "200":
+          description: The new default
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Persona" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /personas/{id}/avatar:
+    parameters:
+      - { $ref: "#/components/parameters/PersonaId" }
+    get:
+      operationId: getPersonaAvatar
+      summary: The persona's avatar image
+      description: |
+        Served with the type sniffed at upload (PNG, JPEG or WebP only),
+        `X-Content-Type-Options: nosniff` and a locked-down CSP. 404 when the
+        persona has no avatar or isn't the caller's.
+      tags: [personas]
+      responses:
+        "200":
+          description: The image
+          headers:
+            X-Content-Type-Options: { schema: { type: string, enum: [nosniff] } }
+            Content-Security-Policy: { schema: { type: string } }
+            Cache-Control: { schema: { type: string } }
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: uploadPersonaAvatar
+      summary: Set or replace the persona's avatar
+      description: |
+        PNG, JPEG or WebP, at most 1 MB (1,048,576 bytes). The server sniffs
+        the bytes and ignores the declared type and filename; SVG is never
+        accepted. 413 over the limit, 415 for any other type, 422 for an
+        empty file, 404 for another person's persona.
+      tags: [personas]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: The persona with its new avatar_url
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Persona" }
+        "404": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deletePersonaAvatar
+      summary: Remove the persona's avatar (idempotent)
+      tags: [personas]
+      responses:
+        "200":
+          description: The persona without an avatar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Persona" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   parameters:
     NodeKind:
@@ -2114,6 +2306,11 @@ components:
       required: true
       schema: { type: string, format: uuid }
     ChatId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PersonaId:
       name: id
       in: path
       required: true
@@ -3907,6 +4104,7 @@ components:
         state: { $ref: "#/components/schemas/ChatState" }
         error: { type: string, description: Why the last turn failed, when state is failed }
         current_run_id: { type: string, format: uuid, description: The run serving the current harness segment; its events show live activity }
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
         archived: { type: boolean }
         revision: { type: integer }
         message_count: { type: integer }
@@ -3921,6 +4119,7 @@ components:
         title: { type: string, maxLength: 200 }
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string, description: Defaults to the harness's default model in GET /chat-models }
+        persona_id: { type: string, format: uuid, description: "One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life." }
         message: { $ref: "#/components/schemas/NewChatMessage" }
     ChatPatch:
       type: object
@@ -3993,3 +4192,60 @@ components:
         available: { type: boolean }
         unavailable_reason: { type: string, description: "e.g. no harness:openai secret" }
         models: { type: array, items: { $ref: "#/components/schemas/ChatModel" } }
+    PersonaTone:
+      type: string
+      enum: [neutral, friendly, concise, formal, playful]
+      description: How the assistant writes; each maps to one fixed prompt sentence on the server
+    PersonaSummary:
+      type: object
+      description: What a chat needs to render its persona. Absent on a chat means the built-in Assistant.
+      required: [id, name, color]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string, pattern: "^#[0-9a-f]{6}$" }
+        avatar_url: { type: string, description: "GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar" }
+    Persona:
+      type: object
+      description: |
+        A named variant of the caller's Personal Assistant, private to them.
+        Its tone and custom instructions shape the assistant's voice in chats
+        only; they never change scopes, tools or memory rules.
+      required: [id, name, tone, color, custom_instructions, is_default, chat_count, revision, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        tone: { $ref: "#/components/schemas/PersonaTone" }
+        color: { type: string, pattern: "^#[0-9a-f]{6}$", description: Stored in lower case }
+        avatar_url: { type: string, description: "GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar" }
+        custom_instructions: { type: string }
+        is_default: { type: boolean }
+        chat_count: { type: integer, description: Chats (archived included) that use this persona }
+        last_used_at: { type: string, format: date-time, description: When a chat with this persona last got a message }
+        revision: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PersonaList:
+      type: object
+      required: [personas]
+      properties:
+        personas: { type: array, items: { $ref: "#/components/schemas/Persona" } }
+        default_persona_id: { type: string, format: uuid, description: Absent when the built-in Assistant is the default }
+    NewPersona:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60, description: Unique per person (case-insensitive) after trimming }
+        tone: { $ref: "#/components/schemas/PersonaTone" }
+        color: { type: string, pattern: "^#[0-9a-fA-F]{6}$", description: "Defaults to #64748b" }
+        custom_instructions: { type: string, maxLength: 2000 }
+        is_default: { type: boolean, default: false, description: Make it the default (replacing the current one) }
+    PersonaPatch:
+      type: object
+      required: [revision]
+      properties:
+        revision: { type: integer }
+        name: { type: string, minLength: 1, maxLength: 60 }
+        tone: { $ref: "#/components/schemas/PersonaTone" }
+        color: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        custom_instructions: { type: string, maxLength: 2000, description: Empty string clears them }
