@@ -119,12 +119,100 @@ export function memoriesMarkdown(memories: MemoryLike[], exportedAt: string): st
   return lines.join("\n");
 }
 
-/** "a, B ,a,,c" → ["a", "b", "c"]: lowercase, trimmed, deduped, at most 12. */
+/** "a, B ,a,,c" → ["a", "b", "c"]: lowercase, trimmed, '#' stripped, deduped, none over 40 chars, at most 12. */
 export function parseTags(text: string): string[] {
   const out: string[] = [];
   for (const t of text.split(",")) {
-    const v = t.trim().toLowerCase();
-    if (v && !out.includes(v)) out.push(v);
+    const v = t.trim().replace(/^#+/, "").trim().toLowerCase();
+    if (v && v.length <= 40 && !out.includes(v)) out.push(v);
   }
   return out.slice(0, 12);
+}
+
+export const IMPORT_PROMPT = `I'm moving to a new personal assistant called Vesper and want to bring over what you know about me. List everything you remember about me from our conversations and your saved memory: my preferences, facts about me, the people in my life, my work and projects, and anything else a personal assistant should know. Leave out passwords, API keys, tokens and other secrets.
+
+Reply with only one JSON code block in exactly this shape, one object per distinct thing:
+
+\`\`\`json
+{"memories": [
+  {"title": "Prefers metric units", "summary": "Uses kilometres and Celsius, not miles or Fahrenheit.", "body": "", "type": "preference", "tags": ["units"]}
+]}
+\`\`\`
+
+Rules:
+- title: a short name, under 80 characters.
+- summary: one sentence saying what to remember.
+- body: extra detail only when the summary isn't enough, otherwise "".
+- type: one of preference, fact, project, person, work, life, other.
+- tags: 1 to 4 lowercase keywords.
+- Keep unrelated things in separate entries. Don't invent anything.`;
+
+export const IMPORT_MAX = 200;
+
+export type ImportEntry = { title: string; summary: string; body: string; tags: string[]; type: string };
+export type ImportParse = { entries: ImportEntry[]; skipped: number; error?: string };
+
+function tryJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function findJson(text: string): unknown {
+  const whole = tryJson(text);
+  if (whole !== undefined) return whole;
+  const fence = /```[a-zA-Z]*[ \t]*\r?\n?([\s\S]*?)```/.exec(text);
+  if (fence) {
+    const v = tryJson(fence[1].trim());
+    if (v !== undefined) return v;
+  }
+  const a = text.search(/[{[]/);
+  if (a >= 0) {
+    const end = Math.max(text.lastIndexOf("}"), text.lastIndexOf("]"));
+    if (end > a) return tryJson(text.slice(a, end + 1));
+  }
+  return undefined;
+}
+
+const oneLine = (v: string) => v.replace(/\s+/g, " ").trim();
+
+/** Lenient read of another assistant's reply (or our own JSON export) into memory entries. */
+export function parseMemoryImport(text: string): ImportParse {
+  const trimmed = text.trim();
+  if (!trimmed) return { entries: [], skipped: 0 };
+  const json = findJson(trimmed);
+  if (json === undefined || json === null || typeof json !== "object")
+    return { entries: [], skipped: 0, error: "Couldn't find JSON in that text. Paste the whole reply, including the code block." };
+  const list = Array.isArray(json) ? json : isObj(json) && Array.isArray(json.memories) ? json.memories : undefined;
+  if (!list) return { entries: [], skipped: 0, error: "That JSON has no memories list." };
+  if (list.length > IMPORT_MAX)
+    return { entries: [], skipped: 0, error: `That's ${list.length} memories. Import at most ${IMPORT_MAX} at a time.` };
+  const entries: ImportEntry[] = [];
+  let skipped = 0;
+  for (const item of list) {
+    if (!isObj(item) || s(item.superseded_by)) {
+      skipped++;
+      continue;
+    }
+    const summary = oneLine(s(item.summary)).slice(0, 300);
+    const title = (s(item.title).trim() || summary).slice(0, 200).trim();
+    if (!title) {
+      skipped++;
+      continue;
+    }
+    const tags = Array.isArray(item.tags)
+      ? parseTags(item.tags.filter((t): t is string => typeof t === "string").join(","))
+      : parseTags(s(item.tags));
+    const type = s(item.type).trim().toLowerCase();
+    entries.push({
+      title,
+      summary,
+      body: s(item.body).trim().slice(0, 20000),
+      tags,
+      type: (MEMORY_TYPES as readonly string[]).includes(type) ? type : "other",
+    });
+  }
+  return { entries, skipped };
 }

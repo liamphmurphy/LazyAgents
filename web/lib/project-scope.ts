@@ -21,6 +21,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/inbox", label: "Inbox", icon: "inbox", badge: "inbox" },
       { href: "/", label: "Dashboard", icon: "dashboard" },
+      { href: "/chat", label: "Assistant", icon: "msg" },
     ],
   },
   {
@@ -30,7 +31,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/tickets", label: "Tickets", icon: "tickets" },
       { href: "/epics", label: "Epics", icon: "epics" },
       { href: "/plans", label: "Plans", icon: "edit" },
-      { href: "/chat", label: "Assistant", icon: "msg" },
       { href: "/artifacts", label: "Artifacts", icon: "artifacts" },
     ],
   },

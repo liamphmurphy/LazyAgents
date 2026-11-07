@@ -94,6 +94,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const memories: MockMemory[] = [];
   const memoryRequests: string[] = [];
   const memoryPatches: Array<Record<string, unknown>> = [];
+  const memoryImports: Array<Record<string, unknown>> = [];
   const wikiPages: Array<{ path: string; body_md: string; project_key?: string }> = [];
   let n = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
@@ -250,6 +251,31 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       memoryRequests.push(`GET ${path}`);
       return json({ exported_at: now(), memories });
     }
+    if (path === "/memories/import" && method === "POST") {
+      memoryRequests.push(`POST ${path}`);
+      const b = body();
+      memoryImports.push(b);
+      const entries = (b.memories ?? []) as Array<Partial<MockMemory>>;
+      let created = 0;
+      let updated = 0;
+      for (const e of entries) {
+        const hit = memories.find((x) => x.title === e.title);
+        const stamp = new Date(Date.now() + 1000).toISOString();
+        if (hit) {
+          Object.assign(hit, e, { updated_at: stamp });
+          updated++;
+        } else {
+          const t = now();
+          memories.unshift({
+            id: `88888888-8888-4888-8888-${String(memories.length + 1).padStart(12, "0")}`,
+            title: e.title ?? "", summary: e.summary ?? "", body: e.body ?? "", tags: e.tags ?? [], type: e.type ?? "other",
+            source: "import", created_at: t, updated_at: t,
+          });
+          created++;
+        }
+      }
+      return json({ created, updated, failed: [] });
+    }
     const mem = /^\/memories\/([^/]+)$/.exec(path);
     if (mem) {
       memoryRequests.push(`${method} ${path}`);
@@ -385,6 +411,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches };
+    return { unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports };
   })();
 }

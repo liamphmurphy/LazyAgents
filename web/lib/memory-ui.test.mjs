@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { memoriesMarkdown, memoryNotices, parseTags, toolOutput } from "./memory-ui.ts";
+import { IMPORT_PROMPT, memoriesMarkdown, memoryNotices, parseMemoryImport, parseTags, toolOutput } from "./memory-ui.ts";
 
 const at = (s) => `2026-11-07T10:00:${String(s).padStart(2, "0")}Z`;
 
@@ -40,4 +40,51 @@ test("tags and markdown export", () => {
   assert.match(md, /## T \(retired\)/);
   assert.match(md, /- Tags: x/);
   assert.match(md, /- Superseded by: 2/);
+});
+
+test("import prompt asks for the JSON shape the parser reads", () => {
+  const r = parseMemoryImport(IMPORT_PROMPT);
+  assert.equal(r.entries.length, 1);
+  assert.equal(r.entries[0].title, "Prefers metric units");
+});
+
+test("import reads a fenced block with chatter around it", () => {
+  const reply = 'Sure! Here you go:\n\n```json\n{"memories":[{"title":" Likes tea ","summary":"Drinks\\n  tea","type":"Preference","tags":["Drinks"]}]}\n```\nAnything else?';
+  assert.deepEqual(parseMemoryImport(reply), {
+    entries: [{ title: "Likes tea", summary: "Drinks tea", body: "", tags: ["drinks"], type: "preference" }],
+    skipped: 0,
+  });
+});
+
+test("import reads a bare array, and an unfenced object amid chatter", () => {
+  assert.equal(parseMemoryImport('[{"title":"A"},{"title":"B"}]').entries.length, 2);
+  assert.equal(parseMemoryImport('Here: {"memories":[{"title":"A"}]} done').entries.length, 1);
+});
+
+test("import takes our own export and skips retired entries", () => {
+  const exp = { exported_at: "now", memories: [{ id: "1", title: "Keep", summary: "s", body: "b", tags: ["x"], type: "fact", source: "manual" }, { id: "2", title: "Old", superseded_by: "1" }, 5, { summary: "" }] };
+  const r = parseMemoryImport(JSON.stringify(exp));
+  assert.deepEqual(r.entries.map((e) => e.title), ["Keep"]);
+  assert.equal(r.skipped, 3);
+});
+
+test("import normalises tags, types and lengths", () => {
+  const long = "x".repeat(500);
+  const r = parseMemoryImport(JSON.stringify([{ title: long, summary: long, body: "y".repeat(30000), tags: "#Foo, bar ,foo," + "z".repeat(41), type: "weird" }, { summary: "Only a summary" }]));
+  assert.equal(r.entries[0].title.length, 200);
+  assert.equal(r.entries[0].summary.length, 300);
+  assert.equal(r.entries[0].body.length, 20000);
+  assert.deepEqual(r.entries[0].tags, ["foo", "bar"]);
+  assert.equal(r.entries[0].type, "other");
+  assert.equal(r.entries[1].title, "Only a summary");
+});
+
+test("import errors: empty, garbage, no list, too many", () => {
+  assert.deepEqual(parseMemoryImport("  \n"), { entries: [], skipped: 0 });
+  assert.match(parseMemoryImport("I remember nothing").error, /Couldn't find JSON/);
+  assert.match(parseMemoryImport('{"a":1}').error, /no memories list/);
+  const many = JSON.stringify(Array.from({ length: 201 }, (_, i) => ({ title: `t${i}` })));
+  const r = parseMemoryImport(many);
+  assert.match(r.error, /at most 200/);
+  assert.deepEqual(r.entries, []);
 });
