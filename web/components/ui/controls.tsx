@@ -26,12 +26,14 @@ export function Segmented<T extends string>({
   small,
 }: {
   options: ReadonlyArray<{ value: T; label: ReactNode }>;
-  value: T;
+  /** undefined (or a value not in options) leaves every option unchecked. */
+  value: T | undefined;
   onChange: (v: T) => void;
   label: string;
   small?: boolean;
 }) {
-  const current = Math.max(0, options.findIndex((o) => o.value === value));
+  const checked = options.findIndex((o) => o.value === value);
+  const current = Math.max(0, checked);
   const { refs, onKeyDown } = useRovingKeys(options.length, current, (i) => onChange(options[i].value));
   return (
     <div
@@ -41,7 +43,7 @@ export function Segmented<T extends string>({
       className="inline-flex gap-0.5 rounded-md border border-border bg-surface p-0.5"
     >
       {options.map((o, i) => {
-        const on = i === current;
+        const on = i === checked;
         return (
           <button
             key={o.value}
@@ -51,7 +53,7 @@ export function Segmented<T extends string>({
             type="button"
             role="radio"
             aria-checked={on}
-            tabIndex={on ? 0 : -1}
+            tabIndex={i === current ? 0 : -1}
             onClick={() => onChange(o.value)}
             className={cx(
               "whitespace-nowrap rounded-[5px]",

@@ -376,6 +376,32 @@ func PlanningContextFile(ctx context.Context, q *store.Queries, run store.Run) (
 	return &ContextFile{Path: ".lazyagents/planning-source.md", Body: []byte(*v.BodyMd), ArtifactID: *p.ArtifactID, VersionID: p.SourceVersionID}, nil
 }
 
+// PlanningRefFiles delivers what the person attached when starting a plan, at
+// the paths its prompt already lists. A reference that no longer resolves
+// (deleted since the plan was queued) is skipped; the planner sees it missing.
+func PlanningRefFiles(ctx context.Context, q *store.Queries, run store.Run) ([]ContextFile, error) {
+	p, err := q.PlanningSessionForRun(ctx, run.ID)
+	if err != nil {
+		return nil, err
+	}
+	var refs []runs.ChatContextRef
+	if err = json.Unmarshal(p.ContextRefs, &refs); err != nil || len(refs) == 0 {
+		return nil, err
+	}
+	var files []ContextFile
+	for i, ref := range refs {
+		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, p.ProjectID, []runs.ChatContextRef{ref})
+		if errors.As(err, new(*apperr.ValidationError)) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, ContextFile{Path: runs.PlanningRefPath(i), Body: []byte(d[0].Body), ArtifactID: derefID(d[0].ArtifactID)})
+	}
+	return files, nil
+}
+
 // ChatTurnContext delivers the references attached to a chat turn's message.
 // File names are generated from the turn and position, never from the ref
 // itself, so a title or path can't escape .lazyagents/context/. prompt is the
