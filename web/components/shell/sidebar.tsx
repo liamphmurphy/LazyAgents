@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, type ReactNode } from "react";
 import { DropdownMenu } from "radix-ui";
+import { useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
+import { needsAttention } from "@/lib/settings";
 import { NAV_GROUPS, currentProject, isActive, switchHref, withProject, type NavBadge, type ScopedProject } from "@/lib/project-scope";
 import { Icon, Mark } from "@/components/ui/icon";
 import { Kbd } from "@/components/ui/primitives";
@@ -58,6 +60,13 @@ function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, num
         <span aria-hidden className="size-1.5 rounded-full bg-state-done" />
         {n}
         <span className="sr-only"> running</span>
+      </span>
+    );
+  }
+  if (kind === "settings") {
+    return (
+      <span className="size-2 rounded-full bg-state-human" title="A setting runs need is missing">
+        <span className="sr-only">: a setting runs need is missing</span>
       </span>
     );
   }
@@ -145,7 +154,8 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
   const remembered = useRememberedProject();
   const active = projects.filter((p) => !p.archived);
   const current = currentProject(pathname, search, remembered, projects);
-  const counts: Record<NavBadge, number> = { inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions };
+  const secrets = useSecrets();
+  const counts: Record<NavBadge, number> = { inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
   return (
     <aside className="flex flex-[1_1_232px] flex-col gap-5 border-r border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3">
       <div className="flex flex-col gap-3">

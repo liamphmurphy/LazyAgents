@@ -17,7 +17,7 @@ const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 /**
  * Playbooks loaded on demand. Agent skills are edited here; what a project's
  * override adds or removes is shown from the server's resolved definition and
- * is read-only (the override API doesn't expose skills yet).
+ * is read-only here; edit additions and removals in Project overrides.
  */
 export function SkillsTab({
   detail,
