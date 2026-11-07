@@ -79,3 +79,60 @@ func TestSetupScriptClonesIntoWorkspaceWithLazyagentsDir(t *testing.T) {
 		})
 	}
 }
+
+func TestSetupScriptStacksOnEpicBranch(t *testing.T) {
+	git := func(dir string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=a", "GIT_AUTHOR_EMAIL=a@x", "GIT_COMMITTER_NAME=a", "GIT_COMMITTER_EMAIL=a@x")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	src := t.TempDir()
+	git(src, "init", "-q", "-b", "trunk")
+	if err := os.WriteFile(src+"/hello.txt", []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(src, "add", ".")
+	git(src, "commit", "-q", "-m", "init")
+	trunk := git(src, "rev-parse", "HEAD")
+
+	setup := func() string {
+		dir := t.TempDir()
+		cmd := exec.Command("sh", "-c", SetupScriptForEpic(src, "trunk", "epic/pay-1234abcd", "me/feat", "A", "a@x", nil))
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		if br := git(dir, "branch", "--show-current"); br != "me/feat" {
+			t.Fatalf("branch = %q", br)
+		}
+		return dir
+	}
+
+	// Before the epic branch exists, the first ticket starts from the base.
+	if dir := setup(); git(dir, "rev-parse", "HEAD") != trunk {
+		t.Fatal("first ticket should start from the base branch")
+	}
+
+	// Once it exists, later tickets stack on it and the base is left alone.
+	git(src, "checkout", "-q", "-b", "epic/pay-1234abcd")
+	if err := os.WriteFile(src+"/epic.txt", []byte("e"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(src, "add", ".")
+	git(src, "commit", "-q", "-m", "epic work")
+	epic := git(src, "rev-parse", "HEAD")
+	git(src, "checkout", "-q", "trunk")
+	dir := setup()
+	if git(dir, "rev-parse", "HEAD") != epic {
+		t.Fatal("ticket should be cut from the epic branch")
+	}
+	if git(dir, "rev-parse", "trunk") != trunk {
+		t.Fatal("local base branch must not move")
+	}
+}

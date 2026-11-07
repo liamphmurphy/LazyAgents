@@ -176,7 +176,9 @@ func (s *Service) Claim(ctx context.Context, c Caller, key string) (store.Run, e
 		if err != nil {
 			return err
 		}
-		resolved.Repository = &agentdef.Repository{URL: p.RepoUrl, DefaultBranch: p.DefaultBranch}
+		if resolved.Repository, err = RepositoryFor(ctx, q, p, t); err != nil {
+			return err
+		}
 		raw, _ := json.Marshal(resolved)
 		mode := "managed"
 		if c.Kind == "unmanaged" {
@@ -264,7 +266,9 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			if err != nil {
 				return err
 			}
-			resolved.Repository = &agentdef.Repository{URL: p.RepoUrl, DefaultBranch: p.DefaultBranch}
+			if resolved.Repository, err = RepositoryFor(ctx, q, p, t); err != nil {
+				return err
+			}
 			raw, _ := json.Marshal(resolved)
 			run, err := q.CreateRun(ctx, store.CreateRunParams{
 				WorkspaceID: ws, TicketID: &t.ID, AgentID: agent.ID, Mode: "managed", State: "queued",
@@ -765,3 +769,19 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, 
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// RepositoryFor freezes the project's repository configuration for a ticket
+// run. A ticket in an epic stacks on the epic's shared branch, so the whole
+// epic ships as one pull request.
+func RepositoryFor(ctx context.Context, q *store.Queries, p store.Project, t store.Ticket) (*agentdef.Repository, error) {
+	repo := &agentdef.Repository{URL: p.RepoUrl, DefaultBranch: p.DefaultBranch}
+	if t.EpicID == nil {
+		return repo, nil
+	}
+	e, err := q.GetEpic(ctx, store.GetEpicParams{ID: *t.EpicID, WorkspaceID: t.WorkspaceID})
+	if err != nil {
+		return nil, err
+	}
+	repo.EpicBranch, repo.EpicName = agentdef.EpicBranch(p.Key, e.ID.String()), e.Name
+	return repo, nil
+}

@@ -278,6 +278,28 @@ func TestSkillsDeliveredPerHarness(t *testing.T) {
 	}
 }
 
+func TestAgentsMDEpicStacksOnOnePR(t *testing.T) {
+	s := spec("repo:write", "allowed")
+	s.Repository = &agentdef.Repository{DefaultBranch: "main", EpicBranch: "epic/pay-1234abcd", EpicName: "Ledger"}
+	md := string(AgentsMD("", s, nil, "PAY-1"))
+	for _, want := range []string{
+		"one pull request from `epic/pay-1234abcd` into `main`",
+		"git push origin origin/main:refs/heads/epic/pay-1234abcd",
+		"gh pr create --draft --head epic/pay-1234abcd --base main",
+		"gh pr create --base epic/pay-1234abcd",
+		"gh pr merge --squash",
+		"never merge the epic's PR",
+		"`set_pr`",
+	} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("epic section missing %q:\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "(add `--draft` if anything is unfinished)") {
+		t.Fatal("epic tickets must not get the standalone PR steps")
+	}
+}
+
 func TestAgentsMDGitHubSection(t *testing.T) {
 	allowed := string(AgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
 	for _, want := range []string{"`gh` CLI", "git push -u origin HEAD", "gh pr create", "`set_pr`"} {

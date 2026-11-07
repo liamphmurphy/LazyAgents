@@ -23,9 +23,22 @@ type ResolvedScope struct {
 
 // Resolved is the fully merged definition a run snapshots (§6.4).
 // Repository freezes project configuration at approval, including an empty repository URL.
+// EpicBranch is set for a ticket in an epic: the epic's shared branch, whose
+// one pull request into DefaultBranch carries all of the epic's work.
 type Repository struct {
 	URL           *string `json:"url"`
 	DefaultBranch string  `json:"default_branch"`
+	EpicBranch    string  `json:"epic_branch,omitempty"`
+	EpicName      string  `json:"epic_name,omitempty"`
+}
+
+// EpicBranch names an epic's shared branch. It uses the epic's id, not its
+// name, so renaming the epic doesn't strand work on an old branch.
+func EpicBranch(projectKey, epicID string) string {
+	if len(epicID) > 8 {
+		epicID = epicID[:8]
+	}
+	return "epic/" + strings.ToLower(projectKey) + "-" + epicID
 }
 
 type Resolved struct {

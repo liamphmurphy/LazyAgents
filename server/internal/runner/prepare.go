@@ -77,6 +77,13 @@ func SetupScript(repoURL, branch, authorName, authorEmail string, setup []string
 
 // SetupScriptForBranch clones the approved base branch rather than the remote's HEAD.
 func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail string, setup []string) string {
+	return SetupScriptForEpic(repoURL, baseBranch, "", branch, authorName, authorEmail, setup)
+}
+
+// SetupScriptForEpic is SetupScriptForBranch for a ticket in an epic: the
+// run's branch is cut from the epic's shared branch once it exists on origin,
+// and from the base branch before the first ticket has pushed it.
+func SetupScriptForEpic(repoURL, baseBranch, epicBranch, branch, authorName, authorEmail string, setup []string) string {
 	var b strings.Builder
 	b.WriteString("set -eu\n")
 	// Everything is repo-local: on the local backend this is the user's own
@@ -98,6 +105,9 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 		b.WriteString("  mv " + dest + "/.git .git\n")
 		b.WriteString("  rm -rf " + dest + "\n")
 		b.WriteString("  if git rev-parse -q --verify HEAD >/dev/null 2>&1; then git reset -q --hard; fi\n")
+		if epicBranch != "" {
+			b.WriteString("  if git fetch --quiet origin " + shellQuote("+refs/heads/"+epicBranch+":refs/remotes/origin/"+epicBranch) + " 2>/dev/null; then echo '→ stacking on epic branch " + strings.ReplaceAll(epicBranch, "'", "") + "'; git checkout -q --detach " + shellQuote("origin/"+epicBranch) + "; else echo '→ epic branch " + strings.ReplaceAll(epicBranch, "'", "") + " not on origin yet: starting from the base branch'; fi\n")
+		}
 	} else {
 		b.WriteString("  echo '→ no repository configured for this project: starting an empty one'\n")
 		b.WriteString("  git init --quiet -b main .\n")

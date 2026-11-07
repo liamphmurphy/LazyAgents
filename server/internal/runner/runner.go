@@ -488,11 +488,14 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	if c.run.Purpose == "ticket" && c.run.TicketID != nil && c.project.RepoUrl != nil {
 		repo = *c.project.RepoUrl
 	}
-	base := ""
+	base, epic := "", ""
 	if c.run.Purpose == "ticket" && c.run.TicketID != nil {
 		base = c.project.DefaultBranch
+		if c.spec.Repository != nil {
+			epic = c.spec.Repository.EpicBranch
+		}
 	}
-	script := SetupScriptForBranch(repo, base, branch, c.agent.Name+" (LazyAgents)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
+	script := SetupScriptForEpic(repo, base, epic, branch, c.agent.Name+" (LazyAgents)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
 	if c.run.Purpose == "chat" {
 		script = "mkdir -p .lazyagents/context"
 	}

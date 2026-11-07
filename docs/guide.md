@@ -218,6 +218,13 @@ to create a project, edit its GitHub repository/default branch, or archive and r
 Project keys stay fixed. Archiving preserves history and requires queued/active runs
 to be finished or cancelled first. Approved runs retain their repository settings.
 
+Tickets in an epic ship together. The epic gets one shared branch,
+`epic/<project key>-<epic id prefix>`, and one draft pull request from it into
+the default branch. Each ticket's branch is cut from the epic branch, its PR is
+stacked on the epic branch, and the agent merges it there once checks pass. You
+review the epic as one GitHub stack and merge the epic's PR once. Tickets outside
+an epic still get their own PR into the default branch.
+
 On a ticket, use **Dependencies → Edit** to add blockers. Every blocker must be
 **Done** before dispatch; In Review is insufficient. Cycles are rejected. The ticket
 list's **Ready to dispatch** filter and an accepted plan's dispatch action show ready
