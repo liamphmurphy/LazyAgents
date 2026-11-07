@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { blockedTickets, currentStep, epicsAtRisk, liveRuns, setupSteps, throughput, topInbox } from "./dashboard.ts";
+import { blockedTickets, currentStep, epicsAtRisk, liveRuns, throughput, topInbox } from "./dashboard.ts";
 
 const run = (id, purpose, state, plan = []) => ({ id, purpose, state, plan });
 
@@ -71,9 +71,4 @@ test("throughput is exactly 14 UTC days ending today, zero-filled", () => {
   assert.equal(days[13].date, "2026-11-07");
   assert.equal(days.reduce((n, d) => n + d.count, 0), 4);
   assert.equal(days[5].count, 0);
-});
-
-test("setup checklist tracks project, agent and an online runner", () => {
-  assert.deepEqual(setupSteps({ projects: 1, agents: 0, runnerOnline: false }).map((s) => s.done), [true, false, false]);
-  assert.ok(setupSteps({ projects: 2, agents: 1, runnerOnline: true }).every((s) => s.done));
 });

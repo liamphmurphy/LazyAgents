@@ -28,12 +28,15 @@ const epic = (name: string, health: S["Epic"]["health"]): S["Epic"] => ({
   criteria_total: 0, criteria_done: 0, points_total: 106, points_done: 44, tickets_total: 20, tickets_open: 11,
 });
 
-type State = { runner: boolean; runsFail: boolean; runs: S["Run"][] };
+type State = { runner: boolean; runsFail: boolean; runs: S["Run"][]; harness: boolean; repo: boolean; plans: number };
 
 async function installDashboardApi(page: Page, init: Partial<State> = {}) {
   const state: State = {
     runner: true,
     runsFail: false,
+    harness: true,
+    repo: true,
+    plans: 1,
     runs: [
       run("r-ticket", "ticket", "running", {
         ticket_key: "WEB-48", work_title: "API",
@@ -75,7 +78,7 @@ async function installDashboardApi(page: Page, init: Partial<State> = {}) {
       workspace: { id: "workspace", name: "LazyAgents", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
       users: [], agents: [{ ...atlas, kind: "main", role: "Tech lead", specialty: "", model: "opus", status: "running" }],
-      epics: [epic("Refresh", "at_risk"), epic("Healthy", "on_track")], projects: [project], labels: [],
+      epics: [epic("Refresh", "at_risk"), epic("Healthy", "on_track")], projects: [state.repo ? { ...project, repo_url: "git@github.com:acme/web.git" } : project], labels: [],
       counts: { inbox: 6, wiki_suggestions: 0, live_agents: 1 },
     });
     if (path === "/dashboard") return json({
@@ -85,6 +88,15 @@ async function installDashboardApi(page: Page, init: Partial<State> = {}) {
       runner: { online: state.runner, runners: [], slots: 1, busy: 0, queued: 0 },
       weekly_spend: { since: minutesAgo(60), cost_usd: 42.18, runs: 14, unpriced_runs: 0 },
     });
+    if (path === "/runner") return json(state.runner
+      ? { online: true, runners: [{ id: "mbp", backend: "docker", max_concurrent: 4, running: 0, heartbeat_at: minutesAgo(0) }], slots: 4, busy: 0, queued: 0 }
+      : { online: false, runners: [], slots: 0, busy: 0, queued: 0 });
+    if (path === "/chat-models") return json([
+      { harness: "claude-code", label: "Claude Code", available: state.harness, ...(state.harness ? {} : { unavailable_reason: "no harness:anthropic secret" }), models: [{ id: "opus", label: "Opus", default: true }] },
+      { harness: "codex", label: "Codex", available: false, unavailable_reason: "no harness:openai secret", models: [{ id: "gpt-5-codex", label: "gpt-5-codex", default: true }] },
+    ]);
+    if (path === "/secrets") return json({ secrets: [], key_configured: true, known: [] });
+    if (path === "/planning-sessions") return json(Array.from({ length: state.plans }, (_, i) => ({ id: `plan-${i}`, project: "WEB" })));
     if (path === "/inbox") return json({ items: [
       inboxItem("m1", "mention", "WEB-40", 500), inboxItem("r1", "review", "WEB-41", 10), inboxItem("a1", "approval", "WEB-44", 5),
       inboxItem("q1", "question", "WEB-43", 60), inboxItem("k1", "mockup", "WEB-47", 30), inboxItem("p1", "planning", "WEB-39", 20),
@@ -173,7 +185,10 @@ test("panels show live work, gates and delivery health, each linking to its full
   await expect(through.getByRole("img")).toHaveAttribute("aria-label", new RegExp(`${today}: 3$`));
   await expect(through.getByRole("link", { name: "Done tickets →" })).toHaveAttribute("href", "/tickets?status=done&view=all");
 
-  await expect(page.getByRole("region", { name: "Finish setup" })).toHaveCount(0);
+  // A configured workspace sees no health banner and no open checklist.
+  await expect(page.getByRole("region", { name: "Setup complete" })).toContainText("You’re set up");
+  await expect(page.getByRole("region", { name: "Get set up" })).toHaveCount(0);
+  await expect(page.getByRole("status", { name: /Agents can’t run|No runner online/ })).toHaveCount(0);
 });
 
 test("panels refresh from live events without a reload", async ({ page }) => {
@@ -202,10 +217,54 @@ test("a failed panel shows its error and recovers on retry", async ({ page }) =>
   await expect(runs.getByRole("alert")).toHaveCount(0);
 });
 
-test("the setup checklist stays until a runner is online", async ({ page }) => {
+test("a new workspace sees the checklist and a health banner naming missing secrets; steps tick without a reload", async ({ page }) => {
+  await installDashboardApi(page, { runner: false, harness: false, repo: false, plans: 0 });
+  await page.goto("/");
+  const banner = page.getByRole("status", { name: /Agents can’t run/ });
+  await expect(banner).toContainText("No harness is available: add harness:anthropic or harness:openai.");
+  await expect(banner.getByRole("link", { name: "Fix in Provider secrets →" })).toHaveAttribute("href", "/settings#secrets");
+
+  const setup = page.getByRole("region", { name: "Get set up" });
+  await expect(setup).toContainText("0 of 5 done");
+  await expect(setup).toContainText("Claude Code: no harness:anthropic secret · Codex: no harness:openai secret");
+  await expect(setup.getByRole("link", { name: "Projects →" })).toHaveAttribute("href", "/settings#projects");
+  await expect(setup.getByRole("link", { name: "Provider secrets →" })).toHaveAttribute("href", "/settings#secrets");
+  await expect(setup.getByRole("link", { name: "Runner backends →" })).toHaveAttribute("href", "/settings#runners");
+  await expect(setup.getByRole("link", { name: "Agents →" })).toHaveAttribute("href", "/agents");
+  await expect(setup.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+
+  // Opening Agents ticks "Review the default agents" in the same session.
+  await setup.getByRole("link", { name: "Agents →" }).click();
+  await expect(page).toHaveURL(/\/agents$/);
+  await page.goBack();
+  await expect(page.getByRole("region", { name: "Get set up" })).toContainText("1 of 5 done");
+
+  // × hides the banner for the session; it's still hidden after navigating.
+  await banner.getByRole("button", { name: "Hide this banner for this session" }).click();
+  await expect(page.getByRole("status", { name: /Agents can’t run/ })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Get set up" })).toBeVisible();
+  await expect(page.getByRole("status", { name: /Agents can’t run/ })).toHaveCount(0);
+});
+
+test("the runner banner shows when a harness works but no runner is online", async ({ page }) => {
   await installDashboardApi(page, { runner: false });
   await page.goto("/");
-  const setup = page.getByRole("region", { name: "Finish setup" });
-  await expect(setup).toContainText("2 / 3 complete — Connect your first runner");
-  await expect(setup.getByRole("link", { name: "Continue setup →" })).toHaveAttribute("href", "/settings/runner");
+  const banner = page.getByRole("status", { name: "No runner online" });
+  await expect(banner).toContainText("Dispatched work stays queued.");
+  await expect(banner.getByRole("link", { name: "Runner backends →" })).toHaveAttribute("href", "/settings#runners");
+});
+
+test("a complete checklist can be dismissed and doesn't come back", async ({ page }) => {
+  await installDashboardApi(page);
+  await page.goto("/");
+  const done = page.getByRole("region", { name: "Setup complete" });
+  await done.getByRole("button", { name: "Dismiss" }).click();
+  await expect(done).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Your team at a glance" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Setup complete" })).toHaveCount(0);
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Setup complete" })).toHaveCount(0);
 });

@@ -8,6 +8,7 @@ import { LiveUpdates } from "./live-updates";
 import { CommandMenu } from "./command-menu";
 import { isTyping, ShortcutsDialog } from "./shortcuts";
 import { Sidebar } from "./sidebar";
+import { SystemBanner } from "./system-banner";
 
 /** Global single-key shortcuts (DESIGN.md §6). */
 function useShortcuts() {
@@ -96,6 +97,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SidebarSkeleton />
       )}
       <main className="flex min-w-0 flex-[999_1_560px] flex-col">
+        <SystemBanner />
         {children}
       </main>
     </div>

@@ -59,14 +59,3 @@ export function throughput(daily: ReadonlyArray<{ date: string; count: number }>
     return { date, count: counts.get(date) ?? 0 };
   });
 }
-
-export type SetupStep = { key: "project" | "agent" | "runner"; label: string; href: string; done: boolean };
-
-/** First-run checklist; the dashboard hides it once every step is done. */
-export function setupSteps(s: { projects: number; agents: number; runnerOnline: boolean }): SetupStep[] {
-  return [
-    { key: "project", label: "Create a project", href: "/settings/projects", done: s.projects > 0 },
-    { key: "agent", label: "Add an agent", href: "/agents", done: s.agents > 0 },
-    { key: "runner", label: "Connect your first runner", href: "/settings/runner", done: s.runnerOnline },
-  ];
-}

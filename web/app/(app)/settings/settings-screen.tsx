@@ -12,6 +12,7 @@ import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ThemeSwitch } from "@/components/shell/theme";
 import { ProjectsSection } from "./projects/projects-screen";
 import { SecretsSection } from "./secrets-section";
+import { SetupChecklist } from "@/components/domain/setup";
 
 type Health = "ok" | "attention" | "idle" | "unknown";
 
@@ -41,6 +42,7 @@ export function SettingsScreen() {
         <h1 className="type-display">Settings</h1>
         <p className="mt-2 text-sm text-fg-secondary">Everything runs depend on. Each section says what breaks when something is missing.</p>
       </div>
+      <SetupChecklist className="max-w-[1020px]" />
       <div className="grid items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="flex gap-1.5 overflow-x-auto lg:sticky lg:top-4 lg:flex-col">
           {nav.map((n) => (
