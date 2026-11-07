@@ -40,6 +40,8 @@ export function BoardScreen() {
   }
   const ticketKey = params.get("ticket") || undefined;
   const editor = useTicketEditorDetail(ticketKey);
+  // Only a failed first load closes the editor; a failed background refetch keeps the draft.
+  const loadFailed = editor.isError && !editor.data;
   function setTicket(key?: string) {
     const next = new URLSearchParams(window.location.search);
     if (key) next.set("ticket", key); else next.delete("ticket");
@@ -72,12 +74,12 @@ export function BoardScreen() {
         : bootstrap.isError ? <p role="alert" className="p-6">Couldn&apos;t load projects: {bootstrap.error.message}</p>
         : !project ? <p className="p-6 text-fg-secondary">{requested ? "Project unavailable. Choose an active project." : "Create a project to view its board."}</p>
         : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} onOpen={setTicket} />}
-      {ticketKey && editor.isError && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
+      {ticketKey && loadFailed && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
         <span>Couldn&apos;t open {ticketKey}: {editor.error.message}</span>
         <button type="button" aria-label="Dismiss ticket error" onClick={() => setTicket()}>×</button>
       </div>}
-      {ticketKey && !editor.isError && bootstrap.data && <TicketEditorDialog key={ticketKey} ticketKey={ticketKey} detail={editor.data} bootstrap={bootstrap.data}
-        onClose={() => setTicket()} onReload={async () => (await editor.refetch()).data} />}
+      {ticketKey && !loadFailed && bootstrap.data && <TicketEditorDialog key={ticketKey} ticketKey={ticketKey} detail={editor.data} bootstrap={bootstrap.data}
+        onClose={() => setTicket()} onReload={async () => { const r = await editor.refetch(); return r.isError ? undefined : r.data; }} />}
     </div>
   );
 }

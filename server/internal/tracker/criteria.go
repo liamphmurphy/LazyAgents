@@ -102,13 +102,6 @@ func applyCriteriaDraft(ctx context.Context, q *store.Queries, ws uuid.UUID, act
 	for _, c := range cur {
 		byID[c.ID] = c
 	}
-	for _, it := range d.Items {
-		if it.ID != nil {
-			if _, ok := byID[*it.ID]; !ok {
-				return invalid("criteria", "unknown criterion %s", *it.ID)
-			}
-		}
-	}
 	stale := apperr.ConflictField("criteria", "acceptance criteria changed; reload and retry")
 	exp := map[uuid.UUID]bool{}
 	for _, e := range d.Expected {
@@ -120,6 +113,15 @@ func applyCriteriaDraft(ctx context.Context, q *store.Queries, ws uuid.UUID, act
 	}
 	if len(exp) != len(cur) {
 		return stale
+	}
+	// Only once the snapshot matches is an unknown id the client's mistake (422);
+	// before that it may be a criterion deleted concurrently (409 above).
+	for _, it := range d.Items {
+		if it.ID != nil {
+			if _, ok := byID[*it.ID]; !ok {
+				return invalid("criteria", "unknown criterion %s", *it.ID)
+			}
+		}
 	}
 
 	kept := map[uuid.UUID]bool{}

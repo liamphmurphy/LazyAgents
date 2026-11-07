@@ -171,6 +171,15 @@ func TestCriteriaDraftRejections(t *testing.T) {
 		t.Fatal("title changed on conflict")
 	}
 
+	// A criterion the draft still keeps was deleted concurrently: stale (409), not invalid (422).
+	if err := f.svc.DeleteCriterion(ctx, f.ws, f.maya, id1); err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.svc.Update(ctx, f.ws, f.maya, tk.Key, tracker.Patch{Revision: &rev, Title: &title, Criteria: draft(tracker.CriterionDraft{ID: &id1, Text: "two"})})
+	if field(err) != "409:criteria" {
+		t.Fatalf("concurrent delete: got %s", field(err))
+	}
+
 	// Bulk rejects criteria.
 	_, err = f.svc.Bulk(ctx, f.ws, f.maya, []string{tk.Key}, tracker.Patch{Criteria: draft()}, nil)
 	if field(err) != "422:criteria" {
