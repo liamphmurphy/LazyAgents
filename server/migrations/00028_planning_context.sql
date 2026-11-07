@@ -5,6 +5,7 @@
 -- accepted / proposed after reviewers drop some.
 ALTER TABLE planning_sessions ADD COLUMN context_refs jsonb NOT NULL DEFAULT '[]';
 ALTER TABLE planning_sessions ADD COLUMN proposal_count integer NOT NULL DEFAULT 0;
+-- Best effort: older drafts only kept the reviewer's last saved list.
 UPDATE planning_sessions SET proposal_count = jsonb_array_length(proposals) WHERE state <> 'planning';
 
 -- +goose Down

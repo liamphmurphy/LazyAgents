@@ -22,6 +22,7 @@ test("index count: reading while live, accepted/total after, no proposals when i
   assert.equal(planCount(plan({ state: "review", run_state: "completed", proposal_count: 6 })), "0/6 accepted");
   assert.equal(planCount(plan({ state: "accepted", run_state: "completed", proposal_count: 6, ticket_keys: ["A-1", "A-2", "A-3", "A-4", "A-5"] })), "5/6 accepted");
   assert.equal(planCount(plan({ state: "dismissed", run_state: "completed", proposal_count: 4 })), "0/4 accepted");
+  assert.equal(planCount(plan({ state: "accepted", run_state: "completed", proposal_count: 1, ticket_keys: ["A-1", "A-2"] })), "2/2 accepted");
 });
 
 test("first line of the goal skips blank lines", () => {

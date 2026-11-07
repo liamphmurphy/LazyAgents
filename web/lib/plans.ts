@@ -42,7 +42,8 @@ export function planCount(p: PlanLike): string {
   if (planLive(p)) return "reading…";
   if (p.proposal_count === 0) return "no proposals";
   const accepted = p.state === "accepted" ? p.ticket_keys.length : 0;
-  return `${accepted}/${p.proposal_count} accepted`;
+  // Reviewers can add proposals before accepting; never show more accepted than total.
+  return `${accepted}/${Math.max(accepted, p.proposal_count)} accepted`;
 }
 
 /** The goal's first non-empty line, for the index. */
