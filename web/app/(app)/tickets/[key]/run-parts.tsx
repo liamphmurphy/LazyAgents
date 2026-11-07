@@ -48,7 +48,7 @@ export function DispatchBanner({ t }: { t: Ticket }) {
   );
 }
 
-const RUN_STATE: Record<Run["state"], { tone: PillTone; label: string }> = {
+export const RUN_STATE: Record<Run["state"], { tone: PillTone; label: string }> = {
   queued: { tone: "neutral", label: "Queued" },
   starting: { tone: "neutral", label: "Starting" },
   running: { tone: "done", label: "Running" },

@@ -1191,17 +1191,20 @@ LEFT JOIN LATERAL (
   WHERE r.purpose = 'chat' AND (c.current_run_id = r.id OR c.id IN (SELECT m.session_id FROM chat_messages m WHERE m.run_id = r.id))
   LIMIT 1
 ) cs ON true
-WHERE r.workspace_id = $1 AND r.parent_run_id IS NULL
-  AND r.state = ANY($2::text[])
-  AND ($3::uuid IS NULL OR r.agent_id = $3)
-  AND ($4::text IS NULL OR r.purpose = $4)
-  AND ($5::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = $5)
+WHERE r.workspace_id = $1
+  AND (r.parent_run_id IS NULL OR $2::uuid IS NOT NULL)
+  AND ($2::uuid IS NULL OR r.ticket_id = $2)
+  AND r.state = ANY($3::text[])
+  AND ($4::uuid IS NULL OR r.agent_id = $4)
+  AND ($5::text IS NULL OR r.purpose = $5)
+  AND ($6::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = $6)
 ORDER BY r.started_at DESC, r.id DESC
-LIMIT 51 OFFSET $6::int
+LIMIT 51 OFFSET $7::int
 `
 
 type ListRunsParams struct {
 	WorkspaceID uuid.UUID
+	TicketID    *uuid.UUID
 	States      []string
 	AgentID     *uuid.UUID
 	Purpose     *string
@@ -1210,10 +1213,12 @@ type ListRunsParams struct {
 }
 
 // Top-level runs for the Runs index. A run's project comes from its ticket,
-// planning session or chat session; delegated runs are left to their parent.
+// planning session or chat session; delegated runs are left to their parent
+// unless the list is filtered to one ticket, where every run is listed.
 func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, error) {
 	rows, err := q.db.Query(ctx, listRuns,
 		arg.WorkspaceID,
+		arg.TicketID,
 		arg.States,
 		arg.AgentID,
 		arg.Purpose,

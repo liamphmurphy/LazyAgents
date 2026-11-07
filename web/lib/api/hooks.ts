@@ -124,6 +124,71 @@ export function useUpdateTicket(key: string) {
   });
 }
 
+/**
+ * Revision-checked PATCH for the ticket page (ADR-034, same contract as the
+ * edit modal). Each save sends the revision the person saw; saves on one
+ * ticket run one after another, and a save queued behind this page's own
+ * earlier save uses that save's new revision. A 409 rolls the optimistic edit
+ * back and refetches the ticket so the latest is shown.
+ */
+export type RevisionPatch = { patch: TicketPatch; revision: number; what: string };
+
+export function useRevisionCheckedUpdate(key: string, onFailed?: (e: Error, v: RevisionPatch) => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    scope: { id: `ticket-patch:${key}` },
+    mutationFn: ({ patch, revision }: RevisionPatch) => {
+      // Our own earlier save in this queue may have bumped it since the click.
+      const rev = Math.max(revision, ownRevisions.get(key) ?? 0);
+      return unwrap(api.PATCH("/tickets/{key}", { params: { path: { key } }, body: { ...patch, revision: rev } }));
+    },
+    onMutate: async ({ patch }) => {
+      await qc.cancelQueries({ queryKey: keys.ticket(key) });
+      const prev = qc.getQueryData<Ticket>(keys.ticket(key));
+      if (prev) {
+        const next = { ...prev };
+        if (patch.title !== undefined) next.title = patch.title;
+        if (patch.description_md !== undefined) next.description_md = patch.description_md;
+        if (patch.status !== undefined) next.status = patch.status;
+        if (patch.priority !== undefined) next.priority = patch.priority;
+        if (patch.requires_mockup !== undefined) next.requires_mockup = patch.requires_mockup;
+        if (patch.estimate_points !== undefined) next.estimate_points = patch.estimate_points ?? undefined;
+        qc.setQueryData(keys.ticket(key), next);
+      }
+      return { prev };
+    },
+    // Hook-level, not per-mutate: queued saves each report their own failure.
+    onError: (e, v, ctx) => {
+      // A queued save snapshots `prev` when mutate() is called, possibly before an
+      // earlier save landed, so always refetch after rolling back.
+      if (ctx?.prev) qc.setQueryData(keys.ticket(key), ctx.prev);
+      void qc.invalidateQueries({ queryKey: keys.ticket(key) });
+      onFailed?.(e, v);
+    },
+    onSuccess: (t) => {
+      ownRevisions.set(key, t.revision);
+      qc.setQueryData(keys.ticket(key), t);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.tickets, predicate: (q) => q.queryKey[1] !== "detail" });
+      void qc.invalidateQueries({ queryKey: ["boards"] });
+      void qc.invalidateQueries({ queryKey: ["knowledge"] });
+    },
+  });
+}
+
+/** The revision each ticket reached through this tab's own last save. */
+const ownRevisions = new Map<string, number>();
+
+/** Every run on a ticket, delegated runs included, newest first. */
+export function useTicketRuns(key: string, live = false) {
+  return useQuery({
+    queryKey: ["runs", "ticket", key],
+    queryFn: () => unwrap(api.GET("/runs", { params: { query: { ticket: key, state: "all" } } })),
+    refetchInterval: live ? LIVE_POLL_MS : false,
+  });
+}
+
 export function useBulkUpdate() {
   const qc = useQueryClient();
   return useMutation({

@@ -849,7 +849,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Top-level runs, newest first, 50 per page (delegated runs are counted in child_count) */
+        /** Top-level runs, newest first, 50 per page (delegated runs are counted in child_count; a ticket filter lists them too) */
         get: operations["listRuns"];
         put?: never;
         post?: never;
@@ -4766,6 +4766,8 @@ export interface operations {
                 /** @description Project key */
                 project?: string;
                 purpose?: "ticket" | "planning" | "chat";
+                /** @description Ticket key: every run on that ticket, delegated runs included */
+                ticket?: string;
                 offset?: number;
             };
             header?: never;

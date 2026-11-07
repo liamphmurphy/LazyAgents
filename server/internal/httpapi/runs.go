@@ -372,6 +372,15 @@ func (s *Server) ListRuns(ctx context.Context, req api.ListRunsRequestObject) (a
 		}
 		arg.ProjectID = &p.ID
 	}
+	if pr.Ticket != nil && *pr.Ticket != "" {
+		t, err := s.Q.GetTicketByKey(ctx, store.GetTicketByKeyParams{WorkspaceID: ws, Key: *pr.Ticket})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return out, nil
+		} else if err != nil {
+			return nil, err
+		}
+		arg.TicketID = &t.ID
+	}
 	rows, err := s.Q.ListRuns(ctx, arg)
 	if err != nil {
 		return nil, err

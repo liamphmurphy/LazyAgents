@@ -333,7 +333,7 @@ export function TicketsScreen() {
             />
           </label>
           {boot.data && (
-            <AgentPicker agents={boot.data.agents} value={agentFilter?.id} onChange={(id) => setParam("assignee", boot.data.agents.find((a) => a.id === id)?.handle ?? null)}>
+            <AgentPicker label="Agent" agents={boot.data.agents} value={agentFilter?.id} onChange={(id) => setParam("assignee", boot.data.agents.find((a) => a.id === id)?.handle ?? null)}>
               <button type="button" className="inline-flex h-[26px] items-center overflow-hidden rounded-sm border border-border-strong text-xs hover:bg-hover">
                 <span className="flex h-full items-center border-r border-border-strong px-2 text-fg-tertiary">Agent</span>
                 <span className="px-2 text-fg-2">{agentFilter?.name ?? "any"}</span>

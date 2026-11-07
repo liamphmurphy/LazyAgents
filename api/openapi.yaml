@@ -1106,7 +1106,7 @@ paths:
   /runs:
     get:
       operationId: listRuns
-      summary: Top-level runs, newest first, 50 per page (delegated runs are counted in child_count)
+      summary: Top-level runs, newest first, 50 per page (delegated runs are counted in child_count; a ticket filter lists them too)
       tags: [runs]
       parameters:
         - name: state
@@ -1116,6 +1116,7 @@ paths:
         - { name: agent, in: query, description: Agent handle, schema: { type: string } }
         - { name: project, in: query, description: Project key, schema: { type: string } }
         - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat] } }
+        - { name: ticket, in: query, description: "Ticket key: every run on that ticket, delegated runs included", schema: { type: string } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
       responses:
         "200":

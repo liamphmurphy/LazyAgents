@@ -2,7 +2,6 @@
 
 import { useState, type ComponentProps, type ReactNode } from "react";
 import type { Bootstrap, Ticket } from "@/lib/api/client";
-import { useUpdateTicket } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { absoluteTime, ago, dueDate } from "@/lib/format";
 import { Toggle } from "@/components/ui/controls";
@@ -12,7 +11,9 @@ import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { Flag, LabelChip } from "@/components/domain/labels";
 import { needsDispatch } from "./run-parts";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
-import { AgentPicker, EpicMenu, LabelPicker, PriorityMenu, StatusMenu, UserMenu } from "@/components/domain/pickers";
+import { AgentPicker, EpicMenu, EstimatePicker, LabelPicker, PriorityMenu, StatusMenu, UserMenu } from "@/components/domain/pickers";
+import { ESTIMATE_SCALE } from "@/lib/ticket-draft";
+import type { SaveTicket } from "./ticket-save";
 
 /**
  * Property row as a button (DESIGN.md §4): the whole row is the hit target.
@@ -85,26 +86,50 @@ function InlineProp({
   );
 }
 
-export function Properties({ t, boot }: { t: Ticket; boot: Bootstrap }) {
-  const update = useUpdateTicket(t.key);
+/** Who set the points and when; the rationale is in the Activity timeline. */
+function estimatorLine(t: Ticket, boot: Bootstrap) {
+  const by = t.estimated_by;
+  if (!by) return null;
+  const who = by.type === "agent" ? `@${boot.agents.find((a) => a.id === by.id)?.handle ?? by.name}` : by.name;
+  return (
+    <span className="text-[11.5px] text-fg-tertiary">
+      by {who}
+      {t.estimated_at && (
+        <>
+          {" · "}
+          <time dateTime={t.estimated_at} title={absoluteTime(t.estimated_at)}>
+            {ago(t.estimated_at)}
+          </time>
+        </>
+      )}
+      {t.estimate_rationale && " · rationale in Activity"}
+    </span>
+  );
+}
+
+export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstrap; save: SaveTicket; error: string | null }) {
   const epics = boot.epics.filter((e) => e.project_id === t.project.id);
   const reviewer = boot.users.find((u) => u.id === t.reviewer?.id);
+  const agentName = (id: string | null) => boot.agents.find((a) => a.id === id)?.name ?? "Unassigned";
+  const closed = t.status === "done" || t.status === "canceled";
+  const scale: number[] = [...ESTIMATE_SCALE];
+  if (t.estimate_points != null && !scale.includes(t.estimate_points)) scale.push(t.estimate_points);
 
   return (
     <div className="flex flex-col gap-px">
-      <StatusMenu value={t.status} onChange={(status) => update.mutate({ status })}>
+      <StatusMenu value={t.status} onChange={(status) => save({ status }, `Status → ${STATUS_NAME[status]}`)}>
         <PropButton label="Status">
           <StatusGlyph state={t.status} surface="var(--bg-panel)" label={false} />
           {STATUS_NAME[t.status]}
         </PropButton>
       </StatusMenu>
-      <PriorityMenu value={t.priority} onChange={(priority) => update.mutate({ priority })}>
+      <PriorityMenu value={t.priority} onChange={(priority) => save({ priority }, `Priority → ${PRIORITY_NAME[priority]}`)}>
         <PropButton label="Priority">
           <PriorityGlyph priority={t.priority} label={false} />
           {PRIORITY_NAME[t.priority]}
         </PropButton>
       </PriorityMenu>
-      <AgentPicker agents={boot.agents.filter((a) => a.kind === "main")} value={t.assignee?.id} onChange={(id) => update.mutate({ assignee_agent_id: id })}>
+      <AgentPicker agents={boot.agents.filter((a) => a.kind === "main")} value={t.assignee?.id ?? null} onChange={(id) => save({ assignee_agent_id: id }, `Agent → ${agentName(id)}`)}>
         <PropButton label="Agent">
           {t.assignee ? (
             <>
@@ -124,7 +149,7 @@ export function Properties({ t, boot }: { t: Ticket; boot: Bootstrap }) {
           )}
         </PropButton>
       </AgentPicker>
-      <UserMenu users={boot.users} value={t.reviewer?.id ?? null} onChange={(id) => update.mutate({ reviewer_user_id: id })}>
+      <UserMenu users={boot.users} value={t.reviewer?.id ?? null} onChange={(id) => save({ reviewer_user_id: id }, `Reviewer → ${boot.users.find((u) => u.id === id)?.name ?? "none"}`)}>
         <PropButton label="Reviewer">
           {t.reviewer ? (
             <>
@@ -136,7 +161,7 @@ export function Properties({ t, boot }: { t: Ticket; boot: Bootstrap }) {
           )}
         </PropButton>
       </UserMenu>
-      <EpicMenu epics={epics} value={t.epic?.id ?? null} onChange={(id) => update.mutate({ epic_id: id })}>
+      <EpicMenu epics={epics} value={t.epic?.id ?? null} onChange={(id) => save({ epic_id: id }, `Epic → ${epics.find((e) => e.id === id)?.name ?? "none"}`)}>
         <PropButton label="Epic">
           {t.epic ? (
             <>
@@ -163,35 +188,51 @@ export function Properties({ t, boot }: { t: Ticket; boot: Bootstrap }) {
           ) : (
             <Toggle
               checked={t.requires_mockup}
-              onChange={(v) => update.mutate({ requires_mockup: v })}
+              onChange={(v) => save({ requires_mockup: v }, v ? "Mockup → required" : "Mockup → not required")}
               label={t.requires_mockup ? "Required" : "Not required"}
             />
           )}
         </span>
       </div>
-      <InlineProp
-        label="Estimate"
-        value={t.estimate ?? ""}
-        placeholder="e.g. M · ~3h agent time"
-        display={t.estimate ?? <Empty>None</Empty>}
-        onSave={(v) => update.mutate({ estimate: v })}
-      />
+      <div className="flex min-h-[34px] items-start gap-2.5 px-2 py-1">
+        <span aria-hidden className="w-[88px] flex-none pt-1.5 text-[12.5px] text-fg-tertiary">
+          Estimate
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <EstimatePicker
+              scale={scale}
+              value={t.estimate_points}
+              disabled={closed}
+              onChange={(p) => save({ estimate_points: p }, `Estimate → ${p}`)}
+            />
+            {t.estimate_points != null && !closed && (
+              <button type="button" onClick={() => save({ estimate_points: null }, "Estimate cleared")} className="rounded px-1 text-[11.5px] text-fg-tertiary hover:text-fg-secondary">
+                Clear
+              </button>
+            )}
+          </div>
+          {t.estimate_points != null && estimatorLine(t, boot)}
+          {closed && <span className="text-[11.5px] text-fg-tertiary">Closed tickets can’t be re-estimated.</span>}
+          {t.estimate && <span className="text-[11.5px] text-fg-tertiary">Legacy note: {t.estimate}</span>}
+        </div>
+      </div>
       <InlineProp
         label="Due"
         type="date"
         value={t.due_date ?? ""}
         placeholder=""
         display={t.due_date ? dueDate(t.due_date) : <Empty>No due date</Empty>}
-        onSave={(v) => update.mutate({ due_date: v })}
+        onSave={(v) => save({ due_date: v }, v ? `Due → ${dueDate(v)}` : "Due date cleared")}
       />
-      <LabelPicker labels={boot.labels} value={t.labels.map((l) => l.id)} onChange={(ids) => update.mutate({ label_ids: ids })}>
+      <LabelPicker labels={boot.labels} value={t.labels.map((l) => l.id)} onChange={(ids) => save({ label_ids: ids }, "Labels")}>
         <PropButton label="Labels" className="py-1.5">
           {t.labels.length ? t.labels.map((l) => <LabelChip key={l.id} name={l.name} color={l.color} />) : <Empty>Add labels</Empty>}
         </PropButton>
       </LabelPicker>
-      {update.isError && (
+      {error && (
         <p role="alert" className="px-2 pt-2 text-xs text-pill-blocked-fg">
-          {update.error.message}
+          {error}
         </p>
       )}
     </div>
