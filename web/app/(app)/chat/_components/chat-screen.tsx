@@ -5,7 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useChat, useChats, useCreateChat, useDeleteChat, useStartChat, useUpdateChat } from "@/lib/api/hooks";
+import { usePersonas } from "@/lib/api/persona-hooks";
 import { chatTitle } from "@/lib/chat-ui";
+import { shortAgo } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { Button, IconButton } from "@/components/ui/button";
@@ -19,6 +21,7 @@ import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop
 import { ChipList } from "./context-chips";
 import { RestoreChat } from "./restore";
 import { MemoryButton, MemoryPanel, useMemoryPanel } from "./memory-panel";
+import { PersonaAvatar, PersonaFilter, PersonaName, PersonaSwitcher, personaLook, usePersonaFilter } from "./persona";
 import { PersonaPanel, PersonasButton, usePersonaPanel } from "./persona-panel";
 
 type Chat = Schemas["ChatSession"];
@@ -37,6 +40,11 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
   const search = useSearchParams();
   const boot = useBootstrap();
   const start = useStartChat();
+  const personas = usePersonas();
+  // Undefined until picked: the chat gets the default persona.
+  const [picked, setPicked] = useState<string>();
+  const personaId = picked ?? personas.data?.default_persona_id;
+  const persona = personaLook(personas.data?.personas.find((p) => p.id === personaId));
   const [text, setText] = useState("");
   // A "Start chat" link with no chat yet (?attach=…) lands here; its chips go with the first message.
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
@@ -51,7 +59,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
     if (!body || locked || files.pending) return;
     const context_refs = toContextRefs(chips);
     start.mutate(
-      { project, message: { body, ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
+      { project, persona_id: personaId, message: { body, ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
       { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) },
     );
   }
@@ -59,9 +67,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
     <div className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
       <DropOverlay over={drop.over} />
       <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-8 text-center">
-        <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent/15 text-xl font-semibold text-accent">
-          A
-        </span>
+        <PersonaAvatar persona={persona} size={48} />
         <h1 className="text-xl font-semibold text-fg">{name ? `Hi ${name}, what can I help with?` : "What can I help with?"}</h1>
         <p className="max-w-[520px] text-[13px] text-fg-secondary">
           I can read your runs, tickets, epics, wiki and files, search the web, and create tickets for you. I remember what matters and tell you when I do.
@@ -103,7 +109,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
           rows={3}
           value={text}
           disabled={locked}
-          placeholder="Message your assistant… Enter sends, Shift+Enter adds a line."
+          placeholder={`Message ${persona.id ? persona.name : "your assistant"}… Enter sends, Shift+Enter adds a line.`}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -113,6 +119,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
           }}
         />
         <div className="flex items-center gap-2">
+          <PersonaSwitcher value={personaId} onChange={setPicked} disabled={locked} />
           <AttachButton onFiles={files.add} disabled={locked} />
           <span className="flex-1" />
           <Button type="submit" variant="primary" disabled={locked || files.pending || !text.trim()}>
@@ -121,6 +128,22 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
         </div>
       </form>
     </div>
+  );
+}
+
+/** The row's persona avatar and, under the title, when it was last active (with the persona's name when listing all). */
+function RowMeta({ chat, showPersona }: { chat: Chat; showPersona: boolean }) {
+  const look = personaLook(chat.persona);
+  return (
+    <span className="flex items-center gap-1 text-[11px] text-fg-tertiary">
+      {showPersona && (
+        <>
+          <PersonaName persona={look} className="!font-normal" />
+          <span aria-hidden>·</span>
+        </>
+      )}
+      <time dateTime={chat.last_message_at ?? chat.created_at}>{shortAgo(chat.last_message_at ?? chat.created_at)}</time>
+    </span>
   );
 }
 
@@ -151,15 +174,19 @@ function DeleteChat({ chat, onDeleted }: { chat: Chat; onDeleted: () => void }) 
 }
 
 /** An archived conversation: open it read-only, or restore it to the active list. */
-function ArchivedRow({ chat, active, project, onDeleted }: { chat: Chat; active: boolean; project: string; onDeleted: () => void }) {
+function ArchivedRow({ chat, active, project, onDeleted, all }: { chat: Chat; active: boolean; project: string; onDeleted: () => void; all: boolean }) {
   return (
     <li className={cx("flex flex-wrap items-center gap-1 rounded-md pr-1", active ? "bg-selected" : "hover:bg-hover")}>
       <Link
         href={`/chat/${chat.id}?project=${encodeURIComponent(project)}&view=archived`}
         aria-current={active ? "page" : undefined}
-        className="min-w-0 flex-1 truncate px-2 py-1.5 text-[13px]"
+        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
       >
-        {chatTitle(chat)}
+        <PersonaAvatar persona={personaLook(chat.persona)} />
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate">{chatTitle(chat)}</span>
+          <RowMeta chat={chat} showPersona={all} />
+        </span>
       </Link>
       <RestoreChat chat={chat} compact />
       <DeleteChat chat={chat} onDeleted={onDeleted} />
@@ -167,7 +194,7 @@ function ArchivedRow({ chat, active, project, onDeleted }: { chat: Chat; active:
   );
 }
 
-function ChatRow({ chat, active, project, onLeave }: { chat: Chat; active: boolean; project: string; onLeave: () => void }) {
+function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: boolean; project: string; onLeave: () => void; all: boolean }) {
   const update = useUpdateChat();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(chat.title);
@@ -202,10 +229,16 @@ function ChatRow({ chat, active, project, onLeave }: { chat: Chat; active: boole
             aria-current={active ? "page" : undefined}
             className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
           >
-            {chat.state === "running" && <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-done" />}
-            <span className="truncate">{label}</span>
-            {chat.state === "running" && <span className="sr-only"> (running)</span>}
-            {chat.state === "failed" && <span className="text-xs text-pill-blocked-fg">Failed</span>}
+            <PersonaAvatar persona={personaLook(chat.persona)} />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="flex min-w-0 items-center gap-2">
+                {chat.state === "running" && <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-done" />}
+                <span className="truncate">{label}</span>
+                {chat.state === "running" && <span className="sr-only"> (running)</span>}
+                {chat.state === "failed" && <span className="text-xs text-pill-blocked-fg">Failed</span>}
+              </span>
+              <RowMeta chat={chat} showPersona={all} />
+            </span>
           </Link>
           <IconButton icon="edit" label={`Rename ${label}`} onClick={() => { setTitle(chat.title); setEditing(true); }} />
           <IconButton
@@ -240,10 +273,18 @@ function HistorySidebar({ project, id }: { project: string; id?: string }) {
     else q.delete("view");
     router.replace(`${pathname}?${q.toString()}`);
   };
-  const active = useChats(project);
-  const archived = useChats(view === "archived" ? project : "", true);
+  // The persona dropdown starts on the default persona; GET /chats does the filtering.
+  const filter = usePersonaFilter();
+  const all = filter.query === "all";
+  const active = useChats(project, false, filter.query);
+  const archived = useChats(view === "archived" ? project : "", true, filter.query);
   const chats = view === "archived" ? archived : active;
   const list = chats.data?.chats;
+  const create = useCreateChat();
+  // An empty filter on a persona other than the default offers to start a conversation with it.
+  const picked = filter.value !== "default" && !all ? filter.personas.find((p) => p.id === filter.value) : undefined;
+  const startWith = (personaId: string) =>
+    create.mutate({ project, persona_id: personaId }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
   // Archiving or deleting the open conversation goes back to /chat, which resumes the newest one.
   const leave = (chatId: string) => chatId === id && router.push(`/chat?project=${encodeURIComponent(project)}`);
   return (
@@ -251,6 +292,7 @@ function HistorySidebar({ project, id }: { project: string; id?: string }) {
       aria-label="Chat history"
       className="flex w-72 flex-none flex-col gap-3 border-r border-border-subtle p-3 max-md:max-h-64 max-md:w-full max-md:border-b max-md:border-r-0"
     >
+      <PersonaFilter filter={filter} />
       <Segmented
         label="Show conversations"
         small
@@ -271,14 +313,24 @@ function HistorySidebar({ project, id }: { project: string; id?: string }) {
             ))}
           </div>
         ) : list.length === 0 ? (
-          <p className="px-2 py-4 text-[13px] text-fg-secondary">
-            {view === "archived" ? "No archived conversations." : "No conversations yet."}
-          </p>
+          view === "active" && picked ? (
+            <div className="flex flex-col items-start gap-1 px-2 py-4 text-[13px]">
+              <p className="text-fg-secondary">No conversations with {picked.name} yet.</p>
+              <button type="button" className="text-accent hover:underline disabled:opacity-50" disabled={!project || create.isPending} onClick={() => startWith(picked.id)}>
+                Start one with {picked.name} →
+              </button>
+              {create.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(create.error)}</p>}
+            </div>
+          ) : (
+            <p className="px-2 py-4 text-[13px] text-fg-secondary">
+              {view === "archived" ? "No archived conversations." : "No conversations yet."}
+            </p>
+          )
         ) : view === "archived" ? (
           <>
             <ul className="flex flex-col gap-px">
               {list.map((c) => (
-                <ArchivedRow key={c.id} chat={c} project={project} active={c.id === id} onDeleted={() => leave(c.id)} />
+                <ArchivedRow key={c.id} chat={c} project={project} active={c.id === id} all={all} onDeleted={() => leave(c.id)} />
               ))}
             </ul>
             <p className="px-2 py-3 text-xs text-fg-tertiary">Archived conversations are read-only. Restore one to continue it.</p>
@@ -291,6 +343,7 @@ function HistorySidebar({ project, id }: { project: string; id?: string }) {
                 chat={c}
                 project={project}
                 active={c.id === id}
+                all={all}
                 onLeave={() => leave(c.id)}
               />
             ))}
@@ -319,13 +372,15 @@ export function ChatScreen({ id }: { id?: string }) {
     : scope.status === "ready" ? (scope.project?.key ?? "") : "";
   const scoped = boot.data?.projects.find((p) => p.key === project);
   const memory = useMemoryPanel();
-  const personas = usePersonaPanel();
+  const personaPanel = usePersonaPanel();
   const create = useCreateChat();
+  const personas = usePersonas();
   const health = useHarnessHealth();
   const noHarness = !!health && !health.ready;
   // /chat resumes the newest conversation, unless a "Start chat" link brought context to attach.
   const attaching = search.has("attach");
-  const chats = useChats(project);
+  // Resume the newest conversation with any persona, whatever the sidebar shows.
+  const chats = useChats(project, false, "all");
   const newest = chats.data?.chats.reduce<(typeof chats.data.chats)[number] | undefined>((a, c) => {
     const t = (x: typeof c) => Date.parse(x.last_message_at ?? x.updated_at);
     return !a || t(c) > t(a) ? c : a;
@@ -338,9 +393,11 @@ export function ChatScreen({ id }: { id?: string }) {
   }, [id, attaching, newest, project, router, search]);
 
   function newConversation() {
-    // An empty current conversation is already new.
-    if (id && current.data?.message_count === 0) return;
-    create.mutate({ project }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
+    // An empty current conversation with the default persona is already new.
+    if (id && current.data?.message_count === 0 && current.data.persona?.id === personas.data?.default_persona_id) return;
+    // New conversations use the default persona; the composer can switch it before the first message.
+    const persona_id = personas.data?.default_persona_id;
+    create.mutate({ project, ...(persona_id ? { persona_id } : {}) }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
   }
   const actions = (
     <>
@@ -387,7 +444,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {personas.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
+          {personaPanel.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
         </div>
       )}
     </div>
