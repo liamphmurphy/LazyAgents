@@ -38,14 +38,17 @@ type Merge struct {
 // (restore clears superseded_by) and every merge is recorded on the retired
 // entry (retired_reason, retired_at) and returned, so the person can see
 // what was merged. Fewer live entries also keeps the always-loaded index
-// small. It runs batches until no duplicates are left.
+// small. Entries the person restored after a merge are left alone. It runs
+// batches until no duplicates are left; a retire that fails is skipped and
+// reported in the returned error.
 func (s *Service) Consolidate(ctx context.Context) ([]Merge, error) {
 	var out []Merge
+	var errs []error
 	for {
 		pairs, err := s.Q.DuplicateMemoryPairs(ctx, store.DuplicateMemoryPairsParams{
 			TitleThreshold: consolidateTitle, SummaryThreshold: consolidateSummary, Lim: consolidateBatch})
 		if err != nil {
-			return out, err
+			return out, errors.Join(append(errs, err)...)
 		}
 		n := 0
 		retired := map[uuid.UUID]bool{}
@@ -55,7 +58,7 @@ func (s *Service) Consolidate(ctx context.Context) ([]Merge, error) {
 			if retired[p.KeepID] || retired[p.RetireID] {
 				continue
 			}
-			reason := fmt.Sprintf("Merged into %q by memory consolidation (duplicate)", truncate(p.KeepTitle, 200))
+			reason := truncate(fmt.Sprintf("Merged into \u201c%s\u201d by memory consolidation (duplicate)", p.KeepTitle), maxReason)
 			_, err := s.Q.RetireDuplicateMemory(ctx, store.RetireDuplicateMemoryParams{
 				ID: p.RetireID, KeepID: &p.KeepID, WorkspaceID: p.WorkspaceID, UserID: p.UserID,
 				UpdatedAt: p.RetireUpdatedAt, RetiredReason: reason})
@@ -63,7 +66,9 @@ func (s *Service) Consolidate(ctx context.Context) ([]Merge, error) {
 				continue // changed, retired or deleted since the pairs were read
 			}
 			if err != nil {
-				return out, err
+				// One bad row mustn't stop everyone else's consolidation.
+				errs = append(errs, fmt.Errorf("retire %s into %s: %w", p.RetireID, p.KeepID, err))
+				continue
 			}
 			retired[p.RetireID] = true
 			n++
@@ -73,7 +78,7 @@ func (s *Service) Consolidate(ctx context.Context) ([]Merge, error) {
 		// A short batch was everything; a batch that merged nothing would
 		// return the same pairs again.
 		if len(pairs) < consolidateBatch || n == 0 {
-			return out, nil
+			return out, errors.Join(errs...)
 		}
 	}
 }

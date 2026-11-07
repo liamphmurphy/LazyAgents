@@ -174,12 +174,16 @@ func (s *Service) update(ctx context.Context, o Owner, id uuid.UUID, p Patch, sr
 }
 
 // Supersede retires an entry in favour of another live entry of the same
-// person, recording why, or restores it when by is nil.
+// person, recording why, or restores it when by is nil. A restored entry is
+// never merged by consolidation again.
 func (s *Service) Supersede(ctx context.Context, o Owner, id uuid.UUID, by *uuid.UUID, reason string) (store.Memory, error) {
 	if by != nil && *by == id {
 		return store.Memory{}, apperr.Invalid("superseded_by", "an entry can't supersede itself")
 	}
-	m, err := s.Q.SetMemorySupersededBy(ctx, store.SetMemorySupersededByParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, SupersededBy: by, RetiredReason: truncate(oneLine(reason), maxReason)})
+	m, err := s.Q.SetMemorySupersededBy(ctx, store.SetMemorySupersededByParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, SupersededBy: by,
+		// Only a person restores (the memory manager), and that exempts the
+		// entry from consolidation.
+		RetiredReason: truncate(oneLine(reason), maxReason), RestoredByPerson: by == nil})
 	if errors.Is(err, pgx.ErrNoRows) && by != nil {
 		if _, gerr := s.Get(ctx, o, id); gerr != nil {
 			return m, gerr
