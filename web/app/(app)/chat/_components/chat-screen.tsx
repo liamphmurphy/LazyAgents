@@ -19,6 +19,7 @@ import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop
 import { ChipList } from "./context-chips";
 import { RestoreChat } from "./restore";
 import { MemoryButton, MemoryPanel, useMemoryPanel } from "./memory-panel";
+import { PersonaPanel, PersonasButton, usePersonaPanel } from "./persona-panel";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -304,7 +305,7 @@ function HistorySidebar({ project, id }: { project: string; id?: string }) {
  * The Personal Assistant (replaces Chat): one conversation surface with no agent
  * picker and a history sidebar (rename, archive, restore, delete) beside it.
  * /chat opens the newest conversation, or the first-time welcome; "New
- * conversation" starts afresh. Memory opens as a right-hand panel.
+ * conversation" starts afresh. Memory and Personas open as right-hand panels.
  */
 export function ChatScreen({ id }: { id?: string }) {
   const router = useRouter();
@@ -318,6 +319,7 @@ export function ChatScreen({ id }: { id?: string }) {
     : scope.status === "ready" ? (scope.project?.key ?? "") : "";
   const scoped = boot.data?.projects.find((p) => p.key === project);
   const memory = useMemoryPanel();
+  const personas = usePersonaPanel();
   const create = useCreateChat();
   const health = useHarnessHealth();
   const noHarness = !!health && !health.ready;
@@ -342,6 +344,7 @@ export function ChatScreen({ id }: { id?: string }) {
   }
   const actions = (
     <>
+      <PersonasButton />
       <MemoryButton />
       <Button variant="secondary" icon="plus" disabled={!project || noHarness || create.isPending} onClick={newConversation}>
         New conversation
@@ -384,7 +387,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {memory.open && <MemoryPanel />}
+          {personas.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
         </div>
       )}
     </div>
