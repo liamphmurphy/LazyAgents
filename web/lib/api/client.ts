@@ -67,8 +67,8 @@ export async function unwrap<T>(p: Promise<{ data?: T; error?: unknown; response
  * Multipart POST for uploads (openapi-fetch types binary parts as strings).
  * Same error contract as `unwrap`.
  */
-export async function postForm<T>(path: string, form: FormData): Promise<T> {
-  const res = await fetch(`/api/v1${path}`, { method: "POST", body: form });
+export async function postForm<T>(path: string, form: FormData, method: "POST" | "PUT" = "POST"): Promise<T> {
+  const res = await fetch(`/api/v1${path}`, { method, body: form });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const e = body as Partial<Schemas["Error"]>;
