@@ -1211,6 +1211,12 @@ paths:
           in: query
           description: Go, React, Postgres, Testing, API, Architecture or Process
           schema: { type: string }
+        - name: tag
+          in: query
+          description: Only patterns with every one of these tags (repeat for several; AND)
+          style: form
+          explode: true
+          schema: { type: array, items: { type: string } }
         - name: limit
           in: query
           description: Default 10, at most 50
@@ -1222,9 +1228,45 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [patterns]
+                required: [patterns, tags]
                 properties:
                   patterns: { type: array, items: { $ref: "#/components/schemas/WikiPattern" } }
+                  tags:
+                    type: array
+                    description: Tag facet for q and topic (before the tag filter), most used first
+                    items: { $ref: "#/components/schemas/TagCount" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/adrs:
+    get:
+      operationId: listWikiADRs
+      summary: Architecture decisions (wiki pages titled "ADR …" and ADR documents) with the status and open questions parsed from their body
+      tags: [wiki]
+      responses:
+        "200":
+          description: ADRs with open questions first, then newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [adrs]
+                properties:
+                  adrs: { type: array, items: { $ref: "#/components/schemas/WikiADR" } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/pages/{id}/citations:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    get:
+      operationId: getWikiCitations
+      summary: Runs and chats that read a page (or any document), from recorded reads
+      tags: [wiki]
+      responses:
+        "200":
+          description: Citations, most recent first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiCitations" }
         default: { $ref: "#/components/responses/Error" }
 
   /wiki/pages/{id}:
@@ -2801,6 +2843,54 @@ components:
         summary: { type: string, description: "First line of When to use" }
         snippet: { type: string, description: "Matches are wrapped in « »; empty when browsing" }
         score: { type: number }
+    TagCount:
+      type: object
+      required: [tag, count]
+      properties:
+        tag: { type: string }
+        count: { type: integer }
+    WikiADR:
+      type: object
+      required: [id, title, href, status, state, open_questions, has_open_questions, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        path: { type: string, description: Wiki pages only }
+        display_id: { type: string, description: "ADR documents only, e.g. ADR-012" }
+        href: { type: string }
+        status: { type: string, description: "From the \"Status: …\" line, without \"with open questions\" (see has_open_questions); empty when there's no Status line" }
+        state:
+          type: string
+          enum: [accepted, proposed, superseded, deprecated, rejected, other, none]
+        date: { type: string, description: "YYYY-MM-DD from the Status line" }
+        ticket: { type: string, description: "Ticket key from the Status line (Ticket: [[KEY]])" }
+        open_questions: { type: array, items: { type: string }, description: "Items of the \"Open questions\" section, as Markdown" }
+        has_open_questions: { type: boolean, description: "Open questions are listed, or the Status line says \"with open questions\"" }
+        updated_at: { type: string, format: date-time }
+    WikiCitation:
+      type: object
+      required: [run_id, purpose, agent, reads, last_read_at]
+      properties:
+        run_id: { type: string, format: uuid }
+        purpose: { type: string, enum: [ticket, planning, chat] }
+        agent: { $ref: "#/components/schemas/AgentRef" }
+        ticket_key: { type: string }
+        ticket_title: { type: string }
+        chat_id: { type: string, format: uuid, description: "Only for the caller's own chats" }
+        chat_title: { type: string }
+        reads: { type: integer }
+        last_read_at: { type: string, format: date-time }
+    WikiCitations:
+      type: object
+      required: [runs, chats, citations, unlinked]
+      properties:
+        runs: { type: integer, description: Distinct non-chat runs }
+        chats: { type: integer, description: "Distinct chats (another person's chat counts once per run)" }
+        citations: { type: array, items: { $ref: "#/components/schemas/WikiCitation" } }
+        unlinked:
+          type: array
+          description: Reads not tied to a run that still exists (older data), per agent
+          items: { $ref: "#/components/schemas/ArtifactReader" }
     WikiPageSummary:
       type: object
       required: [id, path, title, author, updated_at, published, suggestions]

@@ -183,8 +183,7 @@ func (s *Server) DispatchTickets(ctx context.Context, req api.DispatchTicketsReq
 }
 
 func (s *Server) GetTurnLog(ctx context.Context, req api.GetTurnLogRequestObject) (api.GetTurnLogResponseObject, error) {
-	_, _, ws := me(ctx)
-	run, err := s.Q.GetRun(ctx, store.GetRunParams{ID: req.Id, WorkspaceID: ws})
+	run, err := s.readableRun(ctx, req.Id)
 	if err != nil {
 		return nil, apperr.ErrNotFound
 	}

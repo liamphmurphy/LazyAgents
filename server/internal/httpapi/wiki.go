@@ -313,13 +313,95 @@ func (s *Server) FindPatterns(ctx context.Context, req api.FindPatternsRequestOb
 	if req.Params.Limit != nil {
 		limit = *req.Params.Limit
 	}
-	ps, err := wiki.FindPatterns(ctx, s.Q, ws, deref(req.Params.Q), deref(req.Params.Topic), limit)
+	var tags []string
+	if req.Params.Tag != nil {
+		tags = *req.Params.Tag
+	}
+	ps, facet, err := wiki.BrowsePatterns(ctx, s.Q, ws, deref(req.Params.Q), deref(req.Params.Topic), tags, limit)
 	if err != nil {
 		return nil, err
 	}
-	out := api.FindPatterns200JSONResponse{Patterns: make([]api.WikiPattern, len(ps))}
+	out := api.FindPatterns200JSONResponse{Patterns: make([]api.WikiPattern, len(ps)), Tags: make([]api.TagCount, len(facet))}
 	for i, p := range ps {
 		out.Patterns[i] = api.WikiPattern{Title: p.Title, Path: p.Path, Topic: p.Topic, Tags: p.Tags, Summary: p.Summary, Snippet: p.Snippet, Score: float32(p.Score)}
 	}
+	for i, t := range facet {
+		out.Tags[i] = api.TagCount{Tag: t.Tag, Count: t.Count}
+	}
 	return out, nil
+}
+
+func (s *Server) ListWikiADRs(ctx context.Context, _ api.ListWikiADRsRequestObject) (api.ListWikiADRsResponseObject, error) {
+	_, _, ws := me(ctx)
+	adrs, err := wiki.ListADRs(ctx, s.Q, ws)
+	if err != nil {
+		return nil, err
+	}
+	out := api.ListWikiADRs200JSONResponse{Adrs: make([]api.WikiADR, len(adrs))}
+	for i, a := range adrs {
+		qs := a.OpenQuestions
+		if qs == nil {
+			qs = []string{}
+		}
+		out.Adrs[i] = api.WikiADR{
+			Id: a.ID, Title: a.Title, Path: nonEmpty(a.Path), DisplayId: nonEmpty(a.DisplayID), Href: a.Href,
+			Status: a.Status, State: api.WikiADRState(a.State), Date: nonEmpty(a.Date), Ticket: nonEmpty(a.Ticket),
+			OpenQuestions: qs, HasOpenQuestions: a.HasOpenQuestions, UpdatedAt: a.UpdatedAt,
+		}
+	}
+	return out, nil
+}
+
+func (s *Server) GetWikiCitations(ctx context.Context, req api.GetWikiCitationsRequestObject) (api.GetWikiCitationsResponseObject, error) {
+	u, _, ws := me(ctx)
+	if _, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.Id, WorkspaceID: ws}); errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	rows, err := s.Q.ListArtifactCitations(ctx, store.ListArtifactCitationsParams{ArtifactID: req.Id, WorkspaceID: ws, Viewer: u.ID})
+	if err != nil {
+		return nil, err
+	}
+	readers, err := s.Q.ListArtifactUnlinkedReaders(ctx, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	out := api.GetWikiCitations200JSONResponse{Citations: make([]api.WikiCitation, 0, len(rows)), Unlinked: make([]api.ArtifactReader, len(readers))}
+	// Chats count by chat; another person's chat (not shown) by run.
+	chats := map[string]bool{}
+	for _, r := range rows {
+		c := api.WikiCitation{
+			RunId: r.RunID, Purpose: api.WikiCitationPurpose(r.Purpose), Reads: int(r.Reads), LastReadAt: r.LastReadAt,
+			Agent:     api.AgentRef{Id: r.AgentID, Name: r.AgentName, Handle: r.AgentHandle, ColorIndex: int(r.AgentColorIndex)},
+			TicketKey: r.TicketKey, TicketTitle: r.TicketTitle,
+		}
+		if id, err := uuid.Parse(r.ChatID); err == nil {
+			c.ChatId = &id
+			c.ChatTitle = &r.ChatTitle
+			chats[r.ChatID] = true
+		} else if r.Purpose == "chat" {
+			chats["run:"+r.RunID.String()] = true
+		}
+		if r.Purpose != "chat" {
+			out.Runs++
+		}
+		out.Citations = append(out.Citations, c)
+	}
+	out.Chats = len(chats)
+	for i, r := range readers {
+		out.Unlinked[i] = api.ArtifactReader{
+			Agent: api.AgentRef{Id: r.ID, Name: r.Name, Handle: r.Handle, ColorIndex: int(r.ColorIndex)},
+			Reads: int(r.Reads), LastReadAt: r.LastReadAt,
+		}
+	}
+	return out, nil
+}
+
+// nonEmpty is nil for "", so optional fields are omitted.
+func nonEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
