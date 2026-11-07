@@ -688,17 +688,49 @@ export function useDashboard(range: DashboardRange) {
 export function useEpicOverviews() {
  return useQuery({queryKey:["epics"],queryFn:()=>unwrap(api.GET("/epics")).then(d=>d.epics)});
 }
-/** Toggle an epic's "requires mockup" flag. */
+/** Toggle an epic's "requires mockup" flag or change its status (done is gated server-side: 409). */
 export function useUpdateEpic(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { requires_mockup: boolean }) => unwrap(api.PATCH("/epics/{id}", { params: { path: { id } }, body })),
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: keys.bootstrap });
-      qc.invalidateQueries({ queryKey: ["epics"] });
-      qc.invalidateQueries({ queryKey: keys.tickets });
-    },
+    mutationFn: (body: { requires_mockup?: boolean; status?: Schemas["EpicStatus"] }) => unwrap(api.PATCH("/epics/{id}", { params: { path: { id } }, body })),
+    onSettled: () => invalidateEpic(qc),
   });
+}
+
+function invalidateEpic(qc: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: keys.bootstrap }),
+    qc.invalidateQueries({ queryKey: ["epics"] }),
+    qc.invalidateQueries({ queryKey: ["boards"] }),
+    qc.invalidateQueries({ queryKey: keys.tickets }),
+  ]);
+}
+
+/** Epic final acceptance criteria. Callers render server data; every write refetches. */
+export function useEpicCriterionMutations(epicId: string) {
+  const qc = useQueryClient();
+  const settle = { onSettled: () => invalidateEpic(qc) };
+  return {
+    create: useMutation({
+      mutationFn: (text: string) => unwrap(api.POST("/epics/{id}/criteria", { params: { path: { id: epicId } }, body: { text } })),
+      ...settle,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, ...body }: { id: string; text?: string; done?: boolean; position?: number }) =>
+        unwrap(api.PATCH("/epic-criteria/{id}", { params: { path: { id } }, body })),
+      ...settle,
+    }),
+    remove: useMutation({
+      mutationFn: async (id: string) => {
+        const { error, response } = await api.DELETE("/epic-criteria/{id}", { params: { path: { id } } });
+        if (!response.ok) {
+          const e = (error ?? {}) as Partial<Schemas["Error"]>;
+          throw new ApiError(response.status, e.code ?? "internal", e.message ?? response.statusText, e.field);
+        }
+      },
+      ...settle,
+    }),
+  };
 }
 export function useAgentOverviews() {
  return useQuery({queryKey:["agent-overviews"],queryFn:()=>unwrap(api.GET("/agent-overviews")),refetchInterval:30_000});
