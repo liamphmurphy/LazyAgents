@@ -518,3 +518,51 @@ func chatMemoryIndex(ctx context.Context, q *store.Queries, run store.Run) (stri
 	}
 	return memory.IndexMarkdown(entries, total), nil
 }
+
+// agentsSection renders the turn's instructions for the run's purpose. Only
+// chat turns read the person's memory index and persona; ticket, delegated and
+// planning runs never load a persona. Errors only come from chat turns, with
+// the outcome to show in the conversation.
+func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []string) ([]byte, string, error) {
+	switch c.run.Purpose {
+	case "chat":
+		// Both are refreshed every turn, so memory saves and persona edits show
+		// on the next turn.
+		idx, err := chatMemoryIndex(ctx, q, c.run)
+		if err != nil {
+			return nil, "Could not load the assistant's memory index.", fmt.Errorf("chat memory index: %w", err)
+		}
+		persona, err := chatPersona(ctx, q, c.run)
+		if err != nil {
+			return nil, "Could not load the conversation's persona.", fmt.Errorf("chat persona: %w", err)
+		}
+		return harness.ChatAgentsMD(c.spec, paths, c.project.Key, idx, persona), "", nil
+	case "planning":
+		return []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n")), "", nil
+	}
+	if c.run.ParentRunID != nil {
+		return harness.SubagentAgentsMD("", c.spec, paths, c.ticket.Key), "", nil
+	}
+	return harness.AgentsMD("", c.spec, paths, c.ticket.Key), "", nil
+}
+
+// chatPersona loads the chat's persona fresh each turn, so edits show on the
+// next turn and a new segment (harness switch, idle cleanup) keeps the same
+// voice. It must belong to the chat's creator; nil is the built-in Assistant.
+func chatPersona(ctx context.Context, q *store.Queries, run store.Run) (*harness.Persona, error) {
+	chat, err := q.ChatSessionForRun(ctx, &run.ID)
+	if err != nil {
+		return nil, err
+	}
+	if chat.PersonaID == nil {
+		return nil, nil
+	}
+	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *chat.PersonaID, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &harness.Persona{Name: p.Name, Tone: p.Tone, Instructions: p.CustomInstructions}, nil
+}

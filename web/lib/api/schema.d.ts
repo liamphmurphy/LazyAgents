@@ -1461,8 +1461,10 @@ export interface paths {
          * @description Creates an idle chat. Nothing runs until the first message. When
          *     `message` is set it is posted as the first message (same rules as
          *     POST /chats/{id}/messages). Every chat is with the workspace's
-         *     Personal Assistant, created on first use. 422 for an unknown or
-         *     archived project, or a harness/model not in GET /chat-models.
+         *     Personal Assistant, created on first use. The chat keeps `persona_id`
+         *     (default: the caller's default persona, or none) for its whole life.
+         *     422 for an unknown or archived project, a harness/model not in
+         *     GET /chat-models, or a persona_id that isn't one of the caller's.
          */
         post: operations["createChat"];
         delete?: never;
@@ -1610,6 +1612,121 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/personas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's assistant personas, default first, then most recently used
+         * @description Personas are private to the person who made them: only the caller's
+         *     are ever returned. At most 20 per person, so there's no paging.
+         */
+        get: operations["listPersonas"];
+        put?: never;
+        /**
+         * Create a persona
+         * @description 422 for an empty, over-long or already used name (case-insensitive),
+         *     an unknown tone, a color that isn't #rrggbb, custom instructions over
+         *     2,000 characters or that look like a credential, or a 21st persona.
+         *     With is_default it replaces the current default.
+         */
+        post: operations["createPersona"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/personas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        /** One persona; another person's is a 404 */
+        get: operations["getPersona"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a persona and its avatar
+         * @description Its chats keep their history and fall back to the built-in Assistant
+         *     (no persona). Deleting the default promotes the most recently used
+         *     remaining persona; with none left, the built-in Assistant is the
+         *     default. 404 for another person's persona, 409 when revision is given
+         *     and stale.
+         */
+        delete: operations["deletePersona"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a persona (revision-checked)
+         * @description Changes apply from the next turn of every chat using the persona.
+         *     404 for another person's persona, 409 on a stale revision, 422 under
+         *     the same rules as POST /personas.
+         */
+        patch: operations["updatePersona"];
+        trace?: never;
+    };
+    "/personas/{id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make this the caller's default persona (idempotent)
+         * @description New chats and the unfiltered chat list use the default. 404 for another person's persona.
+         */
+        post: operations["setDefaultPersona"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/personas/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The persona's avatar image
+         * @description Served with the type sniffed at upload (PNG, JPEG or WebP only),
+         *     `X-Content-Type-Options: nosniff` and a locked-down CSP. 404 when the
+         *     persona has no avatar or isn't the caller's.
+         */
+        get: operations["getPersonaAvatar"];
+        /**
+         * Set or replace the persona's avatar
+         * @description PNG, JPEG or WebP, at most 1 MB (1,048,576 bytes). The server sniffs
+         *     the bytes and ignores the declared type and filename; SVG is never
+         *     accepted. 413 over the limit, 415 for any other type, 422 for an
+         *     empty file, 404 for another person's persona.
+         */
+        put: operations["uploadPersonaAvatar"];
+        post?: never;
+        /** Remove the persona's avatar (idempotent) */
+        delete: operations["deletePersonaAvatar"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3463,6 +3580,7 @@ export interface components {
              * @description The run serving the current harness segment; its events show live activity
              */
             current_run_id?: string;
+            persona?: components["schemas"]["PersonaSummary"];
             archived: boolean;
             revision: number;
             message_count: number;
@@ -3480,6 +3598,11 @@ export interface components {
             harness?: components["schemas"]["Harness"];
             /** @description Defaults to the harness's default model in GET /chat-models */
             model?: string;
+            /**
+             * Format: uuid
+             * @description One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life.
+             */
+            persona_id?: string;
             message?: components["schemas"]["NewChatMessage"];
         };
         ChatPatch: {
@@ -3565,6 +3688,78 @@ export interface components {
             unavailable_reason?: string;
             models: components["schemas"]["ChatModel"][];
         };
+        /**
+         * @description How the assistant writes; each maps to one fixed prompt sentence on the server
+         * @enum {string}
+         */
+        PersonaTone: "neutral" | "friendly" | "concise" | "formal" | "playful";
+        /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */
+        PersonaSummary: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            color: string;
+            /** @description GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar */
+            avatar_url?: string;
+        };
+        /**
+         * @description A named variant of the caller's Personal Assistant, private to them.
+         *     Its tone and custom instructions shape the assistant's voice in chats
+         *     only; they never change scopes, tools or memory rules.
+         */
+        Persona: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            tone: components["schemas"]["PersonaTone"];
+            /** @description Stored in lower case */
+            color: string;
+            /** @description GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar */
+            avatar_url?: string;
+            custom_instructions: string;
+            is_default: boolean;
+            /** @description Chats (archived included) that use this persona */
+            chat_count: number;
+            /**
+             * Format: date-time
+             * @description When a chat with this persona last got a message
+             */
+            last_used_at?: string;
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PersonaList: {
+            personas: components["schemas"]["Persona"][];
+            /**
+             * Format: uuid
+             * @description Absent when the built-in Assistant is the default
+             */
+            default_persona_id?: string;
+        };
+        NewPersona: {
+            /** @description Unique per person (case-insensitive) after trimming */
+            name: string;
+            tone?: components["schemas"]["PersonaTone"];
+            /** @description Defaults to #64748b */
+            color?: string;
+            custom_instructions?: string;
+            /**
+             * @description Make it the default (replacing the current one)
+             * @default false
+             */
+            is_default: boolean;
+        };
+        PersonaPatch: {
+            revision: number;
+            name?: string;
+            tone?: components["schemas"]["PersonaTone"];
+            color?: string;
+            /** @description Empty string clears them */
+            custom_instructions?: string;
+        };
     };
     responses: {
         /** @description Error */
@@ -3585,6 +3780,7 @@ export interface components {
         AgentHandle: string;
         ArtifactId: string;
         ChatId: string;
+        PersonaId: string;
     };
     requestBodies: never;
     headers: never;
@@ -6071,6 +6267,13 @@ export interface operations {
                 project?: string;
                 /** @description true lists archived chats instead */
                 archived?: boolean;
+                /**
+                 * @description Only chats with this persona: a persona id of the caller's, `all`
+                 *     for every persona, or `none` for chats without one (the built-in
+                 *     Assistant). Omitted: the caller's default persona, or `none` when
+                 *     they have no default. 422 for an unknown id or another person's.
+                 */
+                persona_id?: string;
                 offset?: number;
             };
             header?: never;
@@ -6359,6 +6562,242 @@ export interface operations {
                     "application/json": components["schemas"]["ChatHarnessModels"][];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPersonas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createPersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewPersona"];
+            };
+        };
+        responses: {
+            /** @description The persona */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The persona */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deletePersona: {
+        parameters: {
+            query?: {
+                /** @description The revision the caller saw; omit to delete regardless */
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updatePersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaPatch"];
+            };
+        };
+        responses: {
+            /** @description The updated persona */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setDefaultPersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new default */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPersonaAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    "X-Content-Type-Options"?: "nosniff";
+                    "Content-Security-Policy"?: string;
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadPersonaAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The persona with its new avatar_url */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            415: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deletePersonaAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PersonaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The persona without an avatar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

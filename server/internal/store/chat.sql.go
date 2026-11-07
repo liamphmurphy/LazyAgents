@@ -93,7 +93,7 @@ func (q *Queries) AppendChatMessage(ctx context.Context, arg AppendChatMessagePa
 
 const archiveChatSession = `-- name: ArchiveChatSession :one
 UPDATE chat_sessions SET archived = true, revision = revision + 1, updated_at = now()
-WHERE id = $1 AND workspace_id = $2 AND revision = $3 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+WHERE id = $1 AND workspace_id = $2 AND revision = $3 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id
 `
 
 type ArchiveChatSessionParams struct {
@@ -121,6 +121,7 @@ func (q *Queries) ArchiveChatSession(ctx context.Context, arg ArchiveChatSession
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
@@ -307,7 +308,7 @@ func (q *Queries) ChatMessageForTurn(ctx context.Context, runTurnID *uuid.UUID) 
 }
 
 const chatSessionForRun = `-- name: ChatSessionForRun :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE current_run_id = $1
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id FROM chat_sessions WHERE current_run_id = $1
 `
 
 func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID) (ChatSession, error) {
@@ -329,6 +330,7 @@ func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
@@ -513,8 +515,10 @@ func (q *Queries) CreateChatAttachment(ctx context.Context, arg CreateChatAttach
 }
 
 const createChatSession = `-- name: CreateChatSession :one
-INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, persona_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7,
+  COALESCE($8::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = $1 AND p.user_id = $4 AND p.is_default)))
+RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id
 `
 
 type CreateChatSessionParams struct {
@@ -525,8 +529,12 @@ type CreateChatSessionParams struct {
 	AgentID     uuid.UUID
 	Harness     string
 	Model       string
+	PersonaID   *uuid.UUID
 }
 
+// Without a persona_id the chat gets its creator's default persona (none
+// when they have no default). Callers check that a given persona_id is the
+// creator's own.
 func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionParams) (ChatSession, error) {
 	row := q.db.QueryRow(ctx, createChatSession,
 		arg.WorkspaceID,
@@ -536,6 +544,7 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 		arg.AgentID,
 		arg.Harness,
 		arg.Model,
+		arg.PersonaID,
 	)
 	var i ChatSession
 	err := row.Scan(
@@ -554,6 +563,7 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
@@ -684,7 +694,7 @@ func (q *Queries) GetChatAttachment(ctx context.Context, arg GetChatAttachmentPa
 }
 
 const getChatSession = `-- name: GetChatSession :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id FROM chat_sessions WHERE id = $1 AND workspace_id = $2
 `
 
 type GetChatSessionParams struct {
@@ -711,6 +721,7 @@ func (q *Queries) GetChatSession(ctx context.Context, arg GetChatSessionParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
@@ -828,7 +839,7 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 }
 
 const listChatSessions = `-- name: ListChatSessions :many
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id FROM chat_sessions
 WHERE workspace_id = $1 AND project_id = $2 AND created_by = $3 AND NOT archived
 ORDER BY COALESCE(last_message_at, created_at) DESC, id DESC
 LIMIT $4
@@ -871,6 +882,7 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastMessageAt,
+			&i.PersonaID,
 		); err != nil {
 			return nil, err
 		}
@@ -883,20 +895,27 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 }
 
 const listChatsForUser = `-- name: ListChatsForUser :many
-SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at FROM chat_sessions c JOIN projects p ON p.id = c.project_id
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id FROM chat_sessions c JOIN projects p ON p.id = c.project_id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = $3
   AND ($4::text IS NULL OR p.key = $4::text)
+  -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
+  AND CASE $5::text
+    WHEN 'all' THEN true
+    WHEN 'none' THEN c.persona_id IS NULL
+    ELSE c.persona_id = $6::uuid END
 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
-LIMIT $6 OFFSET $5
+LIMIT $8 OFFSET $7
 `
 
 type ListChatsForUserParams struct {
-	WorkspaceID uuid.UUID
-	CreatedBy   uuid.UUID
-	Archived    bool
-	ProjectKey  *string
-	RowOffset   int32
-	RowLimit    int32
+	WorkspaceID   uuid.UUID
+	CreatedBy     uuid.UUID
+	Archived      bool
+	ProjectKey    *string
+	PersonaFilter string
+	PersonaID     *uuid.UUID
+	RowOffset     int32
+	RowLimit      int32
 }
 
 // One page of a person's chats: archived or not, optionally one project.
@@ -906,6 +925,8 @@ func (q *Queries) ListChatsForUser(ctx context.Context, arg ListChatsForUserPara
 		arg.CreatedBy,
 		arg.Archived,
 		arg.ProjectKey,
+		arg.PersonaFilter,
+		arg.PersonaID,
 		arg.RowOffset,
 		arg.RowLimit,
 	)
@@ -932,6 +953,7 @@ func (q *Queries) ListChatsForUser(ctx context.Context, arg ListChatsForUserPara
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastMessageAt,
+			&i.PersonaID,
 		); err != nil {
 			return nil, err
 		}
@@ -991,7 +1013,7 @@ func (q *Queries) ListRecentChatMessages(ctx context.Context, arg ListRecentChat
 }
 
 const lockChatSession = `-- name: LockChatSession :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
 `
 
 type LockChatSessionParams struct {
@@ -1018,12 +1040,13 @@ func (q *Queries) LockChatSession(ctx context.Context, arg LockChatSessionParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
 const lockChatSessionByID = `-- name: LockChatSessionByID :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at FROM chat_sessions WHERE id = $1 FOR UPDATE
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id FROM chat_sessions WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSession, error) {
@@ -1045,6 +1068,7 @@ func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSe
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
@@ -1161,7 +1185,7 @@ func (q *Queries) RecoverChatCancellations(ctx context.Context, runnerID *string
 
 const renameChatSession = `-- name: RenameChatSession :one
 UPDATE chat_sessions SET title = $3, revision = revision + 1, updated_at = now()
-WHERE id = $1 AND workspace_id = $2 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+WHERE id = $1 AND workspace_id = $2 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id
 `
 
 type RenameChatSessionParams struct {
@@ -1196,6 +1220,7 @@ func (q *Queries) RenameChatSession(ctx context.Context, arg RenameChatSessionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
@@ -1249,7 +1274,7 @@ func (q *Queries) SetChatAgent(ctx context.Context, arg SetChatAgentParams) erro
 const setChatRunState = `-- name: SetChatRunState :one
 UPDATE chat_sessions SET current_run_id = $2, state = $3,
  revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id
 `
 
 type SetChatRunStateParams struct {
@@ -1277,13 +1302,14 @@ func (q *Queries) SetChatRunState(ctx context.Context, arg SetChatRunStateParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
 const setChatSelection = `-- name: SetChatSelection :one
 UPDATE chat_sessions SET harness = $2, model = $3, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id
 `
 
 type SetChatSelectionParams struct {
@@ -1313,13 +1339,14 @@ func (q *Queries) SetChatSelection(ctx context.Context, arg SetChatSelectionPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
 const setChatTitle = `-- name: SetChatTitle :one
 UPDATE chat_sessions SET title = $2, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id
 `
 
 type SetChatTitleParams struct {
@@ -1346,13 +1373,14 @@ func (q *Queries) SetChatTitle(ctx context.Context, arg SetChatTitleParams) (Cha
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
 const updateChatTitleArchived = `-- name: UpdateChatTitleArchived :one
 UPDATE chat_sessions SET title = $2, archived = $3, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id
 `
 
 type UpdateChatTitleArchivedParams struct {
@@ -1380,6 +1408,7 @@ func (q *Queries) UpdateChatTitleArchived(ctx context.Context, arg UpdateChatTit
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastMessageAt,
+		&i.PersonaID,
 	)
 	return i, err
 }

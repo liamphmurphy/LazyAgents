@@ -17,6 +17,8 @@ const prefixes: Record<string, string[]> = {
   project: ["projects", "planning", "bootstrap", "tickets", "boards", "inbox", "search"],
   inbox: ["inbox", "bootstrap"],
   chat: ["chats"],
+  // A persona edit changes the name, color and avatar every chat using it embeds.
+  persona: ["personas", "chats"],
 };
 
 /** One stream per shell. Coalesce bursts from harness logs before refetching. */
