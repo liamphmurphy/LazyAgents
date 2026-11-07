@@ -130,7 +130,8 @@ func TestMockupGateAndReview(t *testing.T) {
 	}
 
 	// Changes requested wake the run with the note.
-	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v2, "changes_requested", "Make the button bigger", nil); err != nil {
+	pins := []artifacts.ReviewPin{{X: 0.5, Y: 0.25, Text: "Here"}}
+	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v2, "changes_requested", "Make the button bigger", pins); err != nil {
 		t.Fatal(err)
 	}
 	if s, _ := state(); s != "running" {
@@ -138,11 +139,12 @@ func TestMockupGateAndReview(t *testing.T) {
 	}
 	turns, _ := q.ListTurns(ctx, run.ID)
 	last := turns[len(turns)-1]
-	if !strings.Contains(last.InputMessage, "Changes requested on mockup Checkout v2: Make the button bigger") || !strings.Contains(last.InputMessage, mockup.ID.String()) {
+	if !strings.Contains(last.InputMessage, "Changes requested on mockup Checkout v2: Make the button bigger\n\nPinned comments") ||
+		!strings.Contains(last.InputMessage, "1. (50%, 25%) Here\n\nRevise it with create_mockup") || !strings.Contains(last.InputMessage, mockup.ID.String()) {
 		t.Fatalf("resume message = %q", last.InputMessage)
 	}
 	g, _ := artifacts.MockupGate(ctx, q, mustTicket(t, q, ws, "PAY-214"))
-	if g.Approved || g.Mockups[0].ReviewState != "changes_requested" || g.Mockups[0].ReviewNote != "Make the button bigger" {
+	if g.Approved || g.Mockups[0].ReviewState != "changes_requested" || g.Mockups[0].ReviewNote != artifacts.GatherReviewNote("Make the button bigger", pins) {
 		t.Fatalf("gate = %+v", g)
 	}
 

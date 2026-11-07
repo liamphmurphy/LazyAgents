@@ -101,6 +101,7 @@ export function ReviewPanel({
   version,
   editable,
   pins,
+  savedPins,
   onRemovePin,
   activePin,
   onHoverPin,
@@ -119,6 +120,8 @@ export function ReviewPanel({
   version: Version;
   editable: boolean;
   pins: Pin[];
+  /** `pins` are the version's saved review pins, not this review's drafts. */
+  savedPins: boolean;
   onRemovePin: (i: number) => void;
   activePin: number | null;
   onHoverPin: (i: number | null) => void;
@@ -135,7 +138,8 @@ export function ReviewPanel({
 }) {
   const review = version.review;
   const state = review?.state ?? "pending";
-  const tone = editable ? "draft" : "saved";
+  const tone = savedPins ? "saved" : "draft";
+  const removable = editable && !savedPins;
   const others = a.versions.filter((v) => v.id !== version.id);
   return (
     <aside aria-label="Review" className="flex w-[360px] flex-none flex-col overflow-y-auto border-l border-border bg-surface max-lg:w-[300px]">
@@ -156,7 +160,7 @@ export function ReviewPanel({
             {review.reviewed_at && <time dateTime={review.reviewed_at} title={absoluteTime(review.reviewed_at)} className="text-fg-tertiary">· {timelineTime(review.reviewed_at)}</time>}
           </p>
         )}
-        {!editable && review?.note && <p className="whitespace-pre-line text-[12.5px] text-fg-2">{review.note}</p>}
+        {review && review.state !== "pending" && review.note && <p className="whitespace-pre-line text-[12.5px] text-fg-2">{review.note}</p>}
       </Section>
 
       <Criteria key={ticketKey} ticketKey={ticketKey} keys={ticketKeys} onTicket={onTicket} />
@@ -173,7 +177,7 @@ export function ReviewPanel({
               >
                 <PinBadge n={i + 1} tone={tone} />
                 <span className="min-w-0 flex-1 whitespace-pre-line break-words text-[12.5px] leading-5">{p.text}</span>
-                {editable && (
+                {removable && (
                   <button
                     type="button"
                     aria-label={`Remove pin ${i + 1}`}
@@ -192,7 +196,12 @@ export function ReviewPanel({
         ) : (
           <p className="text-xs text-fg-tertiary">{editable ? "No pins yet." : `No pins on ${version.label}.`}</p>
         )}
-        {editable && <p className="text-[11px] text-fg-tertiary">Press C or choose Pin, then click the mockup. Pins are added to the note as a numbered list.</p>}
+        {editable && (
+          <p className="text-[11px] text-fg-tertiary">
+            {savedPins ? "Saved with the last decision. Pins you add start a new list for your next decision. " : ""}
+            Press C or choose Pin, then click the mockup. Pins are added to the note as a numbered list.
+          </p>
+        )}
       </Section>
 
       {editable ? (

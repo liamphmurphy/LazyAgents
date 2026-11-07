@@ -24,10 +24,10 @@ function MockupGate({ t, onNew }: { t: Ticket; onNew: () => void }) {
           </Link>
           <span className="font-mono text-xs text-fg-tertiary">{m.version_label}</span>
           <ReviewChip state={m.review_state} />
-          {m.review_state === "changes_requested" && m.review_note && <span className="text-xs text-fg-secondary">“{m.review_note}”</span>}
           <Link href={`/artifacts/${m.id}/review?ticket=${encodeURIComponent(t.key)}`} className="text-xs text-accent hover:underline">
             {m.review_state === "pending" ? "Review" : "Open review"}
           </Link>
+          {m.review_state === "changes_requested" && m.review_note && <span className="basis-full whitespace-pre-line text-xs text-fg-secondary">“{m.review_note}”</span>}
         </li>
       ))}
     </ul>

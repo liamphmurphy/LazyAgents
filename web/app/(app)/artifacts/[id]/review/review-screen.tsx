@@ -173,6 +173,25 @@ function Toolbar({ scale, cam, onZoom, onFit, onActual, tool, onTool, canPin, sh
 
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Keeps Tab inside the modal workspace: it wraps from the last control to the first and back. */
+function trapTab(e: KeyboardEvent<HTMLDivElement>, root: HTMLElement | null) {
+  if (!root) return;
+  const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement;
+  if (e.shiftKey && (active === first || active === root)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (active === last || !root.contains(active))) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
 /**
  * True when this page was reached by navigating inside the app, so history.back()
  * stays in the app. history.length can't tell: a new tab may already have entries.
@@ -207,7 +226,9 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
   const [tool, setTool] = useState<Tool>("pan");
   const [showPins, setShowPins] = useState(true);
   const [swipe, setSwipe] = useState(0.5);
-  const [drafts, setDrafts] = useState<Pin[]>(() => current.review?.pins ?? []);
+  // This review's new pins. A decision already on the current version keeps its own pins and note; they show
+  // (in grey) until the reviewer starts pinning, and a new decision replaces them.
+  const [drafts, setDrafts] = useState<Pin[]>([]);
   const [composing, setComposing] = useState<Fraction | null>(null);
   const [note, setNote] = useState("");
   const [activePin, setActivePin] = useState<number | null>(null);
@@ -238,7 +259,9 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
 
   const canPin = editable && !!primaryDrawing;
   const activeTool: Tool = canPin ? tool : "pan";
-  const primaryPins = editable ? drafts : (primary.review?.pins ?? []);
+  const savedPins = primary.review && primary.review.state !== "pending" ? primary.review.pins : [];
+  const showSaved = !editable || (drafts.length === 0 && !composing && savedPins.length > 0);
+  const primaryPins = showSaved ? savedPins : drafts;
 
   const mut = useReviewMockup(a.id);
   const decide = (decision: Decision) => {
@@ -247,7 +270,9 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
       { versionId: current.id, decision, note: note.trim() || undefined, pins: drafts },
       {
         onSuccess: () => {
+          // The pins and note are now the version's saved review.
           setNote("");
+          setDrafts([]);
           setSaved(decision);
         },
       },
@@ -272,6 +297,7 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
   useEffect(() => rootRef.current?.focus(), []);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Tab" && !e.defaultPrevented) return trapTab(e, rootRef.current);
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.target as HTMLElement;
     if (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.closest('[role="menu"]')) return;
@@ -347,7 +373,7 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
       swipe={shown === "swipe" ? swipe : undefined}
       onSwipe={setSwipe}
       pins={primaryPins}
-      tone={editable ? "draft" : "saved"}
+      tone={showSaved ? "saved" : "draft"}
       showPins={showPins}
       tool={activeTool}
       onPlace={canPin ? setComposing : undefined}
@@ -448,7 +474,7 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
               : shown === "swipe"
                 ? "Drag the handle, or focus it and use ← → (Shift for 10%), Home / End · "
                 : ""}
-            Drag, scroll or arrow keys to pan · ⌘/Ctrl+scroll, pinch or +/− to zoom · 0 Fit · 1 100% · C pin · H pan · [ ] versions · S compare
+            Drag, scroll or arrow keys to pan · ⌘/Ctrl+scroll, trackpad pinch or +/− to zoom · 0 Fit · 1 100% · C pin · H pan · [ ] versions · S compare
           </p>
         </div>
 
@@ -457,6 +483,7 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
           version={primary}
           editable={editable}
           pins={primaryPins}
+          savedPins={showSaved}
           onRemovePin={(i) => {
             setDrafts((d) => d.filter((_, j) => j !== i));
             setActivePin(null);

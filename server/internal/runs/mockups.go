@@ -165,7 +165,11 @@ func (s *Service) ReviewMockup(ctx context.Context, ws, userID, artifactID, vers
 		}
 		verb, msg := tracker.VerbMockupApproved, fmt.Sprintf("Mockup approved: %s %s. Implement to match it (read_artifact %s).", a.Title, v.Label, a.ID)
 		if decision == artifacts.ReviewChangesRequested {
-			verb, msg = tracker.VerbMockupChangesRequested, fmt.Sprintf("Changes requested on mockup %s %s: %s. Revise it with create_mockup (mockup_id %s).", a.Title, v.Label, note, a.ID)
+			sep := ". "
+			if len(pins) > 0 {
+				sep = "\n\n" // the note ends with the numbered pin list
+			}
+			verb, msg = tracker.VerbMockupChangesRequested, fmt.Sprintf("Changes requested on mockup %s %s: %s%sRevise it with create_mockup (mockup_id %s).", a.Title, v.Label, note, sep, a.ID)
 		} else if note != "" {
 			msg += "\nNote from the reviewer: " + note
 		}

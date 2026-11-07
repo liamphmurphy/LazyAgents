@@ -173,6 +173,13 @@ test("review workspace zooms, pans, compares versions and pins comments", async 
   expect(body.pins[0].y).toBeCloseTo(0.25, 1);
   // The ticket (and its mockup gate) is fetched again.
   await expect.poll(api.ticketGets).toBeGreaterThan(gets);
+  // The pin is now part of the saved review; deciding again doesn't resend it or the old note.
+  await expect(canvas.getByRole("button", { name: "Pin 1: Make the button bigger" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Pinned comments" })).toContainText("Saved with the last decision");
+  await expect(page.getByRole("button", { name: "Remove pin 1" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Approve v3" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Approved v3." })).toBeVisible();
+  expect(api.posted[1]).toEqual({ decision: "approved", pins: [] });
 
   // Older versions show their saved pins and can't be decided on.
   await dialog.focus();
@@ -198,10 +205,18 @@ test("Review on the mockup page opens the workspace; approving sends the decisio
   await expect(page).toHaveURL(new RegExp(`/artifacts/${A}$`));
 });
 
-test("opened directly, Close falls back to the ticket", async ({ page }) => {
+test("opened directly, Tab stays in the workspace and Close falls back to the ticket", async ({ page }) => {
   await install(page);
   await page.goto(`/artifacts/${A}/review`);
   await expect(page.getByRole("img", { name: "Login screen v3" })).toBeVisible();
+  const inDialog = () => page.evaluate(() => !!document.querySelector('[role="dialog"]')?.contains(document.activeElement));
+  await page.getByRole("dialog").focus();
+  await page.keyboard.press("Shift+Tab");
+  expect(await inDialog()).toBe(true);
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Back" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  expect(await inDialog()).toBe(true);
   await page.getByRole("button", { name: "Close" }).click();
   await expect(page).toHaveURL(/\/tickets\/WEB-7$/);
 });

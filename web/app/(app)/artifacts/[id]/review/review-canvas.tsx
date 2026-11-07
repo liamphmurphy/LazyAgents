@@ -288,7 +288,16 @@ export function Pane({
       }}
       onPointerCancel={end}
     >
-      {drawing ? <DrawingImage d={drawing} view={view} /> : <p className="absolute inset-0 grid place-items-center text-[13px] text-fg-tertiary">Loading mockup…</p>}
+      {!drawing ? (
+        <p className="absolute inset-0 grid place-items-center text-[13px] text-fg-tertiary">Loading mockup…</p>
+      ) : swipeWith && swipe !== undefined ? (
+        // Clip both sides: drawings without an opaque background would otherwise show through each other.
+        <div className="pointer-events-none absolute inset-0" style={{ clipPath: `inset(0 0 0 ${swipe * 100}%)` }}>
+          <DrawingImage d={drawing} view={view} />
+        </div>
+      ) : (
+        <DrawingImage d={drawing} view={view} />
+      )}
       {swipeWith && swipe !== undefined && (
         <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ clipPath: `inset(0 ${(1 - swipe) * 100}% 0 0)` }}>
           <DrawingImage d={swipeWith} view={view} />
