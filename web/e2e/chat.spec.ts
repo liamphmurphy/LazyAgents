@@ -6,8 +6,9 @@ const picker = (page: Page) => page.getByRole("button", { name: /Model for the n
 
 const chips = (page: Page) => page.getByTestId("context-chip");
 
+// Starts a conversation from the Welcome (or the conversation header).
 async function newChat(page: Page) {
-  await page.getByRole("button", { name: "New chat" }).first().click();
+  await page.getByRole("button", { name: "New conversation" }).first().click();
   // The route swap finishes once the composer of the new chat is there.
   await expect(composer(page)).toBeVisible();
 }
@@ -28,11 +29,14 @@ async function send(page: Page, text: string) {
 test("create, send, switch model, reload keeps history", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
-  await expect(page.getByRole("navigation", { name: "Chats" }).getByText("No chats yet")).toBeVisible();
+  // First visit: no conversations yet, so the Welcome greets the person.
+  await expect(page.getByRole("heading", { name: "Hi Liam, what can I help with?" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Suggestions" }).getByRole("button")).toHaveCount(4);
+  await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
 
   await newChat(page);
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
-  await expect(page.getByText("Ask anything about this project")).toBeVisible();
+  await expect(page.getByText("A new conversation")).toBeVisible();
   await expect(composer(page)).toBeFocused();
 
   // Enter sends, Shift+Enter adds a line.
@@ -62,9 +66,15 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
 
   // History survives a reload.
   await page.reload();
-  await expect(page.getByRole("navigation", { name: "Chats" }).getByRole("link", { name: /hello/ })).toBeVisible();
   await expect(page.getByTestId("user-message")).toHaveCount(2);
   await expect(page.getByTestId("assistant-message").nth(1)).toContainText("Echo: second");
+
+  // Revisiting the assistant resumes the newest conversation instead of the Welcome.
+  const chatId = mock.posted[0].chat;
+  await page.goto("/chat?project=WEB");
+  await expect(page).toHaveURL(new RegExp(`/chat/${chatId}`));
+  await expect(page.getByTestId("user-message")).toHaveCount(2);
+  await expect(page.getByRole("heading", { name: /what can I help with/ })).toHaveCount(0);
   expect(mock.unhandled).toEqual([]);
 });
 
@@ -88,20 +98,6 @@ test("unavailable models are disabled with their reason", async ({ page }) => {
   const item = page.getByRole("menuitem", { name: /Codex gpt-5-codex/ });
   await expect(item).toHaveAttribute("aria-disabled", "true");
   await expect(item).toContainText("No harness:openai secret");
-});
-
-test("rename and archive from the history list", async ({ page }) => {
-  await installChatApi(page);
-  await page.goto("/chat?project=WEB");
-  await newChat(page);
-  await page.getByRole("button", { name: "Rename New chat" }).click();
-  await page.getByRole("textbox", { name: "Chat title" }).fill("Roadmap");
-  await page.getByRole("textbox", { name: "Chat title" }).press("Enter");
-  const nav = page.getByRole("navigation", { name: "Chats" });
-  await expect(nav.getByRole("link", { name: "Roadmap" })).toBeVisible();
-  await page.getByRole("button", { name: "Archive Roadmap" }).click();
-  await expect(page).toHaveURL(/\/chat\?project=WEB/);
-  await expect(page.getByRole("navigation", { name: "Chats" }).getByText("No chats yet")).toBeVisible();
 });
 
 test("[[ picks context as removable chips and sends them as context_refs", async ({ page }) => {
@@ -172,14 +168,57 @@ test("a rejected attachment shows the server error and keeps the chips", async (
 
 test("Start chat links pre-attach the item and drop the query param", async ({ page }) => {
   const mock = await installChatApi(page);
-  await page.goto("/chat?project=WEB&attach=page:11111111-1111-4111-8111-111111111111&attach_title=Plan");
-  await page.getByRole("button", { name: "New chat" }).first().click();
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  // Opened on a conversation, the item is attached to it and ?attach= leaves the URL.
+  await page.goto(page.url() + "&attach=page:11111111-1111-4111-8111-111111111111&attach_title=Plan");
   await expect(chips(page)).toHaveCount(1);
   await expect(chips(page).first()).toContainText("Plan");
   await expect(page).not.toHaveURL(/attach/);
   await send(page, "summarise");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: summarise");
   expect(mock.posted.at(-1)?.body.context_refs).toEqual([{ kind: "page", id: "11111111-1111-4111-8111-111111111111" }]);
+});
+
+test("sending from the Welcome creates the chat, posts the message and opens it", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await expect(page.getByRole("heading", { name: "Hi Liam, what can I help with?" })).toBeVisible();
+  // A suggestion fills the composer; it is not sent.
+  await page.getByRole("list", { name: "Suggestions" }).getByRole("button", { name: "Draft tickets from a spec" }).click();
+  await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("Draft tickets from a spec");
+  expect(mock.posted).toEqual([]);
+
+  await page.getByRole("textbox", { name: "Message" }).fill("first words");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+\?project=WEB/);
+  await expect(page.getByTestId("user-message")).toContainText("first words");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: first words");
+  expect(mock.created).toEqual([{ project: "WEB" }]);
+  expect(mock.posted).toHaveLength(1);
+  expect(mock.posted[0].body).toEqual({ body: "first words" });
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("Start chat ?attach= on /chat shows chips in the Welcome and sends them with the first message", async ({ page }) => {
+  const mock = await installChatApi(page);
+  // An existing conversation doesn't hide the Welcome when context was brought along.
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "earlier");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: earlier");
+
+  await page.goto("/chat?project=WEB&attach=page:11111111-1111-4111-8111-111111111111&attach_title=Plan");
+  await expect(page.getByRole("heading", { name: /what can I help with/ })).toBeVisible();
+  await expect(chips(page)).toHaveCount(1);
+  await expect(chips(page).first()).toContainText("Plan");
+  await page.getByRole("textbox", { name: "Message" }).fill("summarise");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+\?project=WEB/);
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: summarise");
+  expect(mock.posted.at(-1)?.body).toEqual({ body: "summarise", context_refs: [{ kind: "page", id: "11111111-1111-4111-8111-111111111111" }] });
+  await expect(page.getByTestId("user-message").getByTestId("sent-chip")).toHaveCount(1);
+  expect(mock.unhandled).toEqual([]);
 });
 
 test("assistant messages list deduplicated Sources with version and section", async ({ page }) => {
@@ -300,9 +339,9 @@ test("with no harness available, chat says why before anything is sent", async (
   await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
   await composer(page).press("Enter");
   expect(mock.posted).toEqual([]);
-  // New chat is refused up front, naming the missing secrets.
-  await expect(page.getByRole("button", { name: "New chat" }).first()).toBeDisabled();
-  await expect(page.getByRole("complementary", { name: "Chat history" })).toContainText("No harness is available: add harness:anthropic or harness:openai.");
+  // New conversation is refused up front, naming the missing secrets.
+  await expect(page.getByRole("button", { name: "New conversation" }).first()).toBeDisabled();
+  await expect(page.locator('p[role="status"]').filter({ hasText: "No harness is available: add harness:anthropic or harness:openai." })).toBeVisible();
   // The shell banner names the same secrets on every screen.
   await expect(page.getByRole("status", { name: /Agents can’t run/ })).toBeVisible();
 });
@@ -331,48 +370,37 @@ test("a new chat has no agent picker and names no agent", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Agent for new chats/ })).toHaveCount(0);
   await newChat(page);
   expect(mock.created.at(-1)).toEqual({ project: "WEB" });
+  await expect(page.getByTestId("chat-agent")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByText("Assistant", { exact: true })).toBeVisible();
   expect(mock.unhandled).toEqual([]);
 });
 
-test("archived chats are listed under Archived and can be restored", async ({ page }) => {
-  await installChatApi(page);
+test("an archived chat opened by URL is read-only and Restore brings back the composer", async ({ page }) => {
+  const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
   await send(page, "keep me");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: keep me");
-  await page.getByRole("button", { name: "Archive keep me" }).click();
-  const nav = page.getByRole("navigation", { name: "Chats" });
-  await expect(nav.getByText("No chats yet")).toBeVisible();
+  const chatId = mock.posted[0].chat;
+  // The UI has no archive control; archive through the API like another client would.
+  await page.evaluate(async (id) => {
+    const chat = await (await fetch(`/api/v1/chats/${id}`)).json();
+    await fetch(`/api/v1/chats/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ revision: chat.revision, archived: true }),
+    });
+  }, chatId);
 
-  await page.getByRole("radio", { name: "Archived" }).click();
-  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
-  await expect(nav.getByText("Archived chats are read-only")).toBeVisible();
-  await expect(nav.getByRole("button", { name: "Archive keep me" })).toHaveCount(0);
-
-  // Opened, an archived chat is read-only with Restore in the header and in place of the composer.
-  await nav.getByRole("link", { name: "keep me" }).click();
+  await page.goto(`/chat/${chatId}?project=WEB`);
   const chat = page.getByRole("region", { name: "keep me" });
   await expect(chat.getByText("This chat is archived. Restore it to continue.")).toBeVisible();
   await expect(composer(page)).toHaveCount(0);
   await expect(chat.getByRole("button", { name: "Restore keep me" })).toHaveCount(2);
   await chat.getByRole("button", { name: "Restore keep me" }).last().click();
   await expect(composer(page)).toBeVisible();
-  // The restored chat is listed under Active again, next to the open conversation.
-  await expect(page.getByRole("radio", { name: "Active" })).toBeChecked();
-  await expect(page).not.toHaveURL(/view=archived/);
-  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
-  await page.getByRole("radio", { name: "Archived" }).click();
-  await expect(nav.getByText("No archived chats.")).toBeVisible();
-  await page.getByRole("radio", { name: "Active" }).click();
-  await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
-
-  // Restore straight from the list too. Archiving the open chat navigates back to the index first.
-  await page.getByRole("button", { name: "Archive keep me" }).click();
-  await expect(nav.getByText("No chats yet")).toBeVisible();
-  await page.getByRole("radio", { name: "Archived" }).click();
-  await expect(page).toHaveURL(/view=archived/);
-  await nav.getByRole("button", { name: "Restore keep me" }).click();
-  await expect(nav.getByText("No archived chats.")).toBeVisible();
+  await expect(chat.getByRole("button", { name: "Restore keep me" })).toHaveCount(0);
+  expect(mock.unhandled).toEqual([]);
 });
 
 test("a running turn shows its newest tool call as a live line with a linked page", async ({ page }) => {
