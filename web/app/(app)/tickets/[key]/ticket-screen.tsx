@@ -8,6 +8,7 @@ import { Button, ButtonLink, IconButton } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
 import { Markdown } from "@/components/domain/markdown";
 import { StartChatButton } from "@/components/domain/start-chat";
+import { TicketCostChip } from "@/components/domain/cost-chip";
 import { TopBar } from "@/components/shell/topbar";
 import { BacklinksPanel } from "@/components/domain/backlinks";
 import { ContextArtifacts } from "./context-artifacts";
@@ -181,6 +182,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
         }
         actions={
           <>
+            {t && <TicketCostChip ticketKey={t.key} project={t.project.key} />}
             {t && <StartChatButton attach={{ kind: "ticket", key: t.key }} title={`${t.key} ${t.title}`} project={t.project.key} />}
             {pager.total > 0 && pager.index >= 0 && (
               <span className="font-mono text-xs text-fg-tertiary" aria-label={`Ticket ${pager.index + 1} of ${pager.total}`}>

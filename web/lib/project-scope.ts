@@ -38,6 +38,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Workspace",
     items: [
       { href: "/runs", label: "Runs", icon: "play", badge: "runs" },
+      { href: "/costs", label: "Costs", icon: "dollar" },
       { href: "/agents", label: "Agents", icon: "agents" },
       { href: "/wiki", label: "Wiki", icon: "wiki", badge: "wiki" },
       { href: "/settings", label: "Settings", icon: "gear" },
@@ -53,6 +54,7 @@ export const PROJECT_ROUTES: Record<string, ProjectMode> = {
   "/tickets": "optional",
   "/epics": "optional",
   "/artifacts": "optional",
+  "/costs": "optional",
 };
 
 /** Pages under a project route where switching only updates the remembered project (a draft would be lost). */
