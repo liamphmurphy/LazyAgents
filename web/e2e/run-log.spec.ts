@@ -9,7 +9,7 @@ const event = (seq: number, type: Schemas["RunEvent"]["type"], payload: Record<s
 
 function run(id: string, name: string): Schemas["Run"] {
   return {
-    id, ticket_key: "WEB-1", agent: { id, name, handle: name.toLowerCase(), color_index: 0 },
+    id, ticket_key: "WEB-1", purpose: "ticket", agent: { id, name, handle: name.toLowerCase(), color_index: 0 },
     mode: "managed", state: "completed", harness: "codex", model: "test-model", started_at: at(0), ended_at: at(7),
     tool_calls: 1, input_tokens: 0, output_tokens: 0, cost_usd: 0, plan: [], scopes: [], approval_scopes: [],
   };
@@ -45,6 +45,8 @@ test("parent timeline includes historical and live delegated logs with independe
   await expect(page.getByRole("link", { name: "Environment", exact: true })).toHaveAttribute("href", `/settings/runner?run_id=${parentId}`);
   const timeline = page.getByRole("region", { name: "Events" });
   await expect(timeline.getByText("Delegated review findings", { exact: true })).toBeVisible();
+  // Tool results are collapsed until a row (or Expand all) opens them.
+  await timeline.getByRole("button", { name: "Expand all" }).click();
   await expect(timeline.getByText("parent output", { exact: true })).toBeVisible();
   await expect(timeline.getByText("child output", { exact: true })).toBeVisible();
   await expect(timeline.getByRole("link", { name: "Reviewer · delegated agent" }).first()).toHaveAttribute("href", `/runs/${childId}`);

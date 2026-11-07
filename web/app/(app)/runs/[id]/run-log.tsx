@@ -5,40 +5,31 @@ import { eventTokenUsage, tokenBreakdown } from "@/lib/token-usage";
 import { runCost } from "@/lib/format";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
-import { useComment, useControlRunById, useDelegatedRunLogs, useRunLog } from "@/lib/api/hooks";
+import { useControlRunById, useDelegatedRunLogs, useRunLog } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
-import { latestQuestion, withMention } from "@/lib/run-question";
 import { absoluteTime, compact, duration } from "@/lib/format";
+import {
+  PURPOSE_LABEL, argSummary, delegateChild, groupByTurn, isFailedRow, rowEvent, rowsOf, str, toolLink, toolName,
+  triggerLine, turnAt, turnByEvent, turnStarts, workHref, type Row,
+} from "@/lib/run-view";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Tabs, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
-import { Banner, EmptyState, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
+import { Banner, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
 import { Stat } from "@/components/domain/data";
-import { Flag, SmallPill, type PillTone } from "@/components/domain/labels";
-import { TopBar } from "@/components/shell/topbar";
+import { Flag, MonoChip, SmallPill } from "@/components/domain/labels";
+import { RUN_ENDED, RUN_STATE as STATE, StatusPill } from "@/components/domain/run-status";
+import { TopBar, type Crumb } from "@/components/shell/topbar";
+import { ActionBox, RunRail, confirmCancel } from "./run-panels";
 
 type RunDetail = Schemas["RunDetail"];
 type RunEvent = Schemas["RunEvent"];
 type Turn = Schemas["RunTurn"];
+type Run = Schemas["Run"];
 type P = Record<string, unknown>;
-
-const STATE: Record<string, { tone: PillTone; label: string }> = {
-  queued: { tone: "neutral", label: "Queued" },
-  starting: { tone: "neutral", label: "Starting" },
-  running: { tone: "done", label: "Running" },
-  waiting: { tone: "human", label: "Waiting" },
-  paused: { tone: "human", label: "Paused" },
-  blocked: { tone: "blocked", label: "Blocked" },
-  completed: { tone: "review", label: "Completed" },
-  failed: { tone: "blocked", label: "Failed" },
-  cancelled: { tone: "neutral", label: "Cancelled" },
-};
-const WAIT: Record<string, string> = { approval: "approval", human_reply: "reply", pause: "paused", delegation: "sub agent", mockup_review: "mockup review" };
-const ENDED = ["completed", "failed", "cancelled"];
 
 const TRIGGER: Record<Turn["trigger"], string> = {
   start: "Started by dispatch",
@@ -49,48 +40,6 @@ const TRIGGER: Record<Turn["trigger"], string> = {
 };
 
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
-
-/** "lazyagents.claim_ticket" for MCP tools, the tool name otherwise. */
-function toolName(t: string) {
-  const m = /^mcp__([^_]+(?:_[^_]+)*?)__(.+)$/.exec(t);
-  return m ? `${m[1]}.${m[2]}` : t;
-}
-
-/** A compact argument summary: `(ticket: "PAY-214")`, or the command for shells. */
-function argSummary(input: unknown) {
-  if (!input || typeof input !== "object") return "";
-  const o = input as P;
-  if (typeof o.command === "string") return o.command;
-  if (typeof o.file_path === "string") return o.file_path;
-  const parts = Object.entries(o)
-    .slice(0, 3)
-    .map(([k, v]) => `${k}: ${typeof v === "string" ? JSON.stringify(v.length > 40 ? v.slice(0, 40) + "…" : v) : Array.isArray(v) ? `[${v.length}]` : JSON.stringify(v)}`);
-  return `(${parts.join(", ")}${Object.keys(o).length > 3 ? ", …" : ""})`;
-}
-
-type Row =
-  | { kind: "event"; e: RunEvent }
-  | { kind: "tool"; call: RunEvent; result?: RunEvent };
-
-/** Pairs each tool call with its result so they read as one card. */
-function rowsOf(events: RunEvent[]): Row[] {
-  const out: Row[] = [];
-  const open = new Map<string, Extract<Row, { kind: "tool" }>>();
-  for (const e of events) {
-    const p = e.payload as P;
-    if (e.type === "tool_call") {
-      const row = { kind: "tool" as const, call: e };
-      if (p.id) open.set(str(p.id), row);
-      out.push(row);
-    } else if (e.type === "tool_result" && p.id && open.has(str(p.id))) {
-      open.get(str(p.id))!.result = e;
-    } else {
-      out.push({ kind: "event", e });
-    }
-  }
-  return out;
-}
 
 function lifecycleText(p: P): ReactNode {
   switch (p.state) {
@@ -147,53 +96,78 @@ function lifecycleText(p: P): ReactNode {
   return str(p.state);
 }
 
-function ToolCard({ call, result }: { call: RunEvent; result?: RunEvent }) {
+
+type Entry = { row: Row<RunEvent>; source?: Run; runId: string; turn: number };
+
+/** A collapsed tool row: name, args, status; click for the result. MCP reads link to the page or artifact. */
+function ToolRow({ row, open, onToggle, runs }: { row: Extract<Row<RunEvent>, { kind: "tool" }>; open: boolean; onToggle: () => void; runs: Run[] }) {
+  const { call, result } = row;
   const p = call.payload as P;
   const r = (result?.payload ?? {}) as P;
   const denied = p.denied_by_harness === true;
   const failed = r.is_error === true;
   const out = str(r.output);
+  const link = toolLink(str(p.tool), p.input);
+  const child = delegateChild(call, runs);
+  const took = result ? Math.max(0, Date.parse(result.at) - Date.parse(call.at)) : null;
   return (
     <div className={cx("min-w-0 rounded-lg border bg-surface", denied || failed ? "border-pill-blocked-bg" : "border-border")}>
       <div className="flex items-center gap-2 px-3 py-2">
-        <span className="font-mono text-[12.5px] font-medium">{toolName(str(p.tool))}</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-fg-tertiary">{argSummary(p.input)}</span>
+        <button type="button" aria-expanded={open} onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <span aria-hidden className="w-3 flex-none text-fg-tertiary">{open ? "▾" : "▸"}</span>
+          <span className="font-mono text-[12.5px] font-medium">{toolName(str(p.tool))}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-fg-tertiary">{argSummary(p.input)}</span>
+        </button>
+        {link && <Link href={link.href} className="flex-none text-xs text-accent hover:underline">Open {link.label} ↗</Link>}
+        {child && <Link href={`/runs/${child.id}`} className="flex-none text-xs text-accent hover:underline">{child.agent.name} run ↗</Link>}
         {denied ? (
           <Flag tone="blocked">denied by harness</Flag>
         ) : failed ? (
           <Flag tone="blocked">error{r.exit_code != null ? ` · exit ${str(r.exit_code)}` : ""}</Flag>
         ) : result ? (
-          <Icon name="check" size={13} className="text-state-done" />
+          <span className="flex flex-none items-center gap-1.5 font-mono text-[11px] text-fg-tertiary">
+            <Icon name="check" size={13} className="text-state-done" />
+            <span className="sr-only">done</span>
+            {took != null && took >= 1000 ? `${Math.round(took / 1000)}s` : ""}
+          </span>
         ) : (
           <span className="text-[11px] text-fg-tertiary">running…</span>
         )}
       </div>
-      {out && (
-        <pre className="max-h-48 overflow-auto border-t border-border-subtle px-3 py-2 font-mono text-[11.5px] leading-relaxed text-fg-secondary">{out}</pre>
+      {open && (
+        out ? (
+          <pre className="max-h-64 overflow-auto border-t border-border-subtle px-3 py-2 font-mono text-[11.5px] leading-relaxed text-fg-secondary">{out}</pre>
+        ) : (
+          <p className="border-t border-border-subtle px-3 py-2 text-xs text-fg-tertiary">{result ? "No output." : "No result yet."}</p>
+        )
       )}
     </div>
   );
 }
 
-function EventRow({ row, source }: { row: Row; source?: Schemas["Run"] }) {
-  const e = row.kind === "tool" ? row.call : row.e;
+function EventRow({ entry, plan, tools, runs }: { entry: Entry; plan: Run["plan"]; tools: { open: (key: string) => boolean; toggle: (key: string) => void }; runs: Run[] }) {
+  const { row, source } = entry;
+  const e = rowEvent(row);
   const p = e.payload as P;
-  const red = e.type === "error" || (row.kind === "tool" && (!!(row.call.payload as P).denied_by_harness || !!(row.result?.payload as P | undefined)?.is_error));
+  const red = e.type === "error" || isFailedRow(row);
   const amber = e.type === "lifecycle" && (p.state === "waiting" || p.state === "paused");
+  const key = `${entry.runId}:${e.seq}`;
   let body: ReactNode;
   switch (row.kind === "tool" ? "tool" : e.type) {
     case "tool":
-      body = <ToolCard call={(row as Extract<Row, { kind: "tool" }>).call} result={(row as Extract<Row, { kind: "tool" }>).result} />;
+      body = <ToolRow row={row as Extract<Row<RunEvent>, { kind: "tool" }>} open={tools.open(key)} onToggle={() => tools.toggle(key)} runs={runs} />;
       break;
-    case "message":
+    case "message": {
       // Agent text from the harness, or a LazyAgents event logged by a tool
       // (plan posted, step moved, log_event).
+      const stepText = p.kind === "step" ? (plan.find((s) => s.position === Number(p.step)) ?? plan[Number(p.step) - 1])?.text : undefined;
       body =
         p.kind === "plan" ? (
           <span className="text-[13px] text-fg-2">Posted a plan: {Array.isArray(p.steps) ? p.steps.length : 0} steps</span>
         ) : p.kind === "step" ? (
           <span className="text-[13px] text-fg-2">
             Step {str(p.step)} → <span className="font-mono text-xs">{str(p.state)}</span>
+            {stepText && <span className="ml-2 text-fg-secondary">{stepText}</span>}
           </span>
         ) : p.kind ? (
           <span className="font-mono text-[12px] text-fg-secondary">
@@ -203,6 +177,7 @@ function EventRow({ row, source }: { row: Row; source?: Schemas["Run"] }) {
           <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-fg-2">{str(p.text)}</p>
         );
       break;
+    }
     case "usage":
       body = (
         <span className="font-mono text-[12px] text-fg-secondary">
@@ -241,141 +216,115 @@ function EventRow({ row, source }: { row: Row; source?: Schemas["Run"] }) {
   );
 }
 
-function TurnsRail({ d }: { d: RunDetail }) {
-  const run = d.run;
-  const pending = d.approvals.find((a) => a.state === "pending");
-  return (
-    <aside aria-label="Turns" className="flex flex-col gap-2 border-r border-border-subtle px-3 py-4 lg:min-h-0 lg:flex-[1_1_240px] lg:max-w-[260px] lg:overflow-y-auto">
-      <h2 className="px-2 text-xs font-medium text-fg-tertiary">Turns</h2>
-      <ol className="flex flex-col gap-1">
-        {d.turns.map((t) => {
-          const u = (t.usage ?? {}) as P;
-          return (
-            <li key={t.seq} className={cx("flex flex-col gap-0.5 rounded-lg px-2.5 py-2", t.status === "running" && "bg-selected")}>
-              <span className="flex items-center justify-between text-[13px]">
-                <span className="font-medium">Turn {t.seq}</span>
-                <span className="font-mono text-[11px] text-fg-tertiary" title={absoluteTime(t.started_at)}>
-                  {clock.format(new Date(t.process_started_at ?? t.started_at)).slice(0, 5)}
-                </span>
-              </span>
-              <span className="line-clamp-2 text-xs text-fg-secondary">{TRIGGER[t.trigger]}{t.trigger !== "start" && t.input_message ? `: ${t.input_message.split("\n")[0]}` : ""}</span>
-              <span className="flex items-center gap-2 font-mono text-[11px] text-fg-tertiary">
-                {t.status === "pending" ? (
-                  "waiting for the runner"
-                ) : t.status === "running" ? (
-                  <span className="text-pill-done-fg">running</span>
-                ) : (
-                  <>
-                    {t.process_started_at && duration(t.process_started_at, t.ended_at ?? undefined)}
-                    {u.tool_calls != null && ` · ${str(u.tool_calls)} calls`}
-                    {` · ${runCost(Number(u.cost_usd ?? 0), typeof u.cost_source === "string" ? u.cost_source : undefined)}`}
-                    {t.exit_code ? ` · exit ${t.exit_code}` : ""}
-                  </>
-                )}
-                {t.has_log && (
-                  <a href={`/api/v1/runs/${run.id}/turns/${t.seq}/log`} className="ml-auto text-accent hover:underline" aria-label={`Raw log of turn ${t.seq}`}>
-                    raw
-                  </a>
-                )}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      {run.state === "waiting" && (
-        <div className="mt-1 flex flex-col gap-1 rounded-lg border border-dashed border-state-human/40 px-3 py-2.5 text-xs">
-          <span className="font-medium text-pill-human-fg">
-            {run.wait_reason === "delegation" ? "Next turn starts when the delegated agent finishes" : run.wait_reason === "mockup_review" ? "Waiting for mockup review. The next turn starts when a person reviews it" : run.wait_reason === "approval" ? "Next turn starts when someone decides" : "Next turn starts when someone replies"}
-          </span>
-          <span className="text-fg-secondary">{run.wait_reason === "delegation" ? "Follow the delegated agent’s activity in the event timeline." : "Nothing is running. The workspace and session are kept."}</span>
-          {run.wait_reason !== "delegation" && <Link href={`/tickets/${run.ticket_key}`} className="text-accent hover:underline">
-            {run.wait_reason === "mockup_review" ? "Review the mockup on the ticket" : pending ? "Review the request" : `Reply with @${run.agent.handle}`}
-          </Link>}
-        </div>
-      )}
-      {run.state === "queued" && (
-        <p className="px-2 text-xs text-fg-secondary">Queued: it starts when a runner slot is free.</p>
-      )}
-    </aside>
-  );
-}
-
-const TAB_FILTER: Record<string, (r: Row) => boolean> = {
+const TAB_FILTER: Record<string, (r: Row<RunEvent>) => boolean> = {
   all: () => true,
   messages: (r) => r.kind === "event" && r.e.type === "message" && !(r.e.payload as P).kind,
   tools: (r) => r.kind === "tool",
-  errors: (r) =>
-    (r.kind === "event" && r.e.type === "error") ||
-    (r.kind === "tool" && (((r.call.payload as P).denied_by_harness as boolean) || ((r.result?.payload as P | undefined)?.is_error as boolean))),
+  errors: (r) => (r.kind === "event" && r.e.type === "error") || isFailedRow(r),
 };
 
-function rowText(r: Row) {
+function rowText(r: Row<RunEvent>) {
   return JSON.stringify(r.kind === "tool" ? [r.call.payload, r.result?.payload] : r.e.payload).toLowerCase();
 }
 
-/** Chat-style prompt for a run waiting on `human_reply`; replies go out as a ticket comment mentioning the agent. */
-function ReplyBox({ run, question, lastSeq }: { run: Schemas["Run"]; question: string | null; lastSeq: number }) {
-  const qc = useQueryClient();
-  const comment = useComment(run.ticket_key);
-  const [body, setBody] = useState("");
-  const [sentAt, setSentAt] = useState<number | null>(null);
-  const sent = sentAt === lastSeq;
-  const submit = () => {
-    if (!body.trim() || comment.isPending) return;
-    comment.mutate(
-      { body_md: withMention(body, run.agent.handle) },
-      {
-        onSuccess: () => {
-          setBody("");
-          setSentAt(lastSeq);
-        },
-        onSettled: () => qc.invalidateQueries({ queryKey: ["runs", run.id] }),
-      },
-    );
-  };
+/** Turn markers become group headers, so their lifecycle rows are not repeated. */
+const isTurnMarker = (r: Row<RunEvent>) => r.kind === "event" && r.e.type === "lifecycle" && ((r.e.payload as P).state === "turn_started" || (r.e.payload as P).state === "turn_ended");
+
+function TurnGroup({ turn, t, items, open, onToggle, runId }: { turn: number; t?: Turn; items: ReactNode; open: boolean; onToggle: () => void; runId: string }) {
+  const u = (t?.usage ?? {}) as P;
+  const cost = runCost(Number(u.cost_usd ?? 0), typeof u.cost_source === "string" ? u.cost_source : undefined);
+  const id = `turn-${turn}`;
   return (
-    <div className="border-b border-border-subtle px-5 py-3">
-      <div className="flex flex-col gap-2 rounded-xl border border-state-human/40 bg-surface p-3.5">
-        <p className="text-xs font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
-        {question && <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-[13.5px] leading-relaxed text-fg-2">{question}</p>}
-        {sent ? (
-          <p role="status" className="flex items-center gap-3 text-[13px] text-fg-secondary">
-            Sent. Resuming {run.agent.name}…
-            <Button variant="outline" onClick={() => setSentAt(null)}>Reply again</Button>
-          </p>
-        ) : (
-          <>
-            <label className="sr-only" htmlFor="run-reply">Reply to {run.agent.name}</label>
-            <TextArea
-              id="run-reply"
-              value={body}
-              rows={3}
-              placeholder={`Reply to ${run.agent.name}`}
-              onChange={(e) => setBody(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-            />
-            {comment.isError && (
-              <Banner tone="blocked" title="Couldn't send the reply">
-                {comment.error.message}
-              </Banner>
+    <section aria-label={turn === 0 ? "Setup" : `Turn ${turn}`} className="border-b border-border">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={onToggle}
+        className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 bg-surface-sunken px-5 py-2 text-left hover:bg-hover max-sm:px-3"
+      >
+        <span aria-hidden className="w-3 flex-none text-fg-tertiary">{open ? "▾" : "▸"}</span>
+        <span className="text-[13px] font-semibold">{turn === 0 ? "Setup" : `Turn ${turn}`}</span>
+        {t && <span className="min-w-0 flex-1 truncate text-xs text-fg-secondary">{triggerLine(t.trigger, t.input_message, TRIGGER)}</span>}
+        {t && (
+          <span className="font-mono text-[11px] text-fg-tertiary">
+            {t.status === "pending" ? "waiting for the runner" : t.status === "running" ? <span className="text-pill-done-fg">running</span> : (
+              <>
+                {clock.format(new Date(t.process_started_at ?? t.started_at)).slice(0, 5)}
+                {t.process_started_at && ` · ${duration(t.process_started_at, t.ended_at ?? undefined)}`}
+                {u.tool_calls != null && ` · ${str(u.tool_calls)} calls`}
+                {` · ${compact(Number(u.input_tokens ?? 0))} in / ${compact(Number(u.output_tokens ?? 0))} out · ${cost}`}
+                {t.exit_code != null ? ` · exit ${t.exit_code}` : ""}
+              </>
             )}
-            <div className="flex items-center justify-end gap-3">
-              <span className="text-xs text-fg-tertiary">
-                <kbd className="font-mono">⌘↵</kbd> to send
-              </span>
-              <Button variant="approve" disabled={!body.trim() || comment.isPending} onClick={submit}>
-                {comment.isPending ? "Sending…" : "Send"}
-              </Button>
-            </div>
+          </span>
+        )}
+      </button>
+      {open && (
+        <div id={id}>
+          <ol>{items}</ol>
+          {t && (t.has_log || t.status === "done") && (
+            <p className="flex items-center justify-between gap-3 px-5 py-2 font-mono text-[11px] text-fg-tertiary max-sm:px-3">
+              <span>Turn {turn} total · {compact(Number(u.input_tokens ?? 0))} in · {compact(Number(u.output_tokens ?? 0))} out · {cost}</span>
+              {t.has_log && <a href={`/api/v1/runs/${runId}/turns/${t.seq}/log`} className="text-accent hover:underline" aria-label={`Raw log of turn ${t.seq}`}>raw log</a>}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Header({ d }: { d: RunDetail }) {
+  const run = d.run;
+  const href = workHref(run);
+  const sub = d.child_runs.reduce((n, c) => n + c.cost_usd, 0);
+  const subPriced = d.child_runs.every((c) => c.cost_source && c.cost_source !== "unknown");
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b border-border-subtle px-6 py-3.5">
+        <div className="flex items-center gap-3">
+          <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} size="md" label={false} />
+          <div className="flex flex-col leading-tight">
+            <span className="flex flex-wrap items-center gap-2 font-semibold">
+              {run.agent.name}
+              <StatusPill run={run} />
+              <MonoChip variant="outline">{PURPOSE_LABEL[run.purpose]}</MonoChip>
+            </span>
+            <span className="text-xs text-fg-tertiary">
+              {run.purpose === "ticket" && run.ticket_key ? (
+                <Link href={`/tickets/${encodeURIComponent(run.ticket_key)}`} className="text-accent hover:underline"><span className="font-mono">{run.ticket_key}</span> {run.work_title} ↗</Link>
+              ) : href ? (
+                <Link href={href} className="text-accent hover:underline">{run.purpose === "planning" ? "Plan" : "Chat"}: {run.work_title || "untitled"} ↗</Link>
+              ) : null}
+              {href && " · "}
+              {run.mode} · started {absoluteTime(run.started_at)}
+              {run.dispatched_by && ` · dispatched by ${run.dispatched_by.name}`}
+              {run.parent_run_id && <> · <Link href={`/runs/${run.parent_run_id}`} className="text-accent hover:underline">Delegated by ↗</Link></>}
+            </span>
+          </div>
+        </div>
+        <Stat label="Harness" value={run.harness} />
+        <Stat label="Model" value={run.model} />
+        <Stat label="Elapsed" value={duration(run.started_at, run.ended_at)} />
+        <Stat
+          label="Cost"
+          value={<>{runCost(run.cost_usd, run.cost_source)}{d.child_runs.length > 0 && <span className="ml-1.5 text-xs font-normal text-fg-tertiary">{subPriced ? "+" : "≥ +"}${sub.toFixed(2)} sub</span>}</>}
+        />
+        <Stat label="Tokens" value={compact(run.input_tokens + run.output_tokens)} />
+        <Stat label="Tool calls" value={run.tool_calls} />
+        {run.purpose === "ticket" && (
+          <>
+            <Stat label="Branch" value={run.branch ? <span className="font-mono text-xs">{run.branch}</span> : "–"} />
+            <Stat
+              label="Pull request"
+              value={run.pr_url && run.pr_number ? <a href={run.pr_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">#{run.pr_number} ↗</a> : "–"}
+            />
           </>
         )}
       </div>
-    </div>
+      <TokenUsage usage={run} />
+    </>
   );
 }
 
@@ -387,21 +336,30 @@ export function RunLogScreen({ id }: { id: string }) {
   const [tab, setTab] = useState("all");
   const [filter, setFilter] = useState("");
   const [follow, setFollow] = useState(true);
+  const [allOpen, setAllOpen] = useState(false);
+  const [turnOpen, setTurnOpen] = useState<Record<number, boolean>>({});
+  const [toolOpen, setToolOpen] = useState<Record<string, boolean>>({});
   const scroller = useRef<HTMLDivElement>(null);
+
+  const parentTurn = turnByEvent(d?.events ?? []);
+  const starts = turnStarts(d?.events ?? []);
   // Pair tools within each run before merging: sequence numbers and tool IDs
   // are scoped to their own run and can collide across delegated agents.
-  const entries = [
-    ...rowsOf(d?.events ?? []).map((row) => ({ row, source: undefined as Schemas["Run"] | undefined, runId: id })),
-    ...children.flatMap((child) => child.data ? rowsOf(child.data.events).map((row) => ({ row, source: child.data!.run, runId: child.data!.run.id })) : []),
+  const entries: Entry[] = [
+    ...rowsOf<RunEvent>(d?.events ?? []).map((row) => ({ row, source: undefined as Run | undefined, runId: id, turn: parentTurn.get(rowEvent(row).seq) ?? 0 })),
+    ...children.flatMap((child) => child.data ? rowsOf<RunEvent>(child.data.events).map((row) => ({ row, source: child.data!.run as Run | undefined, runId: child.data!.run.id, turn: turnAt(starts, rowEvent(row).at) })) : []),
   ].sort((a, b) => {
-    const ae = a.row.kind === "tool" ? a.row.call : a.row.e;
-    const be = b.row.kind === "tool" ? b.row.call : b.row.e;
+    const ae = rowEvent(a.row);
+    const be = rowEvent(b.row);
     return Date.parse(ae.at) - Date.parse(be.at) || a.runId.localeCompare(b.runId) || ae.seq - be.seq;
   });
-  const rows = entries.map(({ row }) => row);
+  const visible = entries.filter(({ row }) => !isTurnMarker(row));
+  const rows = visible.map(({ row }) => row);
   const counts = Object.fromEntries(Object.entries(TAB_FILTER).map(([k, f]) => [k, rows.filter(f).length]));
-  const shown = entries.filter(({ row, source }) => TAB_FILTER[tab](row) &&
+  const shown = visible.filter(({ row, source }) => TAB_FILTER[tab](row) &&
     (!filter || `${source?.agent.name ?? ""} ${rowText(row)}`.toLowerCase().includes(filter.toLowerCase())));
+  const groups = groupByTurn(shown, (e) => e.turn);
+  const lastTurn = Math.max(0, ...(d?.turns.map((t) => t.seq) ?? []), ...groups.map((g) => g.turn));
 
   const loaded = !!d;
   useEffect(() => {
@@ -412,7 +370,7 @@ export function RunLogScreen({ id }: { id: string }) {
   if (isError) {
     return (
       <>
-        <TopBar crumbs={[{ label: "Runs" }, { label: "Not found" }]} />
+        <TopBar crumbs={[{ label: "Runs", href: "/runs" }, { label: "Not found" }]} />
         <div className="p-6">
           <Banner tone="blocked" title="Couldn't load this run">
             {error.message}
@@ -434,13 +392,27 @@ export function RunLogScreen({ id }: { id: string }) {
     );
   }
   const run = d.run;
-  const st = STATE[run.state];
-  const live = !ENDED.includes(run.state);
+  const live = !RUN_ENDED.includes(run.state);
   const lastLog = [...d.turns].reverse().find((t) => t.has_log);
+  const crumbs: Crumb[] = [
+    ...(run.project_key ? [{ label: run.project_key, href: `/tickets?project=${encodeURIComponent(run.project_key)}`, mono: true }] : []),
+    ...(run.purpose === "ticket" && run.ticket_key
+      ? [{ label: run.ticket_key, href: `/tickets/${encodeURIComponent(run.ticket_key)}`, mono: true }]
+      : run.purpose === "planning"
+        ? [{ label: "Plans", href: workHref(run) ?? "/plans" }]
+        : [{ label: "Chat", href: workHref(run) ?? "/chat" }]),
+    { label: `Run ${run.id.slice(0, 8)}` },
+  ];
+  const tools = {
+    open: (key: string) => toolOpen[key] ?? allOpen,
+    toggle: (key: string) => setToolOpen((o) => ({ ...o, [key]: !(o[key] ?? allOpen) })),
+  };
+  const isOpen = (n: number) => turnOpen[n] ?? (allOpen || n === lastTurn);
+  const grandchildren = children.map((c) => c.data?.child_runs as Run[] | undefined);
   return (
     <div className="flex flex-col lg:h-dvh">
       <TopBar
-        crumbs={[{ label: run.planning_id ? "Plan" : run.ticket_key, href: run.planning_id ? `/plans?id=${run.planning_id}` : `/tickets/${run.ticket_key}`, mono: true }, { label: "Run log" }]}
+        crumbs={crumbs}
         actions={
           <>
             <ButtonLink href={`/settings/runner?run_id=${run.id}`} variant="outline">Environment</ButtonLink>
@@ -471,48 +443,23 @@ export function RunLogScreen({ id }: { id: string }) {
               </Button>
             )}
             {live && (
-              <Button variant="outline" icon="x" className="text-pill-blocked-fg" disabled={control.isPending} onClick={() => control.mutate("cancel")}>
+              <Button variant="outline" icon="x" className="text-pill-blocked-fg" disabled={control.isPending} onClick={() => { if (confirmCancel(run.agent.name)) control.mutate("cancel"); }}>
                 Cancel run
               </Button>
             )}
           </>
         }
       />
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b border-border-subtle px-6 py-3.5">
-        <div className="flex items-center gap-3">
-          <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} size="md" label={false} />
-          <div className="flex flex-col leading-tight">
-            <span className="flex items-center gap-2 font-semibold">
-              {run.agent.name}
-              <SmallPill tone={st.tone}>
-                {st.label}
-                {run.wait_reason && run.state === "waiting" ? ` · ${WAIT[run.wait_reason]}` : ""}
-              </SmallPill>
-            </span>
-            <span className="text-xs text-fg-tertiary">
-              {run.mode} · started {absoluteTime(run.started_at)}
-              {run.dispatched_by && ` · dispatched by ${run.dispatched_by.name}`}
-            </span>
-          </div>
-        </div>
-        <Stat label="Harness" value={run.harness} />
-        <Stat label="Model" value={run.model} />
-        <Stat label="Session" value={run.session_id ? `${run.session_id.slice(0, 8)}…` : "–"} />
-        <Stat label="Run time" value={duration(run.started_at, run.ended_at)} />
-        <Stat label="Tool calls" value={run.tool_calls} />
-        <Stat label="Tokens" value={compact(run.input_tokens + run.output_tokens)} />
-        <Stat label="Spend" value={runCost(run.cost_usd, run.cost_source)} />
-      </div>
-      <TokenUsage usage={run} />
-      {control.isError && (
+      <Header d={d} />
+      {control.isError && control.variables === "retry" && (
         <div className="px-6 pt-3">
-          <Banner tone="blocked" title={control.variables === "retry" ? "Couldn't retry the run" : "Couldn't change the run"}>
+          <Banner tone="blocked" title="Couldn't retry the run">
             {control.error.message}
           </Banner>
         </div>
       )}
+      <ActionBox d={d} />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <TurnsRail d={d} />
         <section aria-label="Events" className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-5 py-2.5">
             <Tabs
@@ -527,6 +474,16 @@ export function RunLogScreen({ id }: { id: string }) {
               ]}
             />
             <TextInput aria-label="Filter events" placeholder="Filter events" value={filter} onChange={(e) => setFilter(e.target.value)} className="ml-auto w-56 max-sm:w-full" />
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTurnOpen({});
+                setToolOpen({});
+                setAllOpen(!allOpen);
+              }}
+            >
+              {allOpen ? "Collapse all" : "Expand all"}
+            </Button>
             <Toggle checked={follow} onChange={setFollow} label="Follow" />
           </div>
           {run.outcome && !live && (
@@ -538,9 +495,6 @@ export function RunLogScreen({ id }: { id: string }) {
             <div className="px-5 pt-3"><Banner tone="blocked" title="Couldn't load delegated agent logs">Some delegated activity is unavailable. Open the delegated run or try again.</Banner></div>
           )}
           {children.some((child) => child.isPending) && <p role="status" className="px-5 py-2 text-xs text-fg-secondary">Loading delegated agent logs…</p>}
-          {run.state === "waiting" && run.wait_reason === "human_reply" && run.ticket_key && (
-            <ReplyBox run={run} question={latestQuestion(d.events)} lastSeq={d.events.at(-1)?.seq ?? 0} />
-          )}
           <div
             ref={scroller}
             role="log"
@@ -552,22 +506,33 @@ export function RunLogScreen({ id }: { id: string }) {
             }}
             className="min-h-0 flex-1 overflow-y-auto max-lg:max-h-[70dvh]"
           >
-          {shown.length ? (
-            <ol aria-live={follow ? "polite" : "off"}>
-              {shown.map(({ row, source, runId }) => (
-                <EventRow key={`${runId}:${row.kind === "tool" ? row.call.seq : row.e.seq}`} row={row} source={source} />
+          {groups.length ? (
+            <div aria-live={follow ? "polite" : "off"}>
+              {groups.map((g) => (
+                <TurnGroup
+                  key={g.turn}
+                  turn={g.turn}
+                  t={d.turns.find((t) => t.seq === g.turn)}
+                  runId={run.id}
+                  open={isOpen(g.turn)}
+                  onToggle={() => setTurnOpen((o) => ({ ...o, [g.turn]: !isOpen(g.turn) }))}
+                  items={g.items.map((entry) => (
+                    <EventRow key={`${entry.runId}:${rowEvent(entry.row).seq}`} entry={entry} plan={run.plan} tools={tools} runs={d.child_runs} />
+                  ))}
+                />
               ))}
-            </ol>
+            </div>
           ) : (
             <EmptyState icon="terminal" title={rows.length ? "No events match" : "No events yet"}>
               {rows.length ? "Try another tab or filter." : run.state === "queued" ? "The run starts when a runner slot is free." : "Events appear as the harness works."}
             </EmptyState>
           )}
           <p className="px-5 py-4 text-xs text-fg-tertiary">
-            Normalized events. The raw harness stream of each turn is kept with the run ({run.mode === "managed" ? "raw links in Turns" : "unmanaged sessions have none"}).
+            Normalized events. The raw harness stream of each turn is kept with the run ({run.mode === "managed" ? "raw links on each turn" : "unmanaged sessions have none"}).
           </p>
           </div>
         </section>
+        <RunRail d={d} grandchildren={grandchildren} />
       </div>
       {!follow && (
         <Button
