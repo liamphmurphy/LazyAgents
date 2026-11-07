@@ -2,6 +2,7 @@ package agents_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/agents"
@@ -50,13 +51,13 @@ func TestEnsureAssistant(t *testing.T) {
 			t.Fatal("the assistant is in the roster")
 		}
 	}
-	if _, err := (&tracker.Service{Pool: pool}).Create(ctx, ws, tracker.UserActor(me.ID), tracker.NewTicket{ProjectKey: "PAY", Title: "For the assistant", AssigneeAgentID: &a.ID}); err == nil {
+	if _, err := (&tracker.Service{Pool: pool}).Create(ctx, ws, tracker.UserActor(me.ID), tracker.NewTicket{ProjectKey: "PAY", Title: "For the assistant", AssigneeAgentID: &a.ID}); err == nil || !strings.Contains(err.Error(), "Personal Assistant") {
 		t.Fatal("assigned a ticket to the assistant")
 	}
-	if _, err := svc.SaveDefinition(ctx, ws, me.ID, a.Handle, agents.Identity{Name: "PA", Kind: agents.KindMain}, spec, "Make it main"); err == nil {
+	if _, err := svc.SaveDefinition(ctx, ws, me.ID, a.Handle, agents.Identity{Name: "PA", Kind: agents.KindMain}, spec, "Make it main"); err == nil || !strings.Contains(err.Error(), "managed by LazyAgents") {
 		t.Fatal("edited the assistant into a main agent")
 	}
-	if err := svc.Delete(ctx, ws, a.Handle); err == nil {
+	if err := svc.Delete(ctx, ws, a.Handle); err == nil || !strings.Contains(err.Error(), "can't be deleted") {
 		t.Fatal("deleted the assistant")
 	}
 }

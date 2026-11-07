@@ -145,7 +145,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		}
 	}
 	if seen != len(allowed)+len(needArgs) {
-		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed))
+		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed)+len(needArgs))
 	}
 
 	// Writes use the chat project, without needing an execution ticket.
