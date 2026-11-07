@@ -1,18 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { DropdownMenu } from "radix-ui";
 import { useState, type ReactNode } from "react";
-import type { AgentDetail, AgentKind, AgentSpec, Harness, ScopeMode } from "@/lib/api/client";
+import type { AgentDetail, AgentKind, AgentSpec, Harness } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
-import { enforcementFor, MODE_LABEL } from "@/lib/enforcement";
+import { MODE_LABEL } from "@/lib/enforcement";
 import { Button, IconButton } from "@/components/ui/button";
 import { Segmented, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
-import { Card, Field, TextArea, TextInput } from "@/components/ui/primitives";
+import { Card, Field, TextInput } from "@/components/ui/primitives";
 import { AGENT_HUES, AgentAvatar } from "@/components/domain/avatars";
-import { EnforcementChip, MonoChip } from "@/components/domain/labels";
-import { floatPanel } from "@/components/domain/pickers";
+import { MonoChip } from "@/components/domain/labels";
 
 export type Draft = { name: string; role: string; specialty: string; color_index: number; kind: AgentKind; spec: AgentSpec };
 
@@ -26,11 +24,6 @@ export function draftOf(d: AgentDetail): Draft {
     spec: structuredClone(d.spec),
   };
 }
-
-const MODES: Array<{ value: ScopeMode; label: string }> = (["allowed", "requires_approval", "denied"] as const).map((m) => ({
-  value: m,
-  label: MODE_LABEL[m],
-}));
 
 /** A one-line summary of what changed, used as the version note. */
 export function describeChanges(a: Draft, b: Draft): string {
@@ -133,66 +126,6 @@ function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; se
   );
 }
 
-const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
-
-/** Playbooks loaded on demand: native skills on Claude Code, an AGENTS.md index elsewhere. */
-function SkillsCard({ spec, set }: { spec: AgentSpec; set: (p: Partial<AgentSpec>) => void }) {
-  const skills = spec.skills ?? [];
-  const [open, setOpen] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const nameOk = SKILL_NAME.test(name) && !skills.some((k) => k.name === name);
-  const update = (i: number, patch: Partial<(typeof skills)[number]>) => set({ skills: skills.map((k, j) => (j === i ? { ...k, ...patch } : k)) });
-  return (
-    <Card title="Skills" bodyClassName="p-0" action={<span className="text-xs text-fg-tertiary">{skills.length} attached</span>}>
-      <p className="px-[18px] pt-3 text-xs text-fg-tertiary">
-        Reusable playbooks. The agent sees each <em>description</em> and reads the full instructions only when a task matches, so keep descriptions specific. On Claude Code they are
-        native skills; Codex and OpenCode load the same playbooks via <code className="inline">AGENTS.md</code> / <code className="inline">.agents/skills</code>.
-      </p>
-      <ul className="mt-2">
-        {skills.map((k, i) => {
-          const isOpen = open === k.name;
-          return (
-            <li key={i} className="border-t border-border-row">
-              <div className="flex items-center gap-3 px-[18px] py-2.5 text-[13px]">
-                <Icon name="wiki" size={14} className="text-fg-tertiary" />
-                <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : k.name)} className="flex min-w-0 flex-1 items-baseline gap-3 text-left">
-                  <span className="font-mono text-[12.5px]">{k.name}</span>
-                  <span className="min-w-0 truncate text-xs text-fg-tertiary">{k.description}</span>
-                </button>
-                <IconButton icon="trash" label={`Remove skill ${k.name}`} onClick={() => set({ skills: skills.filter((_, j) => j !== i) })} />
-              </div>
-              {isOpen && (
-                <div className="flex flex-col gap-3 px-[18px] pb-4">
-                  <Field label="Use when…" htmlFor={`sk-desc-${i}`} hint="One line the agent matches tasks against.">
-                    <TextInput id={`sk-desc-${i}`} value={k.description} maxLength={1024} onChange={(e) => update(i, { description: e.target.value })} />
-                  </Field>
-                  <Field label="Instructions" htmlFor={`sk-body-${i}`} hint="Markdown. Up to 64 KB.">
-                    <TextArea id={`sk-body-${i}`} mono rows={14} value={k.body} onChange={(e) => update(i, { body: e.target.value })} />
-                  </Field>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <form
-        className="flex flex-wrap items-center gap-2 border-t border-border-subtle px-[18px] py-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!nameOk) return;
-          set({ skills: [...skills, { name, description: "", body: "" }] });
-          setOpen(name);
-          setName("");
-        }}
-      >
-        <TextInput mono aria-label="New skill name" placeholder="skill-name" className="w-56" value={name} onChange={(e) => setName(e.target.value.toLowerCase())} />
-        <Button type="submit" variant="outline" icon="plus" disabled={!nameOk}>Add skill</Button>
-        {name && !nameOk && <span className="text-xs text-fg-tertiary">Lowercase letters, digits and -; must be unique.</span>}
-      </form>
-    </Card>
-  );
-}
-
 function SectionCard({ title, action, children, bodyClassName }: { title: string; action?: ReactNode; children: ReactNode; bodyClassName?: string }) {
   return (
     <Card title={title} action={action} bodyClassName={cx("flex flex-col gap-4 px-[18px] py-4", bodyClassName)}>
@@ -208,15 +141,13 @@ const CAP_LABELS: Array<[keyof AgentDetail["harnesses"][number], string]> = [
   ["resume", "resume sessions"],
 ];
 
+/** Settings: identity, runtime, memory, MCP servers, fallbacks and harness options. Instructions, scopes and skills have their own tabs. */
 export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDetail; draft: Draft; onChange: (d: Draft) => void }) {
   const spec = draft.spec;
   const set = (patch: Partial<AgentSpec>) => onChange({ ...draft, spec: { ...spec, ...patch } });
   const harness = detail.harnesses.find((h) => h.name === spec.harness);
-  const [newScope, setNewScope] = useState("");
   const [newServer, setNewServer] = useState({ name: "", url: "" });
   const [newOption, setNewOption] = useState({ harness: spec.harness as Harness, key: "", value: "" });
-  const scopes = Object.keys(spec.scopes).sort();
-  const catalogFree = detail.catalog.filter((c) => !(c.scope in spec.scopes));
 
   return (
     <div className="flex flex-col gap-4">
@@ -350,113 +281,6 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
       </SectionCard>
 
       <MemoryCard handle={detail.agent.handle} spec={spec} set={set} />
-
-      <SectionCard title="Instructions" action={<span className="text-xs text-fg-tertiary">Markdown</span>}>
-        <TextArea aria-label="Instructions" mono rows={9} value={spec.instructions} onChange={(e) => set({ instructions: e.target.value })} />
-        <p className="-mt-2 text-xs text-fg-tertiary">
-          Written to <code className="inline">AGENTS.md</code> in the run workspace. If the repo already has one, this goes in a marked section and the repo&apos;s content is kept. Projects can append.
-        </p>
-      </SectionCard>
-
-      <SkillsCard spec={spec} set={set} />
-
-      <Card
-        title="Permissions"
-        bodyClassName="p-0"
-        action={
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <Button variant="outline" icon="plus">
-                Add scope
-              </Button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[300px]")}>
-                {catalogFree.map((c) => (
-                  <DropdownMenu.Item
-                    key={c.scope}
-                    onSelect={() => set({ scopes: { ...spec.scopes, [c.scope]: "requires_approval" } })}
-                    className="flex cursor-default flex-col rounded-md px-2 py-1.5 outline-none data-[highlighted]:bg-hover"
-                  >
-                    <span className="font-mono text-xs">{c.scope}</span>
-                    <span className="text-[11.5px] text-fg-tertiary">{c.description}</span>
-                  </DropdownMenu.Item>
-                ))}
-                <form
-                  className="mt-1 flex gap-1.5 border-t border-border-subtle p-1.5"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const s = newScope.trim().toLowerCase();
-                    if (/^[a-z][a-z0-9-]*:([a-z0-9][a-z0-9-]*|\*)$/.test(s)) {
-                      set({ scopes: { ...spec.scopes, [s]: "requires_approval" } });
-                      setNewScope("");
-                    }
-                  }}
-                >
-                  <TextInput mono aria-label="Custom scope" placeholder="custom:scope" value={newScope} onChange={(e) => setNewScope(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
-                  <Button type="submit" variant="secondary">Add</Button>
-                </form>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-        }
-      >
-        <p className="px-[18px] pt-3 text-xs text-fg-tertiary">
-          Projects can only tighten these. &ldquo;Enforced by&rdquo; shows how strongly each holds on {harness?.label}. New scopes start at Approval.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-[13px]">
-            <thead>
-              <tr className="text-left text-[12.5px] text-fg-tertiary">
-                <th className="px-[18px] py-2.5 font-normal">Scope</th>
-                <th className="px-2 py-2.5 font-normal">Mode</th>
-                <th className="px-2 py-2.5 font-normal">Enforced by</th>
-                <th className="px-2 py-2.5 font-normal">How</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {scopes.map((s) => {
-                const mode = spec.scopes[s];
-                const { enforcement, how } = enforcementFor(s, mode, spec.harness, detail);
-                const info = detail.catalog.find((c) => c.scope === s);
-                return (
-                  <tr key={s} className="border-t border-border-row">
-                    <td className="px-[18px] py-2.5">
-                      <div className="font-mono text-[12.5px]">{s}</div>
-                      {info && <div className="text-xs text-fg-tertiary">{info.description}</div>}
-                    </td>
-                    <td className="px-2">
-                      <Segmented small label={`Mode for ${s}`} value={mode} options={MODES} onChange={(m) => set({ scopes: { ...spec.scopes, [s]: m } })} />
-                    </td>
-                    <td className="px-2">
-                      <EnforcementChip level={enforcement} />
-                    </td>
-                    <td className="px-2 text-xs text-fg-secondary">{how}</td>
-                    <td className="pr-3">
-                      <IconButton
-                        icon="trash"
-                        label={`Remove ${s}`}
-                        onClick={() => {
-                          const next = { ...spec.scopes };
-                          delete next[s];
-                          set({ scopes: next });
-                        }}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t border-border-subtle px-[18px] py-3 text-xs text-fg-tertiary">
-          <span className="flex items-center gap-1.5"><EnforcementChip level="credential" /> the secret is only in the container when allowed</span>
-          <span className="flex items-center gap-1.5"><EnforcementChip level="brokered" /> LazyAgents runs it; the agent never holds the secret</span>
-          <span className="flex items-center gap-1.5"><EnforcementChip level="harness" /> best-effort harness tool rules</span>
-          <span className="flex items-center gap-1.5"><EnforcementChip level="none" /> instructions only</span>
-        </div>
-      </Card>
 
       <Card title="MCP servers" bodyClassName="p-0">
         <ul>
