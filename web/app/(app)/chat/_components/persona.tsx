@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useSyncExternalStore, type CSSProperties } from "react";
+import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import { DropdownMenu } from "radix-ui";
 import type { Schemas } from "@/lib/api/client";
 import { usePersonas } from "@/lib/api/hooks";
@@ -34,11 +34,14 @@ export const toneLabel = (t?: Schemas["PersonaTone"]) => (t ? TONE[t] : "Neutral
 /** Avatar image cropped to a circle, or the initial on a tint of the persona color. */
 export function PersonaAvatar({ persona, size = 20, className }: { persona: PersonaLook; size?: number; className?: string }) {
   const style: CSSProperties = { width: size, height: size };
-  if (persona.avatar_url) {
+  // An avatar that fails to load (removed, stale ?v=) falls back to the initial.
+  const [broken, setBroken] = useState<string>();
+  if (persona.avatar_url && broken !== persona.avatar_url) {
+    const src = persona.avatar_url;
     return (
       // A same-origin, private, cache-busted URL: next/image would only add a proxy hop.
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={persona.avatar_url} alt="" aria-hidden className={cx("flex-none rounded-full object-cover", className)} style={style} />
+      <img src={src} alt="" aria-hidden onError={() => setBroken(src)} className={cx("flex-none rounded-full object-cover", className)} style={style} />
     );
   }
   return (
@@ -344,7 +347,7 @@ export function PersonaGreeting({
       <PersonaAvatar persona={persona} size={56} className="text-2xl" />
       <h2 className="mt-2 text-xl font-semibold text-fg">
         {firstName ? `Hi ${firstName}, I’m ` : "I’m "}
-        <span style={{ color: persona.color }}>{persona.name}</span>.
+        {persona.id ? <span style={{ color: persona.color }}>{persona.name}</span> : "your assistant"}.
       </h2>
       <p className="text-[13px] text-fg-secondary">
         A new conversation{isDefault ? " with your default persona" : ""}

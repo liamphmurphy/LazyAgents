@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tooltip } from "radix-ui";
-import { ApiError, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import {
   chatKeys,
   useBootstrap,
@@ -104,6 +104,29 @@ function Bubble({ m, groups, chat, persona, saveable, names, turn }: { m: Messag
   );
 }
 
+const DRAFT_KEY = (id: string) => `lazyagents.chat-draft:${id}`;
+function putDraft(id: string, text: string) {
+  try {
+    sessionStorage.setItem(DRAFT_KEY(id), text);
+  } catch {
+    /* No storage: the draft is lost, as before. */
+  }
+}
+function readDraft(id: string): string {
+  try {
+    return sessionStorage.getItem(DRAFT_KEY(id)) ?? "";
+  } catch {
+    return "";
+  }
+}
+function dropDraft(id: string) {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY(id));
+  } catch {
+    /* Nothing stored. */
+  }
+}
+
 /**
  * Each turn's last assistant reply gets the window of events between its user
  * message and the next one, so a turn's memory notices show once, under its answer.
@@ -135,7 +158,10 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const create = useCreateChat();
   const discard = useDeleteChat();
   const qc = useQueryClient();
-  const [text, setText] = useState("");
+  // A persona switch hands the unsent draft over to the new chat.
+  const [text, setText] = useState(() => readDraft(id));
+  // Read once into state, then forget it (an effect, so a StrictMode re-render still sees it).
+  useEffect(() => dropDraft(id), [id]);
   const [picked, setPicked] = useState<Selection | null>(null);
   // A pick on another harness waits here until the person confirms what the switch loses.
   const [confirming, setConfirming] = useState<Selection | null>(null);
@@ -151,7 +177,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const loaded = !!c;
   const running = c?.state === "running";
   const stopping = running && (cancel.isPending || cancel.isSuccess);
-  const locked = running || send.isPending;
+  // Also locked while a persona switch creates the replacement chat, so nothing is sent to the one it drops.
+  const locked = running || send.isPending || create.isPending;
   const groups: Groups = models.data;
   const current: Selection | undefined = c && { harness: c.harness, model: c.model };
   const selection = picked ?? current;
@@ -215,13 +242,18 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // so switching starts a fresh chat with the other persona and drops this empty one.
   const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
   function switchPersona(personaId: string) {
-    if (!c || personaId === c.persona?.id || create.isPending) return;
+    if (!c || personaId === c.persona?.id || create.isPending || send.isPending || send.isSuccess) return;
+    const old = c;
     create.mutate(
-      { project: c.project, persona_id: personaId, harness: c.harness, model: c.model },
+      { project: old.project, persona_id: personaId, harness: old.harness, model: old.model },
       {
-        onSuccess: (next) => {
-          router.replace(`/chat/${next.id}?project=${encodeURIComponent(c.project)}`);
-          discard.mutate(c.id);
+        onSuccess: async (next) => {
+          if (text.trim()) putDraft(next.id, text);
+          router.replace(`/chat/${next.id}?project=${encodeURIComponent(old.project)}`);
+          // Only drop the old chat if it is still empty (a message may have come from another tab).
+          // If the check or the delete fails, the empty chat just stays in the list.
+          const latest = await unwrap(api.GET("/chats/{id}", { params: { path: { id: old.id } } })).catch(() => undefined);
+          if (latest && latest.message_count === 0 && latest.state !== "running") discard.mutate(old.id);
         },
       },
     );
@@ -267,10 +299,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
         <DropOverlay over={drop.over} />
         <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
           <h1 className="type-heading truncate">{chatTitle(c)}</h1>
-          <span
-            className="flex flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden"
-            aria-label={`Persona: ${persona.name}`}
-          >
+          <span className="flex flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden">
+            <span className="sr-only">Persona: </span>
             <PersonaAvatar persona={persona} size={16} />
             <PersonaName persona={persona} />
           </span>

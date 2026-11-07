@@ -390,8 +390,8 @@ export function ChatScreen({ id }: { id?: string }) {
   }, [id, attaching, newest, project, router, search]);
 
   function newConversation() {
-    // An empty current conversation is already new.
-    if (id && current.data?.message_count === 0) return;
+    // An empty current conversation with the default persona is already new.
+    if (id && current.data?.message_count === 0 && current.data.persona?.id === personas.data?.default_persona_id) return;
     // New conversations use the default persona; the composer can switch it before the first message.
     const persona_id = personas.data?.default_persona_id;
     create.mutate({ project, ...(persona_id ? { persona_id } : {}) }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
