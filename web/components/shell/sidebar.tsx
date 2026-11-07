@@ -77,8 +77,12 @@ function ProjectSwitcher({ projects, current }: { projects: ScopedProject[]; cur
   const search = useSearchParams();
   function pick(value: string) {
     const key = value || null;
-    rememberProject(key);
     const href = switchHref(pathname, new URLSearchParams(search.toString()), key);
+    // A chosen project is remembered when its route opens (useProjectScope);
+    // remembering first would also fire the chooser page's own redirect.
+    // "All projects" must be forgotten before navigating, or the bare route
+    // would redirect back to the old project.
+    if (!href || !key) rememberProject(key);
     if (href) router.push(href);
   }
   return (
@@ -139,7 +143,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
   const search = useSearchParams();
   const remembered = useRememberedProject();
   const active = projects.filter((p) => !p.archived);
-  const current = currentProject(pathname, search.get("project"), remembered, projects);
+  const current = currentProject(pathname, search, remembered, projects);
   const counts: Record<NavBadge, number> = { inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions };
   return (
     <aside className="flex flex-[1_1_232px] flex-col gap-5 border-r border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3">

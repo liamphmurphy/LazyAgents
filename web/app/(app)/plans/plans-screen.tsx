@@ -219,7 +219,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
             once their blockers are Done.
           </p>
           {plan.epic_id && (
-            <ButtonLink variant="outline" href={`/epics?epic=${plan.epic_id}`}>
+            <ButtonLink variant="outline" href={`/epics?epic=${plan.epic_id}&project=${encodeURIComponent(plan.project)}`}>
               View epic
             </ButtonLink>
           )}

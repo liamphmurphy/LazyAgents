@@ -116,3 +116,21 @@ test("Runs lists live work and marks the nav item current", async ({ page }) => 
   await expect(row).toHaveAttribute("href", "/runs/11111111-1111-4111-8111-111111111111");
   expect(api.unhandled).toEqual([]);
 });
+
+test("cross-project links keep all projects while bare routes use the remembered one", async ({ page }) => {
+  const api = await installBoardApi(page);
+  await page.goto("/board?project=OPS");
+  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
+
+  // e.g. an agent's "Review assigned tickets" link: not narrowed to OPS.
+  await page.goto("/tickets?view=all&assignee=builder");
+  await expect(page.getByRole("link", { name: "Build ticket modal" })).toBeVisible();
+  await expect(page).toHaveURL(/\/tickets\?view=all&assignee=builder$/);
+  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: All projects");
+
+  // Opening the route itself resolves to the remembered project.
+  await page.goto("/tickets");
+  await expect(page).toHaveURL(/\/tickets\?project=OPS$/);
+  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
+  expect(api.unhandled).toEqual([]);
+});

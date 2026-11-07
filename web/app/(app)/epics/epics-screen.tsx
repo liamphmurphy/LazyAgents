@@ -352,7 +352,7 @@ function Featured({ epic: e }: { epic: EpicOverview }) {
         <h3 className="text-xs font-medium text-fg-secondary">Tickets</h3>
         <Link
           className="text-xs text-fg-secondary hover:text-accent"
-          href={`/tickets?view=all&epic=${e.epic.id}`}
+          href={`/tickets?view=all&epic=${e.epic.id}&project=${encodeURIComponent(e.project.key)}`}
         >
           View all {e.counts.total} →
         </Link>

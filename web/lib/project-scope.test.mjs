@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NAV_GROUPS, currentProject, isActive, projectSection, resolveProject, switchHref, withProject } from "./project-scope.ts";
+import { NAV_GROUPS, currentProject, hasFilters, isActive, projectSection, resolveProject, switchHref, withProject } from "./project-scope.ts";
 
 const web = { key: "WEB", name: "Web app", color: "#6e56cf", archived: false };
 const ops = { key: "OPS", name: "Operations", color: "#3e9bff", archived: false };
@@ -60,9 +60,22 @@ test("switchHref rewrites the current project route and drops project-bound para
 });
 
 test("currentProject prefers the URL on project routes and hides archived projects", () => {
-  assert.equal(currentProject("/board", "OPS", "WEB", projects), ops);
-  assert.equal(currentProject("/inbox", "OPS", "WEB", projects), web);
-  assert.equal(currentProject("/board", "OLD", "WEB", projects), undefined);
-  assert.equal(currentProject("/inbox", null, "OLD", projects), undefined);
-  assert.equal(currentProject("/inbox", null, null, projects), undefined);
+  const q = (s) => new URLSearchParams(s);
+  assert.equal(currentProject("/board", q("project=OPS"), "WEB", projects), ops);
+  assert.equal(currentProject("/inbox", q("project=OPS"), "WEB", projects), web);
+  assert.equal(currentProject("/board", q("project=OLD"), "WEB", projects), undefined);
+  assert.equal(currentProject("/inbox", q(""), "OLD", projects), undefined);
+  assert.equal(currentProject("/inbox", q(""), null, projects), undefined);
+  assert.equal(currentProject("/tickets/WEB-1", q(""), "WEB", projects), web);
+});
+
+test("cross-project links on optional routes show All projects, bare routes the remembered one", () => {
+  const q = (s) => new URLSearchParams(s);
+  assert.equal(hasFilters(q("project=WEB")), false);
+  assert.equal(hasFilters(q("view=all&assignee=builder")), true);
+  assert.equal(currentProject("/tickets", q("view=all&assignee=builder"), "WEB", projects), undefined);
+  assert.equal(currentProject("/epics", q("epic=e1"), "WEB", projects), undefined);
+  assert.equal(currentProject("/tickets", q(""), "WEB", projects), web);
+  // Required routes always need one project.
+  assert.equal(currentProject("/board", q("epic=e1"), "WEB", projects), web);
 });

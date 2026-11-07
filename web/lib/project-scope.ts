@@ -89,6 +89,15 @@ export function switchHref(pathname: string, search: URLSearchParams, key: strin
   return qs ? `${base}?${qs}` : base;
 }
 
+/**
+ * A URL with filters but no project (/tickets?assignee=…, /epics?epic=…) is a
+ * deliberate cross-project link: optional routes honor it instead of narrowing
+ * it to the remembered project.
+ */
+export function hasFilters(search: URLSearchParams): boolean {
+  return [...search.keys()].some((k) => k !== "project");
+}
+
 export type ProjectResolution<P extends ScopedProject = ScopedProject> =
   /** The URL names an active project. */
   | { state: "project"; project: P }
@@ -116,14 +125,20 @@ export function resolveProject<P extends ScopedProject>(
   return { state: "none" };
 }
 
-/** The project the switcher shows: the URL's on project routes, else the remembered one. */
+/**
+ * The project the switcher shows: the URL's on project routes, nothing on a
+ * cross-project link (it lists all projects), else the remembered one.
+ */
 export function currentProject<P extends ScopedProject>(
   pathname: string,
-  requested: string | null | undefined,
+  search: URLSearchParams,
   remembered: string | null | undefined,
   projects: P[],
 ): P | undefined {
   const active = projects.filter((p) => !p.archived);
-  if (projectSection(pathname) && requested) return active.find((p) => p.key === requested);
+  const section = projectSection(pathname);
+  const requested = search.get("project");
+  if (section && requested) return active.find((p) => p.key === requested);
+  if (section === pathname && PROJECT_ROUTES[section] === "optional" && hasFilters(search)) return undefined;
   return remembered ? active.find((p) => p.key === remembered) : undefined;
 }

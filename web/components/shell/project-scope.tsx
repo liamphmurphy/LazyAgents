@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap } from "@/lib/api/hooks";
-import { PROJECT_ROUTES, resolveProject, withProject, type ProjectMode } from "@/lib/project-scope";
+import { PROJECT_ROUTES, hasFilters, resolveProject, withProject, type ProjectMode } from "@/lib/project-scope";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState, Skeleton } from "@/components/ui/primitives";
 import type { Crumb } from "./topbar";
@@ -59,7 +59,9 @@ export type ProjectScope =
 /**
  * The project of a project route: ?project= first, then the remembered project
  * (URL replaced so links and reloads keep it), then a chooser or all projects.
- * skip: the page takes its project from elsewhere (an open chat); no redirect.
+ * Optional routes opened with filters but no project (a cross-project link)
+ * list all projects instead. skip: the page takes its project from elsewhere
+ * (an open chat or plan); no redirect.
  */
 export function useProjectScope(mode: ProjectMode, { skip = false }: { skip?: boolean } = {}): ProjectScope {
   const boot = useBootstrap();
@@ -69,8 +71,9 @@ export function useProjectScope(mode: ProjectMode, { skip = false }: { skip?: bo
   const remembered = useRememberedProject();
   const requested = params.get("project");
   const projects = boot.data?.projects;
-  const resolution = !skip && projects && (requested || remembered !== undefined)
-    ? resolveProject(requested, remembered, projects)
+  const crossProject = mode === "optional" && hasFilters(params);
+  const resolution = !skip && projects && (requested || crossProject || remembered !== undefined)
+    ? resolveProject(requested, crossProject ? null : remembered, projects)
     : undefined;
   const visited = resolution?.state === "project" ? resolution.project.key : undefined;
   const redirect = resolution?.state === "redirect" ? resolution.key : undefined;
@@ -121,6 +124,13 @@ const WHY: Record<string, string> = {
 };
 
 export function ProjectChooser({ base, projects }: { base: string; projects: Project[] }) {
+  const params = useSearchParams();
+  // Keep the rest of the link (/board?epic=…, /chat?attach=…) when a project is picked.
+  const href = (key: string) => {
+    const next = new URLSearchParams(params.toString());
+    next.set("project", key);
+    return `${base}?${next}`;
+  };
   if (!projects.length) {
     return (
       <EmptyState
@@ -143,7 +153,7 @@ export function ProjectChooser({ base, projects }: { base: string; projects: Pro
         {projects.map((p) => (
           <li key={p.key}>
             <Link
-              href={withProject(base, p.key)}
+              href={href(p.key)}
               className="flex h-10 items-center gap-2.5 rounded-md border border-border-strong bg-surface-sunken px-3.5 text-[13px] text-fg hover:bg-hover"
             >
               <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: p.color }} />
