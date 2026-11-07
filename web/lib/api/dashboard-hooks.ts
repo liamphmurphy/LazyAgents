@@ -64,14 +64,14 @@ export function useDashboardBoards(projects: string[] | undefined) {
   });
 }
 
-/** What blocks each previewed ticket. Under ["tickets"]: a blocker finishing refreshes it. */
+/** Unmet blockers of each previewed ticket (anything not done, as the server counts them). Under ["tickets"]: a blocker finishing refreshes it. */
 export function useBlockers(keys: string[]) {
   return useQuery({
     queryKey: ["tickets", "dashboard-blockers", keys] as const,
     enabled: keys.length > 0,
     queryFn: async ({ signal }) => {
       const details = await Promise.all(keys.map((key) => unwrap(api.GET("/tickets/{key}", { params: { path: { key } }, signal }))));
-      return Object.fromEntries(details.map((t) => [t.key, t.blocked_by.filter((b) => b.status !== "done" && b.status !== "canceled")]));
+      return Object.fromEntries(details.map((t) => [t.key, t.blocked_by.filter((b) => b.status !== "done")]));
     },
   });
 }

@@ -200,7 +200,7 @@ export function DashboardScreen() {
                         <p className="truncate text-xs text-fg-tertiary">
                           {by?.length
                             ? <>Blocked by <Link href={`/tickets/${encodeURIComponent(by[0].key)}`} className="font-mono hover:text-accent">{by[0].key}</Link> · {by[0].title}{by.length > 1 && ` and ${by.length - 1} more`}</>
-                            : `Blocked by ${t.unmet_dependencies} open ${t.unmet_dependencies === 1 ? "ticket" : "tickets"}`}
+                            : `Blocked by ${t.unmet_dependencies} unfinished ${t.unmet_dependencies === 1 ? "ticket" : "tickets"}`}
                         </p>
                       </div>
                     </Row>

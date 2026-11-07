@@ -6,19 +6,18 @@ import (
 )
 
 func TestWeekStartIsMondayUTC(t *testing.T) {
-	want := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC) // Monday
-	for _, at := range []time.Time{
-		want,
-		time.Date(2026, 11, 4, 15, 30, 0, 0, time.UTC),                   // Wednesday
-		time.Date(2026, 11, 8, 23, 59, 0, 0, time.UTC),                   // Sunday
-		time.Date(2026, 11, 8, 18, 0, 0, 0, time.FixedZone("", -8*3600)), // Monday 02:00 UTC
+	monday := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+	next := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		at, want time.Time
+	}{
+		{monday, monday},
+		{time.Date(2026, 11, 4, 15, 30, 0, 0, time.UTC), monday},                 // Wednesday
+		{time.Date(2026, 11, 8, 23, 59, 0, 0, time.UTC), monday},                 // Sunday
+		{time.Date(2026, 11, 8, 18, 0, 0, 0, time.FixedZone("", -8*3600)), next}, // Monday 02:00 UTC
 	} {
-		got := weekStart(at)
-		if at.UTC().Weekday() == time.Monday && at.UTC().Day() == 9 {
-			want = time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
-		}
-		if !got.Equal(want) {
-			t.Errorf("weekStart(%s) = %s, want %s", at, got, want)
+		if got := weekStart(c.at); !got.Equal(c.want) {
+			t.Errorf("weekStart(%s) = %s, want %s", c.at, got, c.want)
 		}
 	}
 }
