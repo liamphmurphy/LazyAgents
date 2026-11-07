@@ -376,6 +376,27 @@ func (q *Queries) ChatTurnCitations(ctx context.Context, arg ChatTurnCitationsPa
 	return items, nil
 }
 
+const chatUserMentions = `-- name: ChatUserMentions :one
+SELECT EXISTS (
+  SELECT 1 FROM chat_messages m
+  WHERE m.role = 'user' AND strpos(m.body_md, $1::text) > 0
+    AND m.session_id IN (SELECT c.session_id FROM chat_messages c WHERE c.run_id = $2)
+) AS mentioned
+`
+
+type ChatUserMentionsParams struct {
+	Text  string
+	RunID *uuid.UUID
+}
+
+// Whether the person wrote text in this run's conversation (any segment).
+func (q *Queries) ChatUserMentions(ctx context.Context, arg ChatUserMentionsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, chatUserMentions, arg.Text, arg.RunID)
+	var mentioned bool
+	err := row.Scan(&mentioned)
+	return mentioned, err
+}
+
 const countChatHistory = `-- name: CountChatHistory :one
 SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('user', 'assistant')
 `
@@ -1085,6 +1106,38 @@ func (q *Queries) RenameChatSession(ctx context.Context, arg RenameChatSessionPa
 	return i, err
 }
 
+const runWebSearchEvents = `-- name: RunWebSearchEvents :many
+SELECT type, payload FROM run_events
+WHERE run_id = $1 AND type IN ('tool_call', 'tool_result') AND payload->>'tool' = 'WebSearch'
+ORDER BY seq
+`
+
+type RunWebSearchEventsRow struct {
+	Type    string
+	Payload json.RawMessage
+}
+
+// A run's WebSearch calls and results, for the WebFetch allowlist.
+func (q *Queries) RunWebSearchEvents(ctx context.Context, runID uuid.UUID) ([]RunWebSearchEventsRow, error) {
+	rows, err := q.db.Query(ctx, runWebSearchEvents, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RunWebSearchEventsRow{}
+	for rows.Next() {
+		var i RunWebSearchEventsRow
+		if err := rows.Scan(&i.Type, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setChatAgent = `-- name: SetChatAgent :exec
 UPDATE chat_sessions SET agent_id = $2 WHERE id = $1
 `
@@ -1202,32 +1255,4 @@ func (q *Queries) UpdateChatTitleArchived(ctx context.Context, arg UpdateChatTit
 		&i.LastMessageAt,
 	)
 	return i, err
-}
-
-const webFetchURLKnown = `-- name: WebFetchURLKnown :one
-SELECT EXISTS (
-  SELECT 1 FROM run_events e
-  WHERE e.run_id = $1 AND e.type = 'tool_result' AND e.payload->>'tool' = 'WebSearch'
-    AND COALESCE(e.payload->>'is_error', 'false') <> 'true'
-    AND strpos(e.payload->>'output', '"' || $2::text || '"') > 0
-) OR EXISTS (
-  SELECT 1 FROM chat_messages m
-  WHERE m.role = 'user' AND strpos(m.body_md, $2::text) > 0
-    AND m.session_id IN (SELECT c.session_id FROM chat_messages c WHERE c.run_id = $1)
-) AS known
-`
-
-type WebFetchURLKnownParams struct {
-	RunID uuid.UUID
-	Url   string
-}
-
-// A chat run may fetch only a URL the person wrote in the conversation or
-// that one of the run's own web searches returned (quoted in its Links JSON),
-// so injected instructions can't send data to an arbitrary address.
-func (q *Queries) WebFetchURLKnown(ctx context.Context, arg WebFetchURLKnownParams) (*bool, error) {
-	row := q.db.QueryRow(ctx, webFetchURLKnown, arg.RunID, arg.Url)
-	var known *bool
-	err := row.Scan(&known)
-	return known, err
 }

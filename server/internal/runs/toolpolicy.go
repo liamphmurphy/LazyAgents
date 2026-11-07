@@ -82,11 +82,11 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 		// A fetch can carry data out in its URL: only addresses the person
 		// gave or this run's searches returned (ADR "Assistant web access").
 		url, _ := in.Input["url"].(string)
-		known, err := q.WebFetchURLKnown(ctx, store.WebFetchURLKnownParams{RunID: run.ID, Url: strings.TrimSpace(url)})
+		known, err := webFetchAllowed(ctx, q, run.ID, url)
 		if err != nil {
 			return ToolDecision{}, err
 		}
-		if strings.TrimSpace(url) == "" || known == nil || !*known {
+		if !known {
 			return deny("Only open pages the person linked or that your web search returned; search first, then fetch a result URL exactly")
 		}
 		return ToolDecision{Decision: "allow"}, nil
