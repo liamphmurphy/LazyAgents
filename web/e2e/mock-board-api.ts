@@ -12,11 +12,12 @@ const stamp = (revision: number) => new Date(Date.UTC(2026, 10, 6, 12, 0, revisi
 /** In-memory LAZYAGENTS-29 contract, not a substitute for real-backend integration. */
 export async function installBoardApi(page: Page) {
   const epics: S["Epic"][] = ["Kanban board", "Other epic"].map((name, i) => ({
-    id: `epic-${i + 1}`, project_id: project.id, name, health: "on_track", requires_mockup: false,
+    id: `epic-${i + 1}`, project_id: project.id, name, health: i ? "at_risk" : "on_track", requires_mockup: false,
     status: "open", criteria_total: 2, criteria_done: 1, points_total: 0, points_done: 0, tickets_total: 0, tickets_open: 0,
   }));
   const criteria: S["EpicCriterion"][] = [
-    { id: "criterion-1", epic_id: "epic-1", position: 1, text: "Board shows all statuses", done: true },
+    { id: "criterion-1", epic_id: "epic-1", position: 1, text: "Board shows all statuses", done: true,
+      checked_by: { type: "agent", id: "agent-builder", name: "Builder" }, checked_at: stamp(1) },
     { id: "criterion-2", epic_id: "epic-1", position: 2, text: "Cards can move", done: false },
   ];
   function make(n: number, status: S["TicketStatus"], title: string, extra: Partial<S["Ticket"]> = {}): S["Ticket"] {
@@ -84,10 +85,11 @@ export async function installBoardApi(page: Page) {
       users: [], agents: [builder, reviewer], epics: epics.map(epicSummary), projects, labels: [],
       counts,
     } satisfies S["Bootstrap"]);
-    if (path === "/epics" && request.method() === "GET") return json({ epics: [epics[0]].map((e) => {
+    if (path === "/epics" && request.method() === "GET") return json({ epics: epics.map((e, i) => {
       const ts = tickets.filter((t) => t.epic?.id === e.id && t.status !== "canceled");
       const count = (s: S["TicketStatus"]) => ts.filter((t) => t.status === s).length;
-      return { epic: epicSummary(e), project, objective: "Ship the board", agents: [], agent_seconds: 0,
+      return { epic: epicSummary(e), project, objective: i ? "Other work" : "Ship the board", agents: [], agent_seconds: 0,
+        ...(i ? { target_date: "2026-01-15" } : { owner: { id: "user", name: "Liam", initials: "LM" }, start_date: "2026-11-01", target_date: "2099-12-01" }),
         counts: { total: ts.length, backlog: count("backlog"), todo: count("todo"), in_progress: count("in_progress"), in_review: count("in_review"), done: count("done") },
         tickets: ts.map((t) => ({ id: t.id, key: t.key, title: t.title, status: t.status, priority: t.priority })) };
     }) } satisfies S["EpicOverviewList"]);
@@ -144,7 +146,10 @@ export async function installBoardApi(page: Page) {
         return route.fulfill({ status: 204 });
       }
       if (body.text !== undefined) criterion.text = body.text;
-      if (body.done !== undefined) criterion.done = body.done;
+      if (body.done !== undefined) {
+        criterion.done = body.done;
+        Object.assign(criterion, body.done ? { checked_by: { type: "user", id: "user", name: "Liam" }, checked_at: new Date().toISOString() } : { checked_by: undefined, checked_at: undefined });
+      }
       if (body.position !== undefined) {
         const siblings = sorted().filter((c) => c.epic_id === criterion.epic_id && c !== criterion);
         siblings.splice(body.position - 1, 0, criterion);

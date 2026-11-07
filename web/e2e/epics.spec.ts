@@ -1,0 +1,88 @@
+import { expect, test } from "@playwright/test";
+import { installBoardApi } from "./mock-board-api";
+
+test("the overview shows each epic's progress and filters by status and health in the URL", async ({ page }) => {
+  const api = await installBoardApi(page);
+  await page.goto("/epics?project=WEB");
+  const board = page.getByRole("article", { name: "Kanban board" });
+  const other = page.getByRole("article", { name: "Other epic" });
+  await expect(board).toContainText("5 / 10 pts · 50%");
+  await expect(board).toContainText("1 / 2 met");
+  await expect(board).toContainText("3 open tickets");
+  await expect(board).toContainText("Liam");
+  await expect(board).toContainText("On track");
+  await expect(other).toContainText("0 / 8 pts · 0%");
+  await expect(other).toContainText("No owner");
+  // An open epic past its target date is flagged.
+  await expect(other).toContainText("Overdue ·");
+  // Needs attention puts the at-risk epic first.
+  await expect(page.getByRole("article")).toHaveText([/Other epic/, /Kanban board/]);
+  await page.getByLabel("Sort epics").selectOption("name");
+  await expect(page).toHaveURL(/sort=name/);
+  await expect(page.getByRole("article")).toHaveText([/Kanban board/, /Other epic/]);
+
+  await page.getByRole("radiogroup", { name: "Health" }).getByRole("radio", { name: "At risk" }).click();
+  await expect(page).toHaveURL(/health=at_risk/);
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(other).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("article")).toHaveCount(1);
+
+  await page.getByRole("radiogroup", { name: "Epic status" }).getByRole("radio", { name: /Done/ }).click();
+  await expect(page).toHaveURL(/status=done/);
+  await expect(page.getByRole("heading", { name: "No epics match" })).toBeVisible();
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page.getByRole("article")).toHaveCount(2);
+
+  await board.getByRole("link", { name: "Kanban board" }).click();
+  await expect(page).toHaveURL(/\/epics\/epic-1$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Kanban board" })).toBeVisible();
+  expect(api.unhandled).toEqual([]);
+});
+
+test("old ?epic= links open the detail page", async ({ page }) => {
+  await installBoardApi(page);
+  await page.goto("/epics?epic=epic-1&project=WEB");
+  await expect(page).toHaveURL(/\/epics\/epic-1$/);
+});
+
+test("epic detail shows the burn-up, board link, who checked criteria and the done gate", async ({ page }) => {
+  const api = await installBoardApi(page);
+  await page.goto("/epics/epic-1");
+  await expect(page.getByRole("heading", { level: 1, name: "Kanban board" })).toBeVisible();
+  await expect(page.getByText("Ship the board")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Board filtered to this epic" })).toHaveAttribute("href", "/board?project=WEB&epic=epic-1");
+  await expect(page.getByRole("img", { name: "Points burn-up: 5 of 10 points done (50%)" })).toBeVisible();
+
+  const panel = page.getByRole("region", { name: "Epic completion" });
+  const criteria = panel.getByRole("region", { name: "Final acceptance criteria" });
+  await expect(criteria.getByRole("listitem").first()).toContainText("Checked by Builder");
+  await criteria.getByLabel("Criterion 2 met").check();
+  await expect(criteria.getByRole("listitem").nth(1)).toContainText("Checked by Liam");
+
+  // Open tickets still block done; they are listed from done_blockers.
+  await expect(panel.getByRole("button", { name: "Mark epic done" })).toBeDisabled();
+  await expect(panel.getByRole("region", { name: "Done blockers" }).getByRole("list", { name: "Open tickets" }).getByRole("link"))
+    .toHaveText(["WEB-1 ↗", "WEB-2 ↗", "WEB-5 ↗"]);
+
+  // Tickets are grouped by status.
+  await expect(page.getByRole("region", { name: "Done tickets" })).toContainText("WEB-3");
+  await expect(page.getByRole("region", { name: "Todo tickets" })).toContainText("WEB-1");
+
+  // Once everything is closed the epic can be marked done, and reopened.
+  for (const key of ["WEB-1", "WEB-2", "WEB-5"]) api.editTicket(key, { status: "done" });
+  await api.emit("ticket.updated");
+  await page.reload();
+  await panel.getByRole("button", { name: "Mark epic done" }).click();
+  await expect(panel.getByRole("button", { name: "Reopen epic" })).toBeEnabled();
+  await panel.getByRole("button", { name: "Reopen epic" }).click();
+  await expect(panel.getByRole("button", { name: "Mark epic done" })).toBeEnabled();
+  expect(api.epicWrites.filter((w) => w.method === "PATCH" && w.path === "/epics/epic-1").map((w) => w.body)).toEqual([{ status: "done" }, { status: "open" }]);
+  expect(api.unhandled).toEqual([]);
+});
+
+test("an unknown epic shows not found", async ({ page }) => {
+  await installBoardApi(page);
+  await page.goto("/epics/nope");
+  await expect(page.getByRole("heading", { name: "Epic not found" })).toBeVisible();
+});
