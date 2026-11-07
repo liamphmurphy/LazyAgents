@@ -18,7 +18,8 @@ import (
 
 // Avatar uploads (ADR Decision 4). The type comes from the bytes, never from
 // the declared Content-Type or filename, and the whole file must be exactly
-// one well-formed PNG, JPEG or WebP: trailing data, a container that doesn't
+// one well-formed PNG, JPEG or WebP (a JPEG may carry appended JPEGs, such as
+// an Ultra HDR gain map): trailing data, a container that doesn't
 // parse, or HTML/SVG markup anywhere in the file is refused, so a polyglot
 // can't pass as an image.
 const (
@@ -57,10 +58,13 @@ func AvatarKey(o Owner, persona uuid.UUID) string {
 // markup catches HTML, SVG and script in a file that otherwise parses as an
 // image (in a PNG text chunk, a JPEG comment or a WebP metadata chunk). Each
 // token is long enough that compressed pixel data won't match it by chance.
-var markup = regexp.MustCompile(`(?i)<(?:script|html|svg|iframe|body|head|object|embed|style|meta|link|form|base)[\s/>]|<!doctype\s+html|javascript:`)
+// It's defence in depth: the real control is that avatars are only ever
+// served with an image Content-Type, nosniff and a sandbox CSP, so any new
+// path that serves these blobs must send the same headers.
+var markup = regexp.MustCompile(`(?i)<(?:script|html|svg|iframe|body|head|object|embed|style|meta|link|form|base|img|video|audio|math)[\s/>]|<!doctype\s+html|<\?xml-stylesheet|javascript:`)
 
 // CheckAvatar validates an uploaded avatar and returns its sniffed content
-// type. Empty is a 422 on file, over 1 MB a 413, anything that isn't a single
+// type. Empty is a 422 on file, over 1 MB a 413, anything that isn't a
 // clean PNG, JPEG or WebP a 415 (*AvatarError).
 func CheckAvatar(b []byte) (string, error) {
 	if len(b) == 0 {
@@ -151,44 +155,61 @@ func checkPNG(b []byte) error {
 		func(b []byte) error { _, err := png.Decode(bytes.NewReader(b)); return err })
 }
 
-// checkJPEG walks the marker segments and entropy-coded data from SOI to an
-// EOI that ends the file, then decodes the image.
+// checkJPEG walks the marker segments and entropy-coded data from SOI to EOI,
+// then decodes the image. Anything after that EOI must itself be one or more
+// complete JPEGs: Ultra HDR and gain-map photos append a second image there.
 func checkJPEG(b []byte) error {
+	end, err := walkJPEG(b)
+	if err != nil {
+		return err
+	}
+	for p := end; p < len(b); {
+		if len(b)-p < 2 || b[p] != 0xFF || b[p+1] != 0xD8 {
+			return trailing("JPEG")
+		}
+		n, err := walkJPEG(b[p:])
+		if err != nil {
+			return trailing("JPEG")
+		}
+		p += n
+	}
+	return checkDecoded("JPEG", b,
+		func(b []byte) (image.Config, error) { return jpeg.DecodeConfig(bytes.NewReader(b)) },
+		func(b []byte) error { _, err := jpeg.Decode(bytes.NewReader(b)); return err })
+}
+
+// walkJPEG returns the offset just past the EOI of the JPEG that starts b.
+func walkJPEG(b []byte) (int, error) {
 	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 {
-		return malformed("JPEG")
+		return 0, malformed("JPEG")
 	}
 	p := 2
 	for {
 		if p >= len(b) || b[p] != 0xFF {
-			return malformed("JPEG")
+			return 0, malformed("JPEG")
 		}
 		for p < len(b) && b[p] == 0xFF { // fill bytes
 			p++
 		}
 		if p >= len(b) {
-			return malformed("JPEG")
+			return 0, malformed("JPEG")
 		}
 		m := b[p]
 		p++
 		switch {
 		case m == 0xD9: // EOI
-			if p != len(b) {
-				return trailing("JPEG")
-			}
-			return checkDecoded("JPEG", b,
-				func(b []byte) (image.Config, error) { return jpeg.DecodeConfig(bytes.NewReader(b)) },
-				func(b []byte) error { _, err := jpeg.Decode(bytes.NewReader(b)); return err })
+			return p, nil
 		case m == 0x01 || (m >= 0xD0 && m <= 0xD7): // TEM, RSTn: no length
 			continue
 		case m == 0x00 || m == 0xD8:
-			return malformed("JPEG")
+			return 0, malformed("JPEG")
 		}
 		if len(b)-p < 2 {
-			return malformed("JPEG")
+			return 0, malformed("JPEG")
 		}
 		n := int(binary.BigEndian.Uint16(b[p:]))
 		if n < 2 || n > len(b)-p {
-			return malformed("JPEG")
+			return 0, malformed("JPEG")
 		}
 		p += n
 		if m == 0xDA { // SOS: skip entropy-coded data up to the next real marker
@@ -196,7 +217,7 @@ func checkJPEG(b []byte) error {
 				p++
 			}
 			if p >= len(b)-1 {
-				return malformed("JPEG")
+				return 0, malformed("JPEG")
 			}
 		}
 	}
