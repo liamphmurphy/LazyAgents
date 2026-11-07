@@ -235,3 +235,36 @@ test("the Export menu offers JSON and Markdown downloads", async ({ page }) => {
   expect(mock.memoryRequests.filter((r) => r === "GET /memories/export")).toHaveLength(2);
   expect(mock.unhandled).toEqual([]);
 });
+
+test("Import previews a pasted reply, saves it, and lists the entries as imported", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await openChat(page);
+  await page.getByRole("button", { name: /^Memory/ }).click();
+  await panel(page).getByRole("button", { name: "Import", exact: true }).click();
+  await expect(panel(page).getByRole("button", { name: "Import", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(panel(page).getByText("I'm moving to a new personal assistant called Vesper")).toBeVisible();
+  await expect(panel(page).getByRole("button", { name: "Copy prompt" })).toBeVisible();
+
+  const reply = [
+    "Sure, here is everything I know:",
+    "```json",
+    JSON.stringify({ memories: [
+      { title: "Prefers metric units", summary: "Uses km and Celsius.", type: "preference", tags: ["units"] },
+      { title: "Sister is Ana", summary: "Lives in Lisbon.", type: "person", tags: ["family"] },
+    ] }),
+    "```",
+    "Let me know if you need more!",
+  ].join("\n");
+  await panel(page).getByRole("textbox", { name: "2. Paste its reply" }).fill(reply);
+  await expect(panel(page)).toContainText("Found 2 memories");
+  await panel(page).getByRole("button", { name: "Import 2 memories" }).click();
+  await expect(panel(page)).toContainText("Added 2, updated 0");
+  expect(mock.memoryImports).toHaveLength(1);
+  expect(mock.memories.map((m) => m.title).sort()).toEqual(["Prefers metric units", "Sister is Ana"]);
+
+  await panel(page).getByRole("button", { name: "Done" }).click();
+  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page).first()).toContainText("imported");
+  await expect(rows(page).nth(1)).toContainText("imported");
+  expect(mock.unhandled).toEqual([]);
+});

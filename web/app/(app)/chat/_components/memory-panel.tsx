@@ -2,20 +2,22 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Schemas } from "@/lib/api/client";
 import {
   exportMemories,
   useDeleteAllMemories,
   useDeleteMemory,
+  useImportMemories,
   useMemories,
   useMemory,
   useUpdateMemory,
   type MemoryType,
 } from "@/lib/api/hooks";
-import { MEMORY_TYPES, memoriesMarkdown, parseTags, typeLabel } from "@/lib/memory-ui";
+import { IMPORT_PROMPT, MEMORY_TYPES, memoriesMarkdown, parseMemoryImport, parseTags, typeLabel } from "@/lib/memory-ui";
 import { cx } from "@/lib/cx";
 import { Button, IconButton } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 
@@ -77,6 +79,7 @@ function SourceText({ m }: { m: Memory }) {
     );
   if (m.source.startsWith("chat ")) return <>from a deleted conversation</>;
   if (!m.source || m.source === "manual") return <>added by you</>;
+  if (m.source === "import") return <>imported</>;
   return <>from {m.source}</>;
 }
 
@@ -289,6 +292,99 @@ function ExportMenu() {
   );
 }
 
+/** Import view: copy a prompt for another assistant, paste its reply, preview, then save. */
+function ImportView({ onClose }: { onClose: () => void }) {
+  const imp = useImportMemories();
+  const [text, setText] = useState("");
+  const parsed = useMemo(() => parseMemoryImport(text), [text]);
+  const result = imp.data;
+  const n = parsed.entries.length;
+  if (result)
+    return (
+      <div className="flex flex-col gap-3" data-testid="memory-import-result">
+        <p className="text-[13px] text-fg">
+          Added {result.created}, updated {result.updated}
+        </p>
+        {result.failed.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-pill-blocked-fg">{result.failed.length} couldn’t be saved:</p>
+            <ul className="flex flex-col gap-0.5 text-xs text-fg-secondary">
+              {result.failed.map((f) => (
+                <li key={f.index}>
+                  {f.title} — {f.error}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <Button variant="primary" className="self-start" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+    );
+  return (
+    <section aria-label="Import memories" className="flex flex-col gap-3">
+      <p className="text-[13px] text-fg-secondary">
+        Bring over what another assistant already knows about you. Nothing is saved until you confirm.
+      </p>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <p className="flex-1 text-[13px] text-fg">1. Copy this prompt into ChatGPT, Claude or another assistant</p>
+          <CopyButton text={IMPORT_PROMPT} label="Copy prompt" />
+        </div>
+        <pre
+          tabIndex={0}
+          aria-label="Prompt to copy"
+          className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-2 font-mono text-[11px] text-fg-secondary"
+        >
+          {IMPORT_PROMPT}
+        </pre>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="memory-import-text" className="text-[13px] text-fg">
+          2. Paste its reply
+        </label>
+        <TextArea id="memory-import-text" rows={6} value={text} placeholder="Paste the whole reply, including the code block" onChange={(e) => setText(e.target.value)} />
+      </div>
+      <div aria-live="polite" className="flex flex-col gap-1">
+        {parsed.error && (
+          <p role="alert" className="text-xs text-pill-blocked-fg">
+            {parsed.error}
+          </p>
+        )}
+        {!parsed.error && text.trim() && (
+          <>
+            <p className="text-[13px] text-fg">Found {n} {n === 1 ? "memory" : "memories"}</p>
+            {parsed.skipped > 0 && <p className="text-xs text-fg-tertiary">{parsed.skipped} skipped (retired or missing a title).</p>}
+            {n > 0 && (
+              <ul aria-label="Memories found" className="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-fg-secondary">
+                {parsed.entries.map((e, i) => (
+                  <li key={i}>
+                    {e.title} <span className="text-fg-tertiary">· {typeLabel(e.type)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
+      {imp.isError && (
+        <p role="alert" className="text-xs text-pill-blocked-fg">
+          {errorText(imp.error)}
+        </p>
+      )}
+      <div className="flex items-center gap-2">
+        <Button variant="primary" disabled={n === 0 || imp.isPending} onClick={() => imp.mutateAsync({ memories: parsed.entries }).then(() => undefined, () => undefined)}>
+          Import {n} {n === 1 ? "memory" : "memories"}
+        </Button>
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 function DeleteAll({ total }: { total?: number }) {
   const wipe = useDeleteAllMemories();
   const [asking, setAsking] = useState(false);
@@ -339,6 +435,7 @@ export function MemoryPanel() {
   const [type, setType] = useState<MemoryType | undefined>(undefined);
   const [pages, setPages] = useState(1);
   const [editing, setEditing] = useState<string | undefined>(undefined);
+  const [importing, setImporting] = useState(false);
   const count = useMemories();
   // Debounce search typing; a new search or filter starts from the first page.
   useEffect(() => {
@@ -349,7 +446,7 @@ export function MemoryPanel() {
     return () => clearTimeout(t);
   }, [text]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !editing && panel.close();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !editing && (importing ? setImporting(false) : panel.close());
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
@@ -363,47 +460,67 @@ export function MemoryPanel() {
         <h2 className="type-heading">Memory</h2>
         {total !== undefined && <span className="text-xs text-fg-tertiary">{total} entries</span>}
         <span className="flex-1" />
+        <button
+          type="button"
+          aria-pressed={importing}
+          onClick={() => setImporting((v) => !v)}
+          className={cx(
+            "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-[12.5px] text-fg",
+            importing ? "border-accent bg-selected" : "border-btn-secondary-border bg-btn-secondary hover:bg-hover",
+          )}
+        >
+          <Icon name="upload" size={14} />
+          Import
+        </button>
         <ExportMenu />
         <IconButton icon="x" label="Close memory" onClick={panel.close} />
       </div>
-      <div className="flex flex-col gap-2 px-4 pt-3">
-        <TextInput type="search" aria-label="Search memories" placeholder="Search memories" value={text} onChange={(e) => setText(e.target.value)} />
-        <div role="group" aria-label="Filter by type" className="flex flex-wrap gap-1">
-          {[undefined, ...MEMORY_TYPES].map((t) => (
-            <button
-              key={t ?? "all"}
-              type="button"
-              aria-pressed={type === t}
-              onClick={() => {
-                setType(t);
-                setPages(1);
-              }}
-              className={cx(
-                "rounded-md px-2.5 py-1 text-xs",
-                type === t ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
-              )}
-            >
-              {t ? typeLabel(t) : "All"}
-            </button>
-          ))}
+      {importing ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
+          <ImportView onClose={() => setImporting(false)} />
         </div>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-3">
-        {panel.focus && <Focused key={panel.focus} id={panel.focus} onDone={() => panel.show()} />}
-        {Array.from({ length: pages }, (_, i) => (
-          <Page
-            key={i}
-            q={q}
-            type={type}
-            offset={i * 50}
-            hide={panel.focus}
-            editing={editing}
-            setEditing={setEditing}
-            last={i === pages - 1}
-            onMore={() => setPages((n) => n + 1)}
-          />
-        ))}
-      </div>
+      ) : (
+        <>
+          <div className="flex flex-col gap-2 px-4 pt-3">
+            <TextInput type="search" aria-label="Search memories" placeholder="Search memories" value={text} onChange={(e) => setText(e.target.value)} />
+            <div role="group" aria-label="Filter by type" className="flex flex-wrap gap-1">
+              {[undefined, ...MEMORY_TYPES].map((t) => (
+                <button
+                  key={t ?? "all"}
+                  type="button"
+                  aria-pressed={type === t}
+                  onClick={() => {
+                    setType(t);
+                    setPages(1);
+                  }}
+                  className={cx(
+                    "rounded-md px-2.5 py-1 text-xs",
+                    type === t ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
+                  )}
+                >
+                  {t ? typeLabel(t) : "All"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-3">
+            {panel.focus && <Focused key={panel.focus} id={panel.focus} onDone={() => panel.show()} />}
+            {Array.from({ length: pages }, (_, i) => (
+              <Page
+                key={i}
+                q={q}
+                type={type}
+                offset={i * 50}
+                hide={panel.focus}
+                editing={editing}
+                setEditing={setEditing}
+                last={i === pages - 1}
+                onMore={() => setPages((n) => n + 1)}
+              />
+            ))}
+          </div>
+        </>
+      )}
       <div className="flex flex-col gap-2 border-t border-border-subtle px-4 py-3">
         <DeleteAll total={total} />
         <p className="text-[11.5px] text-fg-tertiary">

@@ -1730,6 +1730,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MemoryExport" }
         default: { $ref: "#/components/responses/Error" }
+  /memories/import:
+    post:
+      operationId: importMemories
+      summary: Add memories brought over from another assistant (e.g. ChatGPT or Claude)
+      description: |
+        Each entry is saved like the assistant's own save_memory: a near-duplicate
+        of an existing entry updates it instead of adding another, and text that
+        looks like a credential is refused. Entries are validated one by one, so
+        a bad entry lands in failed and the rest are still saved. Source is
+        recorded as "import".
+      tags: [memories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryImport" }
+      responses:
+        "200":
+          description: What was saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryImportResult" }
+        default: { $ref: "#/components/responses/Error" }
   /memories/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -2413,6 +2436,42 @@ components:
       properties:
         exported_at: { type: string, format: date-time }
         memories: { type: array, items: { $ref: "#/components/schemas/Memory" } }
+    MemoryImport:
+      type: object
+      required: [memories]
+      properties:
+        memories:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { $ref: "#/components/schemas/MemoryImportEntry" }
+    MemoryImportEntry:
+      type: object
+      description: One memory to add. Limits match MemoryPatch and are checked per entry.
+      required: [title]
+      properties:
+        title: { type: string }
+        summary: { type: string }
+        body: { type: string }
+        tags: { type: array, items: { type: string } }
+        type: { $ref: "#/components/schemas/MemoryType" }
+    MemoryImportResult:
+      type: object
+      required: [created, updated, failed]
+      properties:
+        created: { type: integer, description: New entries added }
+        updated: { type: integer, description: Existing near-duplicate entries updated instead }
+        failed:
+          type: array
+          description: Entries that weren't saved, in request order
+          items: { $ref: "#/components/schemas/MemoryImportFailure" }
+    MemoryImportFailure:
+      type: object
+      required: [index, title, error]
+      properties:
+        index: { type: integer, description: Position in the request's memories }
+        title: { type: string }
+        error: { type: string, description: "Why, e.g. title: must be 1–200 characters" }
     MemoryPatch:
       type: object
       properties:

@@ -1138,6 +1138,15 @@ export function useDeleteAllMemories() {
   });
 }
 
+/** Adds many entries at once; near-duplicates of existing ones update them. */
+export function useImportMemories() {
+  const done = useMemoryInvalidate();
+  return useMutation({
+    mutationFn: (body: Schemas["MemoryImport"]) => unwrap(api.POST("/memories/import", { body })),
+    onSuccess: done,
+  });
+}
+
 export function exportMemories() {
   return unwrap(api.GET("/memories/export"));
 }

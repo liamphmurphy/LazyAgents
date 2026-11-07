@@ -1333,6 +1333,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/memories/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add memories brought over from another assistant (e.g. ChatGPT or Claude)
+         * @description Each entry is saved like the assistant's own save_memory: a near-duplicate
+         *     of an existing entry updates it instead of adding another, and text that
+         *     looks like a credential is refused. Entries are validated one by one, so
+         *     a bad entry lands in failed and the rest are still saved. Source is
+         *     recorded as "import".
+         */
+        post: operations["importMemories"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/memories/{id}": {
         parameters: {
             query?: never;
@@ -1903,6 +1927,32 @@ export interface components {
             /** Format: date-time */
             exported_at: string;
             memories: components["schemas"]["Memory"][];
+        };
+        MemoryImport: {
+            memories: components["schemas"]["MemoryImportEntry"][];
+        };
+        /** @description One memory to add. Limits match MemoryPatch and are checked per entry. */
+        MemoryImportEntry: {
+            title: string;
+            summary?: string;
+            body?: string;
+            tags?: string[];
+            type?: components["schemas"]["MemoryType"];
+        };
+        MemoryImportResult: {
+            /** @description New entries added */
+            created: number;
+            /** @description Existing near-duplicate entries updated instead */
+            updated: number;
+            /** @description Entries that weren't saved, in request order */
+            failed: components["schemas"]["MemoryImportFailure"][];
+        };
+        MemoryImportFailure: {
+            /** @description Position in the request's memories */
+            index: number;
+            title: string;
+            /** @description Why, e.g. title: must be 1–200 characters */
+            error: string;
         };
         MemoryPatch: {
             title?: string;
@@ -5826,6 +5876,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemoryExport"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    importMemories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryImport"];
+            };
+        };
+        responses: {
+            /** @description What was saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryImportResult"];
                 };
             };
             default: components["responses"]["Error"];

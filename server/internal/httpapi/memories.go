@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/liamphmurphy/lazyagents/server/internal/api"
@@ -130,6 +131,42 @@ func (s *Server) ExportMemories(ctx context.Context, _ api.ExportMemoriesRequest
 	out := api.ExportMemories200JSONResponse{ExportedAt: time.Now().UTC(), Memories: make([]api.Memory, len(rows))}
 	for i, m := range rows {
 		out.Memories[i] = toMemory(m)
+	}
+	return out, nil
+}
+
+// memoryImportMax caps one import request.
+const memoryImportMax = 200
+
+// ImportMemories saves entries brought over from another assistant. Each one
+// goes through Save (near-duplicates update, secrets refused); a validation
+// error fails only that entry.
+func (s *Server) ImportMemories(ctx context.Context, req api.ImportMemoriesRequestObject) (api.ImportMemoriesResponseObject, error) {
+	if req.Body == nil || len(req.Body.Memories) == 0 {
+		return nil, apperr.Invalid("memories", "give at least one memory")
+	}
+	if len(req.Body.Memories) > memoryImportMax {
+		return nil, apperr.Invalid("memories", "at most %d memories per import", memoryImportMax)
+	}
+	o, svc := memoryOwner(ctx), memory.New(s.Q)
+	out := api.ImportMemories200JSONResponse{Failed: []api.MemoryImportFailure{}}
+	for i, e := range req.Body.Memories {
+		in := memory.Input{Title: e.Title, Summary: deref(e.Summary), Body: deref(e.Body), Type: deref(e.Type)}
+		if e.Tags != nil {
+			in.Tags = *e.Tags
+		}
+		res, err := svc.Save(ctx, o, in, memory.Source{Label: "import"})
+		var verr *apperr.ValidationError
+		switch {
+		case errors.As(err, &verr):
+			out.Failed = append(out.Failed, api.MemoryImportFailure{Index: i, Title: e.Title, Error: verr.Error()})
+		case err != nil:
+			return nil, err
+		case res.Updated:
+			out.Updated++
+		default:
+			out.Created++
+		}
 	}
 	return out, nil
 }
