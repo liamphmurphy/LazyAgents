@@ -815,3 +815,62 @@ func TestHarnessToolApprovalParity(t *testing.T) {
 		})
 	}
 }
+
+func TestEpicTicketStacksOnEpicBranch(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "idle")
+	origin := filepath.Join(e.dir, "origin")
+	if err := os.MkdirAll(origin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", origin}, args...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+		return string(out)
+	}
+	var epicID uuid.UUID
+	if err := e.pool.QueryRow(e.ctx, "SELECT e.id FROM epics e JOIN projects p ON p.id=e.project_id WHERE p.key='PAY' LIMIT 1").Scan(&epicID); err != nil {
+		t.Fatal(err)
+	}
+	branch := agentdef.EpicBranch("PAY", epicID.String())
+	git("init", "--quiet", "-b", "main")
+	git("config", "user.name", "Test")
+	git("config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(origin, "main.txt"), []byte("main"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "--quiet", "-m", "main")
+	git("checkout", "--quiet", "-b", branch)
+	if err := os.WriteFile(filepath.Join(origin, "epic.txt"), []byte("earlier ticket"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "--quiet", "-m", "earlier ticket")
+	git("checkout", "--quiet", "main")
+	if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url=$1,default_branch='main' WHERE key='PAY'", origin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(e.ctx, "UPDATE tickets SET epic_id=$1 WHERE key='PAY-224'", epicID); err != nil {
+		t.Fatal(err)
+	}
+	e.dispatch("PAY-224")
+	e.until("workspace ready", e.state("PAY-224=running"))
+	run := e.run("PAY-224")
+	spec, err := runs.Spec(run)
+	if err != nil || spec.Repository == nil || spec.Repository.EpicBranch != branch {
+		t.Fatalf("run spec should freeze the epic branch %q: %+v %v", branch, spec.Repository, err)
+	}
+	root := e.runner.Backend.WorkspaceDir(run.ID.String())
+	if content, err := os.ReadFile(filepath.Join(root, "epic.txt")); err != nil || string(content) != "earlier ticket" {
+		t.Fatalf("ticket branch wasn't cut from the epic branch: %q %v", content, err)
+	}
+	if _, err := e.runs.SetRunControl(e.ctx, e.ws, e.me.ID, run.ID, "cancel"); err != nil {
+		t.Fatal(err)
+	}
+	e.runner.Sweep(e.ctx)
+}

@@ -265,10 +265,38 @@ func gitSection(spec agentdef.Resolved) string {
 		step = "`repo:write` needs a person's approval: call request_approval for it, end your turn, and once you're resumed with a yes"
 	}
 	b.WriteString(step + ":\n\n")
+	if r := spec.Repository; r != nil && r.EpicBranch != "" {
+		b.WriteString(epicSteps(r.EpicBranch, r.DefaultBranch, r.EpicName))
+		return b.String()
+	}
 	b.WriteString("1. `git push -u origin HEAD`\n")
 	b.WriteString("2. `gh pr create --title \"<ticket key>: <summary>\" --body \"<what changed, how you tested it, link to the ticket>\"` (add `--draft` if anything is unfinished)\n")
 	b.WriteString("3. Record the PR URL it prints with the `set_pr` tool.\n\n")
 	b.WriteString("If a PR for the branch already exists (`gh pr view`), push to update it instead of opening another. ")
+	b.WriteString("Use `gh pr checks` and `gh run view --log-failed` to find out why CI is red before asking for help.\n\n")
+	return b.String()
+}
+
+// epicSteps publishes a ticket that belongs to an epic. The epic ships as one
+// pull request from its shared branch into the default branch; each ticket's
+// PR is stacked on that branch and merged into it, so the person reviews the
+// epic as a GitHub stack and merges it once.
+func epicSteps(epic, base, name string) string {
+	if base == "" {
+		base = "main"
+	}
+	e, d := "`"+epic+"`", "`"+base+"`"
+	var b strings.Builder
+	fmt.Fprintf(&b, "This ticket is part of the epic %q. The whole epic ships as one pull request from %s into %s, which the person merges once. ", name, e, d)
+	fmt.Fprintf(&b, "Your branch stacks on %s: never open a PR from it into %s, and never merge the epic's PR.\n\n", e, d)
+	b.WriteString("1. `git fetch origin` and, if `origin/" + epic + "` exists, `git merge origin/" + epic + "` to pick up tickets merged since you started. Resolve conflicts and rerun tests.\n")
+	b.WriteString("2. `git push -u origin HEAD`\n")
+	b.WriteString("3. If " + e + " isn't on origin yet (`git ls-remote --exit-code --heads origin " + epic + "` fails), create it from the base: `git push origin origin/" + base + ":refs/heads/" + epic + "`.\n")
+	fmt.Fprintf(&b, "4. If the epic has no open PR (`gh pr list --head %s --base %s --state open`), open it as a draft: `gh pr create --draft --head %s --base %s --title \"Epic: %s\" --body \"<the epic's objective; tickets are stacked on this PR>\"`.\n",
+		epic, base, epic, base, strings.ReplaceAll(name, `"`, `'`))
+	b.WriteString("5. Open your ticket's PR stacked on the epic: `gh pr create --base " + epic + " --title \"<ticket key>: <summary>\" --body \"<what changed, how you tested it, link to the ticket>\"`, and record its URL with the `set_pr` tool.\n")
+	b.WriteString("6. Once its checks pass (`gh pr checks --watch`), and any required review has approved it, merge it into the epic branch: `gh pr merge --squash --delete-branch`. Only ever merge PRs whose base is " + e + ".\n\n")
+	b.WriteString("If a PR for your branch already exists (`gh pr view`), push to update it instead of opening another. ")
 	b.WriteString("Use `gh pr checks` and `gh run view --log-failed` to find out why CI is red before asking for help.\n\n")
 	return b.String()
 }

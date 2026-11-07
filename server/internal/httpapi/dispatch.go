@@ -15,6 +15,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/api"
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/runner"
+	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
@@ -87,6 +88,11 @@ func (s *Server) GetDispatchPreview(ctx context.Context, req api.GetDispatchPrev
 	}
 	out.RepoUrl = p.RepoUrl
 	out.BaseBranch = &p.DefaultBranch
+	if repo, err := runs.RepositoryFor(ctx, s.Q, p, t); err != nil {
+		return nil, err
+	} else if repo.EpicBranch != "" {
+		out.BaseBranch = &repo.EpicBranch
+	}
 	if agent.CurrentDefinitionVersionID != nil {
 		if v, err := s.Q.GetDefinitionVersion(ctx, *agent.CurrentDefinitionVersionID); err == nil {
 			n := int(v.Version)
