@@ -100,6 +100,9 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 		if err != nil || a.ArchivedAt != nil {
 			return apperr.Invalid("agent_id", "unknown agent")
 		}
+		if a.Kind == agents.KindAssistant {
+			return apperr.Invalid("agent_id", "the Personal Assistant only works in chats; pick a main agent to plan")
+		}
 		var sourceVersion *uuid.UUID
 		source := ""
 		if in.EpicID != nil {
@@ -226,7 +229,7 @@ func validateProposals(ctx context.Context, q *store.Queries, ws uuid.UUID, item
 			if err != nil || sa.ArchivedAt != nil {
 				return apperr.Invalid("agent_id", "unknown suggested agent")
 			}
-			if sa.Kind == "assistant" {
+			if sa.Kind == agents.KindAssistant {
 				return apperr.Invalid("agent_id", "@%s is the Personal Assistant; suggest a main agent", sa.Handle)
 			}
 			if sa.Kind == "sub" {

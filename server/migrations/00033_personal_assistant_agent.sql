@@ -8,6 +8,7 @@ CREATE UNIQUE INDEX agents_one_assistant ON agents (workspace_id) WHERE kind = '
 
 -- +goose Down
 DROP INDEX agents_one_assistant;
-UPDATE agents SET kind = 'main' WHERE kind = 'assistant';
+-- Archived so a rolled-back assistant doesn't join the roster; old chats keep their reference.
+UPDATE agents SET kind = 'main', archived_at = coalesce(archived_at, now()) WHERE kind = 'assistant';
 ALTER TABLE agents DROP CONSTRAINT agents_kind_check;
 ALTER TABLE agents ADD CONSTRAINT agents_kind_check CHECK (kind IN ('main', 'sub'));
