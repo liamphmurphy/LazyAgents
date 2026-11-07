@@ -49,7 +49,21 @@ export const AGENTS = [
 const USAGE = { input_tokens: 48200, output_tokens: 1300, cached_input_tokens: 41000, uncached_input_tokens: 7200, unreported_input_tokens: 0, cost_usd: 0.0421 };
 
 export type Posted = { chat: string; body: Record<string, unknown> };
-export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number };
+export type MockPersona = {
+  id: string; name: string; tone: string; color: string; avatar_url?: string; custom_instructions: string;
+  is_default: boolean; chat_count: number; last_used_at?: string; revision: number; created_at: string; updated_at: string;
+};
+export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[] };
+
+/** A persona fixture for the persona specs. */
+export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona {
+  const t = `2026-11-0${Math.min(i, 9)}T09:00:00.000Z`;
+  return {
+    id: `77777777-7777-4777-8777-${String(i).padStart(12, "0")}`,
+    name: `Persona ${i}`, tone: "neutral", color: "#8b8fff", custom_instructions: "", is_default: false,
+    chat_count: 0, revision: 1, created_at: t, updated_at: t, ...over,
+  };
+}
 
 export const catalog = (codexAvailable: boolean, opencodeAvailable = true) => [
   {
@@ -96,6 +110,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const memoryPatches: Array<Record<string, unknown>> = [];
   const memoryImports: Array<Record<string, unknown>> = [];
   const wikiPages: Array<{ path: string; body_md: string; project_key?: string }> = [];
+  // Assistant personas (ADR: Assistant personas): private to the caller, at most one default.
+  const personas: MockPersona[] = [...(opts.personas ?? [])];
+  const personaRequests: string[] = [];
   let n = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
   const now = () => new Date().toISOString();
@@ -386,6 +403,92 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       }
     }
 
+    if (path === "/personas" && method === "GET") {
+      return json({ personas, ...(personas.find((x) => x.is_default) ? { default_persona_id: personas.find((x) => x.is_default)!.id } : {}) });
+    }
+    const personaBody = (b: Record<string, unknown>, self?: MockPersona) => {
+      const name = typeof b.name === "string" ? b.name.trim() : undefined;
+      if (name !== undefined && personas.some((x) => x !== self && x.name.toLowerCase() === name.toLowerCase()))
+        return err(422, "invalid", "You already have a persona with this name", "name");
+      if (typeof b.color === "string" && !/^#[0-9a-f]{6}$/i.test(b.color)) return err(422, "invalid", "Use #rrggbb", "color");
+      return null;
+    };
+    if (path === "/personas" && method === "POST") {
+      const b = body();
+      personaRequests.push(`POST ${path} ${JSON.stringify(b)}`);
+      const bad = personaBody(b);
+      if (bad) return fail(bad);
+      if (b.is_default) for (const x of personas) x.is_default = false;
+      const t = now();
+      const p: MockPersona = {
+        id: uuid(), name: String(b.name).trim(), tone: (b.tone as string) ?? "neutral", color: String(b.color ?? "#64748b").toLowerCase(),
+        custom_instructions: (b.custom_instructions as string) ?? "", is_default: !!b.is_default, chat_count: 0, revision: 1, created_at: t, updated_at: t,
+      };
+      personas.push(p);
+      return json(p, 201);
+    }
+    const pm = /^\/personas\/([^/]+)(?:\/(default|avatar))?$/.exec(path);
+    if (pm) {
+      const p = personas.find((x) => x.id === pm[1]);
+      if (!p) return fail(err(404, "not_found", "persona not found"));
+      personaRequests.push(`${method} ${path}`);
+      const bump = () => {
+        p.revision++;
+        p.updated_at = now();
+      };
+      if (!pm[2] && method === "PATCH") {
+        const b = body();
+        if (b.revision !== p.revision) return fail(err(409, "conflict", "persona changed"));
+        const bad = personaBody(b, p);
+        if (bad) return fail(bad);
+        for (const k of ["name", "tone", "custom_instructions"] as const) if (typeof b[k] === "string") p[k] = (b[k] as string).trim() || p[k];
+        if (typeof b.custom_instructions === "string") p.custom_instructions = b.custom_instructions;
+        if (typeof b.color === "string") p.color = b.color.toLowerCase();
+        bump();
+        return json(p);
+      }
+      if (!pm[2] && method === "DELETE") {
+        const rev = url.searchParams.get("revision");
+        if (rev && Number(rev) !== p.revision) return fail(err(409, "conflict", "persona changed"));
+        personas.splice(personas.indexOf(p), 1);
+        if (p.is_default && personas.length) {
+          const t = (x: MockPersona) => Date.parse(x.last_used_at ?? "") || 0;
+          [...personas].sort((a, b) => t(b) - t(a) || Date.parse(b.created_at) - Date.parse(a.created_at))[0].is_default = true;
+        }
+        return route.fulfill({ status: 204 });
+      }
+      if (pm[2] === "default" && method === "POST") {
+        for (const x of personas) if (x.is_default && x !== p) {
+          x.is_default = false;
+          x.revision++;
+        }
+        if (!p.is_default) {
+          p.is_default = true;
+          bump();
+        }
+        return json(p);
+      }
+      if (pm[2] === "avatar" && method === "PUT") {
+        const raw = req.postDataBuffer() ?? Buffer.alloc(0);
+        if (raw.length > 1_048_576 + 4096) return fail(err(413, "too_large", "avatar over 1 MB"));
+        const text = raw.toString("latin1");
+        if (!text.includes("\x89PNG") && !text.includes("\xff\xd8\xff") && !text.includes("WEBP")) return fail(err(415, "unsupported_type", "PNG, JPEG or WebP only"));
+        bump();
+        p.avatar_url = `/api/v1/personas/${p.id}/avatar?v=${p.revision}`;
+        return json(p);
+      }
+      if (pm[2] === "avatar" && method === "DELETE") {
+        if (p.avatar_url) bump();
+        delete p.avatar_url;
+        return json(p);
+      }
+      if (pm[2] === "avatar" && method === "GET") {
+        // A 1×1 PNG.
+        const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+        return route.fulfill({ status: 200, contentType: "image/png", body: png });
+      }
+    }
+
     const run = /^\/runs\/([^/]+)$/.exec(path);
     if (run) {
       return json({ run: {}, turns: [], approvals: [], events: runEvents.get(run[1]) ?? [] });
@@ -415,6 +518,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports };
+    return { unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests };
   })();
 }
