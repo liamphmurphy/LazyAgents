@@ -16,12 +16,14 @@ import {
   TextInput,
 } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
+import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { DispatchDialog } from "@/components/domain/dispatch-dialog";
 import { cx } from "@/lib/cx";
 
 type Plan = Schemas["PlanningSession"];
 type Proposal = Schemas["TicketProposal"];
 type Bootstrap = Schemas["Bootstrap"];
+type Project = Schemas["Project"];
 const control =
   "w-full rounded-md border border-border-strong bg-surface px-2.5 py-2 text-sm text-fg";
 const message = (e: unknown) =>
@@ -38,14 +40,12 @@ function Runtime({ handle, project }: { handle: string; project: string }) {
   );
 }
 
-function NewPlan({ data }: { data: Bootstrap }) {
+/** project comes from the sidebar switcher (?project=, then the remembered one). */
+function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project }) {
   const search = useSearchParams(),
     router = useRouter(),
     qc = useQueryClient();
-  const projects = data.projects.filter((p) => !p.archived);
-  const [project, setProject] = useState(
-    search.get("project") || projects[0]?.key || "",
-  );
+  const project = scoped.key;
   const [agent, setAgent] = useState(data.agents[0]?.id || "");
   const [goal, setGoal] = useState("");
   const selected = data.agents.find((a) => a.id === agent);
@@ -81,21 +81,15 @@ function NewPlan({ data }: { data: Bootstrap }) {
           proposals before any tickets are created.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Project">
-            <select
-              className={control}
-              aria-label="Project"
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              disabled={!!epic || !!artifact}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.key}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12.5px] font-medium text-fg-2">Project</span>
+            <span className="flex h-[38px] items-center gap-2 rounded-md border border-border-strong bg-surface-sunken px-2.5 text-sm">
+              <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: scoped.color }} />
+              <span className="flex-1 truncate">{scoped.name}</span>
+              <span className="font-mono text-xs text-fg-tertiary">{scoped.key}</span>
+            </span>
+            <span className="text-xs text-fg-tertiary">Switch projects in the sidebar.</span>
+          </div>
           <Field label="Planning agent">
             <select
               className={control}
@@ -111,12 +105,6 @@ function NewPlan({ data }: { data: Bootstrap }) {
             </select>
           </Field>
         </div>
-        {!projects.some((p) => p.key === project) && (
-          <Banner tone="human" title="Choose an active project">
-            This project is archived or unavailable. Restore it in Settings
-            before starting a plan.
-          </Banner>
-        )}
         {selected && <Runtime handle={selected.handle} project={project} />}
         {epic && (
           <p className="text-sm text-fg-secondary">
@@ -154,12 +142,7 @@ function NewPlan({ data }: { data: Bootstrap }) {
         <Button
           type="submit"
           variant="approve"
-          disabled={
-            create.isPending ||
-            !agent ||
-            !project ||
-            !projects.some((p) => p.key === project)
-          }
+          disabled={create.isPending || !agent}
         >
           {create.isPending ? "Starting…" : "Approve & start planning"}
         </Button>
@@ -511,6 +494,9 @@ export function PlansScreen() {
   const search = useSearchParams();
   const id = search.get("id");
   const bootstrap = useBootstrap();
+  // A new plan needs one project; an open plan (?id=) carries its own.
+  const scope = useProjectScope("required", { skip: !!id });
+  const scoped = scope.status === "ready" ? scope.project : undefined;
   const list = useQuery({
     queryKey: ["planning", "list"],
     queryFn: () => unwrap(api.GET("/planning-sessions")),
@@ -528,7 +514,10 @@ export function PlansScreen() {
   return (
     <>
       <TopBar
-        crumbs={[{ label: "Plans" }]}
+        crumbs={projectCrumbs(
+          id ? bootstrap.data?.projects.find((p) => p.key === detail.data?.project) : scoped,
+          "Plans",
+        )}
         actions={
           <ButtonLink href="/plans" variant="outline">
             New plan
@@ -584,27 +573,18 @@ export function PlansScreen() {
                     data={bootstrap.data}
                   />
                 )
-              ) : bootstrap.data.agents.length &&
-                bootstrap.data.projects.some((p) => !p.archived) ? (
-                <NewPlan key={search.toString()} data={bootstrap.data} />
+              ) : !scoped ? (
+                <ProjectScopeState base="/plans" scope={scope} />
+              ) : bootstrap.data.agents.length ? (
+                <NewPlan key={search.toString()} data={bootstrap.data} project={scoped} />
               ) : (
                 <EmptyState
                   icon="epics"
-                  title={
-                    bootstrap.data.projects.some((p) => !p.archived)
-                      ? "Create an agent first"
-                      : "Create a project first"
-                  }
+                  title="Create an agent first"
                   actions={
-                    bootstrap.data.projects.some((p) => !p.archived) ? (
-                      <ButtonLink href="/agents" variant="outline">
-                        Go to agents
-                      </ButtonLink>
-                    ) : (
-                      <ButtonLink href="/settings/projects" variant="outline">
-                        Create a project
-                      </ButtonLink>
-                    )
+                    <ButtonLink href="/agents" variant="outline">
+                      Go to agents
+                    </ButtonLink>
                   }
                 >
                   Planning needs an active project and at least one agent.

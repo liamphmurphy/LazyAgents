@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
-import { useBootstrap } from "@/lib/api/hooks";
+import { useBootstrap, useRunnerStatus } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/primitives";
 import { LiveUpdates } from "./live-updates";
 import { CommandMenu } from "./command-menu";
@@ -69,6 +69,8 @@ function SidebarSkeleton() {
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { data } = useBootstrap();
+  // Inbox and Runs counts: SSE invalidates ["bootstrap"] and ["runner"] (live-updates.tsx).
+  const runner = useRunnerStatus();
   useShortcuts();
   return (
     <div className="flex min-h-dvh flex-wrap bg-bg text-fg">
@@ -79,9 +81,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Sidebar
             workspace={data.workspace.name}
             inboxCount={data.counts.inbox}
-            liveAgents={data.counts.live_agents}
+            liveRuns={runner.data?.busy ?? 0}
             wikiSuggestions={data.counts.wiki_suggestions}
-            projects={data.projects.filter(p => !p.archived)}
+            projects={data.projects}
             user={{
               name: data.me.name,
               initials: data.me.initials,

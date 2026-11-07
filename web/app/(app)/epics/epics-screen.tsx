@@ -13,6 +13,7 @@ import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Content, TopBar } from "@/components/shell/topbar";
+import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import {
   AgentStack,
   HealthPill,
@@ -381,7 +382,10 @@ export function EpicsScreen() {
   const query = useEpicOverviews();
   const params = useSearchParams(),
     router = useRouter();
-  const [project, setProject] = useState("");
+  // The sidebar switcher sets ?project=; none (All projects) lists every epic.
+  const scope = useProjectScope("optional");
+  const current = scope.status === "ready" ? scope.project : undefined;
+  const project = current?.key ?? "";
   const epics = (query.data ?? []).filter(
     (e) => !project || e.project.key === project,
   );
@@ -395,18 +399,16 @@ export function EpicsScreen() {
     (e) => e.counts.total === 0 || e.counts.done < e.counts.total,
   );
   const select = (id: string) =>
-    router.replace(`/epics?epic=${encodeURIComponent(id)}`, { scroll: false });
-  const projects = [
-    ...new Map(
-      (query.data ?? []).map((e) => [e.project.key, e.project]),
-    ).values(),
-  ];
+    router.replace(
+      `/epics?${new URLSearchParams({ ...(project && { project }), epic: id })}`,
+      { scroll: false },
+    );
   return (
     <>
       <TopBar
-        crumbs={[{ label: "Epics" }]}
+        crumbs={projectCrumbs(current, "Epics")}
         actions={
-          <ButtonLink href="/tickets/new" variant="primary" icon="plus">
+          <ButtonLink href={project ? `/tickets/new?project=${encodeURIComponent(project)}` : "/tickets/new"} variant="primary" icon="plus">
             New ticket
           </ButtonLink>
         }
@@ -420,23 +422,10 @@ export function EpicsScreen() {
                 Objectives, progress and the work ahead.
               </p>
             </div>
-            <label className="flex items-center gap-2 text-xs text-fg-tertiary">
-              Project
-              <select
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
-                className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-fg"
-              >
-                <option value="">All projects</option>
-                {projects.map((p) => (
-                  <option value={p.key} key={p.key}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
-          {query.isError ? (
+          {scope.status !== "ready" ? (
+            <ProjectScopeState base="/epics" scope={scope} />
+          ) : query.isError ? (
             <Banner
               tone="blocked"
               title="Couldn’t load epics"

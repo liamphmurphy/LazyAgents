@@ -9,6 +9,7 @@ import { useBoard, useBoardMoves, useTicketEditorDetail, type BoardFilters } fro
 import { BOARD_STATUSES, withBoardMoves, type Board, type BoardCard, type BoardStatus } from "@/lib/board";
 import { cx } from "@/lib/cx";
 import { TopBar } from "@/components/shell/topbar";
+import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
@@ -21,9 +22,9 @@ const selectClass = "h-8 max-w-52 rounded-md border border-border-strong bg-surf
 export function BoardScreen() {
   const bootstrap = useBootstrap();
   const params = useSearchParams();
-  const projects = bootstrap.data?.projects.filter((p) => !p.archived) ?? [];
-  const requested = params.get("project");
-  const project = requested ? projects.find((p) => p.key === requested) : projects[0];
+  // The sidebar switcher owns the project; ?project= wins, then the remembered one.
+  const scope = useProjectScope("required");
+  const project = scope.status === "ready" ? scope.project : undefined;
   const filters: BoardFilters = {
     epic: params.get("epic") || undefined,
     assignee: params.get("assignee") || undefined,
@@ -36,7 +37,6 @@ export function BoardScreen() {
     const next = new URLSearchParams(window.location.search);
     if (project) next.set("project", project.key);
     if (value) next.set(name, value); else next.delete(name);
-    if (name === "project") next.delete("epic");
     window.history.replaceState(null, "", `/board?${next}`);
   }
   const ticketKey = params.get("ticket") || undefined;
@@ -51,12 +51,8 @@ export function BoardScreen() {
   }
   return (
     <div data-testid="board-screen">
-      <TopBar crumbs={[{ label: "Board" }, ...(project ? [{ label: project.key, mono: true }] : [])]} actions={
+      <TopBar crumbs={projectCrumbs(project, "Board")} actions={project &&
         <>
-          <select aria-label="Project" className={selectClass} value={project?.key ?? ""} onChange={(e) => setParam("project", e.target.value)}>
-            {!project && <option value="">Choose project</option>}
-            {projects.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
-          </select>
           <select aria-label="Epic" className={selectClass} value={filters.epic ?? ""} onChange={(e) => setParam("epic", e.target.value)}>
             <option value="">All epics</option>
             {epics.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -71,9 +67,7 @@ export function BoardScreen() {
           <Link href={`/tickets${project ? `?project=${encodeURIComponent(project.key)}` : ""}`} className="text-xs text-fg-secondary hover:text-fg">Tickets view ↗</Link>
         </>
       } />
-      {bootstrap.isPending ? <p role="status" className="p-6 text-fg-secondary">Loading projects…</p>
-        : bootstrap.isError ? <p role="alert" className="p-6">Couldn&apos;t load projects: {bootstrap.error.message}</p>
-        : !project ? <p className="p-6 text-fg-secondary">{requested ? "Project unavailable. Choose an active project." : "Create a project to view its board."}</p>
+      {!project ? <ProjectScopeState base="/board" scope={scope} />
         : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} onOpen={setTicket} />}
       {ticketKey && loadFailed && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
         <span>Couldn&apos;t open {ticketKey}: {editor.error.message}</span>

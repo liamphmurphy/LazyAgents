@@ -6,6 +6,8 @@ import { useDeferredValue, useEffect, useState } from "react";
 import { useSearch } from "@/lib/api/hooks";
 import { IconButton } from "@/components/ui/button";
 import { cx } from "@/lib/cx";
+import { NAV_GROUPS, withProject } from "@/lib/project-scope";
+import { useRememberedProject } from "./project-scope";
 
 function Match({ text, query }: { text: string; query: string }) {
   const at = query ? text.toLowerCase().indexOf(query.toLowerCase()) : -1;
@@ -53,6 +55,17 @@ export function CommandMenu() {
         ["Tickets", "Artifacts & wiki", "Epics", "Agents"].indexOf(b.group),
     );
   const title = query.replace(/^>\s*/, "");
+  // Same item set as the sidebar (lib/project-scope.ts), scoped to the remembered project.
+  const remembered = useRememberedProject();
+  const goTo = NAV_GROUPS.flatMap((g) =>
+    g.items.map((i) => ({
+      id: `nav-${i.href}`,
+      title: `Go to ${i.label}`,
+      meta: g.label,
+      href: withProject(i.href, remembered),
+      group: "Go to",
+    })),
+  ).filter((i) => (title ? i.title.toLowerCase().includes(title.toLowerCase()) : commands));
   const actions = [
     {
       id: "new",
@@ -76,7 +89,7 @@ export function CommandMenu() {
       group: "Actions",
     },
   ];
-  const items = [...(commands ? [] : results), ...actions];
+  const items = [...(commands ? [] : results), ...goTo, ...actions];
   const index = Math.min(active, items.length - 1);
   useEffect(() => {
     if (open)

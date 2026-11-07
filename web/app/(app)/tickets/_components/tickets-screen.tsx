@@ -12,7 +12,8 @@ import { Banner, EmptyState, FilterChip, Skeleton } from "@/components/ui/primit
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { STATUS_NAME, STATUS_ORDER } from "@/components/domain/meta";
 import { AgentPicker } from "@/components/domain/pickers";
-import { TopBar, type Crumb } from "@/components/shell/topbar";
+import { TopBar } from "@/components/shell/topbar";
+import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { BulkBar } from "./bulk-bar";
 import { TicketRow } from "./ticket-row";
 
@@ -58,6 +59,8 @@ export function TicketsScreen() {
   const [search, setSearch] = useState(q);
 
   const boot = useBootstrap();
+  // No ?project= resolves to the remembered project; "All projects" leaves it empty.
+  const scope = useProjectScope("optional");
   const list = useTickets({ ready, project, view, assignee, epic, q: q || undefined });
 
   // Debounced search → URL, so views are shareable.
@@ -118,9 +121,9 @@ export function TicketsScreen() {
   }, [tickets]);
 
   const proj = boot.data?.projects.find((p) => p.key === project);
-  const crumbs: Crumb[] = proj
-    ? [{ label: proj.name, swatch: proj.color, href: `/tickets?project=${proj.key}` }, { label: "Tickets" }]
-    : [{ label: "Tickets" }];
+  const crumbs = projectCrumbs(proj, "Tickets");
+  // Archived projects keep their read-only history (banner below); unknown keys and redirects don't list.
+  const blocked = scope.status !== "ready" && !(scope.status === "unavailable" && scope.archived);
   const agentFilter = boot.data?.agents.find((a) => a.handle === assignee);
 
   return (
@@ -158,7 +161,9 @@ export function TicketsScreen() {
         </div>
       </div>
 
-      {list.isError ? (
+      {blocked ? (
+        <ProjectScopeState base="/tickets" scope={scope} />
+      ) : list.isError ? (
         <div className="p-6">
           <Banner tone="blocked" title="Couldn't load tickets">
             {list.error.message}
