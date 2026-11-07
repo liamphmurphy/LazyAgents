@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -33,6 +34,23 @@ func HardBlockers(ctx context.Context, q *store.Queries, t store.Ticket) ([]stri
 	}
 	if p.Archived {
 		out = append(out, "Project "+p.Key+" is archived; restore it before starting work")
+	}
+	if t.EpicReview && t.EpicID != nil {
+		open, err := q.EpicUnfinishedKeys(ctx, t.EpicID)
+		if err != nil {
+			return nil, err
+		}
+		if len(open) > 0 {
+			var parts []string
+			for i, o := range open {
+				if i == 10 {
+					parts = append(parts, fmt.Sprintf("and %d more", len(open)-10))
+					break
+				}
+				parts = append(parts, o.Key+" ("+o.Status+")")
+			}
+			out = append(out, "Final review waits for the epic's other tickets to finish: "+strings.Join(parts, ", "))
+		}
 	}
 	return out, nil
 }

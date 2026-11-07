@@ -699,6 +699,15 @@ export function useUpdateEpic(id: string) {
   });
 }
 
+/** Add the epic's final review ticket (idempotent; 409 when the epic is done or the project archived). */
+export function useCreateEpicReview(epicId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/epics/{id}/review", { params: { path: { id: epicId } } })),
+    onSettled: () => invalidateEpic(qc),
+  });
+}
+
 function invalidateEpic(qc: ReturnType<typeof useQueryClient>) {
   return Promise.all([
     qc.invalidateQueries({ queryKey: keys.bootstrap }),

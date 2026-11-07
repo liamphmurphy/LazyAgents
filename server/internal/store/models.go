@@ -468,6 +468,7 @@ type Ticket struct {
 	EstimatedByType    *string
 	EstimatedByID      *uuid.UUID
 	EstimatedAt        *time.Time
+	EpicReview         bool
 }
 
 type TicketArtifact struct {

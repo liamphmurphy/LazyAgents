@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,37 +14,101 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
-// fallback consumes a frozen target and queues a fresh session in the same
-// workspace. Persisting both together makes the handoff restart safe.
-func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) error {
-	next := c.spec.Fallbacks[0]
+// chainOf is the run's full preference order, primary first. Runs created
+// before Chain existed derive it from the primary plus Fallbacks. A run with no
+// Fallbacks (a chat) has no chain and never switches.
+func chainOf(spec agentdef.Resolved) []agentdef.Fallback {
+	if len(spec.Chain) > 0 {
+		return spec.Chain
+	}
+	if len(spec.Fallbacks) == 0 {
+		return nil
+	}
+	return append([]agentdef.Fallback{{Harness: spec.Harness, Model: spec.Model, HarnessOptions: spec.HarnessOptions}}, spec.Fallbacks...)
+}
+
+// withTarget returns spec moved onto Chain[i]. Chain is kept whole and
+// Fallbacks becomes every other target in order, so later switches can go back
+// up the chain.
+func withTarget(spec agentdef.Resolved, chain []agentdef.Fallback, i int) agentdef.Resolved {
+	t := chain[i]
+	spec.Chain = append([]agentdef.Fallback{}, chain...)
+	spec.Harness, spec.Model, spec.HarnessOptions = t.Harness, t.Model, t.HarnessOptions
+	spec.Fallbacks = append(append([]agentdef.Fallback{}, chain[:i]...), chain[i+1:]...)
+	return spec
+}
+
+func (r *Runner) activeLimits(ctx context.Context, c runCtx) (map[string]time.Time, error) {
+	rows, err := r.q().ActiveProviderLimits(ctx, c.run.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	limited := map[string]time.Time{}
+	for _, l := range rows {
+		limited[l.Harness] = l.Until
+	}
+	return limited, nil
+}
+
+// preferredTarget returns the run's spec moved onto the first Chain target that
+// has no active limit and passes the usual usability checks. With skipCurrent
+// the target the run is on is never chosen. ok is false when none qualifies;
+// unusable then holds why the first unlimited-but-unusable target was skipped.
+func (r *Runner) preferredTarget(ctx context.Context, c runCtx, limited map[string]time.Time, skipCurrent bool) (next agentdef.Resolved, ok bool, unusable, err error) {
+	chain := chainOf(c.spec)
+	for i, t := range chain {
+		if _, bad := limited[t.Harness]; bad {
+			continue
+		}
+		if skipCurrent && t.Harness == c.spec.Harness && t.Model == c.spec.Model {
+			continue
+		}
+		cand := withTarget(c.spec, chain, i)
+		if err := r.checkSpec(cand); err != nil {
+			unusable = cmp.Or(unusable, err)
+			continue
+		}
+		plan, err := PlanSecrets(ctx, r.q(), c.run.WorkspaceID, &c.project.ID, cand)
+		if err != nil {
+			return c.spec, false, unusable, err
+		}
+		key, err := HarnessKey(cand)
+		if err != nil {
+			unusable = cmp.Or(unusable, err)
+			continue
+		}
+		if NeedsHarnessKey(r.Cfg.RequireHarnessKey, cand) && !hasSecret(plan, key.Secret) {
+			unusable = cmp.Or(unusable, fmt.Errorf("%s (%s): %w", t.Harness, key.Secret, ErrNoHarnessKey))
+			continue
+		}
+		return cand, true, unusable, nil
+	}
+	return c.spec, false, unusable, nil
+}
+
+// fallback moves a run whose turn hit a usage limit to the most preferred
+// usable target other than the current one and queues a fresh session in the
+// same workspace. Persisting both together makes the handoff restart safe. It
+// reports false when no target is usable, so the caller fails the run.
+func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) (bool, error) {
+	limited, err := r.activeLimits(ctx, c)
+	if err != nil {
+		return false, err
+	}
+	next, ok, unusable, err := r.preferredTarget(ctx, c, limited, true)
+	if err != nil || !ok {
+		return false, cmp.Or(err, unusable)
+	}
 	previousHarness, previousModel := c.spec.Harness, c.spec.Model
-	c.spec.Harness, c.spec.Model = next.Harness, next.Model
-	c.spec.HarnessOptions = next.HarnessOptions
-	c.spec.Fallbacks = c.spec.Fallbacks[1:]
-	if err := r.checkSpec(c.spec); err != nil {
-		return err
-	}
-	plan, err := PlanSecrets(ctx, r.q(), c.run.WorkspaceID, &c.project.ID, c.spec)
+	prompt, err := r.handoffPrompt(ctx, c, previousHarness, previousModel, res.Final, "exhausted its provider usage")
 	if err != nil {
-		return err
+		return false, err
 	}
-	key, err := HarnessKey(c.spec)
+	spec, err := json.Marshal(next)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if NeedsHarnessKey(r.Cfg.RequireHarnessKey, c.spec) && !hasSecret(plan, key.Secret) {
-		return fmt.Errorf("%s (%s): %w", next.Harness, key.Secret, ErrNoHarnessKey)
-	}
-	prompt, err := r.handoffPrompt(ctx, c, previousHarness, previousModel, res.Final)
-	if err != nil {
-		return err
-	}
-	spec, err := json.Marshal(c.spec)
-	if err != nil {
-		return err
-	}
-	return pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+	return true, pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
 		run, err := q.LockRun(ctx, c.run.ID)
 		if err != nil {
@@ -71,13 +136,13 @@ func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) err
 
 // handoffPrompt briefs a fresh session on a run another harness started: the
 // recent turn inputs (which include any pending one) and the latest transcript.
-func (r *Runner) handoffPrompt(ctx context.Context, c runCtx, previousHarness, previousModel, lastAssistant string) (string, error) {
+func (r *Runner) handoffPrompt(ctx context.Context, c runCtx, previousHarness, previousModel, lastAssistant, why string) (string, error) {
 	turns, err := r.q().ListTurns(ctx, c.run.ID)
 	if err != nil {
 		return "", err
 	}
 	var prompt strings.Builder
-	fmt.Fprintf(&prompt, "Continue this existing LazyAgents run after %s (%s) exhausted its provider usage. You are using a fresh session in the same checkout. Inspect the working tree, commits, run plan and ticket before continuing; preserve completed work.\n\n", previousHarness, previousModel)
+	fmt.Fprintf(&prompt, "Continue this existing LazyAgents run after %s (%s) %s. You are using a fresh session in the same checkout. Inspect the working tree, commits, run plan and ticket before continuing; preserve completed work.\n\n", previousHarness, previousModel, why)
 	for i, turn := range turns {
 		if i != 0 && i < len(turns)-12 {
 			continue
@@ -119,55 +184,37 @@ func (r *Runner) markProviderLimited(ctx context.Context, c runCtx, msg string) 
 	}
 }
 
-// avoidLimitedHarness moves a run off a harness whose limit is still active,
-// onto its first usable fallback, before the turn starts. It returns the
-// handoff prompt to use instead of the turn's input when the run already had a
-// session on the limited harness, and "" otherwise. With no usable fallback the
-// run is left alone: the limit may have lifted early, and if not the normal
-// failure path applies.
-func (r *Runner) avoidLimitedHarness(ctx context.Context, c *runCtx, turn store.RunTurn) (string, error) {
-	if len(c.spec.Fallbacks) == 0 {
+// selectHarness moves a run onto the most preferred usable target in its chain
+// before the turn starts: off a harness whose limit is active, or back up to
+// the primary once its limit has lifted. It returns the handoff prompt to use
+// instead of the turn's input when the run already had a session, and ""
+// otherwise. With no usable target the run is left alone: the limit may have
+// lifted early, and if not the normal failure path applies.
+func (r *Runner) selectHarness(ctx context.Context, c *runCtx, turn store.RunTurn) (string, error) {
+	if len(chainOf(c.spec)) == 0 {
 		return "", nil
 	}
-	rows, err := r.q().ActiveProviderLimits(ctx, c.run.WorkspaceID)
+	limited, err := r.activeLimits(ctx, *c)
 	if err != nil {
 		return "", err
 	}
-	limited := map[string]time.Time{}
-	for _, l := range rows {
-		limited[l.Harness] = l.Until
+	next, ok, _, err := r.preferredTarget(ctx, *c, limited, false)
+	if err != nil || !ok || (next.Harness == c.spec.Harness && next.Model == c.spec.Model) {
+		return "", err
 	}
-	until, hit := limited[c.spec.Harness]
-	if !hit {
-		return "", nil
-	}
-	next := c.spec
 	previousHarness, previousModel := c.spec.Harness, c.spec.Model
-	var target *agentdef.Fallback
-	for i, f := range c.spec.Fallbacks {
-		if _, bad := limited[f.Harness]; bad {
-			continue
-		}
-		next.Harness, next.Model, next.HarnessOptions = f.Harness, f.Model, f.HarnessOptions
-		plan, err := PlanSecrets(ctx, r.q(), c.run.WorkspaceID, &c.project.ID, next)
-		if err != nil {
-			return "", err
-		}
-		if r.Cfg.RequireHarnessKey && !hasSecret(plan, HarnessKeys[f.Harness].Secret) {
-			continue
-		}
-		target = &c.spec.Fallbacks[i]
-		next.Fallbacks = append([]agentdef.Fallback{}, c.spec.Fallbacks[i+1:]...)
-		break
+	reason, why := "primary_available", "was replaced by a more preferred harness that is available again"
+	payload := map[string]any{"state": "harness_fallback", "from_harness": previousHarness, "from_model": previousModel,
+		"harness": next.Harness, "model": next.Model}
+	if until, hit := limited[previousHarness]; hit {
+		reason, why = "provider_limited", "exhausted its provider usage"
+		payload["until"] = until.Format(time.RFC3339)
 	}
-	if target == nil {
-		return "", nil
-	}
-	hadSession := c.run.HarnessSessionID != nil
+	payload["reason"] = reason
 	handoff := ""
-	if hadSession {
+	if c.run.HarnessSessionID != nil {
 		// The current turn's input is already in the run's turns, so the helper includes it once.
-		if handoff, err = r.handoffPrompt(ctx, *c, previousHarness, previousModel, ""); err != nil {
+		if handoff, err = r.handoffPrompt(ctx, *c, previousHarness, previousModel, "", why); err != nil {
 			return "", err
 		}
 	}
@@ -175,14 +222,13 @@ func (r *Runner) avoidLimitedHarness(ctx context.Context, c *runCtx, turn store.
 	if err != nil {
 		return "", err
 	}
-	payload, _ := json.Marshal(map[string]any{"state": "harness_fallback", "from_harness": previousHarness, "from_model": previousModel,
-		"harness": next.Harness, "model": next.Model, "reason": "provider_limited", "until": until.Format(time.RFC3339)})
+	event, _ := json.Marshal(payload)
 	err = pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
 		if _, err := tx.Exec(ctx, `UPDATE runs SET resolved_spec=$2, harness=$3, model=$4, harness_session_id=NULL, idle_turns=0, updated_at=now() WHERE id=$1`, c.run.ID, spec, next.Harness, next.Model); err != nil {
 			return err
 		}
-		return q.AddRunEvent(ctx, store.AddRunEventParams{RunID: c.run.ID, Type: "lifecycle", Payload: payload})
+		return q.AddRunEvent(ctx, store.AddRunEventParams{RunID: c.run.ID, Type: "lifecycle", Payload: event})
 	})
 	if err != nil {
 		return "", err

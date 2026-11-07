@@ -214,6 +214,29 @@ func (q *Queries) EpicOpenTicketKeys(ctx context.Context, epicID *uuid.UUID) ([]
 	return items, nil
 }
 
+const epicReviewState = `-- name: EpicReviewState :one
+SELECT
+  count(*) FILTER (WHERE NOT epic_review AND status <> 'canceled')::int AS total,
+  count(*) FILTER (WHERE NOT epic_review AND status IN ('backlog', 'todo', 'in_progress'))::int AS unfinished,
+  coalesce(bool_or(epic_review), false)::boolean AS has_review
+FROM tickets WHERE epic_id = $1
+`
+
+type EpicReviewStateRow struct {
+	Total      int32
+	Unfinished int32
+	HasReview  bool
+}
+
+// What the epic review trigger needs: ticket counts excluding the review ticket.
+// total skips canceled tickets, so an epic whose work was all canceled gets no review.
+func (q *Queries) EpicReviewState(ctx context.Context, epicID *uuid.UUID) (EpicReviewStateRow, error) {
+	row := q.db.QueryRow(ctx, epicReviewState, epicID)
+	var i EpicReviewStateRow
+	err := row.Scan(&i.Total, &i.Unfinished, &i.HasReview)
+	return i, err
+}
+
 const epicRollups = `-- name: EpicRollups :many
 SELECT
   e.id AS epic_id,
@@ -257,6 +280,54 @@ func (q *Queries) EpicRollups(ctx context.Context, epicIds []uuid.UUID) ([]EpicR
 			&i.TicketsTotal,
 			&i.TicketsOpen,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const epicTopAssignee = `-- name: EpicTopAssignee :one
+SELECT assignee_agent_id FROM tickets
+WHERE epic_id = $1 AND NOT epic_review AND assignee_agent_id IS NOT NULL
+GROUP BY assignee_agent_id
+ORDER BY count(*) DESC, max(updated_at) DESC
+LIMIT 1
+`
+
+// The agent holding most of the epic's regular tickets, newest activity breaking ties.
+func (q *Queries) EpicTopAssignee(ctx context.Context, epicID *uuid.UUID) (*uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, epicTopAssignee, epicID)
+	var assignee_agent_id *uuid.UUID
+	err := row.Scan(&assignee_agent_id)
+	return assignee_agent_id, err
+}
+
+const epicUnfinishedKeys = `-- name: EpicUnfinishedKeys :many
+SELECT key, status FROM tickets
+WHERE epic_id = $1 AND NOT epic_review AND status IN ('backlog', 'todo', 'in_progress')
+ORDER BY number
+`
+
+type EpicUnfinishedKeysRow struct {
+	Key    string
+	Status string
+}
+
+// Non-review tickets still being worked, for the final review's dispatch blocker.
+func (q *Queries) EpicUnfinishedKeys(ctx context.Context, epicID *uuid.UUID) ([]EpicUnfinishedKeysRow, error) {
+	rows, err := q.db.Query(ctx, epicUnfinishedKeys, epicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EpicUnfinishedKeysRow{}
+	for rows.Next() {
+		var i EpicUnfinishedKeysRow
+		if err := rows.Scan(&i.Key, &i.Status); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -322,6 +393,54 @@ func (q *Queries) GetEpicCriterionByPosition(ctx context.Context, arg GetEpicCri
 	return i, err
 }
 
+const getEpicReviewTicket = `-- name: GetEpicReviewTicket :one
+SELECT id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at, epic_review FROM tickets WHERE epic_id = $1 AND epic_review ORDER BY number LIMIT 1
+`
+
+func (q *Queries) GetEpicReviewTicket(ctx context.Context, epicID *uuid.UUID) (Ticket, error) {
+	row := q.db.QueryRow(ctx, getEpicReviewTicket, epicID)
+	var i Ticket
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Number,
+		&i.Key,
+		&i.Title,
+		&i.DescriptionMd,
+		&i.Status,
+		&i.Priority,
+		&i.EpicID,
+		&i.AssigneeAgentID,
+		&i.ReviewerUserID,
+		&i.CreatedByUserID,
+		&i.Estimate,
+		&i.DueDate,
+		&i.Branch,
+		&i.PrNumber,
+		&i.PrUrl,
+		&i.PrState,
+		&i.PrAdditions,
+		&i.PrDeletions,
+		&i.SortOrder,
+		&i.Search,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PrSyncedAt,
+		&i.PrClosedUnmerged,
+		&i.DependencyRevision,
+		&i.RequiresMockup,
+		&i.Revision,
+		&i.EstimatePoints,
+		&i.EstimateRationale,
+		&i.EstimatedByType,
+		&i.EstimatedByID,
+		&i.EstimatedAt,
+		&i.EpicReview,
+	)
+	return i, err
+}
+
 const listEpicCriteria = `-- name: ListEpicCriteria :many
 SELECT id, epic_id, position, text, done, checked_by_type, checked_by_id, checked_at, created_at, updated_at FROM epic_criteria WHERE epic_id = $1 ORDER BY position
 `
@@ -346,6 +465,47 @@ func (q *Queries) ListEpicCriteria(ctx context.Context, epicID uuid.UUID) ([]Epi
 			&i.CheckedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEpicReviewTickets = `-- name: ListEpicReviewTickets :many
+SELECT key, title, status, branch, pr_url, pr_state FROM tickets
+WHERE epic_id = $1 AND NOT epic_review ORDER BY number
+`
+
+type ListEpicReviewTicketsRow struct {
+	Key     string
+	Title   string
+	Status  string
+	Branch  *string
+	PrUrl   *string
+	PrState *string
+}
+
+func (q *Queries) ListEpicReviewTickets(ctx context.Context, epicID *uuid.UUID) ([]ListEpicReviewTicketsRow, error) {
+	rows, err := q.db.Query(ctx, listEpicReviewTickets, epicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEpicReviewTicketsRow{}
+	for rows.Next() {
+		var i ListEpicReviewTicketsRow
+		if err := rows.Scan(
+			&i.Key,
+			&i.Title,
+			&i.Status,
+			&i.Branch,
+			&i.PrUrl,
+			&i.PrState,
 		); err != nil {
 			return nil, err
 		}
@@ -467,7 +627,7 @@ UPDATE tickets SET
   revision = revision + 1,
   updated_at = now()
 WHERE id = $5
-RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at
+RETURNING id, workspace_id, project_id, number, key, title, description_md, status, priority, epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, branch, pr_number, pr_url, pr_state, pr_additions, pr_deletions, sort_order, search, created_at, updated_at, pr_synced_at, pr_closed_unmerged, dependency_revision, requires_mockup, revision, estimate_points, estimate_rationale, estimated_by_type, estimated_by_id, estimated_at, epic_review
 `
 
 type SetTicketEstimateParams struct {
@@ -528,6 +688,7 @@ func (q *Queries) SetTicketEstimate(ctx context.Context, arg SetTicketEstimatePa
 		&i.EstimatedByType,
 		&i.EstimatedByID,
 		&i.EstimatedAt,
+		&i.EpicReview,
 	)
 	return i, err
 }

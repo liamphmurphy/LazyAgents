@@ -1,10 +1,10 @@
 -- name: CreateTicket :one
 INSERT INTO tickets (
   workspace_id, project_id, number, key, title, description_md, status, priority,
-  epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, sort_order, requires_mockup
+  epic_id, assignee_agent_id, reviewer_user_id, created_by_user_id, estimate, due_date, sort_order, requires_mockup, epic_review
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-  (SELECT coalesce(max(sort_order), 0) + 1 FROM tickets WHERE project_id = $2), $15
+  (SELECT coalesce(max(sort_order), 0) + 1 FROM tickets WHERE project_id = $2), $15, $16
 ) RETURNING *;
 
 -- name: GetTicketByKey :one

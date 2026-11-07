@@ -302,7 +302,9 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 	if err != nil {
 		r.Log.Error("end run", "run", c.run.ID, "err", err)
 	}
-	if c.run.ParentRunID == nil {
+	// Only a successful run's workspace goes: a failed or cancelled one keeps
+	// its checkout (unpushed commits included) for a retry or a person.
+	if c.run.ParentRunID == nil && state == "completed" {
 		r.cleanup(context.Background(), c.run.ID) // a delegated run has no workspace of its own
 	}
 }
@@ -677,7 +679,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 
 	// Skip a harness another run already found exhausted instead of burning a failing turn on it.
-	handoff, err := r.avoidLimitedHarness(ctx, &c, turn)
+	handoff, err := r.selectHarness(ctx, &c, turn)
 	if err != nil {
 		log.Warn("avoid limited harness", "err", err)
 	}
@@ -1103,8 +1105,8 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	q := r.q()
 	switch c.run.State {
 	case "completed", "failed", "cancelled":
-		if c.run.ParentRunID == nil {
-			r.cleanup(ctx, runID)
+		if c.run.ParentRunID == nil && c.run.State == "completed" {
+			r.cleanup(ctx, runID) // failed and cancelled runs keep their checkout
 		}
 		return
 	case "waiting", "paused":
@@ -1119,10 +1121,14 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 		return // a person already resumed it (a reply arrived mid-turn)
 	}
 	if res.UsageLimited && len(c.spec.Fallbacks) > 0 {
-		if err := r.fallback(ctx, c, res); err != nil {
+		switched, err := r.fallback(ctx, c, res)
+		if err != nil {
 			r.end(ctx, c, "failed", "Could not switch to fallback: "+err.Error(), runs.VerbRunFailed)
+			return
 		}
-		return
+		if switched {
+			return
+		}
 	}
 	if (waitErr != nil || code != 0 || res.IsError) && r.retryFreshSession(ctx, c, res) {
 		return

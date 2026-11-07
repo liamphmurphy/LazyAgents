@@ -49,6 +49,12 @@ func (s *Server) GetProjectBoard(ctx context.Context, req api.GetProjectBoardReq
 			return nil, err
 		}
 		b := &api.BoardEpic{Epic: toEpic(e, rollups[e.ID]), Objective: &e.Objective, Criteria: []api.EpicCriterion{}}
+		if rt, err := s.Q.GetEpicReviewTicket(ctx, &e.ID); err == nil {
+			w := toWorkTicket(rt)
+			b.Review = &w
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 		b.DoneBlockers.OpenTickets = blockers.OpenTicketKeys
 		if b.DoneBlockers.OpenTickets == nil {
 			b.DoneBlockers.OpenTickets = []string{}

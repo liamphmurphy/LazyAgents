@@ -51,6 +51,17 @@ func TestEpicCriteriaAndGate(t *testing.T) {
 	if _, err = f.svc.Update(ctx, f.ws, f.maya, child.Key, tracker.Patch{Status: ptr("done")}); err != nil {
 		t.Fatal(err)
 	}
+	// Finishing the last ticket created the epic's final review; it gates the close too.
+	if _, err = f.svc.SetEpicStatus(ctx, f.ws, id, "done"); !errors.As(err, &conflict) {
+		t.Fatalf("close with review open: %v", err)
+	}
+	var reviewKey string
+	if err = f.pool.QueryRow(ctx, `SELECT key FROM tickets WHERE epic_id=$1 AND epic_review`, id).Scan(&reviewKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.svc.Update(ctx, f.ws, f.maya, reviewKey, tracker.Patch{Status: ptr("done")}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = f.svc.SetEpicStatus(ctx, f.ws, id, "done"); err != nil {
 		t.Fatal(err)
 	}

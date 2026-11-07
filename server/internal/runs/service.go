@@ -838,5 +838,19 @@ func RepositoryFor(ctx context.Context, q *store.Queries, p store.Project, t sto
 		return nil, err
 	}
 	repo.EpicBranch, repo.EpicName = agentdef.EpicBranch(p.Key, e.ID.String()), e.Name
+	if !t.EpicReview {
+		return repo, nil
+	}
+	rows, err := q.ListEpicReviewTickets(ctx, t.EpicID)
+	if err != nil {
+		return nil, err
+	}
+	repo.EpicReview = true
+	for _, r := range rows {
+		repo.EpicTickets = append(repo.EpicTickets, agentdef.EpicTicket{
+			Key: r.Key, Title: r.Title, Status: r.Status,
+			Branch: deref(r.Branch), PRURL: deref(r.PrUrl), PRState: deref(r.PrState),
+		})
+	}
 	return repo, nil
 }

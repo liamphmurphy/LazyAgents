@@ -188,7 +188,16 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		}
 	}
 
-	b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. Run the full suite once before finishing; that local run is enough, so never wait for or poll GitHub PR checks. If `TEST_DATABASE_URL` is set, database tests use it: don't start your own database.\n\n")
+	epic := spec.Repository != nil && spec.Repository.EpicBranch != ""
+	review := epic && spec.Repository.EpicReview
+	if epic && !review {
+		b.WriteString("## Checks\n\nThis ticket is part of an epic. Tests run once, in the epic's final review, after its last ticket: don't run tests or the full suite, and don't pass test_command when delegating. Build and typecheck what you changed (e.g. `go build ./...` and `go vet` on the packages you touched, `npx tsc --noEmit` for TypeScript) and fix every error before you commit. Show only the end of long output (`2>&1 | tail -n 40`). Say in complete_run that tests were deferred to the epic review, and never wait for or poll GitHub PR checks.\n\n")
+	} else {
+		b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. Run the full suite once before finishing; that local run is enough, so never wait for or poll GitHub PR checks. If `TEST_DATABASE_URL` is set, database tests use it: don't start your own database.\n\n")
+	}
+	if review && !delegated {
+		b.WriteString(epicReviewSection(spec.Repository))
+	}
 	if !delegated {
 		b.WriteString(gitSection(spec))
 	}
@@ -262,12 +271,15 @@ func gitSection(spec agentdef.Resolved) string {
 	b.WriteString("Check `command -v gh` once: if the `gh` CLI is present it is authenticated through `GH_TOKEN`, so use it for everything on GitHub (pull requests, reviews, checks, issues). ")
 	b.WriteString("If it is missing, just push with `git push -u origin HEAD` and say in a ticket comment that the pull request needs to be opened by hand.\n\n")
 	step := "When the work is done and tests pass"
+	if r := spec.Repository; r != nil && r.EpicBranch != "" && !r.EpicReview {
+		step = "When the work is done and builds cleanly"
+	}
 	if !allowed(spec, "repo:write") {
 		step = "`repo:write` needs a person's approval: call request_approval for it, end your turn, and once you're resumed with a yes"
 	}
 	b.WriteString(step + ":\n\n")
 	if r := spec.Repository; r != nil && r.EpicBranch != "" {
-		b.WriteString(epicSteps(r.EpicBranch, r.DefaultBranch, r.EpicName))
+		b.WriteString(epicSteps(r.EpicBranch, r.DefaultBranch, r.EpicName, r.EpicReview))
 		return b.String()
 	}
 	b.WriteString("1. `git push -u origin HEAD`\n")
@@ -281,7 +293,7 @@ func gitSection(spec agentdef.Resolved) string {
 // pull request from its shared branch into the default branch; each ticket's
 // PR is stacked on that branch and merged into it, so the person reviews the
 // epic as a GitHub stack and merges it once.
-func epicSteps(epic, base, name string) string {
+func epicSteps(epic, base, name string, review bool) string {
 	if base == "" {
 		base = "main"
 	}
@@ -289,7 +301,11 @@ func epicSteps(epic, base, name string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "This ticket is part of the epic %q. The whole epic ships as one pull request from %s into %s, which the person merges once. ", name, e, d)
 	fmt.Fprintf(&b, "Your branch stacks on %s: never open a PR from it into %s, and never merge the epic's PR.\n\n", e, d)
-	b.WriteString("1. `git fetch origin` and, if `origin/" + epic + "` exists, `git merge origin/" + epic + "` to pick up tickets merged since you started. Resolve conflicts and rerun tests.\n")
+	redo := "rebuild"
+	if review {
+		redo = "rerun tests"
+	}
+	b.WriteString("1. `git fetch origin` and, if `origin/" + epic + "` exists, `git merge origin/" + epic + "` to pick up tickets merged since you started. Resolve conflicts and " + redo + ".\n")
 	b.WriteString("2. `git push -u origin HEAD`\n")
 	b.WriteString("3. If " + e + " isn't on origin yet (`git ls-remote --exit-code --heads origin " + epic + "` fails), create it from the base: `git push origin origin/" + base + ":refs/heads/" + epic + "`.\n")
 	fmt.Fprintf(&b, "4. If the epic has no open PR (`gh pr list --head %s --base %s --state open`), open it as a draft: `gh pr create --draft --head %s --base %s --title \"Epic: %s\" --body \"<the epic's objective; tickets are stacked on this PR>\"`.\n",
@@ -300,10 +316,52 @@ func epicSteps(epic, base, name string) string {
 	return b.String()
 }
 
+// epicReviewSection briefs the epic's final review ticket: its tickets only
+// built, so it merges what is still unmerged, runs the tests once and readies
+// the epic's draft PR.
+func epicReviewSection(r *agentdef.Repository) string {
+	base := r.DefaultBranch
+	if base == "" {
+		base = "main"
+	}
+	epic := r.EpicBranch
+	var b strings.Builder
+	b.WriteString("## Epic review\n\n")
+	fmt.Fprintf(&b, "You're the final review of the epic %q, on epic branch `%s` (base `%s`). The epic's tickets only built and typechecked, so expect integration issues: reconcile them here.\n\n", r.EpicName, epic, base)
+	for _, t := range r.EpicTickets {
+		fmt.Fprintf(&b, "- %s %s — %s", t.Key, t.Title, t.Status)
+		if t.Branch != "" {
+			fmt.Fprintf(&b, ", branch `%s`", t.Branch)
+		}
+		if t.PRURL != "" {
+			fmt.Fprintf(&b, ", PR %s", t.PRURL)
+			if t.PRState != "" {
+				fmt.Fprintf(&b, " (%s)", t.PRState)
+			}
+		}
+		b.WriteString("\n")
+	}
+	if len(r.EpicTickets) > 0 {
+		b.WriteString("\n")
+	}
+	b.WriteString("1. `git fetch --prune origin`.\n")
+	fmt.Fprintf(&b, "2. For each ticket PR that's still open with base `%s`, merge it into the epic branch: `gh pr merge <url> --squash --delete-branch`. If it conflicts, check out its branch, merge `origin/%s`, resolve, push, and merge it. Then `git fetch --prune origin` again.\n", epic, epic)
+	fmt.Fprintf(&b, "3. Skip tickets whose PR is merged (squash merges look unmerged to git). Any other listed ticket branch still on origin without an open PR and not yet in `origin/%s` (`git branch -r --no-merged origin/%s`): merge it into your branch.\n", epic, epic)
+	fmt.Fprintf(&b, "4. `git merge origin/%s` into your branch, then run the full test suite once, fix failures, and rerun only what failed.\n", epic)
+	b.WriteString("5. Verify each epic acceptance criterion and tick it with check_epic_criterion; check your own ticket's criteria with check_criterion.\n")
+	b.WriteString("6. Publish your branch with the epic steps below. If you committed nothing beyond the epic branch, skip publishing and go straight to step 7.\n")
+	fmt.Fprintf(&b, "7. Mark the epic PR ready: `gh pr ready <epic PR>` (find it with `gh pr list --head %s --base %s --state open`). Never merge the epic PR into `%s`.\n\n", epic, base, base)
+	return b.String()
+}
+
 // delegationSection tells a main agent it can hand work to sub agents.
-func delegationSection(agentdef.Resolved) string {
+func delegationSection(spec agentdef.Resolved) string {
+	checks := "allowed_paths and test_command"
+	if r := spec.Repository; r != nil && r.EpicBranch != "" && !r.EpicReview {
+		checks = "allowed_paths, and no test_command (tests run in the epic review)"
+	}
 	return fmt.Sprintf("Before finishing, verify every acceptance criterion against evidence and call check_criterion only when satisfied. If anything is missing, implement it yourself or delegate a substantial independent slice. Commit and push changes, record the PR with set_pr, and complete_run(status=done). Use await_human or request_approval for a person; status=todo hands back unfinished work.\n\n"+
-		"Only when delegation is justified, use list_subagents then delegate with acceptance_criteria, allowed_paths and test_command. Commit first. Each child gets a worktree; the server checks and merges successful results. Up to %d children may run in parallel on disjoint paths. End your turn after delegating. Review the returned diff, reuse passing checks, and use continue_run_id for follow-up fixes.\n\n", runs.MaxParallelDelegations)
+		"Only when delegation is justified, use list_subagents then delegate with acceptance_criteria, %s. Commit first. Each child gets a worktree; the server checks and merges successful results. Up to %d children may run in parallel on disjoint paths. End your turn after delegating. Review the returned diff, reuse passing checks, and use continue_run_id for follow-up fixes.\n\n", checks, runs.MaxParallelDelegations)
 }
 
 // UsageLimit reports provider exhaustion from an error, never ordinary tool output.

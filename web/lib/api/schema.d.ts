@@ -79,6 +79,33 @@ export interface paths {
         patch: operations["updateEpic"];
         trace?: never;
     };
+    "/epics/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add the epic's final review ticket now
+         * @description The server creates an epic's final review ticket automatically once its
+         *     last regular ticket finishes (in review, done or canceled). This adds it
+         *     early so it can be dispatched at the end: until the epic's other tickets
+         *     finish, dispatching it is refused. Idempotent: returns the existing
+         *     review ticket if there is one. 409 when the epic is done or its project
+         *     is archived.
+         */
+        post: operations["createEpicReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/epics/{id}/criteria": {
         parameters: {
             query?: never;
@@ -1483,6 +1510,8 @@ export interface components {
                 /** @description Criterion positions */
                 unchecked_criteria: number[];
             };
+            /** @description The epic's final review ticket, once it exists */
+            review?: components["schemas"]["WorkTicket"];
         };
         Label: {
             /** Format: uuid */
@@ -1605,6 +1634,8 @@ export interface components {
             pr?: components["schemas"]["PullRequest"];
             /** @description This ticket itself is flagged (its epic may also require one) */
             requires_mockup: boolean;
+            /** @description The epic's final review: created by the server, it consolidates the epic's branches and runs its tests once */
+            epic_review: boolean;
             mockup_gate: components["schemas"]["MockupGate"];
             /** Format: date-time */
             created_at: string;
@@ -3055,6 +3086,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Epic"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createEpicReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The epic's final review ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkTicket"];
                 };
             };
             default: components["responses"]["Error"];

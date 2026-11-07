@@ -25,6 +25,8 @@ func TestCostAndCumulativeUsageMigration(t *testing.T) {
 	mustExec(t, pool, `ALTER TABLE tickets ADD COLUMN revision integer NOT NULL DEFAULT 1, ADD COLUMN estimate_points integer,
 		ADD COLUMN estimate_rationale text, ADD COLUMN estimated_by_type text, ADD COLUMN estimated_by_id uuid, ADD COLUMN estimated_at timestamptz`)
 	mustExec(t, pool, `ALTER TABLE epics ADD COLUMN status text NOT NULL DEFAULT 'open'`)
+	// ...and the epic review flag (migration 27).
+	mustExec(t, pool, `ALTER TABLE tickets ADD COLUMN epic_review boolean NOT NULL DEFAULT false`)
 	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
 		t.Fatal(err)
 	}
