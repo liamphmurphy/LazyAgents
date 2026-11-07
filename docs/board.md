@@ -54,7 +54,7 @@ status control. The epic page (`/epics`) has the same editor and gate.
   ("Blocks done: PAY-3 open · criteria 2 unchecked"). If you try anyway, the
   server refuses (409) and the header lists the unchecked criteria and open
   tickets. Once nothing blocks it, the header reads "Ready to mark done".
-- An epic with no criteria must get some before it can be closed.
+- The board and epics page require at least one criterion before offering Done.
 - While an epic is done, its criteria are locked and no ticket can be added
   to it. Setting it back to Open is always allowed.
 - Only people move an epic to Done in v1.
