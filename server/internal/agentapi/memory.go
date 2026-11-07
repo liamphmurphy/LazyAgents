@@ -54,13 +54,16 @@ type memoryEntry struct {
 	Type         string     `json:"type"`
 	Source       string     `json:"source,omitempty"`
 	SupersededBy *uuid.UUID `json:"superseded_by,omitempty"`
-	CreatedAt    string     `json:"created_at"`
-	UpdatedAt    string     `json:"updated_at"`
+	// RetiredReason says why a retired entry was retired (e.g. merged by
+	// memory consolidation).
+	RetiredReason string `json:"retired_reason,omitempty"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 func toMemoryEntry(m store.Memory, withBody bool) memoryEntry {
 	e := memoryEntry{ID: m.ID, Title: m.Title, Summary: m.Summary, Tags: m.Tags, Type: m.Type, Source: m.Source,
-		SupersededBy: m.SupersededBy, CreatedAt: m.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"), UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")}
+		SupersededBy: m.SupersededBy, RetiredReason: m.RetiredReason, CreatedAt: m.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"), UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")}
 	if withBody {
 		e.Body = m.Body
 	}
@@ -157,7 +160,7 @@ func updateMemory(ctx context.Context, d Deps, c agents.Caller, in UpdateMemoryI
 		if err != nil {
 			return nil, err
 		}
-		if m, err = svc.Supersede(ctx, o, id, &by); err != nil {
+		if m, err = svc.Supersede(ctx, o, id, &by, "Replaced by the assistant"); err != nil {
 			return nil, err
 		}
 	}

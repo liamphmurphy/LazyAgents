@@ -25,11 +25,47 @@ RETURNING *;
 -- name: SetMemorySupersededBy :one
 -- Retires an entry in favour of another of the same person's entries, or
 -- restores it when superseded_by is null.
-UPDATE memories m SET superseded_by = sqlc.narg(superseded_by), updated_at = now()
+-- Retiring records the reason and time; restoring clears them, and a person's
+-- restore exempts the entry from consolidation. FOR SHARE on the new entry
+-- waits out a concurrent retire of it, so two entries can't supersede each
+-- other.
+UPDATE memories m SET superseded_by = sqlc.narg(superseded_by),
+  retired_reason = CASE WHEN sqlc.narg(superseded_by)::uuid IS NULL THEN '' ELSE @retired_reason::text END,
+  retired_at = CASE WHEN sqlc.narg(superseded_by)::uuid IS NULL THEN NULL ELSE now() END,
+  consolidation_exempt = consolidation_exempt OR (sqlc.narg(superseded_by)::uuid IS NULL AND @restored_by_person::bool),
+  updated_at = now()
 WHERE m.id = @id AND m.workspace_id = @workspace_id AND m.user_id = @user_id
   AND (sqlc.narg(superseded_by)::uuid IS NULL OR EXISTS (
-    SELECT 1 FROM memories n WHERE n.id = sqlc.narg(superseded_by) AND n.workspace_id = @workspace_id AND n.user_id = @user_id AND n.superseded_by IS NULL))
+    SELECT 1 FROM memories n WHERE n.id = sqlc.narg(superseded_by) AND n.workspace_id = @workspace_id AND n.user_id = @user_id AND n.superseded_by IS NULL FOR SHARE))
 RETURNING *;
+
+-- name: RetireDuplicateMemory :one
+-- The consolidation pass retires a live entry in favour of another live entry
+-- of the same person. No row when either was retired or changed meanwhile.
+-- FOR SHARE: see SetMemorySupersededBy.
+UPDATE memories m SET superseded_by = @keep_id, retired_reason = @retired_reason::text, retired_at = now(), updated_at = now()
+WHERE m.id = @id AND m.workspace_id = @workspace_id AND m.user_id = @user_id
+  AND m.superseded_by IS NULL AND m.updated_at = @updated_at
+  AND EXISTS (SELECT 1 FROM memories n WHERE n.id = @keep_id AND n.workspace_id = @workspace_id AND n.user_id = @user_id AND n.superseded_by IS NULL FOR SHARE)
+RETURNING *;
+
+-- name: DuplicateMemoryPairs :many
+-- Pairs of one person's live entries of the same type that look like the same
+-- thing: a similar title or a near-identical summary, neither restored by the
+-- person after an earlier merge. keep is the more
+-- recently changed of the two. Newest keep first, best match first.
+SELECT a.workspace_id, a.user_id, a.id AS keep_id, a.title AS keep_title,
+  b.id AS retire_id, b.title AS retire_title, b.updated_at AS retire_updated_at,
+  greatest(similarity(lower(a.title), lower(b.title)),
+           CASE WHEN a.summary <> '' AND b.summary <> '' THEN similarity(lower(a.summary), lower(b.summary)) ELSE 0 END)::float8 AS score
+FROM memories a
+JOIN memories b ON b.workspace_id = a.workspace_id AND b.user_id = a.user_id AND b.type = a.type
+  AND (b.updated_at, b.id) < (a.updated_at, a.id) AND b.superseded_by IS NULL AND NOT b.consolidation_exempt
+WHERE a.superseded_by IS NULL AND NOT a.consolidation_exempt
+  AND (similarity(lower(a.title), lower(b.title)) >= @title_threshold::float8
+       OR (a.summary <> '' AND b.summary <> '' AND similarity(lower(a.summary), lower(b.summary)) >= @summary_threshold::float8))
+ORDER BY a.workspace_id, a.user_id, a.updated_at DESC, a.id DESC, score DESC
+LIMIT @lim;
 
 -- name: GetMemory :one
 SELECT * FROM memories WHERE id = @id AND workspace_id = @workspace_id AND user_id = @user_id;

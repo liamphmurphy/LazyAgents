@@ -31,6 +31,9 @@ type Config struct {
 	Runner Runner
 	// PRSyncInterval is how often open PRs are polled (0 disables).
 	PRSyncInterval int // seconds
+	// MemoryConsolidateInterval is how often personal memories are
+	// consolidated (duplicates merged; 0 disables).
+	MemoryConsolidateInterval int // seconds
 }
 
 // Runner configures `lazyagents runner` (PLAN.md §6.5).
@@ -137,6 +140,9 @@ func Load() (Config, error) {
 	}
 	c.Runner = r
 	if c.PRSyncInterval, err = intEnv("PR_SYNC_INTERVAL_S", 60); err != nil {
+		return c, err
+	}
+	if c.MemoryConsolidateInterval, err = intEnv("MEMORY_CONSOLIDATE_INTERVAL_S", 6*60*60); err != nil {
 		return c, err
 	}
 	return c, nil
