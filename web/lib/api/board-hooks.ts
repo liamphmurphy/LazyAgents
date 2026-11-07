@@ -2,8 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap } from "./client";
-import { keys } from "./hooks";
+import { api, unwrap, type TicketPatch } from "./client";
+import { keys, useUpdateTicket } from "./hooks";
 import { moveRevision, type BoardCard, type BoardStatus, type PendingMove } from "../board";
 
 export type BoardFilters = { epic?: string; assignee?: string; include_canceled: boolean };
@@ -65,4 +65,31 @@ export function useBoardMoves() {
   }
 
   return { pending, move, error, notice, dismissError: () => setError(undefined) };
+}
+
+/** Fresh detail for the editor. gcTime 0 so every open fetches again instead of showing a cached copy. */
+export function useTicketEditorDetail(key: string | undefined) {
+  return useQuery({
+    enabled: !!key,
+    queryKey: ["tickets", "editor", key ?? ""] as const,
+    gcTime: 0,
+    retry: false,
+    queryFn: ({ signal }) => unwrap(api.GET("/tickets/{key}", { params: { path: { key: key! } }, signal })),
+  });
+}
+
+/** Saves one draft PATCH, then waits for board/ticket caches to refetch so the card shows it. */
+export function useSaveTicketDraft(key: string) {
+  const qc = useQueryClient();
+  const update = useUpdateTicket(key);
+  return async (patch: TicketPatch) => {
+    const saved = await update.mutateAsync(patch);
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["boards"] }),
+      qc.invalidateQueries({ queryKey: keys.tickets }),
+      qc.invalidateQueries({ queryKey: keys.bootstrap }),
+      qc.invalidateQueries({ queryKey: ["epics"] }),
+    ]);
+    return saved;
+  };
 }

@@ -37,10 +37,15 @@ export async function installBoardApi(page: Page) {
   ];
   // Detail criteria are used for the summary progress too.
   tickets[0].criteria = [{ id: "ticket-criterion", position: 1, text: "Works", done: true }];
+  tickets[0].description_md = "Original description";
+  tickets[0].estimated_by = { type: "agent", id: builder.id, name: builder.name };
+  tickets[2].estimated_by = { type: "user", id: "other-user", name: "Sam" };
+  const me = { type: "user" as const, id: "user", name: "Liam" };
+  let newCriterionId = 0;
   const patches: Array<{ key: string; body: S["TicketPatch"] }> = [];
   const boardRequests: string[] = [];
   const unhandled: string[] = [];
-  let rejection: { status: number; message: string } | undefined;
+  let rejection: { status: number; message: string; field?: string } | undefined;
   let gate: Promise<void> | undefined;
   let boardError = false;
   function epicSummary(epic: S["Epic"]): S["Epic"] {
@@ -93,9 +98,25 @@ export async function installBoardApi(page: Page) {
       const hold = gate; gate = undefined;
       if (hold) await hold;
       const reject = rejection; rejection = undefined;
-      if (reject) return json({ code: reject.status === 409 ? "conflict" : "invalid", message: reject.message }, reject.status);
-      if (body.revision !== t.revision) return json({ code: "conflict", message: "Revision changed elsewhere" }, 409);
-      Object.assign(t, { status: body.status, revision: t.revision + 1, updated_at: stamp(t.revision + 1) });
+      if (reject) return json({ code: reject.status === 409 ? "conflict" : "invalid", message: reject.message, ...(reject.field && { field: reject.field }) }, reject.status);
+      if (body.revision !== t.revision) return json({ code: "conflict", message: "Revision changed elsewhere", field: "revision" }, 409);
+      if (body.criteria && JSON.stringify(body.criteria.expected) !== JSON.stringify(t.criteria)) {
+        return json({ code: "conflict", message: "Criteria changed elsewhere", field: "criteria" }, 409);
+      }
+      if (body.title !== undefined) t.title = body.title;
+      if (body.description_md !== undefined) t.description_md = body.description_md;
+      if (body.status !== undefined) t.status = body.status;
+      if (body.priority !== undefined) t.priority = body.priority;
+      if (body.epic_id !== undefined) { const e = epics.find((x) => x.id === body.epic_id); t.epic = e ? { id: e.id, name: e.name } : undefined; }
+      if (body.assignee_agent_id !== undefined) t.assignee = [builder, reviewer].find((a) => a.id === body.assignee_agent_id);
+      if ("estimate_points" in body) {
+        t.estimate_points = body.estimate_points ?? undefined;
+        t.estimated_by = body.estimate_points == null ? undefined : me;
+      }
+      if (body.criteria) {
+        t.criteria = body.criteria.items.map((item, i) => ({ id: item.id ?? `criterion-new-${++newCriterionId}`, position: i + 1, text: item.text, done: item.done }));
+      }
+      Object.assign(t, { revision: t.revision + 1, updated_at: stamp(t.revision + 1) });
       return json(t);
     }
     unhandled.push(`${request.method()} ${path}`);
@@ -114,7 +135,7 @@ export async function installBoardApi(page: Page) {
   await page.route("**/api/v1/**", handle);
   return {
     tickets, criteria, patches, boardRequests, unhandled,
-    rejectNext: (status: number, message: string) => { rejection = { status, message }; },
+    rejectNext: (status: number, message: string, field?: string) => { rejection = { status, message, field }; },
     failBoard: (fail: boolean) => { boardError = fail; },
     holdNextPatch: () => { let release!: () => void; gate = new Promise<void>((resolve) => { release = resolve; }); return release; },
     editTicket: (key: string, patch: Partial<S["Ticket"]>) => {
