@@ -2181,7 +2181,7 @@ export interface components {
             description: string;
             secret?: string;
             brokered: boolean;
-            /** @description Only possible through the LazyAgents API (wiki edits), so every mode is enforced server-side */
+            /** @description Only possible through the Vesper API (wiki edits), so every mode is enforced server-side */
             api_only?: boolean;
         };
         AgentDetail: {

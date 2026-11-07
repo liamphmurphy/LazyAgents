@@ -142,12 +142,12 @@ func (r *Runner) handoffPrompt(ctx context.Context, c runCtx, previousHarness, p
 		return "", err
 	}
 	var prompt strings.Builder
-	fmt.Fprintf(&prompt, "Continue this existing LazyAgents run after %s (%s) %s. You are using a fresh session in the same checkout. Inspect the working tree, commits, run plan and ticket before continuing; preserve completed work.\n\n", previousHarness, previousModel, why)
+	fmt.Fprintf(&prompt, "Continue this existing Vesper run after %s (%s) %s. You are using a fresh session in the same checkout. Inspect the working tree, commits, run plan and ticket before continuing; preserve completed work.\n\n", previousHarness, previousModel, why)
 	for i, turn := range turns {
 		if i != 0 && i < len(turns)-12 {
 			continue
 		}
-		if strings.HasPrefix(turn.InputMessage, "Continue this existing LazyAgents run after ") {
+		if strings.HasPrefix(turn.InputMessage, "Continue this existing Vesper run after ") {
 			continue
 		}
 		prompt.WriteString("Previous input:\n" + harnessContext(turn.InputMessage, 12000) + "\n\n")

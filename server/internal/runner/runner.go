@@ -35,7 +35,7 @@ import (
 type Config struct {
 	ID            string        // unique per runner process
 	MaxConcurrent int           // processes at once (RUNNER_MAX_CONCURRENT)
-	MCPURL        string        // LazyAgents' /mcp as turns reach it
+	MCPURL        string        // Vesper's /mcp as turns reach it
 	Poll          time.Duration // queue poll interval
 	Grace         time.Duration // after SIGINT, before SIGKILL (pause, cancel)
 	LogBucket     string        // raw harness logs (run-logs)
@@ -497,7 +497,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			epic = c.spec.Repository.EpicBranch
 		}
 	}
-	script := SetupScriptForEpic(repo, base, epic, branch, c.agent.Name+" (LazyAgents)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
+	script := SetupScriptForEpic(repo, base, epic, branch, c.agent.Name+" (Vesper)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
 	if c.run.Purpose == "chat" {
 		script = "mkdir -p .lazyagents/context"
 	}

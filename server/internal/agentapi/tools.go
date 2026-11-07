@@ -1042,7 +1042,7 @@ var Tools = []Tool{
 			}
 			msg := "A person has been asked. Call wait_for_approval with this approval_id."
 			if _, brokered := brokerFor(in.Scope); brokered {
-				msg += " Once approved, call run_gated: LazyAgents runs the approved action itself."
+				msg += " Once approved, call run_gated: Vesper runs the approved action itself."
 			}
 			return map[string]any{"state": "pending", "approval_id": out.Approval.ID, "message": msg}, nil
 		}),

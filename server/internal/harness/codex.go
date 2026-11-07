@@ -46,7 +46,7 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		// These are the service's own authenticated workflow tools. MCP's
 		// approval policy is separate from shell approval_policy: without
 		// this, unannotated tools prompt and are rejected headless. Scope
-		// checks and human approvals still happen inside LazyAgents.
+		// checks and human approvals still happen inside Vesper.
 		"mcp_servers." + lazyagentsServer + ".default_tools_approval_mode=" + tomlString("approve"),
 		"mcp_servers." + lazyagentsServer + ".required=true",
 	}

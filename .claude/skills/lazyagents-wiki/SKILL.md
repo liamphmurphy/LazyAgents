@@ -1,11 +1,11 @@
 ---
 name: lazyagents-wiki
-description: Look up the LazyAgents team wiki (shared Patterns, ADRs, agent notes) through the local API. Use when starting non-trivial work in this repo, before designing or reviewing a change, or when unsure of a convention (Go style, testing, API, Postgres, React, architecture, process).
+description: Look up the Vesper team wiki (shared Patterns, ADRs, agent notes) through the local API. Use when starting non-trivial work in this repo, before designing or reviewing a change, or when unsure of a convention (Go style, testing, API, Postgres, React, architecture, process).
 ---
 
-# LazyAgents wiki lookup
+# Vesper wiki lookup
 
-The team wiki lives in the running LazyAgents server, not in the repo. Read it over the local REST API with `curl`. Read-only: never POST/PUT/DELETE here; proposing and publishing patterns happens inside LazyAgents (propose_pattern → librarian → tech-lead).
+The team wiki lives in the running Vesper server, not in the repo. Read it over the local REST API with `curl`. Read-only: never POST/PUT/DELETE here; proposing and publishing patterns happens inside Vesper (propose_pattern → librarian → tech-lead).
 
 API base: `${LAZYAGENTS_API:-http://localhost:8000/api/v1}`. If it doesn't answer, say "wiki unavailable" and continue without it. Don't start the server.
 

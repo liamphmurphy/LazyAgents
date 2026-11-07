@@ -53,7 +53,7 @@ bounded output/timeouts under the exact runtime credential context.
 
 Authentication/provider contract:
 
-| Model provider | Existing LazyAgents secret | Injected credential | Mode |
+| Model provider | Existing Vesper secret | Injected credential | Mode |
 | --- | --- | --- | --- |
 | `anthropic/<model>#<variant>` | `harness:anthropic` | `ANTHROPIC_API_KEY` | API key, equivalent to Claude harness |
 | `openai/<model>#<variant>` | `harness:openai` | `OPENAI_API_KEY` | API key, equivalent to Codex harness |
@@ -148,7 +148,7 @@ not command-line arguments or logs. Clear inherited global servers/plugins/confi
 and bind effective rules to this run so project instructions cannot weaken policy.
 
 OpenCode v2 permission rules are not a security boundary for arbitrary shell access.
-A CLI approval prompt is not LazyAgents approval. Without a verified authenticated
+A CLI approval prompt is not Vesper approval. Without a verified authenticated
 pre-tool integration, reject approval-required nonbrokered scopes; brokered actions
 must stay server-side with no bypass credential. Reject unknown harness options,
 unmapped tools and unsupported sandbox/read-only guarantees before a process starts.
@@ -210,9 +210,9 @@ plugins denied; required built-in policy machinery must remain active.
 This template intentionally
 permits no tool until that expansion. Ticket policy adds only resolved scope actions;
 planning permits context reads and proposal tools, with no writes or project execution.
-No `--auto`. Required approval actions use the authenticated LazyAgents policy bridge;
+No `--auto`. Required approval actions use the authenticated Vesper policy bridge;
 if no bridge can enforce a nonbrokered scope, reject the spec. Native subagents cannot
-replace LazyAgents delegation. Brokered operations stay server-side.
+replace Vesper delegation. Brokered operations stay server-side.
 
 [MCP configuration](https://opencode.ai/v2/docs/mcp-servers/) supplies the remote
 header and direct-tool shape. [Permissions](https://opencode.ai/v2/docs/permissions/)

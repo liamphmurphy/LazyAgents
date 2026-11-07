@@ -161,7 +161,7 @@ function EventRow({ entry, plan, tools, runs, calls }: { entry: Entry; plan: Run
       body = <ToolRow row={row as Extract<Row<RunEvent>, { kind: "tool" }>} open={tools.open(key)} onToggle={() => tools.toggle(key)} runs={runs} calls={calls} />;
       break;
     case "message": {
-      // Agent text from the harness, or a LazyAgents event logged by a tool
+      // Agent text from the harness, or a Vesper event logged by a tool
       // (plan posted, step moved, log_event).
       const stepText = p.kind === "step" ? (plan.find((s) => s.position === Number(p.step)) ?? plan[Number(p.step) - 1])?.text : undefined;
       body =

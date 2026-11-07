@@ -14,7 +14,7 @@ nightly smoke test).
 
 `opencode-real-stub-*.jsonl` were recorded from the real OpenCode 2.2.1 binary against a localhost
 stub provider (no paid call; paths sanitized to `/work/ws`): `text` (plain turn), `tools-blocked` (exact
-LazyAgents config: every file tool is blocked by policy, an MCP call completes), `resume`, `quota-error`
+Vesper config: every file tool is blocked by policy, an MCP call completes), `resume`, `quota-error`
 (stub 400), `cancel` (SIGINT mid-stream), and `tools-completed` / `shell-denied`, which were recorded with a
 corrected policy (`<tool>:*` resources, `shell`) to show completed tools and the `git push` deny. The model
 output, token numbers and the stub's `ses_`/`msg_` ids are the stub's or the CLI's own; they prove the

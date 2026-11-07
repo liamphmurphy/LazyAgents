@@ -1,6 +1,6 @@
-# LazyAgents — Design Handoff
+# Vesper — Design Handoff
 
-LazyAgents is a lightweight issue tracker for autonomous LLM coding agents: projects, epics, tickets, agent assignments and the context documents (PRDs, specs, ADRs, reports) agents read and write.
+Vesper is a lightweight issue tracker for autonomous LLM coding agents: projects, epics, tickets, agent assignments and the context documents (PRDs, specs, ADRs, reports) agents read and write.
 
 This folder is the visual source of truth for the first build. Implement the UI to match it. All names, numbers and people in the mockups are fictional sample data.
 
@@ -369,7 +369,7 @@ A person must dispatch every ticket before its agent runs.
 * The main column is a stack of cards:
   * **Identity:** name, handle, role, color from the fixed palette.
   * **Runtime:**
-    * harness segmented control (Claude Code / Codex), with a sunken capability list showing what LazyAgents can enforce on that harness;
+    * harness segmented control (Claude Code / Codex), with a sunken capability list showing what Vesper can enforce on that harness;
     * model, concurrent runs, optional run guards.
   * **Instructions:** mono markdown, written to `AGENTS.md`.
   * **Permissions:** for each scope, a small segmented mode, an enforcement chip and a "how" line, with a legend footer.

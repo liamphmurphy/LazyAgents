@@ -79,7 +79,7 @@ export function Icon({
   );
 }
 
-/** Shared LazyAgents brand asset, also used in the README and browser icon. */
+/** Shared Vesper brand asset, also used in the README and browser icon. */
 export function Mark({ size = 22 }: { size?: number }) {
   return (
     // A plain image keeps the small vector mark identical on every surface.

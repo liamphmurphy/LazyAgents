@@ -101,7 +101,7 @@ export function ApprovalBanner({ t, ap, expanded = false }: { t: Ticket; ap: App
           {showAction && ap.action_preview && (
             <>
               <span className="text-xs text-fg-tertiary">
-                {ap.brokered ? "LazyAgents runs exactly this after you approve; the agent never sees the credential." : "Requested action"}
+                {ap.brokered ? "Vesper runs exactly this after you approve; the agent never sees the credential." : "Requested action"}
               </span>
               <pre className="max-h-64 overflow-auto rounded-lg bg-surface-sunken p-3 font-mono text-xs leading-relaxed text-fg-2">{ap.action_preview}</pre>
             </>

@@ -244,7 +244,7 @@ The previous sessions ran Postgres 17, SeaweedFS and sqlc from nix inside the se
 - **Tests:** `internal/httpapi/agentapi_test.go` drives PAY-214 end to end through a real MCP client, including the person approving over REST, the broker migrating staging, the ticket reflecting the run, and revoked tokens failing on both transports.
 
 **4e: Ticket UI ✅** (`app/(app)/tickets/[key]/run-parts.tsx`)
-- `ApprovalBanner`: one per pending approval. Shows the scope, action and risk. "View action" shows the exact SQL with "LazyAgents runs exactly this…". An optional note goes with Deny or Approve & continue.
+- `ApprovalBanner`: one per pending approval. Shows the scope, action and risk. "View action" shows the exact SQL with "Vesper runs exactly this…". An optional note goes with Deny or Approve & continue.
 - `RunCard` in the properties panel: state pill, model · harness · unmanaged, run time, tool calls, tokens, spend, permissions (approval scopes amber), outcome, Pause/Resume and Cancel.
 - `PlanCard` renders the live `ticket.run.plan` under the latest `plan_posted` event of that run.
 - Timeline sentences for every run verb (`timeline.tsx`).

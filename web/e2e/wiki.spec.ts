@@ -61,7 +61,7 @@ async function installWikiApi(p: Page) {
     const path = url.pathname.replace(/^\/api\/v1/, "");
     const json = (data: unknown, status = 200) => route.fulfill({ status, json: data });
     if (path === "/bootstrap") return json({
-      workspace: { id: "workspace", name: "LazyAgents", slug: "lazyagents" },
+      workspace: { id: "workspace", name: "Vesper", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
       users: [], agents: [], epics: [], projects: [], labels: [], counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
     } satisfies S["Bootstrap"]);

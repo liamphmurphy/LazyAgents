@@ -1,4 +1,4 @@
-# Running and developing LazyAgents
+# Running and developing Vesper
 
 [← Back to the project](../README.md)
 
@@ -120,7 +120,7 @@ tool results and older messages outside the budget do not transfer.
 
 Use **Add context** or type `[[` to attach a wiki page, artifact or ticket.
 **Start chat** on a context item's page opens a chat with that item attached.
-The assistant can read project context through LazyAgents MCP; pages it reads
+The assistant can read project context through Vesper MCP; pages it reads
 appear under **Sources**. Replies arrive when a turn finishes. **Stop** cancels
 the current turn; **Save to wiki** and **Save as artifact** preserve a reply.
 Chats use a scratch workspace and read-only context tools.

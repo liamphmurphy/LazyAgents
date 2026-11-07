@@ -48,7 +48,7 @@ type OpenCode struct {
 
 func (OpenCode) Name() string { return HarnessOpenCode }
 
-// OpenCodeCredentialEnv maps a provider-qualified model to the LazyAgents
+// OpenCodeCredentialEnv maps a provider-qualified model to the Vesper
 // secret and environment variable that authenticate it. Only the selected
 // provider's key may be injected into the turn.
 func OpenCodeCredentialEnv(model string) (secret, env string, err error) {
@@ -170,7 +170,7 @@ func (o OpenCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		info := agentdef.Catalog[s.Scope]
 		if !info.Brokered && !info.APIOnly {
 			// No authenticated pre-tool bridge exists: a CLI prompt is not
-			// LazyAgents approval.
+			// Vesper approval.
 			return Invocation{}, fmt.Errorf("harness: opencode cannot enforce approval for scope %q", s.Scope)
 		}
 	}
