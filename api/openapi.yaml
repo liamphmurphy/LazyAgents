@@ -2964,15 +2964,21 @@ components:
       required: [id, kind, title, summary, href, project, ticket_key, created_at, resolved, read]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [approval, dispatch, mention, review, blocked, suggestion, planning, mockup] }
+        kind:
+          type: string
+          description: "question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes"
+          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion]
         title: { type: string }
         summary: { type: string }
         href: { type: string }
         project: { type: string }
         ticket_key: { type: string }
-        created_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time, description: "When the item last changed; the wait starts here" }
         resolved: { type: boolean }
-        read: { type: boolean }
+        read: { type: boolean, description: "Marked done by this person since the item last changed" }
+        agent: { $ref: "#/components/schemas/AgentRef" }
+        run_id: { type: string, format: uuid, description: "The run to reply to, retry or cancel" }
+        artifact_id: { type: string, format: uuid, description: "The mockup or wiki page under review" }
 
     WorkflowCounts:
       type: object

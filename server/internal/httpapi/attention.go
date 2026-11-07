@@ -24,7 +24,11 @@ func (s *Server) ListInbox(ctx context.Context, req api.ListInboxRequestObject) 
 		if r.Kind == "suggestion" {
 			r.Href = links.NoteHref(strings.TrimPrefix(r.Href, "/wiki/"))
 		}
-		out.Items = append(out.Items, api.InboxItem{Id: r.ID, Kind: api.InboxItemKind(r.Kind), Title: r.Title, Summary: r.Summary, Href: r.Href, Project: r.Project, TicketKey: r.TicketKey, CreatedAt: r.CreatedAt, Resolved: r.Resolved, Read: r.Read})
+		item := api.InboxItem{Id: r.ID, Kind: api.InboxItemKind(r.Kind), Title: r.Title, Summary: r.Summary, Href: r.Href, Project: r.Project, TicketKey: r.TicketKey, CreatedAt: r.CreatedAt, Resolved: r.Resolved, Read: r.Read, RunId: r.RunID, ArtifactId: r.ArtifactID}
+		if r.AgentID != nil {
+			item.Agent = &api.AgentRef{Id: *r.AgentID, Handle: r.AgentHandle, Name: r.AgentName, ColorIndex: int(r.AgentColorIndex)}
+		}
+		out.Items = append(out.Items, item)
 	}
 	return out, nil
 }

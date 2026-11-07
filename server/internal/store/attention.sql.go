@@ -17,38 +17,55 @@ WITH items AS (
  SELECT ('planning:'||pl.id)::text AS id,'planning'::text AS kind,pl.goal AS title,
  CASE WHEN pl.state='review' THEN 'Draft tickets are ready for your review' ELSE coalesce(r.outcome,'Planning run needs attention') END::text AS summary,
  ('/plans?id='||pl.id)::text AS href,p.key AS project,''::text AS ticket_key,greatest(pl.updated_at,r.updated_at)::timestamptz AS created_at,
- (pl.state IN ('accepted','dismissed')) AS resolved
- FROM planning_sessions pl JOIN runs r ON r.id=pl.run_id JOIN projects p ON p.id=pl.project_id
+ (pl.state IN ('accepted','dismissed')) AS resolved, r.agent_id::uuid AS agent_id, r.id AS run_id, NULL::uuid AS artifact_id
+ FROM planning_sessions pl LEFT JOIN runs r ON r.id=pl.run_id JOIN projects p ON p.id=pl.project_id
  WHERE pl.workspace_id=$3 AND (pl.state<>'planning' OR r.state IN ('failed','cancelled','blocked'))
  UNION ALL
  SELECT ('approval:'||a.id)::text AS id, 'approval'::text AS kind, t.title, a.action_summary AS summary,
  ('/tickets/'||t.key)::text AS href, p.key AS project, t.key AS ticket_key, a.created_at,
- a.state <> 'pending' AS resolved
+ a.state <> 'pending' AS resolved, a.agent_id, a.run_id, NULL
  FROM approval_requests a JOIN tickets t ON t.id=a.ticket_id JOIN projects p ON p.id=t.project_id
  WHERE a.workspace_id=$3
  UNION ALL
- SELECT 'dispatch:'||t.id,'dispatch',t.title,ag.name||' is waiting for dispatch','/tickets/'||t.key,p.key,t.key,greatest(t.updated_at,(SELECT max(b.updated_at) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id))::timestamptz,false
+ SELECT 'dispatch:'||t.id,'dispatch',t.title,ag.name||' is waiting for dispatch','/tickets/'||t.key,p.key,t.key,greatest(t.updated_at,(SELECT max(b.updated_at) FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id))::timestamptz,false,
+ ag.id,NULL,NULL
  FROM tickets t JOIN projects p ON p.id=t.project_id JOIN agents ag ON ag.id=t.assignee_agent_id
  WHERE t.workspace_id=$3 AND NOT p.archived AND t.status NOT IN ('done', 'canceled')
  AND NOT EXISTS(SELECT 1 FROM ticket_dependencies d JOIN tickets b ON b.id=d.blocker_id WHERE d.ticket_id=t.id AND b.status<>'done')
  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.ticket_id=t.id AND r.state NOT IN ('completed','failed','cancelled'))
  UNION ALL
- SELECT 'review:'||t.id,'review',t.title,'Ready for your review','/tickets/'||t.key,p.key,t.key,t.updated_at,false
+ SELECT 'review:'||t.id,'review',t.title,'Ready for your review','/tickets/'||t.key,p.key,t.key,t.updated_at,false,t.assignee_agent_id,NULL,NULL
  FROM tickets t JOIN projects p ON p.id=t.project_id
  WHERE t.workspace_id=$3 AND NOT p.archived AND t.status='in_review' AND t.reviewer_user_id=$1
  UNION ALL
- SELECT 'blocked:'||r.id,'blocked',t.title,coalesce(r.outcome,'Run needs a person'),'/runs/'||r.id,p.key,t.key,r.updated_at,false
+ SELECT 'blocked:'||r.id,'blocked',t.title,coalesce(r.outcome,'Run needs a person'),'/runs/'||r.id,p.key,t.key,r.updated_at,false,r.agent_id,r.id,NULL
  FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN projects p ON p.id=t.project_id
- WHERE r.workspace_id=$3 AND t.status NOT IN ('done', 'canceled') AND (r.state IN ('blocked','failed') OR (r.state='waiting' AND r.wait_reason='human_reply'))
+ WHERE r.workspace_id=$3 AND t.status NOT IN ('done', 'canceled') AND r.state IN ('blocked','failed')
  AND NOT EXISTS (SELECT 1 FROM runs newer WHERE newer.ticket_id=r.ticket_id AND newer.started_at>r.started_at)
  UNION ALL
- SELECT 'mention:'||c.id,'mention',t.title,left(c.body_md,240),'/tickets/'||t.key,p.key,t.key,c.created_at,false
+ -- await_human: the summary is the agent's question.
+ SELECT 'question:'||r.id,'question',t.title,
+ coalesce((SELECT nullif(trim(e.payload->>'reason'),'') FROM activity_events e WHERE e.ticket_id=t.id AND e.verb='waiting_for_human' AND e.payload->>'run_id'=r.id::text ORDER BY e.created_at DESC LIMIT 1),'The agent is waiting for a reply'),
+ '/runs/'||r.id,p.key,t.key,r.updated_at,false,r.agent_id,r.id,NULL
+ FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN projects p ON p.id=t.project_id
+ WHERE r.workspace_id=$3 AND t.status NOT IN ('done', 'canceled') AND r.state='waiting' AND r.wait_reason='human_reply'
+ UNION ALL
+ -- Stalled: running with no event for 30 minutes. created_at is the last activity.
+ SELECT 'stalled:'||r.id,'stalled',t.title,'Running, no activity since the last event','/runs/'||r.id,p.key,t.key,
+ coalesce((SELECT max(e.at) FROM run_events e WHERE e.run_id=r.id),r.started_at),false,r.agent_id,r.id,NULL
+ FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN projects p ON p.id=t.project_id
+ WHERE r.workspace_id=$3 AND r.state='running'
+ AND coalesce((SELECT max(e.at) FROM run_events e WHERE e.run_id=r.id),r.started_at) < now()-interval '30 minutes'
+ UNION ALL
+ SELECT 'mention:'||c.id,'mention',t.title,left(c.body_md,240),'/tickets/'||t.key,p.key,t.key,c.created_at,false,
+ CASE WHEN c.author_type='agent' THEN c.author_id END,NULL,NULL
  FROM comments c JOIN tickets t ON t.id=c.ticket_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=$1
  WHERE c.workspace_id=$3 AND NOT (c.author_type='user' AND c.author_id=u.id)
  AND (lower(c.body_md) ~ ('@'||regexp_replace(lower(split_part(u.email,'@',1)), '([^a-z0-9_])', '\\\1','g')||'\y')
  OR strpos(lower(c.body_md),'@'||lower(u.name))>0)
  UNION ALL
- SELECT 'suggestion:'||v.id,'suggestion',ar.title,v.note,'/wiki/'||ar.path,coalesce(p.key,''),'',v.created_at,v.state<>'suggested'
+ SELECT 'suggestion:'||v.id,'suggestion',ar.title,v.note,'/wiki/'||ar.path,coalesce(p.key,''),'',v.created_at,v.state<>'suggested',
+ CASE WHEN v.created_by_type='agent' THEN v.created_by_id END,NULL,ar.id
  FROM artifact_versions v JOIN artifacts ar ON ar.id=v.artifact_id LEFT JOIN projects p ON p.id=ar.project_id
  WHERE ar.workspace_id=$3 AND v.state IN ('suggested','published','rejected') AND v.based_on_version_id IS NOT NULL
  UNION ALL
@@ -57,13 +74,17 @@ WITH items AS (
  WHEN 'approved' THEN 'Mockup '||v.label||' approved' ELSE 'Changes requested on mockup '||v.label END,
  '/artifacts/'||ar.id||'/review',coalesce(p.key,''),
  coalesce((SELECT t.key FROM ticket_artifacts ta JOIN tickets t ON t.id=ta.ticket_id WHERE ta.artifact_id=ar.id ORDER BY ta.created_at,t.key LIMIT 1),''),
- v.created_at,(v.review_state<>'pending' OR v.id<>ar.current_version_id)
+ v.created_at,(v.review_state<>'pending' OR v.id<>ar.current_version_id),
+ CASE WHEN v.created_by_type='agent' THEN v.created_by_id END,NULL,ar.id
  FROM artifact_versions v JOIN artifacts ar ON ar.id=v.artifact_id LEFT JOIN projects p ON p.id=ar.project_id
  WHERE ar.workspace_id=$3 AND ar.type='mockup' AND v.review_state IS NOT NULL
 )
-SELECT items.id, items.kind, items.title, items.summary, items.href, items.project, items.ticket_key, items.created_at, items.resolved, (rd.read_at IS NOT NULL AND rd.read_at>=items.created_at)::boolean AS read,
+SELECT items.id, items.kind, items.title, items.summary, items.href, items.project, items.ticket_key, items.created_at, items.resolved,
+ items.run_id, items.artifact_id, ag.id AS agent_id, coalesce(ag.handle,'')::text AS agent_handle, coalesce(ag.name,'')::text AS agent_name, coalesce(ag.color_index,0)::int AS agent_color_index,
+ (rd.read_at IS NOT NULL AND rd.read_at>=items.created_at)::boolean AS read,
  (count(*) FILTER (WHERE NOT items.resolved AND NOT coalesce(rd.read_at>=items.created_at,false)) OVER ())::int AS unread_count
 FROM items LEFT JOIN inbox_reads rd ON rd.user_id=$1 AND rd.item_id=items.id
+LEFT JOIN agents ag ON ag.id=items.agent_id
 WHERE ($2::text IS NULL OR items.project=$2)
 ORDER BY items.resolved, (rd.read_at IS NOT NULL AND rd.read_at>=items.created_at), items.created_at DESC,items.id LIMIT 500
 `
@@ -75,19 +96,27 @@ type ListInboxParams struct {
 }
 
 type ListInboxRow struct {
-	ID          string
-	Kind        string
-	Title       string
-	Summary     string
-	Href        string
-	Project     string
-	TicketKey   string
-	CreatedAt   time.Time
-	Resolved    bool
-	Read        bool
-	UnreadCount int32
+	ID              string
+	Kind            string
+	Title           string
+	Summary         string
+	Href            string
+	Project         string
+	TicketKey       string
+	CreatedAt       time.Time
+	Resolved        bool
+	RunID           *uuid.UUID
+	ArtifactID      *uuid.UUID
+	AgentID         *uuid.UUID
+	AgentHandle     string
+	AgentName       string
+	AgentColorIndex int32
+	Read            bool
+	UnreadCount     int32
 }
 
+// Every human gate in one list. agent_id, run_id and artifact_id let the
+// Inbox act on an item (reply, retry, cancel, review) without another lookup.
 func (q *Queries) ListInbox(ctx context.Context, arg ListInboxParams) ([]ListInboxRow, error) {
 	rows, err := q.db.Query(ctx, listInbox, arg.UserID, arg.Project, arg.WorkspaceID)
 	if err != nil {
@@ -107,6 +136,12 @@ func (q *Queries) ListInbox(ctx context.Context, arg ListInboxParams) ([]ListInb
 			&i.TicketKey,
 			&i.CreatedAt,
 			&i.Resolved,
+			&i.RunID,
+			&i.ArtifactID,
+			&i.AgentID,
+			&i.AgentHandle,
+			&i.AgentName,
+			&i.AgentColorIndex,
 			&i.Read,
 			&i.UnreadCount,
 		); err != nil {
