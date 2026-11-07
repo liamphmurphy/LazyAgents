@@ -1,6 +1,6 @@
 -- name: CreatePlanningSession :one
-INSERT INTO planning_sessions(workspace_id,project_id,epic_id,artifact_id,source_version_id,goal,run_id,created_by)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *;
+INSERT INTO planning_sessions(workspace_id,project_id,epic_id,artifact_id,source_version_id,goal,run_id,created_by,context_refs)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *;
 
 -- name: GetPlanningSession :one
 SELECT * FROM planning_sessions WHERE id=$1 AND workspace_id=$2;
@@ -33,3 +33,6 @@ ORDER BY t.key;
 
 -- name: SetPlanningSessionEpic :exec
 UPDATE planning_sessions SET epic_id=$2 WHERE id=$1;
+
+-- name: SetPlanningProposalCount :exec
+UPDATE planning_sessions SET proposal_count=$2 WHERE id=$1;

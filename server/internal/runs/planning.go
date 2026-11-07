@@ -38,6 +38,15 @@ type PlanningInput struct {
 	Goal       string     `json:"goal"`
 	EpicID     *uuid.UUID `json:"epic_id,omitempty"`
 	ArtifactID *uuid.UUID `json:"artifact_id,omitempty"`
+	// ContextRefs are attached like chat context: resolved in the project at
+	// start, delivered to the planner as files when its run starts.
+	ContextRefs []ChatContextRef `json:"context_refs,omitempty"`
+}
+
+// PlanningRefPath is where the planner finds the i-th (0-based) attached reference.
+// Generated from the position, never from the ref, so nothing escapes .lazyagents/context/.
+func PlanningRefPath(i int) string {
+	return fmt.Sprintf(".lazyagents/context/planning-ref-%d.md", i+1)
 }
 
 // planningOptions are the read-only options a harness understands. OpenCode
@@ -122,6 +131,22 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 				in.Goal = "Plan implementation of " + a.Title
 			}
 		}
+		docs, err := ResolveChatRefs(ctx, q, ws, p.ID, in.ContextRefs)
+		if err != nil {
+			return err
+		}
+		refs := make([]ChatContextRef, len(docs))
+		if len(docs) > 0 {
+			source += "\nThe person attached these references. Read them first:"
+		}
+		for i, d := range docs {
+			refs[i] = d.Ref
+			source += fmt.Sprintf("\n- `%s`: %s %q", PlanningRefPath(i), d.Ref.Kind, d.Title)
+		}
+		rawRefs, err := json.Marshal(refs)
+		if err != nil {
+			return err
+		}
 		if in.Goal == "" {
 			return apperr.Invalid("goal", "describe the goal")
 		}
@@ -141,7 +166,7 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 		if err = q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &user}); err != nil {
 			return err
 		}
-		out, err = q.CreatePlanningSession(ctx, store.CreatePlanningSessionParams{WorkspaceID: ws, ProjectID: p.ID, EpicID: in.EpicID, ArtifactID: in.ArtifactID, SourceVersionID: sourceVersion, Goal: in.Goal, RunID: run.ID, CreatedBy: user})
+		out, err = q.CreatePlanningSession(ctx, store.CreatePlanningSessionParams{WorkspaceID: ws, ProjectID: p.ID, EpicID: in.EpicID, ArtifactID: in.ArtifactID, SourceVersionID: sourceVersion, Goal: in.Goal, RunID: run.ID, CreatedBy: user, ContextRefs: rawRefs})
 		if err != nil {
 			return err
 		}
@@ -283,6 +308,10 @@ func (s *Service) ProposeTickets(ctx context.Context, c Caller, items []Proposal
 		if err != nil {
 			return err
 		}
+		if err = q.SetPlanningProposalCount(ctx, store.SetPlanningProposalCountParams{ID: plan.ID, ProposalCount: int32(len(items))}); err != nil {
+			return err
+		}
+		out.ProposalCount = int32(len(items))
 		outcome := "Draft ready for human review"
 		if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
 			return err
