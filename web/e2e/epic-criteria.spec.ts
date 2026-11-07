@@ -119,7 +119,7 @@ test("an epic without criteria prompts for them before it can be closed", async 
 
 test("the epic detail panel has the same criteria editor and done gate", async ({ page }) => {
   const api = await installBoardApi(page);
-  await page.goto("/epics");
+  await page.goto("/epics/epic-1");
   const panel = page.getByRole("region", { name: "Epic completion" });
   await expect(rows(panel)).toHaveText([/1\. Board shows all statuses/, /2\. Cards can move/]);
   await expect(panel).toContainText("5 / 10 pts done");
