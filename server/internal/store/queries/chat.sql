@@ -156,3 +156,12 @@ DELETE FROM chat_sessions WHERE id = $1;
 -- The default agent for a chat that names none: the oldest main (non-sub) agent,
 -- ties broken by name then id so the choice is deterministic.
 SELECT * FROM agents WHERE workspace_id = $1 AND kind <> 'sub' AND archived_at IS NULL ORDER BY created_at, name, id LIMIT 1;
+
+-- name: OwnsChatRun :one
+SELECT EXISTS (
+  SELECT 1 FROM chat_sessions s
+  WHERE s.workspace_id = sqlc.arg(workspace_id) AND s.created_by = sqlc.arg(viewer)
+    AND (s.current_run_id = sqlc.arg(run_id)::uuid OR EXISTS (
+      SELECT 1 FROM chat_messages m WHERE m.session_id = s.id AND m.run_id = sqlc.arg(run_id)::uuid
+    ))
+)::boolean;
