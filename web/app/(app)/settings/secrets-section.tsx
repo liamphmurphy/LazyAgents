@@ -1,0 +1,349 @@
+"use client";
+
+import { DropdownMenu } from "radix-ui";
+import { useEffect, useRef, useState } from "react";
+import { useBootstrap, useDeleteSecret, useSecrets, useSetSecret } from "@/lib/api/hooks";
+import { cx } from "@/lib/cx";
+import { ago } from "@/lib/format";
+import { CONNECTIONS, connectionState, missingConnections, otherSecrets, savedMessage, type Connection } from "@/lib/settings";
+import { Button, IconButton } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { Banner, Card, Field, Skeleton, TextInput } from "@/components/ui/primitives";
+import { MonoChip, SmallPill } from "@/components/domain/labels";
+import { floatPanel } from "@/components/domain/pickers";
+
+const sentence = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
+
+type Target = { name: string; project: string; fixedName: boolean };
+
+/**
+ * Provider secrets (LAZYAGENTS-44). Values are write-only: the API stores them
+ * encrypted and returns names, scopes and timestamps only, never any part of a
+ * value. The value input clears after saving and nothing is echoed back.
+ */
+export function SecretsSection() {
+  const list = useSecrets();
+  const del = useDeleteSecret();
+  const [editing, setEditing] = useState<Target | null>(null);
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(""), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  if (list.isPending) {
+    return (
+      <div aria-label="Loading provider secrets" className="space-y-3">
+        <Skeleton className="h-14" />
+        <Skeleton className="h-48" />
+      </div>
+    );
+  }
+  if (list.isError) {
+    return (
+      <Banner tone="blocked" title="Couldn’t load provider secrets" actions={<Button variant="outline" onClick={() => void list.refetch()}>Retry</Button>}>
+        {sentence(list.error.message || "The API is unavailable")} Other sections keep working.
+      </Banner>
+    );
+  }
+  const d = list.data;
+  const readOnly = !d.key_configured;
+  const missing = missingConnections(d.secrets);
+  const others = otherSecrets(d.secrets);
+  const open = (t: Target) => {
+    setNotice("");
+    setEditing(t);
+  };
+  const saved = (name: string) => {
+    setEditing(null);
+    setNotice(savedMessage(name));
+  };
+
+  return (
+    <div className="space-y-4">
+      {readOnly && (
+        <Banner tone="human" title="Secrets are read-only until SECRETS_KEY is set">
+          Add <code>SECRETS_KEY=$(openssl rand -base64 32)</code> to <code>.env</code> and restart the API. Until then runs get no harness keys or git credentials.
+        </Banner>
+      )}
+      {missing.map((c) => (
+        <Banner key={c.name} tone="human" title={`${c.unlocks.join(" and ")} can’t run`}>
+          <code>{c.name}</code> isn’t set. {c.without} The chat model picker marks those models unavailable. Runners on the local backend use the machine’s own CLI logins instead.
+        </Banner>
+      ))}
+      {notice && (
+        <p role="status" className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-pill-done-fg">
+          <Icon name="check" size={13} /> {notice}
+        </p>
+      )}
+
+      <Card title="Connections" bodyClassName="p-0">
+        <ul>
+          {CONNECTIONS.map((c, i) => (
+            <ConnectionRow
+              key={c.name}
+              c={c}
+              first={i === 0}
+              state={connectionState(d.secrets, c.name)}
+              readOnly={readOnly}
+              editing={editing?.fixedName && editing.name === c.name && !editing.project ? editing : null}
+              onEdit={() => open({ name: c.name, project: "", fixedName: true })}
+              onCancel={() => setEditing(null)}
+              onSaved={saved}
+            />
+          ))}
+        </ul>
+      </Card>
+
+      <Card
+        title="Other secrets"
+        bodyClassName="p-0"
+        action={
+          <Button variant="outline" icon="plus" disabled={readOnly} onClick={() => open({ name: "", project: "", fixedName: false })}>
+            Add secret
+          </Button>
+        }
+      >
+        {editing && !(editing.fixedName && !editing.project && CONNECTIONS.some((c) => c.name === editing.name)) && (
+          <div className="border-b border-border-subtle px-[18px] py-3">
+            <SecretForm target={editing} known={d.known} onCancel={() => setEditing(null)} onSaved={saved} />
+          </div>
+        )}
+        {others.length === 0 ? (
+          <p className="px-[18px] py-4 text-[13px] text-fg-tertiary">
+            No other secrets. Staging database URLs (db:migrate), deploy tokens and per-project overrides go here.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+              <thead>
+                <tr className="text-left text-[12.5px] text-fg-tertiary">
+                  <th className="px-[18px] py-2.5 font-normal">Name</th>
+                  <th className="px-2 py-2.5 font-normal">Scope</th>
+                  <th className="px-2 py-2.5 font-normal">Backs</th>
+                  <th className="px-2 py-2.5 font-normal">Updated</th>
+                  <th className="px-2 py-2.5 font-normal">Last used</th>
+                  <th className="w-28" />
+                </tr>
+              </thead>
+              <tbody>
+                {others.map((s) => (
+                  <tr key={s.id} className="border-t border-border-row">
+                    <td className="px-[18px] py-2.5 font-mono text-[12.5px]">{s.name}</td>
+                    <td className="whitespace-nowrap px-2">
+                      {s.project ? (
+                        <span className="flex items-center gap-1.5 text-fg-secondary">
+                          <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: s.project.color }} />
+                          {s.project.name}
+                        </span>
+                      ) : (
+                        <span className="text-fg-secondary">Workspace</span>
+                      )}
+                    </td>
+                    <td className="px-2">{s.grants_scope ? <MonoChip>{s.grants_scope}</MonoChip> : <span className="text-fg-tertiary">–</span>}</td>
+                    <td className="whitespace-nowrap px-2 text-xs text-fg-secondary">{ago(s.updated_at)}</td>
+                    <td className="whitespace-nowrap px-2 text-xs text-fg-secondary">{s.last_used_at ? ago(s.last_used_at) : "Never"}</td>
+                    <td className="pr-3">
+                      <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" disabled={readOnly} aria-label={`Replace ${s.name}`} onClick={() => open({ name: s.name, project: s.project?.key ?? "", fixedName: true })}>
+                        Replace
+                      </Button>
+                      <IconButton
+                        icon="trash"
+                        label={`Delete ${s.name}`}
+                        disabled={del.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Delete ${s.name}? Runs that need it will fail until it's set again.`)) del.mutate(s.id);
+                        }}
+                      />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {del.isError && <p role="alert" className="px-[18px] pb-3 text-xs text-pill-blocked-fg">{del.error.message}</p>}
+        <p className="border-t border-border-row px-[18px] py-2.5 text-xs text-fg-tertiary">
+          No value column: the API returns names, scopes and timestamps only.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function ConnectionRow({
+  c,
+  first,
+  state,
+  readOnly,
+  editing,
+  onEdit,
+  onCancel,
+  onSaved,
+}: {
+  c: Connection;
+  first: boolean;
+  state: ReturnType<typeof connectionState>;
+  readOnly: boolean;
+  editing: Target | null;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSaved: (name: string) => void;
+}) {
+  const on = state.state === "set";
+  return (
+    <li className={cx("px-[18px] py-3", !first && "border-t border-border-row", editing && "bg-hover/40")}>
+      <div className="flex flex-wrap items-start gap-3">
+        <span className="grid size-8 flex-none place-items-center rounded-md border border-border-strong bg-selected text-fg-secondary">
+          <Icon name={c.icon} size={15} />
+        </span>
+        <span className="flex min-w-[150px] flex-1 flex-col">
+          <span className="font-medium">{c.label}</span>
+          <span className="font-mono text-xs text-fg-tertiary">{c.name}</span>
+        </span>
+        <span className="flex w-[130px] flex-col items-start gap-1">
+          {on ? (
+            <SmallPill tone="done">Set</SmallPill>
+          ) : state.state === "projects" ? (
+            <SmallPill tone="human">Set for {state.projects.length} project{state.projects.length === 1 ? "" : "s"}</SmallPill>
+          ) : (
+            <SmallPill tone={c.required ? "human" : "neutral"}>Not set</SmallPill>
+          )}
+          {on && <span className="text-[11px] text-fg-tertiary">Updated {ago(state.secret.updated_at)}</span>}
+        </span>
+        <span className="flex min-w-[200px] flex-[2] flex-col gap-1">
+          <span className="flex flex-wrap gap-1.5" aria-label={`${on ? "Unlocks" : "Would unlock"}: ${c.unlocks.join(", ")}`}>
+            {c.unlocks.map((u) => (
+              <span
+                key={u}
+                className={cx(
+                  "whitespace-nowrap rounded-[5px] border px-1.5 py-px text-[11.5px]",
+                  on ? "border-pill-done-bg bg-pill-done-bg/40 text-pill-done-fg" : "border-border text-fg-tertiary",
+                )}
+              >
+                {on ? "✓" : "✕"} {u}
+              </span>
+            ))}
+          </span>
+          {on ? (
+            <span className="text-[11px] text-fg-tertiary">{state.secret.last_used_at ? `Used ${ago(state.secret.last_used_at)}` : "Not used yet"}</span>
+          ) : (
+            !editing && <span className="text-[11px] text-fg-tertiary">{c.without}</span>
+          )}
+        </span>
+        {!editing && (
+          <Button variant="outline" disabled={readOnly} aria-label={`${on ? "Replace" : "Add"} ${c.label} key`} onClick={onEdit}>
+            {on ? "Replace" : "Add key"}
+          </Button>
+        )}
+      </div>
+      {editing && (
+        <div className="mt-3 pl-11">
+          <SecretForm target={editing} onCancel={onCancel} onSaved={onSaved} hint={`Without it: ${c.without} Replacing a value takes effect on the next run.`} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+function SecretForm({
+  target,
+  known,
+  hint,
+  onCancel,
+  onSaved,
+}: {
+  target: Target;
+  known?: { name: string; description: string }[];
+  hint?: string;
+  onCancel: () => void;
+  onSaved: (name: string) => void;
+}) {
+  const boot = useBootstrap();
+  const set = useSetSecret();
+  const [name, setName] = useState(target.name);
+  const [value, setValue] = useState("");
+  const [project, setProject] = useState(target.project);
+  const valueRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const id = `secret-${target.name || "new"}`.replace(/[^a-z0-9-]/gi, "-");
+  useEffect(() => {
+    (target.fixedName ? valueRef : nameRef).current?.focus();
+  }, [target.fixedName]);
+  const projects = boot.data?.projects.filter((p) => !p.archived) ?? [];
+
+  return (
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const n = name.trim();
+        set.mutate(
+          { name: n, value, project_key: project || undefined },
+          {
+            onSuccess: () => {
+              setValue("");
+              onSaved(n);
+            },
+          },
+        );
+      }}
+    >
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-end gap-2">
+        {!target.fixedName && (
+          <Field label="Name" htmlFor={`${id}-name`}>
+            <TextInput id={`${id}-name`} ref={nameRef} mono list={`${id}-known`} value={name} onChange={(e) => setName(e.target.value)} placeholder="db:staging" />
+            <datalist id={`${id}-known`}>
+              {known?.map((k) => <option key={k.name} value={k.name}>{k.description}</option>)}
+            </datalist>
+          </Field>
+        )}
+        <Field label={target.fixedName ? `New value for ${target.name}` : "Value"} htmlFor={`${id}-value`}>
+          <TextInput
+            id={`${id}-value`}
+            ref={valueRef}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Paste key. Stored encrypted, never shown again"
+          />
+        </Field>
+        <Field label="Scope" htmlFor={`${id}-project`}>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button id={`${id}-project`} type="button" className="flex h-[30px] items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-left text-[13px] hover:bg-hover">
+                <span className="flex-1 truncate">{projects.find((p) => p.key === project)?.name ?? "Workspace"}</span>
+                <Icon name="chev" size={12} className="text-fg-tertiary" />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content align="start" sideOffset={4} className={cx(floatPanel, "w-56")}>
+                {[{ key: "", name: "Workspace", color: "" }, ...projects].map((p) => (
+                  <DropdownMenu.Item key={p.key} onSelect={() => setProject(p.key)} className="flex h-8 items-center gap-2.5 rounded-md px-2 outline-none data-[highlighted]:bg-hover">
+                    {p.color && <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: p.color }} />}
+                    {p.name}
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </Field>
+        <div className="flex gap-2">
+          <Button type="submit" variant="primary" disabled={!name.trim() || !value || set.isPending}>
+            {set.isPending ? "Saving…" : target.fixedName ? "Save key" : "Save secret"}
+          </Button>
+          <Button variant="ghost" disabled={set.isPending} onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+      {hint && <p className="text-[11.5px] text-fg-tertiary">{hint}</p>}
+      {set.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{set.error.message}</p>}
+    </form>
+  );
+}

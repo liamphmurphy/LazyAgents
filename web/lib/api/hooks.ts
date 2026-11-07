@@ -379,14 +379,27 @@ export function useRevokeToken(handle: string) {
 }
 
 export function useSecrets() {
-  return useQuery({ queryKey: ["secrets"], queryFn: () => unwrap(api.GET("/secrets")) });
+  return useQuery({ queryKey: ["secrets"], queryFn: () => unwrap(api.GET("/secrets")), staleTime: 30_000, retry: 1 });
+}
+
+/**
+ * A secret change can make harnesses available or unavailable: refresh the
+ * secrets list (and the sidebar dot), chat model availability and dispatch
+ * previews, which list the secrets a run would receive.
+ */
+function invalidateSecretDependents(qc: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: ["secrets"] }),
+    qc.invalidateQueries({ queryKey: chatKeys.models }),
+    qc.invalidateQueries({ queryKey: ["tickets", "dispatch"] }),
+  ]);
 }
 
 export function useSetSecret() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { name: string; value: string; grants_scope?: string; project_key?: string }) => unwrap(api.PUT("/secrets", { body })),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["secrets"] }),
+    onSettled: () => invalidateSecretDependents(qc),
   });
 }
 
@@ -397,7 +410,7 @@ export function useDeleteSecret() {
       const r = await api.DELETE("/secrets/{id}", { params: { path: { id } } });
       if (!r.response.ok) throw new Error("Couldn't delete the secret");
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["secrets"] }),
+    onSettled: () => invalidateSecretDependents(qc),
   });
 }
 
