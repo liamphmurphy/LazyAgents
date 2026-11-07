@@ -17,7 +17,7 @@ type Actor = ActivityEvent["actor"];
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
-function ActorAvatar({ actor }: { actor: Actor }) {
+export function ActorAvatar({ actor }: { actor: Actor }) {
   if (actor.type === "agent") return <AgentAvatar name={actor.name} colorIndex={actor.color_index ?? 0} size="stack" label={false} />;
   if (actor.type === "system")
     return <span aria-hidden className="grid size-[22px] place-items-center rounded-full bg-selected text-[10px] text-fg-tertiary">⚙</span>;
@@ -110,6 +110,17 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
       );
     }
     case "estimate_changed":
+      // Point estimates carry {to_points, rationale}; legacy notes carry {to}.
+      if ("to_points" in p) {
+        return p.to_points == null ? (
+          "cleared the estimate"
+        ) : (
+          <>
+            estimated <B>{String(p.to_points)} points</B>
+            {p.rationale ? <span className="mt-1 block border-l-2 border-border pl-2.5 italic text-fg-secondary">“{str(p.rationale)}”</span> : null}
+          </>
+        );
+      }
       return p.to ? (
         <>
           set the estimate to <B>{str(p.to)}</B>

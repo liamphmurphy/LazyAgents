@@ -190,6 +190,7 @@ export const SHORTCUTS: { section: string; items: { label: string; keys: string[
     section: "Ticket",
     items: [
       { label: "Next / previous ticket", keys: ["J", "K"] },
+      { label: "Edit the ticket", keys: ["E"] },
       { label: "Save description / comment", keys: ["⌘/Ctrl", "↵"] },
     ],
   },

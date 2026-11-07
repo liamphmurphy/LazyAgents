@@ -1,12 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import type { Ticket } from "@/lib/api/client";
+import type { ActivityEvent, Ticket } from "@/lib/api/client";
 import { useAddCriterion, useDeleteCriterion, useUpdateCriterion } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
+import { absoluteTime, ago } from "@/lib/format";
 import { IconButton } from "@/components/ui/button";
+import { ActorAvatar } from "./timeline";
 
-export function Criteria({ t }: { t: Ticket }) {
+/** Who last checked each criterion and when, from criterion_checked events (oldest first). */
+export function checkedBy(events: ActivityEvent[] | undefined) {
+  const m = new Map<string, ActivityEvent>();
+  for (const e of events ?? []) {
+    const id = (e.payload as { criterion_id?: unknown }).criterion_id;
+    if (typeof id !== "string") continue;
+    if (e.verb === "criterion_checked") m.set(id, e);
+    else if (e.verb === "criterion_unchecked") m.delete(id);
+  }
+  return m;
+}
+
+export function Criteria({ t, events }: { t: Ticket; events?: ActivityEvent[] }) {
+  const checks = checkedBy(events);
   const add = useAddCriterion(t.key);
   const update = useUpdateCriterion(t.key);
   const remove = useDeleteCriterion(t.key);
@@ -33,9 +48,10 @@ export function Criteria({ t }: { t: Ticket }) {
               onChange={(e) => update.mutate({ id: c.id, done: e.target.checked })}
               className="size-3.5 flex-none accent-[var(--state-done)]"
             />
-            <label htmlFor={`crit-${c.id}`} className={cx("flex-1 text-[13.5px]", c.done ? "text-fg-tertiary line-through" : "text-fg-2")}>
+            <label htmlFor={`crit-${c.id}`} className={cx("flex-1 py-1 text-[13.5px]", c.done ? "text-fg-tertiary line-through" : "text-fg-2")}>
               {c.text}
             </label>
+            {c.done && checks.get(c.id) && <CheckedBy e={checks.get(c.id)!} />}
             <IconButton
               icon="x"
               label={`Remove criterion: ${c.text}`}
@@ -68,5 +84,21 @@ export function Criteria({ t }: { t: Ticket }) {
       </form>
       {add.isError && <p className="text-xs text-pill-blocked-fg">{add.error.message}</p>}
     </section>
+  );
+}
+
+function CheckedBy({ e }: { e: ActivityEvent }) {
+  return (
+    <span className="flex flex-none items-center gap-1.5 text-[11.5px] text-fg-tertiary">
+      <ActorAvatar actor={e.actor} />
+      <span>
+        <span className="sr-only">Checked by </span>
+        {e.actor.name}
+        {" · "}
+        <time dateTime={e.created_at} title={absoluteTime(e.created_at)}>
+          {ago(e.created_at)}
+        </time>
+      </span>
+    </span>
   );
 }
