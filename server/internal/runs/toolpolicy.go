@@ -33,6 +33,8 @@ func ToolScopes(tool string, input map[string]any) []string {
 		return []string{"repo:read"}
 	case "Edit", "Write", "NotebookEdit", "apply_patch":
 		return []string{"repo:write"}
+	case "WebFetch", "WebSearch", "webfetch", "websearch", "web_search":
+		return []string{"web:read"}
 	case "Bash", "shell", "exec_command", "shell_command":
 		command, _ := input["command"].(string)
 		if command == "" {

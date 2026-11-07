@@ -273,6 +273,11 @@ func (OpenCode) config(ws Workspace, spec agentdef.Resolved, provider string, re
 					policyStatement{"bash", "gh pr create*", "deny"})
 			}
 		}
+		// Approval for web:read is rejected above (no pre-tool bridge).
+		if allowed(spec, "web:read") {
+			allowTool("webfetch")
+			allowTool("websearch")
+		}
 	}
 	// Last match wins. Protect runner metadata after every tool allow.
 	policies = append(policies,
