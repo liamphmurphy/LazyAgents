@@ -1155,6 +1155,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/saved-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's saved ticket-list views, by name */
+        get: operations["listSavedViews"];
+        put?: never;
+        /** Save a ticket-list view for the signed-in person */
+        post: operations["createSavedView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/saved-views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved view (tickets are untouched) */
+        delete: operations["deleteSavedView"];
+        options?: never;
+        head?: never;
+        /** Rename a saved view or replace its query */
+        patch: operations["updateSavedView"];
+        trace?: never;
+    };
     "/projects/{key}": {
         parameters: {
             query?: never;
@@ -1566,6 +1604,33 @@ export interface components {
         };
         TicketList: {
             tickets: components["schemas"]["TicketSummary"][];
+        };
+        /**
+         * @description A named ticket-list view owned by one person. query is the list's URL
+         *     search string without project (e.g. "view=active&group=epic"), so the
+         *     view applies to whichever project is current.
+         */
+        SavedView: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            query: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SavedViewList: {
+            views: components["schemas"]["SavedView"][];
+        };
+        SavedViewInput: {
+            /** @description Unique per person, ignoring case; a duplicate is 409 */
+            name: string;
+            query: string;
+        };
+        SavedViewPatch: {
+            name?: string;
+            query?: string;
         };
         Ticket: {
             /** Format: uuid */
@@ -4945,6 +5010,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSavedViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved views, ordered by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedViewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedViewInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedViewPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
                 };
             };
             default: components["responses"]["Error"];

@@ -418,6 +418,16 @@ type Runner struct {
 	HeartbeatAt   time.Time
 }
 
+type SavedView struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Name        string
+	Query       string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type Secret struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
