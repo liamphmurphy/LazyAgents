@@ -140,13 +140,25 @@ func SubagentAgentsMD(existing string, spec agentdef.Resolved, contextFiles []st
 	return agentsMD(existing, spec, contextFiles, ticket, true)
 }
 
+// ChatMemoryGuide tells a chat assistant how to use the person's private memory.
+const ChatMemoryGuide = "## Memory\n\n" +
+	"You keep a private memory of this person, separate from the shared wiki. `" + MemoryIndexPath + "` indexes it (titles and summaries); use search_memory and read_memory to find and open entries rather than guessing.\n" +
+	"- Save durable facts, preferences and context with save_memory when they'll help later. It updates a near-duplicate instead of adding one.\n" +
+	"- Whenever you save or update a memory, tell the person in your reply what you remembered.\n" +
+	"- Never store secrets: credentials, passwords, API keys or tokens. save_memory refuses them.\n" +
+	"- When the person says 'forget that', forget_memory the entry they mean and confirm. When they say 'don't remember this', save nothing from it (and forget anything you already saved from it).\n\n"
+
+// MemoryIndexPath is where a chat turn's memory index is written.
+const MemoryIndexPath = ".lazyagents/context/memory-index.md"
+
 // ChatAgentsMD renders conversation instructions without ticket workflow sections.
 func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project string) []byte {
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n# LazyAgents chat: project " + project + "\n\n")
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
 	b.WriteString("Use search_knowledge, read_page, read_artifact, get_ticket and get_backlinks to look up project context. Cite sources with [[…]].\n")
-	b.WriteString("Use create_ticket, create_epic and list_epics to manage this project when the person asks. Return identifiers for created items. Do not call claim_ticket, complete_run or propose_tickets. Do not modify files, run shell commands, delegate work, or write memory.\n\n")
+	b.WriteString("Use create_ticket, create_epic and list_epics to manage this project when the person asks. Return identifiers for created items. Do not call claim_ticket, complete_run or propose_tickets. Do not modify files, run shell commands, delegate work, or write wiki notes.\n\n")
+	b.WriteString(ChatMemoryGuide)
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
 	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode {
 		b.WriteString(skillsIndex(spec.Skills))
