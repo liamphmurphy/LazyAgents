@@ -54,7 +54,7 @@ export async function installBoardApi(page: Page) {
   function summary(t: S["Ticket"]): S["TicketSummary"] {
     return { id: t.id, key: t.key, project_key: t.project.key, title: t.title, status: t.status, priority: t.priority,
       assignee: t.assignee, epic: t.epic, labels: t.labels, estimate_points: t.estimate_points, updated_at: t.updated_at,
-      unmet_dependencies: t.blocked_by.filter((b) => !["done", "canceled"].includes(b.status)).length,
+      unmet_dependencies: t.blocked_by.filter((b) => b.status !== "done").length,
       criteria_total: t.criteria.length, criteria_done: t.criteria.filter((c) => c.done).length };
   }
   async function handle(route: Route) {

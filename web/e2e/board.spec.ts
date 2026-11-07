@@ -59,6 +59,16 @@ test("epic filter shows points, criteria and blockers, and assignee/canceled fil
   expect(api.unhandled).toEqual([]);
 });
 
+test("canceled dependencies remain blockers until done", async ({ page }) => {
+  const api = await installBoardApi(page);
+  api.tickets[0].blocked_by[0].status = "canceled";
+  await page.goto("/board?project=WEB");
+  await expect(card(page)).toContainText("Blocked");
+  api.tickets[0].blocked_by[0].status = "done";
+  await api.emit("ticket.updated");
+  await expect(card(page)).not.toContainText("Blocked");
+});
+
 test("keyboard Move to menu optimistically PATCHes status plus detail revision", async ({ page }) => {
   const api = await installBoardApi(page);
   await page.goto("/board?project=WEB");
