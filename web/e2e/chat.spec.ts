@@ -225,6 +225,44 @@ test("[[ picks context as removable chips and sends them as context_refs", async
   expect(mock.posted.at(-1)?.body).not.toHaveProperty("context_refs");
 });
 
+// Fires a paste carrying image files and, optionally, the text copied with them.
+async function pasteImages(page: Page, types: string[], text = "") {
+  await composer(page).evaluate((el, { types, text }) => {
+    const data = new DataTransfer();
+    for (const type of types) data.items.add(new File([new Uint8Array([1, 2, 3])], "image.png", { type }));
+    if (text) data.setData("text/plain", text);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  }, { types, text });
+}
+
+test("pasted images preview above the composer and go with the message", async ({ page }) => {
+  const mock = await installChatApi(page);
+  let uploaded = 0;
+  await page.route("**/api/v1/chat-attachments", (route) => {
+    uploaded++;
+    return route.fulfill({ status: 201, json: { id: `att-${uploaded}`, filename: `pasted-image-${uploaded}.png`, content_type: "image/png", size_bytes: 3 } });
+  });
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+
+  await pasteImages(page, ["image/png", "image/jpeg"]);
+  const previews = page.getByTestId("attachment-preview");
+  await expect(previews).toHaveCount(2);
+  await expect(page.getByTestId("attachment-chip").first()).toHaveAttribute("data-status", "done");
+  await expect(page.getByTestId("attachment-chip").nth(1)).toHaveAttribute("data-status", "done");
+  await page.getByRole("button", { name: "Remove pasted-image-2.jpg" }).click();
+  await expect(previews).toHaveCount(1);
+
+  // A picture of copied text, as spreadsheets add, stays a text paste.
+  await pasteImages(page, ["image/png"], "A1\tB1");
+  await expect(previews).toHaveCount(1);
+
+  await send(page, "what is this?");
+  await expect(page.getByTestId("assistant-message").first()).toContainText("Echo: what is this?");
+  expect(mock.posted.at(-1)?.body.attachment_ids).toHaveLength(1);
+  await expect(previews).toHaveCount(0);
+});
+
 test("a rejected attachment shows the server error and keeps the chips", async ({ page }) => {
   await installChatApi(page);
   await page.goto("/chat?project=WEB");

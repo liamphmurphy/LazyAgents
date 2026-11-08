@@ -789,6 +789,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             )}
             <form
               data-dock-avoid=""
+              onPaste={files.onPaste}
               onSubmit={(e) => {
                 e.preventDefault();
                 submitComposer();
