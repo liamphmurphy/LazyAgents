@@ -617,6 +617,33 @@ test("a running turn shows its newest tool call as a live line with a linked pag
   await expect(live).toHaveCount(0);
 });
 
+test("a running turn lists its plan in a rail that collapses to a strip", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "steps: work through it");
+  const rail = page.getByTestId("chat-steps");
+  await expect(rail.locator("li")).toHaveText(["✓Read the code", /^Fix the snapshot\s*added$/, "Run tests"]);
+  await expect(rail.locator('[data-step-state="active"]')).toContainText("Fix the snapshot");
+  await expect(page.getByTestId("chat-status-card")).toContainText("Step 2 of 3");
+  await page.getByRole("button", { name: "Hide steps" }).click();
+  await expect(rail).toHaveCount(0);
+  await page.getByRole("button", { name: "Show steps" }).click();
+  await expect(rail).toBeVisible();
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByTestId("chat-status-card")).toHaveCount(0);
+});
+
+test("the rail shows an interactive app being written", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "app: show me");
+  await expect(page.getByTestId("chat-status")).toHaveText(/ is building an interactive app…$/);
+  await expect(page.getByTestId("chat-steps").locator('[data-step-state="active"]')).toContainText("Building an interactive app");
+  await page.getByRole("button", { name: "Stop" }).click();
+});
+
 test("switching harness asks first and lists what is lost; same harness doesn't", async ({ page }) => {
   await installChatApi(page);
   await page.goto("/chat?project=WEB");

@@ -63,7 +63,7 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 			mode = "default"
 		}
 	}
-	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "Skill", "ToolSearch"}
+	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "TaskCreate", "TaskUpdate", "Skill", "ToolSearch"}
 	for _, m := range spec.MCPServers {
 		allow = append(allow, "mcp__"+m.Name)
 	}
@@ -112,6 +112,9 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	if noTools {
 		argv = append(argv, "--tools", "")
+	} else {
+		// Lets the chat see rich blocks being written; messages still arrive whole.
+		argv = append(argv, "--include-partial-messages")
 	}
 	if t.SessionID != "" {
 		argv = append(argv, "--resume", t.SessionID)
@@ -153,6 +156,7 @@ type claudeParser struct {
 	res      Result
 	tools    map[string]string // tool_use id → name
 	baseline Usage
+	reply    replyScanner
 }
 
 type claudeLine struct {
@@ -162,6 +166,9 @@ type claudeLine struct {
 	SessionID string          `json:"session_id"`
 	Model     string          `json:"model"`
 	Message   json.RawMessage `json:"message"`
+	// stream_event: a piece of the message being written; nil parent is the main agent
+	Event  json.RawMessage `json:"event"`
+	Parent *string         `json:"parent_tool_use_id"`
 	// result
 	IsError    bool                            `json:"is_error"`
 	Result     string                          `json:"result"`
@@ -192,6 +199,26 @@ type claudeBlock struct {
 	IsError   bool            `json:"is_error"`
 }
 
+func (p *claudeParser) streamEvent(l claudeLine) []Event {
+	var ev struct {
+		Type  string `json:"type"`
+		Delta struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"delta"`
+	}
+	if l.Parent != nil || json.Unmarshal(l.Event, &ev) != nil {
+		return nil
+	}
+	switch {
+	case ev.Type == "content_block_start":
+		p.reply = replyScanner{}
+	case ev.Type == "content_block_delta" && ev.Delta.Type == "text_delta":
+		return p.reply.feed(ev.Delta.Text)
+	}
+	return nil
+}
+
 func (p *claudeParser) Line(b []byte) []Event {
 	var l claudeLine
 	if err := json.Unmarshal(b, &l); err != nil || l.Type == "" {
@@ -204,6 +231,8 @@ func (p *claudeParser) Line(b []byte) []Event {
 		p.res.UsageLimited = true
 	}
 	switch l.Type {
+	case "stream_event":
+		return p.streamEvent(l)
 	case "system":
 		if l.Subtype != "init" {
 			return nil

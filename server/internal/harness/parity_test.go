@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 )
@@ -60,6 +61,31 @@ func TestCodexMCPFailureNormalization(t *testing.T) {
 		if len(ev) != 1 || ev[0].Payload["is_error"] != true {
 			t.Fatalf("MCP failure lost: %+v", ev)
 		}
+	}
+}
+
+func TestClaudeSpotsRichBlocksAsTheyStream(t *testing.T) {
+	p := (ClaudeCode{}).NewParser("test")
+	delta := func(text string) []Event {
+		line, _ := json.Marshal(map[string]any{"type": "stream_event", "event": map[string]any{"type": "content_block_delta", "delta": map[string]any{"type": "text_delta", "text": text}}})
+		return p.Line(line)
+	}
+	if ev := delta("Here you go.\n\n```app"); ev != nil {
+		t.Fatalf("seen before the tag was complete: %+v", ev)
+	}
+	ev := delta("\n<!doctype html>\n")
+	if len(ev) != 1 || ev[0].Type != "lifecycle" || ev[0].Payload["state"] != "reply_block" || ev[0].Payload["kind"] != "app" {
+		t.Fatalf("app block: %+v", ev)
+	}
+	if ev := delta("```mermaid\n```\n```go\n```app\n```\n"); len(ev) != 0 {
+		t.Fatalf("fences inside a block: %+v", ev)
+	}
+	if ev := delta("```mermaid\n"); len(ev) != 1 || ev[0].Payload["kind"] != "mermaid" {
+		t.Fatalf("mermaid block: %+v", ev)
+	}
+	child := `{"type":"stream_event","parent_tool_use_id":"x","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"\n` + "```" + `\n` + "```" + `app\n"}}}`
+	if ev := p.Line([]byte(child)); ev != nil {
+		t.Fatalf("subagent text: %+v", ev)
 	}
 }
 

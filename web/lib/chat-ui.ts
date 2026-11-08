@@ -2,7 +2,7 @@
 // Kept free of React so `npm run test:unit` covers it.
 
 export type RunEventLike = { seq: number; type: string; at: string; payload: Record<string, unknown> };
-export type ToolCall = { key: number; tool: string; input: unknown; done: boolean };
+export type ToolCall = { key: number; tool: string; input: unknown; done: boolean; output?: string };
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 
@@ -23,7 +23,9 @@ export function toolCalls(events: RunEventLike[] | undefined, since?: string, un
       if (p.id) open.set(str(p.id), out.length);
       out.push({ key: e.seq, tool: str(p.tool), input: p.input, done: false });
     } else if (e.type === "tool_result" && p.id && open.has(str(p.id))) {
-      out[open.get(str(p.id))!].done = true;
+      const call = out[open.get(str(p.id))!];
+      call.done = true;
+      if (p.output) call.output = str(p.output);
     }
   }
   return out;
@@ -101,7 +103,7 @@ export function runningSince(list: MessageLike[] | undefined): string | undefine
 export function bareTool(tool: string): string {
   const mcp = /^mcp__(.+?)__(.+)$/.exec(tool);
   if (mcp) return mcp[1] === "lazyagents" ? mcp[2] : `${mcp[1]}.${mcp[2]}`;
-  return tool.startsWith("lazyagents.") ? tool.slice("lazyagents.".length) : tool;
+  return /^lazyagents[._]/.test(tool) ? tool.slice("lazyagents.".length) : tool;
 }
 
 /** What the live line says: a verb, then a [[ref]] to link or plain text. */
@@ -238,7 +240,8 @@ const GIT_OTHER = new RegExp(`${GIT}(add|am|apply|blame|branch|checkout|cherry-p
  * "running tests", the Activity tab keeps the exact command.
  */
 function shellStatus(command: string): ChatStatusInfo {
-  const c = command.toLowerCase();
+  // Codex runs everything through a login shell: /bin/zsh -lc 'cat x'.
+  const c = command.toLowerCase().replace(/^(\S*\/)?(ba|z)?sh\s+-l?c\s+['"]?/, "");
   if (/\.lazyagents\/outbox/.test(c)) return status("image", "saving the image");
   if (GIT_PUSH.test(c)) return status("push", "pushing its branch");
   if (GIT_COMMIT.test(c)) return status("commit", "committing changes");
@@ -257,6 +260,26 @@ function githubToolStatus(tool: string): ChatStatusInfo | undefined {
   if (!/(^|[._-])github[._-]/i.test(tool)) return undefined;
   if (/(create|update|merge)\w*pull_?request/i.test(tool)) return status("pull-request", "preparing a pull request");
   return status("github", "working on GitHub");
+}
+
+/** A rich block being written into the reply, reported by the harness: no tool runs, but it can take a while. */
+const REPLY_BLOCK = "reply_block";
+const REPLY_BLOCK_STATUS: Record<string, ChatStatusInfo> = {
+  app: status("canvas", "building an interactive app"),
+  "svg-image": status("image", "drawing an image"),
+  mermaid: status("canvas", "drawing a diagram"),
+  choices: status("canvas", "laying out your options"),
+  "workflow-run": status("workflow", "lining up a workflow"),
+  recommend: status("web", "picking something for you to look at"),
+};
+
+/** The running turn's tool calls and the rich blocks written between them, in order, for the chat tab. */
+export function chatCalls(events: RunEventLike[] | undefined, since?: string): ToolCall[] {
+  const t = since ? Date.parse(since) : 0;
+  const blocks = (events ?? [])
+    .filter((e) => e.type === "lifecycle" && e.payload.state === REPLY_BLOCK && Date.parse(e.at) >= t)
+    .map((e): ToolCall => ({ key: e.seq, tool: REPLY_BLOCK, input: { kind: e.payload.kind }, done: true }));
+  return [...toolCalls(events, since), ...blocks].sort((a, b) => a.key - b.key);
 }
 
 /**
@@ -295,8 +318,16 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("thinking", "naming the conversation");
     case "WebSearch":
     case "web_search":
+    case "websearch":
     case "WebFetch":
+    case "webfetch":
       return status("web", "searching the web");
+    case "list_saved_links":
+      return status("web", "checking your saved links");
+    case "propose_persona":
+      return status("memory", "sketching a new persona");
+    case "submit_research_report":
+      return status("wiki", "writing up its research");
     case "get_video_transcript":
       return status("video", "watching a video");
     case "canvas_list":
@@ -319,23 +350,38 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "generate_image":
       return status("image", "creating an image");
     case "Read":
+    case "read":
+    case "read_file":
       // The image follow-up opens the generated images it is about to react to.
       if (typeof o.file_path === "string" && o.file_path.includes(".lazyagents/attachments/generated/")) return status("image", "looking at the image");
       return status("reading-code", "reading the code");
     case "Glob":
+    case "glob":
     case "Grep":
+    case "grep":
     case "LS":
+    case "list":
+    case "list_dir":
       return status("reading-code", "reading the code");
     case "Edit":
+    case "edit":
     case "MultiEdit":
     case "Write":
+    case "write":
     case "NotebookEdit":
     case "apply_patch":
+    case "patch":
       return status("writing-code", "writing code");
+    case REPLY_BLOCK:
+      return REPLY_BLOCK_STATUS[str(o.kind)] ?? status("thinking", "working on it");
     case "TodoWrite":
+    case "todowrite":
+    case "TaskCreate":
+    case "TaskUpdate":
       return status("thinking", "planning its next steps");
     case "shell":
     case "Bash":
+    case "bash":
     case "exec_command":
     case "shell_command":
       return shellStatus(typeof o.command === "string" ? o.command : typeof o.cmd === "string" ? o.cmd : "");
@@ -347,4 +393,99 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
 /** The chat tab's status for a running turn: the newest call's, or "thinking" before any tool runs. */
 export function chatStatus(calls: { tool: string; input: unknown }[]): ChatStatusInfo {
   return calls.length ? chatStatusOf(calls[calls.length - 1]) : status("thinking", "thinking");
+}
+
+// ---- the chat tab's step rail: the turn's plan, or its work so far ----
+
+export type ChatStepState = "planned" | "active" | "done";
+export type ChatStep = { key: string; title: string; state: ChatStepState; added?: true };
+
+type PlanItem = { id: string; title: string; state: ChatStepState };
+
+const planState = (v: unknown): ChatStepState => (v === "completed" ? "done" : v === "in_progress" ? "active" : "planned");
+const records = (list: unknown) => (Array.isArray(list) ? (list as Record<string, unknown>[]) : []);
+const planItems = (list: unknown): PlanItem[] =>
+  records(list)
+    .filter((item) => item.content && item.status !== "cancelled")
+    .map((item, i) => ({ id: String(i), title: str(item.content), state: planState(item.status) }));
+
+/** Every version of the plan in these calls, oldest first: TodoWrite sends the whole list, TaskCreate and TaskUpdate change one task. */
+function planVersions(calls: ToolCall[]): PlanItem[][] {
+  const versions: PlanItem[][] = [];
+  let tasks: PlanItem[] = [];
+  for (const call of calls) {
+    const o = (call.input && typeof call.input === "object" ? call.input : {}) as Record<string, unknown>;
+    switch (bareTool(call.tool)) {
+      case "TodoWrite":
+      case "todowrite":
+        versions.push(planItems(o.todos));
+        break;
+      case "TaskCreate":
+        tasks = [...tasks, { id: /#(\d+)/.exec(call.output ?? "")?.[1] ?? String(tasks.length + 1), title: str(o.subject), state: "planned" }];
+        versions.push(tasks);
+        break;
+      case "TaskUpdate": {
+        const id = str(o.taskId);
+        if (!tasks.some((t) => t.id === id)) break;
+        tasks = o.status === "deleted"
+          ? tasks.filter((t) => t.id !== id)
+          : tasks.map((t) => (t.id === id ? { ...t, title: o.subject ? str(o.subject) : t.title, state: o.status ? planState(o.status) : t.state } : t));
+        versions.push(tasks);
+        break;
+      }
+    }
+  }
+  return versions;
+}
+
+/** Calls that keep the turn running but aren't work to show: its plan, tool loading, the chat's title. */
+const BOOKKEEPING = new Set(["TodoWrite", "todowrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill", "set_chat_title", "whoami"]);
+
+/**
+ * The turn's steps. The newest plan when the assistant wrote one, marking steps added after
+ * work began. Otherwise its consecutive tool calls with the same description as one step, newest active, in the same
+ * high-level wording as the status line.
+ */
+export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: boolean } {
+  const versions = planVersions(calls);
+  const latest = versions[versions.length - 1];
+  if (latest?.length) {
+    const baseline = versions.find((v) => v.some((s) => s.state !== "planned"));
+    const original = new Set(baseline?.map((s) => s.title) ?? latest.map((s) => s.title));
+    const seen = new Map<string, number>();
+    const steps = latest.map((s): ChatStep => {
+      // By title, not position, so a step added mid-list doesn't remount the ones after it.
+      const n = seen.get(s.title) ?? 0;
+      seen.set(s.title, n + 1);
+      return { key: `${s.title}#${n}`, title: s.title, state: s.state, ...(original.has(s.title) ? {} : { added: true as const }) };
+    });
+    // A plan doesn't list the rich blocks in the reply, so they follow it.
+    const newest = calls[calls.length - 1];
+    for (const call of calls) {
+      if (call.tool !== REPLY_BLOCK) continue;
+      const { phrase } = chatStatusOf(call);
+      steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: call === newest ? "active" : "done" });
+    }
+    return { steps, planned: true };
+  }
+  const steps: ChatStep[] = [];
+  let last: string | undefined;
+  for (const call of calls) {
+    if (BOOKKEEPING.has(bareTool(call.tool))) continue;
+    const { phrase } = chatStatusOf(call);
+    if (phrase === last) continue;
+    last = phrase;
+    steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: "done" });
+  }
+  if (steps.length) steps[steps.length - 1].state = "active";
+  return { steps, planned: false };
+}
+
+/** Keeps the rail short on long turns: all but the newest two of more than three finished steps fold away, and at most four upcoming steps show. */
+export function foldSteps(steps: ChatStep[]): { earlier: number; shown: ChatStep[]; later: number } {
+  const done = steps.filter((s) => s.state === "done");
+  const hidden = new Set(done.length > 3 ? done.slice(0, -2) : []);
+  const upcoming = steps.filter((s) => s.state === "planned");
+  for (const s of upcoming.slice(4)) hidden.add(s);
+  return { earlier: done.length > 3 ? done.length - 2 : 0, shown: steps.filter((s) => !hidden.has(s)), later: Math.max(0, upcoming.length - 4) };
 }

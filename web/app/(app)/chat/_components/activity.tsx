@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
-import { activityOf, chatStatus, interimLine, toolCalls, type Activity, type ToolCall } from "@/lib/chat-ui";
+import { activityOf, chatCalls, chatStatus, chatSteps, foldSteps, interimLine, toolCalls, type Activity, type ChatStep, type ToolCall } from "@/lib/chat-ui";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
 import { ActivityScene, sceneLabel, useHeldScene } from "./activity-scene";
 import { PersonaAvatar, PersonaName, type PersonaLook } from "./persona";
@@ -86,29 +86,90 @@ export function TurnToolCalls({ runId, since, until }: { runId?: string; since?:
   return <CallList calls={calls} />;
 }
 
+const STEP_DOT: Record<ChatStep["state"], string> = {
+  planned: "border border-dashed border-border-strong",
+  active: "bg-accent",
+  done: "bg-[var(--state-done)] text-surface",
+};
+
+const STEP_BAR: Record<ChatStep["state"], string> = {
+  planned: "bg-border",
+  active: "bg-accent",
+  done: "bg-[var(--state-done)]",
+};
+
+/** Pulses the step under way, until the person presses Stop. */
+const stepPulse = (s: ChatStep, stopping?: boolean) => (s.state === "active" && !stopping ? "motion-safe:animate-pulse" : "");
+
+function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }) {
+  const { earlier, shown, later } = foldSteps(steps);
+  return (
+    <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-[12.5px]">
+      {earlier > 0 && (
+        <li className="flex items-center gap-2.5 text-fg-tertiary">
+          <span aria-hidden className={`grid size-4 flex-none place-items-center rounded-full text-[10px] ${STEP_DOT.done}`}>✓</span>
+          {earlier} earlier steps
+        </li>
+      )}
+      {shown.map((s) => (
+        <li key={s.key} data-step-state={s.state} className="flex min-w-0 items-center gap-2.5 motion-safe:animate-[scene-in_240ms_ease-out]">
+          <span aria-hidden className={`grid size-4 flex-none place-items-center rounded-full text-[10px] ${STEP_DOT[s.state]} ${stepPulse(s, stopping)}`}>{s.state === "done" ? "✓" : ""}</span>
+          <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
+          {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
+        </li>
+      ))}
+      {later > 0 && <li className="pl-[26px] text-fg-tertiary">+{later} more</li>}
+    </ol>
+  );
+}
+
 /**
  * The chat tab's card while a turn runs: "<Persona> is reading the code…" beside a small
  * scene for that kind of work, from the newest tool call at a high level only. The exact
- * calls stay in the Activity tab. Its height is fixed so scene changes never move the chat.
+ * calls stay in the Activity tab. Once a turn has two steps, a rail below lists them; it
+ * collapses to a progress strip, and folds old steps so a long turn stays short.
  */
 export function ChatStatus({ runId, since, persona, stopping }: { runId?: string; since?: string; persona: PersonaLook; stopping?: boolean }) {
   const q = useChatRunEvents(runId);
-  const status = useMemo(() => chatStatus(toolCalls(q.data, since)), [q.data, since]);
+  const calls = useMemo(() => chatCalls(q.data, since), [q.data, since]);
+  const status = useMemo(() => chatStatus(calls), [calls]);
+  const { steps, planned } = useMemo(() => chatSteps(calls), [calls]);
+  const [collapsed, setCollapsed] = useState(false);
   const scene = useHeldScene(status.kind);
+  const hasRail = steps.length > 1;
+  const done = steps.filter((s) => s.state === "done").length;
   return (
-    <div data-testid="chat-status-card" className="@container flex h-[72px] w-full max-w-[min(720px,100%)] items-center gap-3 rounded-xl border border-border bg-surface px-3.5">
-      <span className="flex-none motion-safe:animate-pulse">
-        <PersonaAvatar persona={persona} size={28} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p role="status" aria-live="polite" className="truncate text-[13.5px] text-fg" data-testid="chat-status">
-          {stopping ? "Stopping…" : `${persona.name} is ${status.phrase}…`}
-        </p>
-        <p aria-hidden className="truncate text-xs text-fg-tertiary @max-[300px]:hidden">
-          {sceneLabel(scene.current)}
-        </p>
+    <div data-testid="chat-status-card" className="@container w-full max-w-[min(720px,100%)] rounded-xl border border-border bg-surface">
+      <div className="flex h-[72px] items-center gap-3 px-3.5">
+        <span className="flex-none motion-safe:animate-pulse">
+          <PersonaAvatar persona={persona} size={28} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p role="status" aria-live="polite" className="truncate text-[13.5px] text-fg" data-testid="chat-status">
+            {stopping ? "Stopping…" : `${persona.name} is ${status.phrase}…`}
+          </p>
+          <p aria-hidden className="truncate text-xs text-fg-tertiary @max-[300px]:hidden">
+            {planned ? `Step ${Math.min(done + 1, steps.length)} of ${steps.length}` : sceneLabel(scene.current)}
+          </p>
+        </div>
+        <ActivityScene current={scene.current} previous={scene.previous} stopping={stopping} />
       </div>
-      <ActivityScene current={scene.current} previous={scene.previous} stopping={stopping} />
+      {hasRail && (
+        <>
+          {collapsed ? (
+            <div aria-hidden className="flex gap-[3px] px-3.5">
+              {steps.map((s) => (
+                <i key={s.key} className={`h-1 flex-1 rounded-sm ${STEP_BAR[s.state]} ${stepPulse(s, stopping)}`} />
+              ))}
+            </div>
+          ) : (
+            <StepRail steps={steps} stopping={stopping} />
+          )}
+          <button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((c) => !c)} className="px-3.5 py-1.5 text-xs text-fg-tertiary hover:text-fg-secondary">
+            {collapsed ? "Show steps" : "Hide steps"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

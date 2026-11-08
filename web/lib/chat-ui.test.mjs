@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatStatus, chatStatusOf, chatTitle, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
+import { activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -21,6 +21,7 @@ test("tool calls pair with results and skip events before the turn", () => {
 test("MCP tool names lose the lazyagents prefix from either harness", () => {
   assert.equal(bareTool("mcp__lazyagents__read_page"), "read_page");
   assert.equal(bareTool("lazyagents.read_page"), "read_page");
+  assert.equal(bareTool("lazyagents_read_page"), "read_page");
   assert.equal(bareTool("read_page"), "read_page");
   assert.equal(bareTool("mcp__github__get_issue"), "github.get_issue");
 });
@@ -201,4 +202,75 @@ test("the running turn starts at the newest message", () => {
   // The image follow-up has no message of its own: it starts after the reply and its notes.
   assert.equal(runningSince([user, reply, note]), note.created_at);
   assert.equal(runningSince(undefined), undefined);
+});
+
+const stepsOf = (calls) => chatSteps(calls.map((c, key) => ({ key, done: true, input: {}, ...c })));
+
+test("chatSteps follows the newest whole-list plan and marks steps added after work began", () => {
+  const todo = (...rows) => ({ tool: "TodoWrite", input: { todos: rows.map(([content, status]) => ({ content, status })) } });
+  const { steps, planned } = stepsOf([todo(["Read", "in_progress"], ["Test", "pending"]), { tool: "Read" }, todo(["Read", "completed"], ["Fix", "in_progress"], ["Test", "pending"])]);
+  assert.equal(planned, true);
+  assert.deepEqual(steps.map((s) => [s.title, s.state, !!s.added]), [["Read", "done", false], ["Fix", "active", true], ["Test", "planned", false]]);
+  assert.deepEqual(stepsOf([{ tool: "todowrite", input: { todos: [{ content: "One", status: "in_progress" }, { content: "Gone", status: "cancelled" }] } }]).steps.map((s) => [s.title, s.state]), [["One", "active"]]);
+});
+
+test("chatSteps tracks TaskCreate and TaskUpdate by the id in the result", () => {
+  const create = (subject, id) => ({ tool: "TaskCreate", input: { subject }, output: `Task #${id} created successfully: ${subject}` });
+  const update = (taskId, status) => ({ tool: "TaskUpdate", input: { taskId, status } });
+  const { steps } = stepsOf([create("A", 7), create("B", 8), create("C", 9), update("7", "completed"), update("8", "in_progress"), update("9", "deleted"), create("D", 10)]);
+  assert.deepEqual(steps.map((s) => [s.title, s.state, !!s.added]), [["A", "done", false], ["B", "active", false], ["D", "planned", true]]);
+});
+
+test("a step keeps its key when another is added before it", () => {
+  const todo = (...titles) => ({ tool: "TodoWrite", input: { todos: titles.map((content) => ({ content, status: "pending" })) } });
+  const key = (calls, title) => stepsOf(calls).steps.find((s) => s.title === title).key;
+  assert.equal(key([todo("A", "B")], "B"), key([todo("A", "New", "B")], "B"));
+  assert.notEqual(...stepsOf([todo("Same", "Same")]).steps.map((s) => s.key));
+});
+
+test("every harness's tools and each chat tool land on a described step", () => {
+  const phrases = (...tools) => stepsOf(tools.map((tool) => ({ tool }))).steps.map((s) => s.title);
+  assert.deepEqual(phrases("read", "lazyagents_get_ticket", "edit", "websearch"), ["Reading the code", "Checking tickets", "Writing code", "Searching the web"]);
+  assert.deepEqual(phrases("mcp__lazyagents__list_saved_links", "mcp__lazyagents__propose_persona", "mcp__lazyagents__submit_research_report"), ["Checking your saved links", "Sketching a new persona", "Writing up its research"]);
+  assert.deepEqual(phrases("mcp__lazyagents__canvas_create", "mcp__lazyagents__canvas_patch", "mcp__lazyagents__canvas_patch"), ["Drafting a canvas", "Revising a canvas"]);
+  assert.deepEqual(phrases("mcp__other__mystery"), ["Working on it"]);
+  assert.deepEqual(phrases("mcp__lazyagents__whoami", "ToolSearch", "Skill", "mcp__lazyagents__set_chat_title"), []);
+});
+
+test("chatSteps groups a planless turn's calls, skipping bookkeeping", () => {
+  const { steps, planned } = stepsOf([{ tool: "Read" }, { tool: "ToolSearch" }, { tool: "Grep" }, { tool: "Edit" }, { tool: "Bash", input: { command: "go test ./..." } }]);
+  assert.equal(planned, false);
+  assert.deepEqual(steps.map((s) => s.state), ["done", "done", "active"]);
+  assert.equal(steps[0].title, chatStatusOf({ tool: "Read", input: {} }).phrase.replace(/^./, (c) => c.toUpperCase()));
+  assert.deepEqual(chatSteps([]), { steps: [], planned: false });
+});
+
+test("foldSteps folds old finished steps and caps upcoming ones", () => {
+  const make = (state, n, p) => Array.from({ length: n }, (_, i) => ({ key: `${p}${i}`, title: `${p}${i}`, state }));
+  const f = foldSteps([...make("done", 5, "d"), ...make("active", 1, "a"), ...make("planned", 6, "p")]);
+  assert.deepEqual([f.earlier, f.later], [3, 2]);
+  assert.deepEqual(f.shown.map((s) => s.key), ["d3", "d4", "a0", "p0", "p1", "p2", "p3"]);
+  assert.equal(foldSteps(make("done", 3, "d")).earlier, 0);
+});
+
+test("rich reply blocks join the calls in order and become steps", () => {
+  const events = [
+    { seq: 1, type: "tool_call", at: "2026-11-06T10:01:00Z", payload: { id: "a", tool: "Read", input: {} } },
+    { seq: 2, type: "lifecycle", at: "2026-11-06T10:01:01Z", payload: { state: "harness_started" } },
+    { seq: 3, type: "lifecycle", at: "2026-11-06T10:01:02Z", payload: { state: "reply_block", kind: "app" } },
+  ];
+  const calls = chatCalls(events, "2026-11-06T10:00:30Z");
+  assert.deepEqual(calls.map((c) => c.tool), ["Read", "reply_block"]);
+  assert.deepEqual(chatStatus(calls), { kind: "canvas", phrase: "building an interactive app" });
+  assert.deepEqual(chatSteps(calls).steps.map((s) => [s.title, s.state]), [["Reading the code", "done"], ["Building an interactive app", "active"]]);
+  assert.equal(chatCalls(events, "2026-11-06T10:02:00Z").length, 0);
+  const plan = { key: 0, tool: "TodoWrite", done: true, input: { todos: [{ content: "One", status: "completed" }] } };
+  assert.deepEqual(chatSteps([plan, ...calls]).steps.map((s) => [s.title, s.state]), [["One", "done"], ["Building an interactive app", "active"]]);
+});
+
+test("a command wrapped in a login shell is judged by the command inside", () => {
+  const shell = (command) => chatStatusOf({ tool: "shell", input: { command } }).kind;
+  assert.equal(shell("/bin/zsh -lc 'sed -n 1,5p main.go'"), "reading-code");
+  assert.equal(shell("/bin/bash -lc \"git status\""), "repo-history");
+  assert.equal(shell("/bin/zsh -lc pwd"), "terminal");
 });
