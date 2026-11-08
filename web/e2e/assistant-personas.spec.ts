@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installChatApi, persona } from "./mock-chat-api";
 
-const panel = (page: Page) => page.getByRole("complementary", { name: "Personas" });
+const panel = (page: Page) => page.getByRole("region", { name: "Personas", exact: true });
 const editor = (page: Page) => page.getByRole("dialog");
 // Next keeps the page we navigated from mounted but hidden, so count only what is on screen.
 const rows = (page: Page) => page.locator('[data-testid="persona-row"]:visible');
@@ -9,6 +9,7 @@ const rows = (page: Page) => page.locator('[data-testid="persona-row"]:visible')
 async function openPanel(page: Page) {
   await page.goto("/chat?project=WEB");
   await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Personas", exact: true }).click();
+  await expect(page).toHaveURL(/\/personas$/);
   await expect(panel(page)).toBeVisible();
 }
 
@@ -223,7 +224,10 @@ test("abilities: Write code reveals repositories; they validate, save with the c
   const nova = mock.personas.find((p) => p.name === "Nova")!;
   expect(nova.capabilities).toEqual({ code: true, images: true, personas: false, svg: false });
   expect(nova.repos).toEqual(["https://github.com/acme/app"]);
-  await expect(rows(page).filter({ hasText: "Nova" }).getByTestId("capability-badges")).toBeVisible();
+  const granted = rows(page).filter({ hasText: "Nova" }).getByTestId("persona-permissions");
+  await expect(granted).toContainText("Write code");
+  await expect(granted).toContainText("Generate images");
+  await expect(rows(page).filter({ hasText: "Atlas" })).toContainText("No extra permissions");
 
   // Turning code off keeps the repositories and still sends them.
   await panel(page).getByRole("button", { name: "Edit Nova" }).click();

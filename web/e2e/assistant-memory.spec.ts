@@ -3,7 +3,7 @@ import { installChatApi } from "./mock-chat-api";
 
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const notices = (page: Page) => page.getByTestId("memory-notice");
-const panel = (page: Page) => page.getByRole("complementary", { name: "Memory" });
+const panel = (page: Page) => page.getByRole("region", { name: "Memory", exact: true });
 // Next keeps the page we navigated from mounted but hidden, so count only what is on screen.
 const rows = (page: Page) => page.locator('[data-testid="memory-row"]:visible');
 
@@ -88,26 +88,26 @@ test("a turn without memory tools shows no notice", async ({ page }) => {
   expect(mock.unhandled).toEqual([]);
 });
 
-test("View opens the Memory panel focused on that entry", async ({ page }) => {
+test("View opens the Memory page focused on that entry", async ({ page }) => {
   const mock = await installChatApi(page);
   await openChat(page);
   await send(page, "remember: Likes hiking");
   await showActivity(page);
   await notices(page).getByRole("button", { name: "View" }).click();
   const id = mock.memories[0].id;
-  await expect(page).toHaveURL(new RegExp(`memory=${id}`));
+  await expect(page).toHaveURL(new RegExp(`/memory\\?id=${id}`));
   await expect(panel(page)).toBeVisible();
   const form = panel(page).getByRole("form", { name: "Edit Likes hiking" });
   await expect(form).toBeVisible();
   await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue("Likes hiking");
 
-  await panel(page).getByRole("button", { name: "Close memory" }).click();
-  await expect(panel(page)).toHaveCount(0);
-  await expect(page).not.toHaveURL(/memory=/);
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(page).toHaveURL(/\/memory$/);
   expect(mock.unhandled).toEqual([]);
 });
 
-test("the main menu Memory item toggles the panel", async ({ page }) => {
+test("the main menu Memory item opens its own page, without the chat", async ({ page }) => {
   const mock = await installChatApi(page);
   await openChat(page);
   const toggle = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true });
@@ -116,8 +116,8 @@ test("the main menu Memory item toggles the panel", async ({ page }) => {
   await expect(toggle).toHaveAttribute("aria-current", "page");
   await expect(panel(page)).toBeVisible();
   await expect(panel(page)).toContainText("Nothing remembered yet");
-  await toggle.click();
-  await expect(panel(page)).toHaveCount(0);
+  await expect(page).toHaveURL(/\/memory$/);
+  await expect(composer(page)).toHaveCount(0);
   expect(mock.unhandled).toEqual([]);
 });
 

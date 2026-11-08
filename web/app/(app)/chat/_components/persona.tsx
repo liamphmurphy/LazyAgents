@@ -1,14 +1,14 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import { DropdownMenu } from "radix-ui";
 import type { Schemas } from "@/lib/api/client";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { repoShortName } from "@/lib/persona-ui";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
-import { usePersonaPanel } from "./persona-panel";
 
 // Assistant personas in the Assistant view only (ADR: Assistant personas). Ticket,
 // epic and run views keep their agent identity and never render these.
@@ -32,35 +32,26 @@ const TONE: Record<Schemas["PersonaTone"], string> = {
 };
 export const toneLabel = (t?: Schemas["PersonaTone"]) => (t ? TONE[t] : "Neutral");
 
+/** What a persona can be allowed to do, in display order. */
+export const CAPABILITIES: { key: "code" | "images" | "svg" | "personas"; icon: IconName; label: string; title: string }[] = [
+  { key: "code", icon: "terminal", label: "Write code", title: "Can write code" },
+  { key: "images", icon: "artifacts", label: "Generate images", title: "Can generate images" },
+  { key: "svg", icon: "library", label: "Create SVG images", title: "Can create SVG images" },
+  { key: "personas", icon: "users", label: "Create personas", title: "Can propose new personas" },
+];
+
 /** Small icons for what a persona can do (code, images, SVG images, create personas); nothing when it can't do any. */
 export function CapabilityBadges({ capabilities, className }: { capabilities?: Schemas["PersonaCapabilities"]; className?: string }) {
-  if (!capabilities?.code && !capabilities?.images && !capabilities?.personas && !capabilities?.svg) return null;
+  const granted = CAPABILITIES.filter((c) => capabilities?.[c.key]);
+  if (!granted.length) return null;
   return (
     <span className={cx("inline-flex flex-none items-center gap-1 text-fg-tertiary", className)} data-testid="capability-badges">
-      {capabilities.code && (
-        <span title="Can write code" className="inline-flex items-center rounded bg-selected p-0.5">
-          <Icon name="terminal" size={12} />
-          <span className="sr-only">Can write code</span>
+      {granted.map((c) => (
+        <span key={c.key} title={c.title} className="inline-flex items-center rounded bg-selected p-0.5">
+          <Icon name={c.icon} size={12} />
+          <span className="sr-only">{c.title}</span>
         </span>
-      )}
-      {capabilities.images && (
-        <span title="Can generate images" className="inline-flex items-center rounded bg-selected p-0.5">
-          <Icon name="artifacts" size={12} />
-          <span className="sr-only">Can generate images</span>
-        </span>
-      )}
-      {capabilities.svg && (
-        <span title="Can create SVG images" className="inline-flex items-center rounded bg-selected p-0.5">
-          <Icon name="library" size={12} />
-          <span className="sr-only">Can create SVG images</span>
-        </span>
-      )}
-      {capabilities.personas && (
-        <span title="Can propose new personas" className="inline-flex items-center rounded bg-selected p-0.5">
-          <Icon name="users" size={12} />
-          <span className="sr-only">Can propose new personas</span>
-        </span>
-      )}
+      ))}
     </span>
   );
 }
@@ -222,9 +213,10 @@ export function usePersonaFilter(): PersonaFilterState {
   };
 }
 
-/** Opens the persona manager panel (LAZYAGENTS-85), driven by ?personas=. */
+/** Opens the persona manager (LAZYAGENTS-85). */
 export function useOpenPersonaManager() {
-  return usePersonaPanel().show;
+  const router = useRouter();
+  return () => router.push("/personas");
 }
 
 const item =

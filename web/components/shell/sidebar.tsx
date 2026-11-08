@@ -7,7 +7,7 @@ import { DropdownMenu } from "radix-ui";
 import { useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { needsAttention } from "@/lib/settings";
-import { ASSISTANT_PANELS, NAV_GROUPS, assistantPanelHref, currentProject, isActive, switchHref, withProject, type NavBadge, type ScopedProject } from "@/lib/project-scope";
+import { ASSISTANT_VIEWS, NAV_GROUPS, currentProject, isActive, switchHref, withProject, type NavBadge, type ScopedProject } from "@/lib/project-scope";
 import { Icon, Mark } from "@/components/ui/icon";
 import { Kbd } from "@/components/ui/primitives";
 import { floatPanel } from "@/components/domain/pickers";
@@ -211,12 +211,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
   const secrets = useSecrets();
   const counts: Record<NavBadge, number> = { inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
   const [expanded, setExpanded] = useExpanded();
-  const onChat = isActive(pathname, "/chat");
-  const panelOpen = (panel: string) => onChat && search.has(panel);
-  // A sub-item that's showing takes the highlight from its parent.
-  const navActive = (href: string) =>
-    isActive(pathname, href) && !(href === "/tickets" && search.get("sv")) && !(href === "/chat" && ASSISTANT_PANELS.some((p) => panelOpen(p.panel)));
-  const panelHref = (panel: (typeof ASSISTANT_PANELS)[number]["panel"]) => assistantPanelHref(pathname, new URLSearchParams(search.toString()), panel, current?.key);
+  const navActive = (href: string) => isActive(pathname, href) && !(href === "/tickets" && search.get("sv"));
   const newTicketHref = current ? `/tickets/new?project=${encodeURIComponent(current.key)}` : "/tickets/new";
   if (!expanded) {
     return (
@@ -253,8 +248,8 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
                     {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
                   </NavLink>
                   {n.href === "/chat" &&
-                    ASSISTANT_PANELS.map((p) => (
-                      <NavLink key={p.panel} label={p.label} href={panelHref(p.panel)} active={panelOpen(p.panel)}>
+                    ASSISTANT_VIEWS.map((p) => (
+                      <NavLink key={p.href} label={p.label} href={p.href} active={isActive(pathname, p.href)}>
                         <Icon name={p.icon} size={13} />
                       </NavLink>
                     ))}
@@ -318,8 +313,8 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
                 {n.href === "/tickets" && <SidebarSavedViews project={current?.key} />}
                 {n.href === "/chat" && (
                   <div className="flex flex-col gap-px pl-5">
-                    {ASSISTANT_PANELS.map((p) => (
-                      <NavLink key={p.panel} href={panelHref(p.panel)} active={panelOpen(p.panel)}>
+                    {ASSISTANT_VIEWS.map((p) => (
+                      <NavLink key={p.href} href={p.href} active={isActive(pathname, p.href)}>
                         <Icon name={p.icon} size={13} />
                         <span className="flex-1">{p.label}</span>
                       </NavLink>

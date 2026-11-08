@@ -48,12 +48,10 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-export type AssistantPanel = "memory" | "personas";
-
-/** The Assistant's right-hand panels, listed under it in the main menu. */
-export const ASSISTANT_PANELS: { panel: AssistantPanel; label: string; icon: IconName }[] = [
-  { panel: "memory", label: "Memory", icon: "bookmark" },
-  { panel: "personas", label: "Personas", icon: "users" },
+/** The Assistant's own full pages, listed under it in the main menu. */
+export const ASSISTANT_VIEWS: { href: string; label: string; icon: IconName }[] = [
+  { href: "/memory", label: "Memory", icon: "bookmark" },
+  { href: "/personas", label: "Personas", icon: "users" },
 ];
 
 /** Routes whose content belongs to one project, read from ?project=. */
@@ -85,19 +83,6 @@ export function projectSection(pathname: string): string | undefined {
 export function withProject(href: string, key: string | null | undefined): string {
   if (!key || !PROJECT_ROUTES[href]) return href;
   return `${href}?project=${encodeURIComponent(key)}`;
-}
-
-/** Toggles a panel on the open chat; from any other page, opens the Assistant with it showing. */
-export function assistantPanelHref(pathname: string, search: URLSearchParams, panel: AssistantPanel, project: string | null | undefined): string {
-  const onChat = isActive(pathname, "/chat");
-  const q = onChat ? new URLSearchParams(search) : new URLSearchParams(project ? { project } : {});
-  const open = onChat && q.has(panel);
-  q.delete("memory");
-  q.delete("personas");
-  q.delete("canvas"); // one right-hand panel at a time
-  if (!open) q.set(panel, "1");
-  const query = q.toString();
-  return `${onChat ? pathname : "/chat"}${query ? `?${query}` : ""}`;
 }
 
 /**

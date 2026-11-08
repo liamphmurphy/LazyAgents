@@ -11,7 +11,7 @@ async function openChat(page: Page) {
   await expect(composer(page)).toBeFocused();
 }
 
-test("/ lists the commands and /memory toggles the panel without sending", async ({ page }) => {
+test("/ lists the commands and /memory opens the Memory page without sending", async ({ page }) => {
   const mock = await installChatApi(page);
   await openChat(page);
   await composer(page).pressSequentially("/");
@@ -19,8 +19,7 @@ test("/ lists the commands and /memory toggles the panel without sending", async
   await composer(page).pressSequentially("mem");
   await expect(menu(page).getByRole("option")).toHaveCount(1);
   await composer(page).press("Enter");
-  await expect(page.getByRole("complementary", { name: "Memory" })).toBeVisible();
-  await expect(composer(page)).toHaveValue("");
+  await expect(page.getByRole("region", { name: "Memory", exact: true })).toBeVisible();
   expect(mock.posted).toEqual([]);
   expect(mock.unhandled).toEqual([]);
 });
@@ -82,10 +81,10 @@ test("Memory and Personas live under Assistant in the main menu", async ({ page 
   await expect(page.getByRole("button", { name: /^Memory/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Personas/ })).toHaveCount(0);
   await nav.getByRole("link", { name: "Personas", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Personas" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Personas", exact: true })).toBeVisible();
   await nav.getByRole("link", { name: "Memory", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Memory" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Personas" })).toHaveCount(0);
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+\?.*memory=1/);
+  await expect(page.getByRole("region", { name: "Memory", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Personas", exact: true })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/memory$/);
 });
 
