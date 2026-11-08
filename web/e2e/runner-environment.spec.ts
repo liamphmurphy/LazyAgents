@@ -17,7 +17,7 @@ const snapshot: Schemas["EnvironmentSnapshot"] = {
   },
 };
 const environment: Schemas["RunnerEnvironment"] = {
-  runner: { online: true, runners: [{ id: "mac-local", backend: "local", heartbeat_at: at, max_concurrent: 2, running: 1 }], slots: 2, busy: 1, queued: 0 },
+  runner: { online: true, runners: [{ id: "mac-local", backend: "local", heartbeat_at: at, max_concurrent: 2, running: 1 }], slots: 2, busy: 1, live: 1, queued: 0 },
   snapshots: [snapshot, { ...snapshot, run_id: otherId, runner_id: "docker-offline", backend: "docker", report: { ...snapshot.report, status: "failed", error: "missing required tool: sqlc", tools: [{ name: "sqlc", available: false }] } }],
 };
 

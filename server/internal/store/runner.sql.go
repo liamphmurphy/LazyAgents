@@ -319,6 +319,18 @@ func (q *Queries) LiveRunners(ctx context.Context) ([]Runner, error) {
 	return items, nil
 }
 
+const liveWorkRunsCount = `-- name: LiveWorkRunsCount :one
+SELECT count(*)::int FROM runs WHERE state IN ('starting', 'running') AND purpose <> 'chat'
+`
+
+// Runs in flight for the Runs nav count; Personal Assistant chats belong to Chat.
+func (q *Queries) LiveWorkRunsCount(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, liveWorkRunsCount)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const lockRunNoWait = `-- name: LockRunNoWait :one
 SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms FROM runs WHERE id = $1
 `

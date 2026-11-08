@@ -19,7 +19,7 @@ import { rememberProject, useRememberedProject } from "./project-scope";
 export type SidebarProps = {
   workspace: string;
   inboxCount: number;
-  /** Runs in progress on the runners. */
+  /** Ticket and planning runs in progress; chat runs aren't counted. */
   liveRuns: number;
   /** Agent edits to wiki pages waiting for a person (amber: a person acts). */
   wikiSuggestions?: number;

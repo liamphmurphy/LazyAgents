@@ -3220,7 +3220,10 @@ export interface components {
             online: boolean;
             runners: components["schemas"]["RunnerInfo"][];
             slots: number;
+            /** @description Runner slots in use */
             busy: number;
+            /** @description Ticket and planning runs starting or running: the Runs nav count (chat runs live in Chat) */
+            live: number;
             queued: number;
         };
         EnvironmentTool: {

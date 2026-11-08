@@ -96,6 +96,10 @@ DELETE FROM runners WHERE id = $1;
 -- name: LiveRunners :many
 SELECT * FROM runners WHERE heartbeat_at > now() - interval '45 seconds' ORDER BY started_at;
 
+-- name: LiveWorkRunsCount :one
+-- Runs in flight for the Runs nav count; Personal Assistant chats belong to Chat.
+SELECT count(*)::int FROM runs WHERE state IN ('starting', 'running') AND purpose <> 'chat';
+
 -- name: QueuedRunsCount :one
 SELECT count(*)::int FROM runs WHERE state = 'queued';
 
