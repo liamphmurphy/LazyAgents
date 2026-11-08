@@ -198,9 +198,29 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     runEvents.set(runId, events);
   }
 
+  // "web:" runs a search with three results; "webnone:" gets the same search and uses none of it.
+  function webEvents(c: Chat) {
+    const runId = c.current_run_id!;
+    const events = runEvents.get(runId) ?? [];
+    const lastUser = messages.get(c.id)!.findLast((x) => x.role === "user");
+    const at = new Date(Date.parse(lastUser?.created_at ?? now()) + 1).toISOString();
+    const links = [{ title: "Pricing page", url: "https://www.example.com/pricing" }, { title: "Latency notes", url: "https://b.example.org/latency" }, { title: "Unused forum", url: "https://forum.example.net/t/1" }];
+    const id = `web-${events.length + 1}`;
+    events.push({ seq: events.length + 1, type: "tool_call", at, payload: { id, tool: "WebSearch", input: { query: "tts pricing" } } });
+    events.push({ seq: events.length + 1, type: "tool_result", at, payload: { id, tool: "WebSearch", output: `Links: ${JSON.stringify(links)}` } });
+    runEvents.set(runId, events);
+  }
+
   function finishTurn(c: Chat, prompt: string) {
     c.state = "idle";
     memoryEvents(c, prompt);
+    if (prompt.startsWith("web:") || prompt.startsWith("webnone:")) webEvents(c);
+    if (prompt.startsWith("web:") || prompt.startsWith("webnone:")) {
+      const body = prompt.startsWith("web:") ? "The answer.\n\nSources:\n- https://example.com/pricing\n- https://b.example.org/latency" : "I found nothing useful.";
+      add(c, "assistant", body, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE, ...(prompt.startsWith("web:") ? { citations: [{ target: TICKET, title: TICKET.title }] } : {}) });
+      void emit(c);
+      return;
+    }
     // "cite:" prompts get citations (one duplicate, one versioned section, one ticket).
     const citations = prompt.startsWith("cite:")
       ? [

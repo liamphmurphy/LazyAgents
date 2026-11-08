@@ -102,7 +102,7 @@ export type CitationLike = {
   section?: string;
 };
 
-export type Source = { key: string; label: string; href?: string; version?: string; section?: string; target: CitationLike["target"] };
+export type Source = { key: string; label: string; title: string; meta: string; wiki: boolean; href?: string; version?: string; section?: string; target: CitationLike["target"] };
 
 const enc = encodeURIComponent;
 
@@ -132,9 +132,16 @@ export function citationSources(citations: CitationLike[] | undefined): Source[]
     const key = [c.target.kind, id, c.version_id ?? c.version ?? "", section ?? ""].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
+    const wiki = !!c.path || c.target.artifact_type === "note";
+    const named = c.title ?? c.target.title;
+    const place = [c.version, section && `› ${section}`].filter(Boolean).join(" ");
+    const kind = c.target.kind === "ticket" ? "Ticket" : c.target.kind === "epic" ? "Epic" : wiki ? "Wiki" : "Artifact";
     out.push({
       key,
-      label: c.target.display_id ? `${c.target.display_id} ${c.title ?? c.target.title}`.trim() : (c.path ?? c.title ?? c.target.title),
+      label: c.target.display_id ? `${c.target.display_id} ${named}`.trim() : (c.path ?? named),
+      title: c.path?.split("/").pop() || named,
+      meta: [kind, c.target.display_id ?? place].filter(Boolean).join(" · "),
+      wiki,
       href: citationHref(c),
       version: c.version,
       section,
