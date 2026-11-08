@@ -118,8 +118,11 @@ func TestChatSpecCapabilities(t *testing.T) {
 				if images != tc.caps.Images || strings.Contains(ins, ".lazyagents/outbox/") != (tc.caps.Images && h == agentdef.HarnessCodex) {
 					t.Errorf("images instructions: section %v", images)
 				}
-				if tc.caps.Images && h != agentdef.HarnessCodex && !strings.Contains(ins, "needs a Codex model") {
-					t.Errorf("non-Codex chat should say image generation needs Codex")
+				if tc.caps.Images && h != agentdef.HarnessCodex && !strings.Contains(ins, "call generate_image") {
+					t.Errorf("non-Codex chat should be told to call generate_image")
+				}
+				if strings.Contains(ins, "Codex model") || (h == agentdef.HarnessCodex && strings.Contains(ins, "generate_image")) {
+					t.Errorf("image instructions: switch-model guidance or generate_image for a Codex chat")
 				}
 			})
 		}

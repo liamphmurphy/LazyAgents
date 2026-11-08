@@ -80,6 +80,7 @@ test("the chat status is high level and never leaks the call's details", () => {
     [{ tool: "save_memory", input: { body: "likes tea" } }, "making a note"],
     [{ tool: "WebFetch", input: { url: "https://example.com/private" } }, "searching the web"],
     [{ tool: "image_gen", input: {} }, "creating an image"],
+    [{ tool: "mcp__lazyagents__generate_image", input: { prompt: "a cat" } }, "creating an image"],
     [{ tool: "Grep", input: { pattern: "TODO" } }, "reading the code"],
     [{ tool: "apply_patch", input: { files: ["modify src/a.ts"] } }, "writing code"],
     [{ tool: "Bash", input: { command: "go test ./internal/..." } }, "running tests"],

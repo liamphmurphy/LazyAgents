@@ -51,6 +51,9 @@ type Config struct {
 	// freed; the chat's next message starts a new segment. 0 means
 	// DefaultChatIdleTTL.
 	ChatIdleTTL time.Duration
+	// ChatImageTimeout bounds one Codex image step for a chat on another
+	// harness. 0 means DefaultChatImageTimeout.
+	ChatImageTimeout time.Duration
 }
 
 // DefaultChatIdleTTL is how long an idle chat segment keeps its workspace.
@@ -705,7 +708,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	log := r.Log.With("run", c.run.ID, "ticket", c.ticket.Key, "turn", turn.Seq)
 	if c.run.State != "running" {
 		if c.run.Purpose == "chat" && c.run.State == "paused" {
-			r.finishChatTurn(ctx, c, turn, harness.Result{}, 130, nil, nil, nil)
+			r.finishChatTurn(ctx, c, turn, harness.Result{}, 130, nil, nil, nil, chatImages{})
 			return
 		}
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
@@ -839,6 +842,13 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
 			r.failTurnSetup(ctx, c, msg)
 			return
+		}
+	}
+	if c.run.Purpose == "chat" {
+		// A runner that died mid image step left its job running, which would
+		// keep granting the step's allowances to this turn.
+		if err := q.FailStaleChatImageJobs(ctx, c.run.ID); err != nil {
+			log.Warn("stale image jobs", "err", err)
 		}
 	}
 	// A token for this turn only; revoked when the process exits.
@@ -1023,8 +1033,15 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	logKey := r.saveLog(c.run.ID, turn.Seq, raw)
 	if c.run.Purpose == "chat" {
 		if ctx.Err() == nil {
+			var images chatImages
+			if c.spec.Harness != agentdef.HarnessCodex && waitErr == nil && code == 0 && !res.IsError && !res.UsageLimited {
+				images = r.runChatImageJobs(ctx, c, turn, token)
+			}
+			if ctx.Err() != nil {
+				return // shutting down: the turn re-runs on the next runner start
+			}
 			changes := r.chatCodeChanges(ctx, c, codeBase, sensitive, res, code, waitErr)
-			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey, changes)
+			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey, changes, images)
 		}
 		return
 	}
@@ -1055,6 +1072,15 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 // watch streams a turn's output into events, enforces pause/cancel and the
 // runtime guard, and returns what the parser learned.
 func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Parser, env map[string]string, remaining time.Duration) (harness.Result, []byte, int, error) {
+	return r.watchSession(ctx, c, proc, p, env, remaining, func(s string) {
+		_ = r.q().SetRunSession(context.Background(), store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: &s})
+	})
+}
+
+// watchSession is watch with the choice of what to do when the harness reports
+// its session id. The run's own turn records it as the run's resumable
+// session; a side step (an image job's Codex) must not.
+func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p harness.Parser, env map[string]string, remaining time.Duration, onSession func(string)) (harness.Result, []byte, int, error) {
 	var raw bytes.Buffer
 	var rawMu sync.Mutex
 	appendRaw := func(prefix string, b []byte) {
@@ -1090,7 +1116,7 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 			}
 			if s := p.Result().SessionID; s != "" && s != session {
 				session = s
-				_ = r.q().SetRunSession(context.Background(), store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: &s})
+				onSession(s)
 			}
 		}
 	}()

@@ -166,9 +166,11 @@ func (r *Runner) dropImageBlobs(imgs []generatedImage) {
 	}
 }
 
-func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTurn, res harness.Result, code int, waitErr error, logKey *string, codeChanges []byte) {
+func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTurn, res harness.Result, code int, waitErr error, logKey *string, codeChanges []byte, jobs chatImages) {
 	var imgs []generatedImage
-	if c.spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" && waitErr == nil && code == 0 && !res.IsError && !res.UsageLimited {
+	// A Codex chat copies its pictures to the outbox itself; any other chat's
+	// come from the Codex steps its generate_image requests ran.
+	if (c.spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" || jobs.ran) && waitErr == nil && code == 0 && !res.IsError && !res.UsageLimited {
 		imgs = r.harvestChatImages(ctx, c)
 	}
 	bound := false
@@ -232,6 +234,11 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 					}
 				}
 				bound = len(imgs) > 0
+				for _, reason := range jobs.failures {
+					if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: "Couldn't create the image: " + reason + ".", RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
+						return err
+					}
+				}
 			}
 		}
 		if err = idleChat(ctx, q, chat, run, state); err != nil {

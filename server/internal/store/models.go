@@ -179,6 +179,21 @@ type ChatAttachment struct {
 	Source      string
 }
 
+type ChatImageJob struct {
+	ID             uuid.UUID
+	WorkspaceID    uuid.UUID
+	RunID          uuid.UUID
+	TurnID         uuid.UUID
+	ChatID         uuid.UUID
+	Prompt         string
+	Model          string
+	State          string
+	CodexSessionID *string
+	Error          *string
+	CreatedAt      time.Time
+	FinishedAt     *time.Time
+}
+
 type ChatMessage struct {
 	ID          uuid.UUID
 	SessionID   uuid.UUID

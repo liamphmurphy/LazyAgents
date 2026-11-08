@@ -35,6 +35,14 @@ test("changes block is collapsed, expands to file diffs; long fences collapse", 
   // The fence over 20 lines is collapsed behind a show-more button.
   const fence = page.getByTestId("code-fence");
   await expect(fence).toContainText("ts");
+  // The block's <code> is not an inline chip: no border, background or padding
+  // (those drew as empty pills around the first and last lines).
+  const code = fence.locator("pre > code");
+  await expect(code).toHaveCSS("border-top-width", "0px");
+  await expect(code).toHaveCSS("padding-left", "0px");
+  await expect(code).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(code).toHaveCSS("display", "block");
+  await fence.screenshot({ path: "test-results/code-fence.png" });
   await expect(fence.getByRole("button", { name: "Show 7 more lines" })).toBeVisible();
   await expect(fence).not.toContainText("const v24");
   await fence.getByRole("button", { name: /more lines/ }).click();

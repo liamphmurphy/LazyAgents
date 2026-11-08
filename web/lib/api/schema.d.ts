@@ -3809,7 +3809,7 @@ export interface components {
         PersonaCapabilities: {
             /** @description Clone the chat's repo, edit and run code, commit and push its own work branch, open PRs */
             code: boolean;
-            /** @description Generate images (Codex image generation; needs a Codex model in the chat) */
+            /** @description Generate images with Codex image generation; works with any chat model (non-Codex chats hand the image to a one-off Codex step) */
             images: boolean;
         };
         /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */

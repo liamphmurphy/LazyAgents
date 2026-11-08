@@ -16,7 +16,7 @@ import (
 // chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title"}
+	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image"}
 
 // chatScope is the project a chat run may read from.
 type chatScope struct {
@@ -161,4 +161,24 @@ func createChatEpic(ctx context.Context, d Deps, c agents.Caller, in NewEpicIn) 
 		return nil, err
 	}
 	return map[string]any{"epic_id": e.ID, "name": e.Name, "criteria": len(in.Criteria)}, nil
+}
+
+type GenerateImageIn struct {
+	Prompt string `json:"prompt" jsonschema:"A detailed description of the image to create (1–4000 characters)"`
+}
+
+// generateImage queues an image for the runner to make with Codex after this
+// reply (see runs.Service.QueueChatImage).
+func generateImage(ctx context.Context, d Deps, c agents.Caller, in GenerateImageIn) (any, error) {
+	s, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil {
+		return nil, apperr.Conflict("generate_image only works in a chat with a person")
+	}
+	if _, err := d.Runs.QueueChatImage(ctx, c.Agent.WorkspaceID, *c.RunID, in.Prompt); err != nil {
+		return nil, err
+	}
+	return map[string]any{"queued": true, "tell_the_person": "Queued. The image is generated with Codex right after your reply and appears under it. Tell the person you're making it; don't describe it as finished."}, nil
 }

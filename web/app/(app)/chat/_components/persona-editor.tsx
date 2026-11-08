@@ -674,7 +674,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     checked={draft.images}
                     onChange={(v) => set({ images: v })}
                     title="Generate images"
-                    hint="Uses Codex image generation. Needs a Codex model in the chat; images appear in the conversation."
+                    hint="Creates images with Codex; works with any model in the chat. Images appear in the conversation."
                   />
                 </fieldset>
               </div>

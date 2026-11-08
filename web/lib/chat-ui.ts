@@ -182,6 +182,7 @@ export function chatStatusOf(call: { tool: string; input: unknown }): string {
       return "searching the web";
     case "image_generation":
     case "image_gen":
+    case "generate_image":
       return "creating an image";
     case "Read":
     case "Glob":

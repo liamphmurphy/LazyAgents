@@ -36,7 +36,9 @@ export function CodeFence({ code, info }: { code: string; info?: string }) {
         </button>
       </div>
       <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
-        <code>
+        {/* Not an inline chip: reset the .prose-code `code` styles (border, background, padding, size, colour),
+            which otherwise draw as empty pills around the first and last lines. */}
+        <code className="block rounded-none border-0 bg-transparent p-0 text-[length:inherit] text-fg">
           {shown.map((l, i) => (
             <span key={i} className="block whitespace-pre">
               {toks?.[i]
