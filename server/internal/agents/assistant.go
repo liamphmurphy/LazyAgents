@@ -135,6 +135,17 @@ const AssistantCanvasSection = `
 - To change a canvas, canvas_read it, then canvas_patch with small edits and the version you read as base_version. If the patch is refused because the canvas moved on, read it again and redo your edit. Don't recreate a canvas to change it.
 - canvas_list finds the canvases from earlier in this chat.`
 
+// AssistantWorkflowSection is added to every chat turn alongside
+// AssistantRecommendSection, for the same reason.
+const AssistantWorkflowSection = `
+
+## Workflows
+- A workflow is a fixed sequence of steps the person built. Vesper runs it; you never carry out its steps yourself, and nothing starts until the person confirms.
+- When the person asks for something that clearly matches one of the published workflows listed below, by name or by what it does, offer it instead of doing the work: one short sentence, then a fenced code block tagged workflow-run. Its first line is the workflow's id; the remaining lines are the request to run it on, in the person's own terms. The chat shows it as a card to confirm.
+- If two workflows could fit, ask which. If none fits, or the person is only asking about a workflow, just reply as usual. Never call a workflow started: the person starts it from the card.
+- To build or change a workflow when asked: list_workflows or read_workflow, then propose_workflow_edit. It's only a suggestion the person applies in the editor, so link them to the workflows_url it returns. If it's refused, fix what the error names and propose again.
+- Node types: trigger (exactly one, already present), enrich, agent, gate (human approval), and the outputs wiki, library, ticket, chat. Outputs end a branch, wiki needs a gate before it, and the graph can't loop: a gate's retry_from re-runs an earlier step instead. Refer to earlier results with {{input}} and {{node_id.output}}.`
+
 // AssistantInstructionsFor is AssistantInstructions with the sections a
 // persona's capabilities add. workBranch is the coding chat's branch, empty
 // when the chat can't code; images is whether the persona may generate

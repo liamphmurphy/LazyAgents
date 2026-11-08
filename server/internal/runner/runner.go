@@ -86,7 +86,9 @@ type Runner struct {
 	// Attachments reads chat attachments (blob.Store); nil: they're named in
 	// the prompt but not delivered, and stale uploads aren't swept.
 	Attachments AttachmentStore
-	Log         *slog.Logger
+	// Workflows moves workflow runs on when a step ends; nil leaves that to the API.
+	Workflows *runs.WorkflowEngine
+	Log       *slog.Logger
 
 	mu     sync.Mutex
 	active int
@@ -258,6 +260,12 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 			return c, err
 		}
 		c.ticket = store.Ticket{WorkspaceID: job.WorkspaceID, ProjectID: chat.ProjectID, Key: "RES-" + job.ID.String()[:8], Title: job.Title}
+	} else if c.run.Purpose == runs.PurposeWorkflow {
+		wf, err := q.WorkflowRunForAgentRun(ctx, &c.run.ID)
+		if err != nil {
+			return c, err
+		}
+		c.ticket = store.Ticket{WorkspaceID: wf.WorkspaceID, ProjectID: wf.ProjectID, Key: "WF-" + wf.ID.String()[:8], Title: wf.Name}
 	} else {
 		plan, err := q.PlanningSessionForRun(ctx, c.run.ID)
 		if err != nil {
@@ -343,11 +351,23 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 	}
 	// Only a successful run's workspace goes: a failed or cancelled one keeps
 	// its checkout (unpushed commits included) for a retry or a person.
-	if c.run.ParentRunID == nil && (state == "completed" || c.run.Purpose == runs.PurposeResearch) {
+	if c.run.ParentRunID == nil && (state == "completed" || c.run.Purpose == runs.PurposeResearch || c.run.Purpose == runs.PurposeWorkflow) {
 		r.cleanup(context.Background(), c.run.ID) // a delegated run has no workspace of its own
 	}
 	if c.run.Purpose == runs.PurposeResearch {
 		r.advanceResearch(context.Background())
+	}
+	if c.run.Purpose == runs.PurposeWorkflow {
+		r.advanceWorkflows(context.Background())
+	}
+}
+
+func (r *Runner) advanceWorkflows(ctx context.Context) {
+	if r.Workflows == nil {
+		return
+	}
+	if err := r.Workflows.AdvanceAll(ctx); err != nil && ctx.Err() == nil {
+		r.Log.Warn("advance workflows", "err", err)
 	}
 }
 
@@ -378,6 +398,7 @@ func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepChatAttachments(ctx)
 	defer r.sweepLinkPreviews(ctx)
 	defer r.advanceResearch(ctx)
+	defer r.advanceWorkflows(ctx)
 	r.expireIdleChats(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx)
 	if err != nil {
@@ -1374,6 +1395,11 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	// A researcher reports through its tool, so a clean exit is the end of it.
 	if c.run.Purpose == runs.PurposeResearch {
 		r.end(ctx, c, "completed", "Research finished.", runs.VerbRunCompleted)
+		return
+	}
+	// So does a workflow step; the engine checks that it did.
+	if c.run.Purpose == runs.PurposeWorkflow {
+		r.end(ctx, c, "completed", "Workflow step finished.", runs.VerbRunCompleted)
 		return
 	}
 	if c.run.IdleTurns < 1 {

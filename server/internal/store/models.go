@@ -713,6 +713,63 @@ type User struct {
 	AvatarContentType *string
 }
 
+type Workflow struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	UserID           uuid.UUID
+	Name             string
+	Description      string
+	Draft            json.RawMessage
+	Published        []byte
+	PublishedVersion int32
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type WorkflowProposal struct {
+	ID         uuid.UUID
+	WorkflowID uuid.UUID
+	ChatID     *uuid.UUID
+	Summary    string
+	Ops        json.RawMessage
+	Graph      json.RawMessage
+	State      string
+	CreatedAt  time.Time
+}
+
+type WorkflowRun struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	UserID       uuid.UUID
+	ChatID       uuid.UUID
+	ProjectID    uuid.UUID
+	WorkflowID   *uuid.UUID
+	MessageID    *uuid.UUID
+	Name         string
+	Version      int32
+	Graph        json.RawMessage
+	Input        string
+	State        string
+	RevisionNote string
+	Error        string
+	CreatedAt    time.Time
+	FinishedAt   *time.Time
+}
+
+type WorkflowStep struct {
+	ID         uuid.UUID
+	RunID      uuid.UUID
+	NodeID     string
+	Attempt    int32
+	State      string
+	Output     string
+	AgentRunID *uuid.UUID
+	Decision   string
+	Note       string
+	CreatedAt  time.Time
+	FinishedAt *time.Time
+}
+
 type Workspace struct {
 	ID        uuid.UUID
 	Name      string

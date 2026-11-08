@@ -356,3 +356,11 @@ Codex session-total token counters are normalized to per-turn deltas on resume,
 so resumed turns do not bill earlier usage twice. The migration repairs older
 turns where recorded lifecycle events identify the Codex session; original usage
 JSON is retained on those turns for audit.
+
+## Workflows
+
+A workflow is a fixed graph of steps that Vesper runs for you. Build one under **Workflows** by dragging nodes on the canvas, or open **Build with chat** and describe it: a persona proposes edits, previewed on the canvas until you apply them. Publishing freezes a version; runs in flight keep the version they started with.
+
+Node types are a trigger, **Enrich prompt**, **Agent step** (read-only; a step that reads the web can't read the workspace), **Human gate** and the outputs **Add to wiki**, **Add to library**, **Create ticket** and **Post to chat**. Wiki writes need a gate before them. "Request changes" at a gate re-runs an earlier step as a new attempt, so the graph never loops.
+
+Start one from a chat with `/workflow`, or ask for it in your own words: the persona recognizes a published workflow from its name and description and offers a card to confirm. Nothing runs until you confirm. Open gates appear above the message box and in the Inbox.

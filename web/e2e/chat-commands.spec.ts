@@ -15,7 +15,7 @@ test("/ lists the commands and /memory toggles the panel without sending", async
   const mock = await installChatApi(page);
   await openChat(page);
   await composer(page).pressSequentially("/");
-  await expect(menu(page).getByRole("option")).toHaveCount(7);
+  await expect(menu(page).getByRole("option")).toHaveCount(8);
   await composer(page).pressSequentially("mem");
   await expect(menu(page).getByRole("option")).toHaveCount(1);
   await composer(page).press("Enter");

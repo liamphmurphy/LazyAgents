@@ -18,6 +18,8 @@ import {
   useSendChatMessage,
 } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
+import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
+import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflow-cards";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
@@ -281,6 +283,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // The @mention being typed in the composer, and which suggestion is highlighted.
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [mentionActive, setMentionActive] = useState(0);
+  const workflows = useWorkflows();
+  const [startingWorkflow, setStartingWorkflow] = useState<Workflow | null>(null);
   // The / command menu: which row is highlighted, whether Esc closed it, and why the last command didn't run.
   const [commandActive, setCommandActive] = useState(0);
   const [commandDismissed, setCommandDismissed] = useState(false);
@@ -527,8 +531,11 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
       if (!stopping) cancel.mutate();
     },
   };
+  const published = (workflows.data?.workflows ?? []).filter((w) => w.published_version > 0);
   const commandOptions = (name: string): { name: string; run: CommandRun }[] => {
     switch (name) {
+      case "workflow":
+        return published.map((w) => ({ name: w.name, run: () => setStartingWorkflow(w) }));
       case "model":
         return (groups ?? [])
           .filter((g) => g.available)
@@ -569,6 +576,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     const command = CHAT_COMMANDS.find((x) => x.name === name);
     if (!command) return setCommandError(`Unknown command /${name}. Start with // to send it as a message.`);
     if (!command.args) return arg ? setCommandError(`/${name} doesn’t take anything after it.`) : runCommand(plainCommands[name]);
+    if (name === "workflow" && published.length === 0) return setCommandError("You have no published workflows yet. Build one under Workflows.");
     if (!arg) return setCommandError(`Say which ${command.args}: /${name} <${command.args}>`);
     const match = mentionSuggestions(commandOptions(name), arg)[0];
     if (!match) return setCommandError(`No ${command.args} matches “${arg}”.`);
@@ -772,6 +780,13 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               <RestoreChat chat={c} variant="primary" onRestored={restored} />
             </div>
           ) : (
+            <>
+            <ChatWorkflowTray chatId={c.id} />
+            {startingWorkflow && (
+              <div className="mb-2">
+                <WorkflowStartCard workflow={startingWorkflow} chatId={c.id} onDone={() => setStartingWorkflow(null)} onDismiss={() => setStartingWorkflow(null)} />
+              </div>
+            )}
             <form
               data-dock-avoid=""
               onSubmit={(e) => {
@@ -936,6 +951,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 </Button>
               </div>
             </form>
+            </>
           )}
         </div>
         {current && (

@@ -32,3 +32,8 @@ test("commandMenu offers names, then arguments of commands that take one", () =>
   assert.equal(commandMenu("/usr/bin"), null);
   assert.equal(commandMenu("hello"), null);
 });
+
+test("/workflow takes a workflow to pick", () => {
+  assert.deepEqual(commandMenu("/workflow "), { stage: "arg", name: "workflow", query: "" });
+  assert.deepEqual(parseCommand("/workflow Research to wiki"), { name: "workflow", arg: "Research to wiki" });
+});

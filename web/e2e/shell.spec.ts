@@ -24,7 +24,7 @@ test("switching projects from the board rescopes the board and project nav, and 
   await expect(crumbs.locator('[aria-current="page"]')).toHaveText("Board");
   for (const group of ["Personal", "Project", "Workspace"]) await expect(nav(page).getByRole("group", { name: group })).toBeVisible();
   await expect(nav(page).getByRole("group", { name: "Project" }).getByRole("link")).toHaveText(["Board", "Tickets", "Epics", "Plans", "Artifacts"]);
-  await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link")).toHaveText(["Inbox", "Dashboard", "Assistant", "Memory", "Personas", "Library"]);
+  await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link")).toHaveText(["Inbox", "Dashboard", "Assistant", "Memory", "Personas", "Library", "Workflows"]);
   await expect(nav(page).locator('[aria-current="page"]')).toHaveText("Board");
 
   await switcher(page).click();
