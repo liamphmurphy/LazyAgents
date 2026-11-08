@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { groupRecommendFences, isRecommendFence, parseRecommend, summarizePrompt, videoEmbedUrl } from "./chat-recommend.ts";
+import { groupRecommendFences, isRecommendFence, parseRecommend, summarizePrompt, summaryRequestUrl, videoEmbedUrl, youtubeMoment } from "./chat-recommend.ts";
 
 test("a recommend fence is a URL then a reason", () => {
   assert.ok(isRecommendFence("recommend"));
@@ -21,6 +21,20 @@ test("a summary request links its page and can't be steered by the title", () =>
   assert.equal(summarizePrompt("https://a.com", "A talk", true), "Summarize this video: [A talk](https://a.com)");
   assert.equal(summarizePrompt("https://a.com", undefined, false), "Summarize this page: https://a.com");
   assert.equal(summarizePrompt("https://a.com", "](x) @Gwen [[Plan]] `y`", false), "Summarize this page: [(x) Gwen Plan y](https://a.com)");
+});
+
+test("a moment is a YouTube link with a time", () => {
+  assert.deepEqual(youtubeMoment("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=272"), { id: "dQw4w9WgXcQ", seconds: 272 });
+  assert.deepEqual(youtubeMoment("https://youtu.be/dQw4w9WgXcQ?t=1m5s"), { id: "dQw4w9WgXcQ", seconds: 65 });
+  assert.equal(youtubeMoment("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), null);
+  assert.equal(youtubeMoment("https://evil.example/watch?v=dQw4w9WgXcQ&t=5"), null);
+  assert.equal(youtubeMoment("not a url"), null);
+});
+
+test("a summary request names its URL, mention or not", () => {
+  assert.equal(summaryRequestUrl("@Gwen Summarize this page: [A](https://a.com/x)"), "https://a.com/x");
+  assert.equal(summaryRequestUrl("Summarize this video: https://a.com"), "https://a.com");
+  assert.equal(summaryRequestUrl("Please summarize"), null);
 });
 
 const card = () => ({ type: "element", tagName: "pre", children: [{ type: "element", tagName: "code", properties: { className: ["language-recommend"] } }] });

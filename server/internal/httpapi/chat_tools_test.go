@@ -114,11 +114,12 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	allowed := map[string]any{
 		"whoami": map[string]any{}, "search_knowledge": map[string]any{"q": word}, "read_page": map[string]any{"ref": *note.Note.Path},
 		"read_artifact": map[string]any{"artifact": payDoc.ID.String()}, "get_ticket": map[string]any{"ticket": "PAY-214"},
-		"get_backlinks": map[string]any{"ref": payDoc.ID.String()},
-		"create_ticket": map[string]any{"title": "Chat-created ticket"},
-		"create_epic":   map[string]any{"name": "Chat-created epic"},
-		"list_epics":    map[string]any{},
-		"list_runs":     map[string]any{},
+		"get_backlinks":    map[string]any{"ref": payDoc.ID.String()},
+		"create_ticket":    map[string]any{"title": "Chat-created ticket"},
+		"create_epic":      map[string]any{"name": "Chat-created epic"},
+		"list_epics":       map[string]any{},
+		"list_runs":        map[string]any{},
+		"list_saved_links": map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
 	needArgs := []string{"get_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona"}

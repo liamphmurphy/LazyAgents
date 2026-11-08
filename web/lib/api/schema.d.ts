@@ -1713,6 +1713,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/links/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep a persona's summary with its Library link, saving the link if needed
+         * @description The reply must answer a request to summarize that URL, and a reply in the chat must recommend it.
+         */
+        post: operations["saveLibraryLinkSummary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{itemId}/link-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark a saved link to read or done */
+        put: operations["setLibraryLinkStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library/{itemId}": {
         parameters: {
             query?: never;
@@ -4131,8 +4170,25 @@ export interface components {
             site?: string;
             /** @description For a video link: the YouTube id */
             video_id?: string;
+            link_status?: components["schemas"]["LibraryLinkStatus"];
+            /** @description For a link: a saved summary, as markdown */
+            summary?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @enum {string} */
+        LibraryLinkStatus: "to_read" | "done";
+        LibraryLinkStatusSet: {
+            status: components["schemas"]["LibraryLinkStatus"];
+        };
+        LibraryLinkSummarySave: {
+            /**
+             * Format: uuid
+             * @description The assistant reply holding the summary
+             */
+            message_id: string;
+            /** @description The link it summarizes */
+            url: string;
         };
         /**
          * @description persona: what one of the person's personas looks like; self: what the person looks like
@@ -7333,6 +7389,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LibraryItem"];
                 };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveLibraryLinkSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryLinkSummarySave"];
+            };
+        };
+        responses: {
+            /** @description The link, with its summary */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setLibraryLinkStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryLinkStatusSet"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["Error"];
             default: components["responses"]["Error"];

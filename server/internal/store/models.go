@@ -356,6 +356,8 @@ type LibraryItem struct {
 	Note               string
 	Site               string
 	VideoID            string
+	LinkStatus         string
+	Summary            string
 }
 
 type LinkPreview struct {

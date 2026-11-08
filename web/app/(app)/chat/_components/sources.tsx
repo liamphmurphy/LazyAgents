@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
-import { useChatRunEvents } from "@/lib/api/hooks";
+import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
 import { citationSources, type Source } from "@/lib/chat-context";
 import { sourceSplit, usedWebSources, type ListedSource } from "@/lib/chat-sources";
 import { webSearches, type WebSource } from "@/lib/web-search";
@@ -43,25 +43,26 @@ function SourceLink({ href, external, tip, className, children }: { href?: strin
   return <Link href={href} title={tip} className={className}>{children}</Link>;
 }
 
-type Card = { key: string; tile: Tile; title: string; meta: string; href?: string; external?: boolean; tip?: string };
+type Card = { key: string; tile: Tile; title: string; meta: string; href?: string; external?: boolean; tip?: string; n?: number };
 
 const vesperCard = (s: Source): Card => ({ key: s.key, tile: vesperTile(s), title: s.title, meta: s.meta, href: s.href, tip: s.label });
 const webCard = (s: WebSource): Card => ({ key: s.url, tile: webTile(s), title: s.title, meta: s.host, href: s.url, external: true, tip: s.url });
 
-function CardGroup({ label, cards }: { label: string; cards: Card[] }) {
+function CardGroup({ label, cards, focused }: { label: string; cards: Card[]; focused?: number }) {
   if (cards.length === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
       <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary">{label}</h4>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(205px,1fr))] gap-2">
         {cards.map((c) => (
-          <li key={c.key} data-testid="source" className="min-w-0">
-            <SourceLink href={c.href} external={c.external} tip={c.tip} className="flex h-full items-center gap-2.5 rounded-[10px] border border-border bg-surface px-2.5 py-2 transition-colors hover:border-border-strong">
+          <li key={c.key} data-testid="source" data-cite={c.n} className="min-w-0">
+            <SourceLink href={c.href} external={c.external} tip={c.tip} className={cx("flex h-full items-center gap-2.5 rounded-[10px] border bg-surface px-2.5 py-2 transition-colors hover:border-border-strong", c.n !== undefined && c.n === focused ? "border-accent" : "border-border")}>
               <SourceTile tile={c.tile} size={30} />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-[13px] font-semibold text-fg">{c.title}</span>
                 <span className="truncate text-[11.5px] text-fg-tertiary">{c.meta}</span>
               </span>
+              {c.n !== undefined && <span aria-hidden className="ml-auto flex-none self-start rounded bg-accent-soft px-1 font-mono text-[10.5px] font-semibold text-accent">{c.n}</span>}
             </SourceLink>
           </li>
         ))}
@@ -77,7 +78,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : (word.
  * into cards. Pages a search found but the reply didn't use stay behind "more".
  * Hidden when the turn read and searched nothing.
  */
-export function Sources({ citations, body, listed, runId, since, until, webEvents }: {
+export function Sources({ citations, body, listed, runId, since, until, webEvents, focus }: {
   citations?: Schemas["ChatCitation"][];
   body: string;
   listed: ListedSource[];
@@ -86,8 +87,28 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
   until?: string;
   /** The reply closes its turn, so the turn's web searches belong under it. */
   webEvents: boolean;
+  /** The citation last clicked in the reply; tick repeats a click on the same one. */
+  focus?: { n: number; tick: number };
 }) {
-  const vesper = useMemo(() => citationSources(citations), [citations]);
+  const refs = useMemo(() => listed.flatMap((l) => (l.ref ? [l.ref] : [])), [listed]);
+  const resolved = useResolvedLinks(refs);
+  // Pages the closing list names join what the turn read; a name that doesn't resolve still gets a card.
+  const { vesper, byRef } = useMemo(() => {
+    const read = citationSources(citations);
+    const byRef = new Map<string, string>();
+    for (const ref of refs) {
+      const target = resolved.data?.find((l) => l.ref === ref)?.target ?? (resolved.data ? { kind: "unresolved" as const, title: ref } : undefined);
+      if (!target) continue;
+      const hit = read.find((s) => (target.id && s.target.id === target.id) || (!target.id && s.title === target.title));
+      if (hit) byRef.set(ref, hit.key);
+      else {
+        const [added] = citationSources([{ target, title: target.title, path: target.path }]);
+        read.push(added);
+        byRef.set(ref, added.key);
+      }
+    }
+    return { vesper: read, byRef };
+  }, [citations, refs, resolved.data]);
   const q = useChatRunEvents(webEvents ? runId : undefined, true, false);
   const searches = useMemo(() => webSearches(webEvents ? q.data : undefined, since, until), [webEvents, q.data, since, until]);
   const { used, more } = useMemo(() => usedWebSources(body, listed, searches), [body, listed, searches]);
@@ -95,12 +116,38 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
   const [showQueries, setShowQueries] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const panel = useId();
+  const root = useRef<HTMLElement>(null);
+  const [seenTick, setSeenTick] = useState<number>();
+  if (focus && focus.tick !== seenTick) {
+    setSeenTick(focus.tick);
+    setOpen(true);
+  }
+  const [focused, setFocused] = useState<number>();
+  useEffect(() => {
+    if (!focus) return;
+    root.current?.querySelector(`[data-cite="${focus.n}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const on = setTimeout(() => setFocused(focus.n), 0);
+    const off = setTimeout(() => setFocused(undefined), 1800);
+    return () => {
+      clearTimeout(on);
+      clearTimeout(off);
+    };
+  }, [focus]);
 
   const total = vesper.length + used.length;
   const queries = searches.queries;
   if (total === 0 && queries.length === 0 && more.length === 0) return null;
 
-  const cards = [...vesper.map(vesperCard), ...used.map(webCard)];
+  // A citation number belongs to the card its list line became.
+  const numberOf = new Map<string, number>();
+  for (const l of listed) {
+    const key = l.ref ? byRef.get(l.ref) : l.url;
+    if (key && l.n !== undefined) numberOf.set(key, l.n);
+  }
+  const numbered = (c: Card): Card => ({ ...c, n: numberOf.get(c.key) });
+  const vesperCards = vesper.map(vesperCard).map(numbered);
+  const webCards = used.map(webCard).map(numbered);
+  const cards = [...vesperCards, ...webCards];
   const shell = "w-full max-w-[min(720px,100%)] text-[12.5px]";
   const pill = "inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1.5 pr-3 transition-colors hover:border-border-strong";
 
@@ -108,8 +155,8 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
   if (total === 1 && more.length === 0) {
     const c = cards[0];
     return (
-      <section aria-label="Sources" data-testid="sources" className={shell}>
-        <div data-testid="source">
+      <section ref={root} aria-label="Sources" data-testid="sources" className={shell}>
+        <div data-testid="source" data-cite={c.n}>
           <SourceLink href={c.href} external={c.external} tip={c.tip} className={pill}>
             <SourceTile tile={c.tile} size={22} />
             <span className={cx("truncate text-[13px] font-semibold", c.href ? "text-accent" : "text-fg")}>{c.title}</span>
@@ -133,7 +180,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
   if (!open) {
     const tiles = cards.slice(0, MAX_TILES);
     return (
-      <section aria-label="Sources" data-testid="sources" className={shell}>
+      <section ref={root} aria-label="Sources" data-testid="sources" className={shell}>
         <button type="button" aria-expanded={false} onClick={() => setOpen(true)} className={pill}>
           {tiles.length > 0 ? (
             <span aria-hidden className="flex flex-none -space-x-1.5">
@@ -152,7 +199,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
   }
 
   return (
-    <section aria-label="Sources" data-testid="sources" className={cx(shell, "rounded-xl border border-border bg-surface")}>
+    <section ref={root} aria-label="Sources" data-testid="sources" className={cx(shell, "rounded-xl border border-border bg-surface")}>
       <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2">
         <button type="button" aria-expanded aria-controls={panel} onClick={() => setOpen(false)} className="flex min-w-0 items-center gap-2">{toggle}</button>
         {queries.length > 0 && (
@@ -174,8 +221,8 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
             ))}
           </ul>
         )}
-        <CardGroup label="In Vesper" cards={vesper.map(vesperCard)} />
-        <CardGroup label="From the web" cards={used.map(webCard)} />
+        <CardGroup label="In Vesper" cards={vesperCards} focused={focused} />
+        <CardGroup label="From the web" cards={webCards} focused={focused} />
         {more.length > 0 && (
           <div className={cx(total > 0 && "border-t border-border-subtle pt-2.5")}>
             <button type="button" aria-expanded={showMore} onClick={() => setShowMore((v) => !v)} className="flex items-center gap-1.5 text-fg-secondary hover:text-fg">

@@ -33,6 +33,36 @@ export function summarizePrompt(url: string, title: string | undefined, video: b
   return `Summarize this ${video ? "video" : "page"}: ${name ? `[${name}](${url})` : url}`;
 }
 
+const YT_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtu.be"]);
+
+function seconds(t: string): number | null {
+  if (/^\d+s?$/.test(t)) return parseInt(t, 10);
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(t);
+  return m && t ? Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) : null;
+}
+
+/** A YouTube link to a moment in a video; null for any other link. */
+export function youtubeMoment(href: string | undefined): { id: string; seconds: number } | null {
+  if (!href) return null;
+  try {
+    const u = new URL(href);
+    if (!YT_HOSTS.has(u.hostname)) return null;
+    const id = u.hostname.endsWith("youtu.be") ? u.pathname.slice(1) : (u.searchParams.get("v") ?? "");
+    const at = seconds(u.searchParams.get("t") ?? u.searchParams.get("start") ?? "");
+    return /^[A-Za-z0-9_-]{11}$/.test(id) && at !== null ? { id, seconds: at } : null;
+  } catch {
+    return null;
+  }
+}
+
+const SUMMARY_REQUEST = /Summarize this (?:video|page): (?:\[[^\]]*\]\((https?:[^)\s]+)\)|(https?:\S+))/;
+
+/** The URL a Summarize button's message asked about, or null for any other message. */
+export function summaryRequestUrl(body: string | undefined): string | null {
+  const m = SUMMARY_REQUEST.exec(body ?? "");
+  return m ? (m[1] ?? m[2]) : null;
+}
+
 type Node = { type: string; tagName?: string; value?: string; properties?: Record<string, unknown>; children?: Node[] };
 
 const isCard = (n: Node) => n.type === "element" && n.tagName === "pre" && n.children?.some((c) => c.tagName === "code" && (c.properties?.className as string[] | undefined)?.includes("language-recommend"));

@@ -1,17 +1,23 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useLinkPreviews } from "@/lib/api/hooks";
-import { useSaveLibraryLink } from "@/lib/api/library-hooks";
+import { useSaveLibraryLink, useSaveLibraryLinkSummary } from "@/lib/api/library-hooks";
 import { parseRecommend, summarizePrompt, videoEmbedUrl } from "@/lib/chat-recommend";
 import { hostOf } from "@/lib/web-search";
 import { Icon } from "@/components/ui/icon";
 import { CodeFence } from "./code-fence";
 import { SvgFenceMessage } from "./svg-fence";
 
-/** What the chat lets a card do: ask for a summary from the persona that wrote this reply. */
-export const RecommendActions = createContext<{ summarize: (messageId: string, body: string) => void; disabled: boolean } | undefined>(undefined);
+/**
+ * What the chat lets a fence do: send a message to the persona that wrote this reply,
+ * and see what the person said next (which answers a choices fence).
+ */
+export const RecommendActions = createContext<{ ask: (messageId: string, body: string) => void; disabled: boolean; nextMessage: (messageId: string) => string | undefined } | undefined>(undefined);
+
+/** The chat's playing-capable videos by id, so a timestamp link can jump one to a moment. */
+export const VideoPlayers = createContext<Map<string, (seconds: number) => void> | undefined>(undefined);
 
 const FRAME = "overflow-hidden rounded-xl border border-border bg-surface";
 const WIDTH = "w-[380px] max-w-full";
@@ -30,12 +36,27 @@ function OpenMark() {
 }
 
 /** A video's thumbnail until it's played; the player, and any contact with YouTube, starts only on the click. */
-export function VideoFrame({ embed, title, image }: { embed: string; title: string; image?: string }) {
+export function VideoFrame({ embed, title, image, videoId }: { embed: string; title: string; image?: string; videoId?: string }) {
   const [playing, setPlaying] = useState(false);
+  const [start, setStart] = useState<number>();
+  const frame = useRef<HTMLDivElement>(null);
+  const players = useContext(VideoPlayers);
+  useEffect(() => {
+    if (!players || !videoId) return;
+    const seek = (s: number) => {
+      setStart(s);
+      setPlaying(true);
+      frame.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    };
+    players.set(videoId, seek);
+    return () => {
+      if (players.get(videoId) === seek) players.delete(videoId);
+    };
+  }, [players, videoId]);
   return (
-    <div className="relative aspect-video bg-surface-sunken">
+    <div ref={frame} className="relative aspect-video bg-surface-sunken">
       {playing ? (
-        <iframe src={embed} title={title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerPolicy="strict-origin-when-cross-origin" className="absolute inset-0 size-full border-0" />
+        <iframe key={start ?? -1} src={start === undefined ? embed : `${embed}&start=${start}`} title={title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerPolicy="strict-origin-when-cross-origin" className="absolute inset-0 size-full border-0" />
       ) : (
         <button type="button" aria-label={`Play ${title}`} onClick={() => setPlaying(true)} className="group absolute inset-0 grid place-items-center">
           {/* A same-origin, private URL: next/image would only add a proxy hop. */}
@@ -60,7 +81,7 @@ function CardActions({ url, preview, messageId }: { url: string; preview?: Schem
   const saved = !!preview?.saved || save.isSuccess;
   return (
     <div data-testid="recommend-actions" className="flex flex-wrap items-center gap-2 border-t border-border-subtle p-2.5">
-      <button type="button" className={ACTION} disabled={actions.disabled} onClick={() => actions.summarize(messageId, summarizePrompt(url, preview?.title, video))}>
+      <button type="button" className={ACTION} disabled={actions.disabled} onClick={() => actions.ask(messageId, summarizePrompt(url, preview?.title, video))}>
         <Icon name="artifacts" size={13} className="text-fg-secondary" />
         {video ? "Summarize video" : "Summarize page"}
       </button>
@@ -73,6 +94,27 @@ function CardActions({ url, preview, messageId }: { url: string; preview?: Schem
         <button type="button" className={ACTION} disabled={save.isPending} onClick={() => save.mutate({ message_id: messageId, url })}>
           <Icon name="bookmark" size={13} className="text-fg-secondary" />
           {save.isPending ? "Saving…" : "Save to Library"}
+        </button>
+      )}
+      {save.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{save.error.message || "Couldn’t save."}</span>}
+    </div>
+  );
+}
+
+/** Under a reply that summarizes a link: keeps the summary with the link in the Library. */
+export function SaveSummary({ messageId, url }: { messageId: string; url: string }) {
+  const save = useSaveLibraryLinkSummary();
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {save.isSuccess ? (
+        <span className="inline-flex h-[30px] items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 text-[12.5px] font-semibold text-accent">
+          <Icon name="check" size={13} />
+          Summary saved
+        </span>
+      ) : (
+        <button type="button" className={ACTION} disabled={save.isPending} onClick={() => save.mutate({ message_id: messageId, url })}>
+          <Icon name="bookmark" size={13} className="text-fg-secondary" />
+          {save.isPending ? "Saving…" : "Save summary to Library"}
         </button>
       )}
       {save.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{save.error.message || "Couldn’t save."}</span>}
@@ -105,7 +147,7 @@ function CompactCard({ url, title, note, actions }: { url: string; title?: strin
 function VideoCard({ url, preview, embed, note, actions }: { url: string; preview: Schemas["LinkPreview"]; embed: string; note: string; actions: ReactNode }) {
   return (
     <Shell kind="video">
-      <VideoFrame embed={embed} title={preview.title} image={preview.image_url} />
+      <VideoFrame embed={embed} title={preview.title} image={preview.image_url} videoId={preview.video_id} />
       <div className="p-3">
         <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 hover:underline">
           <span className="min-w-0 flex-1 text-[14px] font-semibold text-fg">{preview.title}</span>

@@ -193,3 +193,39 @@ func TestLibraryLinkMustBeRecommendedByTheReply(t *testing.T) {
 		t.Fatalf("fetched %d times", n)
 	}
 }
+
+func TestLibraryLinkQueueAndSummary(t *testing.T) {
+	e, _ := newAvatarEnv(t)
+	usePreviews(t)
+	chat := uuid.MustParse(e.newChat(nil)["id"].(string))
+	add := func(role, body string) string {
+		m, err := e.q.AppendChatMessage(t.Context(), store.AppendChatMessageParams{SessionID: chat, Role: role, BodyMd: body, ContextRefs: []byte("[]"), Citations: []byte("[]")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m.ID.String()
+	}
+	add("assistant", "```recommend\nhttps://a.example/x\nWorth it.\n```")
+	plain := add("assistant", "Unrelated.")
+	add("user", "Summarize this page: [Routes](https://a.example/x)")
+	reply := add("assistant", "It says three things.")
+
+	e.invalid("POST", "/library/links/summary", map[string]any{"message_id": plain, "url": "https://a.example/x"}, "message_id", "isn't a summary")
+	e.invalid("POST", "/library/links/summary", map[string]any{"message_id": reply, "url": "https://elsewhere.example"}, "message_id", "isn't a summary")
+
+	// Saves the link too, when it isn't in the Library yet.
+	got := e.want("POST", "/library/links/summary", map[string]any{"message_id": reply, "url": "https://a.example/x"}, http.StatusCreated)
+	if got["summary"] != "It says three things." || got["link_status"] != "to_read" || got["note"] != "Worth it." {
+		t.Fatalf("%v", got)
+	}
+	id := got["id"].(string)
+	e.want("PUT", "/library/"+id+"/link-status", map[string]any{"status": "done"}, http.StatusNoContent)
+	item := e.want("GET", "/library?kind=link", nil, 200)["items"].([]any)[0].(map[string]any)
+	if item["link_status"] != "done" || item["summary"] != "It says three things." {
+		t.Fatalf("%v", item)
+	}
+	e.want("PUT", "/library/"+uuid.NewString()+"/link-status", map[string]any{"status": "done"}, http.StatusNotFound)
+	if code, _ := e.do("PUT", "/library/"+id+"/link-status", map[string]any{"status": "nope"}); code == http.StatusNoContent {
+		t.Fatal("accepted a bad status")
+	}
+}

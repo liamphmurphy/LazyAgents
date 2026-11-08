@@ -77,6 +77,31 @@ export function useSaveLibraryLink() {
   });
 }
 
+/** Keeps a reply as the summary of a link, saving the link too if it isn't yet. */
+export function useSaveLibraryLinkSummary() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["LibraryLinkSummarySave"]) => unwrap(api.POST("/library/links/summary", { body })),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: libraryKeys.all });
+      qc.invalidateQueries({ queryKey: ["link-previews"] });
+    },
+  });
+}
+
+export function useSetLibraryLinkStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { itemId: string; status: Schemas["LibraryLinkStatus"] }) => {
+      const { error, response } = await api.PUT("/library/{itemId}/link-status", { params: { path: { itemId: v.itemId } }, body: { status: v.status } });
+      if (response.ok) return;
+      const e = (error ?? {}) as Partial<Schemas["Error"]>;
+      throw new ApiError(response.status, e.code ?? "internal", e.message ?? response.statusText, e.field);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
+  });
+}
+
 /** Makes the item the person's (role self) or a persona's reference image, replacing the previous one. */
 export function useSetLibraryReference() {
   const qc = useQueryClient();

@@ -2214,6 +2214,43 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /library/links/summary:
+    post:
+      operationId: saveLibraryLinkSummary
+      summary: Keep a persona's summary with its Library link, saving the link if needed
+      description: The reply must answer a request to summarize that URL, and a reply in the chat must recommend it.
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryLinkSummarySave" }
+      responses:
+        "201":
+          description: The link, with its summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /library/{itemId}/link-status:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setLibraryLinkStatus
+      summary: Mark a saved link to read or done
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryLinkStatusSet" }
+      responses:
+        "204": { description: Updated }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /library/{itemId}:
     parameters:
       - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -4657,7 +4694,23 @@ components:
         note: { type: string, description: "For a link: why the persona recommended it" }
         site: { type: string, description: "For a link: the site's name or a video's channel" }
         video_id: { type: string, description: "For a video link: the YouTube id" }
+        link_status: { $ref: "#/components/schemas/LibraryLinkStatus" }
+        summary: { type: string, description: "For a link: a saved summary, as markdown" }
         created_at: { type: string, format: date-time }
+    LibraryLinkStatus:
+      type: string
+      enum: [to_read, done]
+    LibraryLinkStatusSet:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/LibraryLinkStatus" }
+    LibraryLinkSummarySave:
+      type: object
+      required: [message_id, url]
+      properties:
+        message_id: { type: string, format: uuid, description: The assistant reply holding the summary }
+        url: { type: string, description: The link it summarizes }
     LibraryReferenceRole:
       type: string
       enum: [persona, self]

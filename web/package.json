@@ -15,13 +15,17 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.105.1",
+    "katex": "^0.19.1",
+    "mermaid": "^12.3.0",
     "next": "16.4.3",
     "openapi-fetch": "^0.17.0",
     "radix-ui": "^1.8.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "shiki": "^4.6.0"
   },
   "devDependencies": {

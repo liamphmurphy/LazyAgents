@@ -4,13 +4,17 @@
 
 import { hostOf, type WebSearches, type WebSource } from "./web-search.ts";
 
-export type ListedSource = { title: string; url: string };
+/** One line of the closing list: a web page, or (ref set, url empty) a Vesper page. n is its citation number. */
+export type ListedSource = { title: string; url: string; n?: number; ref?: string };
 
 const URL_RE = /\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<>()\]]+)/gi;
 // "Sources", "**References:**", "## Web sources", or "Sources: <urls>" on one line.
 const HEADING = /^\s*(?:#{1,6}\s+)?[*_]*(?:web\s+)?(?:sources?|references?|links?|urls?)(?:\s+(?:i\s+)?(?:used|consulted))?[*_]*\s*(:?)\s*[*_]*\s*(.*)$/i;
 const BULLET = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const RULE = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
+
+const NUMBERED = /^\s*(\d{1,2})[.)]\s+/;
+const WIKI_REF = /\[\[([^[\]|]+)(?:\|[^[\]]*)?\]\]/;
 
 const trimUrl = (url: string) => url.replace(/[.,;:!?'"*_]+$/, "");
 
@@ -24,6 +28,14 @@ function lineSources(line: string): ListedSource[] {
     }
     const before = out.length ? "" : line.slice(0, m.index).replace(BULLET, "").replace(/[*_`<]/g, "").replace(/[\s:|(–—-]+$/, "").trim();
     out.push({ title: before, url: trimUrl(m[3]) });
+  }
+  const n = NUMBERED.exec(line);
+  if (n) {
+    if (out[0]) out[0].n = Number(n[1]);
+    else {
+      const wiki = WIKI_REF.exec(line);
+      if (wiki) out.push({ title: "", url: "", n: Number(n[1]), ref: wiki[1].trim() });
+    }
   }
   return out;
 }
@@ -75,6 +87,7 @@ export function usedWebSources(body: string, listed: ListedSource[], searches: W
   const found = new Map(searches.sources.map((s) => [urlKey(s.url), s]));
   const used = new Map<string, WebSource>();
   for (const l of listed) {
+    if (l.ref) continue;
     const key = urlKey(l.url);
     if (used.has(key)) continue;
     const hit = found.get(key);
@@ -86,6 +99,40 @@ export function usedWebSources(body: string, listed: ListedSource[], searches: W
     if (hit && !used.has(key)) used.set(key, hit);
   }
   return { used: [...used.values()], more: searches.sources.filter((s) => !used.has(urlKey(s.url))) };
+}
+
+const CITE_SKIP = /(`+[^`\n]*`+)/g;
+const CITE_FENCE = /^ {0,3}(```|~~~)/;
+const CITE = /(?<![[\\!])\[(\d{1,2})\](?![(:])/g;
+
+export const CITE_SCHEME = "cite:";
+
+/** Turns [n] into a link the renderer shows as a citation, for numbers the closing list defines; code stays as written. */
+export function linkCitations(md: string, numbers: number[]): string {
+  if (numbers.length === 0) return md;
+  const known = new Set(numbers);
+  let fence = "";
+  return md
+    .split("\n")
+    .map((line) => {
+      const f = CITE_FENCE.exec(line);
+      if (f) {
+        if (!fence) fence = f[1];
+        else if (fence === f[1]) fence = "";
+        return line;
+      }
+      if (fence) return line;
+      return line
+        .split(CITE_SKIP)
+        .map((part, i) => (i % 2 ? part : part.replace(CITE, (m, d) => (known.has(Number(d)) ? `[${d}](${CITE_SCHEME}${d})` : m))))
+        .join("");
+    })
+    .join("\n");
+}
+
+/** A reply as a saved summary: its closing list and citation numbers mean nothing outside the chat. */
+export function summaryText(md: string): string {
+  return splitSourceList(md).body.replace(/ ?\[\d{1,2}\](?![(:])/g, "").trim();
 }
 
 /** The muted half of the row: where the sources came from. */
