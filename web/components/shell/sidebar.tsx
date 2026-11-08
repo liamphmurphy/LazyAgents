@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { DropdownMenu } from "radix-ui";
 import { useChat, useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { needsAttention } from "@/lib/settings";
-import { ASSISTANT_VIEWS, currentProject, isActive, modeHref, navGroupsFor, switchHref, withProject, type NavBadge, type NavMode, type ScopedProject } from "@/lib/project-scope";
+import { currentProject, isActive, modeHref, navGroupsFor, switchHref, withProject, type NavBadge, type NavMode, type ScopedProject } from "@/lib/project-scope";
 import { viewedChatId } from "@/lib/persona-dock";
 import { Icon, Mark } from "@/components/ui/icon";
 import { Segmented } from "@/components/ui/controls";
@@ -275,18 +275,10 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           {groups.map((g) => (
             <div key={g.label} role="group" aria-label={g.label} className="flex flex-col gap-px">
               {g.items.map((n) => (
-                <Fragment key={n.href}>
-                  <NavLink label={railLabel(n.label, n.badge, counts)} href={withProject(n.href, current?.key)} active={navActive(n.href)}>
-                    <Icon name={n.icon} />
-                    {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
-                  </NavLink>
-                  {n.href === "/chat" &&
-                    ASSISTANT_VIEWS.map((p) => (
-                      <NavLink key={p.href} label={p.label} href={p.href} active={isActive(pathname, p.href)}>
-                        <Icon name={p.icon} size={13} />
-                      </NavLink>
-                    ))}
-                </Fragment>
+                <NavLink key={n.href} label={railLabel(n.label, n.badge, counts)} href={withProject(n.href, current?.key)} active={navActive(n.href)}>
+                  <Icon name={n.icon} />
+                  {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
+                </NavLink>
               ))}
             </div>
           ))}
@@ -335,32 +327,22 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
             {/* Work's pinned items sit above the labelled groups without a heading of their own. */}
             {(chatting || g.label !== "Personal") && <span aria-hidden className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</span>}
             {g.items.map((n) => (
-              <Fragment key={n.href}>
+              <div key={n.href} className="contents">
                 <NavLink href={withProject(n.href, current?.key)} active={navActive(n.href)}>
                   <Icon name={n.icon} />
                   <span className="flex-1">{n.label}</span>
                   <Badge kind={n.badge} counts={counts} />
                 </NavLink>
                 {n.href === "/tickets" && <SidebarSavedViews project={current?.key} />}
-                {n.href === "/chat" && (
-                  <div className="flex flex-col gap-px pl-5">
-                    {ASSISTANT_VIEWS.map((p) => (
-                      <NavLink key={p.href} href={p.href} active={isActive(pathname, p.href)}>
-                        <Icon name={p.icon} size={13} />
-                        <span className="flex-1">{p.label}</span>
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </Fragment>
+              </div>
             ))}
           </div>
         ))}
       </nav>
 
       {chatting && <ChatHistory project={chatProject} id={viewed ?? undefined} viewed={viewed} />}
-      {pathname === "/" && !chatting && <SidebarCapacity />}
-      <div className={cx("flex items-center gap-2.5 px-1.5 py-1", (pathname !== "/" || chatting) && "mt-auto")}>
+      {pathname === "/" && <SidebarCapacity />}
+      <div className={cx("flex items-center gap-2.5 px-1.5 py-1", pathname !== "/" && "mt-auto")}>
         <Link href="/settings#profile" title="Profile" className="-mx-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-hover">
           <HumanAvatar name={user.name} initials={user.initials} src={user.avatarUrl} size={26} label={false} />
           <span className="flex min-w-0 flex-1 flex-col leading-tight">

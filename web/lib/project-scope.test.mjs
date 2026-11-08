@@ -11,7 +11,7 @@ test("nav is three groups with unique hrefs", () => {
   assert.deepEqual(NAV_GROUPS.map((g) => g.label), ["Personal", "Project", "Workspace"]);
   const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
   assert.equal(new Set(hrefs).size, hrefs.length);
-  assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Assistant", "Library", "Workflows", "Learn"]);
+  assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Library", "Workflows", "Learn", "Customization"]);
   assert.deepEqual(NAV_GROUPS[1].items.map((i) => i.label), ["Board", "Tickets", "Epics", "Plans", "Artifacts"]);
 });
 
@@ -83,17 +83,17 @@ test("cross-project links on optional routes show All projects, bare routes the 
 
 
 test("each page belongs to a mode, and pinned pages keep the last one", () => {
-  for (const p of ["/chat", "/chat/1", "/memory", "/personas", "/library", "/workflows", "/learn/2"]) assert.equal(routeMode(p), "chat", p);
-  for (const p of ["/board", "/tickets/WEB-1", "/runs/1", "/settings/projects", "/wiki"]) assert.equal(routeMode(p), "work", p);
-  for (const p of ["/", "/inbox"]) assert.equal(routeMode(p), undefined, p);
+  for (const p of ["/chat", "/chat/1", "/customization", "/library", "/workflows", "/learn/2"]) assert.equal(routeMode(p), "chat", p);
+  for (const p of ["/", "/board", "/tickets/WEB-1", "/runs/1", "/settings/projects", "/wiki"]) assert.equal(routeMode(p), "work", p);
+  assert.equal(routeMode("/inbox"), undefined);
   assert.equal(navMode("/board", "chat"), "work");
   assert.equal(navMode("/inbox", "chat"), "chat");
-  assert.equal(navMode("/", null), "work");
+  assert.equal(navMode("/inbox", null), "work");
 });
 
-test("Work pins Inbox and Dashboard above Project and Workspace; Chat keeps all of Personal", () => {
+test("Work pins Inbox and Dashboard above Project and Workspace; Chat has Personal without Dashboard", () => {
   const labels = (m) => navGroupsFor(m).map((g) => [g.label, g.items.map((i) => i.label)]);
-  assert.deepEqual(labels("chat"), [["Personal", NAV_GROUPS[0].items.map((i) => i.label)]]);
+  assert.deepEqual(labels("chat"), [["Personal", ["Inbox", "Library", "Workflows", "Learn", "Customization"]]]);
   assert.deepEqual(labels("work")[0], ["Personal", ["Inbox", "Dashboard"]]);
   assert.deepEqual(labels("work").slice(1).map(([l]) => l), ["Project", "Workspace"]);
 });

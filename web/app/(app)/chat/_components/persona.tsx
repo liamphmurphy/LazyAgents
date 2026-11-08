@@ -8,7 +8,7 @@ import { usePersonaDock } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { DOCK_STATE_LABEL, dockEntries, type DockState } from "@/lib/persona-dock";
-import { repoShortName, splitPersonaStrip } from "@/lib/persona-ui";
+import { STRIP_PERSONAS, repoShortName, splitPersonaStrip } from "@/lib/persona-ui";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
 
@@ -219,7 +219,7 @@ export function usePersonaFilter(): PersonaFilterState {
 /** Opens the persona manager (LAZYAGENTS-85). */
 export function useOpenPersonaManager() {
   const router = useRouter();
-  return () => router.push("/personas");
+  return () => router.push("/customization");
 }
 
 const item =
@@ -243,7 +243,7 @@ export function PersonaAvatarButton({ label, on, state, disabled, onClick, child
   const name = state ? `${label}: ${DOCK_STATE_LABEL[state]}` : label;
   return (
     <button type="button" aria-label={name} aria-pressed={on} title={name} disabled={disabled} onClick={onClick}
-      className={cx("relative grid size-6 flex-none place-items-center rounded-full disabled:opacity-60", on ? "outline-2 outline-accent" : "hover:opacity-80")}>
+      className={cx("relative grid size-7 flex-none place-items-center rounded-full disabled:opacity-60", on ? "outline-2 outline-accent" : "hover:opacity-80")}>
       {children}
       {state && <span aria-hidden className={cx("absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-sidebar", ACTIVITY_DOT[state])} />}
     </button>
@@ -257,23 +257,23 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
   const { shown, overflow } = splitPersonaStrip(personas.filter((p) => p.id !== defaultId), value);
   return (
     <div className="flex flex-col gap-1">
-      <div role="group" aria-label="Show conversations for" className="flex items-center gap-0.5 px-0.5 py-0.5">
+      <div role="group" aria-label="Show conversations for" className={cx("flex items-center py-0.5", overflow.length > 0 || shown.length === STRIP_PERSONAS - 1 ? "justify-between" : "gap-1.5")}>
         <PersonaAvatarButton label="All personas" on={value === "all"} disabled={filter.loading} onClick={() => filter.set("all")}>
-          <span className="grid size-[22px] place-items-center rounded-full border border-border-strong bg-surface text-fg-secondary"><Icon name="users" size={12} /></span>
+          <span className="grid size-[26px] place-items-center rounded-full border border-border-strong bg-surface text-fg-secondary"><Icon name="users" size={14} /></span>
         </PersonaAvatarButton>
         <PersonaAvatarButton label={`${defaultLook.name} (default)`} on={value === "default"} state={defaultId ? activity.get(defaultId) : undefined} disabled={filter.loading} onClick={() => filter.set("default")}>
-          <PersonaAvatar persona={defaultLook} size={22} />
+          <PersonaAvatar persona={defaultLook} size={26} />
         </PersonaAvatarButton>
         {shown.map((p) => (
           <PersonaAvatarButton key={p.id} label={p.name} on={value === p.id} state={activity.get(p.id)} onClick={() => filter.set(p.id)}>
-            <PersonaAvatar persona={p} size={22} />
+            <PersonaAvatar persona={p} size={26} />
           </PersonaAvatarButton>
         ))}
         {overflow.length > 0 && (
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button type="button" aria-label="More personas" title="More personas"
-                className="grid size-6 flex-none place-items-center rounded-full border border-border-strong bg-surface text-[10.5px] font-semibold text-fg-secondary hover:bg-hover data-[state=open]:border-accent">
+                className="grid size-7 flex-none place-items-center rounded-full border border-border-strong bg-surface text-[11px] font-semibold text-fg-secondary hover:bg-hover data-[state=open]:border-accent">
                 +{overflow.length}
               </button>
             </DropdownMenu.Trigger>

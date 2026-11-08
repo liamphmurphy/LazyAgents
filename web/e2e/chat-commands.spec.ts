@@ -47,7 +47,7 @@ test("/ lists the commands and /memory opens the Memory page without sending", a
   await composer(page).pressSequentially("mem");
   await expect(menu(page).getByRole("option")).toHaveCount(1);
   await composer(page).press("Enter");
-  await expect(page.getByRole("region", { name: "Memory", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Customization", exact: true })).toBeVisible();
   expect(mock.posted).toEqual([]);
   expect(mock.unhandled).toEqual([]);
 });
@@ -102,17 +102,19 @@ test("/persona starts a new chat and keeps the one with messages", async ({ page
   expect(mock.chats.length).toBe(2);
 });
 
-test("Memory and Personas live under Assistant in the main menu", async ({ page }) => {
+test("Customization replaces Assistant, Memory and Personas in the main menu", async ({ page }) => {
   await installChatApi(page);
   await openChat(page);
   const nav = page.getByRole("navigation", { name: "Primary" });
-  await expect(page.getByRole("button", { name: /^Memory/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Personas/ })).toHaveCount(0);
-  await nav.getByRole("link", { name: "Personas", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Personas", exact: true })).toBeVisible();
-  await nav.getByRole("link", { name: "Memory", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Memory", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Personas", exact: true })).toHaveCount(0);
-  await expect(page).toHaveURL(/\/memory$/);
+  for (const gone of ["Assistant", "Memory", "Personas", "Dashboard"]) await expect(nav.getByRole("link", { name: gone, exact: true })).toHaveCount(0);
+  await nav.getByRole("link", { name: "Customization", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Customization", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/customization$/);
+  await expect(page.getByRole("radio", { name: "Chat" })).toBeChecked();
+  // Old links land on the combined page, with their query.
+  await page.goto("/personas");
+  await expect(page).toHaveURL(/\/customization$/);
+  await page.goto("/memory?id=abc");
+  await expect(page).toHaveURL(/\/customization\?id=abc$/);
 });
 

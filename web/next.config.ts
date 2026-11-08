@@ -14,6 +14,13 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  // Memory and Personas became one page; the query (?id=) carries over.
+  async redirects() {
+    return [
+      { source: "/memory", destination: "/customization", permanent: false },
+      { source: "/personas", destination: "/customization", permanent: false },
+    ];
+  },
   // In compose, Caddy routes these paths to the API before they reach Next.
   // These rewrites make `next dev` work on its own without Caddy.
   async rewrites() {

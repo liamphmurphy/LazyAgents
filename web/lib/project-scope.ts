@@ -21,10 +21,10 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/inbox", label: "Inbox", icon: "inbox", badge: "inbox" },
       { href: "/", label: "Dashboard", icon: "dashboard" },
-      { href: "/chat", label: "Assistant", icon: "msg" },
       { href: "/library", label: "Library", icon: "library" },
       { href: "/workflows", label: "Workflows", icon: "graph" },
       { href: "/learn", label: "Learn", icon: "learn" },
+      { href: "/customization", label: "Customization", icon: "sliders" },
     ],
   },
   {
@@ -49,18 +49,14 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** The Assistant's own full pages, listed under it in the main menu. */
-export const ASSISTANT_VIEWS: { href: string; label: string; icon: IconName }[] = [
-  { href: "/memory", label: "Memory", icon: "bookmark" },
-  { href: "/personas", label: "Personas", icon: "users" },
-];
-
 export type NavMode = "chat" | "work";
 
 /** Shown in both modes, so opening them leaves the mode alone. */
-const PINNED_ROUTES = ["/inbox", "/"];
+const PINNED_ROUTES = ["/inbox"];
+/** Personal items Work keeps, above Project and Workspace. */
+const WORK_PERSONAL = [...PINNED_ROUTES, "/"];
 /** Everything else outside this list is Work. */
-const CHAT_ROUTES = ["/chat", "/memory", "/personas", "/library", "/workflows", "/learn"];
+const CHAT_ROUTES = ["/chat", "/customization", "/library", "/workflows", "/learn"];
 
 /** The mode a page belongs to; undefined for the pinned pages. */
 export function routeMode(pathname: string): NavMode | undefined {
@@ -73,11 +69,11 @@ export function navMode(pathname: string, remembered: NavMode | null | undefined
   return routeMode(pathname) ?? remembered ?? "work";
 }
 
-/** Chat keeps all of Personal; Work keeps only its pinned items, above Project and Workspace. */
+/** Chat keeps Personal minus the Dashboard; a conversation is opened from the history. Work keeps Inbox and Dashboard. */
 export function navGroupsFor(mode: NavMode): NavGroup[] {
   const [personal, ...work] = NAV_GROUPS;
-  if (mode === "chat") return [personal];
-  return [{ ...personal, items: personal.items.filter((i) => PINNED_ROUTES.includes(i.href)) }, ...work];
+  if (mode === "chat") return [{ ...personal, items: personal.items.filter((i) => !WORK_PERSONAL.includes(i.href) || PINNED_ROUTES.includes(i.href)) }];
+  return [{ ...personal, items: personal.items.filter((i) => WORK_PERSONAL.includes(i.href)) }, ...work];
 }
 
 /** Where the Chat/Work toggle goes: Chat resumes the newest conversation, Work the last Work page. */

@@ -75,7 +75,7 @@ test("the Chat/Work toggle swaps the menu and goes to each mode's page", async (
   await page.getByRole("radio", { name: "Chat" }).click();
   await expect(page).toHaveURL(/\/chat/);
   await expect(page.getByRole("radio", { name: "Chat" })).toBeChecked();
-  await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link", { name: "Assistant" })).toBeVisible();
+  await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link", { name: "Customization" })).toBeVisible();
   await expect(nav(page).getByRole("group", { name: "Project" })).toHaveCount(0);
   await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New conversation" })).toBeVisible();
