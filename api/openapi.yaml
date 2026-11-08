@@ -2385,6 +2385,40 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chats/{id}/read:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    post:
+      operationId: markChatRead
+      summary: Record that the person has seen the chat up to a message
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seq]
+              properties:
+                seq: { type: integer, format: int64, minimum: 0 }
+      responses:
+        "204": { description: Recorded }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /persona-dock:
+    get:
+      operationId: getPersonaDock
+      summary: The caller's personas with live or unread chat activity, most recent first
+      tags: [chats]
+      responses:
+        "200":
+          description: The dock
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonaDock" }
+        default: { $ref: "#/components/responses/Error" }
+
   /chat-models:
     get:
       operationId: listChatModels
@@ -4629,6 +4663,35 @@ components:
         color: { type: string, pattern: "^#[0-9a-f]{6}$" }
         avatar_url: { type: string, description: "GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar" }
         capabilities: { $ref: "#/components/schemas/PersonaCapabilities" }
+    PersonaDockState:
+      type: string
+      enum: [working, replied, needs_you]
+    PersonaDockChat:
+      type: object
+      required: [id, title, state, unread, last_line, last_seq, waiting_approval, last_activity_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        state: { $ref: "#/components/schemas/PersonaDockState" }
+        unread: { type: integer }
+        last_line: { type: string, description: "Last line of the latest reply" }
+        last_seq: { type: integer, format: int64, description: "Sequence of the latest reply, for marking the chat read" }
+        waiting_approval: { type: boolean, description: "A persona proposal awaits the person; reading the chat doesn't clear it" }
+        last_activity_at: { type: string, format: date-time }
+    PersonaDockEntry:
+      type: object
+      required: [persona, state, unread, last_activity_at, chats]
+      properties:
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
+        state: { $ref: "#/components/schemas/PersonaDockState" }
+        unread: { type: integer }
+        last_activity_at: { type: string, format: date-time }
+        chats: { type: array, items: { $ref: "#/components/schemas/PersonaDockChat" } }
+    PersonaDock:
+      type: object
+      required: [personas]
+      properties:
+        personas: { type: array, items: { $ref: "#/components/schemas/PersonaDockEntry" } }
     PersonaProposal:
       type: object
       description: A persona one of the chat's personas asked to create; nothing exists until the person approves it.

@@ -1839,6 +1839,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record that the person has seen the chat up to a message */
+        post: operations["markChatRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/persona-dock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's personas with live or unread chat activity, most recent first */
+        get: operations["getPersonaDock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chat-models": {
         parameters: {
             query?: never;
@@ -4115,6 +4151,37 @@ export interface components {
             /** @description GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar */
             avatar_url?: string;
             capabilities?: components["schemas"]["PersonaCapabilities"];
+        };
+        /** @enum {string} */
+        PersonaDockState: "working" | "replied" | "needs_you";
+        PersonaDockChat: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            state: components["schemas"]["PersonaDockState"];
+            unread: number;
+            /** @description Last line of the latest reply */
+            last_line: string;
+            /**
+             * Format: int64
+             * @description Sequence of the latest reply, for marking the chat read
+             */
+            last_seq: number;
+            /** @description A persona proposal awaits the person; reading the chat doesn't clear it */
+            waiting_approval: boolean;
+            /** Format: date-time */
+            last_activity_at: string;
+        };
+        PersonaDockEntry: {
+            persona: components["schemas"]["PersonaSummary"];
+            state: components["schemas"]["PersonaDockState"];
+            unread: number;
+            /** Format: date-time */
+            last_activity_at: string;
+            chats: components["schemas"]["PersonaDockChat"][];
+        };
+        PersonaDock: {
+            personas: components["schemas"]["PersonaDockEntry"][];
         };
         /** @description A persona one of the chat's personas asked to create; nothing exists until the person approves it. */
         PersonaProposal: {
@@ -7360,6 +7427,56 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    markChatRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    seq: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPersonaDock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The dock */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaDock"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

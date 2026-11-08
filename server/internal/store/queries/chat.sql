@@ -344,3 +344,22 @@ ORDER BY seq LIMIT 200;
 -- The newest turn not yet claimed: what a chat interruption replaces when
 -- the reply hadn't started.
 SELECT * FROM run_turns WHERE run_id = $1 AND status = 'pending' ORDER BY seq DESC LIMIT 1;
+
+-- name: MarkChatRead :exec
+-- Moves the read position forward, never past the chat's last message.
+UPDATE chat_sessions c SET last_read_seq = least(sqlc.arg(seq)::bigint, m.top)
+FROM (SELECT coalesce(max(seq), 0) AS top FROM chat_messages WHERE session_id = sqlc.arg(id)) m
+WHERE c.id = sqlc.arg(id) AND c.last_read_seq < least(sqlc.arg(seq)::bigint, m.top);
+
+-- name: PersonaDockChats :many
+-- A person's chats with live or unread activity, newest first.
+SELECT c.id, c.title, c.state, c.persona_id, c.speaker_persona_id,
+  coalesce(c.last_message_at, c.created_at)::timestamptz AS last_activity_at,
+  u.unread, p.waiting_approval, l.persona_id AS last_persona_id, coalesce(l.body_md, '')::text AS last_body, coalesce(l.seq, 0)::bigint AS last_seq
+FROM chat_sessions c
+CROSS JOIN LATERAL (SELECT count(*)::int AS unread FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' AND m.seq > c.last_read_seq) u
+CROSS JOIN LATERAL (SELECT EXISTS(SELECT 1 FROM persona_proposals pp WHERE pp.chat_id = c.id AND pp.state = 'pending') AS waiting_approval) p
+LEFT JOIN LATERAL (SELECT m.persona_id, m.body_md, m.seq FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' ORDER BY m.seq DESC LIMIT 1) l ON true
+WHERE c.workspace_id = $1 AND c.created_by = $2 AND NOT c.archived
+  AND (c.state = 'running' OR u.unread > 0 OR p.waiting_approval)
+ORDER BY last_activity_at DESC;

@@ -1019,6 +1019,24 @@ export function useChatMessages(id?: string) {
   });
 }
 
+/** Who is working, replied or needs the person, across their chats. SSE `chat.updated` refreshes it. */
+export function usePersonaDock() {
+  return useQuery({
+    queryKey: ["chats", "dock"] as const,
+    queryFn: () => unwrap(api.GET("/persona-dock")),
+  });
+}
+
+export function useMarkChatRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { id: string; seq: number }) => {
+      await api.POST("/chats/{id}/read", { params: { path: { id: v.id } }, body: { seq: v.seq } });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chats", "dock"] }),
+  });
+}
+
 /** Personas the chat's personas proposed; pending ones wait for the person's approval. */
 export function usePersonaProposals(id?: string) {
   return useQuery({

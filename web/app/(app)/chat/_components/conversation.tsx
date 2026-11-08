@@ -526,6 +526,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
             </div>
           ) : (
             <form
+              data-dock-avoid=""
               onSubmit={(e) => {
                 e.preventDefault();
                 submit(text);

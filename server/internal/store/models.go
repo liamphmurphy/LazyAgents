@@ -248,6 +248,7 @@ type ChatSession struct {
 	RelayTurns         int32
 	RelayLimit         int32
 	InterruptMessageID *uuid.UUID
+	LastReadSeq        int64
 }
 
 type Comment struct {
