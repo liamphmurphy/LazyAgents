@@ -71,6 +71,7 @@ function Tag({ groups, m }: { groups: Groups; m: Message }) {
 // Actions that stay out of the way until the message is hovered or focused.
 const REVEAL = "opacity-0 transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100";
 const LONG_REPLY = 1500;
+const LINK_SETTLE_MS = 600;
 
 function Divider({ children, testId }: { children: string; testId?: string }) {
   return (
@@ -269,6 +270,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const area = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLLIElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const lastEdit = useRef(0);
   const log = useRef<HTMLOListElement>(null);
   // Following the newest message; off once the person scrolls up, or arrives at a search hit.
   const pinned = useRef(!target);
@@ -711,6 +713,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                   rows={1}
                   value={text}
                   onChange={(v) => {
+                    lastEdit.current = Date.now();
                     setText(v);
                     syncMention(v);
                   }}
@@ -745,6 +748,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                     }
                     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                       e.preventDefault();
+                      // The [[ suggestions may be refreshing: don't send a half-typed link.
+                      if (/\[\[[^\]\n]*$/.test(text) && Date.now() - lastEdit.current < LINK_SETTLE_MS) return;
                       submit(text);
                     }
                   }}
