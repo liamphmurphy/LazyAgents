@@ -99,7 +99,7 @@ func whoami(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) 
 		return nil, err
 	}
 	if scope != nil {
-		out.Instructions = fmt.Sprintf(chatInstructions, scope.ProjectKey, scope.ChatID) + "\n\n" + out.Instructions
+		out.Instructions = fmt.Sprintf(chatInstructions, scope.where(), scope.ChatID) + "\n\n" + out.Instructions
 		out.Project, out.ChatID = scope.ProjectKey, scope.ChatID.String()
 		return out, nil
 	}
@@ -580,7 +580,7 @@ func searchKnowledge(ctx context.Context, d Deps, c agents.Caller, in SearchIn) 
 		// A chat searches its own project (plus project-less pages); a project argument can't widen that.
 		project = &scope.ProjectID
 		if in.Project != "" && !strings.EqualFold(strings.TrimSpace(in.Project), scope.ProjectKey) {
-			return nil, apperr.Invalid("project", "chats can only search project %s", scope.ProjectKey)
+			return nil, apperr.Invalid("project", "chats can only search %s", scope.where())
 		}
 	} else if in.Project != "" {
 		p, err := d.Q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: c.Agent.WorkspaceID, Key: strings.ToUpper(in.Project)})
@@ -1008,6 +1008,9 @@ var Tools = []Tool{
 				return nil, err
 			}
 			if scope != nil {
+				if err := scope.requireProject(); err != nil {
+					return nil, err
+				}
 				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: scope.ProjectKey, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID, RequiresMockup: in.RequiresMockup,
 					EstimatePoints: points, EstimateRationale: rationale})
 				if err != nil {

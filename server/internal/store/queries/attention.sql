@@ -69,8 +69,8 @@ WITH items AS (
  WHERE ar.workspace_id=sqlc.arg(workspace_id) AND ar.type='mockup' AND v.review_state IS NOT NULL
  UNION ALL
  -- Workflow gates are private to the person who started the run.
- SELECT 'workflow_gate:'||s.id,'workflow_gate',wr.name,'A workflow step is waiting for your approval','/workflows/runs/'||wr.id,p.key,'',s.created_at,s.state<>'waiting',NULL,NULL,NULL
- FROM workflow_steps s JOIN workflow_runs wr ON wr.id=s.run_id JOIN projects p ON p.id=wr.project_id
+ SELECT 'workflow_gate:'||s.id,'workflow_gate',wr.name,'A workflow step is waiting for your approval','/workflows/runs/'||wr.id,coalesce(p.key,''),'',s.created_at,s.state<>'waiting',NULL,NULL,NULL
+ FROM workflow_steps s JOIN workflow_runs wr ON wr.id=s.run_id LEFT JOIN projects p ON p.id=wr.project_id
  WHERE wr.workspace_id=sqlc.arg(workspace_id) AND wr.user_id=sqlc.arg(user_id) AND (s.state='waiting' OR s.decision<>'')
 )
 SELECT items.id, items.kind, items.title, items.summary, items.href, items.project, items.ticket_key, items.created_at, items.resolved,
@@ -103,7 +103,7 @@ SELECT *, row_number() OVER (PARTITION BY kind ORDER BY title,id) AS n FROM (
  UNION ALL
  -- Chats are private: only the asking user's, unarchived, matched by title.
  SELECT 'chat',c.id,c.title,'/chat/'||c.id
- FROM chat_sessions c JOIN projects p ON p.id=c.project_id
+ FROM chat_sessions c LEFT JOIN projects p ON p.id=c.project_id
  WHERE c.workspace_id=sqlc.arg(workspace_id) AND c.created_by=sqlc.arg(user_id) AND NOT c.archived AND NOT c.hidden
  AND c.title ILIKE '%'||sqlc.arg(q)::text||'%'
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))

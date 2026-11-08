@@ -7,6 +7,11 @@ VALUES (sqlc.arg(workspace_id), sqlc.arg(project_id), sqlc.arg(title), sqlc.arg(
   COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)), sqlc.arg(hidden))
 RETURNING *;
 
+-- name: SetChatProject :one
+-- Returns no row when the revision is stale.
+UPDATE chat_sessions SET project_id = sqlc.narg(project_id), revision = revision + 1, updated_at = now()
+WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND revision = sqlc.arg(revision) RETURNING *;
+
 -- name: SetChatRepo :one
 -- A coding chat's repository and work branch, set once right after creation
 -- (the branch carries the chat id) and never changed.
@@ -136,7 +141,7 @@ SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('u
 
 -- name: ListChatsForUser :many
 -- One page of a person's chats: archived or not, optionally one project.
-SELECT c.* FROM chat_sessions c JOIN projects p ON p.id = c.project_id
+SELECT c.* FROM chat_sessions c LEFT JOIN projects p ON p.id = c.project_id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = sqlc.arg(archived) AND NOT c.hidden
   AND (sqlc.narg(project_key)::text IS NULL OR p.key = sqlc.narg(project_key)::text)
   -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
@@ -397,6 +402,6 @@ SELECT h.id, h.session_id, h.seq, h.role, h.created_at, c.title AS chat_title, c
 FROM hits h
 CROSS JOIN q
 JOIN chat_sessions c ON c.id = h.session_id
-JOIN projects pr ON pr.id = c.project_id
+LEFT JOIN projects pr ON pr.id = c.project_id
 LEFT JOIN personas p ON p.id = COALESCE(h.persona_id, c.persona_id)
 ORDER BY h.rank DESC, h.created_at DESC;

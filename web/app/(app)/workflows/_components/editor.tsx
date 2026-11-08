@@ -6,10 +6,9 @@ import { Background, Controls, ReactFlow, ReactFlowProvider, applyNodeChanges, u
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { useBootstrap, useChat, useChatMessages, useCreateChat, useSendChatMessage } from "@/lib/api/hooks";
+import { useChat, useChatMessages, useCreateChat, useSendChatMessage } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { usePublishWorkflow, useResolveProposal, useSaveWorkflow, useWorkflow, type Workflow } from "@/lib/api/workflow-hooks";
-import { useRememberedProject } from "@/components/shell/project-scope";
 import { TopBar } from "@/components/shell/topbar";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
@@ -135,21 +134,18 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
 function BuildChat({ workflow, chatId, onChatId, personaId, onPersonaId, onChatting }: { workflow: Workflow; chatId?: string; onChatId: (id?: string) => void; personaId?: string; onPersonaId: (id: string) => void; onChatting: () => void }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(true);
-  const boot = useBootstrap();
   const personas = usePersonas();
   // Listed default first, so that's who a new build chat starts with.
   const builders = personas.data?.personas.filter((p) => p.capabilities.workflows) ?? [];
   const persona = builders.find((p) => p.id === personaId) ?? builders[0];
-  const remembered = useRememberedProject();
   const create = useCreateChat();
   const send = useSendChatMessage(chatId ?? "");
   const messages = useChatMessages(chatId);
   const chat = useChat(chatId);
   const working = create.isPending || send.isPending || chat.data?.state === "running";
   const transcript = useRef<HTMLDivElement>(null);
-  const project = boot.data?.projects.find((p) => p.key === remembered && !p.archived) ?? boot.data?.projects.find((p) => !p.archived);
   const list = (messages.data?.messages ?? []).filter((m) => m.role !== "system");
-  const canSend = !!text.trim() && !!project && !!persona && !create.isPending && !send.isPending;
+  const canSend = !!text.trim() && !!persona && !create.isPending && !send.isPending;
 
   useEffect(() => {
     transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
@@ -163,7 +159,7 @@ function BuildChat({ workflow, chatId, onChatId, personaId, onPersonaId, onChatt
     onChatting();
     if (chatId) return send.mutate({ body });
     create.mutate(
-      { project: project!.key, title: `Workflow: ${workflow.name}`.slice(0, 200), persona_id: persona!.id, hidden: true, message: { body: `I'm editing my workflow "${workflow.name}" (id ${workflow.id}). ${body}` } },
+      { title: `Workflow: ${workflow.name}`.slice(0, 200), persona_id: persona!.id, hidden: true, message: { body: `I'm editing my workflow "${workflow.name}" (id ${workflow.id}). ${body}` } },
       { onSuccess: (c) => onChatId(c.id) },
     );
   };

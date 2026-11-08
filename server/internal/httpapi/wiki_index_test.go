@@ -121,7 +121,7 @@ func TestWikiIndexes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess, err := q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: ticket.ProjectID, Title: "Why read-only?", CreatedBy: me.ID, AgentID: atlas.ID, Harness: "codex", Model: "fake"})
+	sess, err := q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: &ticket.ProjectID, Title: "Why read-only?", CreatedBy: me.ID, AgentID: atlas.ID, Harness: "codex", Model: "fake"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestWikiIndexes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherSess, err := q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: ticket.ProjectID, Title: "Sam's secret plans", CreatedBy: other.ID, AgentID: atlas.ID, Harness: "codex", Model: "fake"})
+	otherSess, err := q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: &ticket.ProjectID, Title: "Sam's secret plans", CreatedBy: other.ID, AgentID: atlas.ID, Harness: "codex", Model: "fake"})
 	if err != nil {
 		t.Fatal(err)
 	}

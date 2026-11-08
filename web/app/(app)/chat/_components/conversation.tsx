@@ -56,6 +56,7 @@ import { PersonaProposals } from "./persona-proposals";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
+import { ChatProjectPicker } from "./chat-project";
 import Link from "next/link";
 
 type Message = Schemas["ChatMessage"];
@@ -87,7 +88,7 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
   );
 }
 
-type ChatInfo = { id: string; title: string; project: string; agent: { name: string } };
+type ChatInfo = { id: string; title: string; project?: string; agent: { name: string } };
 
 function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean }) {
   const [editing, setEditing] = useState(false);
@@ -444,11 +445,11 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     if (!c) return;
     const old = c;
     create.mutate(
-      { project: old.project, persona_id: personaId, harness: old.harness, model: old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
+      { ...(old.project ? { project: old.project } : {}), persona_id: personaId, harness: old.harness, model: old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
       {
         onSuccess: async (next) => {
           if (draft.trim()) putDraft(next.id, draft);
-          router[old.message_count === 0 ? "replace" : "push"](`/chat/${next.id}?project=${encodeURIComponent(old.project)}`);
+          router[old.message_count === 0 ? "replace" : "push"](`/chat/${next.id}`);
           // Only drop the old chat if it is still empty (a message may have come from another tab).
           // If the check or the delete fails, the empty chat just stays in the list.
           const latest = await unwrap(api.GET("/chats/{id}", { params: { path: { id: old.id } } })).catch(() => undefined);
@@ -641,6 +642,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               {c.work_branch && <span className="truncate font-mono text-[11.5px]">{c.work_branch}</span>}
             </span>
           )}
+          <ChatProjectPicker chat={c} disabled={running} />
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
           <span className="flex-1" />
           <span className="flex-none">

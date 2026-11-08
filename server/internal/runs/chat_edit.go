@@ -50,7 +50,7 @@ func (s *Service) EditLastChatMessage(ctx context.Context, ws, user, id uuid.UUI
 		if chat.State == "running" || chat.InterruptMessageID != nil {
 			return apperr.Conflict("wait for the reply to finish, or stop it first")
 		}
-		p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: chat.WorkspaceID})
+		p, err := chatProject(ctx, q, chat)
 		if err != nil {
 			return err
 		}

@@ -190,7 +190,7 @@ func chatSuggestionSpec(due store.NextChatSuggestionsDueRow) agentdef.Resolved {
 
 // chatSuggestionEnv is the harness key and no other secret.
 func (r *Runner) chatSuggestionEnv(ctx context.Context, q *store.Queries, due store.NextChatSuggestionsDueRow, spec agentdef.Resolved) (map[string]string, error) {
-	plan, err := PlanSecrets(ctx, q, due.WorkspaceID, &due.ProjectID, spec)
+	plan, err := PlanSecrets(ctx, q, due.WorkspaceID, due.ProjectID, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +202,7 @@ func (r *Runner) chatSuggestionEnv(ctx context.Context, q *store.Queries, due st
 	if r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
 		return nil, fmt.Errorf("%s isn't set up", spec.Harness)
 	}
-	return SecretEnv(ctx, r.Secrets, due.WorkspaceID, &due.ProjectID, plan)
+	return SecretEnv(ctx, r.Secrets, due.WorkspaceID, due.ProjectID, plan)
 }
 
 // chatSuggestionBackground is what the suggestions draw on: the person's own

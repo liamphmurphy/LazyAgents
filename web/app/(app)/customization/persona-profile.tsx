@@ -4,11 +4,10 @@ import { useRouter } from "next/navigation";
 import { Dialog } from "radix-ui";
 import { useState } from "react";
 import type { Schemas } from "@/lib/api/client";
-import { useBootstrap, useCreateChat } from "@/lib/api/hooks";
+import { useCreateChat } from "@/lib/api/hooks";
 import { useDeletePersona, useSetDefaultPersona, type Persona } from "@/lib/api/persona-hooks";
 import { deleteConsequence, isConflict, promotionCandidate, sortPersonas, toneLabel } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
-import { useRememberedProject } from "@/components/shell/project-scope";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { CAPABILITIES, PersonaAvatar, PersonaName, usePersonaFilter } from "../chat/_components/persona";
@@ -114,21 +113,17 @@ function Permissions({ capabilities }: { capabilities?: Schemas["PersonaCapabili
 export function PersonaProfile({ p, memories, onEdit, onDelete }: { p: Persona; memories?: number; onEdit: () => void; onDelete: () => void }) {
   const setDefault = useSetDefaultPersona();
   const filter = usePersonaFilter();
-  const boot = useBootstrap();
-  const remembered = useRememberedProject();
   const router = useRouter();
   const create = useCreateChat();
-  const project = boot.data?.projects.find((x) => x.key === remembered && !x.archived)?.key;
   const stats = [`${toneLabel(p.tone)} tone`, ...(memories === undefined ? [] : [`${memories} ${memories === 1 ? "memory" : "memories"}`]), `${p.chat_count} ${p.chat_count === 1 ? "conversation" : "conversations"}`];
   function newChat() {
-    if (!project) return;
     create.mutate(
-      { project, persona_id: p.id },
+      { persona_id: p.id },
       {
         onSuccess: (c) => {
           // The history follows, so the new conversation is in the list it lands on.
           filter.set(p.is_default ? "default" : p.id);
-          router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`);
+          router.push(`/chat/${c.id}`);
         },
       },
     );
@@ -147,7 +142,7 @@ export function PersonaProfile({ p, memories, onEdit, onDelete }: { p: Persona; 
       <div className="flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={onEdit} aria-label={`Edit ${p.name}`}>Edit</Button>
-          <Button variant="outline" disabled={!project || create.isPending} title={project ? undefined : "Pick a project in the menu first"} onClick={newChat}>New chat</Button>
+          <Button variant="outline" disabled={create.isPending} onClick={newChat}>New chat</Button>
         </div>
         <div className="flex items-center gap-3">
           {!p.is_default && (

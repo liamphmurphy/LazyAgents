@@ -32,7 +32,7 @@ type Harness = "claude-code" | "codex";
 type State = "idle" | "running" | "failed";
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
-  id: string; project: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
+  id: string; project?: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
   created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branch?: string;
   effort?: Effort;
@@ -484,7 +484,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       chatPersonaFilters.push(pid ?? "");
       const want = pid ?? defaultPersona()?.id ?? "none";
       const list = chats
-        .filter((c) => c.project === url.searchParams.get("project") && c.archived === archived)
+        .filter((c) => c.archived === archived)
         .filter((c) => want === "all" || (want === "none" ? !c.persona_id : c.persona_id === want))
         .sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at));
       return json({ chats: list.map(ref), has_more: false });
@@ -497,7 +497,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       if (b.persona_id !== undefined && !personas.some((p) => p.id === b.persona_id)) return fail(err(422, "invalid", "unknown persona", "persona_id"));
       created.push(b);
       const c: Chat = {
-        id: uuid(), project: String(b.project), title: String(b.title ?? ""), agent_id: agent.id,
+        id: uuid(), project: b.project as string | undefined, title: String(b.title ?? ""), agent_id: agent.id,
         harness: (b.harness as Harness) ?? "claude-code", model: String(b.model ?? "opus-5.5"), effort: b.effort as Effort | undefined,
         state: "idle", archived: false, revision: 1, message_count: 0, created_at: now(), updated_at: now(),
         persona_id: (b.persona_id as string | undefined) ?? defaultPersona()?.id,
@@ -559,6 +559,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         if (c.state === "running") return fail(err(409, "conflict", "A turn is running."));
         if (typeof b.title === "string") c.title = b.title;
         if (typeof b.archived === "boolean") c.archived = b.archived;
+        if (typeof b.project === "string") c.project = b.project || undefined;
         touch(c);
         return json(ref(c));
       }

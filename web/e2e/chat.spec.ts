@@ -269,7 +269,7 @@ test("a rejected attachment shows the server error and keeps the chips", async (
   await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
-  await page.goto(page.url() + "&attach=ticket:OTHER-9&attach_title=Elsewhere");
+  await page.goto(page.url() + "?attach=ticket:OTHER-9&attach_title=Elsewhere");
   await expect(chips(page)).toHaveCount(1);
   await send(page, "hi");
   await expect(page.getByRole("alert").filter({ hasText: "OTHER-9" })).toContainText("is not in this chat's project");
@@ -282,7 +282,7 @@ test("Start chat links pre-attach the item and drop the query param", async ({ p
   await page.goto("/chat?project=WEB");
   await newChat(page);
   // Opened on a conversation, the item is attached to it and ?attach= leaves the URL.
-  await page.goto(page.url() + "&attach=page:11111111-1111-4111-8111-111111111111&attach_title=Plan");
+  await page.goto(page.url() + "?attach=page:11111111-1111-4111-8111-111111111111&attach_title=Plan");
   await expect(chips(page)).toHaveCount(1);
   await expect(chips(page).first()).toContainText("Plan");
   await expect(page).not.toHaveURL(/attach/);
@@ -302,10 +302,10 @@ test("sending from the Welcome creates the chat, posts the message and opens it"
 
   await page.getByRole("textbox", { name: "Message" }).fill("first words");
   await page.getByRole("button", { name: "Send" }).click();
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+\?project=WEB/);
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   await expect(page.getByTestId("user-message")).toContainText("first words");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: first words");
-  expect(mock.created).toEqual([{ project: "WEB" }]);
+  expect(mock.created).toEqual([{}]);
   expect(mock.posted).toHaveLength(1);
   expect(mock.posted[0].body).toEqual({ body: "first words" });
   expect(mock.unhandled).toEqual([]);
@@ -325,7 +325,7 @@ test("Start chat ?attach= on /chat shows chips in the Welcome and sends them wit
   await expect(chips(page).first()).toContainText("Plan");
   await page.getByRole("textbox", { name: "Message" }).fill("summarise");
   await page.getByRole("button", { name: "Send" }).click();
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+\?project=WEB/);
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: summarise");
   expect(mock.posted.at(-1)?.body).toEqual({ body: "summarise", context_refs: [{ kind: "page", id: "11111111-1111-4111-8111-111111111111" }] });
   await expect(page.getByTestId("user-message").getByTestId("sent-chip")).toHaveCount(1);
@@ -367,7 +367,7 @@ test("save a reply to the wiki with a link back to the chat", async ({ page }) =
   await expect(page.getByRole("link", { name: "Open Notes/From chat" })).toHaveAttribute("href", "/wiki/Notes/From%20chat");
   const chatId = mock.posted[0].chat;
   expect(mock.wikiPages).toHaveLength(1);
-  expect(mock.wikiPages[0].project_key).toBe("WEB");
+  expect(mock.wikiPages[0].project_key).toBeUndefined();
   expect(mock.wikiPages[0].body_md).toContain("Echo: plain");
   expect(mock.wikiPages[0].body_md).toContain(`(/chat/${chatId})`);
   await page.getByRole("button", { name: "Done" }).click();
@@ -481,7 +481,7 @@ test("a new chat has no agent picker and names no agent", async ({ page }) => {
   await page.goto("/chat?project=WEB");
   await expect(page.getByRole("button", { name: /Agent for new chats/ })).toHaveCount(0);
   await newChat(page);
-  expect(mock.created.at(-1)).toEqual({ project: "WEB" });
+  expect(mock.created.at(-1)).toEqual({});
   await expect(page.getByTestId("chat-agent")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByText("Assistant", { exact: true })).toBeVisible();
   expect(mock.unhandled).toEqual([]);
@@ -505,7 +505,7 @@ test("rename and archive from the history list", async ({ page }) => {
   await title.press("Enter");
   await expect(historyNav(page).getByRole("link", { name: "Roadmap" })).toBeVisible();
   await page.getByRole("button", { name: "Archive Roadmap" }).click();
-  await expect(page).toHaveURL(/\/chat\?project=WEB/);
+  await expect(page).toHaveURL(/\/chat$/);
   await expect(historyNav(page).getByText("No conversations yet.")).toBeVisible();
 });
 
@@ -524,7 +524,7 @@ test("delete asks first, Cancel keeps the conversation, and deleting the open on
 
   await nav.getByRole("button", { name: "Delete delete me" }).click();
   await nav.getByRole("group", { name: "Confirm delete delete me" }).getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(page).toHaveURL(/\/chat\?project=WEB$/);
+  await expect(page).toHaveURL(/\/chat$/);
   await expect(nav.getByText("No conversations yet.")).toBeVisible();
 });
 
@@ -537,7 +537,7 @@ test("archived conversations are listed under Archived and can be restored", asy
   const nav = historyNav(page);
   await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
   await page.getByRole("button", { name: "Archive keep me" }).click();
-  await expect(page).toHaveURL(/\/chat\?project=WEB/);
+  await expect(page).toHaveURL(/\/chat$/);
   await expect(nav.getByText("No conversations yet.")).toBeVisible();
 
   await history(page).getByRole("button", { name: "Archived conversations" }).click();

@@ -12,7 +12,6 @@ import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-co
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton, TextArea } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
-import { ProjectScopeState, useProjectScope } from "@/components/shell/project-scope";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
@@ -31,7 +30,7 @@ const SUGGESTIONS = [
 ];
 
 /** A first-time conversation (mockup frame 2): greeting, suggestions, and a composer that starts the chat. */
-function Welcome({ project, disabled }: { project: string; disabled: boolean }) {
+function Welcome({ disabled }: { disabled: boolean }) {
   const router = useRouter();
   const search = useSearchParams();
   const boot = useBootstrap();
@@ -62,8 +61,8 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
     if (!body || locked || files.pending) return;
     const context_refs = toContextRefs(chips);
     start.mutate(
-      { project, persona_id: personaId, ...(repo ? { repo_url: repo } : {}), message: { body, ...(research ? { research: true } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
-      { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) },
+      { persona_id: personaId, ...(repo ? { repo_url: repo } : {}), message: { body, ...(research ? { research: true } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
+      { onSuccess: (c) => router.push(`/chat/${c.id}`) },
     );
   }
   return (
@@ -155,11 +154,6 @@ export function ChatScreen({ id }: { id?: string }) {
   const router = useRouter();
   const search = useSearchParams();
   const current = useChat(id);
-  // An open chat carries its project; the index resolves ?project=, then the remembered one.
-  const scope = useProjectScope("required", { skip: !!id });
-  const project = id
-    ? (current.data?.project ?? search.get("project") ?? "")
-    : scope.status === "ready" ? (scope.project?.key ?? "") : "";
   const canvas = useCanvasPanel();
   const turnRunning = current.data?.state === "running";
   const health = useHarnessHealth();
@@ -167,25 +161,22 @@ export function ChatScreen({ id }: { id?: string }) {
   // /chat resumes the newest conversation, unless a "Start chat" link brought context to attach.
   const attaching = search.has("attach");
   // Resume the newest conversation with any persona, whatever the sidebar shows.
-  const chats = useChats(project, false, "all");
+  const chats = useChats(false, "all");
   const newest = newestChat(chats.data?.chats);
   useEffect(() => {
     if (id || attaching || !newest) return;
     const q = new URLSearchParams(search.toString());
-    q.set("project", project);
-    router.replace(`/chat/${newest.id}?${q.toString()}`);
-  }, [id, attaching, newest, project, router, search]);
+    q.delete("project"); // Old links; a chat carries its own project.
+    const qs = q.toString();
+    router.replace(qs ? `/chat/${newest.id}?${qs}` : `/chat/${newest.id}`);
+  }, [id, attaching, newest, router, search]);
 
-  const conversation = useNewConversation(project, id);
+  const conversation = useNewConversation(id);
   const resolving = !id && !attaching && (!chats.data || !!newest);
   return (
     <div className="flex h-dvh flex-col">
-      {/* The assistant reads as personal, not per project: no project crumb. */}
       <TopBar crumbs={[{ label: "Assistant" }]} />
-      {!id && scope.status !== "ready" ? (
-        <ProjectScopeState base="/chat" scope={scope} />
-      ) : (
-        <div className="relative flex min-h-0 flex-1 max-md:flex-col">
+      <div className="relative flex min-h-0 flex-1 max-md:flex-col">
           <div className="flex min-w-0 flex-1 flex-col">
             {(noHarness || conversation.error) && (
               <div className="flex flex-col gap-1 px-6 pt-3">
@@ -207,14 +198,13 @@ export function ChatScreen({ id }: { id?: string }) {
                     <Skeleton className="h-16 w-2/3" />
                   </div>
                 ) : (
-                  <Welcome project={project} disabled={!project || noHarness} />
+                  <Welcome disabled={noHarness} />
                 )}
               </>
             )}
           </div>
           {id && canvas.fullscreen ? <CanvasFullscreen chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : null}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -134,7 +134,7 @@ func listChatRuns(ctx context.Context, d Deps, c agents.Caller, in ListRunsIn) (
 	if key := strings.ToUpper(strings.TrimSpace(in.Ticket)); key != "" {
 		t, err := d.Q.GetTicketByKey(ctx, store.GetTicketByKeyParams{WorkspaceID: ws, Key: key})
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !s.allowsTicket(t)) {
-			return nil, apperr.Invalid("ticket", "no ticket %s in project %s", key, s.ProjectKey)
+			return nil, apperr.Invalid("ticket", "no ticket %s in %s", key, s.where())
 		} else if err != nil {
 			return nil, err
 		}
@@ -181,7 +181,7 @@ func getChatRun(ctx context.Context, d Deps, c agents.Caller, in GetRunIn) (any,
 	}
 	r, err := d.Q.GetRun(ctx, store.GetRunParams{ID: id, WorkspaceID: ws})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && r.Purpose != "ticket") {
-		return nil, apperr.Invalid("id", "no run %s in project %s", in.ID, s.ProjectKey)
+		return nil, apperr.Invalid("id", "no run %s in %s", in.ID, s.where())
 	} else if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func getChatRun(ctx context.Context, d Deps, c agents.Caller, in GetRunIn) (any,
 		return nil, err
 	}
 	if !s.allowsTicket(n.tickets[*r.TicketID]) {
-		return nil, apperr.Invalid("id", "no run %s in project %s", in.ID, s.ProjectKey)
+		return nil, apperr.Invalid("id", "no run %s in %s", in.ID, s.where())
 	}
 	steps, err := d.Q.ListPlan(ctx, r.ID)
 	if err != nil {

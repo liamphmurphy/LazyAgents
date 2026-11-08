@@ -264,7 +264,7 @@ type ChatParticipant struct {
 type ChatSession struct {
 	ID                 uuid.UUID
 	WorkspaceID        uuid.UUID
-	ProjectID          uuid.UUID
+	ProjectID          *uuid.UUID
 	Title              string
 	CreatedBy          uuid.UUID
 	AgentID            uuid.UUID
@@ -847,7 +847,7 @@ type WorkflowRun struct {
 	WorkspaceID  uuid.UUID
 	UserID       uuid.UUID
 	ChatID       uuid.UUID
-	ProjectID    uuid.UUID
+	ProjectID    *uuid.UUID
 	WorkflowID   *uuid.UUID
 	MessageID    *uuid.UUID
 	Name         string

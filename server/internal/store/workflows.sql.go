@@ -213,7 +213,7 @@ type CreateWorkflowRunParams struct {
 	WorkspaceID uuid.UUID
 	UserID      uuid.UUID
 	ChatID      uuid.UUID
-	ProjectID   uuid.UUID
+	ProjectID   *uuid.UUID
 	WorkflowID  *uuid.UUID
 	MessageID   *uuid.UUID
 	Name        string

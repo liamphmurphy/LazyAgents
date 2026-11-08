@@ -37,7 +37,7 @@ func TestChatQueries(t *testing.T) {
 		}
 	}
 	mk := func(title string) store.ChatSession {
-		c, err := q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: project, Title: title, CreatedBy: user, AgentID: agent, Harness: "codex", Model: "m"})
+		c, err := q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: &project, Title: title, CreatedBy: user, AgentID: agent, Harness: "codex", Model: "m"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,7 +65,7 @@ func TestChatQueries(t *testing.T) {
 	}
 
 	// a has activity, so it lists before b even though b was created later.
-	list, err := q.ListChatSessions(ctx, store.ListChatSessionsParams{WorkspaceID: ws, ProjectID: project, CreatedBy: user, Limit: 10})
+	list, err := q.ListChatSessions(ctx, store.ListChatSessionsParams{WorkspaceID: ws, ProjectID: &project, CreatedBy: user, Limit: 10})
 	if err != nil || len(list) != 2 || list[0].ID != a.ID {
 		t.Fatalf("list = %+v %v", list, err)
 	}
@@ -92,7 +92,7 @@ func TestChatQueries(t *testing.T) {
 	if _, err = q.ArchiveChatSession(ctx, store.ArchiveChatSessionParams{ID: b.ID, WorkspaceID: ws, Revision: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if list, _ = q.ListChatSessions(ctx, store.ListChatSessionsParams{WorkspaceID: ws, ProjectID: project, CreatedBy: user, Limit: 10}); len(list) != 1 {
+	if list, _ = q.ListChatSessions(ctx, store.ListChatSessionsParams{WorkspaceID: ws, ProjectID: &project, CreatedBy: user, Limit: 10}); len(list) != 1 {
 		t.Fatalf("archived session still listed: %d", len(list))
 	}
 }

@@ -78,14 +78,13 @@ export function navGroupsFor(mode: NavMode): NavGroup[] {
 
 /** Where the Chat/Work toggle goes: Chat resumes the newest conversation, Work the last Work page. */
 export function modeHref(mode: NavMode, project: string | null | undefined, lastWork: string | null | undefined): string {
-  return withProject(mode === "chat" ? "/chat" : (lastWork ?? "/board"), project);
+  return mode === "chat" ? "/chat" : withProject(lastWork ?? "/board", project);
 }
 
 /** Routes whose content belongs to one project, read from ?project=. */
 export const PROJECT_ROUTES: Record<string, ProjectMode> = {
   "/board": "required",
   "/plans": "required",
-  "/chat": "required",
   "/tickets": "optional",
   "/epics": "optional",
   "/artifacts": "optional",

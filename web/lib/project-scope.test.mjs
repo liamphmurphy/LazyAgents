@@ -24,7 +24,7 @@ test("isActive matches the section, Dashboard only on /", () => {
 
 test("projectSection finds the project route of detail pages", () => {
   assert.equal(projectSection("/board"), "/board");
-  assert.equal(projectSection("/chat/123"), "/chat");
+  assert.equal(projectSection("/chat/123"), undefined);
   assert.equal(projectSection("/tickets/WEB-1"), "/tickets");
   assert.equal(projectSection("/inbox"), undefined);
   assert.equal(projectSection("/"), undefined);
@@ -54,7 +54,7 @@ test("switchHref rewrites the current project route and drops project-bound para
   assert.equal(switchHref("/board", q("project=WEB&epic=e1&assignee=builder&ticket=WEB-1"), "OPS"), "/board?assignee=builder&project=OPS");
   assert.equal(switchHref("/tickets", q("project=WEB&view=all"), null), "/tickets?view=all");
   assert.equal(switchHref("/plans", q("id=p1&project=WEB"), "OPS"), "/plans?project=OPS");
-  assert.equal(switchHref("/chat/123", q("project=WEB"), "OPS"), "/chat?project=OPS");
+  assert.equal(switchHref("/chat/123", q("project=WEB"), "OPS"), null);
   assert.equal(switchHref("/tickets/WEB-1", q(""), "OPS"), "/tickets?project=OPS");
   assert.equal(switchHref("/tickets/new", q("project=WEB"), "OPS"), null);
   assert.equal(switchHref("/inbox", q(""), "OPS"), null);
@@ -99,7 +99,7 @@ test("Work pins Inbox and Dashboard above Project and Workspace; Chat has Person
 });
 
 test("the toggle resumes chat and returns to the last Work page in the current project", () => {
-  assert.equal(modeHref("chat", "WEB", "/runs"), "/chat?project=WEB");
+  assert.equal(modeHref("chat", "WEB", "/runs"), "/chat");
   assert.equal(modeHref("work", "WEB", "/tickets"), "/tickets?project=WEB");
   assert.equal(modeHref("work", "WEB", "/runs/1"), "/runs/1");
   assert.equal(modeHref("work", "WEB", null), "/board?project=WEB");

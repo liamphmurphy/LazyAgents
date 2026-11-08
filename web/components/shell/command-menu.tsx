@@ -189,10 +189,9 @@ export function CommandMenu() {
       glyph: "◌",
       group: "Actions",
       perform: () => {
-        const p = attach?.project ?? actionProject;
-        if (!p) return router.push("/chat");
+        const p = attach?.project;
         createChat.mutate(
-          { project: p },
+          p ? { project: p } : {},
           {
             onSuccess: (c) => router.push(attach ? `/chat/${c.id}?${attachQuery(p, attach.ref, attach.label)}` : `/chat/${c.id}`),
             // Reopen so the alert below explains what happened.

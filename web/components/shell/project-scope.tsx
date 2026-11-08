@@ -124,7 +124,6 @@ export function projectCrumbs(project: Project | undefined, label: string): Crum
 const WHY: Record<string, string> = {
   "/board": "The board shows one project at a time.",
   "/plans": "A plan proposes tickets for one project.",
-  "/chat": "The assistant answers from one project’s context.",
 };
 
 export function ProjectChooser({ base, projects }: { base: string; projects: Project[] }) {

@@ -674,7 +674,7 @@ RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, mo
 
 type CreateChatSessionParams struct {
 	WorkspaceID uuid.UUID
-	ProjectID   uuid.UUID
+	ProjectID   *uuid.UUID
 	Title       string
 	CreatedBy   uuid.UUID
 	AgentID     uuid.UUID
@@ -1258,7 +1258,7 @@ LIMIT $4
 
 type ListChatSessionsParams struct {
 	WorkspaceID uuid.UUID
-	ProjectID   uuid.UUID
+	ProjectID   *uuid.UUID
 	CreatedBy   uuid.UUID
 	Limit       int32
 }
@@ -1316,7 +1316,7 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 }
 
 const listChatsForUser = `-- name: ListChatsForUser :many
-SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.work_branch, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden FROM chat_sessions c JOIN projects p ON p.id = c.project_id
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.work_branch, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden FROM chat_sessions c LEFT JOIN projects p ON p.id = c.project_id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = $3 AND NOT c.hidden
   AND ($4::text IS NULL OR p.key = $4::text)
   -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
@@ -1953,7 +1953,7 @@ SELECT h.id, h.session_id, h.seq, h.role, h.created_at, c.title AS chat_title, c
 FROM hits h
 CROSS JOIN q
 JOIN chat_sessions c ON c.id = h.session_id
-JOIN projects pr ON pr.id = c.project_id
+LEFT JOIN projects pr ON pr.id = c.project_id
 LEFT JOIN personas p ON p.id = COALESCE(h.persona_id, c.persona_id)
 ORDER BY h.rank DESC, h.created_at DESC
 `
@@ -1973,7 +1973,7 @@ type SearchChatMessagesRow struct {
 	CreatedAt   time.Time
 	ChatTitle   string
 	Archived    bool
-	ProjectKey  string
+	ProjectKey  *string
 	PersonaName *string
 	Snippet     string
 }
@@ -2127,6 +2127,58 @@ func (q *Queries) SetChatMessageTurn(ctx context.Context, arg SetChatMessageTurn
 		arg.Model,
 	)
 	return err
+}
+
+const setChatProject = `-- name: SetChatProject :one
+UPDATE chat_sessions SET project_id = $1, revision = revision + 1, updated_at = now()
+WHERE id = $2 AND workspace_id = $3 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden
+`
+
+type SetChatProjectParams struct {
+	ProjectID   *uuid.UUID
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Revision    int32
+}
+
+// Returns no row when the revision is stale.
+func (q *Queries) SetChatProject(ctx context.Context, arg SetChatProjectParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, setChatProject,
+		arg.ProjectID,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Revision,
+	)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+		&i.PersonaID,
+		&i.RepoUrl,
+		&i.WorkBranch,
+		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
+		&i.RelayLimit,
+		&i.InterruptMessageID,
+		&i.LastReadSeq,
+		&i.Hidden,
+	)
+	return i, err
 }
 
 const setChatRepo = `-- name: SetChatRepo :one
