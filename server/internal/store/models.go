@@ -246,6 +246,7 @@ type ChatSession struct {
 	SpeakerPersonaID   *uuid.UUID
 	QueuedPersonaIds   []uuid.UUID
 	RelayTurns         int32
+	RelayLimit         int32
 	InterruptMessageID *uuid.UUID
 }
 

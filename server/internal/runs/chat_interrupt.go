@@ -123,7 +123,7 @@ func ResumeInterruptedChat(ctx context.Context, q *store.Queries, chatID, runID 
 	if err != nil {
 		return err
 	}
-	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0}); err != nil {
+	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0, RelayLimit: int32(RelayLimitIn(msg.BodyMd))}); err != nil {
 		return err
 	}
 	_, run, turn, err := startChatTurn(ctx, q, chat, p.Key, note+msg.BodyMd, false, handoffChars)

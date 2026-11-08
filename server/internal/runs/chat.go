@@ -419,12 +419,13 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		}
 	}
 	// A mention picks who answers (and queues the rest); otherwise whoever
-	// spoke last carries on.
+	// spoke last carries on. The message may also set how long personas keep
+	// handing the conversation to each other.
 	speaker, queue, err := routeHumanMessage(ctx, q, chat, body)
 	if err != nil {
 		return chat, msg, err
 	}
-	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0}); err != nil {
+	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0, RelayLimit: int32(RelayLimitIn(body))}); err != nil {
 		return chat, msg, err
 	}
 	chat, run, turn, err := startChatTurn(ctx, q, chat, p.Key, prompt, false, handoffChars)

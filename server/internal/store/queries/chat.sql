@@ -282,9 +282,9 @@ WHERE run_id = $1 AND type IN ('tool_call', 'tool_result') AND payload->>'tool' 
 ORDER BY seq;
 
 -- name: SetChatSpeaker :one
--- Who answers the next turn, who is queued after them, and the relay count.
--- Not a revision bump: it changes together with the turn's state.
-UPDATE chat_sessions SET speaker_persona_id = sqlc.narg(speaker_persona_id), queued_persona_ids = sqlc.arg(queued_persona_ids)::uuid[], relay_turns = sqlc.arg(relay_turns)
+-- Who answers the next turn, who is queued after them, the relay count and
+-- its limit. Not a revision bump: it changes together with the turn's state.
+UPDATE chat_sessions SET speaker_persona_id = sqlc.narg(speaker_persona_id), queued_persona_ids = sqlc.arg(queued_persona_ids)::uuid[], relay_turns = sqlc.arg(relay_turns), relay_limit = sqlc.arg(relay_limit)
 WHERE id = sqlc.arg(id) RETURNING *;
 
 -- name: AddChatParticipant :exec
