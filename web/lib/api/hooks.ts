@@ -1132,7 +1132,8 @@ export function useCreateChat() {
   const done = useChatInvalidate();
   return useMutation({
     mutationFn: (body: Schemas["NewChat"]) => unwrap(api.POST("/chats", { body })),
-    onSettled: done,
+    // Not awaited: callers open the new chat from mutate's onSuccess, which would wait for every chat query to refetch.
+    onSettled: () => void done(),
   });
 }
 
