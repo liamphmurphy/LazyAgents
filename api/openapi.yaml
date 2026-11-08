@@ -4393,6 +4393,7 @@ components:
         project_key: { type: string, description: The project of the chat it came from, for linking to it }
         persona_id: { type: string, format: uuid, description: "The persona that made it, while that persona exists" }
         persona_name: { type: string }
+        source: { type: string, enum: [generated, upload], description: "generated: a persona made it in a chat; upload: the person added it" }
         reference: { $ref: "#/components/schemas/LibraryReferenceRole" }
         reference_persona_id: { type: string, format: uuid, description: "With reference persona: the persona this image shows" }
         reference_persona_name: { type: string }

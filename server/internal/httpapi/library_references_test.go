@@ -72,7 +72,7 @@ func (e *chatEnv) libraryRefs() map[string]string {
 func TestLibraryUploadAndReferences(t *testing.T) {
 	e, s3 := newAvatarEnv(t)
 	code, me := e.uploadLibrary("Me at the beach.png", avatarPNG(t))
-	if code != http.StatusCreated || me["title"] != "Me at the beach" || me["content_type"] != "image/png" || me["chat_id"] != nil || me["reference"] != nil {
+	if code != http.StatusCreated || me["title"] != "Me at the beach" || me["content_type"] != "image/png" || me["chat_id"] != nil || me["reference"] != nil || me["source"] != "upload" {
 		t.Fatalf("upload %d %v", code, me)
 	}
 	if keys := s3.keys(avatarBucket + "/chat-attachments/"); len(keys) != 1 {

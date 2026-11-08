@@ -2,6 +2,11 @@
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *;
 
+-- name: CreateUploadedLibraryItem :one
+-- An image the person uploaded straight into their Library.
+INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, source)
+VALUES ($1, $2, 'image', $3, $4, $5, $6, $7, 'upload') RETURNING *;
+
 -- name: ListLibraryItems :many
 -- The caller's own items, newest first, with where each came from (the chat's
 -- title and the persona's name, while they still exist).

@@ -333,6 +333,7 @@ type LibraryItem struct {
 	CreatedAt          time.Time
 	Reference          *string
 	ReferencePersonaID *uuid.UUID
+	Source             string
 }
 
 type Memory struct {

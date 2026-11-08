@@ -39,7 +39,7 @@ func (q *Queries) ClearLibraryReferenceRole(ctx context.Context, arg ClearLibrar
 
 const createLibraryItem = `-- name: CreateLibraryItem :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source
 `
 
 type CreateLibraryItemParams struct {
@@ -87,6 +87,55 @@ func (q *Queries) CreateLibraryItem(ctx context.Context, arg CreateLibraryItemPa
 		&i.CreatedAt,
 		&i.Reference,
 		&i.ReferencePersonaID,
+		&i.Source,
+	)
+	return i, err
+}
+
+const createUploadedLibraryItem = `-- name: CreateUploadedLibraryItem :one
+INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, source)
+VALUES ($1, $2, 'image', $3, $4, $5, $6, $7, 'upload') RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source
+`
+
+type CreateUploadedLibraryItemParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Title       string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+}
+
+// An image the person uploaded straight into their Library.
+func (q *Queries) CreateUploadedLibraryItem(ctx context.Context, arg CreateUploadedLibraryItemParams) (LibraryItem, error) {
+	row := q.db.QueryRow(ctx, createUploadedLibraryItem,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Title,
+		arg.Filename,
+		arg.ContentType,
+		arg.SizeBytes,
+		arg.BlobKey,
+	)
+	var i LibraryItem
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Kind,
+		&i.Title,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.ChatID,
+		&i.MessageID,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
+		&i.Source,
 	)
 	return i, err
 }
@@ -123,7 +172,7 @@ func (q *Queries) DeleteLibraryItem(ctx context.Context, arg DeleteLibraryItemPa
 }
 
 const getLibraryItem = `-- name: GetLibraryItem :one
-SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `
 
 type GetLibraryItemParams struct {
@@ -151,12 +200,13 @@ func (q *Queries) GetLibraryItem(ctx context.Context, arg GetLibraryItemParams) 
 		&i.CreatedAt,
 		&i.Reference,
 		&i.ReferencePersonaID,
+		&i.Source,
 	)
 	return i, err
 }
 
 const libraryReferences = `-- name: LibraryReferences :many
-SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id FROM library_items
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source FROM library_items
 WHERE workspace_id = $1 AND user_id = $2
   AND (reference = 'self' OR (reference = 'persona' AND reference_persona_id = $3::uuid))
 ORDER BY reference
@@ -195,6 +245,7 @@ func (q *Queries) LibraryReferences(ctx context.Context, arg LibraryReferencesPa
 			&i.CreatedAt,
 			&i.Reference,
 			&i.ReferencePersonaID,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -207,7 +258,7 @@ func (q *Queries) LibraryReferences(ctx context.Context, arg LibraryReferencesPa
 }
 
 const listLibraryItems = `-- name: ListLibraryItems :many
-SELECT l.id, l.workspace_id, l.user_id, l.kind, l.title, l.filename, l.content_type, l.size_bytes, l.blob_key, l.chat_id, l.message_id, l.persona_id, l.created_at, l.reference, l.reference_persona_id, c.title AS chat_title, p.name AS persona_name, pr.key AS project_key, rp.name AS reference_persona_name
+SELECT l.id, l.workspace_id, l.user_id, l.kind, l.title, l.filename, l.content_type, l.size_bytes, l.blob_key, l.chat_id, l.message_id, l.persona_id, l.created_at, l.reference, l.reference_persona_id, l.source, c.title AS chat_title, p.name AS persona_name, pr.key AS project_key, rp.name AS reference_persona_name
 FROM library_items l
 LEFT JOIN chat_sessions c ON c.id = l.chat_id
 LEFT JOIN personas p ON p.id = l.persona_id
@@ -243,6 +294,7 @@ type ListLibraryItemsRow struct {
 	CreatedAt            time.Time
 	Reference            *string
 	ReferencePersonaID   *uuid.UUID
+	Source               string
 	ChatTitle            *string
 	PersonaName          *string
 	ProjectKey           *string
@@ -282,6 +334,7 @@ func (q *Queries) ListLibraryItems(ctx context.Context, arg ListLibraryItemsPara
 			&i.CreatedAt,
 			&i.Reference,
 			&i.ReferencePersonaID,
+			&i.Source,
 			&i.ChatTitle,
 			&i.PersonaName,
 			&i.ProjectKey,
@@ -316,7 +369,7 @@ func (q *Queries) LockLibraryReferences(ctx context.Context, arg LockLibraryRefe
 const setLibraryReference = `-- name: SetLibraryReference :one
 UPDATE library_items SET reference = $1::text, reference_persona_id = $2::uuid
 WHERE id = $3 AND workspace_id = $4 AND user_id = $5
-RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id
+RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source
 `
 
 type SetLibraryReferenceParams struct {
@@ -353,6 +406,7 @@ func (q *Queries) SetLibraryReference(ctx context.Context, arg SetLibraryReferen
 		&i.CreatedAt,
 		&i.Reference,
 		&i.ReferencePersonaID,
+		&i.Source,
 	)
 	return i, err
 }

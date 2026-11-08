@@ -9,6 +9,8 @@ ALTER TABLE library_items
   ADD COLUMN reference text CHECK (reference IN ('persona', 'self')),
   ADD COLUMN reference_persona_id uuid REFERENCES personas(id) ON DELETE SET NULL,
   ADD CONSTRAINT library_items_reference_persona CHECK (reference_persona_id IS NULL OR reference = 'persona');
+-- upload: the person added it themselves (e.g. their photo), not from a chat.
+ALTER TABLE library_items ADD COLUMN source text NOT NULL DEFAULT 'generated' CHECK (source IN ('generated', 'upload'));
 CREATE UNIQUE INDEX library_items_self_reference ON library_items (workspace_id, user_id) WHERE reference = 'self';
 CREATE UNIQUE INDEX library_items_persona_reference ON library_items (reference_persona_id) WHERE reference = 'persona';
 
@@ -21,4 +23,4 @@ ALTER TABLE chat_image_jobs
 ALTER TABLE chat_image_jobs DROP COLUMN reference_roles;
 DROP INDEX library_items_persona_reference;
 DROP INDEX library_items_self_reference;
-ALTER TABLE library_items DROP CONSTRAINT library_items_reference_persona, DROP COLUMN reference_persona_id, DROP COLUMN reference;
+ALTER TABLE library_items DROP CONSTRAINT library_items_reference_persona, DROP COLUMN reference_persona_id, DROP COLUMN reference, DROP COLUMN source;

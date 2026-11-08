@@ -27,6 +27,8 @@ func toLibraryItem(l store.ListLibraryItemsRow) api.LibraryItem {
 		Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
 		ChatId: l.ChatID, ChatTitle: l.ChatTitle, ProjectKey: l.ProjectKey, PersonaId: l.PersonaID, PersonaName: l.PersonaName, CreatedAt: l.CreatedAt,
 	}
+	source := api.LibraryItemSource(l.Source)
+	out.Source = &source
 	// A persona reference whose persona was deleted stands for nobody.
 	if l.Reference != nil && (*l.Reference == "self" || l.ReferencePersonaID != nil) {
 		r := api.LibraryReferenceRole(*l.Reference)
@@ -142,12 +144,14 @@ func (s *Server) UploadLibraryItem(ctx context.Context, req api.UploadLibraryIte
 	if err := s.Blobs.Put(ctx, s.ArtifactBucket, key, f.tmp, f.file.Size, ct); err != nil {
 		return nil, err
 	}
-	l, err := s.Q.CreateLibraryItem(ctx, store.CreateLibraryItemParams{WorkspaceID: ws, UserID: u.ID, Kind: "image", Title: title, Filename: name, ContentType: ct, SizeBytes: f.file.Size, BlobKey: key})
+	l, err := s.Q.CreateUploadedLibraryItem(ctx, store.CreateUploadedLibraryItemParams{WorkspaceID: ws, UserID: u.ID, Title: title, Filename: name, ContentType: ct, SizeBytes: f.file.Size, BlobKey: key})
 	if err != nil {
 		_ = s.Blobs.Delete(context.WithoutCancel(ctx), s.ArtifactBucket, key)
 		return nil, err
 	}
-	return api.UploadLibraryItem201JSONResponse{Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes, CreatedAt: l.CreatedAt}, nil
+	source := api.LibraryItemSource(l.Source)
+	return api.UploadLibraryItem201JSONResponse{Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
+		Source: &source, CreatedAt: l.CreatedAt}, nil
 }
 
 // SetLibraryReference makes one of the caller's images the reference for a
