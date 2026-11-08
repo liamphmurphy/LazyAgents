@@ -138,7 +138,7 @@ test("only the latest card for a canvas is live; earlier ones lead to it", async
   await expect(page.getByTestId("assistant-message").first().getByTestId("canvas-card")).toBeVisible();
 });
 
-test("fullscreen covers the chat area, keeps a message box, and Escape returns", async ({ page }) => {
+test("fullscreen covers the whole window, keeps a message box, and Escape returns", async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 900 });
   const calls = await open(page);
   const inline = page.getByTestId("canvas-panel");
@@ -154,9 +154,11 @@ test("fullscreen covers the chat area, keeps a message box, and Escape returns",
   const full = page.getByTestId("canvas-fullscreen");
   await expect(full).toContainText("days.");
   await expect(inline).toHaveCount(0);
-  const historyBox = (await history.boundingBox())!;
-  const fullBox = (await full.boundingBox())!;
-  expect(fullBox.x).toBeLessThanOrEqual(historyBox.x);
+  expect(await full.boundingBox()).toEqual({ x: 0, y: 0, width: 1500, height: 900 });
+  // On top of the app's sidebar, top bar and corner widgets, not just beside them.
+  for (const [x, y] of [[10, 10], [10, 890], [700, 20], [1490, 890]]) {
+    expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest('[data-testid="canvas-fullscreen"]'), [x, y])).toBe(true);
+  }
   await expect(full.getByTestId("canvas-latest-reply")).toContainText("Drafted it.");
   await expect(full.getByRole("textbox", { name: "Message from fullscreen" })).toBeVisible();
 

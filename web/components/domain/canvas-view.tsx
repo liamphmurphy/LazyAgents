@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useCanvasActions, useCanvasComments, useChatCanvas, useChatCanvases } from "@/lib/api/canvas-hooks";
 import { useChatMessages, useSendChatMessage } from "@/lib/api/hooks";
 import type { Schemas } from "@/lib/api/client";
@@ -509,11 +510,14 @@ function FullscreenChat({ chatId, live, readOnly }: { chatId: string; live: bool
   );
 }
 
-/** A canvas over the whole chat area, with the conversation reduced to a message box. */
+const noSubscribe = () => () => {};
+
+/** A canvas over the whole browser window, with the conversation reduced to a message box. */
 export function CanvasFullscreen({ chatId, live, readOnly, agent }: { chatId: string; live: boolean; readOnly: boolean; agent: string }) {
   const panel = useCanvasPanel();
   const canvases = useChatCanvases(chatId, live).data?.canvases;
   const id = panel.focus ?? canvases?.at(-1)?.id;
+  const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
   const { exitFull } = panel;
   const exit = useRef(exitFull);
   useEffect(() => {
@@ -526,11 +530,13 @@ export function CanvasFullscreen({ chatId, live, readOnly, agent }: { chatId: st
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  if (!id) return null;
-  return (
-    <section role="dialog" aria-label="Canvas" data-testid="canvas-fullscreen" className="absolute inset-0 z-30 flex flex-col bg-surface-sunken">
+  if (!id || !mounted) return null;
+  // On body, so no layout around the chat can contain it.
+  return createPortal(
+    <section role="dialog" aria-modal="true" aria-label="Canvas" data-testid="canvas-fullscreen" className="fixed inset-0 z-[100] flex flex-col bg-surface-sunken">
       <CanvasView key={id} chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={agent} onExitFullscreen={exitFull} />
       <FullscreenChat chatId={chatId} live={live} readOnly={readOnly} />
-    </section>
+    </section>,
+    document.body,
   );
 }
