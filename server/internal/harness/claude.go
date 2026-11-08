@@ -108,13 +108,15 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	if t.SessionID != "" {
 		argv = append(argv, "--resume", t.SessionID)
 	}
+	// The flag, not settings: it takes every level (settings files refuse max)
+	// and applies per invocation, so a chat can change it between turns.
+	if effort := spec.HarnessOptions["effort"]; effort != "" {
+		argv = append(argv, "--effort", effort)
+	}
 	files := SkillFiles(spec.Skills, true)
 	files[claudeMCPFile] = cfg
 	files[toolHookPath] = toolHook
 	settingsDoc := map[string]any{"hooks": map[string]any{"PreToolUse": []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": env["LAZYAGENTS_POLICY_HOOK_COMMAND"], "timeout": 20}}}}}}
-	if effort := spec.HarnessOptions["effort"]; effort != "" {
-		settingsDoc["modelSettings"] = map[string]any{AnthropicModel(spec.Model): map[string]any{"effortLevel": effort}}
-	}
 	settings, _ := json.Marshal(settingsDoc)
 	files[".lazyagents/claude-settings.json"] = settings
 	return Invocation{

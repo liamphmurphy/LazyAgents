@@ -2187,11 +2187,11 @@ paths:
       description: |
         Stores the user message and queues a turn. The reply arrives
         later as an assistant message; watch for `chat.updated`.
-        `harness`/`model` switch the chat from this message on (same harness:
-        same session, new model; other harness: new session with a
+        `harness`/`model`/`effort` switch the chat from this message on (same harness:
+        same session, new model or effort; other harness: new session with a
         transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
         is running or the chat is archived; 422 empty body, unknown
-        harness/model, a context ref outside the chat's project, or an
+        harness/model, an effort the model doesn't offer, a context ref outside the chat's project, or an
         attachment id that isn't the caller's unattached upload.
       tags: [chats]
       requestBody:
@@ -4259,6 +4259,7 @@ components:
         agent: { $ref: "#/components/schemas/AgentRef" }
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string, description: The model the next turn uses }
+        effort: { $ref: "#/components/schemas/ChatEffort" }
         state: { $ref: "#/components/schemas/ChatState" }
         error: { type: string, description: Why the last turn failed, when state is failed }
         current_run_id: { type: string, format: uuid, description: The run serving the current harness segment; its events show live activity }
@@ -4279,6 +4280,7 @@ components:
         title: { type: string, maxLength: 200 }
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string, description: Defaults to the harness's default model in GET /chat-models }
+        effort: { $ref: "#/components/schemas/ChatEffort" }
         persona_id: { type: string, format: uuid, description: "One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life." }
         repo_url: { type: string, description: "One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise." }
         message: { $ref: "#/components/schemas/NewChatMessage" }
@@ -4296,6 +4298,10 @@ components:
         body: { type: string, minLength: 1, maxLength: 100000 }
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string }
+        effort:
+          type: string
+          enum: [default, low, medium, high, xhigh, max]
+          description: "Reasoning effort from this message on; default clears it back to the harness's own default. Omit to keep the chat's effort."
         context_refs:
           type: array
           maxItems: 20
@@ -4382,11 +4388,20 @@ components:
         truncated: { type: boolean, description: The patch was cut short or left out to stay within the limits }
     ChatModel:
       type: object
-      required: [id, label, default]
+      required: [id, label, default, efforts]
       properties:
         id: { type: string, description: "Value for the model field, e.g. opus-5.5 or gpt-5-codex" }
         label: { type: string }
         default: { type: boolean, description: The harness's default model }
+        efforts:
+          type: array
+          items: { $ref: "#/components/schemas/ChatEffort" }
+          description: Reasoning efforts the model offers, lowest first; empty when it has no effort control
+        default_effort: { $ref: "#/components/schemas/ChatEffort" }
+    ChatEffort:
+      type: string
+      enum: [low, medium, high, xhigh, max]
+      description: "Reasoning effort; absent means the harness's own default"
     ChatHarnessModels:
       type: object
       required: [harness, label, available, models]

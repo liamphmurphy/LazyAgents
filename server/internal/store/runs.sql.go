@@ -356,7 +356,7 @@ func (q *Queries) CacheUsageForRuns(ctx context.Context, runIds []uuid.UUID) ([]
 }
 
 const chatSessionOfRun = `-- name: ChatSessionOfRun :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch FROM chat_sessions
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort FROM chat_sessions
 WHERE current_run_id = $1 OR id IN (SELECT session_id FROM chat_messages WHERE run_id = $1)
 LIMIT 1
 `
@@ -384,6 +384,7 @@ func (q *Queries) ChatSessionOfRun(ctx context.Context, runID *uuid.UUID) (ChatS
 		&i.PersonaID,
 		&i.RepoUrl,
 		&i.WorkBranch,
+		&i.Effort,
 	)
 	return i, err
 }
@@ -1586,6 +1587,26 @@ func (q *Queries) SetRunContract(ctx context.Context, arg SetRunContractParams) 
 		&i.ChecksMs,
 	)
 	return i, err
+}
+
+const setRunEffort = `-- name: SetRunEffort :exec
+UPDATE runs SET resolved_spec = CASE WHEN $1::text = ''
+  THEN resolved_spec #- '{harness_options,effort}'
+  ELSE jsonb_set(resolved_spec, '{harness_options}', coalesce(resolved_spec->'harness_options', '{}'::jsonb) || jsonb_build_object('effort', $1::text))
+  END
+WHERE id = $2
+`
+
+type SetRunEffortParams struct {
+	Effort string
+	ID     uuid.UUID
+}
+
+// Same-harness effort switch: keeps the session id and workspace. An empty
+// effort removes the option so the harness uses its own default.
+func (q *Queries) SetRunEffort(ctx context.Context, arg SetRunEffortParams) error {
+	_, err := q.db.Exec(ctx, setRunEffort, arg.Effort, arg.ID)
+	return err
 }
 
 const setRunModel = `-- name: SetRunModel :exec

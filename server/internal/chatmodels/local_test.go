@@ -2,6 +2,7 @@ package chatmodels
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 
@@ -42,5 +43,22 @@ func TestLocalDiscoveryFailsClosed(t *testing.T) {
 		if err == nil || strings.Contains(err.Error(), "private details") {
 			t.Fatalf("err=%v", err)
 		}
+	}
+}
+
+func TestLocalModelsReportEfforts(t *testing.T) {
+	claude := `{"type":"control_response","response":{"subtype":"success","request_id":"models","response":{"models":[` +
+		`{"value":"opus","displayName":"Opus","supportsEffort":true,"supportedEffortLevels":["low","medium","high","xhigh","max"]},` +
+		`{"value":"haiku-4","displayName":"Haiku 4"}]}}}`
+	models, err := localModels(agentdef.HarnessClaudeCode, &bytes.Buffer{}, strings.NewReader(claude))
+	if err != nil || len(models) != 2 || !slices.Equal(models[0].Efforts, agentdef.Efforts) || len(models[1].Efforts) != 0 {
+		t.Fatalf("claude models=%+v err=%v", models, err)
+	}
+	codex := `{"id":1,"result":{}}
+{"id":2,"result":{"data":[{"model":"gpt","displayName":"GPT","isDefault":true,"defaultReasoningEffort":"medium",` +
+		`"supportedReasoningEfforts":[{"reasoningEffort":"low"},{"reasoningEffort":"medium"},{"reasoningEffort":"max"},{"reasoningEffort":"ultra"}]}]}}`
+	models, err = localModels(agentdef.HarnessCodex, &bytes.Buffer{}, strings.NewReader(codex))
+	if err != nil || len(models) != 1 || !slices.Equal(models[0].Efforts, []string{"low", "medium", "max"}) || models[0].DefaultEffort != "medium" {
+		t.Fatalf("codex models=%+v err=%v", models, err)
 	}
 }
