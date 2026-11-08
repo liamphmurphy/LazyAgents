@@ -269,20 +269,19 @@ func (y *YouTube) do(req *http.Request, limit int64) ([]byte, error) {
 
 // parseTimedText reads both caption XML shapes: <transcript><text start dur>
 // (seconds) and srv3's <timedtext><body><p t d> (milliseconds, words in <s>).
+// Bodies are read raw so text inside <font> or <s> isn't lost; tags are
+// stripped before the entities are decoded.
 func parseTimedText(b []byte) ([]Line, error) {
 	var doc struct {
 		Texts []struct {
 			Start string `xml:"start,attr"`
 			Dur   string `xml:"dur,attr"`
-			Body  string `xml:",chardata"`
+			Body  string `xml:",innerxml"`
 		} `xml:"text"`
 		Paras []struct {
-			T     string `xml:"t,attr"`
-			D     string `xml:"d,attr"`
-			Body  string `xml:",chardata"`
-			Words []struct {
-				Body string `xml:",chardata"`
-			} `xml:"s"`
+			T    string `xml:"t,attr"`
+			D    string `xml:"d,attr"`
+			Body string `xml:",innerxml"`
 		} `xml:"body>p"`
 	}
 	dec := xml.NewDecoder(bytes.NewReader(b))
@@ -293,9 +292,9 @@ func parseTimedText(b []byte) ([]Line, error) {
 	}
 	var out []Line
 	add := func(start, dur float64, text string) {
-		// Captions are often double-escaped (&amp;#39;) and carry markup.
-		text = html.UnescapeString(html.UnescapeString(text))
-		text = strings.Join(strings.Fields(tags.ReplaceAllString(text, "")), " ")
+		// Captions carry markup and are often double-escaped (&amp;#39;).
+		text = html.UnescapeString(html.UnescapeString(tags.ReplaceAllString(text, "")))
+		text = strings.Join(strings.Fields(text), " ")
 		if text != "" {
 			out = append(out, Line{Start: start, Dur: dur, Text: text})
 		}
@@ -308,11 +307,7 @@ func parseTimedText(b []byte) ([]Line, error) {
 	for _, p := range doc.Paras {
 		ms, _ := strconv.ParseFloat(p.T, 64)
 		d, _ := strconv.ParseFloat(p.D, 64)
-		text := p.Body
-		for _, w := range p.Words {
-			text += w.Body
-		}
-		add(ms/1000, d/1000, text)
+		add(ms/1000, d/1000, p.Body)
 	}
 	return out, nil
 }

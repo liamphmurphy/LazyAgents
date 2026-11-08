@@ -1,6 +1,6 @@
 -- name: CreateChatImageJob :one
 INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model, reference_roles)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
+VALUES ($1, $2, $3, $4, $5, $6, coalesce(sqlc.narg(reference_roles)::text[], '{}')) RETURNING *;
 
 -- name: CountChatImageJobsForTurn :one
 SELECT count(*)::int FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2;
@@ -20,7 +20,7 @@ UPDATE chat_image_jobs SET codex_session_id = $2 WHERE id = $1;
 -- name: FinishChatImageJob :exec
 -- failure_kind is set exactly when the job failed ('moderation' or 'error').
 UPDATE chat_image_jobs SET state = sqlc.arg(state), error = sqlc.narg(error), failure_kind = sqlc.narg(failure_kind),
-  outbox_files = sqlc.arg(outbox_files)::text[], finished_at = now()
+  outbox_files = coalesce(sqlc.narg(outbox_files)::text[], '{}'), finished_at = now()
 WHERE id = sqlc.arg(id);
 
 -- name: LinkChatImageJobAttachment :exec

@@ -74,14 +74,19 @@ func TestChatImageJobUsesReferences(t *testing.T) {
 	}
 	e.until("reply", func() bool { return e.chat(chat.ID).State == "idle" })
 
-	var claude map[string]string
+	// The asking turn is told which references exist; its image follow-up,
+	// which can't make images, isn't.
+	var claude []map[string]string
 	for _, l := range readLog(t, logPath) {
 		if l["harness"] == "claude" {
-			claude = l
+			claude = append(claude, l)
 		}
 	}
-	if claude == nil || !strings.Contains(claude["full_prompt"], `references "persona" and "person"`) {
+	if len(claude) != 2 || !strings.Contains(claude[0]["full_prompt"], `references "persona" and "person"`) {
 		t.Fatalf("claude turn wasn't told about the references: %+v", claude)
+	}
+	if strings.Contains(claude[1]["full_prompt"], "reference images are set") {
+		t.Fatalf("image follow-up got the references hint: %s", claude[1]["full_prompt"])
 	}
 	run := e.chatRun(chat.ID)
 	var roles []string
@@ -100,7 +105,7 @@ func TestChatImageJobUsesReferences(t *testing.T) {
 	// No reference bytes reach the run's events.
 	evs, _ := e.q.ListRunEvents(e.ctx, store.ListRunEventsParams{RunID: run.ID, Seq: 0})
 	for _, ev := range evs {
-		if strings.Contains(string(ev.Payload), "likeness") {
+		if p := string(ev.Payload); strings.Contains(p, "persona-likeness") || strings.Contains(p, "person-likeness") {
 			t.Fatalf("reference in event %s", ev.Payload)
 		}
 	}

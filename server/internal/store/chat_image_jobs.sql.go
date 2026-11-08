@@ -129,7 +129,7 @@ func (q *Queries) CountChatImageJobsForTurn(ctx context.Context, arg CountChatIm
 
 const createChatImageJob = `-- name: CreateChatImageJob :one
 INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model, reference_roles)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles
+VALUES ($1, $2, $3, $4, $5, $6, coalesce($7::text[], '{}')) RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles
 `
 
 type CreateChatImageJobParams struct {
@@ -189,7 +189,7 @@ func (q *Queries) FailStaleChatImageJobs(ctx context.Context, runID uuid.UUID) e
 
 const finishChatImageJob = `-- name: FinishChatImageJob :exec
 UPDATE chat_image_jobs SET state = $1, error = $2, failure_kind = $3,
-  outbox_files = $4::text[], finished_at = now()
+  outbox_files = coalesce($4::text[], '{}'), finished_at = now()
 WHERE id = $5
 `
 

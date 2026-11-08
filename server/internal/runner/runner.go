@@ -933,7 +933,10 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.run.Purpose == "chat" {
 		var refPrompt string
 		refFiles, refPrompt = r.chatTurnReferences(ctx, q, c)
-		prompt += refPrompt
+		// The image follow-up can't make images, so it doesn't need the hint.
+		if turn.Trigger != runs.TriggerImageFollowup {
+			prompt += refPrompt
+		}
 	}
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}
