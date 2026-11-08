@@ -2530,6 +2530,40 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chats/{id}/canvases:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listChatCanvases
+      summary: The chat's canvases, oldest first
+      tags: [chats]
+      responses:
+        "200":
+          description: Canvases with their current version numbers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatCanvases" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/canvases/{canvasId}:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: seq, in: query, required: false, description: A version number; the current version when omitted, schema: { type: integer, format: int32, minimum: 1 } }
+    get:
+      operationId: getChatCanvas
+      summary: One canvas at a version, with its version history
+      tags: [chats]
+      responses:
+        "200":
+          description: The canvas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatCanvas" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /chats/{id}/cancel:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -3334,6 +3368,43 @@ components:
           items: { $ref: "#/components/schemas/MockupPin" }
         reviewed_by: { $ref: "#/components/schemas/UserRef" }
         reviewed_at: { type: string, format: date-time }
+    ChatCanvasSummary:
+      type: object
+      required: [id, kind, title, seq, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [text, svg], x-enum-varnames: [CanvasKindText, CanvasKindSvg] }
+        title: { type: string }
+        seq: { type: integer, format: int32, description: The current version number }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ChatCanvases:
+      type: object
+      required: [canvases]
+      properties:
+        canvases:
+          type: array
+          items: { $ref: "#/components/schemas/ChatCanvasSummary" }
+    ChatCanvasVersion:
+      type: object
+      required: [seq, note, author_type, created_at]
+      properties:
+        seq: { type: integer, format: int32 }
+        note: { type: string }
+        author_type: { type: string, enum: [user, agent], x-enum-varnames: [CanvasAuthorUser, CanvasAuthorAgent] }
+        created_at: { type: string, format: date-time }
+    ChatCanvas:
+      allOf:
+        - { $ref: "#/components/schemas/ChatCanvasSummary" }
+        - type: object
+          required: [viewing_seq, body, versions]
+          properties:
+            viewing_seq: { type: integer, format: int32, description: The version body belongs to }
+            body: { type: string }
+            versions:
+              type: array
+              description: Newest first
+              items: { $ref: "#/components/schemas/ChatCanvasVersion" }
     MockupPin:
       type: object
       required: [x, y, text]

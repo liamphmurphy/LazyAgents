@@ -1,0 +1,157 @@
+// Package canvas holds the documents and SVG mockups that sit beside a chat.
+package canvas
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+)
+
+const (
+	KindText = "text"
+	KindSVG  = "svg"
+	// maxBody bounds one version, in bytes.
+	maxBody = 512 * 1024
+	maxOps  = 100
+)
+
+type Service struct{ Pool *pgxpool.Pool }
+
+// Actor is who wrote a version.
+type Actor struct {
+	Type string
+	ID   uuid.UUID
+}
+
+type New struct {
+	Kind, Title, Body, Note string
+}
+
+// Op is one edit. A text canvas uses Find and Replace; an SVG canvas uses Op,
+// VID and whichever of the other fields that op needs.
+type Op struct {
+	Find     string            `json:"find,omitempty" jsonschema:"Text canvas: the exact text to change; it must occur exactly once"`
+	Replace  string            `json:"replace,omitempty" jsonschema:"Text canvas: what to put in its place; omit to delete it"`
+	Op       string            `json:"op,omitempty" jsonschema:"SVG canvas: set_attrs, set_text, replace, insert or remove"`
+	VID      string            `json:"vid,omitempty" jsonschema:"SVG canvas: the data-vid of the element to act on. Omit only to append to the root"`
+	Attrs    map[string]string `json:"attrs,omitempty" jsonschema:"set_attrs: attributes to set; an empty value removes one"`
+	Text     string            `json:"text,omitempty" jsonschema:"set_text: the element's new text"`
+	Markup   string            `json:"markup,omitempty" jsonschema:"replace and insert: exactly one SVG element"`
+	Position string            `json:"position,omitempty" jsonschema:"insert: before or after the vid element, or append inside it"`
+}
+
+func normalize(kind, body string) (string, error) {
+	if strings.TrimSpace(body) == "" {
+		return "", apperr.Invalid("body", "provide some content")
+	}
+	if len(body) > maxBody || !utf8.ValidString(body) {
+		return "", apperr.Invalid("body", "must be valid UTF-8 and at most %d KB", maxBody/1024)
+	}
+	if kind == KindSVG {
+		return Stamp(body)
+	}
+	return body, nil
+}
+
+func applyText(body string, i int, op Op) (string, error) {
+	if op.Find == "" {
+		return "", apperr.Invalid("ops", "op %d: find is required on a text canvas", i)
+	}
+	if n := strings.Count(body, op.Find); n != 1 {
+		return "", apperr.Invalid("ops", "op %d: find matched %d times; it must match exactly once, so include more surrounding text", i, n)
+	}
+	return strings.Replace(body, op.Find, op.Replace, 1), nil
+}
+
+// Apply runs ops in order on a body and returns the normalized result.
+func Apply(kind, body string, ops []Op) (string, error) {
+	if len(ops) == 0 || len(ops) > maxOps {
+		return "", apperr.Invalid("ops", "provide 1 to %d ops", maxOps)
+	}
+	for i, op := range ops {
+		var err error
+		if kind == KindSVG {
+			var all []*element
+			if all, err = scan(body); err == nil {
+				body, err = applySVGOp(body, all, op)
+			}
+			if err != nil {
+				return "", fmt.Errorf("op %d: %w", i, err)
+			}
+			continue
+		}
+		if body, err = applyText(body, i, op); err != nil {
+			return "", err
+		}
+	}
+	return normalize(kind, body)
+}
+
+// Create makes a canvas and its first version.
+func (s *Service) Create(ctx context.Context, chat uuid.UUID, in New, by Actor) (store.ChatCanvas, store.ChatCanvasVersion, error) {
+	var c store.ChatCanvas
+	var v store.ChatCanvasVersion
+	title := strings.Join(strings.Fields(in.Title), " ")
+	if n := utf8.RuneCountInString(title); n < 1 || n > 200 {
+		return c, v, apperr.Invalid("title", "provide 1–200 characters")
+	}
+	if in.Kind != KindText && in.Kind != KindSVG {
+		return c, v, apperr.Invalid("kind", "use text or svg")
+	}
+	body, err := normalize(in.Kind, in.Body)
+	if err != nil {
+		return c, v, err
+	}
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		if c, err = q.CreateChatCanvas(ctx, store.CreateChatCanvasParams{SessionID: chat, Kind: in.Kind, Title: title}); err != nil {
+			return err
+		}
+		v, err = q.CreateChatCanvasVersion(ctx, store.CreateChatCanvasVersionParams{CanvasID: c.ID, Seq: 1, Body: body, Note: in.Note, AuthorType: by.Type, AuthorID: by.ID})
+		return err
+	})
+	return c, v, err
+}
+
+// Patch applies ops on top of version base, which must still be current: an
+// edit made against text someone has since changed is refused, not merged.
+func (s *Service) Patch(ctx context.Context, chat, id uuid.UUID, base int32, ops []Op, note string, by Actor) (store.ChatCanvasVersion, error) {
+	var v store.ChatCanvasVersion
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		c, err := q.LockChatCanvas(ctx, store.LockChatCanvasParams{ID: id, SessionID: chat})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperr.ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		cur, err := q.LatestChatCanvasVersion(ctx, c.ID)
+		if err != nil {
+			return err
+		}
+		if base != cur.Seq {
+			return apperr.Conflict("this canvas is at version %d, not %d; read it again and redo your edit", cur.Seq, base)
+		}
+		body, err := Apply(c.Kind, cur.Body, ops)
+		if err != nil {
+			return err
+		}
+		if body == cur.Body {
+			return apperr.Invalid("ops", "these ops change nothing")
+		}
+		if v, err = q.CreateChatCanvasVersion(ctx, store.CreateChatCanvasVersionParams{CanvasID: c.ID, Seq: cur.Seq + 1, Body: body, Note: note, AuthorType: by.Type, AuthorID: by.ID}); err != nil {
+			return err
+		}
+		return q.TouchChatCanvas(ctx, c.ID)
+	})
+	return v, err
+}

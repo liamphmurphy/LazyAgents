@@ -1975,6 +1975,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/canvases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** The chat's canvases, oldest first */
+        get: operations["listChatCanvases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/canvases/{canvasId}": {
+        parameters: {
+            query?: {
+                /** @description A version number; the current version when omitted */
+                seq?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        /** One canvas at a version, with its version history */
+        get: operations["getChatCanvas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -2681,6 +2723,44 @@ export interface components {
             reviewed_by?: components["schemas"]["UserRef"];
             /** Format: date-time */
             reviewed_at?: string;
+        };
+        ChatCanvasSummary: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "text" | "svg";
+            title: string;
+            /**
+             * Format: int32
+             * @description The current version number
+             */
+            seq: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ChatCanvases: {
+            canvases: components["schemas"]["ChatCanvasSummary"][];
+        };
+        ChatCanvasVersion: {
+            /** Format: int32 */
+            seq: number;
+            note: string;
+            /** @enum {string} */
+            author_type: "user" | "agent";
+            /** Format: date-time */
+            created_at: string;
+        };
+        ChatCanvas: components["schemas"]["ChatCanvasSummary"] & {
+            /**
+             * Format: int32
+             * @description The version body belongs to
+             */
+            viewing_seq: number;
+            body: string;
+            /** @description Newest first */
+            versions: components["schemas"]["ChatCanvasVersion"][];
         };
         MockupPin: {
             /**
@@ -7998,6 +8078,58 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatCanvases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canvases with their current version numbers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCanvases"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatCanvas: {
+        parameters: {
+            query?: {
+                /** @description A version number; the current version when omitted */
+                seq?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The canvas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
