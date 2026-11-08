@@ -53,6 +53,7 @@ export const RUN_STATE: Record<Run["state"], { tone: PillTone; label: string }> 
   starting: { tone: "neutral", label: "Starting" },
   running: { tone: "done", label: "Running" },
   waiting: { tone: "human", label: "Waiting" },
+  waiting_for_quota: { tone: "neutral", label: "Waiting for quota" },
   paused: { tone: "human", label: "Paused" },
   blocked: { tone: "blocked", label: "Blocked" },
   completed: { tone: "review", label: "Completed" },
@@ -173,9 +174,9 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
       )}
       {live && (
         <div className="grid grid-cols-2 gap-2">
-          {run.state === "paused" ? (
+          {run.state === "paused" || run.state === "waiting_for_quota" ? (
             <Button variant="outline" icon="play" className="justify-center" onClick={() => control.mutate({ id: run.id, action: "resume" })}>
-              Resume
+              {run.state === "paused" ? "Resume" : "Try now"}
             </Button>
           ) : (
             <Button variant="outline" icon="pause" className="justify-center" onClick={() => control.mutate({ id: run.id, action: "pause" })}>

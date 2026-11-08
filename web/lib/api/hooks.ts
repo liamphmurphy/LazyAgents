@@ -68,7 +68,7 @@ export function useTickets(f: TicketFilters) {
   });
 }
 
-const LIVE_RUN = ["queued", "starting", "running", "waiting", "paused", "blocked"];
+const LIVE_RUN = ["queued", "starting", "running", "waiting", "waiting_for_quota", "paused", "blocked"];
 
 /** True while the ticket has a run an agent may still be working on. */
 export function hasLiveRun(t?: Ticket) {
@@ -667,7 +667,7 @@ export function useDecideRunApproval(runId: string) {
 
 export type RunListFilters = { state: string; agent?: string; project?: string; purpose?: "ticket" | "planning" | "chat" };
 
-type ListRunsState = "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+type ListRunsState = "live" | "all" | "queued" | "starting" | "running" | "waiting" | "waiting_for_quota" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
 
 function runListOptions(f: RunListFilters, offset: number) {
   return {

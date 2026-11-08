@@ -54,6 +54,11 @@ type Config struct {
 	// ChatImageTimeout bounds one Codex image step for a chat on another
 	// harness. 0 means DefaultChatImageTimeout.
 	ChatImageTimeout time.Duration
+	// MaxHold, MaxHoldAttempts and HoldBackoff bound a run held at a provider
+	// limit (see hold.go). 0 means the Default of each.
+	MaxHold         time.Duration
+	MaxHoldAttempts int
+	HoldBackoff     time.Duration
 }
 
 // DefaultChatIdleTTL is how long an idle chat segment keeps its workspace.
@@ -176,6 +181,7 @@ func (r *Runner) release() {
 // pending turns of running runs. Work runs in goroutines; Wait waits.
 func (r *Runner) Tick(ctx context.Context) {
 	q := r.q()
+	r.resumeHeld(ctx)
 	for r.slot() {
 		run, err := q.ClaimQueuedRun(ctx, &r.Cfg.ID)
 		if err != nil {
@@ -332,7 +338,13 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 	}
 }
 
+// cleanup discards a run's workspace once its work is safe. A failed checkpoint
+// keeps the workspace; the sweep tries again.
 func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
+	if err := r.checkpoint(ctx, runID); err != nil {
+		r.Log.Warn("checkpoint before discarding workspace", "run", runID, "err", err)
+		return
+	}
 	r.removeWorktrees(ctx, runID)
 	if err := r.Backend.RemoveWorkspace(ctx, runID.String()); err != nil {
 		r.Log.Warn("remove workspace", "run", runID, "err", err)
@@ -538,6 +550,16 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		ScrubChatGitEnv(env, chatRepo)
 	}
 	setupStart := time.Now()
+	checkpoint := ""
+	if c.run.Purpose == "ticket" && c.run.TicketID != nil {
+		if checkpoint, err = r.recoverTicketWork(ctx, c); err != nil {
+			if ctx.Err() != nil {
+				return // shutting down: the run goes back to the queue on the next start
+			}
+			fail("Couldn't save an earlier run's unpushed work, so this run did not start: " + err.Error())
+			return
+		}
+	}
 	if err := r.Backend.EnsureWorkspace(ctx, run.ID.String()); err != nil {
 		fail("Couldn't create the workspace: " + err.Error())
 		return
@@ -557,7 +579,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			epic = c.spec.Repository.EpicBranch
 		}
 	}
-	script := SetupScriptForEpic(repo, base, epic, branch, c.agent.Name+" (Vesper)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
+	script := SetupScriptWithCheckpoint(repo, base, epic, checkpoint, branch, c.agent.Name+" (Vesper)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
 	if c.run.Purpose == "chat" {
 		if script, err = chatSetupScript(ctx, r.q(), c); err != nil {
 			fail("Couldn't prepare the chat workspace: " + err.Error())
@@ -596,6 +618,9 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	if err != nil || code != 0 {
 		fail(fmt.Sprintf("Workspace setup failed (exit %d):\n%s", code, tail))
 		return
+	}
+	if checkpoint != "" && strings.Contains(output, checkpointRecovered) {
+		r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "checkpoint_recovered", "branch": checkpoint})
 	}
 	r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "workspace_ready", "branch": branch, "log": tail})
 
@@ -1093,7 +1118,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if ctx.Err() != nil {
 		return // shutting down: the turn re-runs on the next runner start
 	}
-	r.afterTurn(ctx, c.run.ID, res, code, waitErr)
+	r.afterTurn(ctx, c.run.ID, res, limitMsg, code, waitErr)
 }
 
 // watch streams a turn's output into events, enforces pause/cancel and the
@@ -1243,13 +1268,19 @@ func (r *Runner) saveLog(runID uuid.UUID, seq int32, raw []byte) *string {
 //   - waiting or paused: nothing until a person acts (that queues a turn);
 //   - still running: the harness failed, or the agent stopped without
 //     saying what's next. That gets one nudge, then a person.
-func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Result, code int, waitErr error) {
+func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Result, limitMsg string, code int, waitErr error) {
 	c, err := r.load(ctx, runID)
 	if err != nil {
 		r.Log.Error("load run", "run", runID, "err", err)
 		return
 	}
 	q := r.q()
+	if !res.UsageLimited && c.run.HoldStartedAt != nil {
+		if err := q.ClearRunHold(ctx, runID); err != nil {
+			r.Log.Warn("clear run hold", "run", runID, "err", err)
+		}
+		c.run.HoldStartedAt, c.run.HoldAttempts = nil, 0
+	}
 	switch c.run.State {
 	case "completed", "failed", "cancelled":
 		if c.run.ParentRunID == nil && c.run.State == "completed" {
@@ -1277,14 +1308,15 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 			return
 		}
 	}
+	if res.UsageLimited {
+		r.hold(ctx, c, limitMsg)
+		return
+	}
 	if (waitErr != nil || code != 0 || res.IsError) && r.retryFreshSession(ctx, c, res) {
 		return
 	}
-	if waitErr != nil || code != 0 || res.IsError || res.UsageLimited {
+	if waitErr != nil || code != 0 || res.IsError {
 		msg := res.Error
-		if msg == "" && res.UsageLimited {
-			msg = "Provider usage exhausted; no fallback targets remain"
-		}
 		if msg == "" && waitErr != nil {
 			msg = waitErr.Error()
 		}

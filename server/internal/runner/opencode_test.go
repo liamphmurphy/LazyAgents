@@ -437,6 +437,7 @@ func TestOpenCodeFallbackAttribution(t *testing.T) {
 }
 
 // A fallback to OpenCode with no isolation or no key fails the run cleanly.
+// A fallback that can't be used leaves the run with none available, so it holds.
 func TestOpenCodeFallbackTargetRejected(t *testing.T) {
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "quota")
@@ -450,9 +451,9 @@ func TestOpenCodeFallbackTargetRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	// No harness:openai secret exists.
-	r := e.failedWith("PAY-214", "fallback")
-	if !strings.Contains(deref(r.Outcome), "harness:openai") {
-		t.Fatalf("outcome %q", deref(r.Outcome))
+	e.until("held", e.state("PAY-214=waiting_for_quota"))
+	if got := e.run("PAY-214"); got.Harness != run.Harness {
+		t.Fatalf("switched to the unusable fallback: %s", got.Harness)
 	}
 }
 

@@ -89,15 +89,21 @@ func (r *Runner) preferredTarget(ctx context.Context, c runCtx, limited map[stri
 // fallback moves a run whose turn hit a usage limit to the most preferred
 // usable target other than the current one and queues a fresh session in the
 // same workspace. Persisting both together makes the handoff restart safe. It
-// reports false when no target is usable, so the caller fails the run.
+// reports false when no target is usable, so the caller holds the run.
 func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) (bool, error) {
 	limited, err := r.activeLimits(ctx, c)
 	if err != nil {
 		return false, err
 	}
 	next, ok, unusable, err := r.preferredTarget(ctx, c, limited, true)
-	if err != nil || !ok {
-		return false, cmp.Or(err, unusable)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		if unusable != nil {
+			r.Log.Warn("no usable fallback", "run", c.run.ID, "err", unusable)
+		}
+		return false, nil
 	}
 	previousHarness, previousModel := c.spec.Harness, c.spec.Model
 	prompt, err := r.handoffPrompt(ctx, c, previousHarness, previousModel, res.Final, "exhausted its provider usage")

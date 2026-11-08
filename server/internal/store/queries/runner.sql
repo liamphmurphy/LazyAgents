@@ -144,6 +144,7 @@ SELECT id FROM runs r
 WHERE r.workspace_volume IS NOT NULL
   AND (r.state = 'completed' OR (r.purpose = 'chat' AND r.state IN ('failed', 'cancelled')))
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
+ORDER BY r.checkpoint_error IS NOT NULL -- a stuck checkpoint must not starve the rest
 LIMIT 20;
 
 -- name: RunnerEnvironments :many
@@ -173,3 +174,46 @@ WHERE r.purpose = 'chat' AND r.state = 'waiting' AND r.updated_at < sqlc.arg(cut
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status IN ('pending', 'running'))
 ORDER BY r.updated_at
 LIMIT 20;
+
+-- name: HoldRun :one
+-- Holds a run at a provider limit. The first hold of an episode starts the
+-- max-hold clock; later ones keep it.
+UPDATE runs SET state = 'waiting_for_quota', wait_reason = NULL, hold_until = sqlc.arg(hold_until),
+  hold_reset_known = sqlc.arg(hold_reset_known), hold_attempts = hold_attempts + 1,
+  hold_started_at = coalesce(hold_started_at, now())
+WHERE id = sqlc.arg(id) RETURNING *;
+
+-- name: DueHeldRuns :many
+-- Held runs to resume now, or to fail because they have been held too long.
+SELECT id FROM runs
+WHERE state = 'waiting_for_quota' AND (hold_until <= now() OR hold_started_at <= sqlc.arg(expired_before)::timestamptz)
+ORDER BY hold_until LIMIT 50;
+
+-- name: ClearRunHold :exec
+-- A turn got past the limit: the next hold is a new episode.
+UPDATE runs SET hold_until = NULL, hold_started_at = NULL, hold_attempts = 0, hold_reset_known = false
+WHERE id = $1 AND hold_started_at IS NOT NULL;
+
+-- name: RequestHoldResume :exec
+-- A person asked to try now; the runner resumes it on its next tick.
+UPDATE runs SET hold_until = now() WHERE id = $1;
+
+-- name: SetRunCheckpoint :exec
+UPDATE runs SET checkpoint_branch = sqlc.narg(branch), checkpoint_at = now(), checkpoint_error = NULL WHERE id = sqlc.arg(id);
+
+-- name: SetRunCheckpointError :exec
+UPDATE runs SET checkpoint_error = sqlc.arg(error) WHERE id = sqlc.arg(id);
+
+-- name: RunsToCheckpoint :many
+-- Earlier ended runs of a ticket whose workspace has not been checkpointed; a new run on the ticket would otherwise start without them.
+SELECT id FROM runs
+WHERE ticket_id = sqlc.arg(ticket_id) AND id <> sqlc.arg(id) AND parent_run_id IS NULL AND purpose = 'ticket'
+  AND state IN ('completed', 'failed', 'cancelled') AND workspace_volume IS NOT NULL AND checkpoint_at IS NULL
+ORDER BY started_at;
+
+-- name: LatestTicketCheckpoint :one
+-- The checkpoint a new run on the ticket recovers from: only the latest earlier
+-- run's, since a later run that left no checkpoint has superseded older ones.
+SELECT coalesce(checkpoint_branch, '')::text FROM runs
+WHERE ticket_id = sqlc.arg(ticket_id) AND id <> sqlc.arg(id) AND parent_run_id IS NULL AND purpose = 'ticket'
+ORDER BY started_at DESC LIMIT 1;

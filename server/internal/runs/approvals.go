@@ -418,6 +418,16 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			}
 			return RecomputeAgentStatus(ctx, q, run.AgentID)
 		case "resume":
+			if run.State == "waiting_for_quota" {
+				if err := q.RequestHoldResume(ctx, run.ID); err != nil {
+					return err
+				}
+				if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "quota_resume_requested", "user_id": userID}); err != nil {
+					return err
+				}
+				out, err = q.GetRun(ctx, store.GetRunParams{ID: run.ID, WorkspaceID: ws})
+				return err
+			}
 			if run.State != "paused" {
 				return apperr.Conflict("only a paused run can be resumed")
 			}

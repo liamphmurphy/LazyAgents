@@ -57,6 +57,10 @@ type Runner struct {
 	// ChatIdleTTL is how long an idle Personal Assistant chat keeps its run
 	// and workspace (RUNNER_CHAT_IDLE_TTL_S).
 	ChatIdleTTL time.Duration
+	// MaxHold and MaxHoldAttempts bound how long a run waits at a provider
+	// limit (RUNNER_MAX_HOLD_S, RUNNER_MAX_HOLD_ATTEMPTS).
+	MaxHold         time.Duration
+	MaxHoldAttempts int
 }
 
 type S3 struct {
@@ -150,6 +154,20 @@ func Load() (Config, error) {
 		return c, fmt.Errorf("config: RUNNER_CHAT_IDLE_TTL_S must be at least 60")
 	}
 	r.ChatIdleTTL = time.Duration(ttl) * time.Second
+	hold, err := intEnv("RUNNER_MAX_HOLD_S", 24*60*60)
+	if err != nil {
+		return c, err
+	}
+	if hold < 60 {
+		return c, fmt.Errorf("config: RUNNER_MAX_HOLD_S must be at least 60")
+	}
+	r.MaxHold = time.Duration(hold) * time.Second
+	if r.MaxHoldAttempts, err = intEnv("RUNNER_MAX_HOLD_ATTEMPTS", 12); err != nil {
+		return c, err
+	}
+	if r.MaxHoldAttempts < 1 {
+		return c, fmt.Errorf("config: RUNNER_MAX_HOLD_ATTEMPTS must be at least 1")
+	}
 	c.Runner = r
 	if c.PRSyncInterval, err = intEnv("PR_SYNC_INTERVAL_S", 60); err != nil {
 		return c, err

@@ -1239,7 +1239,7 @@ paths:
         - name: state
           in: query
           description: "live (queued to waiting, the default), all, or one run state"
-          schema: { type: string, enum: [live, all, queued, starting, running, waiting, paused, blocked, completed, failed, cancelled], default: live }
+          schema: { type: string, enum: [live, all, queued, starting, running, waiting, waiting_for_quota, paused, blocked, completed, failed, cancelled], default: live }
         - { name: agent, in: query, description: Agent handle, schema: { type: string } }
         - { name: project, in: query, description: Project key, schema: { type: string } }
         - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat] } }
@@ -1293,7 +1293,7 @@ paths:
         schema: { type: string, enum: [pause, resume, cancel, retry] }
     post:
       operationId: controlRun
-      summary: Pause, resume or cancel a run, or retry a failed one (returns the new run)
+      summary: Pause, resume or cancel a run, or retry a failed one (returns the new run). Resume on a waiting_for_quota run tries again immediately.
       tags: [runs]
       responses:
         "200":
@@ -3618,7 +3618,12 @@ components:
         child_count: { type: integer, description: "Direct delegated runs" }
         agent: { $ref: "#/components/schemas/AgentRef" }
         mode: { type: string, enum: [managed, unmanaged] }
-        state: { type: string, enum: [queued, starting, running, waiting, paused, blocked, completed, failed, cancelled] }
+        state: { type: string, enum: [queued, starting, running, waiting, waiting_for_quota, paused, blocked, completed, failed, cancelled] }
+        hold_until: { type: string, format: date-time, description: "waiting_for_quota: when the run next tries to resume" }
+        hold_reset_known: { type: boolean, description: "waiting_for_quota: hold_until is the provider's stated reset time, not a backoff" }
+        hold_attempts: { type: integer, description: "Consecutive times this run has been held at a provider limit" }
+        checkpoint_branch: { type: string, description: "Branch holding the run's unpushed work, pushed before its workspace was given up" }
+        checkpoint_error: { type: string, description: "Why the last checkpoint push failed; the workspace is kept until one succeeds" }
         session_id: { type: string, description: The harness session turns resume }
         dispatched_by: { $ref: "#/components/schemas/UserRef" }
         wait_reason: { type: string, enum: [approval, human_reply, pause, delegation, mockup_review], description: "delegation: waiting for a sub agent the run delegated to; mockup_review: waiting for a person to review a UI mockup" }

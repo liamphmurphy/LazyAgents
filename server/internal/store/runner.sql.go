@@ -70,7 +70,7 @@ WHERE id = (
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
-RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms
+RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error
 `
 
 // The runner (docs/dev/plan.md §6.4–6.6): queue, turns, heartbeats, PR sync.
@@ -114,8 +114,26 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, runnerID *string) (Run, er
 		&i.SetupMs,
 		&i.HarnessMs,
 		&i.ChecksMs,
+		&i.HoldUntil,
+		&i.HoldStartedAt,
+		&i.HoldAttempts,
+		&i.HoldResetKnown,
+		&i.CheckpointBranch,
+		&i.CheckpointAt,
+		&i.CheckpointError,
 	)
 	return i, err
+}
+
+const clearRunHold = `-- name: ClearRunHold :exec
+UPDATE runs SET hold_until = NULL, hold_started_at = NULL, hold_attempts = 0, hold_reset_known = false
+WHERE id = $1 AND hold_started_at IS NOT NULL
+`
+
+// A turn got past the limit: the next hold is a new episode.
+func (q *Queries) ClearRunHold(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearRunHold, id)
+	return err
 }
 
 const deleteRunner = `-- name: DeleteRunner :exec
@@ -137,11 +155,39 @@ func (q *Queries) DropPendingTurns(ctx context.Context, runID uuid.UUID) error {
 	return err
 }
 
+const dueHeldRuns = `-- name: DueHeldRuns :many
+SELECT id FROM runs
+WHERE state = 'waiting_for_quota' AND (hold_until <= now() OR hold_started_at <= $1::timestamptz)
+ORDER BY hold_until LIMIT 50
+`
+
+// Held runs to resume now, or to fail because they have been held too long.
+func (q *Queries) DueHeldRuns(ctx context.Context, expiredBefore time.Time) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, dueHeldRuns, expiredBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const endedRunsWithWorkspace = `-- name: EndedRunsWithWorkspace :many
 SELECT id FROM runs r
 WHERE r.workspace_volume IS NOT NULL
   AND (r.state = 'completed' OR (r.purpose = 'chat' AND r.state IN ('failed', 'cancelled')))
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
+ORDER BY r.checkpoint_error IS NOT NULL -- a stuck checkpoint must not starve the rest
 LIMIT 20
 `
 
@@ -252,6 +298,69 @@ func (q *Queries) Heartbeat(ctx context.Context, arg HeartbeatParams) error {
 	return err
 }
 
+const holdRun = `-- name: HoldRun :one
+UPDATE runs SET state = 'waiting_for_quota', wait_reason = NULL, hold_until = $1,
+  hold_reset_known = $2, hold_attempts = hold_attempts + 1,
+  hold_started_at = coalesce(hold_started_at, now())
+WHERE id = $3 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error
+`
+
+type HoldRunParams struct {
+	HoldUntil      *time.Time
+	HoldResetKnown bool
+	ID             uuid.UUID
+}
+
+// Holds a run at a provider limit. The first hold of an episode starts the
+// max-hold clock; later ones keep it.
+func (q *Queries) HoldRun(ctx context.Context, arg HoldRunParams) (Run, error) {
+	row := q.db.QueryRow(ctx, holdRun, arg.HoldUntil, arg.HoldResetKnown, arg.ID)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TicketID,
+		&i.AgentID,
+		&i.Mode,
+		&i.State,
+		&i.WaitReason,
+		&i.ResolvedSpec,
+		&i.DefinitionVersionID,
+		&i.Harness,
+		&i.Model,
+		&i.HarnessSessionID,
+		&i.Outcome,
+		&i.ToolCalls,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.CostUsdMicros,
+		&i.CostSource,
+		&i.StartedAt,
+		&i.EndedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DispatchedByUserID,
+		&i.RunnerID,
+		&i.WorkspaceVolume,
+		&i.IdleTurns,
+		&i.ParentRunID,
+		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
+		&i.SetupMs,
+		&i.HarnessMs,
+		&i.ChecksMs,
+		&i.HoldUntil,
+		&i.HoldStartedAt,
+		&i.HoldAttempts,
+		&i.HoldResetKnown,
+		&i.CheckpointBranch,
+		&i.CheckpointAt,
+		&i.CheckpointError,
+	)
+	return i, err
+}
+
 const idleChatRuns = `-- name: IdleChatRuns :many
 SELECT r.id, r.workspace_id FROM runs r
 WHERE r.purpose = 'chat' AND r.state = 'waiting' AND r.updated_at < $1::timestamptz
@@ -285,6 +394,26 @@ func (q *Queries) IdleChatRuns(ctx context.Context, cutoff time.Time) ([]IdleCha
 		return nil, err
 	}
 	return items, nil
+}
+
+const latestTicketCheckpoint = `-- name: LatestTicketCheckpoint :one
+SELECT coalesce(checkpoint_branch, '')::text FROM runs
+WHERE ticket_id = $1 AND id <> $2 AND parent_run_id IS NULL AND purpose = 'ticket'
+ORDER BY started_at DESC LIMIT 1
+`
+
+type LatestTicketCheckpointParams struct {
+	TicketID *uuid.UUID
+	ID       uuid.UUID
+}
+
+// The checkpoint a new run on the ticket recovers from: only the latest earlier
+// run's, since a later run that left no checkpoint has superseded older ones.
+func (q *Queries) LatestTicketCheckpoint(ctx context.Context, arg LatestTicketCheckpointParams) (string, error) {
+	row := q.db.QueryRow(ctx, latestTicketCheckpoint, arg.TicketID, arg.ID)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const liveRunners = `-- name: LiveRunners :many
@@ -332,7 +461,7 @@ func (q *Queries) LiveWorkRunsCount(ctx context.Context) (int32, error) {
 }
 
 const lockRunNoWait = `-- name: LockRunNoWait :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms FROM runs WHERE id = $1
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error FROM runs WHERE id = $1
 `
 
 // Plain read used by the runner (it locks inside its own transactions).
@@ -373,6 +502,13 @@ func (q *Queries) LockRunNoWait(ctx context.Context, id uuid.UUID) (Run, error) 
 		&i.SetupMs,
 		&i.HarnessMs,
 		&i.ChecksMs,
+		&i.HoldUntil,
+		&i.HoldStartedAt,
+		&i.HoldAttempts,
+		&i.HoldResetKnown,
+		&i.CheckpointBranch,
+		&i.CheckpointAt,
+		&i.CheckpointError,
 	)
 	return i, err
 }
@@ -386,6 +522,16 @@ func (q *Queries) QueuedRunsCount(ctx context.Context) (int32, error) {
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const requestHoldResume = `-- name: RequestHoldResume :exec
+UPDATE runs SET hold_until = now() WHERE id = $1
+`
+
+// A person asked to try now; the runner resumes it on its next tick.
+func (q *Queries) RequestHoldResume(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, requestHoldResume, id)
+	return err
 }
 
 const requeueInterrupted = `-- name: RequeueInterrupted :exec
@@ -495,6 +641,39 @@ func (q *Queries) RunnerEnvironments(ctx context.Context, arg RunnerEnvironments
 	return items, nil
 }
 
+const runsToCheckpoint = `-- name: RunsToCheckpoint :many
+SELECT id FROM runs
+WHERE ticket_id = $1 AND id <> $2 AND parent_run_id IS NULL AND purpose = 'ticket'
+  AND state IN ('completed', 'failed', 'cancelled') AND workspace_volume IS NOT NULL AND checkpoint_at IS NULL
+ORDER BY started_at
+`
+
+type RunsToCheckpointParams struct {
+	TicketID *uuid.UUID
+	ID       uuid.UUID
+}
+
+// Earlier ended runs of a ticket whose workspace has not been checkpointed; a new run on the ticket would otherwise start without them.
+func (q *Queries) RunsToCheckpoint(ctx context.Context, arg RunsToCheckpointParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, runsToCheckpoint, arg.TicketID, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const secretsForRun = `-- name: SecretsForRun :many
 SELECT DISTINCT ON (name) id, name, grants_scope, project_id FROM secrets
 WHERE workspace_id = $1 AND (project_id IS NULL OR project_id = $2)
@@ -551,6 +730,34 @@ type SetIdleTurnsParams struct {
 
 func (q *Queries) SetIdleTurns(ctx context.Context, arg SetIdleTurnsParams) error {
 	_, err := q.db.Exec(ctx, setIdleTurns, arg.ID, arg.IdleTurns)
+	return err
+}
+
+const setRunCheckpoint = `-- name: SetRunCheckpoint :exec
+UPDATE runs SET checkpoint_branch = $1, checkpoint_at = now(), checkpoint_error = NULL WHERE id = $2
+`
+
+type SetRunCheckpointParams struct {
+	Branch *string
+	ID     uuid.UUID
+}
+
+func (q *Queries) SetRunCheckpoint(ctx context.Context, arg SetRunCheckpointParams) error {
+	_, err := q.db.Exec(ctx, setRunCheckpoint, arg.Branch, arg.ID)
+	return err
+}
+
+const setRunCheckpointError = `-- name: SetRunCheckpointError :exec
+UPDATE runs SET checkpoint_error = $1 WHERE id = $2
+`
+
+type SetRunCheckpointErrorParams struct {
+	Error *string
+	ID    uuid.UUID
+}
+
+func (q *Queries) SetRunCheckpointError(ctx context.Context, arg SetRunCheckpointErrorParams) error {
+	_, err := q.db.Exec(ctx, setRunCheckpointError, arg.Error, arg.ID)
 	return err
 }
 

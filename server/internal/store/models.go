@@ -503,6 +503,13 @@ type Run struct {
 	SetupMs             *int64
 	HarnessMs           *int64
 	ChecksMs            *int64
+	HoldUntil           *time.Time
+	HoldStartedAt       *time.Time
+	HoldAttempts        int32
+	HoldResetKnown      bool
+	CheckpointBranch    *string
+	CheckpointAt        *time.Time
+	CheckpointError     *string
 }
 
 type RunEvent struct {

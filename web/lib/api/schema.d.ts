@@ -987,7 +987,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Pause, resume or cancel a run, or retry a failed one (returns the new run) */
+        /** Pause, resume or cancel a run, or retry a failed one (returns the new run). Resume on a waiting_for_quota run tries again immediately. */
         post: operations["controlRun"];
         delete?: never;
         options?: never;
@@ -1747,8 +1747,17 @@ export interface paths {
          *     later as an assistant message; watch for `chat.updated`.
          *     `harness`/`model`/`effort` switch the chat from this message on (same harness:
          *     same session, new model or effort; other harness: new session with a
-         *     transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
-         *     is running or the chat is archived; 422 empty body, unknown
+         *     transcript handoff, see the ADR).
+         *     A message sent while a turn is running interrupts it: the turn is
+         *     stopped and the next one answers this message together with the
+         *     previous one and what the stopped reply had written and which tools it
+         *     called, in the same session. If the stopped turn hadn't started, the
+         *     new turn replaces it at once. Otherwise the message is stored without a
+         *     turn (`run_turn_id` empty), the chat stays `running`, and its turn
+         *     starts once the stopped process has exited; Stop
+         *     (`/chats/{id}/cancel`) in that window leaves it unanswered.
+         *     404 unknown chat; 409 when the chat is archived, or while an earlier
+         *     interruption is still waiting for its turn; 422 empty body, unknown
          *     harness/model, an effort the model doesn't offer, a context ref outside the chat's project, or an
          *     attachment id that isn't the caller's unattached upload.
          */
@@ -2969,7 +2978,20 @@ export interface components {
             /** @enum {string} */
             mode: "managed" | "unmanaged";
             /** @enum {string} */
-            state: "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+            state: "queued" | "starting" | "running" | "waiting" | "waiting_for_quota" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+            /**
+             * Format: date-time
+             * @description waiting_for_quota: when the run next tries to resume
+             */
+            hold_until?: string;
+            /** @description waiting_for_quota: hold_until is the provider's stated reset time, not a backoff */
+            hold_reset_known?: boolean;
+            /** @description Consecutive times this run has been held at a provider limit */
+            hold_attempts?: number;
+            /** @description Branch holding the run's unpushed work, pushed before its workspace was given up */
+            checkpoint_branch?: string;
+            /** @description Why the last checkpoint push failed; the workspace is kept until one succeeds */
+            checkpoint_error?: string;
             /** @description The harness session turns resume */
             session_id?: string;
             dispatched_by?: components["schemas"]["UserRef"];
@@ -5802,7 +5824,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description live (queued to waiting, the default), all, or one run state */
-                state?: "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+                state?: "live" | "all" | "queued" | "starting" | "running" | "waiting" | "waiting_for_quota" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
                 /** @description Agent handle */
                 agent?: string;
                 /** @description Project key */

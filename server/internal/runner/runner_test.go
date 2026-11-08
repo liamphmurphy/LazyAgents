@@ -775,7 +775,7 @@ func TestFallbackStopsOnExhaustionOrUnrelatedErrors(t *testing.T) {
 			if _, err := e.pool.Exec(e.ctx, "UPDATE runs SET resolved_spec=$2 WHERE id=$1", run.ID, raw); err != nil {
 				t.Fatal(err)
 			}
-			e.until("failed without looping", e.state("PAY-214=failed"))
+			e.until("stopped without looping", func() bool { st := e.run("PAY-214").State; return st == "failed" || st == "waiting_for_quota" })
 			turns, err := e.q.ListTurns(e.ctx, run.ID)
 			if err != nil || len(turns) != tc.turns {
 				t.Fatalf("turns=%d want=%d err=%v", len(turns), tc.turns, err)

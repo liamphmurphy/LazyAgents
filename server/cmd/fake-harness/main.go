@@ -629,6 +629,10 @@ func main() {
 		result(false, "Done.")
 		return
 	}
+	if resume != "" && os.Getenv("FAKE_HARNESS_MODE") == "quota" && !codex && !opencode {
+		result(true, "You have hit your usage limit")
+		os.Exit(1)
+	}
 	if resume != "" {
 		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" {
 			if _, err := os.Stat(".lazyagents/round2"); err != nil && os.Getenv("FAKE_HARNESS_ROUND2") != "" {
@@ -679,6 +683,10 @@ func main() {
 			_ = os.WriteFile("before-fallback.txt", []byte("work preserved"), 0o644)
 			if d, err := time.ParseDuration(os.Getenv("FAKE_HARNESS_QUOTA_SLEEP")); err == nil {
 				time.Sleep(d)
+			}
+			if msg := os.Getenv("FAKE_HARNESS_QUOTA_MESSAGE"); msg != "" {
+				result(true, msg)
+				os.Exit(1)
 			}
 			result(true, "You have hit your usage limit")
 			os.Exit(1)

@@ -96,6 +96,16 @@ func SetupScriptForBranch(repoURL, baseBranch, branch, authorName, authorEmail s
 // run's branch is cut from the epic's shared branch once it exists on origin,
 // and from the base branch before the first ticket has pushed it.
 func SetupScriptForEpic(repoURL, baseBranch, epicBranch, branch, authorName, authorEmail string, setup []string) string {
+	return SetupScriptWithCheckpoint(repoURL, baseBranch, epicBranch, "", branch, authorName, authorEmail, setup)
+}
+
+// checkpointRecovered is what setup prints once it has restored a checkpoint.
+const checkpointRecovered = "→ recovered checkpoint"
+
+// SetupScriptWithCheckpoint is SetupScriptForEpic for a ticket whose earlier
+// run left a checkpoint branch: the run starts from it when it is still on
+// origin, and as usual when it isn't.
+func SetupScriptWithCheckpoint(repoURL, baseBranch, epicBranch, checkpoint, branch, authorName, authorEmail string, setup []string) string {
 	var b strings.Builder
 	b.WriteString("set -eu\n")
 	// Everything is repo-local: on the local backend this is the user's own
@@ -119,6 +129,9 @@ func SetupScriptForEpic(repoURL, baseBranch, epicBranch, branch, authorName, aut
 		b.WriteString("  if git rev-parse -q --verify HEAD >/dev/null 2>&1; then git reset -q --hard; fi\n")
 		if epicBranch != "" {
 			b.WriteString("  if git fetch --quiet origin " + shellQuote("+refs/heads/"+epicBranch+":refs/remotes/origin/"+epicBranch) + " 2>/dev/null; then echo '→ stacking on epic branch " + strings.ReplaceAll(epicBranch, "'", "") + "'; git checkout -q --detach " + shellQuote("origin/"+epicBranch) + "; else echo '→ epic branch " + strings.ReplaceAll(epicBranch, "'", "") + " not on origin yet: starting from the base branch'; fi\n")
+		}
+		if checkpoint != "" {
+			b.WriteString("  if git fetch --quiet origin " + shellQuote("+refs/heads/"+checkpoint+":refs/remotes/origin/"+checkpoint) + " 2>/dev/null; then git checkout -q --detach " + shellQuote("origin/"+checkpoint) + "; echo '" + checkpointRecovered + " " + strings.ReplaceAll(checkpoint, "'", "") + "'; else echo '→ checkpoint " + strings.ReplaceAll(checkpoint, "'", "") + " is no longer on origin: starting without it'; fi\n")
 		}
 	} else {
 		b.WriteString("  echo '→ no repository configured for this project: starting an empty one'\n")
