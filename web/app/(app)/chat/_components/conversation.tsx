@@ -32,7 +32,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
-import { RunActivity, TurnToolCalls } from "./activity";
+import { ChatStatus, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { AttachButton, AttachmentChips, DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { WebSearchPill } from "./web-search";
@@ -433,7 +433,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               )}
               {running && (
                 <li className="flex flex-col gap-2" data-testid="thinking">
-                  <span role="status" className="text-[13px] text-fg-secondary">{stopping ? "Stopping…" : "Thinking…"}</span>
+                  <ChatStatus runId={c.current_run_id} since={lastUser?.created_at} persona={persona} stopping={stopping} />
                 </li>
               )}
               <li ref={end} aria-hidden />

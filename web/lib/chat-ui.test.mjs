@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatTitle, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
+import { activityOf, bareTool, chatStatus, chatStatusOf, chatTitle, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -70,4 +70,32 @@ test("an empty chat title reads as New conversation", () => {
   assert.equal(chatTitle({ title: "" }), "New conversation");
   assert.equal(chatTitle({ title: "   " }), "New conversation");
   assert.equal(chatTitle({ title: "Roadmap" }), "Roadmap");
+});
+
+test("the chat status is high level and never leaks the call's details", () => {
+  const cases = [
+    [{ tool: "mcp__lazyagents__read_page", input: { ref: "Architecture/ADR - Secret" } }, "looking through the wiki"],
+    [{ tool: "search_knowledge", input: { q: "payroll" } }, "looking through the wiki"],
+    [{ tool: "create_ticket", input: { title: "x" } }, "drafting a ticket"],
+    [{ tool: "save_memory", input: { body: "likes tea" } }, "making a note"],
+    [{ tool: "WebFetch", input: { url: "https://example.com/private" } }, "searching the web"],
+    [{ tool: "image_gen", input: {} }, "creating an image"],
+    [{ tool: "Grep", input: { pattern: "TODO" } }, "reading the code"],
+    [{ tool: "apply_patch", input: { files: ["modify src/a.ts"] } }, "writing code"],
+    [{ tool: "Bash", input: { command: "go test ./internal/..." } }, "running tests"],
+    [{ tool: "shell", input: { command: "bash -lc 'npm run test:unit'" } }, "running tests"],
+    [{ tool: "shell", input: { command: "git commit -m 'secret plan'" } }, "committing changes"],
+    [{ tool: "Bash", input: { command: "git push -u origin vesper/ava-1234abcd" } }, "pushing its branch"],
+    [{ tool: "Bash", input: { command: "gh pr create --fill" } }, "preparing a pull request"],
+    [{ tool: "Bash", input: { command: "npm ci" } }, "installing dependencies"],
+    [{ tool: "Bash", input: { command: "go vet ./..." } }, "checking the build"],
+    [{ tool: "Bash", input: { command: "git status" } }, "looking over the repository"],
+    [{ tool: "Bash", input: { command: "rg -n token src" } }, "reading the code"],
+    [{ tool: "exec_command", input: { cmd: "cp /h/.codex/generated_images/t/a.png .lazyagents/outbox/a.png" } }, "saving the image"],
+    [{ tool: "Bash", input: { command: "python3 scripts/migrate.py" } }, "working in the terminal"],
+    [{ tool: "some.other_tool", input: { secret: "x" } }, "working on it"],
+  ];
+  for (const [call, want] of cases) assert.equal(chatStatusOf(call), want, call.tool);
+  assert.equal(chatStatus([]), "thinking");
+  assert.equal(chatStatus([{ tool: "Read", input: {} }, { tool: "Bash", input: { command: "go test ./..." } }]), "running tests");
 });
