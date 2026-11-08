@@ -3,11 +3,13 @@ package httpapi
 import (
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -126,4 +128,67 @@ func TestLibraryDeleteKeepsChatImage(t *testing.T) {
 	if keys := s3.keys(avatarBucket + "/" + key); len(keys) != 1 {
 		t.Fatalf("chat image object removed: %v", keys)
 	}
+}
+
+// A diagram is saved only on request, once per content, and only from the
+// caller's own assistant replies.
+func TestLibrarySavesDiagrams(t *testing.T) {
+	e, s3 := newAvatarEnv(t)
+	chat := e.newChat(nil)
+	chatID := uuid.MustParse(chat["id"].(string))
+	ctx := t.Context()
+	reply, err := e.q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chatID, Role: "assistant", BodyMd: "here", ContextRefs: []byte("[]"), Citations: []byte("[]")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 2"><rect width="4" height="2"/></svg>`
+	body := map[string]any{"message_id": reply.ID.String(), "svg": svg}
+
+	if items := e.want("GET", "/library?kind=diagram", nil, 200)["items"].([]any); len(items) != 0 {
+		t.Fatalf("saved before asked: %v", items)
+	}
+	first := e.want("POST", "/library/diagrams", body, http.StatusCreated)
+	again := e.want("POST", "/library/diagrams", body, http.StatusCreated)
+	if first["id"] != again["id"] || first["kind"] != "diagram" || first["content_type"] != "image/svg+xml" {
+		t.Fatalf("saves %v %v", first, again)
+	}
+	items := e.want("GET", "/library?kind=diagram", nil, 200)["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["chat_id"] != chatID.String() {
+		t.Fatalf("items %v", items)
+	}
+	if images := e.want("GET", "/library?kind=image", nil, 200)["items"].([]any); len(images) != 0 {
+		t.Fatalf("diagram listed as an image: %v", images)
+	}
+
+	// An SVG never renders as a page on the app's origin.
+	id := first["id"].(string)
+	res, err := http.Get(e.srv.URL + "/api/v1/library/" + id + "/content")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if string(got) != svg || res.Header.Get("Content-Security-Policy") != "sandbox" || !strings.HasPrefix(res.Header.Get("Content-Disposition"), "attachment") {
+		t.Fatalf("content %q %v", got, res.Header)
+	}
+
+	// A diagram can't stand in for a likeness.
+	e.want("PUT", "/library/"+id+"/reference", map[string]any{"role": "self"}, http.StatusUnprocessableEntity)
+
+	for _, bad := range []string{"", "<div></div>", "not xml", `<svg viewBox="0 0 1 1"></svg>`, strings.Repeat(" ", 8) + "<svg" + strings.Repeat("x", runs.MaxLibraryDiagramBytes)} {
+		e.want("POST", "/library/diagrams", map[string]any{"message_id": reply.ID.String(), "svg": bad}, http.StatusUnprocessableEntity)
+	}
+	mine, err := e.q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chatID, Role: "user", BodyMd: "hi", ContextRefs: []byte("[]"), Citations: []byte("[]")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.want("POST", "/library/diagrams", map[string]any{"message_id": mine.ID.String(), "svg": svg}, http.StatusUnprocessableEntity)
+	e.want("POST", "/library/diagrams", map[string]any{"message_id": uuid.NewString(), "svg": svg}, http.StatusNotFound)
+
+	// Removing it frees the object; it can be saved again.
+	e.want("DELETE", "/library/"+id, nil, http.StatusNoContent)
+	if keys := s3.keys(avatarBucket + "/library-diagrams/"); len(keys) != 0 {
+		t.Fatalf("object kept %v", keys)
+	}
+	e.want("POST", "/library/diagrams", body, http.StatusCreated)
 }

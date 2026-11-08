@@ -2094,9 +2094,9 @@ paths:
       summary: The signed-in person's Library, newest first
       description: |
         The Library keeps what a person wants from their assistant chats for
-        good; for now, every image a persona generates is added
-        automatically. It is strictly per person, and items outlive the chat
-        they came from.
+        good: every image a persona generates is added automatically, and
+        SVG diagrams when the person saves them. It is strictly per person,
+        and items outlive the chat they came from.
       tags: [library]
       parameters:
         - { name: kind, in: query, description: Only items of this kind, schema: { $ref: "#/components/schemas/LibraryItemKind" } }
@@ -2135,6 +2135,32 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /library/diagrams:
+    post:
+      operationId: saveLibraryDiagram
+      summary: Save an SVG diagram from a chat reply to your Library
+      description: |
+        Keeps one SVG document from an assistant reply in a chat of the
+        caller's. Saving the same diagram again returns the existing item. It
+        counts against the same storage cap as images. 404 unless the message
+        is in one of your chats; 422 unless it is an assistant reply and the
+        source is an SVG document of at most 1 MiB, or for a full Library.
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryDiagramSave" }
+      responses:
+        "201":
+          description: Saved, or already in the Library
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /library/{itemId}:
     parameters:
       - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -2160,7 +2186,8 @@ paths:
         self). Generated images of that persona or person start from it. Each
         persona and the caller have at most one: this replaces the previous
         one, and replaces any reference the image already was. 404 unless the
-        image is yours; 422 unless persona_id is one of your personas.
+        image is yours; 422 for a diagram, or unless persona_id is one of
+        your personas.
       tags: [library]
       requestBody:
         required: true
@@ -4536,14 +4563,14 @@ components:
         created_at: { type: string, format: date-time }
     LibraryItemKind:
       type: string
-      enum: [image]
+      enum: [image, diagram]
     LibraryItem:
       type: object
       required: [id, kind, title, filename, content_type, size_bytes, created_at]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/LibraryItemKind" }
-        title: { type: string, description: "For a generated image, the title of the chat it came from" }
+        title: { type: string, description: "For a generated image or saved diagram, the title of the chat it came from" }
         filename: { type: string }
         content_type: { type: string }
         size_bytes: { type: integer, format: int64 }
@@ -4567,6 +4594,12 @@ components:
       properties:
         role: { $ref: "#/components/schemas/LibraryReferenceRole" }
         persona_id: { type: string, format: uuid, description: Required for role persona; one of your personas }
+    LibraryDiagramSave:
+      type: object
+      required: [message_id, svg]
+      properties:
+        message_id: { type: string, format: uuid, description: The assistant reply the diagram is in }
+        svg: { type: string, description: The SVG document }
     LibraryList:
       type: object
       required: [items, has_more]

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Markdown } from "@/components/domain/markdown";
+import { SvgFenceMessage } from "@/components/domain/svg-fence";
 
 const TICKET_KEY = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
 const FENCE = /^ {0,3}(```|~~~)/;
@@ -29,7 +30,12 @@ export function linkTicketKeys(md: string): string {
     .join("\n");
 }
 
-export function ChatMarkdown({ children }: { children: string }) {
+/** replyId: the assistant reply this is, so its SVG diagrams can be saved. */
+export function ChatMarkdown({ children, replyId }: { children: string; replyId?: string }) {
   const md = useMemo(() => linkTicketKeys(children), [children]);
-  return <Markdown codeBlocks>{md}</Markdown>;
+  return (
+    <SvgFenceMessage.Provider value={replyId}>
+      <Markdown codeBlocks>{md}</Markdown>
+    </SvgFenceMessage.Provider>
+  );
 }

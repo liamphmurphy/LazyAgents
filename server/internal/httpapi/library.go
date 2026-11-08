@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -21,6 +22,8 @@ import (
 // filters on the caller, and someone else's item is a 404.
 
 const libraryPageSize = 60
+
+const libraryDiagramType = "image/svg+xml"
 
 func toLibraryItem(l store.ListLibraryItemsRow) api.LibraryItem {
 	out := api.LibraryItem{
@@ -154,6 +157,55 @@ func (s *Server) UploadLibraryItem(ctx context.Context, req api.UploadLibraryIte
 		Source: &source, CreatedAt: l.CreatedAt}, nil
 }
 
+// SaveLibraryDiagram keeps an SVG from one of the caller's assistant replies.
+// The object key comes from the content, so a repeat save (or two racing)
+// lands on the same object and row.
+func (s *Server) SaveLibraryDiagram(ctx context.Context, req api.SaveLibraryDiagramRequestObject) (api.SaveLibraryDiagramResponseObject, error) {
+	u, _, ws := me(ctx)
+	m, err := s.Q.GetChatMessage(ctx, req.Body.MessageId)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	chat, err := s.ownChat(ctx, m.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	if m.Role != "assistant" {
+		return nil, apperr.Invalid("message_id", "not an assistant reply")
+	}
+	svg, err := runs.CheckLibraryDiagram(req.Body.Svg)
+	if err != nil {
+		return nil, err
+	}
+	key := runs.LibraryDiagramKey(ws, u.ID, svg)
+	l, err := s.Q.GetLibraryDiagram(ctx, store.GetLibraryDiagramParams{WorkspaceID: ws, UserID: u.ID, BlobKey: key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A soft cap, as for uploads.
+		stored, err := s.Q.ChatGeneratedImageBytes(ctx, store.ChatGeneratedImageBytesParams{WorkspaceID: ws, UserID: u.ID})
+		if err != nil {
+			return nil, err
+		}
+		if stored+int64(len(svg)) > runs.MaxGeneratedImageStorageBytes {
+			return nil, apperr.Invalid("svg", "your Library is full (1 GB): remove items you no longer need")
+		}
+		if err := s.Blobs.Put(ctx, s.ArtifactBucket, key, bytes.NewReader(svg), int64(len(svg)), libraryDiagramType); err != nil {
+			return nil, err
+		}
+		l, err = s.Q.CreateLibraryDiagram(ctx, store.CreateLibraryDiagramParams{WorkspaceID: ws, UserID: u.ID, Title: runs.LibraryDiagramTitle(chat.Title), Filename: "diagram.svg",
+			ContentType: libraryDiagramType, SizeBytes: int64(len(svg)), BlobKey: key, ChatID: &chat.ID, MessageID: &m.ID, PersonaID: m.PersonaID})
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	source := api.LibraryItemSource(l.Source)
+	return api.SaveLibraryDiagram201JSONResponse{Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
+		ChatId: l.ChatID, PersonaId: l.PersonaID, Source: &source, CreatedAt: l.CreatedAt}, nil
+}
+
 // SetLibraryReference makes one of the caller's images the reference for a
 // role, replacing the role's previous image and whatever this image stood for
 // before. The persona must be the caller's own.
@@ -201,17 +253,21 @@ func (s *Server) setLibraryReference(ctx context.Context, ws, user, item uuid.UU
 		if err := q.LockLibraryReferences(ctx, store.LockLibraryReferencesParams{WorkspaceID: ws, UserID: user}); err != nil {
 			return err
 		}
-		if _, err := q.GetLibraryItem(ctx, store.GetLibraryItemParams{ID: item, WorkspaceID: ws, UserID: user}); errors.Is(err, pgx.ErrNoRows) {
+		l, err := q.GetLibraryItem(ctx, store.GetLibraryItemParams{ID: item, WorkspaceID: ws, UserID: user})
+		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
 		} else if err != nil {
 			return err
 		}
 		if role != nil {
+			if l.Kind != "image" {
+				return apperr.Invalid("role", "only an image can be a reference")
+			}
 			if err := q.ClearLibraryReferenceRole(ctx, store.ClearLibraryReferenceRoleParams{WorkspaceID: ws, UserID: user, Role: *role, PersonaID: persona}); err != nil {
 				return err
 			}
 		}
-		_, err := q.SetLibraryReference(ctx, store.SetLibraryReferenceParams{ID: item, WorkspaceID: ws, UserID: user, Role: role, PersonaID: persona})
+		_, err = q.SetLibraryReference(ctx, store.SetLibraryReferenceParams{ID: item, WorkspaceID: ws, UserID: user, Role: role, PersonaID: persona})
 		return err
 	})
 }

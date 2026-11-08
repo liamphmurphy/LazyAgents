@@ -37,6 +37,62 @@ func (q *Queries) ClearLibraryReferenceRole(ctx context.Context, arg ClearLibrar
 	return err
 }
 
+const createLibraryDiagram = `-- name: CreateLibraryDiagram :one
+INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id)
+VALUES ($1, $2, 'diagram', $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (workspace_id, user_id, blob_key) WHERE kind = 'diagram' DO UPDATE SET blob_key = EXCLUDED.blob_key
+RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source
+`
+
+type CreateLibraryDiagramParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Title       string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+	ChatID      *uuid.UUID
+	MessageID   *uuid.UUID
+	PersonaID   *uuid.UUID
+}
+
+// Saving a diagram again returns the row it already has.
+func (q *Queries) CreateLibraryDiagram(ctx context.Context, arg CreateLibraryDiagramParams) (LibraryItem, error) {
+	row := q.db.QueryRow(ctx, createLibraryDiagram,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Title,
+		arg.Filename,
+		arg.ContentType,
+		arg.SizeBytes,
+		arg.BlobKey,
+		arg.ChatID,
+		arg.MessageID,
+		arg.PersonaID,
+	)
+	var i LibraryItem
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Kind,
+		&i.Title,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.ChatID,
+		&i.MessageID,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
+		&i.Source,
+	)
+	return i, err
+}
+
 const createLibraryItem = `-- name: CreateLibraryItem :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source
@@ -168,6 +224,41 @@ func (q *Queries) DeleteLibraryItem(ctx context.Context, arg DeleteLibraryItemPa
 	row := q.db.QueryRow(ctx, deleteLibraryItem, arg.ID, arg.WorkspaceID, arg.UserID)
 	var i DeleteLibraryItemRow
 	err := row.Scan(&i.BlobKey, &i.Orphaned)
+	return i, err
+}
+
+const getLibraryDiagram = `-- name: GetLibraryDiagram :one
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'diagram'
+`
+
+type GetLibraryDiagramParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	BlobKey     string
+}
+
+// The caller's saved diagram with this content, if any.
+func (q *Queries) GetLibraryDiagram(ctx context.Context, arg GetLibraryDiagramParams) (LibraryItem, error) {
+	row := q.db.QueryRow(ctx, getLibraryDiagram, arg.WorkspaceID, arg.UserID, arg.BlobKey)
+	var i LibraryItem
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Kind,
+		&i.Title,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.ChatID,
+		&i.MessageID,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
+		&i.Source,
+	)
 	return i, err
 }
 
