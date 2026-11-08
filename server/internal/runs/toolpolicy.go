@@ -83,9 +83,18 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	if err != nil {
 		return ToolDecision{}, err
 	}
-	if WebTool(in.Tool) && run.Purpose == "chat" && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+	if WebTool(in.Tool) && (run.Purpose == "chat" || run.Purpose == PurposeResearch) && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
 		if in.Tool != "WebFetch" {
 			return ToolDecision{Decision: "allow"}, nil
+		}
+		if run.Purpose == PurposeResearch {
+			full, err := researchSourceLimitReached(ctx, q, run.ID)
+			if err != nil {
+				return ToolDecision{}, err
+			}
+			if full {
+				return deny("The research source limit is reached: submit what you have with submit_findings and stop")
+			}
 		}
 		// A fetch can carry data out in its URL: only addresses the person
 		// gave or this run's searches returned (ADR "Assistant web access").

@@ -33,7 +33,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, CopyButton, quoteForComposer } from "./reply-tools";
+import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle } from "./reply-tools";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { CiteContext } from "@/components/domain/cite-marker";
 import { summaryRequestUrl } from "@/lib/chat-recommend";
@@ -273,6 +273,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // Following the newest message; off once the person scrolls up, or arrives at a search hit.
   const pinned = useRef(!target);
   const [newReply, setNewReply] = useState(false);
+  // On for one message: asks for a research plan to approve.
+  const [research, setResearch] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
   // The @mention being typed in the composer, and which suggestion is highlighted.
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
@@ -364,6 +366,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     setNewReply(false);
     end.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   };
+  const researchMore = (artifactId: string, title: string) => {
+    const chip = chipFromTarget({ kind: "artifact", id: artifactId, title, artifact_type: "report" });
+    if (chip) setChips((cs) => addChip(cs, chip));
+    setResearch(true);
+    setText("Go deeper on this report: ");
+    area.current?.focus();
+  };
   const askAboutSelection = (selected: string, authorId?: string, author?: string) => {
     const quote = quoteForComposer(selected, authorId && authorId !== (c?.speaker ?? c?.persona)?.id ? author : undefined);
     setText((t) => quote + t);
@@ -379,6 +388,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     send.mutate(
       {
         body,
+        ...(research ? { research: true } : {}),
         ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}),
         ...(effortPending ? { effort: effort ?? "default" } : {}),
         ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) },
@@ -389,6 +399,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
           setPicked(null);
           setPickedEffort(null);
           setChips([]);
+          setResearch(false);
         },
       },
     );
@@ -584,7 +595,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
           ) : (
             <>
             <VideoPlayers.Provider value={players}>
-            <RecommendActions.Provider value={{ ask: askAuthor, disabled: running || locked || !!unavailable || c.archived, nextMessage: (id) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md }}>
+            <RecommendActions.Provider value={{ ask: askAuthor, disabled: running || locked || !!unavailable || c.archived, chatId: c.id, project: c.project, researchMore, nextMessage: (id) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md }}>
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m, i) => (
@@ -757,6 +768,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 )}
                 <AttachButton onFiles={files.add} disabled={locked} />
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
+                <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked || running} />}
                 <EffortPicker
                   efforts={offered.efforts}
@@ -777,7 +789,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                   disabled={locked || !!unavailable || files.pending || !text.trim()}
                   title={running ? "Stop the reply and answer this together with your last message" : undefined}
                 >
-                  {running ? "Interrupt" : "Send"}
+                  {running ? "Interrupt" : research ? "Plan it" : "Send"}
                 </Button>
               </div>
             </form>

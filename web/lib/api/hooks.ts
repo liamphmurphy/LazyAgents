@@ -1020,6 +1020,34 @@ export function useChatMessages(id?: string, limit = 200) {
   });
 }
 
+const researchKey = (chatId: string) => ["chats", "research", chatId] as const;
+
+/** A chat's research jobs; follows along while any is active. */
+export function useChatResearch(chatId?: string) {
+  return useQuery({
+    enabled: !!chatId,
+    queryKey: researchKey(chatId ?? ""),
+    queryFn: () => unwrap(api.GET("/chats/{id}/research", { params: { path: { id: chatId! } } })),
+    refetchInterval: (q) => (q.state.data?.jobs.some((j) => ["running", "finishing", "ready", "writing"].includes(j.state)) ? 3000 : false),
+  });
+}
+
+export function useStartResearch(chatId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["ResearchStart"]) => unwrap(api.POST("/chats/{id}/research", { params: { path: { id: chatId } }, body })),
+    onSettled: () => qc.invalidateQueries({ queryKey: researchKey(chatId) }),
+  });
+}
+
+export function useControlResearch(chatId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; action: "stop" | "finish" }) => unwrap(api.POST("/chats/{id}/research/{jobId}/{action}", { params: { path: { id: chatId, jobId: v.id, action: v.action } } })),
+    onSettled: () => qc.invalidateQueries({ queryKey: researchKey(chatId) }),
+  });
+}
+
 /** Replaces the last message and redoes its turn; the same text retries it. */
 export function useEditLastChatMessage(id: string) {
   const done = useChatInvalidate();

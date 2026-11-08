@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { cx } from "@/lib/cx";
 
 /** Copies text, and says so for a moment. */
 export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
@@ -20,6 +21,23 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
     >
       {copied ? "Copied" : label}
     </Button>
+  );
+}
+
+/** On for one message: asks for a research plan to approve instead of an answer. */
+export function ResearchToggle({ on, onChange, disabled }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={disabled}
+      title="Plan a multi-source research report instead of answering right away"
+      onClick={() => onChange(!on)}
+      className={cx("inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium disabled:opacity-50", on ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:text-fg")}
+    >
+      <Icon name="search" size={13} />
+      Research
+    </button>
   );
 }
 

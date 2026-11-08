@@ -14,7 +14,8 @@ WHERE id = (
       WHERE d.ticket_id = r.ticket_id AND bt.status <> 'done'))
     AND (r.purpose = 'chat' OR (SELECT count(*) FROM runs o WHERE o.agent_id = r.agent_id AND o.purpose <> 'chat' AND o.state IN ('starting', 'running'))
         < greatest(coalesce((r.resolved_spec->>'max_concurrency')::int, 1), 1))
-  ORDER BY r.started_at
+  -- Research waits behind every other kind of run.
+  ORDER BY r.purpose = 'research', r.started_at
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
@@ -98,7 +99,7 @@ SELECT * FROM runners WHERE heartbeat_at > now() - interval '45 seconds' ORDER B
 
 -- name: LiveWorkRunsCount :one
 -- Runs in flight for the Runs nav count; Personal Assistant chats belong to Chat.
-SELECT count(*)::int FROM runs WHERE state IN ('starting', 'running') AND purpose <> 'chat';
+SELECT count(*)::int FROM runs WHERE state IN ('starting', 'running') AND purpose NOT IN ('chat', 'research');
 
 -- name: QueuedRunsCount :one
 SELECT count(*)::int FROM runs WHERE state = 'queued';

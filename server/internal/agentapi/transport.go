@@ -36,7 +36,7 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 			if err != nil {
 				return nil, err
 			}
-			if c.Agent.Kind == agents.KindAssistant && run.Purpose != "chat" {
+			if c.Agent.Kind == agents.KindAssistant && run.Purpose != "chat" && run.Purpose != runs.PurposeResearch {
 				return nil, apperr.Conflict("the Personal Assistant only works inside chats")
 			}
 			switch {
@@ -46,6 +46,13 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 				}
 				if slices.Contains([]string{"completed", "failed", "cancelled"}, run.State) {
 					return nil, apperr.Conflict("chat run is %s", run.State)
+				}
+			case run.Purpose == runs.PurposeResearch:
+				if !slices.Contains(researchTools, name) {
+					return nil, apperr.Conflict("%s isn't available to researchers", name)
+				}
+				if run.State != "running" {
+					return nil, apperr.Conflict("research run is %s", run.State)
 				}
 			case run.TicketID == nil:
 				if !slices.Contains(planningTools, name) {
@@ -134,10 +141,15 @@ func verifier(d Deps) auth.TokenVerifier {
 const (
 	profileChat     = "chat"
 	profilePlanning = "planning"
+	profileResearch = "research"
 	profileSubagent = "subagent"
 	profileLead     = "lead"
 	profileFull     = "full"
 )
+
+// researchTools is the whole MCP surface of a researcher: the web comes from
+// the harness, and it reads nothing in the workspace.
+var researchTools = []string{"submit_findings"}
 
 // planningTools is the whole MCP surface of a planning run.
 var planningTools = []string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}
@@ -149,13 +161,15 @@ var subagentTools = []string{"get_ticket", "read_artifact", "create_artifact", "
 // leadHidden are the tools a managed ticket run never needs: usage is reported
 // by the runner, the ticket is already assigned, and personal memory belongs
 // to chats with a person.
-var leadHidden = []string{"report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links"}
+var leadHidden = []string{"submit_findings", "submit_research_report", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links"}
 
 // profileFor must stay consistent with the checks in define().
 func profileFor(run store.Run) string {
 	switch {
 	case run.Purpose == "chat":
 		return profileChat
+	case run.Purpose == runs.PurposeResearch:
+		return profileResearch
 	case run.TicketID == nil:
 		return profilePlanning
 	case run.ParentRunID != nil:
@@ -173,6 +187,8 @@ func profileTools(profile string) []Tool {
 			ok = slices.Contains(chatTools, t.Name)
 		case profilePlanning:
 			ok = slices.Contains(planningTools, t.Name)
+		case profileResearch:
+			ok = slices.Contains(researchTools, t.Name)
 		case profileSubagent:
 			ok = slices.Contains(subagentTools, t.Name)
 		case profileLead:
@@ -188,6 +204,7 @@ func profileTools(profile string) []Tool {
 }
 
 var profileInstructions = map[string]string{
+	profileResearch: `You are a researcher working for Vesper. Your question and AGENTS.md are your instructions; report through submit_findings.`,
 	profileChat:     `You are answering a person in a Vesper chat. Your instructions are in AGENTS.md. Use the Vesper tools to look up project context and manage tickets when asked.`,
 	profilePlanning: `This is a Vesper planning run. Follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.`,
 	profileSubagent: `You are a sub agent: a main agent delegated one task to you through Vesper. Your task brief and AGENTS.md are your instructions; don't call claim_ticket.

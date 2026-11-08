@@ -491,6 +491,35 @@ type ProviderLimit struct {
 	UpdatedAt   time.Time
 }
 
+type ResearchJob struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	ChatID           uuid.UUID
+	UserID           uuid.UUID
+	MessageID        *uuid.UUID
+	Title            string
+	State            string
+	MaxSources       int32
+	MaxMinutes       int32
+	MaxCostMicros    *int64
+	StopReason       string
+	Error            string
+	ReportArtifactID *uuid.UUID
+	Report           []byte
+	CreatedAt        time.Time
+	FinishedAt       *time.Time
+}
+
+type ResearchTask struct {
+	ID       uuid.UUID
+	JobID    uuid.UUID
+	RunID    uuid.UUID
+	Seq      int32
+	Label    string
+	Question string
+	Findings json.RawMessage
+}
+
 type Run struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID

@@ -1934,6 +1934,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** The chat's research jobs, oldest first */
+        get: operations["listChatResearch"];
+        put?: never;
+        /** Approve a research plan and start its researchers */
+        post: operations["startChatResearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/research/{jobId}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                jobId: string;
+                action: "stop" | "finish";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop a job without a report, or finish it early from what's been found */
+        post: operations["controlChatResearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -3157,7 +3198,7 @@ export interface components {
              * @description What the run works on: a ticket, a plan or a chat
              * @enum {string}
              */
-            purpose: "ticket" | "planning" | "chat";
+            purpose: "ticket" | "planning" | "chat" | "research";
             /** Format: uuid */
             planning_id?: string;
             /**
@@ -3462,7 +3503,7 @@ export interface components {
             /** Format: uuid */
             run_id: string;
             /** @enum {string} */
-            purpose: "ticket" | "planning" | "chat";
+            purpose: "ticket" | "planning" | "chat" | "research";
             agent: components["schemas"]["AgentRef"];
             ticket_key?: string;
             ticket_title?: string;
@@ -4119,6 +4160,8 @@ export interface components {
             archived?: boolean;
         };
         NewChatMessage: {
+            /** @description Ask for a research plan to approve instead of an answer */
+            research?: boolean;
             body: string;
             harness?: components["schemas"]["Harness"];
             model?: string;
@@ -4171,6 +4214,77 @@ export interface components {
         };
         ChatSearchResults: {
             hits: components["schemas"]["ChatSearchHit"][];
+        };
+        ResearchStart: {
+            /**
+             * Format: uuid
+             * @description The reply holding the plan
+             */
+            message_id: string;
+            title: string;
+            questions: {
+                label: string;
+                question: string;
+            }[];
+            max_sources: number;
+            max_minutes: number;
+            /** @description Omit for no spend limit */
+            max_cost_usd?: number;
+        };
+        ResearchTask: {
+            label: string;
+            question: string;
+            /** @enum {string} */
+            state: "queued" | "running" | "done" | "failed" | "stopped";
+            sources_read: number;
+            findings: number;
+            /** @description The page being read now */
+            reading?: string;
+        };
+        ResearchReport: {
+            bottom_line: string;
+            key_findings: {
+                text: string;
+                sources?: number[];
+            }[];
+            disagreements: {
+                topic: string;
+                detail: string;
+            }[];
+            sources: {
+                n: number;
+                title: string;
+                url: string;
+            }[];
+            body_md: string;
+        };
+        ResearchJob: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            message_id?: string;
+            title: string;
+            /** @enum {string} */
+            state: "running" | "finishing" | "ready" | "writing" | "done" | "stopped" | "failed";
+            max_sources: number;
+            max_minutes: number;
+            /** @description Absent means no spend limit */
+            max_cost_usd?: number;
+            sources_read: number;
+            spent_usd: number;
+            stop_reason?: string;
+            error?: string;
+            tasks: components["schemas"]["ResearchTask"][];
+            /** Format: uuid */
+            artifact_id?: string;
+            report?: components["schemas"]["ResearchReport"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        ResearchJobs: {
+            jobs: components["schemas"]["ResearchJob"][];
         };
         ChatAttachment: {
             /** Format: uuid */
@@ -6148,7 +6262,7 @@ export interface operations {
                 agent?: string;
                 /** @description Project key */
                 project?: string;
-                purpose?: "ticket" | "planning" | "chat";
+                purpose?: "ticket" | "planning" | "chat" | "research";
                 /** @description Ticket key: every run on that ticket, delegated runs included */
                 ticket?: string;
                 offset?: number;
@@ -7803,6 +7917,87 @@ export interface operations {
                     "application/json": components["schemas"]["ChatSearchResults"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatResearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Jobs with progress and any finished report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchJobs"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startChatResearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResearchStart"];
+            };
+        };
+        responses: {
+            /** @description The started job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchJob"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    controlChatResearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                jobId: string;
+                action: "stop" | "finish";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchJob"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

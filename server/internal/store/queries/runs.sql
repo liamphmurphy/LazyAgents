@@ -244,7 +244,7 @@ WHERE r.workspace_id = sqlc.arg(workspace_id)
   AND r.state = ANY(sqlc.arg(states)::text[])
   AND (sqlc.narg(agent_id)::uuid IS NULL OR r.agent_id = sqlc.narg(agent_id))
   AND (sqlc.narg(purpose)::text IS NULL OR r.purpose = sqlc.narg(purpose))
-  AND (NOT sqlc.arg(hide_chat)::bool OR r.purpose <> 'chat')
+  AND (NOT sqlc.arg(hide_chat)::bool OR r.purpose NOT IN ('chat', 'research'))
   AND (sqlc.narg(project_id)::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = sqlc.narg(project_id))
 ORDER BY r.started_at DESC, r.id DESC
 LIMIT 51 OFFSET sqlc.arg(skip)::int;

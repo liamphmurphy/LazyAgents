@@ -14,7 +14,14 @@ import { SvgFenceMessage } from "./svg-fence";
  * What the chat lets a fence do: send a message to the persona that wrote this reply,
  * and see what the person said next (which answers a choices fence).
  */
-export const RecommendActions = createContext<{ ask: (messageId: string, body: string) => void; disabled: boolean; nextMessage: (messageId: string) => string | undefined } | undefined>(undefined);
+export const RecommendActions = createContext<{
+  ask: (messageId: string, body: string) => void;
+  disabled: boolean;
+  nextMessage: (messageId: string) => string | undefined;
+  chatId?: string;
+  project?: string;
+  researchMore?: (artifactId: string, title: string) => void;
+} | undefined>(undefined);
 
 /** The chat's playing-capable videos by id, so a timestamp link can jump one to a moment. */
 export const VideoPlayers = createContext<Map<string, (seconds: number) => void> | undefined>(undefined);

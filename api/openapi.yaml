@@ -1242,7 +1242,7 @@ paths:
           schema: { type: string, enum: [live, all, queued, starting, running, waiting, waiting_for_quota, paused, blocked, completed, failed, cancelled], default: live }
         - { name: agent, in: query, description: Agent handle, schema: { type: string } }
         - { name: project, in: query, description: Project key, schema: { type: string } }
-        - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat] } }
+        - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat, research] } }
         - { name: ticket, in: query, description: "Ticket key: every run on that ticket, delegated runs included", schema: { type: string } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
       responses:
@@ -2474,6 +2474,60 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ChatSearchResults" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/research:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listChatResearch
+      summary: The chat's research jobs, oldest first
+      tags: [chats]
+      responses:
+        "200":
+          description: Jobs with progress and any finished report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchJobs" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: startChatResearch
+      summary: Approve a research plan and start its researchers
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResearchStart" }
+      responses:
+        "201":
+          description: The started job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchJob" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/research/{jobId}/{action}:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: jobId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: action, in: path, required: true, schema: { type: string, enum: [stop, finish] } }
+    post:
+      operationId: controlChatResearch
+      summary: Stop a job without a report, or finish it early from what's been found
+      tags: [chats]
+      responses:
+        "200":
+          description: The job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchJob" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   /chats/{id}/cancel:
@@ -3804,7 +3858,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticket_key: { type: string, description: Empty for standalone planning runs }
-        purpose: { type: string, enum: [ticket, planning, chat], description: "What the run works on: a ticket, a plan or a chat" }
+        purpose: { type: string, enum: [ticket, planning, chat, research], description: "What the run works on: a ticket, a plan or a chat" }
         planning_id: { type: string, format: uuid }
         chat_id: { type: string, format: uuid, description: The chat session of a chat run }
         project_key: { type: string, description: "Project of the ticket, plan or chat" }
@@ -4052,7 +4106,7 @@ components:
       required: [run_id, purpose, agent, reads, last_read_at]
       properties:
         run_id: { type: string, format: uuid }
-        purpose: { type: string, enum: [ticket, planning, chat] }
+        purpose: { type: string, enum: [ticket, planning, chat, research] }
         agent: { $ref: "#/components/schemas/AgentRef" }
         ticket_key: { type: string }
         ticket_title: { type: string }
@@ -4672,6 +4726,7 @@ components:
       type: object
       required: [body]
       properties:
+        research: { type: boolean, description: "Ask for a research plan to approve instead of an answer" }
         body: { type: string, minLength: 1, maxLength: 100000 }
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string }
@@ -4728,6 +4783,89 @@ components:
       required: [hits]
       properties:
         hits: { type: array, items: { $ref: "#/components/schemas/ChatSearchHit" } }
+    ResearchStart:
+      type: object
+      required: [message_id, title, questions, max_sources, max_minutes]
+      properties:
+        message_id: { type: string, format: uuid, description: The reply holding the plan }
+        title: { type: string }
+        questions:
+          type: array
+          items:
+            type: object
+            required: [label, question]
+            properties:
+              label: { type: string }
+              question: { type: string }
+        max_sources: { type: integer, minimum: 5, maximum: 200 }
+        max_minutes: { type: integer, minimum: 5, maximum: 120 }
+        max_cost_usd: { type: number, description: Omit for no spend limit }
+    ResearchTask:
+      type: object
+      required: [label, question, state, sources_read, findings]
+      properties:
+        label: { type: string }
+        question: { type: string }
+        state: { type: string, enum: [queued, running, done, failed, stopped] }
+        sources_read: { type: integer }
+        findings: { type: integer }
+        reading: { type: string, description: The page being read now }
+    ResearchReport:
+      type: object
+      required: [bottom_line, key_findings, disagreements, sources, body_md]
+      properties:
+        bottom_line: { type: string }
+        key_findings:
+          type: array
+          items:
+            type: object
+            required: [text]
+            properties:
+              text: { type: string }
+              sources: { type: array, items: { type: integer } }
+        disagreements:
+          type: array
+          items:
+            type: object
+            required: [topic, detail]
+            properties:
+              topic: { type: string }
+              detail: { type: string }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [n, title, url]
+            properties:
+              n: { type: integer }
+              title: { type: string }
+              url: { type: string }
+        body_md: { type: string }
+    ResearchJob:
+      type: object
+      required: [id, title, state, max_sources, max_minutes, sources_read, spent_usd, tasks, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        title: { type: string }
+        state: { type: string, enum: [running, finishing, ready, writing, done, stopped, failed] }
+        max_sources: { type: integer }
+        max_minutes: { type: integer }
+        max_cost_usd: { type: number, description: Absent means no spend limit }
+        sources_read: { type: integer }
+        spent_usd: { type: number }
+        stop_reason: { type: string }
+        error: { type: string }
+        tasks: { type: array, items: { $ref: "#/components/schemas/ResearchTask" } }
+        artifact_id: { type: string, format: uuid }
+        report: { $ref: "#/components/schemas/ResearchReport" }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    ResearchJobs:
+      type: object
+      required: [jobs]
+      properties:
+        jobs: { type: array, items: { $ref: "#/components/schemas/ResearchJob" } }
     ChatAttachment:
       type: object
       required: [id, filename, content_type, size_bytes, created_at]

@@ -254,6 +254,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "research:" replies with a plan to approve.
+    if (prompt.startsWith("research:")) {
+      add(c, "assistant", "Here's a plan.\n\n```research-plan\nLocal TTS\n- Quality | Which sounds best?\n- Latency | How fast is it?\n```", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     // "rich:" replies with citations, math, a diagram, a moment in a video and a choice.
     if (prompt.startsWith("rich:")) {
       const body = [
@@ -364,6 +370,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
       return route.fulfill({ status: 200, contentType: "image/png", body: png });
     }
+    if (/^\/chats\/[^/]+\/research$/.test(path) && method === "GET") return json({ jobs: [] });
     if (path === "/persona-dock") return json({ personas: [] });
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, live: 0, queued: 0 });
     // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
