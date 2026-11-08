@@ -97,6 +97,17 @@ test("free text returns grouped results from the server with keyboard navigation
   await expect(page).toHaveURL(/\/artifacts\/adr-1$/);
 });
 
+test("Enter waits for results instead of falling through to an action", async ({ page }) => {
+  await install(page);
+  await page.goto("/board?project=WEB");
+  await page.keyboard.press("ControlOrMeta+k");
+  await input(page).fill("deploy");
+  await page.keyboard.press("Enter");
+  await expect(palette(page)).toBeVisible();
+  await expect(page).toHaveURL(/\/board\?project=WEB$/);
+  await expect(results(page).getByRole("option").first()).toHaveText(/Deploy staging/);
+});
+
 test("actions: new ticket, start planning, new chat and switch project", async ({ page }) => {
   const { chats } = await install(page);
   await page.goto("/board?project=WEB");

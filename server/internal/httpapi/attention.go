@@ -3,8 +3,10 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/links"
@@ -63,14 +65,12 @@ func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.S
 		}
 		project = &p
 	}
-	// Reuse full-text ranking and snippets, and name matching for epics/agents.
-	var hits []wiki.Hit
-	var err error
+	// Reuse full-text ranking and snippets, and name matching for everything else.
+	var projectID *uuid.UUID
 	if project != nil {
-		hits, err = wiki.Search(ctx, s.Q, ws, text, nil, &project.ID, 30)
-	} else {
-		hits, err = wiki.Search(ctx, s.Q, ws, text, nil, nil, 30)
+		projectID = &project.ID
 	}
+	hits, err := wiki.SearchFuzzy(ctx, s.Q, ws, text, projectID, 30)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,29 @@ func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.S
 	}
 	for _, t := range targets {
 		id, href := t.ID, t.Href
-		out.Hits = append(out.Hits, api.SearchHit{Target: api.LinkTarget{Kind: api.LinkTargetKind(t.Kind), Id: &id, Title: t.Title, Href: &href}, Snippet: "", Score: 0})
+		target := api.LinkTarget{Kind: api.LinkTargetKind(t.Kind), Id: &id, Title: t.Title, Href: &href}
+		if t.Status != "" {
+			status := t.Status
+			target.Status = &status
+		}
+		out.Hits = append(out.Hits, api.SearchHit{Target: target, Snippet: "", Score: float32(t.Score)})
+	}
+	// Message text is the costliest search, so it waits for a real word.
+	if len(text) < 3 {
+		return out, nil
+	}
+	messages, err := s.Q.SearchChatMessages(ctx, store.SearchChatMessagesParams{Query: text, WorkspaceID: ws, UserID: u.ID, RowLimit: 8})
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range messages {
+		if m.Archived || (project != nil && m.ProjectKey != project.Key) {
+			continue
+		}
+		id, href := m.ID, "/chat/"+m.SessionID.String()+"?project="+url.QueryEscape(m.ProjectKey)+"&message="+m.ID.String()
+		snippet := strings.NewReplacer("\ue000", "«", "\ue001", "»").Replace(m.Snippet)
+		// Below title matches: a word somewhere in a conversation is weak evidence.
+		out.Hits = append(out.Hits, api.SearchHit{Target: api.LinkTarget{Kind: api.LinkTargetKind("chat"), Id: &id, Title: m.ChatTitle, Href: &href}, Snippet: snippet, Score: 0.05})
 	}
 	return out, nil
 }

@@ -150,6 +150,16 @@ type Hit struct {
 // with well-linked pages ranked higher. kinds filters by artifact type or
 // "ticket"; empty means everything.
 func Search(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, kinds []string, projectID *uuid.UUID, limit int) ([]Hit, error) {
+	return search(ctx, q, ws, text, kinds, projectID, limit, false)
+}
+
+// SearchFuzzy is Search for people typing: partial words and typos in titles
+// match too, title matches score higher and finished tickets lower.
+func SearchFuzzy(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, projectID *uuid.UUID, limit int) ([]Hit, error) {
+	return search(ctx, q, ws, text, nil, projectID, limit, true)
+}
+
+func search(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, kinds []string, projectID *uuid.UUID, limit int, fuzzy bool) ([]Hit, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 10
 	}
@@ -169,7 +179,7 @@ func Search(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, ki
 			tf = types
 		}
 		rows, err := q.SearchKnowledgeArtifacts(ctx, store.SearchKnowledgeArtifactsParams{
-			Q: text, WorkspaceID: ws, Types: tf, ProjectID: projectID, Lim: int32(limit)})
+			Q: text, Fuzzy: fuzzy, WorkspaceID: ws, Types: tf, ProjectID: projectID, Lim: int32(limit)})
 		if err != nil {
 			return nil, err
 		}
@@ -179,7 +189,7 @@ func Search(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, ki
 		}
 	}
 	if wantTickets {
-		rows, err := q.SearchKnowledgeTickets(ctx, store.SearchKnowledgeTicketsParams{Q: text, WorkspaceID: ws, ProjectID: projectID, Lim: int32(limit)})
+		rows, err := q.SearchKnowledgeTickets(ctx, store.SearchKnowledgeTicketsParams{Q: text, Fuzzy: fuzzy, WorkspaceID: ws, ProjectID: projectID, Lim: int32(limit)})
 		if err != nil {
 			return nil, err
 		}

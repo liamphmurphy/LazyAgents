@@ -87,25 +87,48 @@ INSERT INTO inbox_reads (user_id,item_id) VALUES ($1,$2)
 ON CONFLICT (user_id,item_id) DO UPDATE SET read_at=clock_timestamp();
 
 -- name: SearchAttentionTargets :many
--- At most 8 per kind, so many chats or agents can't crowd epics out.
-SELECT kind,id,title,href FROM (
-SELECT *, row_number() OVER (PARTITION BY kind ORDER BY title,id) AS n FROM (
- SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href
+-- Best matches first, at most 8 per kind so many chats or agents can't crowd
+-- epics out. Partial words and typos match through trigrams. Personas,
+-- memories, Library items and workflows are private and belong to no project.
+WITH needle AS (SELECT lower(replace(sqlc.arg(q)::text,'@','')) AS q)
+SELECT kind,id,title,href,status,score::float8 AS score FROM (
+SELECT *, row_number() OVER (PARTITION BY kind ORDER BY score DESC,id DESC) AS n FROM (
+SELECT c.*, greatest(word_similarity(needle.q,lower(c.haystack)),similarity(needle.q,lower(c.haystack))) AS score
+FROM needle CROSS JOIN LATERAL (
+ SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href,''::text AS status,e.name AS haystack
  FROM epics e JOIN projects p ON p.id=e.project_id
- WHERE e.workspace_id=sqlc.arg(workspace_id) AND e.name ILIKE '%'||sqlc.arg(q)::text||'%'
+ WHERE e.workspace_id=sqlc.arg(workspace_id)
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
  UNION ALL
- SELECT 'agent',a.id,a.name, '/agents/'||a.handle
+ SELECT 'agent',a.id,a.name,'/agents/'||a.handle,'',a.name||' '||a.handle
  FROM agents a WHERE a.workspace_id=sqlc.arg(workspace_id) AND a.archived_at IS NULL
- AND (a.name ILIKE '%'||sqlc.arg(q)::text||'%' OR a.handle ILIKE replace(sqlc.arg(q),'@','')||'%')
  AND (sqlc.narg(project)::text IS NULL OR EXISTS (
  SELECT 1 FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.assignee_agent_id=a.id AND p.key=sqlc.narg(project)))
  UNION ALL
  -- Chats are private: only the asking user's, unarchived, matched by title.
- SELECT 'chat',c.id,c.title,'/chat/'||c.id
+ SELECT 'chat',c.id,c.title,'/chat/'||c.id,'',c.title
  FROM chat_sessions c JOIN projects p ON p.id=c.project_id
  WHERE c.workspace_id=sqlc.arg(workspace_id) AND c.created_by=sqlc.arg(user_id) AND NOT c.archived AND NOT c.hidden
- AND c.title ILIKE '%'||sqlc.arg(q)::text||'%'
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
+ UNION ALL
+ -- Ticket runs only: chat and workflow runs have their own pages.
+ SELECT 'run',r.id,t.key||' · '||a.name,'/runs/'||r.id,r.state,t.key||' '||t.title||' '||a.name
+ FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN agents a ON a.id=r.agent_id JOIN projects p ON p.id=t.project_id
+ WHERE r.workspace_id=sqlc.arg(workspace_id)
+ AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
+ UNION ALL
+ SELECT 'workflow',w.id,w.name,'/workflows/'||w.id,'',w.name
+ FROM workflows w WHERE w.workspace_id=sqlc.arg(workspace_id) AND w.user_id=sqlc.arg(user_id)
+ UNION ALL
+ SELECT 'persona',pe.id,pe.name,'/customization','',pe.name
+ FROM personas pe WHERE pe.workspace_id=sqlc.arg(workspace_id) AND pe.user_id=sqlc.arg(user_id)
+ UNION ALL
+ SELECT 'memory',m.id,m.title,'/customization','',m.title||' '||m.summary
+ FROM memories m WHERE m.workspace_id=sqlc.arg(workspace_id) AND m.user_id=sqlc.arg(user_id) AND m.superseded_by IS NULL
+ UNION ALL
+ SELECT 'library',l.id,l.title,'/library','',l.title
+ FROM library_items l WHERE l.workspace_id=sqlc.arg(workspace_id) AND l.user_id=sqlc.arg(user_id)
+) c
+WHERE lower(c.haystack) LIKE '%'||needle.q||'%' OR word_similarity(needle.q,lower(c.haystack))>=0.3
 ) matches
-) results WHERE n<=8 ORDER BY kind,title,id LIMIT 24;
+) results WHERE n<=8 ORDER BY score DESC,kind,title,id LIMIT 40;
