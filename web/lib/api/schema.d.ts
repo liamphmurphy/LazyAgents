@@ -1373,13 +1373,22 @@ export interface paths {
         /**
          * The signed-in person's assistant memories, newest change first (or ranked by q)
          * @description Memory is strictly per person: only the signed-in person's entries are
-         *     ever returned. With q, results are ranked by full-text relevance over
-         *     title, tags, summary and body (plus fuzzy title matching).
+         *     ever returned. That includes each of their personas' own memories
+         *     (persona_id set) unless about narrows it. With q, results are ranked
+         *     by full-text relevance over title, tags, summary and body (plus fuzzy
+         *     title matching).
          */
         get: operations["listMemories"];
         put?: never;
-        post?: never;
-        /** Forget everything the assistant remembers about the signed-in person */
+        /**
+         * Add a memory by hand, e.g. a moment to a persona's own memory
+         * @description Saved like the assistant's own save_memory: a near-duplicate in the same
+         *     memory is updated instead (moments are always added), and text that
+         *     looks like a credential is refused with 422. Source is "manual". A
+         *     moment needs persona_id.
+         */
+        post: operations["createMemory"];
+        /** Forget everything the assistant remembers about the signed-in person, and its personas' own memories unless about narrows it */
         delete: operations["deleteAllMemories"];
         options?: never;
         head?: never;
@@ -2172,18 +2181,42 @@ export interface components {
             name?: string;
             query?: string;
         };
-        /** @description One of preference, project, person, life, work, fact, other */
+        /** @description One of preference, project, person, life, work, fact, other, moment (a shared moment; persona memory only) */
         MemoryType: string;
+        /**
+         * @default all
+         * @enum {string}
+         */
+        MemoryAbout: "all" | "person" | "persona";
+        MemoryCreate: {
+            title: string;
+            summary?: string;
+            body?: string;
+            tags?: string[];
+            type?: components["schemas"]["MemoryType"];
+            /**
+             * Format: uuid
+             * @description Save to this persona's own memory; absent saves to the person's
+             */
+            persona_id?: string;
+        };
         /**
          * @description One thing the personal assistant remembers about its person, kept apart
          *     from the shared wiki. superseded_by marks a retired entry and names the
          *     entry that replaced it; retired_reason and retired_at say why and when
          *     (a periodic consolidation pass retires duplicates this way). Restoring
-         *     an entry clears all three.
+         *     an entry clears all three. persona_id marks a persona's own memory
+         *     (who it is, and the moments it shared with the person); absent, the
+         *     entry is about the person.
          */
         Memory: {
             /** Format: uuid */
             id: string;
+            /**
+             * Format: uuid
+             * @description The persona whose own memory this is; absent for the person's memory
+             */
+            persona_id?: string;
             title: string;
             /** @description One line */
             summary: string;
@@ -6435,6 +6468,12 @@ export interface operations {
                 include_retired?: boolean;
                 /** @description Skip this many (listing only; search returns the top 50) */
                 offset?: number;
+                /** @description Whose memory: all (default), person (what the assistant remembers about the person) or persona (personas' own memories) */
+                about?: components["schemas"]["MemoryAbout"];
+                /** @description Only this persona's own memory (implies about=persona) */
+                persona_id?: string;
+                /** @description updated: newest change first (default); created: newest first. Listing only */
+                sort?: "updated" | "created";
             };
             header?: never;
             path?: never;
@@ -6454,11 +6493,40 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    createMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryCreate"];
+            };
+        };
+        responses: {
+            /** @description The saved (or updated near-duplicate) entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     deleteAllMemories: {
         parameters: {
             query: {
                 /** @description Must be true; guards against accidental wipes */
                 confirm: boolean;
+                /** @description Whose memory: all (default), person or persona */
+                about?: components["schemas"]["MemoryAbout"];
+                /** @description Only this persona's own memory (implies about=persona) */
+                persona_id?: string;
             };
             header?: never;
             path?: never;

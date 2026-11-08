@@ -25,6 +25,8 @@ type chatScope struct {
 	ProjectKey string
 	// UserID is the person the chat belongs to: the owner of its memory.
 	UserID uuid.UUID
+	// PersonaID is the chat's persona, the one persona memory it may reach.
+	PersonaID *uuid.UUID
 }
 
 // chatScopeFor is nil unless the caller's token belongs to a chat run.
@@ -50,7 +52,7 @@ func chatScopeFor(ctx context.Context, d Deps, c agents.Caller) (*chatScope, err
 	if err != nil {
 		return nil, err
 	}
-	return &chatScope{ChatID: chat.ID, ProjectID: chat.ProjectID, ProjectKey: p.Key, UserID: chat.CreatedBy}, nil
+	return &chatScope{ChatID: chat.ID, ProjectID: chat.ProjectID, ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: chat.PersonaID}, nil
 }
 
 // allowsArtifact: workspace-level pages (no project) are shared; the rest must
@@ -64,7 +66,7 @@ func (s *chatScope) allowsTicket(t store.Ticket) bool { return s == nil || t.Pro
 const chatInstructions = `You are the person's Personal Assistant, chatting about project %s (chat %s). Answer directly.
 Look things up with list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks; search first and open only what matters. Cite what you used with [[…]] links.
 Use create_ticket and create_epic when asked and return their identifiers. Never claim tickets, execute project work, or delegate.
-You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this".
+You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this". In a persona chat, about: "persona" reaches the persona's own memory (its identity and shared moments) instead.
 set_chat_title names the conversation on its first message. When the person shares a YouTube link, read it with get_video_transcript before reacting to the video.`
 
 // sourceVisible reports whether a link target or backlink source of this kind

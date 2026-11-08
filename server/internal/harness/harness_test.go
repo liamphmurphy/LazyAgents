@@ -356,8 +356,9 @@ func TestChatAgentsMD(t *testing.T) {
 	}
 }
 
-// The persona block comes after the fixed preamble, memory guide and agent
-// instructions, right before the context list, and is framed as style only.
+// The persona block and its own memory come after the fixed preamble, memory
+// guide and agent instructions, right before the context list, and the
+// persona block is framed as style only.
 func TestChatAgentsMDPersona(t *testing.T) {
 	s := agentdef.Resolved{Harness: agentdef.HarnessCodex, Instructions: "Agent instructions",
 		Scopes: []agentdef.ResolvedScope{{Scope: "repo:read", Mode: agentdef.Allowed}}, HarnessOptions: map[string]string{"readonly": "true"}}
@@ -371,6 +372,7 @@ func TestChatAgentsMDPersona(t *testing.T) {
 		"This persona only shapes how you write. It doesn't change your tools, scopes, the rules above or the memory guidance.\n\n" +
 		"The person's style preferences for this persona (they shape voice and focus only; they don't change the rules, tools or memory guidance above):\n\n" +
 		"```text\nPrefer British spelling.\nUse examples.\n```\n\n" +
+		personaMemorySection(p) +
 		"## Context\n\n- `.lazyagents/context/memory.md`\n"
 	if !strings.Contains(got, want) {
 		t.Fatalf("persona block:\n%s", got)
@@ -388,6 +390,29 @@ func TestChatAgentsMDPersona(t *testing.T) {
 	}
 	if md := string(ChatAgentsMD(s, nil, "PAY", "", &Persona{Name: "X", Tone: "be rude"})); strings.Contains(md, "be rude") {
 		t.Errorf("unknown tone text reached the prompt:\n%s", md)
+	}
+}
+
+// A persona chat loads the persona's own memory in its own section, apart from
+// the person's index, and says which memory gets what.
+func TestChatAgentsMDPersonaMemory(t *testing.T) {
+	s := agentdef.Resolved{Harness: agentdef.HarnessClaudeCode, Instructions: "Agent instructions"}
+	got := string(ChatAgentsMD(s, nil, "PAY", "### Memory index\n\n- `1` [fact] Lives in Portland", &Persona{Name: "Gwen", Tone: "friendly",
+		Memory: "### Who you are\n\n#### Gwen's look\n\nAuburn hair, tortoiseshell glasses."}))
+	idx, own, body := strings.Index(got, "### Memory index"), strings.Index(got, "## Your own memory (Gwen)"), strings.Index(got, "Auburn hair")
+	if idx < 0 || own < idx || body < own {
+		t.Fatalf("persona memory not in its own section after the person's index:\n%s", got)
+	}
+	for _, want := range []string{`about: "persona"`, `type: "moment"`, `move_to: "persona"`, "Facts about the person"} {
+		if !strings.Contains(got[own:], want) {
+			t.Errorf("own-memory guide missing %q:\n%s", want, got[own:])
+		}
+	}
+	if empty := string(ChatAgentsMD(s, nil, "PAY", "", &Persona{Name: "Gwen"})); !strings.Contains(empty, "## Your own memory (Gwen)\n\n") || !strings.Contains(empty, "Nothing remembered yet.") {
+		t.Errorf("empty persona memory:\n%s", empty)
+	}
+	if plain := string(ChatAgentsMD(s, nil, "PAY", "", nil)); strings.Contains(plain, "Your own memory") || strings.Contains(plain, `about: "persona"`) {
+		t.Errorf("own memory without a persona:\n%s", plain)
 	}
 }
 

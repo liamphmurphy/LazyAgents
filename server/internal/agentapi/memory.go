@@ -13,17 +13,25 @@ import (
 )
 
 // Memory tools: the personal assistant's per-person memory. They only work in
-// a chat, and only on the memory of the person the chat belongs to.
+// a chat, and only on the memory of the person the chat belongs to: the
+// person's own memory, plus (in a persona chat) that one persona's own memory.
+// No chat reaches another persona's memory.
+
+const (
+	aboutPerson  = "person"
+	aboutPersona = "persona"
+)
 
 type SearchMemoryIn struct {
 	Query          string `json:"query,omitempty" jsonschema:"Words to look for in titles, tags, summaries and bodies; empty lists the newest entries"`
-	Type           string `json:"type,omitempty" jsonschema:"Only this type: preference, project, person, life, work, fact or other"`
+	Type           string `json:"type,omitempty" jsonschema:"Only this type: preference, project, person, life, work, fact, other or moment"`
 	Limit          int    `json:"limit,omitempty" jsonschema:"Up to 50, default 10"`
 	IncludeRetired bool   `json:"include_retired,omitempty" jsonschema:"Also return entries superseded by newer ones"`
+	About          string `json:"about,omitempty" jsonschema:"Whose memory: person (default, what you remember about the person) or persona (your own memory as this chat's persona)"`
 }
 
 type MemoryIDIn struct {
-	ID string `json:"id" jsonschema:"Memory id from the index, search_memory or save_memory"`
+	ID string `json:"id" jsonschema:"Memory id from the index, your own memory, search_memory or save_memory"`
 }
 
 type SaveMemoryIn struct {
@@ -31,7 +39,8 @@ type SaveMemoryIn struct {
 	Summary string   `json:"summary,omitempty" jsonschema:"One line saying what to remember"`
 	Body    string   `json:"body,omitempty" jsonschema:"Details, if the summary isn't enough"`
 	Tags    []string `json:"tags,omitempty" jsonschema:"A few lowercase keywords"`
-	Type    string   `json:"type,omitempty" jsonschema:"One of preference, project, person, life, work, fact, other (default other)"`
+	Type    string   `json:"type,omitempty" jsonschema:"One of preference, project, person, life, work, fact, other (default other); moment (a shared moment) only with about persona"`
+	About   string   `json:"about,omitempty" jsonschema:"Whose memory: person (default: facts about the person) or persona (your own identity, traits, history, appearance and shared moments; persona chats only)"`
 }
 
 type UpdateMemoryIn struct {
@@ -40,13 +49,16 @@ type UpdateMemoryIn struct {
 	Summary      *string   `json:"summary,omitempty"`
 	Body         *string   `json:"body,omitempty"`
 	Tags         *[]string `json:"tags,omitempty" jsonschema:"Replaces all tags"`
-	Type         *string   `json:"type,omitempty" jsonschema:"One of preference, project, person, life, work, fact, other"`
-	SupersededBy string    `json:"superseded_by,omitempty" jsonschema:"Retire this entry in favour of the newer entry with this id"`
+	Type         *string   `json:"type,omitempty" jsonschema:"One of preference, project, person, life, work, fact, other, moment (persona memory only)"`
+	SupersededBy string    `json:"superseded_by,omitempty" jsonschema:"Retire this entry in favour of the newer entry with this id (in the same memory)"`
+	MoveTo       string    `json:"move_to,omitempty" jsonschema:"Move the entry to person (the person's memory) or persona (your own memory as this chat's persona)"`
 }
 
 // memoryEntry is a memory as the assistant reads it.
 type memoryEntry struct {
-	ID           uuid.UUID  `json:"id"`
+	ID uuid.UUID `json:"id"`
+	// About is person (the person's memory) or persona (the chat persona's own).
+	About        string     `json:"about"`
 	Title        string     `json:"title"`
 	Summary      string     `json:"summary"`
 	Body         string     `json:"body,omitempty"`
@@ -62,30 +74,68 @@ type memoryEntry struct {
 }
 
 func toMemoryEntry(m store.Memory, withBody bool) memoryEntry {
-	e := memoryEntry{ID: m.ID, Title: m.Title, Summary: m.Summary, Tags: m.Tags, Type: m.Type, Source: m.Source,
+	e := memoryEntry{ID: m.ID, About: aboutPerson, Title: m.Title, Summary: m.Summary, Tags: m.Tags, Type: m.Type, Source: m.Source,
 		SupersededBy: m.SupersededBy, RetiredReason: m.RetiredReason, CreatedAt: m.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"), UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")}
+	if m.PersonaID != nil {
+		e.About = aboutPersona
+	}
 	if withBody {
 		e.Body = m.Body
 	}
 	return e
 }
 
+// chatMemory is the memory a chat run may use: the person's own, and the
+// chat's persona (nil without one).
+type chatMemory struct {
+	person  memory.Owner
+	persona *uuid.UUID
+	src     memory.Source
+}
+
 // memoryOwner is the person whose memory a chat run may use, and the source
 // to stamp on what it writes.
-func memoryOwner(ctx context.Context, d Deps, c agents.Caller) (memory.Owner, memory.Source, error) {
+func memoryOwner(ctx context.Context, d Deps, c agents.Caller) (chatMemory, error) {
 	s, err := chatScopeFor(ctx, d, c)
 	if err != nil {
-		return memory.Owner{}, memory.Source{}, err
+		return chatMemory{}, err
 	}
 	if s == nil {
-		return memory.Owner{}, memory.Source{}, apperr.Conflict("memory tools only work in a chat with a person")
+		return chatMemory{}, apperr.Conflict("memory tools only work in a chat with a person")
 	}
-	return memory.Owner{WorkspaceID: c.Agent.WorkspaceID, UserID: s.UserID},
-		memory.Source{Label: "chat " + s.ChatID.String(), ChatID: &s.ChatID, RunID: c.RunID}, nil
+	return chatMemory{person: memory.Owner{WorkspaceID: c.Agent.WorkspaceID, UserID: s.UserID}, persona: s.PersonaID,
+		src: memory.Source{Label: "chat " + s.ChatID.String(), ChatID: &s.ChatID, RunID: c.RunID}}, nil
+}
+
+// about picks the person's memory or the chat persona's own. A chat without a
+// persona has no persona memory.
+func (m chatMemory) about(field, v string) (memory.Owner, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", aboutPerson:
+		return m.person, nil
+	case aboutPersona:
+		if m.persona == nil {
+			return memory.Owner{}, apperr.Invalid(field, "this chat has no persona, so there's no persona memory; use person")
+		}
+		return m.person.Persona(*m.persona), nil
+	}
+	return memory.Owner{}, apperr.Invalid(field, "must be person or persona")
+}
+
+// reach is everything the chat may read, change or forget by id: the person's
+// memory plus its own persona's.
+func (m chatMemory) reach() memory.Owner {
+	o := m.person
+	o.PersonaID, o.Scope = m.persona, memory.ScopeChat
+	return o
 }
 
 func searchMemory(ctx context.Context, d Deps, c agents.Caller, in SearchMemoryIn) (any, error) {
-	o, _, err := memoryOwner(ctx, d, c)
+	cm, err := memoryOwner(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
+	o, err := cm.about("about", in.About)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +154,7 @@ func searchMemory(ctx context.Context, d Deps, c agents.Caller, in SearchMemoryI
 }
 
 func readMemory(ctx context.Context, d Deps, c agents.Caller, in MemoryIDIn) (any, error) {
-	o, _, err := memoryOwner(ctx, d, c)
+	cm, err := memoryOwner(ctx, d, c)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +162,7 @@ func readMemory(ctx context.Context, d Deps, c agents.Caller, in MemoryIDIn) (an
 	if err != nil {
 		return nil, err
 	}
-	m, err := memory.New(d.Q).Get(ctx, o, id)
+	m, err := memory.New(d.Q).Get(ctx, cm.reach(), id)
 	if err != nil {
 		return nil, err
 	}
@@ -120,27 +170,35 @@ func readMemory(ctx context.Context, d Deps, c agents.Caller, in MemoryIDIn) (an
 }
 
 func saveMemory(ctx context.Context, d Deps, c agents.Caller, in SaveMemoryIn) (any, error) {
-	o, src, err := memoryOwner(ctx, d, c)
+	cm, err := memoryOwner(ctx, d, c)
 	if err != nil {
 		return nil, err
 	}
-	r, err := memory.New(d.Q).Save(ctx, o, memory.Input{Title: in.Title, Summary: in.Summary, Body: in.Body, Tags: in.Tags, Type: in.Type}, src)
+	o, err := cm.about("about", in.About)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"id": r.Memory.ID, "action": "created", "title": r.Memory.Title,
-		"tell_the_person": "Remembered: " + r.Memory.Title + ". Say so in your reply, and that they can ask you to forget it."}
+	r, err := memory.New(d.Q).Save(ctx, o, memory.Input{Title: in.Title, Summary: in.Summary, Body: in.Body, Tags: in.Tags, Type: in.Type}, cm.src)
+	if err != nil {
+		return nil, err
+	}
+	where := ""
+	if o.PersonaID != nil {
+		where = " (in my own memory)"
+	}
+	out := map[string]any{"id": r.Memory.ID, "action": "created", "about": toMemoryEntry(r.Memory, false).About, "title": r.Memory.Title,
+		"tell_the_person": "Remembered" + where + ": " + r.Memory.Title + ". Say so in your reply, and that they can ask you to forget it."}
 	if r.Updated {
 		p := r.Previous
 		out["action"] = "updated"
 		out["previous"] = map[string]any{"id": p.ID, "title": p.Title, "summary": p.Summary, "type": p.Type}
-		out["tell_the_person"] = "Updated what I remember: '" + p.Title + "' is now '" + r.Memory.Title + "'. Say so in your reply; if this wasn't the same thing, save it again with a more distinct title and restore the old entry with update_memory."
+		out["tell_the_person"] = "Updated what I remember" + where + ": '" + p.Title + "' is now '" + r.Memory.Title + "'. Say so in your reply; if this wasn't the same thing, save it again with a more distinct title and restore the old entry with update_memory."
 	}
 	return out, nil
 }
 
 func updateMemory(ctx context.Context, d Deps, c agents.Caller, in UpdateMemoryIn) (any, error) {
-	o, src, err := memoryOwner(ctx, d, c)
+	cm, err := memoryOwner(ctx, d, c)
 	if err != nil {
 		return nil, err
 	}
@@ -148,10 +206,18 @@ func updateMemory(ctx context.Context, d Deps, c agents.Caller, in UpdateMemoryI
 	if err != nil {
 		return nil, err
 	}
-	svc := memory.New(d.Q)
+	p := memory.Patch{Title: in.Title, Summary: in.Summary, Body: in.Body, Tags: in.Tags, Type: in.Type}
+	if strings.TrimSpace(in.MoveTo) != "" {
+		to, err := cm.about("move_to", in.MoveTo)
+		if err != nil {
+			return nil, err
+		}
+		p.Move, p.ToPersona = true, to.PersonaID
+	}
+	o, svc := cm.reach(), memory.New(d.Q)
 	var m store.Memory
-	if in.Title != nil || in.Summary != nil || in.Body != nil || in.Tags != nil || in.Type != nil {
-		if m, err = svc.Update(ctx, o, id, memory.Patch{Title: in.Title, Summary: in.Summary, Body: in.Body, Tags: in.Tags, Type: in.Type}, src); err != nil {
+	if p.Title != nil || p.Summary != nil || p.Body != nil || p.Tags != nil || p.Type != nil || p.Move {
+		if m, err = svc.Update(ctx, o, id, p, cm.src); err != nil {
 			return nil, err
 		}
 	}
@@ -167,11 +233,18 @@ func updateMemory(ctx context.Context, d Deps, c agents.Caller, in UpdateMemoryI
 	if m.ID == uuid.Nil {
 		return nil, apperr.Invalid("id", "give at least one field to change")
 	}
-	return map[string]any{"memory": toMemoryEntry(m, false), "tell_the_person": "Updated what I remember: " + m.Title + "."}, nil
+	tell := "Updated what I remember: " + m.Title + "."
+	if p.Move {
+		tell = "Moved '" + m.Title + "' to the person's memory."
+		if m.PersonaID != nil {
+			tell = "Moved '" + m.Title + "' to my own memory."
+		}
+	}
+	return map[string]any{"memory": toMemoryEntry(m, false), "tell_the_person": tell}, nil
 }
 
 func forgetMemory(ctx context.Context, d Deps, c agents.Caller, in MemoryIDIn) (any, error) {
-	o, _, err := memoryOwner(ctx, d, c)
+	cm, err := memoryOwner(ctx, d, c)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +252,7 @@ func forgetMemory(ctx context.Context, d Deps, c agents.Caller, in MemoryIDIn) (
 	if err != nil {
 		return nil, err
 	}
-	svc := memory.New(d.Q)
+	o, svc := cm.reach(), memory.New(d.Q)
 	m, err := svc.Get(ctx, o, id)
 	if err != nil {
 		return nil, err

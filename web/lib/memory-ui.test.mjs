@@ -68,6 +68,14 @@ test("import takes our own export and skips retired entries", () => {
   assert.equal(r.skipped, 3);
 });
 
+test("import skips a persona's own memory from our export, and the Markdown export marks it", () => {
+  const own = { id: "3", title: "Gwen's look", summary: "", body: "", tags: [], type: "moment", source: "chat x", persona_id: "p1", created_at: "c", updated_at: "u" };
+  const r = parseMemoryImport(JSON.stringify({ memories: [{ title: "About me", type: "fact" }, own] }));
+  assert.deepEqual(r.entries.map((e) => e.title), ["About me"]);
+  assert.equal(r.skipped, 1);
+  assert.match(memoriesMarkdown([own], "now"), /- Persona's own memory: p1/);
+});
+
 test("import normalises tags, types and lengths", () => {
   const long = "x".repeat(500);
   const r = parseMemoryImport(JSON.stringify([{ title: long, summary: long, body: "y".repeat(30000), tags: "#Foo, bar ,foo," + "z".repeat(41), type: "weird" }, { summary: "Only a summary" }]));

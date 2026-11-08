@@ -14,7 +14,8 @@ import {
   useUpdateMemory,
   type MemoryType,
 } from "@/lib/api/hooks";
-import { IMPORT_PROMPT, MEMORY_TYPES, memoriesMarkdown, parseMemoryImport, parseTags, typeLabel } from "@/lib/memory-ui";
+import { usePersonaLookup } from "@/lib/api/persona-memory-hooks";
+import { IMPORT_PROMPT, MEMORY_TYPES, PERSONA_MEMORY_TYPES, memoriesMarkdown, parseMemoryImport, parseTags, typeLabel } from "@/lib/memory-ui";
 import { cx } from "@/lib/cx";
 import { Button, IconButton } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -86,9 +87,26 @@ function SourceText({ m }: { m: Memory }) {
   return <>from {m.source}</>;
 }
 
+/** A persona's own memory (who it is, moments it shared), labelled with the persona's name and colour. */
+function PersonaTag({ id }: { id: string }) {
+  const p = usePersonaLookup().get(id);
+  return (
+    <span className="inline-flex items-center gap-1 text-fg-secondary" data-testid="memory-persona">
+      <span aria-hidden className="size-2 rounded-full" style={{ background: p?.color ?? "currentColor" }} />
+      {p ? `${p.name}’s own memory` : "A persona’s own memory"}
+    </span>
+  );
+}
+
 function Meta({ m }: { m: Memory }) {
   return (
     <p className="text-[11.5px] text-fg-tertiary">
+      {m.persona_id && (
+        <>
+          <PersonaTag id={m.persona_id} />
+          {" · "}
+        </>
+      )}
       {typeLabel(m.type)} · <SourceText m={m} /> · saved {shortDate(m.created_at)}
       {m.updated_at !== m.created_at && ` · updated ${shortDate(m.updated_at)}`}
     </p>
@@ -145,7 +163,7 @@ function Editor({ m, onDone, onDeleted }: { m: Memory; onDone: () => void; onDel
             onChange={(e) => setType(e.target.value)}
             className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
           >
-            {MEMORY_TYPES.map((t) => (
+            {(m.persona_id ? PERSONA_MEMORY_TYPES : MEMORY_TYPES).map((t) => (
               <option key={t} value={t}>
                 {typeLabel(t)}
               </option>
@@ -202,6 +220,7 @@ function Row({ m, editing, onEdit, onDone }: { m: Memory; editing: boolean; onEd
 function Page({
   q,
   type,
+  whose,
   offset,
   hide,
   editing,
@@ -211,6 +230,7 @@ function Page({
 }: {
   q: string;
   type?: MemoryType;
+  whose: string;
   offset: number;
   hide?: string;
   editing?: string;
@@ -218,7 +238,7 @@ function Page({
   onMore: () => void;
   last: boolean;
 }) {
-  const list = useMemories(q, type, offset);
+  const list = useMemories(q, type, offset, whose);
   if (list.isError) return <Banner tone="blocked" title="Couldn’t load memories">{errorText(list.error)}</Banner>;
   if (!list.data)
     return (
@@ -232,7 +252,7 @@ function Page({
     <>
       {offset === 0 && rows.length === 0 && (
         <p className="px-1 py-6 text-center text-[13px] text-fg-secondary">
-          {q || type ? "No memories match." : "Nothing remembered yet. The assistant saves useful things as you talk and tells you when it does."}
+          {q || type || whose ? "No memories match." : "Nothing remembered yet. The assistant saves useful things as you talk and tells you when it does."}
         </p>
       )}
       <ul className="flex flex-col gap-2">
@@ -436,6 +456,9 @@ export function MemoryPanel() {
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [type, setType] = useState<MemoryType | undefined>(undefined);
+  // "" everything, "person" about the person, "persona" every persona's own memory, or one persona's id.
+  const [whose, setWhose] = useState("");
+  const personas = usePersonaLookup();
   const [pages, setPages] = useState(1);
   const [editing, setEditing] = useState<string | undefined>(undefined);
   const [importing, setImporting] = useState(false);
@@ -485,9 +508,36 @@ export function MemoryPanel() {
       ) : (
         <>
           <div className="flex flex-col gap-2 px-4 pt-3">
-            <TextInput type="search" aria-label="Search memories" placeholder="Search memories" value={text} onChange={(e) => setText(e.target.value)} />
+            <div className="flex gap-2">
+              <TextInput
+                type="search"
+                aria-label="Search memories"
+                placeholder="Search memories"
+                value={text}
+                className="min-w-0 flex-1"
+                onChange={(e) => setText(e.target.value)}
+              />
+              <select
+                aria-label="Whose memory"
+                value={whose}
+                onChange={(e) => {
+                  setWhose(e.target.value);
+                  setPages(1);
+                }}
+                className="h-[30px] w-40 flex-none rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
+              >
+                <option value="">Everything</option>
+                <option value="person">About you</option>
+                {personas.size > 0 && <option value="persona">Personas’ own</option>}
+                {[...personas.values()].map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}’s own
+                  </option>
+                ))}
+              </select>
+            </div>
             <div role="group" aria-label="Filter by type" className="flex flex-wrap gap-1">
-              {[undefined, ...MEMORY_TYPES].map((t) => (
+              {[undefined, ...PERSONA_MEMORY_TYPES].map((t) => (
                 <button
                   key={t ?? "all"}
                   type="button"
@@ -513,6 +563,7 @@ export function MemoryPanel() {
                 key={i}
                 q={q}
                 type={type}
+                whose={whose}
                 offset={i * 50}
                 hide={panel.focus}
                 editing={editing}

@@ -1,6 +1,11 @@
 // Package memory is the personal assistant's per-person memory store, kept
 // apart from the shared wiki. Every operation takes an Owner and touches only
 // that person's entries: there is no cross-person read or write.
+//
+// A person's memory splits in two: what the assistant remembers about the
+// person (persona_id NULL), and each persona's own memory of who it is and of
+// the moments it shared with the person (persona_id set). The Owner's
+// PersonaID and Scope say which part an operation reaches.
 package memory
 
 import (
@@ -18,8 +23,11 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// Types are the kinds of memory an entry can be.
-var Types = []string{"preference", "project", "person", "life", "work", "fact", "other"}
+// Types are the kinds of memory an entry can be. A moment (something the
+// persona and the person shared) belongs in a persona's own memory only.
+var Types = []string{"preference", "project", "person", "life", "work", "fact", "other", TypeMoment}
+
+const TypeMoment = "moment"
 
 const (
 	maxTitle   = 200
@@ -37,10 +45,44 @@ const (
 	dupSummary = 0.75
 )
 
-// Owner is the one person whose memory an operation reads or writes.
+// Owner is the one person whose memory an operation reads or writes, and
+// which part of it.
 type Owner struct {
 	WorkspaceID uuid.UUID
 	UserID      uuid.UUID
+	// PersonaID is the persona whose own memory this is; nil is the person's
+	// own memory. Save always writes exactly here.
+	PersonaID *uuid.UUID
+	// Scope widens what reads, edits and deletes reach beyond PersonaID's
+	// memory. The zero value reaches only that memory.
+	Scope Scope
+}
+
+// Scope is how much of a person's memory an Owner reaches.
+type Scope string
+
+const (
+	ScopeOwn      Scope = ""         // exactly PersonaID's memory (the person's own when nil)
+	ScopeChat     Scope = "chat"     // the person's own plus PersonaID's: a persona chat
+	ScopePersonas Scope = "personas" // every persona's, none of the person's own
+	ScopeAll      Scope = "all"      // everything: the person's memory manager
+)
+
+// Person is the person's own memory.
+func (o Owner) Person() Owner {
+	return Owner{WorkspaceID: o.WorkspaceID, UserID: o.UserID}
+}
+
+// Persona is one persona's own memory.
+func (o Owner) Persona(id uuid.UUID) Owner {
+	return Owner{WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: &id}
+}
+
+func (o Owner) scope() string {
+	if o.Scope == ScopeOwn {
+		return "own"
+	}
+	return string(o.Scope)
 }
 
 // Source records where a memory came from.
@@ -59,13 +101,16 @@ type Input struct {
 	Type    string
 }
 
-// Patch changes some fields of an entry; nil leaves a field alone.
+// Patch changes some fields of an entry; nil leaves a field alone. Move
+// moves the entry to ToPersona's own memory, or the person's when nil.
 type Patch struct {
-	Title   *string
-	Summary *string
-	Body    *string
-	Tags    *[]string
-	Type    *string
+	Title     *string
+	Summary   *string
+	Body      *string
+	Tags      *[]string
+	Type      *string
+	Move      bool
+	ToPersona *uuid.UUID
 }
 
 type Service struct{ Q *store.Queries }
@@ -80,18 +125,31 @@ type SaveResult struct {
 	Previous *store.Memory
 }
 
-// Save adds a memory, or updates the person's near-duplicate entry instead.
-// Secrets are refused.
+// Save adds a memory to exactly o.PersonaID's memory (the person's own when
+// nil), or updates that memory's near-duplicate entry instead. A moment is
+// always added: each is its own thing. Secrets are refused.
 func (s *Service) Save(ctx context.Context, o Owner, in Input, src Source) (SaveResult, error) {
 	typeGiven := strings.TrimSpace(in.Type) != ""
 	in, err := normalizeInput(in)
 	if err != nil {
 		return SaveResult{}, err
 	}
-	dup, err := s.Q.NearDuplicateMemory(ctx, store.NearDuplicateMemoryParams{
-		WorkspaceID: o.WorkspaceID, UserID: o.UserID, Title: in.Title, Summary: in.Summary,
-		TitleThreshold: dupTitle, SummaryThreshold: dupSummary,
-	})
+	if err := checkMoment(in.Type, o.PersonaID); err != nil {
+		return SaveResult{}, err
+	}
+	o = Owner{WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID}
+	if o.PersonaID != nil {
+		if err := s.checkPersona(ctx, o, *o.PersonaID); err != nil {
+			return SaveResult{}, err
+		}
+	}
+	dup, err := store.NearDuplicateMemoryRow{}, pgx.ErrNoRows
+	if in.Type != TypeMoment {
+		dup, err = s.Q.NearDuplicateMemory(ctx, store.NearDuplicateMemoryParams{
+			WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID, Title: in.Title, Summary: in.Summary,
+			TitleThreshold: dupTitle, SummaryThreshold: dupSummary,
+		})
+	}
 	switch {
 	case err == nil:
 		prev := dup.Memory
@@ -115,13 +173,15 @@ func (s *Service) Save(ctx context.Context, o Owner, in Input, src Source) (Save
 		return SaveResult{}, err
 	}
 	m, err := s.Q.CreateMemory(ctx, store.CreateMemoryParams{
-		WorkspaceID: o.WorkspaceID, UserID: o.UserID, Title: in.Title, Summary: in.Summary, Body: in.Body,
+		WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID, Title: in.Title, Summary: in.Summary, Body: in.Body,
 		Tags: in.Tags, Type: in.Type, Source: src.Label, SourceChatID: src.ChatID, SourceRunID: src.RunID,
 	})
 	return SaveResult{Memory: m}, err
 }
 
-// Update edits an entry. A non-empty src.Label replaces the entry's source.
+// Update edits an entry o reaches and, with p.Move, moves it between the
+// person's and a persona's memory. A non-empty src.Label replaces the entry's
+// source.
 func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch, src Source) (store.Memory, error) {
 	if p.Title != nil {
 		p.Title = new(strings.TrimSpace(*p.Title))
@@ -154,12 +214,52 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch, sr
 	if err := checkSecrets(deref(p.Title), deref(p.Summary), deref(p.Body), derefTags(p.Tags)); err != nil {
 		return store.Memory{}, err
 	}
+	if p.Move || (p.Type != nil && *p.Type == TypeMoment) {
+		if err := s.checkPlacement(ctx, o, id, p); err != nil {
+			return store.Memory{}, err
+		}
+	}
 	return s.update(ctx, o, id, p, src)
 }
 
+// checkPlacement refuses a patch that would leave a moment in the person's
+// memory, move a retired entry, or move an entry to someone else's persona.
+func (s *Service) checkPlacement(ctx context.Context, o Owner, id uuid.UUID, p Patch) error {
+	cur, err := s.Get(ctx, o, id)
+	if err != nil {
+		return err
+	}
+	persona, typ := cur.PersonaID, cur.Type
+	if p.Move {
+		if cur.SupersededBy != nil {
+			return apperr.Invalid("id", "a retired entry can't move; restore it first")
+		}
+		persona = p.ToPersona
+	}
+	if p.Type != nil {
+		typ = *p.Type
+	}
+	if err := checkMoment(typ, persona); err != nil {
+		return err
+	}
+	if p.Move && p.ToPersona != nil {
+		return s.checkPersona(ctx, o, *p.ToPersona)
+	}
+	return nil
+}
+
+// checkPersona refuses a persona that isn't one of o's person's.
+func (s *Service) checkPersona(ctx context.Context, o Owner, id uuid.UUID) error {
+	_, err := s.Q.GetPersona(ctx, store.GetPersonaParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return apperr.Invalid("persona_id", "must be one of your personas")
+	}
+	return err
+}
+
 func (s *Service) update(ctx context.Context, o Owner, id uuid.UUID, p Patch, src Source) (store.Memory, error) {
-	arg := store.UpdateMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID,
-		Title: p.Title, Summary: p.Summary, Body: p.Body, Type: p.Type}
+	arg := store.UpdateMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID,
+		Title: p.Title, Summary: p.Summary, Body: p.Body, Type: p.Type, Move: p.Move, ToPersonaID: p.ToPersona}
 	if p.Tags != nil {
 		arg.Tags = *p.Tags
 		if arg.Tags == nil {
@@ -174,13 +274,15 @@ func (s *Service) update(ctx context.Context, o Owner, id uuid.UUID, p Patch, sr
 }
 
 // Supersede retires an entry in favour of another live entry of the same
-// person, recording why, or restores it when by is nil. A restored entry is
-// never merged by consolidation again.
+// memory (the person's own, or the same persona's), recording why, or
+// restores it when by is nil. A restored entry is never merged by
+// consolidation again.
 func (s *Service) Supersede(ctx context.Context, o Owner, id uuid.UUID, by *uuid.UUID, reason string) (store.Memory, error) {
 	if by != nil && *by == id {
 		return store.Memory{}, apperr.Invalid("superseded_by", "an entry can't supersede itself")
 	}
-	m, err := s.Q.SetMemorySupersededBy(ctx, store.SetMemorySupersededByParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, SupersededBy: by,
+	m, err := s.Q.SetMemorySupersededBy(ctx, store.SetMemorySupersededByParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID,
+		Scope: o.scope(), PersonaID: o.PersonaID, SupersededBy: by,
 		// Only a person restores (the memory manager), and that exempts the
 		// entry from consolidation.
 		RetiredReason: truncate(oneLine(reason), maxReason), RestoredByPerson: by == nil})
@@ -188,21 +290,23 @@ func (s *Service) Supersede(ctx context.Context, o Owner, id uuid.UUID, by *uuid
 		if _, gerr := s.Get(ctx, o, id); gerr != nil {
 			return m, gerr
 		}
-		return m, apperr.Invalid("superseded_by", "must be another of your current memories")
+		return m, apperr.Invalid("superseded_by", "must be another current entry of the same memory")
 	}
 	return m, notFound(err)
 }
 
 func (s *Service) Get(ctx context.Context, o Owner, id uuid.UUID) (store.Memory, error) {
-	m, err := s.Q.GetMemory(ctx, store.GetMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID})
+	m, err := s.Q.GetMemory(ctx, store.GetMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID})
 	return m, notFound(err)
 }
 
-// Query filters List and Search. An empty Text lists newest first.
+// Query filters List and Search. An empty Text lists newest change first, or
+// newest first with ByCreated.
 type Query struct {
 	Text           string
 	Type           string
 	IncludeRetired bool
+	ByCreated      bool
 	Limit, Offset  int
 }
 
@@ -212,7 +316,7 @@ type Hit struct {
 	Rank float64
 }
 
-// Find searches (ranked) when q.Text is set, and lists newest first otherwise.
+// Find searches (ranked) when q.Text is set, and lists otherwise.
 func (s *Service) Find(ctx context.Context, o Owner, q Query) ([]Hit, error) {
 	if q.Limit <= 0 || q.Limit > 200 {
 		q.Limit = 20
@@ -227,14 +331,14 @@ func (s *Service) Find(ctx context.Context, o Owner, q Query) ([]Hit, error) {
 	text := strings.TrimSpace(q.Text)
 	out := []Hit{}
 	if text == "" {
-		rows, err := s.Q.ListMemories(ctx, store.ListMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID,
-			IncludeRetired: q.IncludeRetired, Type: typ, Lim: int32(q.Limit), Off: int32(max(q.Offset, 0))})
+		rows, err := s.Q.ListMemories(ctx, store.ListMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID,
+			IncludeRetired: q.IncludeRetired, Type: typ, ByCreated: q.ByCreated, Lim: int32(q.Limit), Off: int32(max(q.Offset, 0))})
 		for _, m := range rows {
 			out = append(out, Hit{Memory: m})
 		}
 		return out, err
 	}
-	rows, err := s.Q.SearchMemories(ctx, store.SearchMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID,
+	rows, err := s.Q.SearchMemories(ctx, store.SearchMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID,
 		Q: text, IncludeRetired: q.IncludeRetired, Type: typ, Lim: int32(q.Limit)})
 	for _, r := range rows {
 		out = append(out, Hit{Memory: r.Memory, Rank: r.Rank})
@@ -248,7 +352,8 @@ func (s *Service) Count(ctx context.Context, o Owner, q Query) (int, error) {
 	if q.Type != "" {
 		typ = &q.Type
 	}
-	n, err := s.Q.CountMemories(ctx, store.CountMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, IncludeRetired: q.IncludeRetired, Type: typ})
+	n, err := s.Q.CountMemories(ctx, store.CountMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID,
+		IncludeRetired: q.IncludeRetired, Type: typ})
 	return int(n), err
 }
 
@@ -261,8 +366,10 @@ type IndexEntry struct {
 }
 
 // Index lists the person's most recently changed live entries, titles and
-// summaries only, and the total number of live entries.
+// summaries only, and the total number of live entries. Personas' own
+// memories are never in it.
 func (s *Service) Index(ctx context.Context, o Owner) ([]IndexEntry, int, error) {
+	o = o.Person()
 	hits, err := s.Find(ctx, o, Query{Limit: IndexSize})
 	if err != nil {
 		return nil, 0, err
@@ -300,23 +407,24 @@ func IndexMarkdown(entries []IndexEntry, total int) string {
 	return b.String()
 }
 
-// Forget deletes an entry and everything it superseded.
+// Forget deletes an entry o reaches and everything it superseded.
 func (s *Service) Forget(ctx context.Context, o Owner, id uuid.UUID) error {
-	n, err := s.Q.DeleteMemory(ctx, store.DeleteMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID})
+	n, err := s.Q.DeleteMemory(ctx, store.DeleteMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID})
 	if err == nil && n == 0 {
 		return apperr.ErrNotFound
 	}
 	return err
 }
 
-// DeleteAll forgets everything the person has and returns how many entries
-// went (superseded entries cascade, so only top-level rows are counted).
+// DeleteAll forgets everything o reaches and returns how many entries went
+// (superseded entries cascade, so only top-level rows are counted).
 func (s *Service) DeleteAll(ctx context.Context, o Owner) (int, error) {
-	n, err := s.Q.DeleteAllMemories(ctx, store.DeleteAllMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID})
+	n, err := s.Q.DeleteAllMemories(ctx, store.DeleteAllMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID})
 	return int(n), err
 }
 
-// Export returns every entry the person has, retired ones included.
+// Export returns every entry the person has, retired ones and personas'
+// memories included.
 func (s *Service) Export(ctx context.Context, o Owner) ([]store.Memory, error) {
 	return s.Q.ExportMemories(ctx, store.ExportMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID})
 }
@@ -349,6 +457,14 @@ func normalizeInput(in Input) (Input, error) {
 		return in, err
 	}
 	return in, nil
+}
+
+// checkMoment refuses a moment outside a persona's own memory.
+func checkMoment(typ string, persona *uuid.UUID) error {
+	if typ == TypeMoment && persona == nil {
+		return apperr.Invalid("type", "a moment belongs in a persona's own memory, not the person's")
+	}
+	return nil
 }
 
 // checkSecrets refuses any field that looks like it holds a credential.
