@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { catalog, installChatApi } from "./mock-chat-api";
 
+// History lives in the expanded menu.
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
+
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const picker = (page: Page) => page.getByRole("button", { name: /Model for the next message/ });
 const effort = (page: Page) => page.getByRole("button", { name: /Effort for the next message/ });
@@ -537,7 +540,7 @@ test("archived conversations are listed under Archived and can be restored", asy
   await expect(page).toHaveURL(/\/chat\?project=WEB/);
   await expect(nav.getByText("No conversations yet.")).toBeVisible();
 
-  await history(page).getByRole("radio", { name: "Archived" }).click();
+  await history(page).getByRole("button", { name: "Archived conversations" }).click();
   await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
   await expect(nav.getByText("Archived conversations are read-only")).toBeVisible();
   await expect(nav.getByRole("button", { name: "Archive keep me" })).toHaveCount(0);
@@ -551,18 +554,18 @@ test("archived conversations are listed under Archived and can be restored", asy
   await chat.getByRole("button", { name: "Restore keep me" }).last().click();
   await expect(composer(page)).toBeVisible();
   // The restored conversation is listed under Active again, next to the open one.
-  await expect(history(page).getByRole("radio", { name: "Active" })).toBeChecked();
+  await expect(history(page).getByRole("button", { name: "Archived conversations" })).toHaveAttribute("aria-pressed", "false");
   await expect(page).not.toHaveURL(/view=archived/);
   await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
-  await history(page).getByRole("radio", { name: "Archived" }).click();
+  await history(page).getByRole("button", { name: "Archived conversations" }).click();
   await expect(nav.getByText("No archived conversations.")).toBeVisible();
-  await history(page).getByRole("radio", { name: "Active" }).click();
+  await history(page).getByRole("button", { name: "Archived conversations" }).click();
   await expect(nav.getByRole("link", { name: "keep me" })).toBeVisible();
 
   // Restore straight from the list too. Archiving the open chat navigates back to the index first.
   await page.getByRole("button", { name: "Archive keep me" }).click();
   await expect(nav.getByText("No conversations yet.")).toBeVisible();
-  await history(page).getByRole("radio", { name: "Archived" }).click();
+  await history(page).getByRole("button", { name: "Archived conversations" }).click();
   await expect(page).toHaveURL(/view=archived/);
   await nav.getByRole("button", { name: "Restore keep me" }).click();
   await expect(nav.getByText("No archived conversations.")).toBeVisible();

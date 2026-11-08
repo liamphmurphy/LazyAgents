@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installChatApi } from "./mock-chat-api";
 
+// History lives in the expanded menu.
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
+
 // A ```canvas fence opens a canvas beside the chat, without running its content.
 
 const DOC = "11111111-1111-4111-8111-111111111111";

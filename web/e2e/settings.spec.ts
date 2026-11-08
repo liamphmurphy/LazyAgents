@@ -61,7 +61,8 @@ test("provider secrets show status and unlocks, are write-only, and saving refre
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Escape");
   const before = mock.models();
-  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /Settings/ }).click();
+  // Settings is in Work mode; the profile link reaches it from Chat without a reload.
+  await page.getByRole("complementary", { name: "Main menu" }).locator('a[href="/settings#profile"]').click();
 
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" })).toContainText("a setting runs need is missing");
@@ -97,7 +98,7 @@ test("provider secrets show status and unlocks, are write-only, and saving refre
 
   // The chat model cache was invalidated, so back in chat Codex is selectable
   // without a reload (the cache is otherwise fresh for a minute).
-  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /Assistant/ }).click();
+  await page.getByRole("radio", { name: "Chat" }).click();
   await page.getByRole("button", { name: "New conversation" }).first().click();
   await page.getByRole("button", { name: /Model for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).not.toHaveAttribute("aria-disabled", "true");

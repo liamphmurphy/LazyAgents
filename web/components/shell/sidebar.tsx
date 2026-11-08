@@ -4,16 +4,20 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { DropdownMenu } from "radix-ui";
-import { useSecrets } from "@/lib/api/hooks";
+import { useChat, useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { needsAttention } from "@/lib/settings";
-import { ASSISTANT_VIEWS, NAV_GROUPS, currentProject, isActive, switchHref, withProject, type NavBadge, type ScopedProject } from "@/lib/project-scope";
+import { ASSISTANT_VIEWS, currentProject, isActive, modeHref, navGroupsFor, switchHref, withProject, type NavBadge, type NavMode, type ScopedProject } from "@/lib/project-scope";
+import { viewedChatId } from "@/lib/persona-dock";
 import { Icon, Mark } from "@/components/ui/icon";
+import { Segmented } from "@/components/ui/controls";
 import { Kbd } from "@/components/ui/primitives";
 import { floatPanel } from "@/components/domain/pickers";
 import { SidebarCapacity } from "@/components/domain/runner-capacity";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { SidebarSavedViews } from "@/components/domain/saved-views";
+import { ChatHistory, NewConversationButton, PersonaRail } from "@/app/(app)/chat/_components/chat-history";
+import { useNavMode } from "./nav-mode";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
 export type SidebarProps = {
@@ -132,6 +136,20 @@ function ToggleButton({ expanded, onToggle }: { expanded: boolean; onToggle: () 
   );
 }
 
+/** Half the menu each when expanded, stacked icons on the rail. Switching also goes to that mode's page. */
+function ModeToggle({ mode, onChange, rail }: { mode: NavMode; onChange: (m: NavMode) => void; rail?: boolean }) {
+  const options = rail
+    ? ([
+        { value: "chat", name: "Chat", label: <Icon name="msg" /> },
+        { value: "work", name: "Work", label: <Icon name="briefcase" /> },
+      ] as const)
+    : ([
+        { value: "chat", label: "Chat" },
+        { value: "work", label: "Work" },
+      ] as const);
+  return <Segmented label="Menu mode" layout={rail ? "column" : "fill"} value={mode} onChange={onChange} options={options} />;
+}
+
 const menuItem =
   "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 outline-none data-[highlighted]:bg-hover";
 
@@ -213,21 +231,35 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
   const [expanded, setExpanded] = useExpanded();
   const navActive = (href: string) => isActive(pathname, href) && !(href === "/tickets" && search.get("sv"));
   const newTicketHref = current ? `/tickets/new?project=${encodeURIComponent(current.key)}` : "/tickets/new";
+  const router = useRouter();
+  const { mode, lastWork } = useNavMode(pathname);
+  const switchMode = (m: NavMode) => {
+    if (m !== mode) router.push(modeHref(m, current?.key, lastWork));
+  };
+  const groups = navGroupsFor(mode);
+  const chatting = mode === "chat";
+  // An open conversation belongs to its own project, whatever the switcher remembers.
+  const viewed = viewedChatId(pathname);
+  const openChat = useChat(viewed ?? undefined);
+  const chatProject = (viewed ? (openChat.data?.project ?? search.get("project")) : null) ?? current?.key ?? "";
+  const newTicket = (
+    <Link
+      href={newTicketHref}
+      aria-label="New ticket"
+      title="New ticket (C)"
+      className="grid size-[30px] flex-none place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover"
+    >
+      <Icon name="plus" size={15} strokeWidth={1.6} />
+    </Link>
+  );
   if (!expanded) {
     return (
-      <aside aria-label="Main menu" className="flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3">
+      <aside aria-label="Main menu" className={cx("flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3", chatting && "min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh")}>
         <span title={workspace} className="grid size-[30px] place-items-center">
           <Mark />
         </span>
         <div className="flex flex-col items-center gap-1">
-          <Link
-            href={newTicketHref}
-            aria-label="New ticket"
-            title="New ticket (C)"
-            className="grid size-[30px] place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover"
-          >
-            <Icon name="plus" size={15} strokeWidth={1.6} />
-          </Link>
+          {chatting ? <NewConversationButton project={chatProject} id={viewed ?? undefined} rail /> : newTicket}
           <button
             type="button"
             aria-label="Search"
@@ -237,9 +269,10 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           >
             <Icon name="search" size={14} strokeWidth={1.6} />
           </button>
+          <ModeToggle mode={mode} onChange={switchMode} rail />
         </div>
         <nav aria-label="Primary" className="flex w-full flex-col gap-3">
-          {NAV_GROUPS.map((g) => (
+          {groups.map((g) => (
             <div key={g.label} role="group" aria-label={g.label} className="flex flex-col gap-px">
               {g.items.map((n) => (
                 <Fragment key={n.href}>
@@ -258,6 +291,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
             </div>
           ))}
         </nav>
+        {chatting && <PersonaRail project={chatProject} id={viewed ?? undefined} viewed={viewed} />}
         <div className="mt-auto flex flex-col items-center gap-2">
           <Link href="/settings#profile" aria-label={`${user.name}: Profile`} title="Profile" className="rounded-full hover:opacity-80">
             <HumanAvatar name={user.name} initials={user.initials} src={user.avatarUrl} size={26} label={false} />
@@ -268,7 +302,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
     );
   }
   return (
-    <aside aria-label="Main menu" className="flex flex-[1_1_232px] flex-col gap-5 border-r border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3">
+    <aside aria-label="Main menu" className={cx("flex flex-[1_1_232px] flex-col gap-5 border-r border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3", chatting && "min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh")}>
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <button type="button" className="flex items-center gap-[9px] rounded-md px-1.5 py-[5px] hover:bg-hover">
@@ -276,33 +310,30 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
             <span className="text-[13.5px] font-semibold tracking-[-0.01em]">{workspace}</span>
             <Icon name="chev" size={14} strokeWidth={1.6} className="text-fg-tertiary" />
           </button>
-          <Link
-            href={newTicketHref}
-            aria-label="New ticket"
-            title="New ticket (C)"
-            className="grid size-[30px] place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover"
-          >
-            <Icon name="plus" size={15} strokeWidth={1.6} />
-          </Link>
+          {chatting ? <NewConversationButton project={chatProject} id={viewed ?? undefined} /> : newTicket}
         </div>
         <ProjectSwitcher projects={active} current={current} />
       </div>
 
-      {/* Shared command menu also opens from the keyboard. */}
-      <button
-        type="button"
-        onClick={() => window.dispatchEvent(new Event("la:search"))}
-        className="flex h-8 items-center gap-[9px] rounded-md border border-border bg-search px-2.5 text-[13px] text-fg-tertiary hover:bg-hover"
-      >
-        <Icon name="search" size={14} strokeWidth={1.6} />
-        <span className="flex-1 text-left">Search…</span>
-        <Kbd>⌘K</Kbd>
-      </button>
+      <div className="flex flex-col gap-2">
+        {/* Shared command menu also opens from the keyboard. */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("la:search"))}
+          className="flex h-8 items-center gap-[9px] rounded-md border border-border bg-search px-2.5 text-[13px] text-fg-tertiary hover:bg-hover"
+        >
+          <Icon name="search" size={14} strokeWidth={1.6} />
+          <span className="flex-1 text-left">Search…</span>
+          <Kbd>⌘K</Kbd>
+        </button>
+        <ModeToggle mode={mode} onChange={switchMode} />
+      </div>
 
       <nav aria-label="Primary" className="flex flex-col gap-3.5">
-        {NAV_GROUPS.map((g) => (
-          <div key={g.label} role="group" aria-labelledby={`nav-${g.label}`} className="flex flex-col gap-px">
-            <span id={`nav-${g.label}`} className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</span>
+        {groups.map((g) => (
+          <div key={g.label} role="group" aria-label={g.label} className="flex flex-col gap-px">
+            {/* Work's pinned items sit above the labelled groups without a heading of their own. */}
+            {(chatting || g.label !== "Personal") && <span aria-hidden className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</span>}
             {g.items.map((n) => (
               <Fragment key={n.href}>
                 <NavLink href={withProject(n.href, current?.key)} active={navActive(n.href)}>
@@ -327,8 +358,9 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
         ))}
       </nav>
 
-      {pathname === "/" && <SidebarCapacity />}
-      <div className={cx("flex items-center gap-2.5 px-1.5 py-1", pathname !== "/" && "mt-auto")}>
+      {chatting && <ChatHistory project={chatProject} id={viewed ?? undefined} viewed={viewed} />}
+      {pathname === "/" && !chatting && <SidebarCapacity />}
+      <div className={cx("flex items-center gap-2.5 px-1.5 py-1", (pathname !== "/" || chatting) && "mt-auto")}>
         <Link href="/settings#profile" title="Profile" className="-mx-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-hover">
           <HumanAvatar name={user.name} initials={user.initials} src={user.avatarUrl} size={26} label={false} />
           <span className="flex min-w-0 flex-1 flex-col leading-tight">

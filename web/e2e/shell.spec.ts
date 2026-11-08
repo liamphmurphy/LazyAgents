@@ -24,7 +24,8 @@ test("switching projects from the board rescopes the board and project nav, and 
   await expect(crumbs.locator('[aria-current="page"]')).toHaveText("Board");
   for (const group of ["Personal", "Project", "Workspace"]) await expect(nav(page).getByRole("group", { name: group })).toBeVisible();
   await expect(nav(page).getByRole("group", { name: "Project" }).getByRole("link")).toHaveText(["Board", "Tickets", "Epics", "Plans", "Artifacts"]);
-  await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link")).toHaveText(["Inbox", "Dashboard", "Assistant", "Memory", "Personas", "Library", "Workflows"]);
+  await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link")).toHaveText(["Inbox", "Dashboard"]);
+  await expect(page.getByRole("radio", { name: "Work" })).toBeChecked();
   await expect(nav(page).locator('[aria-current="page"]')).toHaveText("Board");
 
   await switcher(page).click();
@@ -41,7 +42,7 @@ test("switching projects from the board rescopes the board and project nav, and 
   await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
   for (const [label, href] of [
     ["Board", "/board?project=OPS"], ["Tickets", "/tickets?project=OPS"], ["Epics", "/epics?project=OPS"],
-    ["Plans", "/plans?project=OPS"], ["Assistant", "/chat?project=OPS"], ["Artifacts", "/artifacts?project=OPS"],
+    ["Plans", "/plans?project=OPS"], ["Artifacts", "/artifacts?project=OPS"],
     ["Dashboard", "/"], ["Agents", "/agents"], ["Wiki", "/wiki"], ["Settings", "/settings"],
   ]) await expect(nav(page).getByRole("link", { name: label, exact: true })).toHaveAttribute("href", href);
 
@@ -61,6 +62,31 @@ test("switching projects from the board rescopes the board and project nav, and 
   await expect(page).toHaveURL(/\/board\?project=WEB$/);
   await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Web app");
   expect(api.unhandled).toEqual([]);
+});
+
+test("the Chat/Work toggle swaps the menu and goes to each mode's page", async ({ page }) => {
+  await installBoardApi(page);
+  await page.route("**/api/v1/chats?*", (route) => route.fulfill({ json: { chats: [] } }));
+  await page.route("**/api/v1/personas", (route) => route.fulfill({ json: { personas: [] } }));
+  await page.goto("/runs");
+  await expect(nav(page).getByRole("group", { name: "Workspace" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New conversation" })).toHaveCount(0);
+
+  await page.getByRole("radio", { name: "Chat" }).click();
+  await expect(page).toHaveURL(/\/chat/);
+  await expect(page.getByRole("radio", { name: "Chat" })).toBeChecked();
+  await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link", { name: "Assistant" })).toBeVisible();
+  await expect(nav(page).getByRole("group", { name: "Project" })).toHaveCount(0);
+  await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New conversation" })).toBeVisible();
+
+  // A pinned page keeps the mode; Work returns to the last Work page.
+  await nav(page).getByRole("link", { name: /^Inbox/ }).click();
+  await expect(page).toHaveURL(/\/inbox/);
+  await expect(page.getByRole("radio", { name: "Chat" })).toBeChecked();
+  await page.getByRole("radio", { name: "Work" }).click();
+  await expect(page).toHaveURL(/\/runs$/);
+  await expect(nav(page).getByRole("group", { name: "Project" })).toBeVisible();
 });
 
 test("an archived or unknown project shows an explicit empty state with a way back", async ({ page }) => {
