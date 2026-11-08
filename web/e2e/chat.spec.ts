@@ -642,7 +642,7 @@ test("the rail shows an interactive app being written", async ({ page }) => {
   await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
-  await send(page, "app: show me");
+  await send(page, "building-app: show me");
   await expect(page.getByTestId("chat-status")).toHaveText(/ is building an interactive app…$/);
   await expect(page.getByTestId("chat-steps").locator('[data-step-state="active"]')).toContainText("Building an interactive app");
   await page.getByRole("button", { name: "Stop" }).click();
