@@ -591,11 +591,12 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     <Tooltip.Provider delayDuration={200}>
       <section aria-label={chatTitle(c)} className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
         <DropOverlay over={drop.over} />
-        <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
-          <h1 className="type-heading truncate">{chatTitle(c)}</h1>
+        {/* Sized by its own width: a panel beside the chat can leave it narrow on a wide screen. */}
+        <div className="@container flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
+          <h1 className="type-heading min-w-0 truncate">{chatTitle(c)}</h1>
           {group ? (
             <span
-              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden"
+              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden @max-[460px]:hidden"
               data-testid="chat-participants"
               title={participants.map((p) => p.name).join(", ")}
             >
@@ -611,7 +612,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </span>
             </span>
           ) : (
-            <span className="flex flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden">
+            <span className="flex flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden @max-[460px]:hidden">
               <span className="sr-only">Persona: </span>
               <PersonaAvatar persona={persona} size={16} />
               <PersonaName persona={persona} />
@@ -621,7 +622,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             <span
               data-testid="repo-chip"
               title={c.repo_url}
-              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-fg-secondary max-md:hidden"
+              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-fg-secondary max-md:hidden @max-[720px]:hidden"
             >
               <Icon name="branch" size={13} className="flex-none" />
               <span className="truncate text-fg">{repoShortName(c.repo_url)}</span>
@@ -630,6 +631,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           )}
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
           <span className="flex-1" />
+          <span className="flex-none">
           <Tabs
             label="Chat view"
             value={tab}
@@ -639,6 +641,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               { key: "activity", label: "Activity" },
             ]}
           />
+          </span>
           {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>

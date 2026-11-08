@@ -92,6 +92,12 @@ func TestAgentAPIOverMCP(t *testing.T) {
 		t.Fatalf("tools: %d %v", len(tools.Tools), err)
 	}
 
+	for _, tl := range tools.Tools {
+		if raw, _ := json.Marshal(tl.InputSchema); strings.Contains(string(raw), `"maxItems":16`) {
+			t.Errorf("%s describes a UUID as a byte array: %s", tl.Name, raw)
+		}
+	}
+
 	call := func(name string, args map[string]any) map[string]any {
 		t.Helper()
 		res, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})

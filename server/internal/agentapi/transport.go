@@ -7,10 +7,13 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -23,6 +26,18 @@ import (
 type mcpServer = *mcp.Server
 
 func brokerFor(scope string) (broker.Action, bool) { return broker.For(scope) }
+
+// inputSchema is In's inferred schema, except that a UUID is the string it
+// decodes from rather than the 16-byte array it's stored as.
+func inputSchema[In any]() *jsonschema.Schema {
+	s, err := jsonschema.For[In](&jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{
+		reflect.TypeFor[uuid.UUID](): {Type: "string", Format: "uuid"},
+	}})
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
 
 // define binds a typed tool function to both transports.
 func define[In any](name, desc string, fn func(context.Context, Deps, agents.Caller, In) (any, error)) Tool {
@@ -90,7 +105,7 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 			return fn(ctx, d, c, in)
 		},
 		addMCP: func(srv mcpServer, d Deps) {
-			mcp.AddTool(srv, &mcp.Tool{Name: name, Description: desc},
+			mcp.AddTool(srv, &mcp.Tool{Name: name, Description: desc, InputSchema: inputSchema[In]()},
 				func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
 					c, ok := callerFrom(req)
 					if !ok {

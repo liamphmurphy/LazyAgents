@@ -325,7 +325,6 @@ function Rail({ threads, replies, resolved, target, activeId, setActive, agent, 
   return (
     <aside aria-label="Comments" className="flex flex-none flex-col gap-2 border-border-subtle p-3 max-xl:border-t xl:w-[264px] xl:overflow-y-auto xl:border-l">
       {target && <Composer key={target.kind === "text" ? `${target.start}-${target.end}` : target.vid} target={target} readOnly={readOnly} actions={actions} seq={seq} onDone={onComposerDone} />}
-      {!target && !threads.length && !resolved.length && <p className="text-xs text-fg-tertiary">Select text or click an element to comment.</p>}
       <ol className="flex flex-col gap-2">{threads.map(card)}</ol>
       {resolved.length > 0 && (
         <details className="text-xs text-fg-tertiary">
@@ -421,6 +420,7 @@ function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }
       {failure && <p role="alert" className="border-b border-border-row px-4 py-1 text-xs text-pill-blocked-fg">{errorText(failure)}</p>}
       <div className="flex min-h-0 flex-1 max-xl:flex-col max-xl:overflow-y-auto">
         <div className="relative min-w-0 flex-1 p-4 xl:overflow-auto">
+          {canComment && !target && !open.length && !resolved.length && <p className="mb-3 text-xs text-fg-tertiary">{c?.kind === "svg" ? "Click an element to comment on it." : "Select text to comment on it."}</p>}
           {q.isError ? (
             <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(q.error)}</p>
           ) : !c ? (
@@ -447,7 +447,7 @@ function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }
             </div>
           )}
         </div>
-        {c && view === "preview" && (
+        {c && view === "preview" && (open.length > 0 || resolved.length > 0 || (canComment && target)) && (
           <Rail threads={open} replies={replies} resolved={resolved} target={canComment ? target : null} activeId={activeId} setActive={setActiveId} agent={agent} readOnly={locked} actions={actions} seq={c.seq} onComposerDone={() => setTarget(null)} numberOf={numberOf} />
         )}
       </div>

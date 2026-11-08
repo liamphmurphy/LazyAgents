@@ -236,6 +236,25 @@ test("edit saves a version, changes show a diff, older versions restore, and it 
   await expect.poll(() => calls.promoted).toBe(1);
 });
 
+test("opening a canvas makes room: the header fits and no empty rail shows", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await open(page);
+  await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
+  const pane = await openDoc(page);
+  await expect(page.getByRole("complementary", { name: "Chat history" })).toHaveCount(0);
+  await expect(pane.getByRole("complementary", { name: "Comments" })).toHaveCount(0);
+  await expect(pane).toContainText("Select text to comment on it.");
+  const paneBox = (await pane.boundingBox())!;
+  const button = (await page.getByRole("button", { name: "Canvas, 2 open" }).boundingBox())!;
+  expect(button.x + button.width).toBeLessThanOrEqual(paneBox.x);
+  const chat = (await page.getByRole("tab", { name: "Chat", exact: true }).boundingBox())!;
+  const activity = (await page.getByRole("tab", { name: "Activity", exact: true }).boundingBox())!;
+  expect(activity.y).toBe(chat.y);
+
+  await pane.getByRole("button", { name: "Close canvas" }).click();
+  await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
+});
+
 test("a failing canvas request doesn't hold up the composer", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   await page.route(/\/api\/v1\/chats\/[^/]+\/canvases$/, (route) => route.fulfill({ status: 500, contentType: "application/json", body: '{"code":"internal","message":"boom"}' }));

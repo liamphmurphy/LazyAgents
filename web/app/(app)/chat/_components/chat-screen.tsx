@@ -496,7 +496,8 @@ export function ChatScreen({ id }: { id?: string }) {
         <ProjectScopeState base="/chat" scope={scope} />
       ) : (
         <div className="relative flex min-h-0 flex-1 max-md:flex-col">
-          <HistorySidebar project={project} id={id} newChat={newChat} />
+          {/* A canvas needs the width; closing it brings the history back. */}
+          {!(id && canvas.open) && <HistorySidebar project={project} id={id} newChat={newChat} />}
           <div className="flex min-w-0 flex-1 flex-col">
             {(noHarness || create.isError) && (
               <div className="flex flex-col gap-1 px-6 pt-3">
