@@ -191,7 +191,7 @@ func (s *Server) toWorkflowRun(ctx context.Context, r store.WorkflowRun) (api.Wo
 	carried := runs.WorkflowImagesByNode(graph, rows, all)
 	for _, st := range rows {
 		step := api.WorkflowStep{NodeId: st.NodeID, Attempt: int(st.Attempt), State: api.WorkflowStepState(st.State), Output: st.Output, AgentRunId: st.AgentRunID,
-			Decision: st.Decision, Note: st.Note, CreatedAt: st.CreatedAt, FinishedAt: st.FinishedAt}
+			Decision: st.Decision, Note: st.Note, CheckResult: st.CheckResult, CreatedAt: st.CreatedAt, FinishedAt: st.FinishedAt}
 		if images := carried[st.NodeID]; len(images) > 0 {
 			list := toWorkflowImages(images)
 			step.Images = &list
@@ -201,6 +201,14 @@ func (s *Server) toWorkflowRun(ctx context.Context, r store.WorkflowRun) (api.Wo
 	if len(all) > 0 {
 		list := toWorkflowImages(all)
 		out.Images = &list
+	}
+	checks, err := s.Q.ListWorkflowCheckAttempts(ctx, r.ID)
+	if err != nil {
+		return out, err
+	}
+	out.CheckAttempts = make([]api.WorkflowCheckAttempt, len(checks))
+	for i, c := range checks {
+		out.CheckAttempts[i] = api.WorkflowCheckAttempt{NodeId: c.NodeID, Attempt: int(c.Attempt), Result: c.CheckResult, Output: c.Output, Note: c.Note, FinishedAt: c.FinishedAt}
 	}
 	return out, nil
 }

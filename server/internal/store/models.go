@@ -777,18 +777,19 @@ type WorkflowRun struct {
 }
 
 type WorkflowStep struct {
-	ID         uuid.UUID
-	RunID      uuid.UUID
-	NodeID     string
-	Attempt    int32
-	State      string
-	Output     string
-	AgentRunID *uuid.UUID
-	Decision   string
-	Note       string
-	CreatedAt  time.Time
-	FinishedAt *time.Time
-	ImageCalls int32
+	ID          uuid.UUID
+	RunID       uuid.UUID
+	NodeID      string
+	Attempt     int32
+	State       string
+	Output      string
+	AgentRunID  *uuid.UUID
+	Decision    string
+	Note        string
+	CreatedAt   time.Time
+	FinishedAt  *time.Time
+	ImageCalls  int32
+	CheckResult string
 }
 
 type WorkflowStepImage struct {

@@ -133,13 +133,14 @@ func proposeWorkflowEdit(ctx context.Context, d Deps, c agents.Caller, in Propos
 
 type SubmitWorkflowOutputIn struct {
 	Output string `json:"output" jsonschema:"Your complete result, in markdown"`
+	Check  string `json:"check,omitempty" jsonschema:"Only when your task says this step is a check: pass if every requirement is met, otherwise fail"`
 }
 
 func submitWorkflowOutput(ctx context.Context, d Deps, c agents.Caller, in SubmitWorkflowOutputIn) (any, error) {
 	if c.RunID == nil {
 		return nil, apperr.Conflict("submit_workflow_output only works in a workflow step")
 	}
-	if err := d.Runs.SubmitWorkflowOutput(ctx, *c.RunID, in.Output); err != nil {
+	if err := d.Runs.SubmitWorkflowOutput(ctx, *c.RunID, in.Output, in.Check); err != nil {
 		return nil, err
 	}
 	return map[string]any{"saved": true}, nil

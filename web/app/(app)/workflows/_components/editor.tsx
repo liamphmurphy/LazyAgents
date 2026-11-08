@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { Markdown } from "@/components/domain/markdown";
 import { PersonaAvatar } from "@/components/domain/persona-avatar";
-import { PALETTE, ancestors, canConnect, diffGraphs, newNodeId, removeNode, type Graph, type GraphNode, type NodeType } from "@/lib/workflows";
+import { PALETTE, ancestors, canConnect, diffGraphs, newNodeId, parentChecks, removeNode, type Graph, type GraphNode, type NodeType } from "@/lib/workflows";
 import { FLOW_STYLE, NODE_TYPES, toFlowEdges, toFlowNodes, type FlowNode } from "./flow";
 
 const SAVE_DELAY = 700;
@@ -61,6 +61,25 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
             <input type="checkbox" checked={!!c.images} disabled={!!c.agent_handle} onChange={(e) => config({ images: e.target.checked || undefined })} /> Generate images
           </label>
           {c.images && <p className="text-[12px] text-fg-tertiary">Always runs on Codex, as a persona allowed to generate images. Later steps can see the images.</p>}
+          <label className="flex items-center gap-2 text-[13px] text-fg-2">
+            <input type="checkbox" aria-label="Check" checked={!!c.check} onChange={(e) => config({ check: e.target.checked || undefined, retry_from: undefined, max_attempts: undefined })} /> This step is a check (pass or fail)
+          </label>
+          {c.check && (
+            <>
+              <p className="text-[12px] text-fg-tertiary">Nothing after this step runs unless it passes. A missing or unreadable result counts as a failure.</p>
+              <Labeled label="If the check fails">
+                <select aria-label="Re-run on failure" className={SELECT} value={c.retry_from ?? ""} onChange={(e) => config({ retry_from: e.target.value || undefined })}>
+                  <option value="">Don&apos;t retry</option>
+                  {rerunnable.map((n) => <option key={n.id} value={n.id}>Re-run from {n.title}</option>)}
+                </select>
+              </Labeled>
+              {c.retry_from && (
+                <Labeled label="Failures allowed before giving up">
+                  <TextInput aria-label="Failures allowed" type="number" min={1} max={5} value={c.max_attempts ?? 3} onChange={(e) => config({ max_attempts: Number(e.target.value) || undefined })} />
+                </Labeled>
+              )}
+            </>
+          )}
         </>
       )}
       {node.type === "gate" && (
@@ -76,6 +95,12 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
               <TextInput aria-label="Reviews allowed" type="number" min={1} max={5} value={c.max_attempts ?? 3} onChange={(e) => config({ max_attempts: Number(e.target.value) || undefined })} />
             </Labeled>
           )}
+          <Labeled label="Approve needs this check to pass">
+            <select aria-label="Tied check" className={SELECT} value={c.requires_check ?? ""} onChange={(e) => config({ requires_check: e.target.value || undefined })}>
+              <option value="">No check</option>
+              {parentChecks(graph, node.id).map((n) => <option key={n.id} value={n.id}>{n.title}</option>)}
+            </select>
+          </Labeled>
           <fieldset className="flex flex-col gap-1">
             <legend className={LABEL}>Show for review (none selected shows the previous steps)</legend>
             {before.filter((n) => n.type !== "trigger").map((n) => (
