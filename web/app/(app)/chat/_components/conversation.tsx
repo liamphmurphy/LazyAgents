@@ -38,6 +38,7 @@ import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
 import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle } from "./reply-tools";
+import { ChatSuggestions } from "./suggestions";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { CiteContext } from "@/components/domain/cite-marker";
 import { summaryRequestUrl } from "@/lib/chat-recommend";
@@ -695,6 +696,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do.
               </EmptyState>
             ) : (
+              <>
               <PersonaGreeting
                 persona={persona}
                 tone={full?.tone}
@@ -702,6 +704,9 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 firstName={boot.data?.me.name?.split(" ")[0]}
                 canSwitch={!!personas.data?.personas.length}
               />
+              {/* Picking one sends it, which would drop a half-written message. */}
+              {!text.trim() && <ChatSuggestions onPick={submit} disabled={locked || !!unavailable} />}
+              </>
             )
           ) : (
             <>

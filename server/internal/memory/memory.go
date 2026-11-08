@@ -407,8 +407,17 @@ func IndexMarkdown(entries []IndexEntry, total int) string {
 	return b.String()
 }
 
+// clearSuggestions drops the person's conversation starters before a forget,
+// so a forgotten entry can't linger on the new-chat screen.
+func (s *Service) clearSuggestions(ctx context.Context, o Owner) error {
+	return s.Q.ClearChatSuggestions(ctx, store.ClearChatSuggestionsParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID})
+}
+
 // Forget deletes an entry o reaches and everything it superseded.
 func (s *Service) Forget(ctx context.Context, o Owner, id uuid.UUID) error {
+	if err := s.clearSuggestions(ctx, o); err != nil {
+		return err
+	}
 	n, err := s.Q.DeleteMemory(ctx, store.DeleteMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID})
 	if err == nil && n == 0 {
 		return apperr.ErrNotFound
@@ -419,6 +428,9 @@ func (s *Service) Forget(ctx context.Context, o Owner, id uuid.UUID) error {
 // DeleteAll forgets everything o reaches and returns how many entries went
 // (superseded entries cascade, so only top-level rows are counted).
 func (s *Service) DeleteAll(ctx context.Context, o Owner) (int, error) {
+	if err := s.clearSuggestions(ctx, o); err != nil {
+		return 0, err
+	}
 	n, err := s.Q.DeleteAllMemories(ctx, store.DeleteAllMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID})
 	return int(n), err
 }

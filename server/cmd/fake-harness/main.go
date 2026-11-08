@@ -384,6 +384,17 @@ func main() {
 		emit(map[string]any{"type": "system", "subtype": "init", "model": "fake", "mcp_servers": []any{map[string]any{"name": "lazyagents", "status": "connected"}}})
 	}
 
+	// Conversation starters: a background prompt with no tools or MCP.
+	if os.Getenv("FAKE_HARNESS_MODE") == "suggestions" {
+		answer := `Here you go: [{"title":"Plan the next session","prompt":"Help me plan my next session.","icon":"dice"},` +
+			`{"title":"Tidy the runner","prompt":"What should I tidy in the runner?","icon":"not-an-icon"},` +
+			`{"title":"Pick a book","prompt":"Suggest a book for this week.","icon":"wiki"},` +
+			`{"title":"Plan a ride","prompt":"Plan a bike ride for Saturday.","icon":"compass"}]`
+		text(answer)
+		result(false, answer)
+		return
+	}
+
 	// A chat can answer successfully without connecting to MCP or calling tools.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat" {
 		if prompt == "slow" && resume == "" {

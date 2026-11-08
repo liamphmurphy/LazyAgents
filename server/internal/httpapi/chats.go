@@ -416,6 +416,24 @@ func (s *Server) UpdateChat(ctx context.Context, req api.UpdateChatRequestObject
 	return api.UpdateChat200JSONResponse(out), err
 }
 
+// ListChatSuggestions returns the person's conversation starters: none until
+// the runner has written a batch, or once the last one is too old.
+func (s *Server) ListChatSuggestions(ctx context.Context, _ api.ListChatSuggestionsRequestObject) (api.ListChatSuggestionsResponseObject, error) {
+	u, _, ws := me(ctx)
+	out := api.ListChatSuggestions200JSONResponse{Suggestions: []api.ChatSuggestion{}}
+	items, err := s.Q.GetChatSuggestions(ctx, store.GetChatSuggestionsParams{WorkspaceID: ws, UserID: u.ID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(items, &out.Suggestions); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (s *Server) DeleteChat(ctx context.Context, req api.DeleteChatRequestObject) (api.DeleteChatResponseObject, error) {
 	u, _, ws := me(ctx)
 	if err := s.Runs.DeleteChat(ctx, ws, u.ID, req.Id); err != nil {

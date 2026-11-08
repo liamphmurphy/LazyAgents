@@ -802,6 +802,9 @@ func (s *Service) DeleteChat(ctx context.Context, ws, user, id uuid.UUID) error 
 		if err != nil {
 			return err
 		}
+		if err := q.ClearChatSuggestions(ctx, store.ClearChatSuggestionsParams{WorkspaceID: ws, UserID: user}); err != nil {
+			return err
+		}
 		if err := stopResearchForChat(ctx, q, chat.ID); err != nil {
 			return err
 		}

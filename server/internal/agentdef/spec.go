@@ -175,6 +175,11 @@ const OptionWebSearch = "web_search"
 // have the feature switched off. Claude Code and OpenCode never receive it.
 const OptionImageGeneration = "image_generation"
 
+// OptionNoTools ("true") makes a turn answer from its prompt alone: no MCP
+// servers and no tools. Vesper's own background prompts use it, since they
+// carry a person's private context and have no run to scope tools to.
+const OptionNoTools = "no_tools"
+
 // Efforts are the allowed values of the "effort" harness option.
 var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 
