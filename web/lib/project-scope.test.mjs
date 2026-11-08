@@ -86,6 +86,7 @@ test("assistantPanelHref toggles on a chat and opens the Assistant from elsewher
   assert.equal(assistantPanelHref("/chat/1", q("project=WEB"), "memory", "WEB"), "/chat/1?project=WEB&memory=1");
   assert.equal(assistantPanelHref("/chat/1", q("project=WEB&memory=1"), "memory", "WEB"), "/chat/1?project=WEB");
   assert.equal(assistantPanelHref("/chat/1", q("project=WEB&memory=abc"), "personas", "WEB"), "/chat/1?project=WEB&personas=1");
+  assert.equal(assistantPanelHref("/chat/1", q("project=WEB&canvas=1"), "memory", "WEB"), "/chat/1?project=WEB&memory=1");
   assert.equal(assistantPanelHref("/board", q("project=WEB&epic=2"), "personas", "WEB"), "/chat?project=WEB&personas=1");
   assert.equal(assistantPanelHref("/inbox", q(""), "memory", undefined), "/chat?memory=1");
 });

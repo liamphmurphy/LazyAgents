@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { ResearchToggle } from "./reply-tools";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -22,6 +23,7 @@ import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { ChipList } from "./context-chips";
 import { RestoreChat } from "./restore";
+import { CanvasButton, CanvasPanel } from "./canvas-panel";
 import { MemoryPanel, useMemoryPanel } from "./memory-panel";
 import { PersonaAvatar, PersonaFilter, PersonaName, PersonaSwitcher, RepoSelect, personaLook, useOpenPersonaManager, usePersonaFilter } from "./persona";
 import { PersonaPanel, usePersonaPanel } from "./persona-panel";
@@ -201,7 +203,7 @@ function ArchivedRow({ chat, active, project, onDeleted, all }: { chat: Chat; ac
         aria-current={active ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
       >
-        <PersonaAvatar persona={personaLook(chat.persona)} />
+        {all && <PersonaAvatar persona={personaLook(chat.persona)} />}
         <span className="flex min-w-0 flex-col">
           <span className="truncate">{chatTitle(chat)}</span>
           <RowMeta chat={chat} showPersona={all} />
@@ -248,7 +250,7 @@ function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: 
             aria-current={active ? "page" : undefined}
             className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
           >
-            <PersonaAvatar persona={personaLook(chat.persona)} />
+            {all && <PersonaAvatar persona={personaLook(chat.persona)} />}
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="flex min-w-0 items-center gap-2">
                 {chat.state === "running" && <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-done" />}
@@ -450,6 +452,8 @@ export function ChatScreen({ id }: { id?: string }) {
     : scope.status === "ready" ? (scope.project?.key ?? "") : "";
   const memory = useMemoryPanel();
   const personaPanel = usePersonaPanel();
+  const canvas = useCanvasPanel();
+  const turnRunning = current.data?.state === "running";
   const create = useCreateChat();
   const personas = usePersonas();
   const health = useHarnessHealth();
@@ -500,7 +504,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </div>
             )}
             {id ? (
-              <Conversation key={id} id={id} onNew={newConversation} />
+              <Conversation key={id} id={id} onNew={newConversation} actions={<CanvasButton chatId={id} live={turnRunning} />} />
             ) : (
               <>
                 {chats.isError ? (
@@ -518,7 +522,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {personaPanel.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
+          {id && canvas.open ? <CanvasPanel chatId={id} live={turnRunning} /> : personaPanel.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
         </div>
       )}
     </div>

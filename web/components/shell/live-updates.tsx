@@ -16,7 +16,7 @@ const prefixes: Record<string, string[]> = {
   knowledge: ["knowledge", "wiki"],
   project: ["projects", "planning", "bootstrap", "tickets", "boards", "inbox", "search"],
   inbox: ["inbox", "bootstrap"],
-  chat: ["chats"],
+  chat: ["chats", "canvases"],
   // A persona edit changes the name, color and avatar every chat using it embeds.
   persona: ["personas", "chats"],
 };

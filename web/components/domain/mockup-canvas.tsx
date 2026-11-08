@@ -71,12 +71,12 @@ export type SourceHistory = ReturnType<typeof useSourceHistory>;
 const checker =
   "bg-surface-sunken [background-image:conic-gradient(var(--border-subtle)_25%,transparent_0_50%,var(--border-subtle)_0_75%,transparent_0)] [background-size:16px_16px]";
 
-function renderNode(n: SNode, key?: number): ReactNode {
+export function renderNode(n: SNode, key?: number): ReactNode {
   if (n.tag === "#text") return n.text;
   return createElement(n.tag, { key, ...n.attrs, "data-path": n.path }, ...n.children.map(renderNode));
 }
 
-function viewBoxOf(attrs: Record<string, string>): { x: number; y: number; w: number; h: number } {
+export function viewBoxOf(attrs: Record<string, string>): { x: number; y: number; w: number; h: number } {
   const vb = attrs.viewBox?.trim().split(/[\s,]+/).map(Number);
   if (vb && vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0) return { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
   const num = (v?: string) => (v && /^[\d.]+(px)?$/.test(v.trim()) ? parseFloat(v) : NaN);

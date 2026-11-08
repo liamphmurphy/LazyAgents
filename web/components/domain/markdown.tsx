@@ -13,8 +13,10 @@ import { headingAnchors } from "@/lib/slug";
 import { linkify, parseWikiLinks, WIKILINK_SCHEME } from "@/lib/wikilinks";
 import { isAppFence } from "@/lib/chat-app";
 import { isSvgFence } from "@/lib/chat-svg";
+import { isCanvasFence } from "@/lib/chat-canvas";
 import { groupRecommendFences, isRecommendFence, RECOMMEND_ROW } from "@/lib/chat-recommend";
 import { AppFence } from "./app-fence";
+import { CanvasFence } from "./canvas-fence";
 import { CITE_SCHEME } from "@/lib/chat-sources";
 import { isChoicesFence } from "@/lib/chat-choices";
 import { youtubeMoment } from "@/lib/chat-recommend";
@@ -98,6 +100,7 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
           if (isAppFence(info)) return <AppFence code={code.children} info={info} />;
           // ```svg-image fences show as images.
           if (isSvgFence(info)) return <SvgFence code={code.children} info={info} />;
+          if (isCanvasFence(info)) return <CanvasFence code={code.children} info={info} />;
           if (isMermaidFence(info)) return <MermaidFence code={code.children} info={info} />;
           if (isChoicesFence(info)) return <ChoicesFence code={code.children} info={info} />;
           if (isResearchPlanFence(info)) return <ResearchFence code={code.children} info={info} />;

@@ -93,6 +93,7 @@ export function assistantPanelHref(pathname: string, search: URLSearchParams, pa
   const open = onChat && q.has(panel);
   q.delete("memory");
   q.delete("personas");
+  q.delete("canvas"); // one right-hand panel at a time
   if (!open) q.set(panel, "1");
   const query = q.toString();
   return `${onChat ? pathname : "/chat"}${query ? `?${query}` : ""}`;

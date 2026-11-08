@@ -37,6 +37,7 @@ export function useMemoryPanel() {
     else {
       q.set("memory", value);
       q.delete("personas"); // one right-hand panel at a time
+      q.delete("canvas");
     }
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
