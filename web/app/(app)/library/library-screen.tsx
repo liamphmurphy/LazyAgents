@@ -23,7 +23,6 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { Tabs } from "@/components/ui/controls";
-import { useState } from "react";
 import { Fridge } from "./fridge";
 
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
