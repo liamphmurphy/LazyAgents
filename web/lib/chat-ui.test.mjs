@@ -21,6 +21,7 @@ test("tool calls pair with results and skip events before the turn", () => {
 test("MCP tool names lose the lazyagents prefix from either harness", () => {
   assert.equal(bareTool("mcp__lazyagents__read_page"), "read_page");
   assert.equal(bareTool("lazyagents.read_page"), "read_page");
+  assert.equal(bareTool("lazyagents_read_page"), "read_page");
   assert.equal(bareTool("read_page"), "read_page");
   assert.equal(bareTool("mcp__github__get_issue"), "github.get_issue");
 });
@@ -210,7 +211,8 @@ test("chatSteps follows the newest whole-list plan and marks steps added after w
   const { steps, planned } = stepsOf([todo(["Read", "in_progress"], ["Test", "pending"]), { tool: "Read" }, todo(["Read", "completed"], ["Fix", "in_progress"], ["Test", "pending"])]);
   assert.equal(planned, true);
   assert.deepEqual(steps.map((s) => [s.title, s.state, !!s.added]), [["Read", "done", false], ["Fix", "active", true], ["Test", "planned", false]]);
-  assert.deepEqual(stepsOf([{ tool: "update_plan", input: { plan: [{ step: "One", status: "in_progress" }] } }]).steps.map((s) => [s.title, s.state]), [["One", "active"]]);
+  assert.deepEqual(stepsOf([{ tool: "todowrite", input: { todos: [{ content: "One", status: "in_progress" }, { content: "Gone", status: "cancelled" }] } }]).steps.map((s) => [s.title, s.state]), [["One", "active"]]);
+  assert.deepEqual(stepsOf([{ tool: "todo_list", input: { items: [{ text: "A", completed: true }, { text: "B", completed: false }, { text: "C", completed: false }] } }]).steps.map((s) => s.state), ["done", "active", "planned"]);
 });
 
 test("chatSteps tracks TaskCreate and TaskUpdate by the id in the result", () => {
@@ -220,7 +222,23 @@ test("chatSteps tracks TaskCreate and TaskUpdate by the id in the result", () =>
   assert.deepEqual(steps.map((s) => [s.title, s.state, !!s.added]), [["A", "done", false], ["B", "active", false], ["D", "planned", true]]);
 });
 
-test("chatSteps groups a planless turn's calls by kind, skipping bookkeeping", () => {
+test("a step keeps its key when another is added before it", () => {
+  const todo = (...titles) => ({ tool: "TodoWrite", input: { todos: titles.map((content) => ({ content, status: "pending" })) } });
+  const key = (calls, title) => stepsOf(calls).steps.find((s) => s.title === title).key;
+  assert.equal(key([todo("A", "B")], "B"), key([todo("A", "New", "B")], "B"));
+  assert.notEqual(...stepsOf([todo("Same", "Same")]).steps.map((s) => s.key));
+});
+
+test("every harness's tools and each chat tool land on a described step", () => {
+  const phrases = (...tools) => stepsOf(tools.map((tool) => ({ tool }))).steps.map((s) => s.title);
+  assert.deepEqual(phrases("read", "lazyagents_get_ticket", "edit", "websearch"), ["Reading the code", "Checking tickets", "Writing code", "Searching the web"]);
+  assert.deepEqual(phrases("mcp__lazyagents__list_saved_links", "mcp__lazyagents__propose_persona", "mcp__lazyagents__submit_research_report"), ["Checking your saved links", "Sketching a new persona", "Writing up its research"]);
+  assert.deepEqual(phrases("mcp__lazyagents__canvas_create", "mcp__lazyagents__canvas_patch", "mcp__lazyagents__canvas_patch"), ["Drafting a canvas", "Revising a canvas"]);
+  assert.deepEqual(phrases("mcp__other__mystery"), ["Working on it"]);
+  assert.deepEqual(phrases("mcp__lazyagents__whoami", "ToolSearch", "Skill", "mcp__lazyagents__set_chat_title"), []);
+});
+
+test("chatSteps groups a planless turn's calls, skipping bookkeeping", () => {
   const { steps, planned } = stepsOf([{ tool: "Read" }, { tool: "ToolSearch" }, { tool: "Grep" }, { tool: "Edit" }, { tool: "Bash", input: { command: "go test ./..." } }]);
   assert.equal(planned, false);
   assert.deepEqual(steps.map((s) => s.state), ["done", "done", "active"]);

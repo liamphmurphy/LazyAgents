@@ -7,6 +7,7 @@ import type { components } from "../lib/api/schema";
  * the selected harness/model. Swap `installChatApi` for the real stack once
  * LAZYAGENTS-11 lands; the spec only talks to the UI.
  *
+ * A message starting with "steps:" keeps the turn running with a plan in progress.
  * A message starting with "slow:" keeps the turn running until it is cancelled
  * or interrupted: a message sent while a turn runs stops it, and the next reply
  * echoes "<new> (interrupting: <previous>)", like the server's merged turn;
@@ -609,7 +610,14 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
           events.push({ seq: events.length + 1, type: "tool_call", at: now(), payload: { id: `call-${events.length + 1}`, tool: "mcp__lazyagents__read_page", input: { ref: PLAN.path } } });
           runEvents.set(c.current_run_id, events);
         }
-        if (!text.startsWith("slow:")) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
+        if (text.startsWith("steps:")) {
+          const todos = (...rows: [string, string][]) => rows.map(([content, status]) => ({ content, status }));
+          runEvents.set(c.current_run_id, [
+            { seq: 1, type: "tool_call", at: now(), payload: { id: "plan-1", tool: "TodoWrite", input: { todos: todos(["Read the code", "in_progress"], ["Run tests", "pending"]) } } },
+            { seq: 2, type: "tool_call", at: now(), payload: { id: "plan-2", tool: "TodoWrite", input: { todos: todos(["Read the code", "completed"], ["Fix the snapshot", "in_progress"], ["Run tests", "pending"]) } } },
+          ]);
+        }
+        if (!/^(slow|steps):/.test(text)) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
         void emit(c);
         return json({ chat: ref(c), message: user }, 202);
       }

@@ -165,6 +165,10 @@ type codexItem struct {
 		Kind string `json:"kind"`
 	} `json:"changes"`
 	Query string `json:"query"`
+	Items []struct {
+		Text      string `json:"text"`
+		Completed bool   `json:"completed"`
+	} `json:"items"`
 }
 
 type codexLine struct {
@@ -266,6 +270,12 @@ func (p *codexParser) Line(b []byte) []Event {
 			return nil
 		}
 		return p.item(l.Type == "item.completed", *l.Item)
+	case "item.updated":
+		// Other items would log their call twice; a todo list's updates are its progress.
+		if l.Item == nil || l.Item.Type != "todo_list" {
+			return nil
+		}
+		return p.item(false, *l.Item)
 	}
 	return nil
 }
@@ -326,12 +336,19 @@ func (p *codexParser) item(done bool, it codexItem) []Event {
 			p.res.Usage.ToolCalls++
 			return []Event{{"tool_call", map[string]any{"id": it.ID, "tool": "web_search", "input": map[string]any{"query": it.Query}}}}
 		}
+	case "todo_list":
+		// Each version of the list, so the chat can follow it. Not a call the model
+		// paid for, so it isn't counted, and it finishes at once.
+		return []Event{
+			{"tool_call", map[string]any{"id": it.ID, "tool": "todo_list", "input": map[string]any{"items": it.Items}}},
+			{"tool_result", map[string]any{"id": it.ID, "tool": "todo_list", "is_error": false, "output": ""}},
+		}
 	case "error":
 		if done {
 			return []Event{{"error", map[string]any{"message": it.Message}}}
 		}
 	}
-	return nil // reasoning, todo lists: raw log only
+	return nil // reasoning: raw log only
 }
 
 func (p *codexParser) Result() Result { return p.res }

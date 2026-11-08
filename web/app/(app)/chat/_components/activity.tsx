@@ -88,17 +88,20 @@ export function TurnToolCalls({ runId, since, until }: { runId?: string; since?:
 
 const STEP_DOT: Record<ChatStep["state"], string> = {
   planned: "border border-dashed border-border-strong",
-  active: "bg-accent motion-safe:animate-pulse",
+  active: "bg-accent",
   done: "bg-[var(--state-done)] text-surface",
 };
 
 const STEP_BAR: Record<ChatStep["state"], string> = {
   planned: "bg-border",
-  active: "bg-accent motion-safe:animate-pulse",
+  active: "bg-accent",
   done: "bg-[var(--state-done)]",
 };
 
-function StepRail({ steps }: { steps: ChatStep[] }) {
+/** Pulses the step under way, until the person presses Stop. */
+const stepPulse = (s: ChatStep, stopping?: boolean) => (s.state === "active" && !stopping ? "motion-safe:animate-pulse" : "");
+
+function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }) {
   const { earlier, shown, later } = foldSteps(steps);
   return (
     <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-[12.5px]">
@@ -110,7 +113,7 @@ function StepRail({ steps }: { steps: ChatStep[] }) {
       )}
       {shown.map((s) => (
         <li key={s.key} data-step-state={s.state} className="flex min-w-0 items-center gap-2.5 motion-safe:animate-[scene-in_240ms_ease-out]">
-          <span aria-hidden className={`grid size-4 flex-none place-items-center rounded-full text-[10px] ${STEP_DOT[s.state]}`}>{s.state === "done" ? "✓" : ""}</span>
+          <span aria-hidden className={`grid size-4 flex-none place-items-center rounded-full text-[10px] ${STEP_DOT[s.state]} ${stepPulse(s, stopping)}`}>{s.state === "done" ? "✓" : ""}</span>
           <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
           {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
         </li>
@@ -156,11 +159,11 @@ export function ChatStatus({ runId, since, persona, stopping }: { runId?: string
           {collapsed ? (
             <div aria-hidden className="flex gap-[3px] px-3.5">
               {steps.map((s) => (
-                <i key={s.key} className={`h-1 flex-1 rounded-sm ${STEP_BAR[s.state]}`} />
+                <i key={s.key} className={`h-1 flex-1 rounded-sm ${STEP_BAR[s.state]} ${stepPulse(s, stopping)}`} />
               ))}
             </div>
           ) : (
-            <StepRail steps={steps} />
+            <StepRail steps={steps} stopping={stopping} />
           )}
           <button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((c) => !c)} className="px-3.5 py-1.5 text-xs text-fg-tertiary hover:text-fg-secondary">
             {collapsed ? "Show steps" : "Hide steps"}

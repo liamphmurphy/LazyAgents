@@ -103,7 +103,7 @@ export function runningSince(list: MessageLike[] | undefined): string | undefine
 export function bareTool(tool: string): string {
   const mcp = /^mcp__(.+?)__(.+)$/.exec(tool);
   if (mcp) return mcp[1] === "lazyagents" ? mcp[2] : `${mcp[1]}.${mcp[2]}`;
-  return tool.startsWith("lazyagents.") ? tool.slice("lazyagents.".length) : tool;
+  return /^lazyagents[._]/.test(tool) ? tool.slice("lazyagents.".length) : tool;
 }
 
 /** What the live line says: a verb, then a [[ref]] to link or plain text. */
@@ -297,8 +297,16 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("thinking", "naming the conversation");
     case "WebSearch":
     case "web_search":
+    case "websearch":
     case "WebFetch":
+    case "webfetch":
       return status("web", "searching the web");
+    case "list_saved_links":
+      return status("web", "checking your saved links");
+    case "propose_persona":
+      return status("memory", "sketching a new persona");
+    case "submit_research_report":
+      return status("wiki", "writing up its research");
     case "get_video_transcript":
       return status("video", "watching a video");
     case "canvas_list":
@@ -321,26 +329,37 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "generate_image":
       return status("image", "creating an image");
     case "Read":
+    case "read":
+    case "read_file":
       // The image follow-up opens the generated images it is about to react to.
       if (typeof o.file_path === "string" && o.file_path.includes(".lazyagents/attachments/generated/")) return status("image", "looking at the image");
       return status("reading-code", "reading the code");
     case "Glob":
+    case "glob":
     case "Grep":
+    case "grep":
     case "LS":
+    case "list":
+    case "list_dir":
       return status("reading-code", "reading the code");
     case "Edit":
+    case "edit":
     case "MultiEdit":
     case "Write":
+    case "write":
     case "NotebookEdit":
     case "apply_patch":
+    case "patch":
       return status("writing-code", "writing code");
     case "TodoWrite":
+    case "todowrite":
     case "TaskCreate":
     case "TaskUpdate":
-    case "update_plan":
+    case "todo_list":
       return status("thinking", "planning its next steps");
     case "shell":
     case "Bash":
+    case "bash":
     case "exec_command":
     case "shell_command":
       return shellStatus(typeof o.command === "string" ? o.command : typeof o.cmd === "string" ? o.cmd : "");
@@ -362,10 +381,19 @@ export type ChatStep = { key: string; title: string; state: ChatStepState; added
 type PlanItem = { id: string; title: string; state: ChatStepState };
 
 const planState = (v: unknown): ChatStepState => (v === "completed" ? "done" : v === "in_progress" ? "active" : "planned");
-const planItems = (list: unknown, title: string): PlanItem[] =>
-  (Array.isArray(list) ? (list as Record<string, unknown>[]) : []).map((item, i) => ({ id: String(i), title: str(item[title]), state: planState(item.status) }));
+const records = (list: unknown) => (Array.isArray(list) ? (list as Record<string, unknown>[]) : []);
+const planItems = (list: unknown): PlanItem[] =>
+  records(list)
+    .filter((item) => item.content && item.status !== "cancelled")
+    .map((item, i) => ({ id: String(i), title: str(item.content), state: planState(item.status) }));
+/** Codex only marks items completed, so the first open one is the one under way. */
+const checklistItems = (list: unknown): PlanItem[] => {
+  const items = records(list).filter((item) => item.text);
+  const current = items.findIndex((item) => !item.completed);
+  return items.map((item, i) => ({ id: String(i), title: str(item.text), state: item.completed ? "done" : i === current ? "active" : "planned" }));
+};
 
-/** Every version of the plan in these calls, oldest first: TodoWrite and update_plan send the whole list, TaskCreate and TaskUpdate change one task. */
+/** Every version of the plan in these calls, oldest first: TodoWrite and Codex's todo_list send the whole list, TaskCreate and TaskUpdate change one task. */
 function planVersions(calls: ToolCall[]): PlanItem[][] {
   const versions: PlanItem[][] = [];
   let tasks: PlanItem[] = [];
@@ -373,10 +401,11 @@ function planVersions(calls: ToolCall[]): PlanItem[][] {
     const o = (call.input && typeof call.input === "object" ? call.input : {}) as Record<string, unknown>;
     switch (bareTool(call.tool)) {
       case "TodoWrite":
-        versions.push(planItems(o.todos, "content"));
+      case "todowrite":
+        versions.push(planItems(o.todos));
         break;
-      case "update_plan":
-        versions.push(planItems(o.plan, "step"));
+      case "todo_list":
+        versions.push(checklistItems(o.items));
         break;
       case "TaskCreate":
         tasks = [...tasks, { id: /#(\d+)/.exec(call.output ?? "")?.[1] ?? String(tasks.length + 1), title: str(o.subject), state: "planned" }];
@@ -396,9 +425,12 @@ function planVersions(calls: ToolCall[]): PlanItem[][] {
   return versions;
 }
 
+/** Calls that keep the turn running but aren't work to show: its plan, tool loading, the chat's title. */
+const BOOKKEEPING = new Set(["TodoWrite", "todowrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "todo_list", "ToolSearch", "Skill", "set_chat_title", "whoami"]);
+
 /**
  * The turn's steps. The newest plan when the assistant wrote one, marking steps added after
- * work began. Otherwise its tool calls grouped by kind of work, newest active, in the same
+ * work began. Otherwise its consecutive tool calls with the same description as one step, newest active, in the same
  * high-level wording as the status line.
  */
 export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: boolean } {
@@ -407,15 +439,22 @@ export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: bool
   if (latest?.length) {
     const baseline = versions.find((v) => v.some((s) => s.state !== "planned"));
     const original = new Set(baseline?.map((s) => s.title) ?? latest.map((s) => s.title));
-    const steps = latest.map((s, i): ChatStep => ({ key: `${i}:${s.title}`, title: s.title, state: s.state, ...(original.has(s.title) ? {} : { added: true as const }) }));
+    const seen = new Map<string, number>();
+    const steps = latest.map((s): ChatStep => {
+      // By title, not position, so a step added mid-list doesn't remount the ones after it.
+      const n = seen.get(s.title) ?? 0;
+      seen.set(s.title, n + 1);
+      return { key: `${s.title}#${n}`, title: s.title, state: s.state, ...(original.has(s.title) ? {} : { added: true as const }) };
+    });
     return { steps, planned: true };
   }
   const steps: ChatStep[] = [];
-  let last: ChatStatusKind | undefined;
+  let last: string | undefined;
   for (const call of calls) {
-    const { kind, phrase } = chatStatusOf(call);
-    if (kind === "thinking" || kind === last) continue;
-    last = kind;
+    if (BOOKKEEPING.has(bareTool(call.tool))) continue;
+    const { phrase } = chatStatusOf(call);
+    if (phrase === last) continue;
+    last = phrase;
     steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: "done" });
   }
   if (steps.length) steps[steps.length - 1].state = "active";

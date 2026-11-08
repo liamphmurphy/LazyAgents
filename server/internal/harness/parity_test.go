@@ -63,6 +63,22 @@ func TestCodexMCPFailureNormalization(t *testing.T) {
 	}
 }
 
+func TestCodexTodoListFollowsEachVersion(t *testing.T) {
+	p := (Codex{}).NewParser("test")
+	for _, typ := range []string{"item.started", "item.updated", "item.completed"} {
+		ev := p.Line([]byte(`{"type":"` + typ + `","item":{"id":"t","type":"todo_list","items":[{"text":"Read","completed":true},{"text":"Fix","completed":false}]}}`))
+		if len(ev) != 2 || ev[0].Type != "tool_call" || ev[0].Payload["tool"] != "todo_list" || ev[1].Type != "tool_result" {
+			t.Fatalf("%s: %+v", typ, ev)
+		}
+	}
+	if n := p.Result().Usage.ToolCalls; n != 0 {
+		t.Fatalf("plan updates counted as %d tool calls", n)
+	}
+	if ev := p.Line([]byte(`{"type":"item.updated","item":{"id":"c","type":"command_execution","command":"ls"}}`)); ev != nil {
+		t.Fatalf("other items must not log again on update: %+v", ev)
+	}
+}
+
 func TestCodexResumeUsageUsesDeltas(t *testing.T) {
 	baseline := Usage{SessionID: "same", SessionInputTokens: 131141, SessionOutputTokens: 446, SessionCachedTokens: 112256}
 	p := (Codex{Baseline: baseline}).NewParser("unpriced-model")
