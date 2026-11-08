@@ -8,8 +8,10 @@ import { cx } from "@/lib/cx";
 import { headingAnchors } from "@/lib/slug";
 import { linkify, parseWikiLinks, WIKILINK_SCHEME } from "@/lib/wikilinks";
 import { isAppFence } from "@/lib/chat-app";
+import { isSvgFence } from "@/lib/chat-svg";
 import { AppFence } from "./app-fence";
 import { CodeFence } from "./code-fence";
+import { SvgFence } from "./svg-fence";
 import { LinkTargets, WikiLink } from "./wikilink";
 
 const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) ? url : defaultUrlTransform(url));
@@ -60,6 +62,8 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
           const info = /language-(\S+)/.exec(code.className ?? "")?.[1];
           // ```app fences run as sandboxed interactive apps.
           if (isAppFence(info)) return <AppFence code={code.children} info={info} />;
+          // ```svg-image fences show as images.
+          if (isSvgFence(info)) return <SvgFence code={code.children} info={info} />;
           return <CodeFence code={code.children} info={info} />;
         }
         return (

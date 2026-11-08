@@ -62,7 +62,7 @@ const USAGE = { input_tokens: 48200, output_tokens: 1300, cached_input_tokens: 4
 export type Posted = { chat: string; body: Record<string, unknown> };
 export type MockPersona = {
   id: string; name: string; tone: string; color: string; avatar_url?: string; custom_instructions: string;
-  capabilities: { code: boolean; images: boolean; personas?: boolean }; repos: string[];
+  capabilities: { code: boolean; images: boolean; personas?: boolean; svg?: boolean }; repos: string[];
   is_default: boolean; chat_count: number; last_used_at?: string; revision: number; created_at: string; updated_at: string;
 };
 export type MockProposal = {
@@ -231,6 +231,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     if (prompt.startsWith("app:")) {
       const app = `<!DOCTYPE html>\n<button id="b">Count: 0</button><p id="net">pending</p>\n<script>let n=0;b.onclick=()=>{b.textContent="Count: "+(++n)};fetch("/api/v1/bootstrap").then(()=>net.textContent="reached",()=>net.textContent="blocked");</script>`;
       add(c, "assistant", `Here you go.\n\n\`\`\`app\n${app}\n\`\`\``, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
+    // "svg:" replies with an SVG image; "badsvg:" with one the browser can't draw.
+    if (prompt.startsWith("svg:") || prompt.startsWith("badsvg:")) {
+      const svg = prompt.startsWith("svg:") ? `<svg viewBox="0 0 40 20" width="40" height="20"><script>document.title="ran"</script><rect width="40" height="20" fill="#36c"/></svg>` : "<svg><rect></svg>";
+      add(c, "assistant", `Here you go.\n\n\`\`\`svg-image\n${svg}\n\`\`\``, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
       void emit(c);
       return;
     }

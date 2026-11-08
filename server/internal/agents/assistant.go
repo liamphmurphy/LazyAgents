@@ -91,6 +91,18 @@ const assistantImagesViaCodex = `
 - Don't paste file paths or image data into your reply.
 - The person can pick reference images in their Library: one of you and one of themselves. When they are set, the message says so. Whenever an image shows you, pass references ["persona"]; whenever it shows the person, ["person"] (or both), so you both look the same from picture to picture. Without a reference, describe the look in the prompt instead.`
 
+// AssistantSVGSection is added to a turn's instructions when the persona
+// answering may show SVG images. It is rendered per turn, not frozen in the
+// segment's spec, so switching the capability applies on the next turn.
+const AssistantSVGSection = `
+
+## SVG images
+- You can draw vector images: application design mockups, wireframes, diagrams, icons, logos and illustrations. Write the SVG in a fenced code block tagged svg-image. The chat shows it as an image under your reply, and the person can switch to its code or download it.
+- Write one complete <svg> element with xmlns="http://www.w3.org/2000/svg", a viewBox, and width and height.
+- It is displayed as a static image: scripts, links and hover or click behaviour don't work, and it can't load anything external, including web fonts and remote images. Use system-ui or generic font families, and embed any raster image as a data: URI.
+- It sits on a white background; draw your own background if you want another.
+- Use an ordinary code block tagged svg when the person wants code to read or copy, and an interactive app when they need to click or tweak something.`
+
 // AssistantInstructionsFor is AssistantInstructions with the sections a
 // persona's capabilities add. workBranch is the coding chat's branch, empty
 // when the chat can't code; images is whether the persona may generate

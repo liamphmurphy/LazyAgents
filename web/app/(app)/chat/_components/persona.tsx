@@ -32,9 +32,9 @@ const TONE: Record<Schemas["PersonaTone"], string> = {
 };
 export const toneLabel = (t?: Schemas["PersonaTone"]) => (t ? TONE[t] : "Neutral");
 
-/** Small icons for what a persona can do (code, images, create personas); nothing when it can't do any. */
+/** Small icons for what a persona can do (code, images, SVG images, create personas); nothing when it can't do any. */
 export function CapabilityBadges({ capabilities, className }: { capabilities?: Schemas["PersonaCapabilities"]; className?: string }) {
-  if (!capabilities?.code && !capabilities?.images && !capabilities?.personas) return null;
+  if (!capabilities?.code && !capabilities?.images && !capabilities?.personas && !capabilities?.svg) return null;
   return (
     <span className={cx("inline-flex flex-none items-center gap-1 text-fg-tertiary", className)} data-testid="capability-badges">
       {capabilities.code && (
@@ -47,6 +47,12 @@ export function CapabilityBadges({ capabilities, className }: { capabilities?: S
         <span title="Can generate images" className="inline-flex items-center rounded bg-selected p-0.5">
           <Icon name="artifacts" size={12} />
           <span className="sr-only">Can generate images</span>
+        </span>
+      )}
+      {capabilities.svg && (
+        <span title="Can create SVG images" className="inline-flex items-center rounded bg-selected p-0.5">
+          <Icon name="library" size={12} />
+          <span className="sr-only">Can create SVG images</span>
         </span>
       )}
       {capabilities.personas && (

@@ -400,6 +400,7 @@ type Persona struct {
 	CanGenerateImages  bool
 	Repos              []string
 	CanCreatePersonas  bool
+	CanCreateSvgs      bool
 }
 
 type PersonaProposal struct {
