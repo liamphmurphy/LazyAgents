@@ -147,3 +147,42 @@ test("the collapsed menu lists personas and opens each one's newest conversation
   await expect(page).toHaveURL(new RegExp(atlasChat));
   expect(mock.unhandled).toEqual([]);
 });
+
+test("a new conversation opens at once, without waiting for the lists to refresh", async ({ page }) => {
+  await installChatApi(page, { personas: [ATLAS, NOVA] });
+  await page.goto("/chat?project=WEB");
+  await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
+  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
+  await expect(page.getByTestId("assistant-identity").first()).toContainText("Atlas");
+  const first = new URL(page.url()).pathname;
+
+  await page.route(/\/api\/v1\/chats\?/, async (route) => {
+    await new Promise((r) => setTimeout(r, 4000));
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await expect(page).not.toHaveURL(new RegExp(first), { timeout: 2500 });
+});
+
+test("the menu keeps its width whatever the titles and persona filter", async ({ page }) => {
+  const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
+  await page.goto("/chat?project=WEB");
+  await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
+  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
+  await expect(page.getByTestId("assistant-identity").first()).toContainText("Atlas");
+  mock.chats[0].title = "A title still being generated that keeps going and going well past the width of the menu";
+  await page.reload();
+  await expect(history(page).getByRole("link", { name: /A title still being generated/ })).toBeVisible();
+
+  const menu = page.getByRole("complementary", { name: "Main menu" });
+  const width = async () => (await menu.boundingBox())!.width;
+  expect(await width()).toBe(232);
+  await pick(page, "All personas");
+  await expect(picked(page)).toHaveAccessibleName("All personas");
+  expect(await width()).toBe(232);
+  await pick(page, /^Atlas/);
+  await expect(picked(page)).toHaveAccessibleName("Atlas (default)");
+  expect(await width()).toBe(232);
+});
