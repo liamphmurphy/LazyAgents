@@ -100,3 +100,20 @@ func TestDiscoverUsesSeamEndpoint(t *testing.T) {
 		t.Fatalf("models=%+v err=%v", models, err)
 	}
 }
+
+func TestResolveAcceptsRestatedCurrentModel(t *testing.T) {
+	catalog := Catalog{Discover: func(_ context.Context, harness, _ string) ([]Model, error) {
+		return []Model{{ID: "opus", Default: true}, {ID: "sonnet"}}, nil
+	}}
+	cc := agentdef.HarnessClaudeCode
+	h, m, err := catalog.Resolve(context.Background(), nil, uuid.New(), cc, "opus-5.5", cc, "opus-5.5")
+	if err != nil || h != cc || m != "opus-5.5" {
+		t.Fatalf("h=%q m=%q err=%v", h, m, err)
+	}
+	if _, _, err := catalog.Resolve(context.Background(), nil, uuid.New(), cc, "opus-5.5", cc, "haiku-5.5"); err == nil {
+		t.Fatal("expected an unlisted, changed model to be rejected")
+	}
+	if _, m, err := catalog.Resolve(context.Background(), nil, uuid.New(), cc, "opus-5.5", cc, "sonnet"); err != nil || m != "sonnet" {
+		t.Fatalf("m=%q err=%v", m, err)
+	}
+}
