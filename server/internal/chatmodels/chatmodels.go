@@ -5,6 +5,8 @@ package chatmodels
 
 import (
 	"context"
+	"slices"
+
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 
 	"github.com/google/uuid"
@@ -25,6 +27,34 @@ type Model struct {
 	ID      string
 	Label   string
 	Default bool
+	// Efforts are the reasoning efforts the model offers (agentdef.Efforts
+	// order); empty when it has no effort control. DefaultEffort is the
+	// model's own default, when the harness reports one.
+	Efforts       []string
+	DefaultEffort string
+}
+
+// EffortDefault in a request clears a chat's effort back to the harness's own default.
+const EffortDefault = "default"
+
+// fallbackEfforts are what Claude Code and Codex models offer when discovery
+// can't say (provider APIs don't report effort levels; the local CLIs do).
+var fallbackEfforts = map[string][]string{
+	agentdef.HarnessClaudeCode: agentdef.Efforts,
+	agentdef.HarnessCodex:      agentdef.Efforts,
+}
+
+// knownEfforts keeps the levels Vesper can pass to a harness, in
+// agentdef.Efforts order. It drops others, such as Codex's "ultra", which
+// delegates automatically and so doesn't fit a chat.
+func knownEfforts(levels []string) []string {
+	out := []string{}
+	for _, e := range agentdef.Efforts {
+		if slices.Contains(levels, e) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 type Harness struct {
@@ -123,21 +153,59 @@ func (c Catalog) List(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]Ha
 	return out, nil
 }
 
+// Selection is a chat's harness, model and reasoning effort ("" is the
+// harness's own default).
+type Selection struct {
+	Harness, Model, Effort string
+}
+
 // Resolve validates a requested selection against the catalog. Empty fields
-// fall back to current: an empty harness keeps currentHarness, and an empty
-// model keeps currentModel unless the harness changes, in which case it is
-// the new harness's default. Errors are 422s with field harness or model.
-func (c Catalog) Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, currentHarness, currentModel, reqHarness, reqModel string) (harnessName, model string, err error) {
-	harnessName, model = currentHarness, currentModel
-	if reqHarness == "" && reqModel == "" {
-		return harnessName, model, nil
-	}
-	if reqHarness != "" {
-		harnessName = reqHarness
+// fall back to current: an empty harness keeps the current one, and an empty
+// model keeps the current one unless the harness changes, in which case it is
+// the new harness's default. An empty effort keeps the current one when the
+// selected model offers it (otherwise the harness default), and
+// EffortDefault clears it. Errors are 422s with field harness, model or effort.
+func (c Catalog) Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, cur, req Selection) (Selection, error) {
+	if req.Harness == "" && req.Model == "" && req.Effort == "" {
+		return cur, nil
 	}
 	list, err := c.List(ctx, q, ws)
 	if err != nil {
-		return "", "", err
+		return Selection{}, err
+	}
+	h, m, err := resolveModel(list, cur.Harness, cur.Model, req.Harness, req.Model)
+	if err != nil {
+		return Selection{}, err
+	}
+	out := Selection{Harness: h.Harness, Model: m, Effort: cur.Effort}
+	// A model the catalog doesn't list (the definition's alias) may take any
+	// effort the harness supports.
+	efforts := fallbackEfforts[h.Harness]
+	for _, x := range h.Models {
+		if x.ID == m {
+			efforts = x.Efforts
+		}
+	}
+	switch req.Effort {
+	case "":
+		if !slices.Contains(efforts, out.Effort) {
+			out.Effort = ""
+		}
+	case EffortDefault:
+		out.Effort = ""
+	default:
+		if !slices.Contains(efforts, req.Effort) {
+			return Selection{}, apperr.Invalid("effort", "%s doesn't offer effort %q", m, req.Effort)
+		}
+		out.Effort = req.Effort
+	}
+	return out, nil
+}
+
+func resolveModel(list []Harness, currentHarness, currentModel, reqHarness, reqModel string) (*Harness, string, error) {
+	harnessName, model := currentHarness, currentModel
+	if reqHarness != "" {
+		harnessName = reqHarness
 	}
 	var h *Harness
 	for i := range list {
@@ -146,10 +214,10 @@ func (c Catalog) Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, cu
 		}
 	}
 	if h == nil {
-		return "", "", apperr.Invalid("harness", "unknown harness %q", reqHarness)
+		return nil, "", apperr.Invalid("harness", "unknown harness %q", reqHarness)
 	}
 	if !h.Available {
-		return "", "", apperr.Invalid("harness", "%s is unavailable: %s", h.Label, h.UnavailableReason)
+		return nil, "", apperr.Invalid("harness", "%s is unavailable: %s", h.Label, h.UnavailableReason)
 	}
 	switch {
 	case reqModel != "":
@@ -164,14 +232,14 @@ func (c Catalog) Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, cu
 	// Restating the current model is the same as omitting it: the definition's
 	// model (e.g. "opus-5.5") is an alias the live catalog may not list.
 	if harnessName == currentHarness && (reqModel == "" || reqModel == currentModel) {
-		return harnessName, model, nil
+		return h, model, nil
 	}
 	for _, m := range h.Models {
 		if m.ID == model {
-			return harnessName, model, nil
+			return h, model, nil
 		}
 	}
-	return "", "", apperr.Invalid("model", "unknown model %q for %s", model, h.Label)
+	return nil, "", apperr.Invalid("model", "unknown model %q for %s", model, h.Label)
 }
 
 // listOpenCode fills the OpenCode entry. It always needs an API-key secret,

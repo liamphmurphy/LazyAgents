@@ -98,9 +98,6 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	// switched off unless the chat's persona has the images capability.
 	cfg = append(cfg, "features.image_generation="+strconv.FormatBool(spec.HarnessOptions[agentdef.OptionImageGeneration] == "true"))
 	if effort := spec.HarnessOptions["effort"]; effort != "" {
-		if effort == "xhigh" || effort == "max" {
-			effort = "high"
-		}
 		cfg = append(cfg, "model_reasoning_effort="+tomlString(effort))
 	}
 	for _, c := range cfg {

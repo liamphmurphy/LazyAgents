@@ -1745,11 +1745,11 @@ export interface paths {
          * Send a message and start the assistant's turn
          * @description Stores the user message and queues a turn. The reply arrives
          *     later as an assistant message; watch for `chat.updated`.
-         *     `harness`/`model` switch the chat from this message on (same harness:
-         *     same session, new model; other harness: new session with a
+         *     `harness`/`model`/`effort` switch the chat from this message on (same harness:
+         *     same session, new model or effort; other harness: new session with a
          *     transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
          *     is running or the chat is archived; 422 empty body, unknown
-         *     harness/model, a context ref outside the chat's project, or an
+         *     harness/model, an effort the model doesn't offer, a context ref outside the chat's project, or an
          *     attachment id that isn't the caller's unattached upload.
          */
         post: operations["postChatMessage"];
@@ -3796,6 +3796,7 @@ export interface components {
             harness: components["schemas"]["Harness"];
             /** @description The model the next turn uses */
             model: string;
+            effort?: components["schemas"]["ChatEffort"];
             state: components["schemas"]["ChatState"];
             /** @description Why the last turn failed */
             error?: string;
@@ -3826,6 +3827,7 @@ export interface components {
             harness?: components["schemas"]["Harness"];
             /** @description Defaults to the harness's default model in GET /chat-models */
             model?: string;
+            effort?: components["schemas"]["ChatEffort"];
             /**
              * Format: uuid
              * @description One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life.
@@ -3844,6 +3846,11 @@ export interface components {
             body: string;
             harness?: components["schemas"]["Harness"];
             model?: string;
+            /**
+             * @description Reasoning effort from this message on; default clears it back to the harness's own default. Omit to keep the chat's effort.
+             * @enum {string}
+             */
+            effort?: "default" | "low" | "medium" | "high" | "xhigh" | "max";
             context_refs?: components["schemas"]["ChatContextRef"][];
             /** @description Uploads from POST /chat-attachments that you made and haven't attached yet; the assistant gets the files with this message */
             attachment_ids?: string[];
@@ -3990,7 +3997,15 @@ export interface components {
             label: string;
             /** @description The harness's default model */
             default: boolean;
+            /** @description Reasoning efforts the model offers, lowest first; empty when it has no effort control */
+            efforts: components["schemas"]["ChatEffort"][];
+            default_effort?: components["schemas"]["ChatEffort"];
         };
+        /**
+         * @description Reasoning effort; absent means the harness's own default
+         * @enum {string}
+         */
+        ChatEffort: "low" | "medium" | "high" | "xhigh" | "max";
         ChatHarnessModels: {
             harness: components["schemas"]["Harness"];
             label: string;

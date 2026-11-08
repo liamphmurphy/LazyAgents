@@ -145,6 +145,15 @@ UPDATE runs SET model = sqlc.arg(model)::text,
   resolved_spec = jsonb_set(resolved_spec, '{model}', to_jsonb(sqlc.arg(model)::text))
 WHERE id = sqlc.arg(id);
 
+-- name: SetRunEffort :exec
+-- Same-harness effort switch: keeps the session id and workspace. An empty
+-- effort removes the option so the harness uses its own default.
+UPDATE runs SET resolved_spec = CASE WHEN sqlc.arg(effort)::text = ''
+  THEN resolved_spec #- '{harness_options,effort}'
+  ELSE jsonb_set(resolved_spec, '{harness_options}', coalesce(resolved_spec->'harness_options', '{}'::jsonb) || jsonb_build_object('effort', sqlc.arg(effort)::text))
+  END
+WHERE id = sqlc.arg(id);
+
 -- name: RunVerdict :one
 -- The review verdict ("" if none) a delegated run reported when it completed.
 SELECT coalesce(payload->>'verdict', '')::text AS verdict FROM run_events WHERE run_id = $1 AND type = 'lifecycle' AND payload->>'state' = 'completed' ORDER BY seq DESC LIMIT 1;

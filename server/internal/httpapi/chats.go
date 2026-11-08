@@ -92,6 +92,10 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 			CurrentRunId: c.CurrentRunID, Archived: c.Archived, Revision: int(c.Revision), MessageCount: counts[c.ID],
 			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, LastMessageAt: c.LastMessageAt, RepoUrl: c.RepoUrl, WorkBranch: c.WorkBranch,
 		}
+		if c.Effort != "" {
+			e := api.ChatEffort(c.Effort)
+			item.Effort = &e
+		}
 		if i := slices.IndexFunc(projects, func(p store.Project) bool { return p.ID == c.ProjectID }); i >= 0 {
 			item.Project = projects[i].Key
 		}
@@ -215,7 +219,14 @@ func (s *Server) ListChatModels(ctx context.Context, _ api.ListChatModelsRequest
 			item.UnavailableReason = &reason
 		}
 		for i, m := range h.Models {
-			item.Models[i] = api.ChatModel{Id: m.ID, Label: m.Label, Default: m.Default}
+			item.Models[i] = api.ChatModel{Id: m.ID, Label: m.Label, Default: m.Default, Efforts: make([]api.ChatEffort, len(m.Efforts))}
+			for j, e := range m.Efforts {
+				item.Models[i].Efforts[j] = api.ChatEffort(e)
+			}
+			if m.DefaultEffort != "" {
+				e := api.ChatEffort(m.DefaultEffort)
+				item.Models[i].DefaultEffort = &e
+			}
 		}
 		out = append(out, item)
 	}
@@ -284,6 +295,9 @@ func toMessageInput(b api.NewChatMessage) (runs.ChatMessageInput, error) {
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}
+	if b.Effort != nil {
+		in.Effort = string(*b.Effort)
+	}
 	if b.ContextRefs != nil {
 		refs, err := recode[[]runs.ChatContextRef](*b.ContextRefs)
 		if err != nil {
@@ -306,6 +320,9 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 	in := runs.ChatInput{Project: b.Project, Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl)}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
+	}
+	if b.Effort != nil {
+		in.Effort = string(*b.Effort)
 	}
 	if b.Message != nil {
 		m, err := toMessageInput(*b.Message)

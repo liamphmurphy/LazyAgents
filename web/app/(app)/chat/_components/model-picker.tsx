@@ -7,7 +7,21 @@ import { Icon } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
 
 export type Selection = { harness: Harness; model: string };
+export type Effort = Schemas["ChatEffort"];
 type Group = Schemas["ChatHarnessModels"];
+
+const EFFORT_LABELS: Record<Effort, string> = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" };
+export const effortLabel = (e: Effort | undefined) => (e ? EFFORT_LABELS[e] : "Default");
+
+/**
+ * The efforts the selected model offers. A model the catalog doesn't list (the
+ * definition's alias) gets its harness default model's, as the server allows.
+ */
+export function modelEfforts(groups: Group[] | undefined, s: Selection): { efforts: Effort[]; defaultEffort?: Effort } {
+  const g = groups?.find((x) => x.harness === s.harness);
+  const m = g?.models.find((x) => x.id === s.model) ?? g?.models.find((x) => x.default);
+  return { efforts: m?.efforts ?? [], defaultEffort: m?.default_effort };
+}
 
 export const sameSelection = (a: Selection, b: Selection) => a.harness === b.harness && a.model === b.model;
 
@@ -75,6 +89,53 @@ export function ModelPicker({
                 );
               })}
             </DropdownMenu.Group>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** Reasoning effort for the next message; hidden when the model has no effort control. */
+export function EffortPicker({
+  efforts,
+  defaultEffort,
+  value,
+  onChange,
+  disabled,
+}: {
+  efforts: Effort[];
+  defaultEffort?: Effort;
+  value: Effort | undefined;
+  onChange: (e: Effort | undefined) => void;
+  disabled?: boolean;
+}) {
+  if (!efforts.length) return null;
+  const options: (Effort | undefined)[] = [undefined, ...efforts];
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label={`Effort for the next message: ${effortLabel(value)}`}
+          className="flex h-[30px] items-center gap-1.5 rounded-md border border-border-strong bg-btn-outline px-2.5 text-[13px] text-fg-2 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span className="text-xs">Effort · {effortLabel(value)}</span>
+          <Icon name="chev" size={13} strokeWidth={1.6} className="text-fg-tertiary" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" side="top" sideOffset={6} className={cx(floatPanel, "w-48")}>
+          <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">Reasoning effort</DropdownMenu.Label>
+          {options.map((e) => (
+            <DropdownMenu.Item key={e ?? "default"} className={item} onSelect={() => onChange(e)}>
+              <span className="flex items-center gap-2">
+                {effortLabel(e)}
+                {!e && defaultEffort && <span className="text-xs text-fg-tertiary">({effortLabel(defaultEffort).toLowerCase()})</span>}
+                <span className="ml-auto w-4 text-accent">{value === e && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
+              </span>
+            </DropdownMenu.Item>
           ))}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

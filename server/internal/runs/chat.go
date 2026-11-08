@@ -140,6 +140,8 @@ type ChatInput struct {
 	Title   string
 	Harness string
 	Model   string
+	// Effort is a reasoning effort the model offers; empty is the harness default.
+	Effort string
 	// PersonaID is one of the creator's personas; nil means their default
 	// persona (none when they have no default). Fixed for the chat's life.
 	PersonaID *uuid.UUID
@@ -154,9 +156,12 @@ type ChatInput struct {
 // in LAZYAGENTS-10, so an existing segment keeps running its own harness/model.
 // ContextRefs are resolved inside the chat's project and delivered to the turn.
 type ChatMessageInput struct {
-	Body        string
-	Harness     string
-	Model       string
+	Body    string
+	Harness string
+	Model   string
+	// Effort switches the reasoning effort from this message on; empty keeps
+	// it, chatmodels.EffortDefault clears it.
+	Effort      string
 	ContextRefs []ChatContextRef
 	// AttachmentIDs are the poster's own unattached uploads (chat_attachments);
 	// they're bound to the new message and delivered to its turn.
@@ -194,7 +199,8 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if err != nil {
 			return err
 		}
-		h, m, err := s.ChatCatalog().Resolve(ctx, q, ws, spec.Harness, spec.Model, in.Harness, in.Model)
+		sel, err := s.ChatCatalog().Resolve(ctx, q, ws, chatmodels.Selection{Harness: spec.Harness, Model: spec.Model},
+			chatmodels.Selection{Harness: in.Harness, Model: in.Model, Effort: in.Effort})
 		if err != nil {
 			return err
 		}
@@ -232,7 +238,7 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: h, Model: m, PersonaID: personaID})
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID})
 		if err != nil {
 			return err
 		}
@@ -327,7 +333,8 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	}
 	// Validate the selection and the refs before anything is written; a 422
 	// leaves the stored selection unchanged (the whole transaction rolls back).
-	h, m, err := cat.Resolve(ctx, q, chat.WorkspaceID, chat.Harness, chat.Model, in.Harness, in.Model)
+	cur := chatmodels.Selection{Harness: chat.Harness, Model: chat.Model, Effort: chat.Effort}
+	sel, err := cat.Resolve(ctx, q, chat.WorkspaceID, cur, chatmodels.Selection{Harness: in.Harness, Model: in.Model, Effort: in.Effort})
 	if err != nil {
 		return chat, msg, err
 	}
@@ -352,8 +359,8 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	if err != nil {
 		return chat, msg, err
 	}
-	if h != chat.Harness || m != chat.Model {
-		if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: h, Model: m}); err != nil {
+	if sel != cur {
+		if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort}); err != nil {
 			return chat, msg, err
 		}
 	}
@@ -437,6 +444,18 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			}
 			run.Model = chat.Model
 		}
+		if !fresh {
+			// Same harness: the next turn's invocation picks up the new effort.
+			have, err := Spec(run)
+			if err != nil {
+				return chat, msg, err
+			}
+			if have.HarnessOptions["effort"] != chat.Effort {
+				if err = q.SetRunEffort(ctx, store.SetRunEffortParams{ID: run.ID, Effort: chat.Effort}); err != nil {
+					return chat, msg, err
+				}
+			}
+		}
 	}
 	if fresh {
 		// Chats started before the Personal Assistant existed move to it at their next segment.
@@ -456,6 +475,9 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		}
 		spec.Harness, spec.Model = chat.Harness, chat.Model
 		spec = ChatSpec(spec, caps)
+		if chat.Effort != "" {
+			spec.HarnessOptions["effort"] = chat.Effort
+		}
 		raw, err := json.Marshal(spec)
 		if err != nil {
 			return chat, msg, err

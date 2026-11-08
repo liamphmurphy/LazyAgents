@@ -31,7 +31,7 @@ import { CodeChanges } from "./code-changes";
 import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
-import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
+import { EffortPicker, ModelPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { AttachButton, AttachmentChips, DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
@@ -191,6 +191,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // Read once into state, then forget it (an effect, so a StrictMode re-render still sees it).
   useEffect(() => dropDraft(id), [id]);
   const [picked, setPicked] = useState<Selection | null>(null);
+  // null keeps the chat's effort; "default" clears it.
+  const [pickedEffort, setPickedEffort] = useState<Effort | "default" | null>(null);
   const [tab, setTab] = useState<"chat" | "activity">("chat");
   // A pick on another harness waits here until the person confirms what the switch loses.
   const [confirming, setConfirming] = useState<Selection | null>(null);
@@ -212,6 +214,11 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const current: Selection | undefined = c && { harness: c.harness, model: c.model };
   const selection = picked ?? current;
   const pending = !!(picked && current && !sameSelection(picked, current));
+  const offered = selection ? modelEfforts(groups, selection) : { efforts: [] };
+  // The effort the next message runs at; one the selected model lacks falls back to the default, as on the server.
+  const wanted = pickedEffort === null ? c?.effort : pickedEffort === "default" ? undefined : pickedEffort;
+  const effort = wanted && offered.efforts.includes(wanted) ? wanted : undefined;
+  const effortPending = !!c && effort !== c.effort;
   // The next message would start a run on a harness that can't run: say why before sending.
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
   const list = messages.data?.messages;
@@ -257,12 +264,17 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     const context_refs = toContextRefs(chips);
     setNames((n) => new Map([...n, ...chips.map((c): [string, string] => [c.key, c.label])]));
     send.mutate(
-      { body, ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) },
+      {
+        body,
+        ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}),
+        ...(effortPending ? { effort: effort ?? "default" } : {}),
+        ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) },
       {
         onSuccess: () => {
           files.clear();
           setText("");
           setPicked(null);
+          setPickedEffort(null);
           setChips([]);
         },
       },
@@ -276,7 +288,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     if (!c || (personaId === c.persona?.id && !repo) || create.isPending || send.isPending || send.isSuccess) return;
     const old = c;
     create.mutate(
-      { project: old.project, persona_id: personaId, harness: old.harness, model: old.model, ...(repo ? { repo_url: repo } : {}) },
+      { project: old.project, persona_id: personaId, harness: old.harness, model: old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
       {
         onSuccess: async (next) => {
           if (text.trim()) putDraft(next.id, text);
@@ -367,6 +379,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
             {current && (
               <span className="truncate font-mono text-[11.5px] text-fg-tertiary">
                 {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
+                {c.effort && ` · ${effortLabel(c.effort)} effort`}
               </span>
             )}
           </div>
@@ -404,6 +417,9 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 <Divider testId="pending-switch">
                   {`Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}
                 </Divider>
+              )}
+              {effortPending && (
+                <Divider testId="pending-effort">{`Next message will use ${effortLabel(effort).toLowerCase()} effort`}</Divider>
               )}
               {running && (
                 <li className="flex flex-col gap-2" data-testid="thinking">
@@ -494,6 +510,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 <AttachButton onFiles={files.add} disabled={locked} />
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked} />}
+                <EffortPicker
+                  efforts={offered.efforts}
+                  defaultEffort={offered.defaultEffort}
+                  value={effort}
+                  onChange={(e) => setPickedEffort(e ?? "default")}
+                  disabled={locked}
+                />
                 <span className="flex-1" />
                 {running && (
                   <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>

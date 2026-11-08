@@ -1,4 +1,5 @@
 import type { Page, Route } from "@playwright/test";
+import type { components } from "../lib/api/schema";
 
 /**
  * In-memory stand-in for the chat REST contract (api/openapi.yaml, tag `chats`)
@@ -24,10 +25,12 @@ import type { Page, Route } from "@playwright/test";
 
 type Harness = "claude-code" | "codex" | "opencode";
 type State = "idle" | "running" | "failed";
+type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
   id: string; project: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
   created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branch?: string;
+  effort?: Effort;
 };
 type Message = {
   id: string; seq: number; role: "user" | "assistant" | "system"; body_md: string;
@@ -72,25 +75,25 @@ export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona
   };
 }
 
-export const catalog = (codexAvailable: boolean, opencodeAvailable = true) => [
+export const catalog = (codexAvailable: boolean, opencodeAvailable = true): components["schemas"]["ChatHarnessModels"][] => [
   {
     harness: "claude-code", label: "Claude Code", available: true,
     models: [
-      { id: "opus-5.5", label: "Opus 5.5", default: true },
-      { id: "sonnet-5.5", label: "Sonnet 5.5", default: false },
+      { id: "opus-5.5", label: "Opus 5.5", default: true, efforts: ["low", "medium", "high", "xhigh", "max"] },
+      { id: "sonnet-5.5", label: "Sonnet 5.5", default: false, efforts: ["low", "medium", "high", "xhigh", "max"] },
     ],
   },
   {
     harness: "codex", label: "Codex", available: codexAvailable,
     ...(codexAvailable ? {} : { unavailable_reason: "No harness:openai secret" }),
-    models: [{ id: "gpt-5-codex", label: "gpt-5-codex", default: true }],
+    models: [{ id: "gpt-5-codex", label: "gpt-5-codex", default: true, efforts: ["low", "medium", "high"], default_effort: "medium" }],
   },
   {
     harness: "opencode", label: "OpenCode", available: opencodeAvailable,
     ...(opencodeAvailable ? {} : { unavailable_reason: "OpenCode is not installed" }),
     models: [
-      { id: "anthropic/claude-sonnet-4-5", label: "anthropic/claude-sonnet-4-5", default: true },
-      { id: "openai/gpt-5", label: "openai/gpt-5", default: false },
+      { id: "anthropic/claude-sonnet-4-5", label: "anthropic/claude-sonnet-4-5", default: true, efforts: [] },
+      { id: "openai/gpt-5", label: "openai/gpt-5", default: false, efforts: [] },
     ],
   },
 ];
@@ -412,7 +415,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       created.push(b);
       const c: Chat = {
         id: uuid(), project: String(b.project), title: String(b.title ?? ""), agent_id: agent.id,
-        harness: (b.harness as Harness) ?? "claude-code", model: String(b.model ?? "opus-5.5"),
+        harness: (b.harness as Harness) ?? "claude-code", model: String(b.model ?? "opus-5.5"), effort: b.effort as Effort | undefined,
         state: "idle", archived: false, revision: 1, message_count: 0, created_at: now(), updated_at: now(),
         persona_id: (b.persona_id as string | undefined) ?? defaultPersona()?.id,
       };
@@ -461,6 +464,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         if (!g || !g.models.some((x) => x.id === model) || !g.available) {
           return fail(err(422, "invalid", "Unknown or unavailable harness/model", "model"));
         }
+        const offered: string[] = g.models.find((x) => x.id === model)!.efforts;
+        if (b.effort === "default") c.effort = undefined;
+        else if (b.effort) {
+          if (!offered.includes(b.effort as string)) return fail(err(422, "invalid", "Effort not offered", "effort"));
+          c.effort = b.effort as Effort;
+        } else if (c.effort && !offered.includes(c.effort)) c.effort = undefined;
         if (harness !== c.harness || model !== c.model) {
           c.harness = harness;
           c.model = model;

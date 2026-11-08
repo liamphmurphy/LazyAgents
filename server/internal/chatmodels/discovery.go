@@ -106,7 +106,7 @@ func discoverHTTP(ctx context.Context, client *http.Client, endpoint, harness, k
 			if label == "" {
 				label = m.ID
 			}
-			out = append(out, Model{ID: m.ID, Label: label})
+			out = append(out, Model{ID: m.ID, Label: label, Efforts: fallbackEfforts[harness]})
 		}
 		if !page.HasMore {
 			break
