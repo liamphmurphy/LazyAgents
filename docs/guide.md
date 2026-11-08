@@ -359,7 +359,7 @@ JSON is retained on those turns for audit.
 
 ## Workflows
 
-A workflow is a fixed graph of steps that Vesper runs for you. Build one under **Workflows** by dragging nodes on the canvas, or open **Build with chat** and describe it: a persona proposes edits, previewed on the canvas until you apply them. Publishing freezes a version; runs in flight keep the version they started with.
+A workflow is a fixed graph of steps that Vesper runs for you. Build one under **Workflows** by dragging nodes on the canvas, or describe it in the box at the bottom of the canvas: a persona proposes edits, previewed on the canvas until you apply them. Publishing freezes a version; runs in flight keep the version they started with.
 
 Node types are a trigger, **Enrich prompt**, **Agent step** (read-only; a step that reads the web can't read the workspace), **Human gate** and the outputs **Add to wiki**, **Add to library**, **Create ticket** and **Post to chat**. Wiki writes need a gate before them. "Request changes" at a gate re-runs an earlier step as a new attempt, so the graph never loops.
 
