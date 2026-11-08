@@ -10,7 +10,7 @@ import (
 )
 
 // videoTranscripts fetches YouTube captions; tests point it at a fake.
-var videoTranscripts = transcript.NewYouTube()
+var videoTranscripts = transcript.Shared
 
 type VideoTranscriptIn struct {
 	URL      string  `json:"url" jsonschema:"The YouTube link the person shared (watch, youtu.be, shorts, embed or live)"`

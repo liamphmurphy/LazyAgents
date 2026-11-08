@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
@@ -96,6 +97,9 @@ type Transcript struct {
 type YouTube struct {
 	HTTP    *http.Client
 	BaseURL string
+
+	mu      sync.Mutex
+	flights map[string]*flight
 }
 
 // NewYouTube returns a fetcher with a bounded HTTP client.
@@ -126,10 +130,9 @@ type playerResponse struct {
 	} `json:"captions"`
 }
 
-// Fetch loads the transcript of a video in the preferred language (a code like
-// "en"; empty prefers English), falling back to whatever the video has.
-// Uploaded captions win over auto-generated ones in the same language.
-func (y *YouTube) Fetch(ctx context.Context, id, lang string) (Transcript, error) {
+// fetch loads a transcript from YouTube. Uploaded captions win over
+// auto-generated ones in the same language.
+func (y *YouTube) fetch(ctx context.Context, id, lang string) (Transcript, error) {
 	out := Transcript{VideoID: id}
 	if !videoID.MatchString(id) {
 		return out, apperr.Invalid("url", "that isn't a YouTube video id")

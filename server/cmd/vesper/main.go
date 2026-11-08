@@ -37,6 +37,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/seed"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/transcript"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
@@ -159,7 +160,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Artifacts:      arts,
 		Agents:         &agents.Service{Pool: pool},
 		Secrets:        secretsSvc,
-		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc, RequireHarnessKey: cfg.Runner.Backend == "docker", OpenCodeIsolated: cfg.Runner.OpenCodeIsolated},
+		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc, RequireHarnessKey: cfg.Runner.Backend == "docker", OpenCodeIsolated: cfg.Runner.OpenCodeIsolated, Transcripts: transcript.Shared},
 		Wiki:           &wiki.Service{Pool: pool, Artifacts: arts, Tracker: trackerSvc},
 		PublicURL:      cfg.PublicURL,
 		Blobs:          blobs,

@@ -296,6 +296,9 @@ func (s *Service) PostChatMessage(ctx context.Context, ws, user, id uuid.UUID, i
 		_, out, err = postChatMessage(ctx, q, s.ChatCatalog(), chat, in, s.HandoffChars)
 		return err
 	})
+	if err == nil && s.Transcripts != nil {
+		s.Transcripts.Prefetch(in.Body)
+	}
 	return out, err
 }
 
