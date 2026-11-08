@@ -13,7 +13,7 @@ const graph = {
 };
 const workflow = (over = {}) => ({ id: WF, name: "Research to wiki", description: "Research and file it", draft: graph, issues: [], published_version: 1, unpublished_changes: false, proposals: [], updated_at: now(), ...over });
 const run = (over = {}) => ({
-  id: RUN, chat_id: "c", name: "Research to wiki", version: 1, graph, input: "Compare queues", state: "waiting", error: "", created_at: now(),
+  id: RUN, chat_id: "c", name: "Research to wiki", version: 1, graph, input: "Compare queues", state: "waiting", error: "", check_attempts: [], created_at: now(),
   steps: [{ node_id: "start", attempt: 1, state: "done", output: "Compare queues", decision: "", note: "", created_at: now() }, { node_id: "work", attempt: 1, state: "done", output: "The **findings**", decision: "", note: "", created_at: now() }, { node_id: "ok", attempt: 1, state: "waiting", output: "", decision: "", note: "", created_at: now() }],
   ...over,
 });
