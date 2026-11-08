@@ -70,6 +70,15 @@ fi
 export GIT_SSH_COMMAND="ssh $sshopts"
 `
 
+// keepOurFilesOutOfGit: our files never get committed. .lazyagents/ is
+// excluded and a tracked AGENTS.md is marked skip-worktree while we write our
+// section into it.
+const keepOurFilesOutOfGit = `mkdir -p .lazyagents/context
+grep -qx '.lazyagents/' .git/info/exclude 2>/dev/null || echo '.lazyagents/' >> .git/info/exclude
+if [ -f AGENTS.md ] && ! grep -q 'lazyagents:start' AGENTS.md; then cp AGENTS.md .lazyagents/AGENTS.repo.md; fi
+if git ls-files --error-unmatch AGENTS.md >/dev/null 2>&1; then git update-index --skip-worktree AGENTS.md; else grep -qx 'AGENTS.md' .git/info/exclude || echo 'AGENTS.md' >> .git/info/exclude; fi
+`
+
 // SetupScript prepares a fresh workspace (§6.5): clone the project's repo
 // (or start an empty one), create the run's branch, keep Vesper's files
 // out of git, and run the project's setup commands. The working directory
@@ -121,18 +130,76 @@ func SetupScriptForEpic(repoURL, baseBranch, epicBranch, branch, authorName, aut
 	b.WriteString(`  git config core.sshCommand "$GIT_SSH_COMMAND"` + "\n")
 	b.WriteString("  git checkout --quiet -B " + shellQuote(branch) + "\n")
 	b.WriteString("fi\n")
-	// Our files never get committed: .lazyagents/ is excluded and a tracked
-	// AGENTS.md is marked skip-worktree while we write our section into it.
-	b.WriteString("mkdir -p .lazyagents/context\n")
-	b.WriteString("grep -qx '.lazyagents/' .git/info/exclude 2>/dev/null || echo '.lazyagents/' >> .git/info/exclude\n")
-	b.WriteString("if [ -f AGENTS.md ] && ! grep -q 'lazyagents:start' AGENTS.md; then cp AGENTS.md .lazyagents/AGENTS.repo.md; fi\n")
-	b.WriteString("if git ls-files --error-unmatch AGENTS.md >/dev/null 2>&1; then git update-index --skip-worktree AGENTS.md; else grep -qx 'AGENTS.md' .git/info/exclude || echo 'AGENTS.md' >> .git/info/exclude; fi\n")
+	b.WriteString(keepOurFilesOutOfGit)
 	b.WriteString(dependencySetupScript())
 	for _, c := range setup {
 		b.WriteString("echo " + shellQuote("→ "+c) + "\n")
 		b.WriteString(c + "\n")
 	}
 	b.WriteString("echo '→ workspace ready on branch " + strings.ReplaceAll(branch, "'", "") + "'\n")
+	return b.String()
+}
+
+// ChatRepoSetupScript prepares a coding chat's workspace: the persona's repo
+// cloned into the workspace root on the chat's own work branch. A branch an
+// earlier segment already pushed is checked out and resumed (the previous
+// workspace is gone); otherwise it starts from the remote's default branch.
+// Only github.com over https gets the workspace's git token: the repo URL is
+// the persona owner's choice, and the token must not go to a host they picked.
+func ChatRepoSetupScript(repoURL, workBranch, authorName, authorEmail string) string {
+	var b strings.Builder
+	b.WriteString("set -eu\n")
+	b.WriteString(`helper='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'` + "\n")
+	b.WriteString(sshSetup)
+	// An empty value never matches the credential helper's GH_TOKEN test below.
+	b.WriteString(`token="${GH_TOKEN:-}"` + "\n")
+	if !strings.HasPrefix(repoURL, "https://github.com/") {
+		b.WriteString(`token=""` + "\n")
+	}
+	q, wb := shellQuote(repoURL), shellQuote(workBranch)
+	b.WriteString("if [ ! -d .git ]; then\n")
+	b.WriteString("  echo '→ cloning " + strings.ReplaceAll(repoURL, "'", "") + "'\n")
+	const dest = ".lazyagents/clone"
+	b.WriteString("  rm -rf " + dest + "\n")
+	b.WriteString(`  if [ -n "$token" ]; then git -c credential.helper= -c "credential.helper=$helper" clone --quiet --no-checkout -- ` + q + " " + dest + "; else git clone --quiet --no-checkout -- " + q + " " + dest + "; fi\n")
+	b.WriteString("  mv " + dest + "/.git .git\n")
+	b.WriteString("  rm -rf " + dest + "\n")
+	b.WriteString("  if git rev-parse -q --verify HEAD >/dev/null 2>&1; then git reset -q --hard; fi\n")
+	b.WriteString("  git config user.name " + shellQuote(authorName) + "\n")
+	b.WriteString("  git config user.email " + shellQuote(authorEmail) + "\n")
+	// Scoped to github.com so the token never answers for another host
+	// (a submodule, a second remote the agent adds).
+	b.WriteString(`  if [ -n "$token" ]; then git config credential.https://github.com.helper "$helper"; fi` + "\n")
+	b.WriteString(`  git config core.sshCommand "$GIT_SSH_COMMAND"` + "\n")
+	b.WriteString("  if git fetch --quiet origin " + shellQuote("+refs/heads/"+workBranch+":refs/remotes/origin/"+workBranch) + " 2>/dev/null; then\n")
+	b.WriteString("    echo '→ resuming pushed work on branch " + strings.ReplaceAll(workBranch, "'", "") + "'\n")
+	b.WriteString("    git checkout --quiet -B " + wb + " " + shellQuote("origin/"+workBranch) + "\n")
+	b.WriteString("  else\n")
+	b.WriteString("    git checkout --quiet -B " + wb + "\n")
+	b.WriteString("  fi\n")
+	b.WriteString("fi\n")
+	// Defense in depth, not a hard boundary: the agent can still bypass a hook
+	// (--no-verify, another remote). The token's own reach is the real limit.
+	hook := []string{
+		"#!/bin/sh",
+		"# Vesper: this chat may push only its own work branch (not a hard boundary).",
+		"want=" + shellQuote("refs/heads/"+workBranch),
+		`while read -r local_ref local_sha remote_ref remote_sha; do`,
+		`  if [ "$remote_ref" != "$want" ]; then echo "vesper: this chat may only push $want, not $remote_ref" >&2; exit 1; fi`,
+		"done",
+		"exit 0",
+	}
+	quoted := make([]string, len(hook))
+	for i, l := range hook {
+		quoted[i] = shellQuote(l)
+	}
+	b.WriteString("mkdir -p .git/hooks\n")
+	b.WriteString("printf '%s\\n' " + strings.Join(quoted, " ") + " > .git/hooks/pre-push\n")
+	b.WriteString("chmod +x .git/hooks/pre-push\n")
+	b.WriteString(keepOurFilesOutOfGit)
+	b.WriteString("mkdir -p .lazyagents/outbox\n")
+	b.WriteString(dependencySetupScript())
+	b.WriteString("echo '→ workspace ready on branch " + strings.ReplaceAll(workBranch, "'", "") + "'\n")
 	return b.String()
 }
 
@@ -334,6 +401,41 @@ func PlanSecrets(ctx context.Context, q *store.Queries, ws uuid.UUID, project *u
 		out = append(out, d)
 	}
 	return out, nil
+}
+
+// GitHubHTTPS reports a repository URL the workspace's git token may be used
+// for; SSHKeyEnv's key is likewise only for GitHubSSH URLs (only GitHub's host
+// keys are pinned).
+func GitHubHTTPS(repoURL string) bool { return strings.HasPrefix(repoURL, "https://github.com/") }
+
+// GitHubSSH reports a github.com SSH repository URL (scp or ssh:// form).
+func GitHubSSH(repoURL string) bool {
+	return strings.HasPrefix(repoURL, "git@github.com:") || strings.HasPrefix(repoURL, "ssh://git@github.com/") || strings.HasPrefix(repoURL, "ssh://git@github.com:22/")
+}
+
+// ChatSecretPlan narrows a chat's secret plan to the harness key and the git
+// credentials: no other repo:* or tests:run-scoped secret ever reaches a chat,
+// whose repository (and so the host its git credentials go to) is a
+// persona owner's choice.
+func ChatSecretPlan(plan []SecretDecision, spec agentdef.Resolved) []SecretDecision {
+	key, _ := HarnessKey(spec)
+	return slices.DeleteFunc(slices.Clone(plan), func(d SecretDecision) bool {
+		return d.Name != key.Secret && d.Name != "git:pat" && d.Name != "git:ssh"
+	})
+}
+
+// ScrubChatGitEnv removes the git credentials a chat's repository can't use:
+// the token unless it is a github.com https repo, the SSH key unless it is a
+// github.com ssh repo. A chat without a repository gets neither.
+func ScrubChatGitEnv(env map[string]string, repoURL string) {
+	if !GitHubHTTPS(repoURL) {
+		for _, k := range []string{"GH_TOKEN", "GITHUB_TOKEN", envName("git:pat")} {
+			delete(env, k)
+		}
+	}
+	if !GitHubSSH(repoURL) {
+		delete(env, SSHKeyEnv)
+	}
 }
 
 // ErrNoHarnessKey means a docker run can't authenticate its harness.

@@ -86,6 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             user={{
               name: data.me.name,
               initials: data.me.initials,
+              avatarUrl: data.me.avatar_url,
               role: data.me.role_title,
             }}
           />

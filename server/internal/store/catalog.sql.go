@@ -320,7 +320,7 @@ func (q *Queries) GetProjectByKey(ctx context.Context, arg GetProjectByKeyParams
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at FROM users WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type FROM users WHERE id = $1 AND workspace_id = $2
 `
 
 type GetUserParams struct {
@@ -342,6 +342,8 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AvatarKey,
+		&i.AvatarContentType,
 	)
 	return i, err
 }

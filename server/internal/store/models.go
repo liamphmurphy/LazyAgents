@@ -176,6 +176,7 @@ type ChatAttachment struct {
 	SizeBytes   int64
 	BlobKey     string
 	CreatedAt   time.Time
+	Source      string
 }
 
 type ChatMessage struct {
@@ -192,6 +193,7 @@ type ChatMessage struct {
 	Citations   json.RawMessage
 	Usage       []byte
 	CreatedAt   time.Time
+	CodeChanges json.RawMessage
 }
 
 type ChatSession struct {
@@ -211,6 +213,8 @@ type ChatSession struct {
 	UpdatedAt     time.Time
 	LastMessageAt *time.Time
 	PersonaID     *uuid.UUID
+	RepoUrl       *string
+	WorkBranch    *string
 }
 
 type Comment struct {
@@ -347,6 +351,9 @@ type Persona struct {
 	Revision           int32
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	CanCode            bool
+	CanGenerateImages  bool
+	Repos              []string
 }
 
 type PlanStep struct {
@@ -552,16 +559,18 @@ type TicketLabel struct {
 }
 
 type User struct {
-	ID           uuid.UUID
-	WorkspaceID  uuid.UUID
-	Name         string
-	Email        string
-	Initials     string
-	RoleTitle    string
-	AvatarColor  *string
-	PasswordHash string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	Name              string
+	Email             string
+	Initials          string
+	RoleTitle         string
+	AvatarColor       *string
+	PasswordHash      string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	AvatarKey         *string
+	AvatarContentType *string
 }
 
 type Workspace struct {

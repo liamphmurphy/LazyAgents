@@ -54,16 +54,25 @@ func readAvatar(mr *multipart.Reader) ([]byte, error) {
 // avatarRefused renders a 413 or 415 from CheckAvatar or readAvatar; other
 // errors go through the shared error mapping.
 func avatarRefused(err error) (api.UploadPersonaAvatarResponseObject, error) {
-	var ae *personas.AvatarError
-	if !errors.As(err, &ae) {
+	body, status, ok := avatarRefusal(err)
+	if !ok {
 		return nil, err
 	}
-	field := "file"
-	body := api.Error{Code: api.Invalid, Message: ae.Msg, Field: &field}
-	if ae.Status == http.StatusRequestEntityTooLarge {
+	if status == http.StatusRequestEntityTooLarge {
 		return api.UploadPersonaAvatar413JSONResponse(body), nil
 	}
 	return api.UploadPersonaAvatar415JSONResponse(body), nil
+}
+
+// avatarRefusal is the error body and status (413 or 415) for an upload
+// refused by CheckAvatar or readAvatar; ok is false for any other error.
+func avatarRefusal(err error) (body api.Error, status int, ok bool) {
+	var ae *personas.AvatarError
+	if !errors.As(err, &ae) {
+		return body, 0, false
+	}
+	field := "file"
+	return api.Error{Code: api.Invalid, Message: ae.Msg, Field: &field}, ae.Status, true
 }
 
 func (s *Server) deleteAvatarBlob(ctx context.Context, key *string) {
@@ -151,6 +160,15 @@ type avatarResponse struct {
 }
 
 func (r avatarResponse) VisitGetPersonaAvatarResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
+// VisitGetUserAvatarResponse serves a profile picture with the same headers.
+func (r avatarResponse) VisitGetUserAvatarResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
+func (r avatarResponse) write(w http.ResponseWriter) error {
 	defer r.body.Close()
 	h := w.Header()
 	h.Set("Content-Type", r.contentType)

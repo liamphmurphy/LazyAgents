@@ -34,3 +34,20 @@ func TestFallbacks(t *testing.T) {
 		}
 	}
 }
+
+// Only LazyAgents sets the assistant-only options: a definition (or a
+// fallback) that tries is refused.
+func TestAssistantOnlyOptionsRejected(t *testing.T) {
+	for _, opt := range []string{OptionWebSearch, OptionImageGeneration} {
+		s := base()
+		s.HarnessOptions = map[string]map[string]string{s.Harness: {opt: "true"}}
+		if s.Normalize() == nil {
+			t.Fatalf("a definition set %s", opt)
+		}
+		s = base()
+		s.Fallbacks = []Fallback{{Harness: HarnessCodex, Model: "m", HarnessOptions: map[string]string{opt: "true"}}}
+		if s.Normalize() == nil {
+			t.Fatalf("a fallback set %s", opt)
+		}
+	}
+}

@@ -20,23 +20,27 @@ import { usePersonas } from "@/lib/api/persona-hooks";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm } from "@/lib/chat-ui";
+import { codesInRepos, imageHint, repoShortName } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { LinkEditor } from "@/components/domain/link-editor";
 import { ChatMarkdown } from "./chat-markdown";
+import { CodeChanges } from "./code-changes";
 import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
 import { RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
-import { AttachButton, AttachmentChips, DropOverlay, SentAttachments, useAttachments, useFileDrop } from "./attachments";
+import { AttachButton, AttachmentChips, DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
-import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaSwitcher, personaLook, type PersonaLook } from "./persona";
+import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
+import { HumanAvatar } from "@/components/domain/avatars";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import Link from "next/link";
@@ -77,7 +81,10 @@ function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatI
   return (
     <li className={cx("flex flex-col gap-1", mine ? "items-end" : "items-start")} data-testid={`${m.role}-message`}>
       {mine ? (
-        <span className="text-xs text-fg-tertiary">{m.author?.name ?? "You"}</span>
+        <span className="flex items-center gap-1.5 text-xs text-fg-tertiary">
+          {m.author?.avatar_url && <HumanAvatar name={m.author.name} initials={m.author.initials} color={m.author.avatar_color} src={m.author.avatar_url} size={18} label={false} />}
+          {m.author?.name ?? "You"}
+        </span>
       ) : (
         // Assistant replies carry the persona's avatar and its name in the persona's color.
         // The harness · model tag and usage live in the Activity tab, so the chat stays immersive.
@@ -94,7 +101,8 @@ function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatI
       >
         <ChatMarkdown>{m.body_md}</ChatMarkdown>
       </div>
-      {mine && <SentAttachments attachments={m.attachments} />}
+      {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
+      {!mine && <CodeChanges changes={m.code_changes} />}
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
       {!mine && <Sources citations={m.citations} />}
       {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
@@ -284,11 +292,11 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // Before the first message the persona can still change: a chat keeps its persona for life,
   // so switching starts a fresh chat with the other persona and drops this empty one.
   const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
-  function switchPersona(personaId: string) {
-    if (!c || personaId === c.persona?.id || create.isPending || send.isPending || send.isSuccess) return;
+  function switchPersona(personaId: string, repo?: string) {
+    if (!c || (personaId === c.persona?.id && !repo) || create.isPending || send.isPending || send.isSuccess) return;
     const old = c;
     create.mutate(
-      { project: old.project, persona_id: personaId, harness: old.harness, model: old.model },
+      { project: old.project, persona_id: personaId, harness: old.harness, model: old.model, ...(repo ? { repo_url: repo } : {}) },
       {
         onSuccess: async (next) => {
           if (text.trim()) putDraft(next.id, text);
@@ -325,6 +333,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // A chat without a persona, or whose persona was deleted, is the built-in Assistant.
   const persona = personaLook(c.persona);
   const full = personas.data?.personas.find((p) => p.id === c.persona?.id);
+  const hint = imageHint((c.persona?.capabilities ?? full?.capabilities)?.images, c.harness);
   // Restoring a chat opened from the Archived list shows it under Active again.
   const restored = () => {
     if (!search.has("view")) return;
@@ -347,6 +356,22 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
             <PersonaAvatar persona={persona} size={16} />
             <PersonaName persona={persona} />
           </span>
+          {c.repo_url && (
+            <span
+              data-testid="repo-chip"
+              title={c.repo_url}
+              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-fg-secondary max-md:hidden"
+            >
+              <Icon name="branch" size={13} className="flex-none" />
+              <span className="truncate text-fg">{repoShortName(c.repo_url)}</span>
+              {c.work_branch && <span className="truncate font-mono text-[11.5px]">{c.work_branch}</span>}
+            </span>
+          )}
+          {hint && (
+            <span data-testid="image-hint" className="flex-none text-[11.5px] text-fg-tertiary max-lg:hidden">
+              {hint}
+            </span>
+          )}
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
           <span className="flex-1" />
           <Tabs
@@ -488,6 +513,9 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               />
               <div className="flex flex-wrap items-center gap-2">
                 {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
+                {fresh && c.persona && c.repo_url && (full?.repos.length ?? 0) > 1 && codesInRepos(full) && (
+                  <RepoSelect repos={full!.repos} value={c.repo_url} onChange={(r) => switchPersona(c.persona!.id, r)} disabled={locked || create.isPending} />
+                )}
                 <AttachButton onFiles={files.add} disabled={locked} />
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked} />}

@@ -153,7 +153,7 @@ export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstra
         <PropButton label="Reviewer">
           {t.reviewer ? (
             <>
-              <HumanAvatar name={t.reviewer.name} initials={t.reviewer.initials} color={reviewer?.avatar_color} label={false} />
+              <HumanAvatar name={t.reviewer.name} initials={t.reviewer.initials} color={reviewer?.avatar_color} src={reviewer?.avatar_url} label={false} />
               {t.reviewer.name}
             </>
           ) : (

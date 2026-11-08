@@ -27,12 +27,12 @@ type State = "idle" | "running" | "failed";
 type Chat = {
   id: string; project: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
-  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string;
+  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branch?: string;
 };
 type Message = {
   id: string; seq: number; role: "user" | "assistant" | "system"; body_md: string;
   harness?: Harness; model?: string; created_at: string;
-  context_refs?: unknown[]; citations?: unknown[]; run_id?: string;
+  context_refs?: unknown[]; citations?: unknown[]; run_id?: string; code_changes?: unknown[];
 };
 export type MockMemory = {
   id: string; title: string; summary: string; body: string; tags: string[]; type: string;
@@ -57,6 +57,7 @@ const USAGE = { input_tokens: 48200, output_tokens: 1300, cached_input_tokens: 4
 export type Posted = { chat: string; body: Record<string, unknown> };
 export type MockPersona = {
   id: string; name: string; tone: string; color: string; avatar_url?: string; custom_instructions: string;
+  capabilities: { code: boolean; images: boolean }; repos: string[];
   is_default: boolean; chat_count: number; last_used_at?: string; revision: number; created_at: string; updated_at: string;
 };
 export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[] };
@@ -66,7 +67,7 @@ export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona
   const t = `2026-11-0${Math.min(i, 9)}T09:00:00.000Z`;
   return {
     id: `77777777-7777-4777-8777-${String(i).padStart(12, "0")}`,
-    name: `Persona ${i}`, tone: "neutral", color: "#8b8fff", custom_instructions: "", is_default: false,
+    name: `Persona ${i}`, tone: "neutral", color: "#8b8fff", custom_instructions: "", capabilities: { code: false, images: false }, repos: [], is_default: false,
     chat_count: 0, revision: 1, created_at: t, updated_at: t, ...over,
   };
 }
@@ -195,6 +196,23 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
           { target: TICKET, title: TICKET.title },
         ]
       : undefined;
+    // "code:" replies like a coding persona: changed files (two hunks, an added file, a binary) and a long fence.
+    if (prompt.startsWith("code:")) {
+      const long = Array.from({ length: 25 }, (_, i) => `  const v${i} = ${i};`).join("\n");
+      add(c, "assistant", `Done.\n\n\`\`\`ts\nfunction run() {\n${long}\n}\n\`\`\``, {
+        harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE,
+        code_changes: [
+          {
+            path: "src/app.ts", status: "modified", additions: 2, deletions: 1, binary: false, truncated: false,
+            patch: "@@ -1,3 +1,4 @@\n import a from \"a\";\n-const x = 1;\n+const x = 2;\n+const y = 3;\n export {};\n@@ -20,2 +21,2 @@\n function f() {\n-  return 1;\n+  return 2;\n }\n",
+          },
+          { path: "cmd/main.go", status: "added", additions: 3, deletions: 0, binary: false, truncated: false, patch: "@@ -0,0 +1,3 @@\n+package main\n+\n+func main() {}\n" },
+          { path: "assets/logo.png", status: "modified", additions: 0, deletions: 0, binary: true, truncated: false },
+        ],
+      });
+      void emit(c);
+      return;
+    }
     add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE, ...(citations ? { citations } : {}) });
     void emit(c);
   }
@@ -204,7 +222,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     return {
       ...c, agent_id: undefined, persona_id: undefined,
       agent: { id: a.id, name: a.name, handle: a.handle, color_index: a.color_index },
-      ...(p ? { persona: { id: p.id, name: p.name, color: p.color, ...(p.avatar_url ? { avatar_url: p.avatar_url } : {}) } } : {}),
+      ...(p ? { persona: { id: p.id, name: p.name, color: p.color, ...(p.avatar_url ? { avatar_url: p.avatar_url } : {}), capabilities: p.capabilities } } : {}),
     };
   }
   const updatePersona = (id: string, patch: Partial<MockPersona>) => {
@@ -217,6 +235,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       }, id)
       .catch(() => undefined);
   };
+
+  // Your profile (Settings → Profile): shared by /bootstrap and /me so edits show in the sidebar.
+  const me: Record<string, unknown> & { id: string; name: string } = {
+    id: "00000000-0000-4000-8000-0000000000aa", name: "Liam", email: "liam@example.com", initials: "L", role_title: "Owner",
+  };
+  const profileRequests: string[] = [];
+  const initialsOf = (name: string) => name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   async function handle(route: Route) {
     const req = route.request();
@@ -231,11 +256,36 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     if (path === "/bootstrap") {
       return json({
         workspace: { id: uuid(), name: "Acme", slug: "acme" },
-        me: { id: uuid(), name: "Liam", email: "liam@example.com", initials: "L", role_title: "Owner" },
+        me,
         users: [], agents: AGENTS, epics: [], labels: [],
         projects: [{ id: uuid(), key: "WEB", name: "Web app", color: "#6e56cf", default_branch: "main", archived: false, revision: 1 }],
         counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
       });
+    }
+    if (path === "/me" && method === "GET") return json(me);
+    if (path === "/me" && method === "PATCH") {
+      const b = body() as { name?: string; role_title?: string };
+      profileRequests.push(`PATCH ${JSON.stringify(b)}`);
+      if (b.name !== undefined && !b.name.trim()) return fail(err(422, "invalid", "Name is required.", "name"));
+      if (b.name !== undefined) Object.assign(me, { name: b.name.trim(), initials: initialsOf(b.name) });
+      if (b.role_title !== undefined) me.role_title = b.role_title.trim();
+      return json(me);
+    }
+    if (path === "/me/avatar" && method === "PUT") {
+      const raw = (req.postDataBuffer() ?? Buffer.alloc(0)).toString("latin1");
+      profileRequests.push("PUT avatar");
+      if (!raw.includes("\x89PNG") && !raw.includes("\xff\xd8\xff") && !raw.includes("WEBP")) return fail(err(415, "unsupported_type", "PNG, JPEG or WebP only"));
+      me.avatar_url = `/api/v1/users/${me.id}/avatar?v=${profileRequests.length}`;
+      return json(me);
+    }
+    if (path === "/me/avatar" && method === "DELETE") {
+      profileRequests.push("DELETE avatar");
+      delete me.avatar_url;
+      return json(me);
+    }
+    if (/^\/users\/[^/]+\/avatar$/.test(path) && method === "GET") {
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+      return route.fulfill({ status: 200, contentType: "image/png", body: png });
     }
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, queued: 0 });
     // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
@@ -359,6 +409,11 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         state: "idle", archived: false, revision: 1, message_count: 0, created_at: now(), updated_at: now(),
         persona_id: (b.persona_id as string | undefined) ?? defaultPersona()?.id,
       };
+      // A coding persona's chat works in the requested repo (default: its first) on its own branch.
+      const owner = personas.find((p) => p.id === c.persona_id);
+      const repo = (b.repo_url as string | undefined) ?? owner?.repos[0];
+      if (b.repo_url !== undefined && !(owner?.capabilities.code && owner.repos.includes(String(b.repo_url)))) return fail(err(422, "invalid", "not one of the persona's repos", "repo_url"));
+      if (owner?.capabilities.code && repo) Object.assign(c, { repo_url: repo, work_branch: `vesper/${owner.name.toLowerCase()}-${c.id.slice(0, 8)}` });
       chats.unshift(c);
       messages.set(c.id, []);
       return json(ref(c), 201);
@@ -452,7 +507,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const t = now();
       const p: MockPersona = {
         id: uuid(), name: String(b.name).trim(), tone: (b.tone as string) ?? "neutral", color: String(b.color ?? "#64748b").toLowerCase(),
-        custom_instructions: (b.custom_instructions as string) ?? "", is_default: !!b.is_default, chat_count: 0, revision: 1, created_at: t, updated_at: t,
+        custom_instructions: (b.custom_instructions as string) ?? "", is_default: !!b.is_default,
+        capabilities: (b.capabilities as MockPersona["capabilities"] | undefined) ?? { code: false, images: false }, repos: (b.repos as string[] | undefined) ?? [], chat_count: 0, revision: 1, created_at: t, updated_at: t,
       };
       personas.push(p);
       return json(p, 201);
@@ -474,6 +530,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         for (const k of ["name", "tone", "custom_instructions"] as const) if (typeof b[k] === "string") p[k] = (b[k] as string).trim() || p[k];
         if (typeof b.custom_instructions === "string") p.custom_instructions = b.custom_instructions;
         if (typeof b.color === "string") p.color = b.color.toLowerCase();
+        if (b.capabilities) p.capabilities = b.capabilities as MockPersona["capabilities"];
+        if (Array.isArray(b.repos)) p.repos = b.repos as string[];
         bump();
         return json(p);
       }
@@ -550,6 +608,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona };
+    return { unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests };
   })();
 }

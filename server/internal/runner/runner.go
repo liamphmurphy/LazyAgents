@@ -56,9 +56,10 @@ type Config struct {
 // DefaultChatIdleTTL is how long an idle chat segment keeps its workspace.
 const DefaultChatIdleTTL = 4 * time.Hour
 
-// Blobs stores raw logs (blob.Store).
+// Blobs stores raw logs and generated chat images (blob.Store).
 type Blobs interface {
 	Put(ctx context.Context, bucket, key string, body io.Reader, size int64, contentType string) error
+	Delete(ctx context.Context, bucket, key string) error
 }
 
 // AttachmentStore reads chat attachments and deletes stale ones (blob.Store).
@@ -500,6 +501,14 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		fail("Couldn't read secrets: " + err.Error())
 		return
 	}
+	chatRepo := ""
+	if c.run.Purpose == "chat" {
+		plan = ChatSecretPlan(plan, c.spec)
+		if chatRepo, err = chatGitRepo(ctx, r.q(), c); err != nil {
+			fail("Couldn't prepare the chat workspace: " + err.Error())
+			return
+		}
+	}
 	key, _ := HarnessKey(c.spec)
 	if NeedsHarnessKey(r.Cfg.RequireHarnessKey, c.spec) && !hasSecret(plan, key.Secret) {
 		fail(fmt.Sprintf("No %s secret: add an API key in Settings → Connections & secrets, then dispatch again.", key.Secret))
@@ -521,6 +530,9 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		if v, err := r.Secrets.Reveal(ctx, run.WorkspaceID, &c.project.ID, "git:ssh"); err == nil {
 			env[SSHKeyEnv] = v
 		}
+	}
+	if c.run.Purpose == "chat" {
+		ScrubChatGitEnv(env, chatRepo)
 	}
 	setupStart := time.Now()
 	if err := r.Backend.EnsureWorkspace(ctx, run.ID.String()); err != nil {
@@ -544,7 +556,10 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	}
 	script := SetupScriptForEpic(repo, base, epic, branch, c.agent.Name+" (Vesper)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
 	if c.run.Purpose == "chat" {
-		script = "mkdir -p .lazyagents/context"
+		if script, err = chatSetupScript(ctx, r.q(), c); err != nil {
+			fail("Couldn't prepare the chat workspace: " + err.Error())
+			return
+		}
 	}
 	r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "starting", "runner": r.Cfg.ID, "backend": r.Backend.Name(), "branch": branch})
 	proc, err := r.Backend.Start(ctx, run.ID.String(), ExecSpec{
@@ -690,7 +705,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	log := r.Log.With("run", c.run.ID, "ticket", c.ticket.Key, "turn", turn.Seq)
 	if c.run.State != "running" {
 		if c.run.Purpose == "chat" && c.run.State == "paused" {
-			r.finishChatTurn(ctx, c, turn, harness.Result{}, 130, nil, nil)
+			r.finishChatTurn(ctx, c, turn, harness.Result{}, 130, nil, nil, nil)
 			return
 		}
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
@@ -795,10 +810,21 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		log.Error("secrets", "err", err)
 		return
 	}
+	chatRepo := ""
+	if c.run.Purpose == "chat" {
+		plan = ChatSecretPlan(plan, c.spec)
+		if chatRepo, err = chatGitRepo(ctx, q, c); err != nil {
+			r.failChat(ctx, c, "Could not load chat credentials.")
+			return
+		}
+	}
 	env, err := SecretEnv(ctx, r.Secrets, c.run.WorkspaceID, &c.project.ID, plan)
 	if err != nil {
 		r.end(ctx, c, "failed", "Couldn't decrypt secrets: "+err.Error(), runs.VerbRunFailed)
 		return
+	}
+	if c.run.Purpose == "chat" {
+		ScrubChatGitEnv(env, chatRepo)
 	}
 	if c.spec.Harness == agentdef.HarnessOpenCode {
 		// SecretEnv skips what it cannot reveal; OpenCode has no host login to
@@ -934,6 +960,12 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	env["LAZYAGENTS_TICKET"] = c.ticket.Key
 	argv := append(append([]string{}, TurnWrapper...), inv.Argv...)
 
+	// A coding chat's turn is reported as what changed since this commit,
+	// remembered here rather than in a file the agent could edit.
+	codeBase := ""
+	if c.run.Purpose == "chat" && allowedScope(c.spec, "repo:write") {
+		codeBase = r.workspaceBase(ctx, wsID(c.run))
+	}
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
@@ -991,7 +1023,8 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	logKey := r.saveLog(c.run.ID, turn.Seq, raw)
 	if c.run.Purpose == "chat" {
 		if ctx.Err() == nil {
-			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey)
+			changes := r.chatCodeChanges(ctx, c, codeBase, sensitive, res, code, waitErr)
+			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey, changes)
 		}
 		return
 	}

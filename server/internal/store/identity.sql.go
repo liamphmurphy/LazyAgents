@@ -25,7 +25,7 @@ func (q *Queries) CountWorkspaces(ctx context.Context) (int64, error) {
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (workspace_id, name, email, initials, role_title, avatar_color, password_hash)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at
+RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type
 `
 
 type CreateUserParams struct {
@@ -60,6 +60,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AvatarKey,
+		&i.AvatarContentType,
 	)
 	return i, err
 }
@@ -87,7 +89,7 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 }
 
 const getLocalUser = `-- name: GetLocalUser :one
-SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at FROM users ORDER BY created_at, id LIMIT 1
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type FROM users ORDER BY created_at, id LIMIT 1
 `
 
 // The user every request acts as while there is no login: the first one created.
@@ -105,12 +107,14 @@ func (q *Queries) GetLocalUser(ctx context.Context) (User, error) {
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AvatarKey,
+		&i.AvatarContentType,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at FROM users WHERE lower(email) = lower($1)
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type FROM users WHERE lower(email) = lower($1)
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error) {
@@ -127,6 +131,37 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AvatarKey,
+		&i.AvatarContentType,
+	)
+	return i, err
+}
+
+const getUserForUpdate = `-- name: GetUserForUpdate :one
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type FROM users WHERE id = $1 AND workspace_id = $2 FOR UPDATE
+`
+
+type GetUserForUpdateParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) GetUserForUpdate(ctx context.Context, arg GetUserForUpdateParams) (User, error) {
+	row := q.db.QueryRow(ctx, getUserForUpdate, arg.ID, arg.WorkspaceID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Email,
+		&i.Initials,
+		&i.RoleTitle,
+		&i.AvatarColor,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AvatarKey,
+		&i.AvatarContentType,
 	)
 	return i, err
 }
@@ -149,7 +184,7 @@ func (q *Queries) GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, er
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at FROM users WHERE workspace_id = $1 ORDER BY name
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type FROM users WHERE workspace_id = $1 ORDER BY name
 `
 
 func (q *Queries) ListUsers(ctx context.Context, workspaceID uuid.UUID) ([]User, error) {
@@ -172,6 +207,8 @@ func (q *Queries) ListUsers(ctx context.Context, workspaceID uuid.UUID) ([]User,
 			&i.PasswordHash,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AvatarKey,
+			&i.AvatarContentType,
 		); err != nil {
 			return nil, err
 		}
@@ -181,4 +218,83 @@ func (q *Queries) ListUsers(ctx context.Context, workspaceID uuid.UUID) ([]User,
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserAvatar = `-- name: SetUserAvatar :one
+UPDATE users SET avatar_key = $3, avatar_content_type = $4, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type
+`
+
+type SetUserAvatarParams struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	AvatarKey         *string
+	AvatarContentType *string
+}
+
+// Both columns null clears the picture.
+func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserAvatar,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.AvatarKey,
+		arg.AvatarContentType,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Email,
+		&i.Initials,
+		&i.RoleTitle,
+		&i.AvatarColor,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AvatarKey,
+		&i.AvatarContentType,
+	)
+	return i, err
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users SET name = $3, initials = $4, role_title = $5, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type
+`
+
+type UpdateUserProfileParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	Initials    string
+	RoleTitle   string
+}
+
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.Initials,
+		arg.RoleTitle,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Email,
+		&i.Initials,
+		&i.RoleTitle,
+		&i.AvatarColor,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AvatarKey,
+		&i.AvatarContentType,
+	)
+	return i, err
 }

@@ -304,6 +304,101 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
 
+  /me:
+    get:
+      operationId: getProfile
+      summary: The signed-in person's profile
+      tags: [workspace]
+      responses:
+        "200":
+          description: The caller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateProfile
+      summary: Edit your display name and role title
+      description: |
+        Only the caller's own profile. Initials are recomputed from the new
+        name. 422 for an empty name or anything over the limits.
+      tags: [workspace]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfilePatch" }
+      responses:
+        "200":
+          description: The updated profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /me/avatar:
+    put:
+      operationId: uploadProfileAvatar
+      summary: Set or replace your profile picture
+      description: |
+        Same rules as PUT /personas/{id}/avatar: PNG, JPEG or WebP, at most
+        1 MB (1,048,576 bytes), sniffed by the server; SVG is never accepted.
+        413 over the limit, 415 for any other type, 422 for an empty file.
+      tags: [workspace]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Your profile with its new avatar_url
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteProfileAvatar
+      summary: Remove your profile picture (idempotent)
+      tags: [workspace]
+      responses:
+        "200":
+          description: Your profile without an avatar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        default: { $ref: "#/components/responses/Error" }
+  /users/{userId}/avatar:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getUserAvatar
+      summary: A workspace member's profile picture
+      description: |
+        Any member of the caller's workspace. Served like persona avatars:
+        the type sniffed at upload, `X-Content-Type-Options: nosniff` and a
+        locked-down CSP. 404 when the person has no picture or is in another
+        workspace.
+      tags: [workspace]
+      responses:
+        "200":
+          description: The image
+          headers:
+            X-Content-Type-Options: { schema: { type: string, enum: [nosniff] } }
+            Content-Security-Policy: { schema: { type: string } }
+            Cache-Control: { schema: { type: string } }
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
   /bootstrap:
     get:
       operationId: getBootstrap
@@ -2365,6 +2460,13 @@ components:
         initials: { type: string }
         role_title: { type: string }
         avatar_color: { type: string }
+        avatar_url: { type: string, description: "GET /users/{userId}/avatar with a cache-busting ?v=<updated_at unix>; absent without a picture" }
+    ProfilePatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80, description: Display name; trimmed }
+        role_title: { type: string, maxLength: 80, description: Empty string clears it }
     Project:
       type: object
       required: [id, key, name, color, default_branch, archived, revision]
@@ -2517,6 +2619,7 @@ components:
         name: { type: string }
         initials: { type: string }
         avatar_color: { type: string }
+        avatar_url: { type: string, description: "GET /users/{userId}/avatar with a cache-busting ?v=<updated_at unix>; absent without a picture" }
     EpicRef:
       type: object
       required: [id, name]
@@ -4105,6 +4208,8 @@ components:
         error: { type: string, description: Why the last turn failed, when state is failed }
         current_run_id: { type: string, format: uuid, description: The run serving the current harness segment; its events show live activity }
         persona: { $ref: "#/components/schemas/PersonaSummary" }
+        repo_url: { type: string, description: "The git repository a coding persona works in for this chat; fixed for the chat's life. Absent when the chat has no repository." }
+        work_branch: { type: string, description: "The branch this chat commits and pushes to (vesper/<persona>-<chat id prefix>); set with repo_url" }
         archived: { type: boolean }
         revision: { type: integer }
         message_count: { type: integer }
@@ -4120,6 +4225,7 @@ components:
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string, description: Defaults to the harness's default model in GET /chat-models }
         persona_id: { type: string, format: uuid, description: "One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life." }
+        repo_url: { type: string, description: "One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise." }
         message: { $ref: "#/components/schemas/NewChatMessage" }
     ChatPatch:
       type: object
@@ -4152,6 +4258,7 @@ components:
         filename: { type: string }
         content_type: { type: string }
         size_bytes: { type: integer, format: int64 }
+        source: { type: string, enum: [upload, generated], description: "upload: the person attached it; generated: the assistant created it (e.g. an image)" }
         created_at: { type: string, format: date-time }
     ChatMessage:
       type: object
@@ -4167,7 +4274,12 @@ components:
         turn_seq: { type: integer, description: The run turn that produced an assistant message }
         context_refs: { type: array, items: { $ref: "#/components/schemas/ChatContextRef" } }
         citations: { type: array, items: { $ref: "#/components/schemas/ChatCitation" } }
-        attachments: { type: array, items: { $ref: "#/components/schemas/ChatAttachment" }, description: Files the person attached to a user message }
+        attachments: { type: array, items: { $ref: "#/components/schemas/ChatAttachment" }, description: "Files the person attached to a user message, or files (images) the assistant generated in an assistant message" }
+        code_changes:
+          type: array
+          maxItems: 50
+          description: "Files a coding persona changed during the turn that produced an assistant message (git diff from the turn's starting commit to the working tree, commits included, plus new untracked files). Secrets the run used are redacted. Absent when nothing changed."
+          items: { $ref: "#/components/schemas/ChatCodeChange" }
         author: { $ref: "#/components/schemas/UserRef" }
         input_tokens: { type: integer, format: int64 }
         output_tokens: { type: integer, format: int64 }
@@ -4176,6 +4288,18 @@ components:
         unreported_input_tokens: { type: integer, format: int64, description: Input whose cache breakdown was not reported }
         cost_usd: { type: number }
         created_at: { type: string, format: date-time }
+    ChatCodeChange:
+      type: object
+      required: [path, status, additions, deletions, binary, truncated]
+      properties:
+        path: { type: string, description: Repository-relative path after the change }
+        old_path: { type: string, description: The path before a rename }
+        status: { type: string, enum: [added, modified, deleted, renamed] }
+        additions: { type: integer }
+        deletions: { type: integer }
+        binary: { type: boolean, description: "Binary files have no patch" }
+        patch: { type: string, description: "The file's unified diff hunks (from the first @@ line; no diff --git header), at most 40 KB; absent for binary files or when the turn's total budget (200 KB) ran out" }
+        truncated: { type: boolean, description: The patch was cut short or left out to stay within the limits }
     ChatModel:
       type: object
       required: [id, label, default]
@@ -4196,6 +4320,15 @@ components:
       type: string
       enum: [neutral, friendly, concise, formal, playful]
       description: How the assistant writes; each maps to one fixed prompt sentence on the server
+    PersonaCapabilities:
+      type: object
+      description: |
+        What a persona may do beyond answering. These are enforced in code
+        (chat scopes, sandbox and harness options), never by prompt text.
+      required: [code, images]
+      properties:
+        code: { type: boolean, description: "Clone the chat's repo, edit and run code, commit and push its own work branch, open PRs" }
+        images: { type: boolean, description: "Generate images (Codex image generation; needs a Codex model in the chat)" }
     PersonaSummary:
       type: object
       description: What a chat needs to render its persona. Absent on a chat means the built-in Assistant.
@@ -4205,13 +4338,15 @@ components:
         name: { type: string }
         color: { type: string, pattern: "^#[0-9a-f]{6}$" }
         avatar_url: { type: string, description: "GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar" }
+        capabilities: { $ref: "#/components/schemas/PersonaCapabilities" }
     Persona:
       type: object
       description: |
         A named variant of the caller's Personal Assistant, private to them.
         Its tone and custom instructions shape the assistant's voice in chats
-        only; they never change scopes, tools or memory rules.
-      required: [id, name, tone, color, custom_instructions, is_default, chat_count, revision, created_at, updated_at]
+        only; they never change scopes, tools or memory rules. Only the
+        structured capabilities (and repos) widen what its chats may do.
+      required: [id, name, tone, color, custom_instructions, capabilities, repos, is_default, chat_count, revision, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -4219,6 +4354,8 @@ components:
         color: { type: string, pattern: "^#[0-9a-f]{6}$", description: Stored in lower case }
         avatar_url: { type: string, description: "GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar" }
         custom_instructions: { type: string }
+        capabilities: { $ref: "#/components/schemas/PersonaCapabilities" }
+        repos: { type: array, maxItems: 10, items: { type: string }, description: "Git repositories (https or ssh URLs, normalized) a coding persona may work in" }
         is_default: { type: boolean }
         chat_count: { type: integer, description: Chats (archived included) that use this persona }
         last_used_at: { type: string, format: date-time, description: When a chat with this persona last got a message }
@@ -4239,6 +4376,8 @@ components:
         tone: { $ref: "#/components/schemas/PersonaTone" }
         color: { type: string, pattern: "^#[0-9a-fA-F]{6}$", description: "Defaults to #64748b" }
         custom_instructions: { type: string, maxLength: 2000 }
+        capabilities: { $ref: "#/components/schemas/PersonaCapabilities" }
+        repos: { type: array, maxItems: 10, items: { type: string, maxLength: 500 }, description: "https://host/owner/repo(.git), ssh://git@host/owner/repo(.git) or git@host:owner/repo(.git); no credentials in the URL" }
         is_default: { type: boolean, default: false, description: Make it the default (replacing the current one) }
     PersonaPatch:
       type: object
@@ -4249,3 +4388,5 @@ components:
         tone: { $ref: "#/components/schemas/PersonaTone" }
         color: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
         custom_instructions: { type: string, maxLength: 2000, description: Empty string clears them }
+        capabilities: { $ref: "#/components/schemas/PersonaCapabilities" }
+        repos: { type: array, maxItems: 10, items: { type: string, maxLength: 500 }, description: Replaces the whole list; existing chats keep their repo }

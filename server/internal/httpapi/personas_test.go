@@ -193,7 +193,7 @@ func TestPersonaConcurrentSetDefault(t *testing.T) {
 		personas = append(personas, e.want("POST", "/personas", map[string]any{"name": fmt.Sprintf("P%d", i)}, http.StatusCreated)["id"].(string))
 	}
 	var wg sync.WaitGroup
-	codes := make(chan int, 40)
+	codes := make(chan int, 45) // 40 swaps and 5 creates
 	for i := range 40 {
 		wg.Go(func() {
 			req, _ := http.NewRequest("POST", e.srv.URL+"/api/v1/personas/"+personas[i%len(personas)]+"/default", nil)
@@ -314,4 +314,105 @@ func TestChatPersonaGroupingAndOwnership(t *testing.T) {
 		t.Fatalf("default list after delete %v (the Assistant should be promoted)", got)
 	}
 	e.invalid("GET", "/chats?persona_id="+workID, nil, "persona_id", "unknown")
+}
+
+func TestPersonaCapabilitiesAndRepos(t *testing.T) {
+	e := newChatEnv(t)
+	plain := e.want("POST", "/personas", map[string]any{"name": "Plain"}, http.StatusCreated)
+	if c := plain["capabilities"].(map[string]any); c["code"] != false || c["images"] != false {
+		t.Fatalf("default capabilities %v", plain)
+	}
+	if repos, ok := plain["repos"].([]any); !ok || len(repos) != 0 {
+		t.Fatalf("repos must be [] not %#v", plain["repos"])
+	}
+
+	dev := e.want("POST", "/personas", map[string]any{
+		"name": "Dev", "capabilities": map[string]any{"code": true, "images": false},
+		"repos": []string{"HTTPS://GitHub.com/acme/app.git/", "git@github.com:acme/api", "https://github.com/acme/app.git"},
+	}, http.StatusCreated)
+	id := dev["id"].(string)
+	if c := dev["capabilities"].(map[string]any); c["code"] != true || c["images"] != false {
+		t.Fatalf("capabilities %v", dev)
+	}
+	if got := fmt.Sprint(dev["repos"]); got != "[https://github.com/acme/app.git git@github.com:acme/api]" {
+		t.Fatalf("repos not normalized and deduplicated: %s", got)
+	}
+
+	// Patch: capabilities replace together, repos replace the whole list, absent leaves them.
+	upd := e.want("PATCH", "/personas/"+id, map[string]any{"revision": 1, "name": "Developer"}, 200)
+	if upd["capabilities"].(map[string]any)["code"] != true || len(upd["repos"].([]any)) != 2 || upd["revision"].(float64) != 2 {
+		t.Fatalf("an unrelated patch changed capabilities or repos: %v", upd)
+	}
+	upd = e.want("PATCH", "/personas/"+id, map[string]any{"revision": 2, "capabilities": map[string]any{"code": false, "images": true}, "repos": []string{"https://github.com/acme/web"}}, 200)
+	if c := upd["capabilities"].(map[string]any); c["code"] != false || c["images"] != true || fmt.Sprint(upd["repos"]) != "[https://github.com/acme/web]" {
+		t.Fatalf("patch %v", upd)
+	}
+	// Repos may be kept while code is off, and cleared with [].
+	upd = e.want("PATCH", "/personas/"+id, map[string]any{"revision": 3, "repos": []string{}}, 200)
+	if len(upd["repos"].([]any)) != 0 || upd["revision"].(float64) != 4 {
+		t.Fatalf("clear repos %v", upd)
+	}
+	// Stale revision still conflicts.
+	e.want("PATCH", "/personas/"+id, map[string]any{"revision": 3, "capabilities": map[string]any{"code": true, "images": true}}, http.StatusConflict)
+
+	for _, bad := range []string{"-uhttps://x", "ext::sh -c touch", "file:///etc", "/tmp/repo", "https://u:t@github.com/a/b", "http://github.com/a/b"} {
+		e.invalid("POST", "/personas", map[string]any{"name": "Bad", "repos": []string{bad}}, "repos", "")
+		e.invalid("PATCH", "/personas/"+id, map[string]any{"revision": 4, "repos": []string{bad}}, "repos", "")
+	}
+	e.invalid("POST", "/personas", map[string]any{"name": "Bad", "repos": []string{"https://u:t@github.com/a/b"}}, "repos", "Settings secrets")
+	many := make([]string, 11)
+	for i := range many {
+		many[i] = fmt.Sprintf("https://github.com/acme/r%d", i)
+	}
+	e.want("POST", "/personas", map[string]any{"name": "Many", "repos": many}, http.StatusUnprocessableEntity)
+	e.invalid("POST", "/personas", map[string]any{"name": "Many", "repos": many}, "repos", "at most 10")
+
+	// The summary a chat embeds carries the capabilities.
+	e.want("PATCH", "/personas/"+id, map[string]any{"revision": 4, "capabilities": map[string]any{"code": true, "images": true}}, 200)
+	chat := e.newChat(map[string]any{"persona_id": id})
+	if c := chat["persona"].(map[string]any)["capabilities"].(map[string]any); c["code"] != true || c["images"] != true {
+		t.Fatalf("chat persona summary %v", chat["persona"])
+	}
+}
+
+func TestChatRepoSelection(t *testing.T) {
+	e := newChatEnv(t)
+	mk := func(name string, code bool, repos ...string) string {
+		return e.want("POST", "/personas", map[string]any{"name": name, "capabilities": map[string]any{"code": code, "images": false}, "repos": repos}, http.StatusCreated)["id"].(string)
+	}
+	coder := mk("Pair Programmer", true, "https://github.com/acme/app", "git@github.com:acme/api.git")
+	noCode := mk("Writer", false, "https://github.com/acme/docs")
+	noRepos := mk("Empty", true)
+
+	// The first repo is the default; the branch is vesper/<slug>-<8 hex of the chat id>.
+	c := e.newChat(map[string]any{"persona_id": coder})
+	id := strings.ReplaceAll(c["id"].(string), "-", "")
+	if c["repo_url"] != "https://github.com/acme/app" || c["work_branch"] != "vesper/pair-programmer-"+id[len(id)-8:] {
+		t.Fatalf("default repo/branch: %v %v", c["repo_url"], c["work_branch"])
+	}
+	// An explicit repo is compared after normalization.
+	c = e.newChat(map[string]any{"persona_id": coder, "repo_url": "git@GitHub.com:acme/api.git"})
+	if c["repo_url"] != "git@github.com:acme/api.git" || c["work_branch"] == nil {
+		t.Fatalf("explicit repo: %v", c)
+	}
+	// It is fixed for the chat: renaming the chat or editing the persona leaves it.
+	chatID := c["id"].(string)
+	e.want("PATCH", "/chats/"+chatID, map[string]any{"revision": c["revision"], "title": "renamed"}, 200)
+	if got := e.want("GET", "/chats/"+chatID, nil, 200); got["repo_url"] != "git@github.com:acme/api.git" || got["work_branch"] != c["work_branch"] {
+		t.Fatalf("repo changed: %v", got)
+	}
+	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "persona_id": coder, "repo_url": "https://github.com/acme/other"}, "repo_url", "persona's repositories")
+	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "persona_id": coder, "repo_url": "file:///etc"}, "repo_url", "persona's repositories")
+	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "persona_id": noCode, "repo_url": "https://github.com/acme/docs"}, "repo_url", "can code")
+	// A persona that can't code, or has no repos, gets a chat without a repository.
+	for _, p := range []string{noCode, noRepos} {
+		if c := e.newChat(map[string]any{"persona_id": p}); c["repo_url"] != nil || c["work_branch"] != nil {
+			t.Fatalf("persona %s: %v", p, c)
+		}
+	}
+	// The default persona is resolved the same way when persona_id is omitted.
+	e.want("POST", "/personas/"+coder+"/default", nil, 200)
+	if c := e.newChat(nil); c["repo_url"] != "https://github.com/acme/app" || c["persona"].(map[string]any)["id"] != coder {
+		t.Fatalf("default persona chat: %v", c)
+	}
 }

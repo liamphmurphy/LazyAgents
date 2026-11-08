@@ -1176,8 +1176,10 @@ export function exportMemories() {
 export function useStartChat() {
   const done = useChatInvalidate();
   return useMutation({
-    mutationFn: async (v: { project: string; persona_id?: string; message: Schemas["NewChatMessage"] }) => {
-      const chat = await unwrap(api.POST("/chats", { body: { project: v.project, ...(v.persona_id ? { persona_id: v.persona_id } : {}) } }));
+    mutationFn: async (v: { project: string; persona_id?: string; repo_url?: string; message: Schemas["NewChatMessage"] }) => {
+      const chat = await unwrap(
+        api.POST("/chats", { body: { project: v.project, ...(v.persona_id ? { persona_id: v.persona_id } : {}), ...(v.repo_url ? { repo_url: v.repo_url } : {}) } }),
+      );
       await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id: chat.id } }, body: v.message }));
       return chat;
     },

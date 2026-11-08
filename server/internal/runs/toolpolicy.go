@@ -5,9 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"mvdan.cc/sh/v3/syntax"
+
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
@@ -93,6 +97,9 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 		}
 		return ToolDecision{Decision: "allow"}, nil
 	}
+	if run.Purpose == "chat" && spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" && imageOutboxTool(run, in) {
+		return ToolDecision{Decision: "allow"}, nil
+	}
 	scopes := ToolScopes(in.Tool, in.Input)
 	if spec.HarnessOptions["readonly"] == "true" && len(scopes) > 0 {
 		if len(scopes) == 1 && scopes[0] == "repo:read" {
@@ -176,4 +183,75 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 		}
 	}
 	return ToolDecision{Decision: "allow"}, nil
+}
+
+// imageOutboxTool recognizes what an image-generating chat needs without any
+// scope: Codex's own image tool, and copying a generated image from this
+// thread's own generated_images directory (<home>/.codex/generated_images/
+// <thread id>/<file>) into the workspace outbox (the runner shows what it finds
+// there under the reply). Nothing else qualifies: one literal cp (or mkdir -p
+// of the outbox), no redirects, and no shell metacharacters that expand later.
+// It fails closed until the runner has recorded the thread id.
+func imageOutboxTool(run store.Run, in ToolCheck) bool {
+	switch in.Tool {
+	case "image_generation", "image_gen":
+		return true
+	case "Bash", "shell", "exec_command", "shell_command":
+	default:
+		return false
+	}
+	if run.HarnessSessionID == nil || *run.HarnessSessionID == "" {
+		return false
+	}
+	command, _ := in.Input["command"].(string)
+	if command == "" {
+		command, _ = in.Input["cmd"].(string)
+	}
+	f, err := syntax.NewParser().Parse(strings.NewReader(command), "")
+	if err != nil || len(f.Stmts) != 1 {
+		return false
+	}
+	st := f.Stmts[0]
+	call, ok := st.Cmd.(*syntax.CallExpr)
+	if !ok || st.Background || st.Coprocess || st.Negated || len(st.Redirs) != 0 || len(call.Assigns) != 0 {
+		return false
+	}
+	args := make([]string, len(call.Args))
+	for i, w := range call.Args {
+		if args[i], ok = literalWord(w); !ok || strings.ContainsAny(args[i], "*?[]{}~\\$") {
+			return false
+		}
+	}
+	const outbox = ".lazyagents/outbox"
+	clean := func(p string) bool {
+		return p != "" && !slices.Contains(strings.Split(p, "/"), "..") && !slices.Contains(strings.Split(p, "/"), ".")
+	}
+	switch {
+	case len(args) == 3 && args[0] == "mkdir" && args[1] == "-p":
+		return args[2] == outbox || args[2] == outbox+"/"
+	case len(args) >= 3 && args[0] == "cp":
+		flags, paths := args[1:len(args)-2], args[len(args)-2:]
+		for _, fl := range flags {
+			if fl != "-f" && fl != "-n" && fl != "-p" {
+				return false
+			}
+		}
+		src, dst := paths[0], paths[1]
+		segs := strings.Split(src, "/")
+		n := len(segs)
+		if !strings.HasPrefix(src, "/") || !clean(src[1:]) || n < 5 ||
+			segs[n-4] != ".codex" || segs[n-3] != "generated_images" || segs[n-2] != *run.HarnessSessionID ||
+			segs[n-1] == "" || strings.HasPrefix(segs[n-1], ".") {
+			return false
+		}
+		name, inOutbox := strings.CutPrefix(dst, outbox+"/")
+		if !inOutbox || name == "" || strings.Contains(name, "/") || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "-") {
+			return false
+		}
+		switch strings.ToLower(path.Ext(name)) {
+		case ".png", ".jpg", ".jpeg", ".webp", ".gif":
+			return true
+		}
+	}
+	return false
 }

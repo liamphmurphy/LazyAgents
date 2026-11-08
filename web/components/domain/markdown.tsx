@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { isValidElement, useMemo, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import type { LinkTarget } from "@/lib/api/client";
 import { useResolvedLinks } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { headingAnchors } from "@/lib/slug";
 import { linkify, parseWikiLinks, WIKILINK_SCHEME } from "@/lib/wikilinks";
+import { CodeFence } from "./code-fence";
 import { LinkTargets, WikiLink } from "./wikilink";
 
 const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) ? url : defaultUrlTransform(url));
@@ -15,7 +16,7 @@ const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) ? url : d
  * Renders user and agent markdown. react-markdown escapes raw HTML by
  * default, so agent-written content can't inject markup.
  */
-export function Markdown({ children, className, anchors }: { children: string; className?: string; anchors?: boolean }) {
+export function Markdown({ children, className, anchors, codeBlocks }: { children: string; className?: string; anchors?: boolean; codeBlocks?: boolean }) {
   // Heading ids come from source lines, so they match the API's outline
   // anchors and stay stable across re-renders.
   const ids = anchors ? headingAnchors(children) : undefined;
@@ -52,11 +53,18 @@ export function Markdown({ children, className, anchors }: { children: string; c
                 h2: ({ children }) => <h3 className="type-heading mt-2">{children}</h3>,
                 h3: ({ children }) => <h4 className="mt-1 font-semibold">{children}</h4>,
               }),
-          pre: ({ children }) => (
+          pre: ({ children }) => {
+            // Chat: fenced blocks get a header, Copy, lazy highlighting and collapse.
+            const code = codeBlocks && isValidElement<{ className?: string; children?: ReactNode }>(children) ? children.props : undefined;
+            if (code && typeof code.children === "string") {
+              return <CodeFence code={code.children} info={/language-(\S+)/.exec(code.className ?? "")?.[1]} />;
+            }
+            return (
             <pre className="overflow-x-auto rounded-lg border border-border bg-surface-sunken p-3 font-mono text-xs leading-relaxed [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0">
               {children}
             </pre>
-          ),
+            );
+          },
           a: ({ href, children }) =>
             href?.startsWith(WIKILINK_SCHEME) ? (
               <WikiLink refText={decodeURIComponent(href.slice(WIKILINK_SCHEME.length))}>{children}</WikiLink>

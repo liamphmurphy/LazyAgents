@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,7 +10,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 	"github.com/liamphmurphy/lazyagents/server/internal/harness"
+	"github.com/liamphmurphy/lazyagents/server/internal/personas"
 	"github.com/liamphmurphy/lazyagents/server/internal/runs"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
@@ -24,6 +27,54 @@ func lockRunChat(ctx context.Context, q *store.Queries, run store.Run) (store.Ch
 	return q.LockChatSession(ctx, store.LockChatSessionParams{ID: chat.ID, WorkspaceID: run.WorkspaceID})
 }
 
+// chatSetupScript is a chat segment's workspace setup: the coding persona's
+// repository on the chat's work branch when the frozen spec grants repo:write
+// and the chat has one, otherwise just the context directory (and the outbox
+// image-generating chats copy their pictures to).
+func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, error) {
+	script := "mkdir -p .lazyagents/context"
+	if c.spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" {
+		script += " .lazyagents/outbox"
+	}
+	if !allowedScope(c.spec, "repo:write") {
+		return script, nil
+	}
+	chat, err := q.ChatSessionForRun(ctx, &c.run.ID)
+	if err != nil {
+		return "", err
+	}
+	if chat.RepoUrl == nil || chat.WorkBranch == nil {
+		return script, nil
+	}
+	name := "Assistant"
+	if chat.PersonaID != nil {
+		p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *chat.PersonaID, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return "", err
+		}
+		if err == nil {
+			name = p.Name
+		}
+	}
+	return ChatRepoSetupScript(*chat.RepoUrl, *chat.WorkBranch, name+" (Vesper)", personas.Slug(name)+"@personas.lazyagents.local"), nil
+}
+
+// chatGitRepo is the repository URL a coding chat's git credentials may be
+// used for: "" unless the frozen spec grants repo:write and the chat has one.
+func chatGitRepo(ctx context.Context, q *store.Queries, c runCtx) (string, error) {
+	if c.run.Purpose != "chat" || !allowedScope(c.spec, "repo:write") {
+		return "", nil
+	}
+	chat, err := q.ChatSessionForRun(ctx, &c.run.ID)
+	if err != nil {
+		return "", err
+	}
+	if chat.RepoUrl == nil || chat.WorkBranch == nil {
+		return "", nil
+	}
+	return *chat.RepoUrl, nil
+}
+
 func idleChat(ctx context.Context, q *store.Queries, chat store.ChatSession, run store.Run, state string) error {
 	reason := "human_reply"
 	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &reason}); err != nil {
@@ -35,7 +86,92 @@ func idleChat(ctx context.Context, q *store.Queries, chat store.ChatSession, run
 	return runs.RecomputeAgentStatus(ctx, q, run.AgentID)
 }
 
-func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTurn, res harness.Result, code int, waitErr error, logKey *string) {
+// generatedImage is an outbox file already stored as a blob, waiting to be
+// bound to the turn's assistant message.
+type generatedImage struct {
+	outbox   string // the file's name in the outbox
+	name, ct string
+	key      string
+	size     int64
+}
+
+// harvestChatImages stores the images an image-generating chat copied into
+// its outbox. It runs before the turn's transaction so no blob I/O happens
+// under row locks; a failure is logged as a run event and never fails the turn.
+func (r *Runner) harvestChatImages(ctx context.Context, c runCtx) (out []generatedImage) {
+	warn := func(state string, detail any) {
+		r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": state, "detail": detail})
+	}
+	if r.Blobs == nil || r.Cfg.AttachmentBucket == "" {
+		warn("chat_images_skipped", "no attachment storage is configured")
+		return nil
+	}
+	chat, err := r.q().ChatSessionForRun(ctx, &c.run.ID)
+	if err != nil {
+		r.Log.Warn("harvest chat images", "run", c.run.ID, "err", err)
+		return nil
+	}
+	stored, err := r.q().ChatGeneratedImageBytes(ctx, store.ChatGeneratedImageBytesParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	if err != nil {
+		r.Log.Warn("generated image usage", "run", c.run.ID, "err", err)
+		return nil
+	}
+	if stored >= runs.MaxGeneratedImageStorageBytes {
+		warn("chat_images_skipped", "quota")
+		return nil
+	}
+	files, skipped, err := r.Backend.ReadOutbox(ctx, c.run.ID.String())
+	if err != nil {
+		r.Log.Warn("read chat outbox", "run", c.run.ID, "err", err)
+		warn("chat_images_failed", err.Error())
+		return nil
+	}
+	for _, f := range files {
+		ct, ok := runs.GeneratedImageType(f.Data)
+		name := runs.ChatAttachmentName(f.Name)
+		if !ok || name == "" || len(f.Data) == 0 {
+			skipped = append(skipped, f.Name+": not a png, jpeg, webp or gif image")
+			continue
+		}
+		if stored+int64(len(f.Data)) > runs.MaxGeneratedImageStorageBytes {
+			skipped = append(skipped, f.Name+": quota")
+			continue
+		}
+		stored += int64(len(f.Data))
+		key := runs.ChatAttachmentKey(chat.WorkspaceID, chat.CreatedBy)
+		if err := r.Blobs.Put(ctx, r.Cfg.AttachmentBucket, key, bytes.NewReader(f.Data), int64(len(f.Data)), ct); err != nil {
+			r.Log.Warn("store generated image", "run", c.run.ID, "err", err)
+			skipped = append(skipped, f.Name+": couldn't be stored")
+			continue
+		}
+		out = append(out, generatedImage{outbox: f.Name, name: name, ct: ct, key: key, size: int64(len(f.Data))})
+	}
+	if len(skipped) > 0 {
+		warn("chat_images_skipped", skipped)
+	}
+	return out
+}
+
+// dropImageBlobs removes stored images that never got a row, through the
+// store they were written to. A runner crash between the Put and the turn's
+// commit can still orphan blobs; a sweep for those is a follow-up.
+func (r *Runner) dropImageBlobs(imgs []generatedImage) {
+	if r.Blobs == nil {
+		return
+	}
+	for _, im := range imgs {
+		if err := r.Blobs.Delete(context.WithoutCancel(context.Background()), r.Cfg.AttachmentBucket, im.key); err != nil {
+			r.Log.Warn("remove unbound generated image", "key", im.key, "err", err)
+		}
+	}
+}
+
+func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTurn, res harness.Result, code int, waitErr error, logKey *string, codeChanges []byte) {
+	var imgs []generatedImage
+	if c.spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" && waitErr == nil && code == 0 && !res.IsError && !res.UsageLimited {
+		imgs = r.harvestChatImages(ctx, c)
+	}
+	bound := false
 	err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
 		chat, err := lockRunChat(ctx, q, c.run)
@@ -80,8 +216,22 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 					return err
 				}
 			}
-			if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: body, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: citations, Usage: usage}); err != nil {
+			msg, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: body, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: citations, Usage: usage})
+			if err != nil {
 				return err
+			}
+			if role == "assistant" {
+				if len(codeChanges) > 2 { // more than "[]"
+					if err := q.SetChatMessageCodeChanges(ctx, store.SetChatMessageCodeChangesParams{ID: msg.ID, CodeChanges: codeChanges}); err != nil {
+						return err
+					}
+				}
+				for _, im := range imgs {
+					if _, err := q.CreateGeneratedChatAttachment(ctx, store.CreateGeneratedChatAttachmentParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, MessageID: &msg.ID, Filename: im.name, ContentType: im.ct, SizeBytes: im.size, BlobKey: im.key}); err != nil {
+						return err
+					}
+				}
+				bound = len(imgs) > 0
 			}
 		}
 		if err = idleChat(ctx, q, chat, run, state); err != nil {
@@ -92,6 +242,20 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 	})
 	if err != nil {
 		r.Log.Error("finish chat turn", "run", c.run.ID, "err", err)
+	}
+	switch {
+	case len(imgs) == 0:
+	case err != nil || !bound:
+		r.dropImageBlobs(imgs)
+	default:
+		// Committed: the files must not be attached to a later message too.
+		names := make([]string, len(imgs))
+		for i, im := range imgs {
+			names[i] = im.outbox
+		}
+		if err := r.Backend.RemoveOutbox(context.WithoutCancel(ctx), c.run.ID.String(), names); err != nil {
+			r.Log.Warn("clear chat outbox", "run", c.run.ID, "err", err)
+		}
 	}
 }
 

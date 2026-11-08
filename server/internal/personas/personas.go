@@ -46,6 +46,10 @@ type NewInput struct {
 	Color        *string
 	Instructions *string
 	IsDefault    bool
+	// Capabilities and Repos are the structured settings that widen what the
+	// persona's chats may do (runs.ChatSpec); nil takes the defaults (off, none).
+	Code, Images *bool
+	Repos        *[]string
 }
 
 // Patch edits a persona at Revision; nil fields are unchanged.
@@ -55,6 +59,9 @@ type Patch struct {
 	Tone         *string
 	Color        *string
 	Instructions *string
+	Code, Images *bool
+	// Repos replaces the whole list; existing chats keep the repo they chose.
+	Repos *[]string
 }
 
 func normName(s string) (string, error) {
@@ -176,6 +183,12 @@ func (s *Service) Create(ctx context.Context, o Owner, in NewInput) (store.Perso
 	if err := checkInstructions(instr); err != nil {
 		return out, err
 	}
+	repos := []string{}
+	if in.Repos != nil {
+		if repos, err = NormalizeRepos(*in.Repos); err != nil {
+			return out, err
+		}
+	}
 	err = s.tx(ctx, o, func(q *store.Queries) error {
 		n, err := q.CountPersonas(ctx, store.CountPersonasParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID})
 		if err != nil {
@@ -194,6 +207,7 @@ func (s *Service) Create(ctx context.Context, o Owner, in NewInput) (store.Perso
 		}
 		out, err = q.CreatePersona(ctx, store.CreatePersonaParams{
 			WorkspaceID: o.WorkspaceID, UserID: o.UserID, Name: name, Tone: tone, Color: color, CustomInstructions: instr, IsDefault: in.IsDefault,
+			CanCode: in.Code != nil && *in.Code, CanGenerateImages: in.Images != nil && *in.Images, Repos: repos,
 		})
 		return nameTaken(err)
 	})
@@ -201,7 +215,7 @@ func (s *Service) Create(ctx context.Context, o Owner, in NewInput) (store.Perso
 }
 
 // Update edits a persona, checking the revision (stale is a 409). A change to
-// the name or colour re-renders the summary embedded in its chats, so those
+// the name, colour or capabilities re-renders the summary embedded in its chats, so those
 // chats get chat.updated.
 func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (store.Persona, error) {
 	var out store.Persona
@@ -229,6 +243,13 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 			return out, err
 		}
 	}
+	var repos []string // nil leaves the list alone; an empty list clears it
+	if p.Repos != nil {
+		var err error
+		if repos, err = NormalizeRepos(*p.Repos); err != nil {
+			return out, err
+		}
+	}
 	err := s.tx(ctx, o, func(q *store.Queries) error {
 		cur, err := get(ctx, q, o, id)
 		if err != nil {
@@ -245,6 +266,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		out, err = q.UpdatePersona(ctx, store.UpdatePersonaParams{
 			ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Revision: p.Revision,
 			Name: p.Name, Tone: p.Tone, Color: p.Color, CustomInstructions: p.Instructions,
+			CanCode: p.Code, CanGenerateImages: p.Images, Repos: repos,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.Conflict("the persona changed since you loaded it")
@@ -252,7 +274,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		if err != nil {
 			return nameTaken(err)
 		}
-		if out.Name != cur.Name || out.Color != cur.Color {
+		if out.Name != cur.Name || out.Color != cur.Color || out.CanCode != cur.CanCode || out.CanGenerateImages != cur.CanGenerateImages {
 			return NotifyChats(ctx, q, id)
 		}
 		return nil

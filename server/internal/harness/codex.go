@@ -8,7 +8,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
 )
 
-// Codex runs `codex exec --json` (checked against codex-cli 0.166.0).
+// Codex runs `codex exec --json` (checked against codex-cli 0.167.0; features.image_generation needs 0.167 or newer).
 // Codex reads AGENTS.md itself; MCP servers and policy go in -c overrides.
 // It authenticates headless with CODEX_API_KEY.
 type Codex struct {
@@ -63,6 +63,15 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 			// the dot in ".git" and produce an invalid filesystem rule.
 			`permissions.lazyagents-repo-write={extends=":workspace",filesystem={":workspace_roots"={".git"="write"}},network={enabled=true}}`,
 		)
+	} else if sandbox == "read-only" && spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" {
+		// An image-generating chat copies pictures into the workspace outbox
+		// and nowhere else, so that is the only place it may write. Syntax
+		// checked under --strict-config against codex-cli 0.167.0 (":read-only"
+		// is a built-in base; a bad base or access value fails config load).
+		cfg = append(cfg,
+			`default_permissions="lazyagents-image-outbox"`,
+			`permissions.lazyagents-image-outbox={extends=":read-only",filesystem={":workspace_roots"={".lazyagents/outbox"="write"}}}`,
+		)
 	} else {
 		cfg = append(cfg, "sandbox_mode="+tomlString(sandbox))
 	}
@@ -79,6 +88,9 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		web = "live"
 	}
 	cfg = append(cfg, "web_search="+tomlString(web))
+	// Image generation is a default-on feature in codex-cli 0.167.0, so it is
+	// switched off unless the chat's persona has the images capability.
+	cfg = append(cfg, "features.image_generation="+strconv.FormatBool(spec.HarnessOptions[agentdef.OptionImageGeneration] == "true"))
 	if effort := spec.HarnessOptions["effort"]; effort != "" {
 		if effort == "xhigh" || effort == "max" {
 			effort = "high"

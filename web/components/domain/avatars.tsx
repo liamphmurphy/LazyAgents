@@ -1,4 +1,5 @@
 import { cx } from "@/lib/cx";
+import { HumanPicture } from "./human-picture";
 
 /** Agent identity hues, assigned in order (DESIGN.md §2 Agent identity). */
 export const AGENT_HUES = ["atlas", "quill", "sentry", "juno", "nova", "relay", "pike", "echo"] as const;
@@ -67,21 +68,25 @@ export function HumanAvatar({
   color,
   ring,
   label = true,
+  src,
 }: {
   name: string;
   initials?: string;
+  /** avatar_url; falls back to initials when absent or it fails to load */
+  src?: string;
   size?: number;
   /** Optional per-person tint; defaults to the neutral avatar token. */
   color?: string;
   ring?: string;
   label?: boolean;
 }) {
+  const text = initials ?? initialsOf(name);
   return (
     <span
       role={label ? "img" : undefined}
       aria-label={label ? name : undefined}
       aria-hidden={label ? undefined : true}
-      className="grid flex-none place-items-center rounded-full font-semibold text-fg"
+      className="grid flex-none place-items-center overflow-hidden rounded-full font-semibold text-fg"
       style={{
         width: size,
         height: size,
@@ -92,7 +97,7 @@ export function HumanAvatar({
         boxShadow: ring ? `0 0 0 2px ${ring}` : undefined,
       }}
     >
-      {initials ?? initialsOf(name)}
+      {src ? <HumanPicture src={src} fallback={text} /> : text}
     </span>
   );
 }
@@ -110,12 +115,12 @@ export function UnassignedAvatar({ size = 20 }: { size?: number }) {
 
 export type Actor =
   | { kind: "agent"; name: string; colorIndex: number }
-  | { kind: "human"; name: string; initials?: string; color?: string };
+  | { kind: "human"; name: string; initials?: string; color?: string; src?: string };
 
 export function ActorAvatar({ actor, size = "sm", ring }: { actor: Actor; size?: AgentAvatarSize; ring?: string }) {
   if (actor.kind === "agent") return <AgentAvatar name={actor.name} colorIndex={actor.colorIndex} size={size} ring={ring} />;
   const px = { sm: 20, md: 24, lg: 38, stack: 22 }[size];
-  return <HumanAvatar name={actor.name} initials={actor.initials} color={actor.color} size={px} ring={ring} />;
+  return <HumanAvatar name={actor.name} initials={actor.initials} color={actor.color} src={actor.src} size={px} ring={ring} />;
 }
 
 /** Overlapping avatars (−5px) with a ring in the surface color, plus "+N". */

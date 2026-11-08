@@ -224,7 +224,7 @@ export function Composer() {
                 </AgentPicker>
                 <UserMenu users={boot.data.users} value={reviewerId} onChange={setReviewerId}>
                   <Chip>
-                    {reviewer ? <HumanAvatar name={reviewer.name} initials={reviewer.initials} color={reviewer.avatar_color} size={16} label={false} /> : <Icon name="users" size={13} className="text-fg-tertiary" />}
+                    {reviewer ? <HumanAvatar name={reviewer.name} initials={reviewer.initials} color={reviewer.avatar_color} src={reviewer.avatar_url} size={16} label={false} /> : <Icon name="users" size={13} className="text-fg-tertiary" />}
                     {reviewer?.name ?? <span className="text-fg-tertiary">Reviewer</span>}
                   </Chip>
                 </UserMenu>
