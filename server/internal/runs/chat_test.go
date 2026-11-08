@@ -87,12 +87,13 @@ func TestChatSpecCapabilities(t *testing.T) {
 						t.Errorf("opencode options %v", opts)
 					}
 				case tc.coding:
-					// A coding chat has no web access of any kind.
+					// A coding chat gets the assistant's web option (WebFetch stays
+					// on the allowlist), never the web:read scope.
 					if opts["sandbox"] != "workspace-write" || opts["readonly"] != "" {
 						t.Errorf("coding options %v", opts)
 					}
-					if _, web := opts[agentdef.OptionWebSearch]; web || got.Mode("web:read") != agentdef.Denied || strings.Contains(got.Instructions, "web search and fetch tools") || !strings.Contains(got.Instructions, "no web access") {
-						t.Errorf("coding chat must not have the web: %v", opts)
+					if opts[agentdef.OptionWebSearch] != "true" || got.Mode("web:read") != agentdef.Denied || strings.Contains(got.Instructions, "no web access") {
+						t.Errorf("coding chat web: %v", opts)
 					}
 				case tc.images:
 					// Image-only chats stay read-only; the Codex harness grants the outbox alone.

@@ -60,13 +60,12 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
 	// web_search turns on the harness's own web search and page fetch tools
-	// (Claude Code WebSearch/WebFetch, Codex live web search); see
-	// agentdef.OptionWebSearch.
+	// (Claude Code WebSearch/WebFetch, Codex cached web search) for every chat,
+	// coding or not; WebFetch stays on the CheckTool allowlist. See
+	// agentdef.OptionWebSearch and ADR "Assistant web access".
 	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true", agentdef.OptionWebSearch: "true"}
 	if coding {
-		// A coding chat has no web access at all: its shell and git credentials
-		// plus a fetchable URL would be a way to carry repository data out.
-		r.HarnessOptions = map[string]string{"sandbox": "workspace-write"}
+		r.HarnessOptions = map[string]string{"sandbox": "workspace-write", agentdef.OptionWebSearch: "true"}
 	}
 	// Codex generates images with its own tool and copies them into the
 	// workspace outbox (the Codex harness grants write to only that directory
