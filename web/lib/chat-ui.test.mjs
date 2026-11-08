@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatStatus, chatStatusOf, chatTitle, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
+import { activityOf, bareTool, chatStatus, chatStatusOf, chatTitle, interimLine, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -99,4 +99,17 @@ test("the chat status is high level and never leaks the call's details", () => {
   for (const [call, want] of cases) assert.equal(chatStatusOf(call), want, call.tool);
   assert.equal(chatStatus([]), "thinking");
   assert.equal(chatStatus([{ tool: "Read", input: {} }, { tool: "Bash", input: { command: "go test ./..." } }]), "running tests");
+});
+
+test("the opening line shows only once a tool call follows it", () => {
+  const at = (s) => `2026-11-06T10:0${s}:00Z`;
+  const msg = (seq, text, extra = {}) => ({ seq, type: "message", at: at(seq), payload: { role: "assistant", text, ...extra } });
+  const call = (seq) => ({ seq, type: "tool_call", at: at(seq), payload: { id: `c${seq}`, tool: "list_runs" } });
+  const since = "2026-11-06T10:00:30Z";
+  // A straight answer has no tool call: its text is the reply, not an opening line.
+  assert.equal(interimLine([msg(1, "Hello!")], since), undefined);
+  assert.equal(interimLine([msg(1, "  Let me check the runs.  "), call(2), msg(3, "Two are running.")], since), "Let me check the runs.");
+  // An earlier turn's text and plan messages don't count.
+  assert.equal(interimLine([msg(0, "old"), msg(1, "plan", { kind: "plan" }), call(2)], since), undefined);
+  assert.equal(interimLine(undefined), undefined);
 });

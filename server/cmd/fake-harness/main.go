@@ -11,7 +11,8 @@
 //
 //	approval (default)  claim, plan, request db:migrate approval, end turn
 //	complete            claim, plan, complete_run
-//	chat-read           chat turn; a prompt "read <artifact id> [section]" reads it through MCP
+//	chat-read           chat turn; a prompt "read <artifact id> [section]" reads it through MCP,
+//	                    saying FAKE_HARNESS_OPENING first when set
 //	idle                end the turn without saying what's next
 //	crash               exit 3 with an error result
 //	chat-image          chat turn on Claude; a prompt "image: <text>" calls generate_image
@@ -485,6 +486,9 @@ func main() {
 			args := map[string]any{"artifact": f[1]}
 			if len(f) > 2 {
 				args["section"] = f[2]
+			}
+			if o := os.Getenv("FAKE_HARNESS_OPENING"); o != "" {
+				text(o)
 			}
 			call("read_artifact", args)
 		}

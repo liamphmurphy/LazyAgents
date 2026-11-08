@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -215,6 +216,13 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			citations := []byte("[]")
 			if role == "assistant" {
 				if citations, err = runs.ChatCitations(ctx, q, run.ID, turn.StartedAt); err != nil {
+					return err
+				}
+			}
+			// The opening line the chat showed while the turn worked stays in
+			// the conversation, as its own reply ahead of the answer.
+			if opening := strings.TrimSpace(res.Opening); role == "assistant" && opening != "" && opening != strings.TrimSpace(body) {
+				if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: opening, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
 					return err
 				}
 			}

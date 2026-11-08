@@ -3,9 +3,9 @@
 import { useMemo } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
-import { activityOf, chatStatus, toolCalls, type Activity, type ToolCall } from "@/lib/chat-ui";
+import { activityOf, chatStatus, interimLine, toolCalls, type Activity, type ToolCall } from "@/lib/chat-ui";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
-import { PersonaAvatar, type PersonaLook } from "./persona";
+import { PersonaAvatar, PersonaName, type PersonaLook } from "./persona";
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 
@@ -101,5 +101,25 @@ export function ChatStatus({ runId, since, persona, stopping }: { runId?: string
         {stopping ? "Stopping…" : `${persona.name} is ${status}…`}
       </span>
     </span>
+  );
+}
+
+/**
+ * The running turn's opening line ("Good question, let me check the runs."), shown as a
+ * reply bubble while the assistant works. The prompt asks for one only on turns that
+ * need real work; when the turn ends the server saves it as its own message ahead of the reply.
+ */
+export function InterimReply({ runId, since, persona }: { runId?: string; since?: string; persona: PersonaLook }) {
+  const q = useChatRunEvents(runId);
+  const line = useMemo(() => interimLine(q.data, since), [q.data, since]);
+  if (!line) return null;
+  return (
+    <div className="flex flex-col items-start gap-1" data-testid="interim-reply">
+      <span className="flex items-center gap-1.5 text-xs text-fg-tertiary">
+        <PersonaAvatar persona={persona} size={22} />
+        <PersonaName persona={persona} className="text-[13px]" />
+      </span>
+      <p className="max-w-[min(720px,100%)] whitespace-pre-wrap rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[13.5px]">{line}</p>
+    </div>
   );
 }
