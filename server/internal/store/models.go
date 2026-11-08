@@ -179,6 +179,26 @@ type ChatAttachment struct {
 	Source      string
 }
 
+type ChatCanvas struct {
+	ID        uuid.UUID
+	SessionID uuid.UUID
+	Kind      string
+	Title     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type ChatCanvasVersion struct {
+	ID         uuid.UUID
+	CanvasID   uuid.UUID
+	Seq        int32
+	Body       string
+	Note       string
+	AuthorType string
+	AuthorID   uuid.UUID
+	CreatedAt  time.Time
+}
+
 type ChatImageJob struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID
