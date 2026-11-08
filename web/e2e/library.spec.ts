@@ -94,3 +94,32 @@ test("the Links tab lists saved links, filters them, plays videos and removes on
   await expect(links).toHaveCount(1);
   expect(api.deleted).toEqual(["link-2"]);
 });
+
+test("links move through the reading queue and show saved summaries", async ({ page }) => {
+  const a = item("link-1", { kind: "link", title: "To finish", url: "https://a.example/x", size_bytes: 0, summary: "Three points [1].\n\nSources:\n1. https://a.example/x" });
+  const b = item("link-2", { kind: "link", title: "Finished", url: "https://b.example/y", size_bytes: 0, link_status: "done" });
+  await installLibrary(page, [a, b]);
+  const sets: unknown[] = [];
+  await page.route("**/api/v1/library/*/link-status", (route) => {
+    sets.push(route.request().postDataJSON());
+    a.link_status = "done";
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("/library");
+  await page.getByRole("tab", { name: "Links" }).click();
+
+  const links = page.getByTestId("library-link");
+  await expect(links).toHaveCount(1);
+  await expect(links.first()).toContainText("To finish");
+  const summary = links.first().getByTestId("link-summary");
+  await summary.getByText("Summary").click();
+  await expect(summary).toContainText("Three points.");
+  await expect(summary).not.toContainText("Sources:");
+
+  await page.getByRole("button", { name: /^Done \(1\)/ }).click();
+  await expect(links.first()).toContainText("Finished");
+  await page.getByRole("button", { name: /^To read/ }).click();
+  await links.first().getByRole("button", { name: "Mark done" }).click();
+  expect(sets).toEqual([{ status: "done" }]);
+  await expect(links).toHaveCount(0);
+});

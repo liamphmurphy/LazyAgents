@@ -41,7 +41,7 @@ const createLibraryDiagram = `-- name: CreateLibraryDiagram :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id)
 VALUES ($1, $2, 'diagram', $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (workspace_id, user_id, blob_key) WHERE kind = 'diagram' DO UPDATE SET blob_key = EXCLUDED.blob_key
-RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id
+RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary
 `
 
 type CreateLibraryDiagramParams struct {
@@ -93,13 +93,15 @@ func (q *Queries) CreateLibraryDiagram(ctx context.Context, arg CreateLibraryDia
 		&i.Note,
 		&i.Site,
 		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
 	)
 	return i, err
 }
 
 const createLibraryItem = `-- name: CreateLibraryItem :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary
 `
 
 type CreateLibraryItemParams struct {
@@ -152,6 +154,8 @@ func (q *Queries) CreateLibraryItem(ctx context.Context, arg CreateLibraryItemPa
 		&i.Note,
 		&i.Site,
 		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
 	)
 	return i, err
 }
@@ -160,7 +164,7 @@ const createLibraryLink = `-- name: CreateLibraryLink :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, url, note, site, video_id)
 VALUES ($1, $2, 'link', $3, 'link', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 ON CONFLICT (workspace_id, user_id, url) WHERE kind = 'link' DO UPDATE SET url = EXCLUDED.url
-RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id
+RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary
 `
 
 type CreateLibraryLinkParams struct {
@@ -218,13 +222,15 @@ func (q *Queries) CreateLibraryLink(ctx context.Context, arg CreateLibraryLinkPa
 		&i.Note,
 		&i.Site,
 		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
 	)
 	return i, err
 }
 
 const createUploadedLibraryItem = `-- name: CreateUploadedLibraryItem :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, source)
-VALUES ($1, $2, 'image', $3, $4, $5, $6, $7, 'upload') RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id
+VALUES ($1, $2, 'image', $3, $4, $5, $6, $7, 'upload') RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary
 `
 
 type CreateUploadedLibraryItemParams struct {
@@ -270,6 +276,8 @@ func (q *Queries) CreateUploadedLibraryItem(ctx context.Context, arg CreateUploa
 		&i.Note,
 		&i.Site,
 		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
 	)
 	return i, err
 }
@@ -306,7 +314,7 @@ func (q *Queries) DeleteLibraryItem(ctx context.Context, arg DeleteLibraryItemPa
 }
 
 const getLibraryDiagram = `-- name: GetLibraryDiagram :one
-SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'diagram'
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'diagram'
 `
 
 type GetLibraryDiagramParams struct {
@@ -340,12 +348,14 @@ func (q *Queries) GetLibraryDiagram(ctx context.Context, arg GetLibraryDiagramPa
 		&i.Note,
 		&i.Site,
 		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
 	)
 	return i, err
 }
 
 const getLibraryItem = `-- name: GetLibraryItem :one
-SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `
 
 type GetLibraryItemParams struct {
@@ -378,12 +388,14 @@ func (q *Queries) GetLibraryItem(ctx context.Context, arg GetLibraryItemParams) 
 		&i.Note,
 		&i.Site,
 		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
 	)
 	return i, err
 }
 
 const getLibraryLink = `-- name: GetLibraryLink :one
-SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND url = $3 AND kind = 'link'
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND url = $3 AND kind = 'link'
 `
 
 type GetLibraryLinkParams struct {
@@ -417,12 +429,14 @@ func (q *Queries) GetLibraryLink(ctx context.Context, arg GetLibraryLinkParams) 
 		&i.Note,
 		&i.Site,
 		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
 	)
 	return i, err
 }
 
 const libraryReferences = `-- name: LibraryReferences :many
-SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id FROM library_items
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary FROM library_items
 WHERE workspace_id = $1 AND user_id = $2
   AND (reference = 'self' OR (reference = 'persona' AND reference_persona_id = $3::uuid))
 ORDER BY reference
@@ -466,6 +480,8 @@ func (q *Queries) LibraryReferences(ctx context.Context, arg LibraryReferencesPa
 			&i.Note,
 			&i.Site,
 			&i.VideoID,
+			&i.LinkStatus,
+			&i.Summary,
 		); err != nil {
 			return nil, err
 		}
@@ -478,7 +494,7 @@ func (q *Queries) LibraryReferences(ctx context.Context, arg LibraryReferencesPa
 }
 
 const listLibraryItems = `-- name: ListLibraryItems :many
-SELECT l.id, l.workspace_id, l.user_id, l.kind, l.title, l.filename, l.content_type, l.size_bytes, l.blob_key, l.chat_id, l.message_id, l.persona_id, l.created_at, l.reference, l.reference_persona_id, l.source, l.url, l.note, l.site, l.video_id, c.title AS chat_title, p.name AS persona_name, pr.key AS project_key, rp.name AS reference_persona_name
+SELECT l.id, l.workspace_id, l.user_id, l.kind, l.title, l.filename, l.content_type, l.size_bytes, l.blob_key, l.chat_id, l.message_id, l.persona_id, l.created_at, l.reference, l.reference_persona_id, l.source, l.url, l.note, l.site, l.video_id, l.link_status, l.summary, c.title AS chat_title, p.name AS persona_name, pr.key AS project_key, rp.name AS reference_persona_name
 FROM library_items l
 LEFT JOIN chat_sessions c ON c.id = l.chat_id
 LEFT JOIN personas p ON p.id = l.persona_id
@@ -519,6 +535,8 @@ type ListLibraryItemsRow struct {
 	Note                 string
 	Site                 string
 	VideoID              string
+	LinkStatus           string
+	Summary              string
 	ChatTitle            *string
 	PersonaName          *string
 	ProjectKey           *string
@@ -563,10 +581,76 @@ func (q *Queries) ListLibraryItems(ctx context.Context, arg ListLibraryItemsPara
 			&i.Note,
 			&i.Site,
 			&i.VideoID,
+			&i.LinkStatus,
+			&i.Summary,
 			&i.ChatTitle,
 			&i.PersonaName,
 			&i.ProjectKey,
 			&i.ReferencePersonaName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSavedLinks = `-- name: ListSavedLinks :many
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary FROM library_items
+WHERE workspace_id = $1 AND user_id = $2 AND kind = 'link'
+  AND ($3::text IS NULL OR link_status = $3)
+ORDER BY created_at DESC, id DESC
+LIMIT $4
+`
+
+type ListSavedLinksParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Status      *string
+	RowLimit    int32
+}
+
+// A person's saved links for their personas, newest first, optionally one status.
+func (q *Queries) ListSavedLinks(ctx context.Context, arg ListSavedLinksParams) ([]LibraryItem, error) {
+	rows, err := q.db.Query(ctx, listSavedLinks,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Status,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LibraryItem{}
+	for rows.Next() {
+		var i LibraryItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.Kind,
+			&i.Title,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.BlobKey,
+			&i.ChatID,
+			&i.MessageID,
+			&i.PersonaID,
+			&i.CreatedAt,
+			&i.Reference,
+			&i.ReferencePersonaID,
+			&i.Source,
+			&i.Url,
+			&i.Note,
+			&i.Site,
+			&i.VideoID,
+			&i.LinkStatus,
+			&i.Summary,
 		); err != nil {
 			return nil, err
 		}
@@ -625,10 +709,106 @@ func (q *Queries) SavedLibraryLinks(ctx context.Context, arg SavedLibraryLinksPa
 	return items, nil
 }
 
+const setLibraryLinkStatus = `-- name: SetLibraryLinkStatus :one
+UPDATE library_items SET link_status = $4
+WHERE id = $1 AND workspace_id = $2 AND user_id = $3 AND kind = 'link'
+RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary
+`
+
+type SetLibraryLinkStatusParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	LinkStatus  string
+}
+
+func (q *Queries) SetLibraryLinkStatus(ctx context.Context, arg SetLibraryLinkStatusParams) (LibraryItem, error) {
+	row := q.db.QueryRow(ctx, setLibraryLinkStatus,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.LinkStatus,
+	)
+	var i LibraryItem
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Kind,
+		&i.Title,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.ChatID,
+		&i.MessageID,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
+		&i.Source,
+		&i.Url,
+		&i.Note,
+		&i.Site,
+		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
+	)
+	return i, err
+}
+
+const setLibraryLinkSummary = `-- name: SetLibraryLinkSummary :one
+UPDATE library_items SET summary = $4
+WHERE id = $1 AND workspace_id = $2 AND user_id = $3 AND kind = 'link'
+RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary
+`
+
+type SetLibraryLinkSummaryParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Summary     string
+}
+
+func (q *Queries) SetLibraryLinkSummary(ctx context.Context, arg SetLibraryLinkSummaryParams) (LibraryItem, error) {
+	row := q.db.QueryRow(ctx, setLibraryLinkSummary,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Summary,
+	)
+	var i LibraryItem
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Kind,
+		&i.Title,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.ChatID,
+		&i.MessageID,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
+		&i.Source,
+		&i.Url,
+		&i.Note,
+		&i.Site,
+		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
+	)
+	return i, err
+}
+
 const setLibraryReference = `-- name: SetLibraryReference :one
 UPDATE library_items SET reference = $1::text, reference_persona_id = $2::uuid
 WHERE id = $3 AND workspace_id = $4 AND user_id = $5
-RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id
+RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary
 `
 
 type SetLibraryReferenceParams struct {
@@ -670,6 +850,8 @@ func (q *Queries) SetLibraryReference(ctx context.Context, arg SetLibraryReferen
 		&i.Note,
 		&i.Site,
 		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
 	)
 	return i, err
 }

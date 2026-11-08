@@ -1,8 +1,11 @@
 "use client";
 
 import { isValidElement, useMemo, type ReactNode } from "react";
-import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components, type Options } from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import "katex/dist/katex.min.css";
 import type { LinkTarget } from "@/lib/api/client";
 import { useResolvedLinks } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -12,15 +15,23 @@ import { isAppFence } from "@/lib/chat-app";
 import { isSvgFence } from "@/lib/chat-svg";
 import { groupRecommendFences, isRecommendFence, RECOMMEND_ROW } from "@/lib/chat-recommend";
 import { AppFence } from "./app-fence";
+import { CITE_SCHEME } from "@/lib/chat-sources";
+import { isChoicesFence } from "@/lib/chat-choices";
+import { youtubeMoment } from "@/lib/chat-recommend";
+import { ChoicesFence } from "./choices-fence";
+import { CiteMarker, MomentLink } from "./cite-marker";
 import { CodeFence } from "./code-fence";
+import { MermaidFence, isMermaidFence } from "./mermaid-fence";
 import { RecommendFence } from "./recommend-fence";
 import { SvgFence } from "./svg-fence";
 import { LinkTargets, WikiLink } from "./wikilink";
 
-const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) ? url : defaultUrlTransform(url));
+const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) || url.startsWith(CITE_SCHEME) ? url : defaultUrlTransform(url));
 // Tables, task lists, strikethrough and bare-URL links.
-const remarkPlugins = [remarkGfm];
-const chatRehypePlugins = [groupRecommendFences];
+// Math needs $$: a single dollar is far more often a price.
+const remarkPlugins: Options["remarkPlugins"] = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]];
+const rehypePlugins: Options["rehypePlugins"] = [rehypeKatex];
+const chatRehypePlugins: Options["rehypePlugins"] = [rehypeKatex, groupRecommendFences];
 
 /**
  * Renders user and agent markdown. react-markdown escapes raw HTML by
@@ -85,6 +96,8 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
           if (isAppFence(info)) return <AppFence code={code.children} info={info} />;
           // ```svg-image fences show as images.
           if (isSvgFence(info)) return <SvgFence code={code.children} info={info} />;
+          if (isMermaidFence(info)) return <MermaidFence code={code.children} info={info} />;
+          if (isChoicesFence(info)) return <ChoicesFence code={code.children} info={info} />;
           // ```recommend fences show as preview cards.
           if (isRecommendFence(info)) return <RecommendFence code={code.children} info={info} />;
           return <CodeFence code={code.children} info={info} />;
@@ -96,7 +109,11 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
         );
       },
       a: ({ href, children }) =>
-        href?.startsWith(WIKILINK_SCHEME) ? (
+        href?.startsWith(CITE_SCHEME) ? (
+          <CiteMarker n={Number(href.slice(CITE_SCHEME.length))} />
+        ) : codeBlocks && youtubeMoment(href) ? (
+          <MomentLink href={href!}>{children}</MomentLink>
+        ) : href?.startsWith(WIKILINK_SCHEME) ? (
           <WikiLink refText={decodeURIComponent(href.slice(WIKILINK_SCHEME.length))}>{children}</WikiLink>
         ) : href?.startsWith("#") ? (
           <a href={href}>{children}</a>
@@ -110,7 +127,7 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
   return (
     <LinkTargets.Provider value={targets}>
     <div className={cx("prose-code flex flex-col gap-2.5 [&_a]:text-accent [&_a]:underline-offset-2 hover:[&_a]:underline", className)}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={codeBlocks ? chatRehypePlugins : undefined} urlTransform={urlTransform} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={codeBlocks ? chatRehypePlugins : rehypePlugins} urlTransform={urlTransform} components={components}>
         {md}
       </ReactMarkdown>
     </div>

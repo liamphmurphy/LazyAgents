@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sourceSplit, splitSourceList, usedWebSources } from "./chat-sources.ts";
+import { linkCitations, sourceSplit, splitSourceList, summaryText, usedWebSources } from "./chat-sources.ts";
 
 const urls = (r) => r.listed.map((l) => l.url);
 
@@ -36,6 +36,22 @@ test("anything but a clean headed list stays in the message", () => {
     assert.equal(r.body, md);
     assert.deepEqual(r.listed, []);
   }
+});
+
+test("numbered lists carry citation numbers, and may name Vesper pages", () => {
+  const r = splitSourceList("Claim [1] and [2].\n\nSources:\n1. [A](https://a.com)\n2. [[Eng/Plan|the plan]]");
+  assert.equal(r.body, "Claim [1] and [2].");
+  assert.deepEqual(r.listed, [{ title: "A", url: "https://a.com", n: 1 }, { title: "", url: "", n: 2, ref: "Eng/Plan" }]);
+});
+
+test("only numbers the list defines become citations, and never in code", () => {
+  assert.equal(linkCitations("See [1][2] and [9].", [1, 2]), "See [1](cite:1)[2](cite:2) and [9].");
+  assert.equal(linkCitations("`[1]`\n```\n[1]\n```\n[[1]] [1](x) [1]: y", [1]), "`[1]`\n```\n[1]\n```\n[[1]] [1](x) [1]: y");
+  assert.equal(linkCitations("[1]", []), "[1]");
+});
+
+test("a saved summary drops its citations and closing list", () => {
+  assert.equal(summaryText("Claim [1].\n\nSources:\n1. https://a.com"), "Claim.");
 });
 
 const found = (...s) => ({ queries: [], fetched: [], running: false, sources: s });

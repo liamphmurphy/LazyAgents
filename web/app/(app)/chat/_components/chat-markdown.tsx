@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Markdown } from "@/components/domain/markdown";
+import { linkCitations } from "@/lib/chat-sources";
 import { SvgFenceMessage } from "@/components/domain/svg-fence";
 
 const TICKET_KEY = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
@@ -30,9 +31,9 @@ export function linkTicketKeys(md: string): string {
     .join("\n");
 }
 
-/** replyId: the assistant reply this is, so its SVG diagrams can be saved. */
-export function ChatMarkdown({ children, replyId }: { children: string; replyId?: string }) {
-  const md = useMemo(() => linkTicketKeys(children), [children]);
+/** replyId: the assistant reply this is, so its SVG diagrams can be saved. cites: the citation numbers it defines. */
+export function ChatMarkdown({ children, replyId, cites }: { children: string; replyId?: string; cites?: number[] }) {
+  const md = useMemo(() => linkCitations(linkTicketKeys(children), cites ?? []), [children, cites]);
   return (
     <SvgFenceMessage.Provider value={replyId}>
       <Markdown codeBlocks>{md}</Markdown>

@@ -31,7 +31,9 @@ func toLibraryItem(l store.ListLibraryItemsRow) api.LibraryItem {
 		ChatId: l.ChatID, ChatTitle: l.ChatTitle, ProjectKey: l.ProjectKey, PersonaId: l.PersonaID, PersonaName: l.PersonaName, CreatedAt: l.CreatedAt,
 	}
 	if l.Kind == "link" {
-		out.Url, out.Note, out.Site, out.VideoId = &l.Url, &l.Note, &l.Site, &l.VideoID
+		out.Url, out.Note, out.Site, out.VideoId, out.Summary = &l.Url, &l.Note, &l.Site, &l.VideoID, &l.Summary
+		status := api.LibraryLinkStatus(l.LinkStatus)
+		out.LinkStatus = &status
 	}
 	source := api.LibraryItemSource(l.Source)
 	out.Source = &source

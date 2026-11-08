@@ -87,3 +87,21 @@ RETURNING *;
 -- name: SavedLibraryLinks :many
 -- Which of these URLs the caller has in their Library.
 SELECT url FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND kind = 'link' AND url = ANY(sqlc.arg(urls)::text[]);
+
+-- name: SetLibraryLinkStatus :one
+UPDATE library_items SET link_status = $4
+WHERE id = $1 AND workspace_id = $2 AND user_id = $3 AND kind = 'link'
+RETURNING *;
+
+-- name: SetLibraryLinkSummary :one
+UPDATE library_items SET summary = $4
+WHERE id = $1 AND workspace_id = $2 AND user_id = $3 AND kind = 'link'
+RETURNING *;
+
+-- name: ListSavedLinks :many
+-- A person's saved links for their personas, newest first, optionally one status.
+SELECT * FROM library_items
+WHERE workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND kind = 'link'
+  AND (sqlc.narg(status)::text IS NULL OR link_status = sqlc.narg(status))
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(row_limit);

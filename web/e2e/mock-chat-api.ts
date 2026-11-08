@@ -254,6 +254,22 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "rich:" replies with citations, math, a diagram, a moment in a video and a choice.
+    if (prompt.startsWith("rich:")) {
+      const body = [
+        "A claim [1] and another [2], not [9].",
+        "Energy is $$E = mc^2$$ and it costs $5 or $10.",
+        "```mermaid\ngraph TD\n  A[Start] --> B[Finish]\n```",
+        "```mermaid\nthis is not a diagram !!\n```",
+        "```recommend\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\nShort and useful.\n```",
+        "The key part is at [1:05](https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=65).",
+        "```choices\nWhich one?\n- Kokoro | Free, local\n- Cartesia\n```",
+        "Sources:\n1. [Pricing page](https://example.com/pricing)\n2. [[Eng/Plan]]",
+      ].join("\n\n");
+      add(c, "assistant", body, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     // "gfm:" replies with GitHub-flavored markdown.
     if (prompt.startsWith("gfm:")) {
       add(c, "assistant", "| Option | Cost |\n|---|--:|\n| OpenAI tts-1 | $0.015 |\n| Cartesia | $0.011 |\n\n- [x] Shipped\n- [ ] Pending\n\n~~old~~\n\n> Quoted", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
@@ -667,6 +683,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       { url: "https://trailatlas.example/routes", kind: "site", title: "A field guide to quiet bike routes", description: "Routes", site: "", saved: false, image_url: "/api/v1/link-previews/site/image" },
       { url: "https://notes.example/grinders", kind: "site", title: "", description: "", site: "", saved: false },
     ] });
+    if (path === "/library/links/summary" && method === "POST") return json({ id: "11111111-aaaa-4aaa-8aaa-222222222222", kind: "link", title: "T", filename: "link", content_type: "image/png", size_bytes: 9, created_at: now() }, 201);
     if (path === "/library/links" && method === "POST") return json({ id: "11111111-aaaa-4aaa-8aaa-111111111111", kind: "link", title: "T", filename: "link", content_type: "image/png", size_bytes: 9, created_at: now() }, 201);
     if (/^\/link-previews\/[^/]+\/image$/.test(path)) {
       const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");

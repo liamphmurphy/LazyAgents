@@ -32,7 +32,10 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { RecommendActions } from "@/components/domain/recommend-fence";
+import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
+import { CiteContext } from "@/components/domain/cite-marker";
+import { summaryRequestUrl } from "@/lib/chat-recommend";
+import { hostOf } from "@/lib/web-search";
 import { EffortPicker, ModelPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
@@ -75,9 +78,15 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project: string; agent: { name: string } };
 
-function Bubble({ m, chat, persona, saveable, names, turn }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow }) {
+function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null }) {
   // The closing URL list shows as Sources cards, not as text. Saved replies keep it.
   const parts = useMemo(() => (m.role === "assistant" ? splitSourceList(m.body_md) : { body: m.body_md, listed: [] }), [m.role, m.body_md]);
+  const [citeFocus, setCiteFocus] = useState<{ n: number; tick: number }>();
+  const cites = useMemo(() => {
+    const titles = new Map<number, string>();
+    for (const l of parts.listed) if (l.n !== undefined) titles.set(l.n, l.title || l.ref || hostOf(l.url));
+    return { numbers: [...titles.keys()], value: { titles, focus: (n: number) => setCiteFocus((f) => ({ n, tick: (f?.tick ?? 0) + 1 })) } };
+  }, [parts.listed]);
   if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
   const mine = m.role === "user";
   const author = m.persona ? personaLook(m.persona) : persona;
@@ -104,12 +113,15 @@ function Bubble({ m, chat, persona, saveable, names, turn }: { m: Message; chat:
         )}
         style={mine || !m.persona ? undefined : { borderLeftColor: author.color, borderLeftWidth: 3 }}
       >
-        <ChatMarkdown replyId={mine ? undefined : m.id}>{parts.body}</ChatMarkdown>
+        <CiteContext.Provider value={cites.value}>
+          <ChatMarkdown replyId={mine ? undefined : m.id} cites={cites.numbers}>{parts.body}</ChatMarkdown>
+        </CiteContext.Provider>
       </div>
       {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
       {!mine && <CodeChanges changes={m.code_changes} />}
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
-      {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} />}
+      {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} focus={citeFocus} />}
+      {!mine && saveable && summaryUrl && <SaveSummary messageId={m.id} url={summaryUrl} />}
       {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
     </li>
   );
@@ -188,6 +200,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const messages = useChatMessages(id);
   const models = useChatModels();
   const send = useSendChatMessage(id);
+  const [players] = useState(() => new Map<string, (seconds: number) => void>());
   const cancel = useCancelChat(id);
   const boot = useBootstrap();
   const personas = usePersonas();
@@ -295,9 +308,9 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     );
   }
 
-  // A card's Summarize button: goes to the persona that recommended the link. A mention
+  // A card's button or a choice: goes to the persona that wrote the reply. A mention
   // is only needed when someone else would answer next.
-  function summarize(messageId: string, body: string) {
+  function askAuthor(messageId: string, body: string) {
     const by = list?.find((m) => m.id === messageId)?.persona;
     send.mutate({ body: by && by.id !== (c?.speaker ?? c?.persona)?.id ? `@${by.name} ${body}` : body });
   }
@@ -470,11 +483,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               />
             )
           ) : (
-            <RecommendActions.Provider value={{ summarize, disabled: running || locked || !!unavailable || c.archived }}>
+            <VideoPlayers.Provider value={players}>
+            <RecommendActions.Provider value={{ ask: askAuthor, disabled: running || locked || !!unavailable || c.archived, nextMessage: (id) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md }}>
             <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
-              {list.map((m) => (
-                <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} />
+              {list.map((m, i) => (
+                <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)}
+                  summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null} />
               ))}
               <PersonaProposals chatId={c.id} disabled={c.archived} />
               {pending && selection && (
@@ -494,6 +509,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               <li ref={end} aria-hidden />
             </ol>
             </RecommendActions.Provider>
+            </VideoPlayers.Provider>
           )}
         </div>
         <div className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5">
