@@ -974,7 +974,7 @@ var Tools = []Tool{
 	define("update_memory", "Change a memory entry, or retire it in favour of a newer one with superseded_by.", updateMemory),
 	define("forget_memory", "Delete a memory entry for good, e.g. when the person says 'forget that'.", forgetMemory),
 	define("set_chat_title", "Name this conversation after the person's first message: a concise title of 2 to 6 words. Does nothing if the person already named it.", setChatTitle),
-	define("generate_image", "Make an image. Only when the person asks for one and your instructions allow it. It is created with Codex right after your reply and shown under it; you don't get the image, so say you're making it. At most 2 per reply.", generateImage),
+	define("generate_image", "Try to make an image. Only when the person asks for one and your instructions allow it. Codex attempts it right after your reply and it may fail (e.g. a moderation refusal), so say you're trying, never that it's done. You then get a follow-up turn with the image (or why it failed) to react to. At most 2 per reply; not available in that follow-up.", generateImage),
 	define("list_runs", "List agent runs in the current chat project, newest first: live runs by default, or finished/all. Filter by ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One agent run in the current chat project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
 	define("list_epics", "List epics in the current chat project.", listChatEpics),

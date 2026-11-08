@@ -180,5 +180,7 @@ func generateImage(ctx context.Context, d Deps, c agents.Caller, in GenerateImag
 	if _, err := d.Runs.QueueChatImage(ctx, c.Agent.WorkspaceID, *c.RunID, in.Prompt); err != nil {
 		return nil, err
 	}
-	return map[string]any{"queued": true, "tell_the_person": "Queued. The image is generated with Codex right after your reply and appears under it. Tell the person you're making it; don't describe it as finished."}, nil
+	return map[string]any{"queued": true, "tell_the_person": "Queued. Codex tries to make the image right after your reply; it may still fail (for example if moderation refuses it). " +
+		"Tell the person you're trying to make it; don't describe it as finished or promise it will appear. " +
+		"You'll get a follow-up turn with the image to look at, or the reason it failed, to react to."}, nil
 }

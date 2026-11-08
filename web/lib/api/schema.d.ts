@@ -2946,8 +2946,11 @@ export interface components {
         };
         RunTurn: {
             seq: number;
-            /** @enum {string} */
-            trigger: "start" | "approval" | "comment" | "resume" | "delegation";
+            /**
+             * @description image_followup: the automatic chat turn that shows the assistant the results of its generate_image calls (no user message)
+             * @enum {string}
+             */
+            trigger: "start" | "approval" | "comment" | "resume" | "delegation" | "image_followup";
             input_message: string;
             /** Format: date-time */
             started_at: string;

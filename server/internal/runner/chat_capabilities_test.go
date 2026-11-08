@@ -267,6 +267,11 @@ func TestImageHarvest(t *testing.T) {
 	if len(left) != 5 || !left["p09.png"] || !left["p10.png"] || !left["zz-notes.txt"] || !left["zz-link.png"] || !left["zz-sub"] {
 		t.Fatalf("outbox after harvest: %v", left)
 	}
+	// A Codex chat saw its own images in the turn: no follow-up turn.
+	var followups int
+	if err := e.pool.QueryRow(e.ctx, `SELECT count(*) FROM run_turns WHERE run_id=$1 AND trigger='image_followup'`, e.chatRun(chat.ID).ID).Scan(&followups); err != nil || followups != 0 {
+		t.Fatalf("%d image follow-ups for a Codex chat, %v", followups, err)
+	}
 	var skipped string
 	if err := e.pool.QueryRow(e.ctx, `SELECT payload->>'detail' FROM run_events WHERE run_id=$1 AND payload->>'state'='chat_images_skipped'`, e.chatRun(chat.ID).ID).Scan(&skipped); err != nil {
 		t.Fatal(err)

@@ -143,6 +143,16 @@ func TestGenerateImageTool(t *testing.T) {
 	if code, out = call(token, map[string]any{"prompt": "next turn"}); code != 200 {
 		t.Fatalf("next turn: %d %v", code, out)
 	}
+	if tell := out["tell_the_person"].(string); !strings.Contains(tell, "trying") || !strings.Contains(tell, "follow-up turn") {
+		t.Fatalf("tell_the_person %q", tell)
+	}
+
+	// The automatic follow-up that reports images can't ask for more (no loops).
+	exec("UPDATE run_turns SET status='done' WHERE run_id=$1", runID)
+	exec("INSERT INTO run_turns (run_id, seq, trigger, status) VALUES ($1, 3, 'image_followup', 'running')", runID)
+	reject("image follow-up turn", map[string]any{"prompt": "one more"}, 409, "isn't available while you react")
+	exec("UPDATE run_turns SET status='done' WHERE run_id=$1", runID)
+	exec("INSERT INTO run_turns (run_id, seq, trigger, status) VALUES ($1, 4, 'comment', 'running')", runID)
 
 	// Turning images off takes effect immediately, and so does a deleted persona.
 	off := false

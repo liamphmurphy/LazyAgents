@@ -916,6 +916,17 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		ctxFiles = append(ctxFiles, attFiles...)
 		prompt += attPrompt
+		if turn.Trigger == runs.TriggerImageFollowup {
+			// The images (and failures) the previous turn's generate_image calls made.
+			imgFiles, imgPrompt, err := r.imageFollowup(ctx, q, turn)
+			if err != nil {
+				log.Warn("image follow-up", "err", err)
+				r.failChat(ctx, c, "Could not load the generated images.")
+				return
+			}
+			ctxFiles = append(ctxFiles, imgFiles...)
+			prompt += imgPrompt
+		}
 	}
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}
