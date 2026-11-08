@@ -199,92 +199,113 @@ export function newestChat<T extends { last_message_at?: string | null; updated_
 
 // ---- the chat tab's status line: what the persona is doing, at a glance ----
 
+/** The kind of work under way, which picks the status card's animated scene. */
+export type ChatStatusKind = "thinking" | "wiki" | "reading-code" | "writing-code" | "tests" | "github" | "web" | "image" | "memory";
+export type ChatStatusInfo = { kind: ChatStatusKind; phrase: string };
+
+const status = (kind: ChatStatusKind, phrase: string): ChatStatusInfo => ({ kind, phrase });
+
+// Options may sit between `git` and its subcommand: "git -C /repo push".
+const GIT = String.raw`\bgit(?:\s+-c\s+\S+|\s+--\S+)*\s+`;
+const GIT_PUSH = new RegExp(`${GIT}push\\b`);
+const GIT_COMMIT = new RegExp(`${GIT}commit\\b`);
+const GIT_OTHER = new RegExp(`${GIT}(add|am|apply|blame|branch|checkout|cherry-pick|clone|diff|fetch|init|log|ls-files|merge|merge-base|pull|rebase|remote|reset|restore|rev-list|rev-parse|revert|rm|show|stash|status|submodule|switch|tag|worktree)\\b`);
+
 /**
  * A shell command as a kind of work, never the command itself: the chat tab says
  * "running tests", the Activity tab keeps the exact command.
  */
-function shellStatus(command: string): string {
+function shellStatus(command: string): ChatStatusInfo {
   const c = command.toLowerCase();
-  if (/\.lazyagents\/outbox/.test(c)) return "saving the image";
-  if (/\bgit\s+push\b/.test(c)) return "pushing its branch";
-  if (/\bgit\s+commit\b/.test(c)) return "committing changes";
-  if (/\bgh\s+pr\b/.test(c)) return "preparing a pull request";
-  if (/\b(go\s+test|npm\s+(run\s+)?test|pnpm\s+(run\s+)?test|yarn\s+test|pytest|jest|vitest|cargo\s+test|make\s+test|rspec|playwright\s+test|mvn\s+test|gradle\w*\s+test)\b/.test(c)) return "running tests";
-  if (/\b(npm\s+(ci|install|i)|pnpm\s+install|yarn(\s+install)?\s*$|go\s+mod\s+(download|tidy)|pip\s+install|bundle\s+install|cargo\s+fetch)\b/.test(c)) return "installing dependencies";
-  if (/\b(go\s+(build|vet)|npm\s+run\s+(build|lint|typecheck)|tsc\b|cargo\s+(build|check|clippy)|make\b|eslint|gofmt)\b/.test(c)) return "checking the build";
-  if (/\bgit\s+(clone|fetch|pull|checkout|switch|status|diff|log|show|branch|rebase|merge)\b/.test(c)) return "looking over the repository";
-  if (/^\s*(cat|less|head|tail|ls|tree|find|rg|grep|sed\s+-n|wc|awk)\b|\|\s*(rg|grep|head|tail)\b/.test(c)) return "reading the code";
-  return "working in the terminal";
+  if (/\.lazyagents\/outbox/.test(c)) return status("image", "saving the image");
+  if (GIT_PUSH.test(c)) return status("github", "pushing its branch");
+  if (GIT_COMMIT.test(c)) return status("github", "committing changes");
+  if (/\bgh\s+pr\b/.test(c)) return status("github", "preparing a pull request");
+  if (/\bgh\s+\S/.test(c)) return status("github", "working on GitHub");
+  if (/\b(go\s+test|npm\s+(run\s+)?test|pnpm\s+(run\s+)?test|yarn\s+test|pytest|jest|vitest|cargo\s+test|make\s+test|rspec|playwright\s+test|mvn\s+test|gradle\w*\s+test)\b/.test(c)) return status("tests", "running tests");
+  if (/\b(npm\s+(ci|install|i)|pnpm\s+install|yarn(\s+install)?\s*$|go\s+mod\s+(download|tidy)|pip\s+install|bundle\s+install|cargo\s+fetch)\b/.test(c)) return status("thinking", "installing dependencies");
+  if (/\b(go\s+(build|vet)|npm\s+run\s+(build|lint|typecheck)|tsc\b|cargo\s+(build|check|clippy)|make\b|eslint|gofmt)\b/.test(c)) return status("tests", "checking the build");
+  if (GIT_OTHER.test(c)) return status("github", "looking over the repository");
+  if (/^\s*(cat|less|head|tail|ls|tree|find|rg|grep|sed\s+-n|wc|awk)\b|\|\s*(rg|grep|head|tail)\b/.test(c)) return status("reading-code", "reading the code");
+  return status("thinking", "working in the terminal");
+}
+
+/** An MCP GitHub tool, from any server name: "github.create_pull_request", "plugin_github_github.get_issue". */
+function githubToolStatus(tool: string): ChatStatusInfo | undefined {
+  if (!/(^|[._-])github[._-]/i.test(tool)) return undefined;
+  if (/(create|update|merge)\w*pull_?request/i.test(tool)) return status("github", "preparing a pull request");
+  return status("github", "working on GitHub");
 }
 
 /**
- * One tool call as a short, high-level phrase for the chat tab ("reading the code",
- * "looking through the wiki"): no queries, paths, refs or commands, which stay in
- * the Activity tab. Completes "<Persona> is …".
+ * One tool call as a kind of work and a short, high-level phrase for the chat tab
+ * ("reading the code", "looking through the wiki"): no queries, paths, refs or commands,
+ * which stay in the Activity tab. The phrase completes "<Persona> is …".
  */
-export function chatStatusOf(call: { tool: string; input: unknown }): string {
+export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatusInfo {
   const o = (call.input && typeof call.input === "object" ? call.input : {}) as Record<string, unknown>;
-  switch (bareTool(call.tool)) {
+  const tool = bareTool(call.tool);
+  switch (tool) {
     case "read_page":
     case "read_artifact":
     case "get_backlinks":
     case "search_knowledge":
     case "find_pattern":
-      return "looking through the wiki";
+      return status("wiki", "looking through the wiki");
     case "get_ticket":
     case "list_epics":
-      return "checking tickets";
+      return status("wiki", "checking tickets");
     case "create_ticket":
     case "create_epic":
-      return "drafting a ticket";
+      return status("wiki", "drafting a ticket");
     case "list_runs":
     case "get_run":
-      return "checking on runs";
+      return status("thinking", "checking on runs");
     case "search_memory":
     case "read_memory":
-      return "recalling what it knows about you";
+      return status("memory", "recalling what it knows about you");
     case "save_memory":
     case "update_memory":
-      return "making a note";
+      return status("memory", "making a note");
     case "forget_memory":
-      return "forgetting that";
+      return status("memory", "forgetting that");
     case "set_chat_title":
-      return "naming the conversation";
+      return status("thinking", "naming the conversation");
     case "WebSearch":
     case "web_search":
     case "WebFetch":
-      return "searching the web";
+      return status("web", "searching the web");
     case "image_generation":
     case "image_gen":
     case "generate_image":
-      return "creating an image";
+      return status("image", "creating an image");
     case "Read":
       // The image follow-up opens the generated images it is about to react to.
-      if (typeof o.file_path === "string" && o.file_path.includes(".lazyagents/attachments/generated/")) return "looking at the image";
-      return "reading the code";
+      if (typeof o.file_path === "string" && o.file_path.includes(".lazyagents/attachments/generated/")) return status("image", "looking at the image");
+      return status("reading-code", "reading the code");
     case "Glob":
     case "Grep":
     case "LS":
-      return "reading the code";
+      return status("reading-code", "reading the code");
     case "Edit":
     case "MultiEdit":
     case "Write":
     case "NotebookEdit":
     case "apply_patch":
-      return "writing code";
+      return status("writing-code", "writing code");
     case "TodoWrite":
-      return "planning its next steps";
+      return status("thinking", "planning its next steps");
     case "shell":
     case "Bash":
     case "exec_command":
     case "shell_command":
       return shellStatus(typeof o.command === "string" ? o.command : typeof o.cmd === "string" ? o.cmd : "");
     default:
-      return "working on it";
+      return githubToolStatus(tool) ?? status("thinking", "working on it");
   }
 }
 
-/** The chat tab's status for a running turn: the newest call's phrase, or "thinking" before any tool runs. */
-export function chatStatus(calls: { tool: string; input: unknown }[]): string {
-  return calls.length ? chatStatusOf(calls[calls.length - 1]) : "thinking";
+/** The chat tab's status for a running turn: the newest call's, or "thinking" before any tool runs. */
+export function chatStatus(calls: { tool: string; input: unknown }[]): ChatStatusInfo {
+  return calls.length ? chatStatusOf(calls[calls.length - 1]) : status("thinking", "thinking");
 }

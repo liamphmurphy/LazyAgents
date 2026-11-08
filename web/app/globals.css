@@ -158,3 +158,118 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .shiki-tok { color: var(--shiki-light); }
 }
+
+/*
+ * The chat status card's scenes (activity-scene.tsx). Each element's resting style is its
+ * still frame: reduced motion only removes the animations.
+ */
+.scene-layer { position: absolute; inset: 0; }
+.scene-in { animation: scene-in 240ms ease-out both; }
+.scene-out { opacity: 0; animation: scene-out 240ms ease-out both; }
+@keyframes scene-in { from { opacity: 0; } }
+@keyframes scene-out { from { opacity: 1; } to { opacity: 0; } }
+
+.scene-accent { fill: var(--accent); }
+.scene-done { fill: var(--state-done); }
+.scene-warm { fill: var(--state-progress); }
+.scene-muted { fill: var(--text-tertiary); }
+.scene-paper { fill: var(--surface-raised); stroke: var(--border-strong); }
+.scene-empty { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
+.scene-line { fill: none; stroke: var(--text-tertiary); stroke-width: 2; stroke-linecap: round; }
+.scene-line-accent { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; }
+.scene-line-done { fill: none; stroke: var(--state-done); stroke-width: 2; stroke-linecap: round; }
+.scene-box { transform-box: fill-box; transform-origin: center; }
+.scene-left { transform-box: fill-box; transform-origin: left center; }
+
+.scene-breathe { animation: scene-breathe 3.2s ease-in-out infinite; }
+.scene-drift-a { animation: scene-drift-a 3.6s ease-in-out infinite; }
+.scene-drift-b { animation: scene-drift-b 4.2s ease-in-out infinite; }
+.scene-drift-c { animation: scene-drift-c 3s ease-in-out infinite; }
+@keyframes scene-breathe { 50% { transform: scale(1.12); opacity: 0.55; } }
+@keyframes scene-drift-a { 50% { transform: translate(5px, -5px); } }
+@keyframes scene-drift-b { 50% { transform: translate(-6px, 5px); } }
+@keyframes scene-drift-c { 50% { transform: translate(4px, 6px); } }
+
+.scene-sweep { animation: scene-sweep 2.4s ease-in-out infinite alternate; }
+@keyframes scene-sweep { from { transform: translateY(-10px); } to { transform: translateY(20px); } }
+
+.scene-scan { animation: scene-scan 2.2s linear infinite; }
+@keyframes scene-scan {
+  0% { transform: translateY(-18px); opacity: 0; }
+  10%, 90% { opacity: 0.25; }
+  100% { transform: translateY(18px); opacity: 0; }
+}
+
+.scene-type-1 { animation: scene-type-1 4s linear infinite; }
+.scene-type-2 { animation: scene-type-2 4s linear infinite; }
+.scene-type-3 { animation: scene-type-3 4s linear infinite; }
+.scene-type-4 { animation: scene-type-4 4s linear infinite; }
+@keyframes scene-type-1 { 0% { transform: scaleX(0); } 20%, 100% { transform: scaleX(1); } }
+@keyframes scene-type-2 { 0%, 20% { transform: scaleX(0); } 40%, 100% { transform: scaleX(1); } }
+@keyframes scene-type-3 { 0%, 40% { transform: scaleX(0); } 60%, 100% { transform: scaleX(1); } }
+@keyframes scene-type-4 { 0%, 60% { transform: scaleX(0); } 75%, 100% { transform: scaleX(1); } }
+.scene-caret-path { animation: scene-caret-path 4s linear infinite; }
+.scene-caret { animation: scene-caret 0.8s steps(1) infinite; }
+@keyframes scene-caret-path {
+  0% { transform: translate(-42px, -30px); }
+  20% { transform: translate(18px, -30px); }
+  20.01% { transform: translate(-32px, -20px); }
+  40% { transform: translate(48px, -20px); }
+  40.01% { transform: translate(-32px, -10px); }
+  60% { transform: translate(18px, -10px); }
+  60.01% { transform: translate(-32px, 0); }
+  75%, 100% { transform: translate(0, 0); }
+}
+@keyframes scene-caret { 50% { opacity: 0; } }
+
+.scene-dot { animation: scene-dot 4s ease-out infinite both; }
+@keyframes scene-dot {
+  0% { transform: scale(0); }
+  8%, 55% { transform: scale(1); }
+  63%, 100% { transform: scale(0); }
+}
+
+.scene-commit { animation: scene-commit 3.2s linear infinite; }
+@keyframes scene-commit {
+  0% { transform: translate(-48px, 30px); opacity: 0; }
+  4% { opacity: 1; }
+  8% { transform: translate(-38.5px, 25.3px); }
+  14% { transform: translate(-32px, 15px); }
+  20% { transform: translate(-25.5px, 4.7px); }
+  28% { transform: translate(-16px, 0); }
+  64% { transform: translate(16px, 0); }
+  72% { transform: translate(25.5px, 4.7px); }
+  78% { transform: translate(32px, 15px); }
+  84% { transform: translate(38.5px, 25.3px); }
+  92% { transform: translate(48px, 30px); opacity: 1; }
+  100% { transform: translate(48px, 30px); opacity: 0; }
+}
+
+.scene-orbit { transform-origin: 66px 28px; animation: scene-spin 4s linear infinite; }
+.scene-upright { transform-origin: 79px 19px; animation: scene-spin 4s linear infinite reverse; }
+@keyframes scene-spin { to { transform: rotate(360deg); } }
+
+.scene-focus { animation: scene-focus 3.2s ease-out infinite; }
+.scene-tile { animation: scene-tile 3.2s ease-out infinite both; }
+@keyframes scene-focus {
+  0% { filter: blur(3px); }
+  70%, 100% { filter: blur(0); }
+}
+@keyframes scene-tile {
+  0% { opacity: 0.25; }
+  60%, 100% { opacity: 1; }
+}
+
+.scene-link { stroke-dasharray: 1; animation: scene-link 4s ease-in-out infinite both; }
+.scene-node { animation: scene-node 2.4s ease-in-out infinite; }
+@keyframes scene-link {
+  0% { stroke-dashoffset: 1; }
+  25%, 80% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes scene-node { 50% { transform: scale(1.25); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-layer,
+  .scene-layer * { animation: none !important; }
+}
