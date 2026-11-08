@@ -7,9 +7,43 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const deleteStaleLinkPreviews = `-- name: DeleteStaleLinkPreviews :many
+DELETE FROM link_previews WHERE id IN (
+  SELECT l.id FROM link_previews l WHERE l.fetched_at < $1 ORDER BY l.fetched_at LIMIT $2
+) RETURNING blob_key
+`
+
+type DeleteStaleLinkPreviewsParams struct {
+	Before   time.Time
+	RowLimit int32
+}
+
+// A batch of previews old enough to refetch if anyone opens their reply again.
+// Saved links hold their own copy of the image.
+func (q *Queries) DeleteStaleLinkPreviews(ctx context.Context, arg DeleteStaleLinkPreviewsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, deleteStaleLinkPreviews, arg.Before, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var blob_key string
+		if err := rows.Scan(&blob_key); err != nil {
+			return nil, err
+		}
+		items = append(items, blob_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const getLinkPreview = `-- name: GetLinkPreview :one
 SELECT id, workspace_id, url, kind, title, description, site, video_id, blob_key, image_type, fetched_at FROM link_previews WHERE workspace_id = $1 AND url = $2

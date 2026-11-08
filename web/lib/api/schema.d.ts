@@ -1893,6 +1893,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/edit-last": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace your last message and redo its turn
+         * @description Removes everything after your newest message, replaces its text and
+         *     queues a new turn. The same text retries the turn. 409 while a reply is
+         *     running, or when the chat is archived or has no message.
+         */
+        post: operations["editLastChatMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the messages of your own chats */
+        get: operations["searchChats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -4108,6 +4149,28 @@ export interface components {
         };
         LinkPreviews: {
             previews: components["schemas"]["LinkPreview"][];
+        };
+        ChatMessageEdit: {
+            body: string;
+        };
+        ChatSearchHit: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            chat_title: string;
+            project_key: string;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            archived: boolean;
+            persona_name?: string;
+            /** @description Matches are wrapped in U+E000 and U+E001 */
+            snippet: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ChatSearchResults: {
+            hits: components["schemas"]["ChatSearchHit"][];
         };
         ChatAttachment: {
             /** Format: uuid */
@@ -7684,6 +7747,62 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    editLastChatMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatMessageEdit"];
+            };
+        };
+        responses: {
+            /** @description Message updated and turn queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        chat: components["schemas"]["ChatSession"];
+                        message: components["schemas"]["ChatMessage"];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    searchChats: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Best matches first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSearchResults"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

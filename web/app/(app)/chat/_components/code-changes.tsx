@@ -1,5 +1,6 @@
 "use client";
 
+import { CopyButton } from "./reply-tools";
 import { useId, useMemo, useState } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { changeTotals, filesStartOpen, langFromPath, parsePatch, STATUS_BADGE, type DiffRow } from "@/lib/code-diff";
@@ -170,6 +171,11 @@ export function CodeChanges({ changes }: { changes?: Change[] }) {
           <Counts {...totals} />
         </span>
       </button>
+      {open && changes.some((c) => c.patch) && (
+        <div className="flex justify-end border-t border-border-subtle px-2 py-1">
+          <CopyButton label="Copy diff" text={changes.flatMap((c) => (c.patch ? [`--- ${c.path}\n+++ ${c.path}\n${c.patch}`] : [])).join("\n")} />
+        </div>
+      )}
       {open && (
         <ul id={id} className="border-t border-border">
           {changes.map((c) => (

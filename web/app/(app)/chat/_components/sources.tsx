@@ -60,9 +60,9 @@ function CardGroup({ label, cards, focused }: { label: string; cards: Card[]; fo
               <SourceTile tile={c.tile} size={30} />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-[13px] font-semibold text-fg">{c.title}</span>
-                <span className="truncate text-[11.5px] text-fg-tertiary">{c.meta}</span>
+                <span className="truncate text-xs text-fg-tertiary">{c.meta}</span>
               </span>
-              {c.n !== undefined && <span aria-hidden className="ml-auto flex-none self-start rounded bg-accent-soft px-1 font-mono text-[10.5px] font-semibold text-accent">{c.n}</span>}
+              {c.n !== undefined && <span aria-hidden className="ml-auto flex-none self-start rounded bg-accent-soft px-1 font-mono text-[11px] font-semibold text-accent">{c.n}</span>}
             </SourceLink>
           </li>
         ))}
@@ -191,7 +191,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
           ) : (
             <span aria-hidden className="grid size-[22px] flex-none place-items-center rounded-md bg-surface-sunken text-fg-secondary"><Icon name="search" size={12} /></span>
           )}
-          {cards.length > MAX_TILES && <span aria-hidden className="flex-none text-[11.5px] font-semibold text-fg-tertiary">+{cards.length - MAX_TILES}</span>}
+          {cards.length > MAX_TILES && <span aria-hidden className="flex-none text-xs font-semibold text-fg-tertiary">+{cards.length - MAX_TILES}</span>}
           {toggle}
         </button>
       </section>

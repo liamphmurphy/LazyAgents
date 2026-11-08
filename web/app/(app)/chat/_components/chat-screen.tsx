@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
-import { useBootstrap, useChat, useChats, useCreateChat, useDeleteChat, useStartChat, useUpdateChat } from "@/lib/api/hooks";
+import { useBootstrap, useChat, useChats, useChatSearch, useCreateChat, useDeleteChat, useStartChat, useUpdateChat } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { chatTitle, newestChat } from "@/lib/chat-ui";
 import { codesInRepos } from "@/lib/persona-ui";
@@ -239,7 +239,7 @@ function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: 
           <IconButton icon="x" label="Cancel rename" onClick={() => setEditing(false)} />
         </form>
       ) : (
-        <div className={cx("group flex flex-wrap items-center gap-1 rounded-md pr-1", active ? "bg-selected" : "hover:bg-hover")}>
+        <div className={cx("group relative flex flex-wrap items-center gap-1 rounded-md pr-1", active ? "bg-selected" : "hover:bg-hover")}>
           <Link
             href={`/chat/${chat.id}?project=${encodeURIComponent(project)}`}
             aria-current={active ? "page" : undefined}
@@ -256,6 +256,8 @@ function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: 
               <RowMeta chat={chat} showPersona={all} />
             </span>
           </Link>
+          {/* Over the row until hovered, so titles get the full width. A delete confirmation takes its own line. */}
+          <div className={cx("absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 has-[[role=group]]:static has-[[role=group]]:basis-full has-[[role=group]]:translate-y-0 has-[[role=group]]:flex-wrap has-[[role=group]]:opacity-100", active ? "bg-selected" : "bg-hover")}>
           <IconButton icon="edit" label={`Rename ${label}`} onClick={() => { setTitle(chat.title); setEditing(true); }} />
           <IconButton
             icon="folder"
@@ -266,6 +268,7 @@ function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: 
             }
           />
           <DeleteChat chat={chat} onDeleted={onLeave} />
+          </div>
         </div>
       )}
       {update.isError && (
@@ -274,6 +277,39 @@ function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: 
         </p>
       )}
     </li>
+  );
+}
+
+const MATCH = /(\uE000[^\uE001]*\uE001)/;
+
+/** A search hit's excerpt with its matches marked; the excerpt is only ever text. */
+function Snippet({ text }: { text: string }) {
+  return (
+    <span className="line-clamp-2 text-xs text-fg-secondary">
+      {text.split(MATCH).map((part, i) => (i % 2 ? <mark key={i} className="rounded-sm bg-accent-soft px-px text-fg">{part.slice(1, -1)}</mark> : part))}
+    </span>
+  );
+}
+
+/** Message search across the person's chats: results stand in for the list while there's a query. */
+function ChatSearchResults({ query, onPick }: { query: string; onPick: () => void }) {
+  const results = useChatSearch(query);
+  const hits = results.data?.hits ?? [];
+  if (query.trim().length < 2 || results.isPending) return <p className="px-2 py-1.5 text-xs text-fg-tertiary">{query.trim().length < 2 ? "Keep typing…" : "Searching…"}</p>;
+  if (results.isError) return <p role="alert" className="px-2 py-1.5 text-xs text-pill-blocked-fg">{errorText(results.error)}</p>;
+  if (hits.length === 0) return <p className="px-2 py-1.5 text-xs text-fg-tertiary">No messages match.</p>;
+  return (
+    <ul aria-label="Search results" className="flex flex-col gap-0.5">
+      {hits.map((h) => (
+        <li key={h.message_id} data-testid="chat-search-hit">
+          <Link href={`/chat/${h.chat_id}?project=${encodeURIComponent(h.project_key)}&message=${h.message_id}`} onClick={onPick} className="flex flex-col gap-0.5 rounded-md px-2 py-1.5 hover:bg-hover">
+            <span className="truncate text-[13px] text-fg">{h.chat_title || "New conversation"}</span>
+            <Snippet text={h.snippet} />
+            <span className="truncate text-xs text-fg-tertiary">{h.role === "user" ? "You" : (h.persona_name ?? "Assistant")}{h.archived ? " · archived" : ""}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -321,6 +357,8 @@ function HistorySidebar({ project, id, newChat }: { project: string; id?: string
     create.mutate({ project, persona_id: personaId }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
   // Archiving or deleting the open conversation goes back to /chat, which resumes the newest one.
   const leave = (chatId: string) => chatId === id && router.push(`/chat?project=${encodeURIComponent(project)}`);
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   return (
     <aside
       aria-label="Chat history"
@@ -328,7 +366,8 @@ function HistorySidebar({ project, id, newChat }: { project: string; id?: string
     >
       <PersonaFilter filter={{ ...filter, set: pickPersona }} />
       {newChat}
-      <Segmented
+      <TextInput aria-label="Find in chats" placeholder="Find in chats" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setQuery("")} />
+      {!query && <Segmented
         label="Show conversations"
         small
         value={view}
@@ -337,9 +376,11 @@ function HistorySidebar({ project, id, newChat }: { project: string; id?: string
           { value: "active", label: "Active" },
           { value: "archived", label: "Archived" },
         ]}
-      />
+      />}
       <nav aria-label="Chats" className="min-h-0 flex-1 overflow-y-auto">
-        {chats.isError ? (
+        {query ? (
+          <ChatSearchResults query={deferredQuery} onPick={() => undefined} />
+        ) : chats.isError ? (
           <Banner tone="blocked" title="Couldn’t load conversations">{errorText(chats.error)}</Banner>
         ) : !list ? (
           <div aria-busy="true" className="flex flex-col gap-2">

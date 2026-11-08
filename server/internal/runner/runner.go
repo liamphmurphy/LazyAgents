@@ -357,6 +357,7 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 // between turns.
 func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepChatAttachments(ctx)
+	defer r.sweepLinkPreviews(ctx)
 	r.expireIdleChats(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx)
 	if err != nil {
@@ -386,6 +387,30 @@ func (r *Runner) sweepChatAttachments(ctx context.Context) {
 	for _, k := range keys {
 		if err := r.Attachments.Delete(ctx, r.Cfg.AttachmentBucket, k); err != nil {
 			r.Log.Warn("delete chat attachment object", "key", k, "err", err)
+		}
+	}
+}
+
+// StaleLinkPreviewAge is how long a fetched preview is kept. A reply opened
+// after that just fetches its card again.
+const StaleLinkPreviewAge = 90 * 24 * time.Hour
+
+// sweepLinkPreviews retires a batch of old link previews and their images.
+func (r *Runner) sweepLinkPreviews(ctx context.Context) {
+	if r.Attachments == nil {
+		return
+	}
+	keys, err := r.q().DeleteStaleLinkPreviews(ctx, store.DeleteStaleLinkPreviewsParams{Before: time.Now().Add(-StaleLinkPreviewAge), RowLimit: 100})
+	if err != nil {
+		r.Log.Warn("sweep link previews", "err", err)
+		return
+	}
+	for _, k := range keys {
+		if k == "" {
+			continue
+		}
+		if err := r.Attachments.Delete(ctx, r.Cfg.AttachmentBucket, k); err != nil {
+			r.Log.Warn("delete link preview object", "key", k, "err", err)
 		}
 	}
 }

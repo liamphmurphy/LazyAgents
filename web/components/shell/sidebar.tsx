@@ -28,6 +28,15 @@ export type SidebarProps = {
   user: { name: string; initials?: string; avatarUrl?: string; role: string };
 };
 
+const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "unread", runs: "running" };
+
+/** The rail shows only a dot, so a count has to reach screen readers through the name. */
+function railLabel(label: string, badge: NavBadge | undefined, counts: Record<NavBadge, number>) {
+  const n = badge ? counts[badge] : 0;
+  const word = badge && BADGE_WORD[badge];
+  return n > 0 && word ? `${label} ${n} ${word}` : label;
+}
+
 function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
   return (
     <Link
@@ -232,7 +241,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           {NAV_GROUPS.map((g) => (
             <div key={g.label} role="group" aria-label={g.label} className="flex flex-col gap-px">
               {g.items.map((n) => (
-                <NavLink key={n.href} label={n.label} href={withProject(n.href, current?.key)} active={isActive(pathname, n.href) && !(n.href === "/tickets" && search.get("sv"))}>
+                <NavLink key={n.href} label={railLabel(n.label, n.badge, counts)} href={withProject(n.href, current?.key)} active={isActive(pathname, n.href) && !(n.href === "/tickets" && search.get("sv"))}>
                   <Icon name={n.icon} />
                   {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
                 </NavLink>

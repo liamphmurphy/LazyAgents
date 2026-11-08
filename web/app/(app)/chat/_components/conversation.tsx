@@ -11,6 +11,7 @@ import {
   useCancelChat,
   useChat,
   useChatMessages,
+  useEditLastChatMessage,
   useChatModels,
   useCreateChat,
   useDeleteChat,
@@ -32,6 +33,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
+import { AskAboutSelection, CopyButton, quoteForComposer } from "./reply-tools";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { CiteContext } from "@/components/domain/cite-marker";
 import { summaryRequestUrl } from "@/lib/chat-recommend";
@@ -66,6 +68,10 @@ function Tag({ groups, m }: { groups: Groups; m: Message }) {
   );
 }
 
+// Actions that stay out of the way until the message is hovered or focused.
+const REVEAL = "opacity-0 transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100";
+const LONG_REPLY = 1500;
+
 function Divider({ children, testId }: { children: string; testId?: string }) {
   return (
     <li className="flex items-center gap-3 py-1 text-xs text-fg-tertiary" data-testid={testId}>
@@ -78,7 +84,10 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project: string; agent: { name: string } };
 
-function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null }) {
+function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(m.body_md);
+  const self = useRef<HTMLLIElement>(null);
   // The closing URL list shows as Sources cards, not as text. Saved replies keep it.
   const parts = useMemo(() => (m.role === "assistant" ? splitSourceList(m.body_md) : { body: m.body_md, listed: [] }), [m.role, m.body_md]);
   const [citeFocus, setCiteFocus] = useState<{ n: number; tick: number }>();
@@ -91,7 +100,7 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl }: { m: Me
   const mine = m.role === "user";
   const author = m.persona ? personaLook(m.persona) : persona;
   return (
-    <li className={cx("flex flex-col gap-1", mine ? "items-end" : "items-start")} data-testid={`${m.role}-message`}>
+    <li ref={self} id={`msg-${m.id}`} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg flex scroll-mt-4 flex-col gap-1 rounded-xl transition-shadow", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-testid={`${m.role}-message`}>
       {mine ? (
         <span className="flex items-center gap-1.5 text-xs text-fg-tertiary">
           {m.author?.avatar_url && <HumanAvatar name={m.author.name} initials={m.author.initials} color={m.author.avatar_color} src={m.author.avatar_url} size={18} label={false} />}
@@ -109,20 +118,52 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl }: { m: Me
       <div
         className={cx(
           "max-w-[min(720px,100%)] rounded-xl border px-3.5 py-2.5 text-[13.5px]",
-          mine ? "border-border-strong bg-selected" : "border-border bg-surface",
+          // Replies share one column edge with what sits under them.
+          mine ? "border-border-strong bg-selected" : "w-full border-border bg-surface",
         )}
         style={mine || !m.persona ? undefined : { borderLeftColor: author.color, borderLeftWidth: 3 }}
       >
-        <CiteContext.Provider value={cites.value}>
-          <ChatMarkdown replyId={mine ? undefined : m.id} cites={cites.numbers}>{parts.body}</ChatMarkdown>
-        </CiteContext.Provider>
+        {editing ? (
+          <form
+            className="flex w-[min(560px,70vw)] flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (draft.trim() && onEdit) {
+                onEdit(draft);
+                setEditing(false);
+              }
+            }}
+          >
+            <textarea aria-label="Edit message" autoFocus rows={Math.min(10, draft.split("\n").length + 1)} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditing(false)} className="w-full resize-y rounded-md border border-border-strong bg-surface p-2 text-[13.5px] text-fg focus:border-accent focus:outline-none" />
+            <div className="flex justify-end gap-1.5">
+              <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+              <Button type="submit" variant="primary" disabled={!draft.trim()}>Save and resend</Button>
+            </div>
+          </form>
+        ) : (
+          <CiteContext.Provider value={cites.value}>
+            <ChatMarkdown replyId={mine ? undefined : m.id} cites={cites.numbers}>{parts.body}</ChatMarkdown>
+          </CiteContext.Provider>
+        )}
       </div>
       {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
       {!mine && <CodeChanges changes={m.code_changes} />}
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
+      {mine && editable && !editing && (
+        <div className={REVEAL}>
+          <Button variant="ghost" icon="edit" onClick={() => { setDraft(m.body_md); setEditing(true); }}>Edit</Button>
+        </div>
+      )}
       {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} focus={citeFocus} />}
       {!mine && saveable && summaryUrl && <SaveSummary messageId={m.id} url={summaryUrl} />}
-      {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
+      {!mine && saveable && m.body_md.trim() && (
+        <div className={cx("flex flex-wrap items-center gap-1.5", REVEAL)} data-testid="reply-actions">
+          <CopyButton text={m.body_md} />
+          {m.body_md.length > LONG_REPLY && <Button variant="ghost" onClick={() => self.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Top of reply</Button>}
+          {onRetry && <Button variant="ghost" onClick={() => { if (window.confirm("Replace this reply with a new one?")) onRetry(); }}>Retry</Button>}
+          <SaveActions chat={chat} body={m.body_md} />
+        </div>
+      )}
     </li>
   );
 }
@@ -197,7 +238,10 @@ function dropDraft(id: string) {
 
 export function Conversation({ id, actions }: { id: string; actions?: ReactNode }) {
   const chat = useChat(id);
-  const messages = useChatMessages(id);
+  const urlSearch = useSearchParams();
+  const target = urlSearch.get("message");
+  const messages = useChatMessages(id, target ? 1000 : 200);
+  const edit = useEditLastChatMessage(id);
   const models = useChatModels();
   const send = useSendChatMessage(id);
   const [players] = useState(() => new Map<string, (seconds: number) => void>());
@@ -224,6 +268,12 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const files = useAttachments();
   const area = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLLIElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const log = useRef<HTMLOListElement>(null);
+  // Following the newest message; off once the person scrolls up, or arrives at a search hit.
+  const pinned = useRef(!target);
+  const [newReply, setNewReply] = useState(false);
+  const [highlight, setHighlight] = useState<string | null>(null);
   // The @mention being typed in the composer, and which suggestion is highlighted.
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [mentionActive, setMentionActive] = useState(0);
@@ -282,12 +332,48 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     if (loaded && !locked) area.current?.focus();
   }, [locked, loaded]);
   useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "end" });
-  }, [list?.length, running]);
+    if (pinned.current) {
+      end.current?.scrollIntoView?.({ block: "end" });
+      return;
+    }
+    if (list?.at(-1)?.role !== "assistant") return;
+    const show = setTimeout(() => setNewReply(true), 0);
+    return () => clearTimeout(show);
+  }, [list?.length, running]); // eslint-disable-line react-hooks/exhaustive-deps -- only a new message or turn moves the view
+  const targetFound = !!target && !!list?.some((m) => m.id === target);
+  useEffect(() => {
+    if (!target || !targetFound) return;
+    pinned.current = false;
+    document.getElementById(`msg-${target}`)?.scrollIntoView({ block: "center" });
+    const on = setTimeout(() => setHighlight(target), 0);
+    const off = setTimeout(() => setHighlight(null), 2400);
+    return () => {
+      clearTimeout(on);
+      clearTimeout(off);
+    };
+  }, [target, targetFound]);
+  // The composer starts at one line and grows with what's typed, up to a limit.
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight + 2, 220)}px`;
+  }, [text, loaded]);
+  const followLatest = () => {
+    pinned.current = true;
+    setNewReply(false);
+    end.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
+  };
+  const askAboutSelection = (selected: string, authorId?: string, author?: string) => {
+    const quote = quoteForComposer(selected, authorId && authorId !== (c?.speaker ?? c?.persona)?.id ? author : undefined);
+    setText((t) => quote + t);
+    area.current?.focus();
+  };
 
   function submit(body: string) {
     if (!body.trim() || locked || unavailable || files.pending) return;
     cancel.reset();
+    pinned.current = true;
     const context_refs = toContextRefs(chips);
     setNames((n) => new Map([...n, ...chips.map((c): [string, string] => [c.key, c.label])]));
     send.mutate(
@@ -311,6 +397,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // A card's button or a choice: goes to the persona that wrote the reply. A mention
   // is only needed when someone else would answer next.
   function askAuthor(messageId: string, body: string) {
+    pinned.current = true;
     const by = list?.find((m) => m.id === messageId)?.persona;
     send.mutate({ body: by && by.id !== (c?.speaker ?? c?.persona)?.id ? `@${by.name} ${body}` : body });
   }
@@ -355,7 +442,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
       </div>
     );
   }
-  const actionError = send.error ?? cancel.error ?? create.error;
+  const actionError = send.error ?? edit.error ?? cancel.error ?? create.error;
   // A chat without a persona, or whose persona was deleted, is the built-in Assistant.
   const persona = personaLook(c.persona);
   const full = personas.data?.personas.find((p) => p.id === c.persona?.id);
@@ -460,7 +547,19 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
           </div>
           <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={since} />
         </div>
-        <div role="tabpanel" aria-label="Chat" hidden={tab !== "chat"} className="flex-1 overflow-y-auto px-6 py-5">
+        <div
+          ref={scroller}
+          role="tabpanel"
+          aria-label="Chat"
+          hidden={tab !== "chat"}
+          className="relative flex-1 overflow-y-auto px-6 py-5"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+            pinned.current = atEnd;
+            if (atEnd) setNewReply(false);
+          }}
+        >
           {messages.isError ? (
             <Banner tone="blocked" title="Couldn’t load messages">{errorText(messages.error)}</Banner>
           ) : !list ? (
@@ -483,12 +582,16 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               />
             )
           ) : (
+            <>
             <VideoPlayers.Provider value={players}>
             <RecommendActions.Provider value={{ ask: askAuthor, disabled: running || locked || !!unavailable || c.archived, nextMessage: (id) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md }}>
-            <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
+            <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m, i) => (
-                <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)}
+                <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} highlighted={highlight === m.id}
+                  editable={!running && !locked && !edit.isPending && !c.archived && m.id === lastUser?.id}
+                  onEdit={(body) => { pinned.current = true; edit.mutate(body); }}
+                  onRetry={!running && !edit.isPending && !c.archived && lastUser && m.id === list.at(-1)?.id ? () => { pinned.current = true; edit.mutate(lastUser.body_md); } : undefined}
                   summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null} />
               ))}
               <PersonaProposals chatId={c.id} disabled={c.archived} />
@@ -510,6 +613,16 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
             </ol>
             </RecommendActions.Provider>
             </VideoPlayers.Provider>
+            <AskAboutSelection root={log} onAsk={askAboutSelection} />
+            {newReply && (
+              <div className="sticky bottom-1 z-20 flex justify-center">
+                <button type="button" onClick={followLatest} className="flex items-center gap-1.5 rounded-full border border-border-float bg-surface-raised px-3 py-1 text-xs font-medium text-fg shadow-[var(--shadow-float)] hover:bg-hover">
+                  <Icon name="chev" size={12} />
+                  New reply
+                </button>
+              </div>
+            )}
+            </>
           )}
         </div>
         <div className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5">
@@ -595,7 +708,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                   }}
                   mono={false}
                   aria-label="Message"
-                  rows={3}
+                  rows={1}
                   value={text}
                   onChange={(v) => {
                     setText(v);
@@ -609,8 +722,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                     locked
                       ? "Sending…"
                       : running
-                        ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to interrupt: the reply picks up from where it was, with your new message.`
-                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}… Type @ to bring in another persona, [[ to attach context. Enter sends, Shift+Enter adds a line.`
+                        ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to interrupt.`
+                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}…  @ for a persona, [[ for context`
                   }
                   onKeyDown={(e) => {
                     if (suggestions.length > 0) {

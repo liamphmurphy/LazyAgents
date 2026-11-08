@@ -509,6 +509,25 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return json(p);
     }
 
+    if (path === "/chat-search") {
+      const q = (url.searchParams.get("q") ?? "").toLowerCase();
+      const hits = chats.flatMap((c) => (messages.get(c.id) ?? []).filter((x) => x.role !== "system" && x.body_md.toLowerCase().includes(q)).map((x) => ({
+        message_id: x.id, chat_id: c.id, chat_title: c.title, project_key: "WEB", role: x.role, archived: false, created_at: x.created_at,
+        snippet: x.body_md.replace(new RegExp(q, "i"), (w) => `${w}`),
+      })));
+      return json({ hits });
+    }
+    const redo = /^\/chats\/([^/]+)\/edit-last$/.exec(path);
+    if (redo && method === "POST") {
+      const c = chats.find((x) => x.id === redo[1])!;
+      const list = messages.get(c.id)!;
+      const at = list.findLastIndex((x) => x.role === "user");
+      list.splice(at + 1);
+      list[at].body_md = (body() as { body: string }).body;
+      add(c, "assistant", `Redone: ${list[at].body_md}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return json({ chat: c, message: list[at] }, 202);
+    }
     const m = /^\/chats\/([^/]+)(?:\/(messages|cancel))?$/.exec(path);
     if (m) {
       const c = chats.find((x) => x.id === m[1]);
