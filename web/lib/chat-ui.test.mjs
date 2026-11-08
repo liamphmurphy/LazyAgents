@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatStatus, chatStatusOf, chatSteps, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
+import { activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -212,7 +212,6 @@ test("chatSteps follows the newest whole-list plan and marks steps added after w
   assert.equal(planned, true);
   assert.deepEqual(steps.map((s) => [s.title, s.state, !!s.added]), [["Read", "done", false], ["Fix", "active", true], ["Test", "planned", false]]);
   assert.deepEqual(stepsOf([{ tool: "todowrite", input: { todos: [{ content: "One", status: "in_progress" }, { content: "Gone", status: "cancelled" }] } }]).steps.map((s) => [s.title, s.state]), [["One", "active"]]);
-  assert.deepEqual(stepsOf([{ tool: "todo_list", input: { items: [{ text: "A", completed: true }, { text: "B", completed: false }, { text: "C", completed: false }] } }]).steps.map((s) => s.state), ["done", "active", "planned"]);
 });
 
 test("chatSteps tracks TaskCreate and TaskUpdate by the id in the result", () => {
@@ -252,4 +251,26 @@ test("foldSteps folds old finished steps and caps upcoming ones", () => {
   assert.deepEqual([f.earlier, f.later], [3, 2]);
   assert.deepEqual(f.shown.map((s) => s.key), ["d3", "d4", "a0", "p0", "p1", "p2", "p3"]);
   assert.equal(foldSteps(make("done", 3, "d")).earlier, 0);
+});
+
+test("rich reply blocks join the calls in order and become steps", () => {
+  const events = [
+    { seq: 1, type: "tool_call", at: "2026-11-06T10:01:00Z", payload: { id: "a", tool: "Read", input: {} } },
+    { seq: 2, type: "lifecycle", at: "2026-11-06T10:01:01Z", payload: { state: "harness_started" } },
+    { seq: 3, type: "lifecycle", at: "2026-11-06T10:01:02Z", payload: { state: "reply_block", kind: "app" } },
+  ];
+  const calls = chatCalls(events, "2026-11-06T10:00:30Z");
+  assert.deepEqual(calls.map((c) => c.tool), ["Read", "reply_block"]);
+  assert.deepEqual(chatStatus(calls), { kind: "canvas", phrase: "building an interactive app" });
+  assert.deepEqual(chatSteps(calls).steps.map((s) => [s.title, s.state]), [["Reading the code", "done"], ["Building an interactive app", "active"]]);
+  assert.equal(chatCalls(events, "2026-11-06T10:02:00Z").length, 0);
+  const plan = { key: 0, tool: "TodoWrite", done: true, input: { todos: [{ content: "One", status: "completed" }] } };
+  assert.deepEqual(chatSteps([plan, ...calls]).steps.map((s) => [s.title, s.state]), [["One", "done"], ["Building an interactive app", "active"]]);
+});
+
+test("a command wrapped in a login shell is judged by the command inside", () => {
+  const shell = (command) => chatStatusOf({ tool: "shell", input: { command } }).kind;
+  assert.equal(shell("/bin/zsh -lc 'sed -n 1,5p main.go'"), "reading-code");
+  assert.equal(shell("/bin/bash -lc \"git status\""), "repo-history");
+  assert.equal(shell("/bin/zsh -lc pwd"), "terminal");
 });

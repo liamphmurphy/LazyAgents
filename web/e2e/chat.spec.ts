@@ -634,6 +634,16 @@ test("a running turn lists its plan in a rail that collapses to a strip", async 
   await expect(page.getByTestId("chat-status-card")).toHaveCount(0);
 });
 
+test("the rail shows an interactive app being written", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "app: show me");
+  await expect(page.getByTestId("chat-status")).toHaveText(/ is building an interactive app…$/);
+  await expect(page.getByTestId("chat-steps").locator('[data-step-state="active"]')).toContainText("Building an interactive app");
+  await page.getByRole("button", { name: "Stop" }).click();
+});
+
 test("switching harness asks first and lists what is lost; same harness doesn't", async ({ page }) => {
   await installChatApi(page);
   await page.goto("/chat?project=WEB");

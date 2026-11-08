@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
-import { activityOf, chatStatus, chatSteps, foldSteps, interimLine, toolCalls, type Activity, type ChatStep, type ToolCall } from "@/lib/chat-ui";
+import { activityOf, chatCalls, chatStatus, chatSteps, foldSteps, interimLine, toolCalls, type Activity, type ChatStep, type ToolCall } from "@/lib/chat-ui";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
 import { ActivityScene, sceneLabel, useHeldScene } from "./activity-scene";
 import { PersonaAvatar, PersonaName, type PersonaLook } from "./persona";
@@ -131,7 +131,7 @@ function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }
  */
 export function ChatStatus({ runId, since, persona, stopping }: { runId?: string; since?: string; persona: PersonaLook; stopping?: boolean }) {
   const q = useChatRunEvents(runId);
-  const calls = useMemo(() => toolCalls(q.data, since), [q.data, since]);
+  const calls = useMemo(() => chatCalls(q.data, since), [q.data, since]);
   const status = useMemo(() => chatStatus(calls), [calls]);
   const { steps, planned } = useMemo(() => chatSteps(calls), [calls]);
   const [collapsed, setCollapsed] = useState(false);

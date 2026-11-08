@@ -7,6 +7,7 @@ import type { components } from "../lib/api/schema";
  * the selected harness/model. Swap `installChatApi` for the real stack once
  * LAZYAGENTS-11 lands; the spec only talks to the UI.
  *
+ * A message starting with "app:" keeps the turn running while it writes an interactive app.
  * A message starting with "steps:" keeps the turn running with a plan in progress.
  * A message starting with "slow:" keeps the turn running until it is cancelled
  * or interrupted: a message sent while a turn runs stops it, and the next reply
@@ -617,7 +618,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
             { seq: 2, type: "tool_call", at: now(), payload: { id: "plan-2", tool: "TodoWrite", input: { todos: todos(["Read the code", "completed"], ["Fix the snapshot", "in_progress"], ["Run tests", "pending"]) } } },
           ]);
         }
-        if (!/^(slow|steps):/.test(text)) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
+        if (text.startsWith("app:")) {
+          runEvents.set(c.current_run_id, [
+            { seq: 1, type: "tool_call", at: now(), payload: { id: "read-1", tool: "Read", input: {} } },
+            { seq: 2, type: "lifecycle", at: now(), payload: { state: "reply_block", kind: "app" } },
+          ]);
+        }
+        if (!/^(slow|steps|app):/.test(text)) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
         void emit(c);
         return json({ chat: ref(c), message: user }, 202);
       }

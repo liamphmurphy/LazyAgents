@@ -240,7 +240,8 @@ const GIT_OTHER = new RegExp(`${GIT}(add|am|apply|blame|branch|checkout|cherry-p
  * "running tests", the Activity tab keeps the exact command.
  */
 function shellStatus(command: string): ChatStatusInfo {
-  const c = command.toLowerCase();
+  // Codex runs everything through a login shell: /bin/zsh -lc 'cat x'.
+  const c = command.toLowerCase().replace(/^(\S*\/)?(ba|z)?sh\s+-l?c\s+['"]?/, "");
   if (/\.lazyagents\/outbox/.test(c)) return status("image", "saving the image");
   if (GIT_PUSH.test(c)) return status("push", "pushing its branch");
   if (GIT_COMMIT.test(c)) return status("commit", "committing changes");
@@ -259,6 +260,26 @@ function githubToolStatus(tool: string): ChatStatusInfo | undefined {
   if (!/(^|[._-])github[._-]/i.test(tool)) return undefined;
   if (/(create|update|merge)\w*pull_?request/i.test(tool)) return status("pull-request", "preparing a pull request");
   return status("github", "working on GitHub");
+}
+
+/** A rich block being written into the reply, reported by the harness: no tool runs, but it can take a while. */
+const REPLY_BLOCK = "reply_block";
+const REPLY_BLOCK_STATUS: Record<string, ChatStatusInfo> = {
+  app: status("canvas", "building an interactive app"),
+  "svg-image": status("image", "drawing an image"),
+  mermaid: status("canvas", "drawing a diagram"),
+  choices: status("canvas", "laying out your options"),
+  "workflow-run": status("workflow", "lining up a workflow"),
+  recommend: status("web", "picking something for you to look at"),
+};
+
+/** The running turn's tool calls and the rich blocks written between them, in order, for the chat tab. */
+export function chatCalls(events: RunEventLike[] | undefined, since?: string): ToolCall[] {
+  const t = since ? Date.parse(since) : 0;
+  const blocks = (events ?? [])
+    .filter((e) => e.type === "lifecycle" && e.payload.state === REPLY_BLOCK && Date.parse(e.at) >= t)
+    .map((e): ToolCall => ({ key: e.seq, tool: REPLY_BLOCK, input: { kind: e.payload.kind }, done: true }));
+  return [...toolCalls(events, since), ...blocks].sort((a, b) => a.key - b.key);
 }
 
 /**
@@ -351,11 +372,12 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "apply_patch":
     case "patch":
       return status("writing-code", "writing code");
+    case REPLY_BLOCK:
+      return REPLY_BLOCK_STATUS[str(o.kind)] ?? status("thinking", "working on it");
     case "TodoWrite":
     case "todowrite":
     case "TaskCreate":
     case "TaskUpdate":
-    case "todo_list":
       return status("thinking", "planning its next steps");
     case "shell":
     case "Bash":
@@ -386,14 +408,8 @@ const planItems = (list: unknown): PlanItem[] =>
   records(list)
     .filter((item) => item.content && item.status !== "cancelled")
     .map((item, i) => ({ id: String(i), title: str(item.content), state: planState(item.status) }));
-/** Codex only marks items completed, so the first open one is the one under way. */
-const checklistItems = (list: unknown): PlanItem[] => {
-  const items = records(list).filter((item) => item.text);
-  const current = items.findIndex((item) => !item.completed);
-  return items.map((item, i) => ({ id: String(i), title: str(item.text), state: item.completed ? "done" : i === current ? "active" : "planned" }));
-};
 
-/** Every version of the plan in these calls, oldest first: TodoWrite and Codex's todo_list send the whole list, TaskCreate and TaskUpdate change one task. */
+/** Every version of the plan in these calls, oldest first: TodoWrite sends the whole list, TaskCreate and TaskUpdate change one task. */
 function planVersions(calls: ToolCall[]): PlanItem[][] {
   const versions: PlanItem[][] = [];
   let tasks: PlanItem[] = [];
@@ -403,9 +419,6 @@ function planVersions(calls: ToolCall[]): PlanItem[][] {
       case "TodoWrite":
       case "todowrite":
         versions.push(planItems(o.todos));
-        break;
-      case "todo_list":
-        versions.push(checklistItems(o.items));
         break;
       case "TaskCreate":
         tasks = [...tasks, { id: /#(\d+)/.exec(call.output ?? "")?.[1] ?? String(tasks.length + 1), title: str(o.subject), state: "planned" }];
@@ -426,7 +439,7 @@ function planVersions(calls: ToolCall[]): PlanItem[][] {
 }
 
 /** Calls that keep the turn running but aren't work to show: its plan, tool loading, the chat's title. */
-const BOOKKEEPING = new Set(["TodoWrite", "todowrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "todo_list", "ToolSearch", "Skill", "set_chat_title", "whoami"]);
+const BOOKKEEPING = new Set(["TodoWrite", "todowrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill", "set_chat_title", "whoami"]);
 
 /**
  * The turn's steps. The newest plan when the assistant wrote one, marking steps added after
@@ -446,6 +459,13 @@ export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: bool
       seen.set(s.title, n + 1);
       return { key: `${s.title}#${n}`, title: s.title, state: s.state, ...(original.has(s.title) ? {} : { added: true as const }) };
     });
+    // A plan doesn't list the rich blocks in the reply, so they follow it.
+    const newest = calls[calls.length - 1];
+    for (const call of calls) {
+      if (call.tool !== REPLY_BLOCK) continue;
+      const { phrase } = chatStatusOf(call);
+      steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: call === newest ? "active" : "done" });
+    }
     return { steps, planned: true };
   }
   const steps: ChatStep[] = [];
