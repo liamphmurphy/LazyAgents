@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
-import { activityOf, toolCalls, type Activity } from "@/lib/chat-ui";
+import { activityOf, toolCalls, type Activity, type ToolCall } from "@/lib/chat-ui";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
@@ -42,9 +42,26 @@ function LiveLine({ a }: { a: Activity }) {
   );
 }
 
+function CallList({ calls }: { calls: ToolCall[] }) {
+  return (
+    <details className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[12.5px]">
+      <summary className="cursor-pointer text-fg-secondary">Tool calls ({calls.length})</summary>
+      <ul className="mt-2 flex flex-col gap-1 font-mono text-xs">
+        {calls.map((c) => (
+          <li key={c.key} className="flex gap-2">
+            <span className="text-fg">{c.tool}</span>
+            <span className="min-w-0 flex-1 truncate text-fg-tertiary">{str(c.input)}</span>
+            <span className="text-fg-tertiary">{c.done ? "done" : "running"}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 /**
  * While a turn runs: the newest tool call as a live line ("Reading [[ADR-012]]…",
- * ADR Decision 5), with every call of the turn under Tool calls.
+ * ADR Decision 5), with every call of the turn under Tool calls. Shown in the Activity tab only.
  */
 export function RunActivity({ runId, since }: { runId?: string; since?: string }) {
   const q = useChatRunEvents(runId);
@@ -54,18 +71,15 @@ export function RunActivity({ runId, since }: { runId?: string; since?: string }
   return (
     <>
       <LiveLine a={activityOf(latest)} />
-      <details className="rounded-lg border border-border bg-surface px-3 py-2 text-[12.5px]">
-        <summary className="cursor-pointer text-fg-secondary">Tool calls ({calls.length})</summary>
-        <ul className="mt-2 flex flex-col gap-1 font-mono text-xs">
-          {calls.map((c) => (
-            <li key={c.key} className="flex gap-2">
-              <span className="text-fg">{c.tool}</span>
-              <span className="min-w-0 flex-1 truncate text-fg-tertiary">{str(c.input)}</span>
-              <span className="text-fg-tertiary">{c.done ? "done" : "running"}</span>
-            </li>
-          ))}
-        </ul>
-      </details>
+      <CallList calls={calls} />
     </>
   );
+}
+
+/** A finished turn's tool calls, in the Activity tab. */
+export function TurnToolCalls({ runId, since, until }: { runId?: string; since?: string; until?: string }) {
+  const q = useChatRunEvents(runId, true, false);
+  const calls = useMemo(() => toolCalls(q.data, since, until), [q.data, since, until]);
+  if (calls.length === 0) return null;
+  return <CallList calls={calls} />;
 }

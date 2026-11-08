@@ -17,6 +17,7 @@ import {
   useSendChatMessage,
 } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
+import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -28,7 +29,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
-import { RunActivity } from "./activity";
+import { RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { AttachButton, AttachmentChips, DropOverlay, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { WebSearchPill } from "./web-search";
@@ -70,7 +71,7 @@ type ChatInfo = { id: string; title: string; project: string; agent: { name: str
 /** The window of run events that belongs to an assistant reply: from its turn's message to the next one. */
 type Turn = { since?: string; until?: string };
 
-function Bubble({ m, groups, chat, persona, saveable, names, turn }: { m: Message; groups: Groups; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: Turn }) {
+function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string> }) {
   if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
   const mine = m.role === "user";
   return (
@@ -79,11 +80,10 @@ function Bubble({ m, groups, chat, persona, saveable, names, turn }: { m: Messag
         <span className="text-xs text-fg-tertiary">{m.author?.name ?? "You"}</span>
       ) : (
         // Assistant replies carry the persona's avatar and its name in the persona's color.
+        // The harness · model tag and usage live in the Activity tab, so the chat stays immersive.
         <span className="flex items-center gap-1.5 text-xs text-fg-tertiary" data-testid="assistant-identity">
           <PersonaAvatar persona={persona} size={22} />
           <PersonaName persona={persona} className="text-[13px]" />
-          <span aria-hidden>·</span>
-          <Tag groups={groups} m={m} />
         </span>
       )}
       <div
@@ -97,10 +97,52 @@ function Bubble({ m, groups, chat, persona, saveable, names, turn }: { m: Messag
       {mine && <SentAttachments attachments={m.attachments} />}
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
       {!mine && <Sources citations={m.citations} />}
-      {turn && <WebSearchPill runId={m.run_id} since={turn.since} until={turn.until} />}
-      {turn && <MemoryNotices runId={m.run_id} since={turn.since} until={turn.until} />}
       {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
     </li>
+  );
+}
+
+const snippet = (s: string) => (s.length > 120 ? `${s.slice(0, 120).trimEnd()}…` : s);
+
+/**
+ * Everything behind the replies: per turn, the model and usage, tool calls, web searches
+ * and memory changes (with Undo), plus the running turn's live activity. Kept out of the
+ * chat tab so the conversation reads as if no tools ran.
+ */
+function ActivityLog({ list, turns, groups, running, runId, since }: { list: Message[] | undefined; turns: Map<string, Turn>; groups: Groups; running: boolean; runId?: string; since?: string }) {
+  const replies = (list ?? []).filter((m) => turns.has(m.id));
+  const prompt = new Map<string, string>();
+  let last: Message | undefined;
+  for (const m of list ?? []) {
+    if (m.role === "user") last = m;
+    else if (turns.has(m.id) && last) prompt.set(m.id, last.body_md);
+  }
+  if (!replies.length && !running) {
+    return <EmptyState icon="msg" title="No activity yet">Tool calls, web searches and memory changes show here once the assistant replies.</EmptyState>;
+  }
+  return (
+    <ol aria-label="Activity" className="mx-auto flex max-w-[860px] flex-col gap-4">
+      {replies.map((m) => {
+        const t = turns.get(m.id)!;
+        return (
+          <li key={m.id} data-testid="activity-turn" className="flex flex-col items-start gap-1.5 border-b border-border-subtle pb-4">
+            <span className="flex w-full items-center gap-2 text-xs text-fg-tertiary">
+              <span className="min-w-0 flex-1 truncate text-fg-secondary">{snippet(prompt.get(m.id) ?? "")}</span>
+              <Tag groups={groups} m={m} />
+            </span>
+            <TurnToolCalls runId={m.run_id} since={t.since} until={t.until} />
+            <WebSearchPill runId={m.run_id} since={t.since} until={t.until} />
+            <MemoryNotices runId={m.run_id} since={t.since} until={t.until} />
+          </li>
+        );
+      })}
+      {running && (
+        <li className="flex flex-col gap-2" data-testid="activity-running">
+          <span className="text-xs text-fg-secondary">Current turn</span>
+          <RunActivity runId={runId} since={since} />
+        </li>
+      )}
+    </ol>
   );
 }
 
@@ -163,6 +205,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // Read once into state, then forget it (an effect, so a StrictMode re-render still sees it).
   useEffect(() => dropDraft(id), [id]);
   const [picked, setPicked] = useState<Selection | null>(null);
+  const [tab, setTab] = useState<"chat" | "activity">("chat");
   // A pick on another harness waits here until the person confirms what the switch loses.
   const [confirming, setConfirming] = useState<Selection | null>(null);
   const router = useRouter();
@@ -305,20 +348,32 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
             <PersonaName persona={persona} />
           </span>
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
-          <ChatCostChip chatId={c.id} project={c.project} />
           <span className="flex-1" />
-          {c.archived ? (
-            <RestoreChat chat={c} onRestored={restored} />
-          ) : (
-            current && (
-              <span className="truncate font-mono text-[11.5px] text-fg-tertiary max-sm:hidden">
-                {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
-              </span>
-            )
-          )}
+          <Tabs
+            label="Chat view"
+            value={tab}
+            onChange={(k) => setTab(k === "activity" ? "activity" : "chat")}
+            items={[
+              { key: "chat", label: "Chat" },
+              { key: "activity", label: "Activity" },
+            ]}
+          />
+          {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        {/* Mounted while hidden so memory notices still refresh the header count. */}
+        <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="mx-auto mb-4 flex max-w-[860px] items-center gap-2">
+            <ChatCostChip chatId={c.id} project={c.project} />
+            {current && (
+              <span className="truncate font-mono text-[11.5px] text-fg-tertiary">
+                {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
+              </span>
+            )}
+          </div>
+          <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={lastUser?.created_at} />
+        </div>
+        <div role="tabpanel" aria-label="Chat" hidden={tab !== "chat"} className="flex-1 overflow-y-auto px-6 py-5">
           {messages.isError ? (
             <Banner tone="blocked" title="Couldn’t load messages">{errorText(messages.error)}</Banner>
           ) : !list ? (
@@ -344,7 +399,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
             <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m) => (
-                <Bubble key={m.id} m={m} groups={groups} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} />
+                <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} />
               ))}
               {pending && selection && (
                 <Divider testId="pending-switch">
@@ -354,7 +409,6 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               {running && (
                 <li className="flex flex-col gap-2" data-testid="thinking">
                   <span role="status" className="text-[13px] text-fg-secondary">{stopping ? "Stopping…" : "Thinking…"}</span>
-                  <RunActivity runId={c.current_run_id} since={lastUser?.created_at} />
                 </li>
               )}
               <li ref={end} aria-hidden />

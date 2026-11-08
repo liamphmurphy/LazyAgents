@@ -14,6 +14,8 @@ test("tool calls pair with results and skip events before the turn", () => {
     { key: 4, tool: "get_ticket", input: { ticket: "WEB-3" }, done: false },
   ]);
   assert.equal(toolCalls(undefined).length, 0);
+  // `until` (the next user message) closes the turn.
+  assert.deepEqual(toolCalls(events, "2026-11-06T10:00:30Z", "2026-11-06T10:01:01.500Z").map((c) => c.key), [2]);
 });
 
 test("MCP tool names lose the lazyagents prefix from either harness", () => {

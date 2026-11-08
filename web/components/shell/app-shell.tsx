@@ -46,17 +46,14 @@ function useShortcuts() {
 
 function SidebarSkeleton() {
   return (
+    // Matches the menu's collapsed default (an icon rail).
     <aside
       aria-busy="true"
-      className="flex flex-[1_1_232px] flex-col gap-5 border-r border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3"
+      className="flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3"
     >
-      <Skeleton className="h-8 w-40" />
-      <Skeleton className="h-8" />
-      <div className="flex flex-col gap-3 px-2">
-        {[70, 50, 60, 55, 60, 65].map((w, i) => (
-          <Skeleton key={i} className="h-3" style={{ width: `${w}%` }} />
-        ))}
-      </div>
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+        <Skeleton key={i} className="size-[26px]" />
+      ))}
     </aside>
   );
 }

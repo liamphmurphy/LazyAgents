@@ -12,6 +12,11 @@ async function send(page: Page, text: string) {
   await composer(page).press("Enter");
 }
 
+// Memory notices live in the Activity tab, out of the conversation.
+async function showActivity(page: Page) {
+  await page.getByRole("tab", { name: "Activity" }).click();
+}
+
 async function openChat(page: Page) {
   await page.goto("/chat?project=WEB");
   await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
@@ -34,6 +39,8 @@ test("a saved memory shows an inline notice; Undo deletes it", async ({ page }) 
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: remember: I prefer tea");
   const notice = notices(page);
   await expect(notice).toHaveCount(1);
+  await expect(notice).toBeHidden();
+  await showActivity(page);
   await expect(notice).toContainText("Saved to memory: “I prefer tea”");
   await expect(notice.getByRole("button", { name: "View" })).toBeVisible();
   await expect(notice.getByRole("button", { name: "Forget" })).toBeVisible();
@@ -50,6 +57,7 @@ test("Forget on a saved notice removes the entry and says so", async ({ page }) 
   const mock = await installChatApi(page);
   await openChat(page);
   await send(page, "remember: Dog is called Rex");
+  await showActivity(page);
   await expect(notices(page)).toContainText("Saved to memory: “Dog is called Rex”");
   await notices(page).getByRole("button", { name: "Forget" }).click();
   await expect(notices(page)).toContainText("Forgot 1 memory: “Dog is called Rex”");
@@ -64,7 +72,8 @@ test("a forget turn shows a Forgot notice", async ({ page }) => {
   await expect(notices(page)).toHaveCount(1);
   await send(page, "forget: Old habit");
   await expect(page.getByTestId("assistant-message").nth(1)).toContainText("Echo: forget: Old habit");
-  const second = page.getByTestId("assistant-message").nth(1).getByTestId("memory-notice");
+  await showActivity(page);
+  const second = page.getByTestId("activity-turn").nth(1).getByTestId("memory-notice");
   await expect(second).toHaveText("Forgot 1 memory: “Old habit”");
   expect(mock.memories).toHaveLength(0);
   expect(mock.unhandled).toEqual([]);
@@ -83,6 +92,7 @@ test("View opens the Memory panel focused on that entry", async ({ page }) => {
   const mock = await installChatApi(page);
   await openChat(page);
   await send(page, "remember: Likes hiking");
+  await showActivity(page);
   await notices(page).getByRole("button", { name: "View" }).click();
   const id = mock.memories[0].id;
   await expect(page).toHaveURL(new RegExp(`memory=${id}`));

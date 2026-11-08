@@ -6,13 +6,18 @@ export type ToolCall = { key: number; tool: string; input: unknown; done: boolea
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 
-/** Tool calls since `since` (the turn's user message), each marked done once its result arrives. */
-export function toolCalls(events: RunEventLike[] | undefined, since?: string): ToolCall[] {
+/**
+ * Tool calls since `since` (the turn's user message) and up to `until` (the next one),
+ * each marked done once its result arrives.
+ */
+export function toolCalls(events: RunEventLike[] | undefined, since?: string, until?: string): ToolCall[] {
   const t = since ? Date.parse(since) : 0;
+  const hi = until ? Date.parse(until) : Infinity;
   const out: ToolCall[] = [];
   const open = new Map<string, number>();
   for (const e of events ?? []) {
-    if (Date.parse(e.at) < t) continue;
+    const at = Date.parse(e.at);
+    if (at < t || at > hi) continue;
     const p = e.payload;
     if (e.type === "tool_call") {
       if (p.id) open.set(str(p.id), out.length);

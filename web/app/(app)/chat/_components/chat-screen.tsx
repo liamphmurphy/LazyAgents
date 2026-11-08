@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useChat, useChats, useCreateChat, useDeleteChat, useStartChat, useUpdateChat } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
@@ -14,7 +14,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/controls";
 import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
-import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
+import { ProjectScopeState, useProjectScope } from "@/components/shell/project-scope";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
@@ -262,7 +262,7 @@ function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: 
 }
 
 /** The conversation history: Active/Archived (kept in ?view= so it survives opening one), with rename, archive and restore. */
-function HistorySidebar({ project, id }: { project: string; id?: string }) {
+function HistorySidebar({ project, id, newChat }: { project: string; id?: string; newChat: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -293,6 +293,7 @@ function HistorySidebar({ project, id }: { project: string; id?: string }) {
       className="flex w-72 flex-none flex-col gap-3 border-r border-border-subtle p-3 max-md:max-h-64 max-md:w-full max-md:border-b max-md:border-r-0"
     >
       <PersonaFilter filter={filter} />
+      {newChat}
       <Segmented
         label="Show conversations"
         small
@@ -363,14 +364,12 @@ function HistorySidebar({ project, id }: { project: string; id?: string }) {
 export function ChatScreen({ id }: { id?: string }) {
   const router = useRouter();
   const search = useSearchParams();
-  const boot = useBootstrap();
   const current = useChat(id);
   // An open chat carries its project; the index resolves ?project=, then the remembered one.
   const scope = useProjectScope("required", { skip: !!id });
   const project = id
     ? (current.data?.project ?? search.get("project") ?? "")
     : scope.status === "ready" ? (scope.project?.key ?? "") : "";
-  const scoped = boot.data?.projects.find((p) => p.key === project);
   const memory = useMemoryPanel();
   const personaPanel = usePersonaPanel();
   const create = useCreateChat();
@@ -403,20 +402,24 @@ export function ChatScreen({ id }: { id?: string }) {
     <>
       <PersonasButton />
       <MemoryButton />
-      <Button variant="secondary" icon="plus" disabled={!project || noHarness || create.isPending} onClick={newConversation}>
-        New conversation
-      </Button>
     </>
+  );
+  // Sits under the sidebar's persona picker.
+  const newChat = (
+    <Button variant="secondary" icon="plus" className="w-full justify-center" disabled={!project || noHarness || create.isPending} onClick={newConversation}>
+      New conversation
+    </Button>
   );
   const resolving = !id && !attaching && (!chats.data || !!newest);
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar crumbs={projectCrumbs(scoped, "Assistant")} />
+      {/* The assistant reads as personal, not per project: no project crumb. */}
+      <TopBar crumbs={[{ label: "Assistant" }]} />
       {!id && scope.status !== "ready" ? (
         <ProjectScopeState base="/chat" scope={scope} />
       ) : (
         <div className="relative flex min-h-0 flex-1 max-md:flex-col">
-          <HistorySidebar project={project} id={id} />
+          <HistorySidebar project={project} id={id} newChat={newChat} />
           <div className="flex min-w-0 flex-1 flex-col">
             {(noHarness || create.isError) && (
               <div className="flex flex-col gap-1 px-6 pt-3">
