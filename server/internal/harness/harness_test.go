@@ -606,6 +606,19 @@ func TestAgentsMDEpicReview(t *testing.T) {
 	}
 }
 
+// The host's user settings (e.g. a user-level "agent" with its own tool list)
+// must not reach a run on the local runner, where HOME is the person's own.
+func TestClaudeSkipsUserSettings(t *testing.T) {
+	ws := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	inv, err := (ClaudeCode{}).Invocation(ws, Turn{Spec: spec("repo:read", "allowed"), Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := flag(inv.Argv, "--setting-sources"); got != "project,local" {
+		t.Fatalf("--setting-sources = %q, want project,local", got)
+	}
+}
+
 func TestChatWebSearchOption(t *testing.T) {
 	ws := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
 	s := spec("repo:write", "denied", "tests:run", "denied")

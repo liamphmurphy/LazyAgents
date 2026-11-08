@@ -47,7 +47,9 @@ func ToolScopes(tool string, input map[string]any) []string {
 		return shellScopes(command, 0)
 	}
 	// MCP tools enforce permissions in the service, not via a shell heuristic.
-	if strings.HasPrefix(tool, "mcp__") || (tool == "TodoWrite" || tool == "Skill") {
+	// ToolSearch only loads deferred tool definitions (Claude Code defers
+	// WebFetch); each loaded tool still passes this hook when called.
+	if strings.HasPrefix(tool, "mcp__") || tool == "TodoWrite" || tool == "Skill" || tool == "ToolSearch" {
 		return nil
 	}
 	return []string{"tests:run"} // unknown execution tools require the execution scope

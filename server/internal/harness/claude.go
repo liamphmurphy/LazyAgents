@@ -58,7 +58,7 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 			mode = "default"
 		}
 	}
-	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "Skill"}
+	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "Skill", "ToolSearch"}
 	for _, m := range spec.MCPServers {
 		allow = append(allow, "mcp__"+m.Name)
 	}
@@ -72,7 +72,7 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	var deny []string
 	if readonly {
-		allow = []string{"mcp__" + lazyagentsServer, "Read", "Glob", "Grep"}
+		allow = []string{"mcp__" + lazyagentsServer, "Read", "Glob", "Grep", "ToolSearch"}
 		// The web tools are handled below: a denied tool beats an allowed one.
 		deny = append(deny, "Edit", "Write", "NotebookEdit", "Bash", "Agent")
 	}
@@ -96,6 +96,10 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		// and the agent is told to use request_approval.
 		"--permission-prompts", "none",
 		"--settings", ".lazyagents/claude-settings.json",
+		// Skip the host's user settings: on the local runner HOME is the
+		// person's own, and a user-level "agent", plugins or permissions would
+		// replace this run's tools and prompt. Login isn't a setting source.
+		"--setting-sources", "project,local",
 		"--allowedTools", strings.Join(allow, ","),
 	}
 	if len(deny) > 0 {
