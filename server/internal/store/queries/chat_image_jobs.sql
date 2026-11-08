@@ -18,7 +18,29 @@ UPDATE chat_image_jobs SET state = 'running' WHERE id = $1;
 UPDATE chat_image_jobs SET codex_session_id = $2 WHERE id = $1;
 
 -- name: FinishChatImageJob :exec
-UPDATE chat_image_jobs SET state = sqlc.arg(state), error = sqlc.narg(error), finished_at = now() WHERE id = sqlc.arg(id);
+-- failure_kind is set exactly when the job failed ('moderation' or 'error').
+UPDATE chat_image_jobs SET state = sqlc.arg(state), error = sqlc.narg(error), failure_kind = sqlc.narg(failure_kind),
+  outbox_files = sqlc.arg(outbox_files)::text[], finished_at = now()
+WHERE id = sqlc.arg(id);
+
+-- name: LinkChatImageJobAttachment :exec
+-- The chat attachment a job's image became when its turn's reply was stored.
+UPDATE chat_image_jobs SET attachment_id = $2 WHERE id = $1;
+
+-- name: SetChatImageJobsFollowup :exec
+-- The finished jobs of a turn, reported to the assistant by its image_followup turn.
+UPDATE chat_image_jobs SET followup_turn_id = sqlc.arg(followup_turn_id)
+WHERE run_id = sqlc.arg(run_id) AND turn_id = sqlc.arg(turn_id) AND state IN ('done', 'failed');
+
+-- name: ChatImageJobsForFollowup :many
+-- What an image_followup turn reports: each job with its image, if it got one.
+SELECT j.id, j.prompt, j.state, j.failure_kind, j.error, t.seq AS turn_seq,
+  a.filename AS attachment_filename, a.content_type AS attachment_content_type, a.blob_key AS attachment_blob_key
+FROM chat_image_jobs j
+JOIN run_turns t ON t.id = j.turn_id
+LEFT JOIN chat_attachments a ON a.id = j.attachment_id
+WHERE j.followup_turn_id = $1
+ORDER BY j.id;
 
 -- name: RunningChatImageJobs :many
 -- This run's image jobs that are making an image now.
@@ -30,5 +52,5 @@ SELECT * FROM run_turns WHERE run_id = $1 AND status = 'running' ORDER BY seq DE
 -- name: FailStaleChatImageJobs :exec
 -- A runner that died mid-step leaves its job running; end it so it stops
 -- granting the step's tool allowances.
-UPDATE chat_image_jobs SET state = 'failed', error = 'interrupted', finished_at = now()
+UPDATE chat_image_jobs SET state = 'failed', error = 'interrupted', failure_kind = 'error', finished_at = now()
 WHERE run_id = $1 AND state = 'running';

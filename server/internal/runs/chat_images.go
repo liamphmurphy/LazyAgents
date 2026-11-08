@@ -17,6 +17,11 @@ import (
 // MaxChatImageJobsPerTurn caps generate_image requests in one chat turn.
 const MaxChatImageJobsPerTurn = 2
 
+// TriggerImageFollowup is the run_turns trigger of the one automatic turn that
+// follows a chat turn whose generate_image jobs ran: it shows the assistant
+// what they made (or why they failed) so it can react. It has no user message.
+const TriggerImageFollowup = "image_followup"
+
 // MaxChatImagePromptRunes bounds an image prompt (and chat_image_jobs.prompt).
 const MaxChatImagePromptRunes = 4000
 
@@ -96,6 +101,11 @@ func (s *Service) QueueChatImage(ctx context.Context, ws, runID uuid.UUID, promp
 	}
 	if err != nil {
 		return job, err
+	}
+	// The follow-up only reports what earlier requests made; a request from it
+	// would queue another follow-up, and so on.
+	if turn.Trigger == TriggerImageFollowup {
+		return job, apperr.Conflict("generate_image isn't available while you react to the images you already asked for. Tell the person what came of them; make another only when they ask in a new message.")
 	}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		tq := store.New(tx)

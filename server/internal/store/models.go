@@ -192,6 +192,10 @@ type ChatImageJob struct {
 	Error          *string
 	CreatedAt      time.Time
 	FinishedAt     *time.Time
+	FailureKind    *string
+	OutboxFiles    []string
+	AttachmentID   *uuid.UUID
+	FollowupTurnID *uuid.UUID
 }
 
 type ChatMessage struct {

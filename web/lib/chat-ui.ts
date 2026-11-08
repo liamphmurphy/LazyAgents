@@ -50,6 +50,53 @@ export function interimLine(events: RunEventLike[] | undefined, since?: string):
   return undefined;
 }
 
+type MessageLike = { id: string; role: string; created_at: string; run_id?: string; turn_seq?: number };
+
+/** One turn's event window; `followup` marks a turn no person's message started (the image follow-up). */
+export type TurnWindow = { since?: string; until?: string; followup: boolean };
+
+/**
+ * Each turn's last assistant reply gets the window of events between the turn's start
+ * and the next one's, so a turn's memory notices show once, under its answer. A turn
+ * starts at a user message, or right after an earlier turn's reply when the assistant
+ * replies again on its own (a different run turn, e.g. reacting to generated images).
+ */
+export function turnWindows(list: MessageLike[] | undefined): Map<string, TurnWindow> {
+  const out = new Map<string, TurnWindow>();
+  let since: string | undefined;
+  let reply: MessageLike | undefined;
+  let followup = false;
+  const close = (until?: string) => reply && out.set(reply.id, { since, until, followup });
+  const turnOf = (m: MessageLike) => (m.turn_seq === undefined ? undefined : `${m.run_id}:${m.turn_seq}`);
+  for (const m of list ?? []) {
+    if (m.role === "user") {
+      close(m.created_at);
+      since = m.created_at;
+      reply = undefined;
+      followup = false;
+    } else if (m.role === "assistant") {
+      if (reply && turnOf(m) !== undefined && turnOf(reply) !== undefined && turnOf(m) !== turnOf(reply)) {
+        close(reply.created_at);
+        since = reply.created_at;
+        followup = true;
+      }
+      reply = m;
+    }
+  }
+  close(undefined);
+  return out;
+}
+
+/**
+ * Where the running turn's events start: the newest message. That is the person's
+ * message for a turn they started, or the previous reply (and its notes) for a turn
+ * the assistant takes on its own, so the earlier turn's opening line and tools aren't
+ * shown again.
+ */
+export function runningSince(list: MessageLike[] | undefined): string | undefined {
+  return list?.at(-1)?.created_at;
+}
+
 /** "mcp__lazyagents__read_page" (Claude) and "read_page" (Codex) are the same tool. */
 export function bareTool(tool: string): string {
   const mcp = /^mcp__(.+?)__(.+)$/.exec(tool);
@@ -212,6 +259,9 @@ export function chatStatusOf(call: { tool: string; input: unknown }): string {
     case "generate_image":
       return "creating an image";
     case "Read":
+      // The image follow-up opens the generated images it is about to react to.
+      if (typeof o.file_path === "string" && o.file_path.includes(".lazyagents/attachments/generated/")) return "looking at the image";
+      return "reading the code";
     case "Glob":
     case "Grep":
     case "LS":

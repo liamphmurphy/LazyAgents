@@ -37,7 +37,7 @@ func (e env) imageChat(t *testing.T, step string, prompt string) (store.ChatSess
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.until("reply", func() bool { return e.chat(chat.ID).State == "idle" })
+	e.until("reply", func() bool { s := e.chat(chat.ID).State; return s == "idle" || s == "failed" })
 	return chat, logPath
 }
 
@@ -57,8 +57,8 @@ func (e env) chatMsgs(id uuid.UUID) []store.ChatMessage {
 func (e env) imageJob(runID uuid.UUID) store.ChatImageJob {
 	e.t.Helper()
 	var j store.ChatImageJob
-	if err := e.pool.QueryRow(e.ctx, "SELECT id, state, coalesce(codex_session_id,''), coalesce(error,''), model FROM chat_image_jobs WHERE run_id=$1", runID).
-		Scan(&j.ID, &j.State, new(string), new(string), &j.Model); err != nil {
+	if err := e.pool.QueryRow(e.ctx, "SELECT id, state, model, failure_kind, outbox_files, attachment_id, followup_turn_id FROM chat_image_jobs WHERE run_id=$1", runID).
+		Scan(&j.ID, &j.State, &j.Model, &j.FailureKind, &j.OutboxFiles, &j.AttachmentID, &j.FollowupTurnID); err != nil {
 		e.t.Fatal(err)
 	}
 	var sess, msg string
@@ -74,15 +74,26 @@ func (e env) imageJob(runID uuid.UUID) store.ChatImageJob {
 	return j
 }
 
+// turns lists a run's turns, oldest first.
+func (e env) turns(runID uuid.UUID) []store.RunTurn {
+	e.t.Helper()
+	ts, err := e.q.ListTurns(e.ctx, runID)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return ts
+}
+
 // A Claude chat asks for an image: after its reply the runner makes it with a
 // one-shot Codex step in the same workspace, attaches it under the reply, and
-// leaves the chat's own harness session alone.
+// leaves the chat's own harness session alone. One automatic follow-up turn
+// then shows the assistant the image with its prompt to react to.
 func TestChatImageJobMakesImageWithCodex(t *testing.T) {
 	e := setup(t)
 	chat, logPath := e.imageChat(t, "ok", "image: a red fox")
 	msgs := e.chatMsgs(chat.ID)
 	run := e.chatRun(chat.ID)
-	if len(msgs) != 2 || msgs[1].Role != "assistant" || !strings.Contains(msgs[1].BodyMd, "making it") {
+	if len(msgs) != 3 || msgs[1].Role != "assistant" || !strings.Contains(msgs[1].BodyMd, "making it") || msgs[2].Role != "assistant" {
 		t.Fatalf("messages %+v", msgs)
 	}
 	atts, err := e.q.ListChatAttachmentsForMessages(e.ctx, []uuid.UUID{msgs[1].ID})
@@ -95,20 +106,45 @@ func TestChatImageJobMakesImageWithCodex(t *testing.T) {
 		t.Fatalf("run %+v want session %q", run, claudeSession)
 	}
 	job := e.imageJob(run.ID)
-	if job.State != "done" || job.CodexSessionID == nil || *job.CodexSessionID == claudeSession || job.Model != "codex-main" {
+	if job.State != "done" || job.CodexSessionID == nil || *job.CodexSessionID == claudeSession || job.Model != "codex-main" || job.FailureKind != nil {
 		t.Fatalf("job %+v", job)
 	}
-	// The Claude turn and the Codex step both ran; the step has no session to resume.
-	var step map[string]string
+	// The job knows its outbox file and the attachment it became.
+	if len(job.OutboxFiles) != 1 || job.OutboxFiles[0] != atts[0].Filename || job.AttachmentID == nil || *job.AttachmentID != atts[0].ID {
+		t.Fatalf("job files %v attachment %v, want %s", job.OutboxFiles, job.AttachmentID, atts[0].ID)
+	}
+	// The follow-up turn has no user message; it got the image as a file with
+	// its prompt, couldn't ask for another, and its reply is a normal one.
+	turns := e.turns(run.ID)
+	if len(turns) != 2 || turns[1].Trigger != runs.TriggerImageFollowup || job.FollowupTurnID == nil || *job.FollowupTurnID != turns[1].ID {
+		t.Fatalf("turns %+v job %+v", turns, job)
+	}
+	if msgs[2].RunTurnID == nil || *msgs[2].RunTurnID != turns[1].ID {
+		t.Fatalf("follow-up reply %+v", msgs[2])
+	}
+	follow := msgs[2].BodyMd
+	for _, want := range []string{"seen=1", "isn't available while you react", `Prompt: "a red fox"`, "`.lazyagents/attachments/generated/turn-1/1-" + atts[0].Filename + "`", "Open each image file"} {
+		if !strings.Contains(follow, want) {
+			t.Fatalf("follow-up lacks %q:\n%s", want, follow)
+		}
+	}
+	// The Claude turns and the Codex step all ran; the step has no session to
+	// resume, and the follow-up resumed the chat's own.
+	var step, followLog map[string]string
 	for _, l := range readLog(t, logPath) {
 		if l["harness"] == "codex" {
 			step = l
+		} else if strings.HasPrefix(l["prompt"], "(Vesper: this is an automatic follow-up") {
+			followLog = l
 		}
 	}
 	if step == nil || step["resume"] != "" || step["model"] != "codex-main" || !strings.HasPrefix(step["prompt"], "Generate exactly one image") || step["request"] != "a red fox" {
 		t.Fatalf("codex step %+v", step)
 	}
-	// Synthetic events carry no prompt; usage from both processes is on the run.
+	if followLog == nil || followLog["resume"] != claudeSession {
+		t.Fatalf("follow-up turn %+v", followLog)
+	}
+	// Synthetic events carry no prompt; usage from all three processes is on the run.
 	evs, _ := e.q.ListRunEvents(e.ctx, store.ListRunEventsParams{RunID: run.ID, Seq: 0})
 	var calls, results int
 	for _, ev := range evs {
@@ -133,7 +169,7 @@ func TestChatImageJobMakesImageWithCodex(t *testing.T) {
 	if calls != 1 || results != 1 {
 		t.Fatalf("synthetic events: %d calls %d results", calls, results)
 	}
-	if run.InputTokens != 2500 || run.OutputTokens != 400 {
+	if run.InputTokens != 4000 || run.OutputTokens != 600 {
 		t.Fatalf("usage %d/%d", run.InputTokens, run.OutputTokens)
 	}
 	// The next turn resumes the chat's own session, untouched by the step.
@@ -142,24 +178,33 @@ func TestChatImageJobMakesImageWithCodex(t *testing.T) {
 	}
 }
 
-// A step that fails or makes nothing still leaves the reply, plus a plain
-// system message saying why.
+// A step that fails, makes nothing or is refused by moderation still leaves
+// the reply, plus a plain system message saying why (a refusal says so), and
+// the follow-up turn tells the assistant the image doesn't exist and why.
+const fakeRefusal = "I can't create that image: the request was blocked by the safety system under the content policy."
+
 func TestChatImageJobFailures(t *testing.T) {
-	for _, tc := range []struct{ step, reason string }{
-		{"fail", "Codex couldn't finish the image"},
-		{"empty", "no image was produced"},
+	for _, tc := range []struct{ step, kind, reason, system, label string }{
+		{"fail", "error", "Codex couldn't finish the image", "Couldn't create the image: Codex couldn't finish the image.", "Failed (error)"},
+		{"empty", "error", "no image was produced", "Couldn't create the image: no image was produced.", "Failed (error)"},
+		{"moderation", "moderation", "rejected by moderation: " + fakeRefusal, "The image request was rejected by moderation: " + fakeRefusal, "Failed (refused by moderation)"},
 	} {
 		t.Run(tc.step, func(t *testing.T) {
 			e := setup(t)
 			chat, _ := e.imageChat(t, tc.step, "image: a fox")
 			msgs := e.chatMsgs(chat.ID)
-			if len(msgs) != 3 || msgs[1].Role != "assistant" || msgs[2].Role != "system" || msgs[2].BodyMd != "Couldn't create the image: "+tc.reason+"." {
+			if len(msgs) != 4 || msgs[1].Role != "assistant" || msgs[2].Role != "system" || msgs[2].BodyMd != tc.system || msgs[3].Role != "assistant" {
 				t.Fatalf("messages %+v", msgs)
+			}
+			follow := msgs[3].BodyMd
+			if !strings.Contains(follow, tc.label+": "+tc.reason+". No image exists") || !strings.Contains(follow, "seen=0") || strings.Contains(follow, "attachments/generated/") {
+				t.Fatalf("follow-up:\n%s", follow)
 			}
 			atts, _ := e.q.ListChatAttachmentsForMessages(e.ctx, []uuid.UUID{msgs[1].ID})
 			run := e.chatRun(chat.ID)
 			job := e.imageJob(run.ID)
-			if len(atts) != 0 || job.State != "failed" || job.Error == nil || *job.Error != tc.reason || run.HarnessSessionID == nil || e.chat(chat.ID).State != "idle" {
+			if len(atts) != 0 || job.State != "failed" || job.Error == nil || *job.Error != tc.reason || job.FailureKind == nil || *job.FailureKind != tc.kind ||
+				job.AttachmentID != nil || job.FollowupTurnID == nil || run.HarnessSessionID == nil || e.chat(chat.ID).State != "idle" {
 				t.Fatalf("atts %v job %+v run %+v", atts, job, run)
 			}
 		})
@@ -172,10 +217,38 @@ func TestChatImageJobTimeout(t *testing.T) {
 	e.runner.Cfg.ChatImageTimeout = 1500 * time.Millisecond
 	chat, _ := e.imageChat(t, "hang", "image: a fox")
 	msgs := e.chatMsgs(chat.ID)
-	if len(msgs) != 3 || msgs[2].Role != "system" || msgs[2].BodyMd != "Couldn't create the image: timed out." {
+	if len(msgs) != 4 || msgs[2].Role != "system" || msgs[2].BodyMd != "Couldn't create the image: timed out." || !strings.Contains(msgs[3].BodyMd, "Failed (error): timed out.") {
 		t.Fatalf("messages %+v", msgs)
 	}
-	if job := e.imageJob(e.chatRun(chat.ID).ID); job.State != "failed" || *job.Error != "timed out" {
+	if job := e.imageJob(e.chatRun(chat.ID).ID); job.State != "failed" || *job.Error != "timed out" || *job.FailureKind != "error" {
 		t.Fatalf("job %+v", job)
+	}
+}
+
+// A turn that asked for no image gets no follow-up: the chat idles after its reply.
+func TestChatWithoutImageJobsHasNoFollowup(t *testing.T) {
+	e := setup(t)
+	chat, _ := e.imageChat(t, "ok", "hello there")
+	msgs := e.chatMsgs(chat.ID)
+	turns := e.turns(e.chatRun(chat.ID).ID)
+	if len(msgs) != 2 || msgs[1].Role != "assistant" || len(turns) != 1 || turns[0].Trigger != "comment" {
+		t.Fatalf("messages %+v turns %+v", msgs, turns)
+	}
+}
+
+// A follow-up whose harness fails ends the chat in the normal failed state.
+func TestChatImageFollowupFailureFailsChat(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_FAIL_FOLLOWUP", "1")
+	chat, _ := e.imageChat(t, "ok", "image: a fox")
+	e.until("failed", func() bool { return e.chat(chat.ID).State == "failed" })
+	msgs := e.chatMsgs(chat.ID)
+	last := msgs[len(msgs)-1]
+	if len(msgs) != 3 || msgs[1].Role != "assistant" || last.Role != "system" || e.chatRun(chat.ID).State != "waiting" {
+		t.Fatalf("messages %+v", msgs)
+	}
+	// The person can carry on.
+	if reply := e.say(chat.ID, "again?"); !strings.Contains(reply.BodyMd, "again?") {
+		t.Fatalf("next turn %+v", reply)
 	}
 }

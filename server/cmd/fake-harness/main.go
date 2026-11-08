@@ -20,7 +20,11 @@
 //	                    prompt starts "Generate exactly one image") does what
 //	                    FAKE_IMAGE_STEP says: ok (default; writes exec-<uuid>.png into
 //	                    .lazyagents/outbox), empty (succeeds, writes nothing), fail
-//	                    (exits 1), hang (waits until killed)
+//	                    (exits 1), hang (waits until killed), moderation (succeeds
+//	                    with a content-policy refusal, writes nothing). The
+//	                    image_followup turn after it reads the delivered images, calls
+//	                    generate_image once more and echoes its prompt (or fails,
+//	                    with FAKE_HARNESS_FAIL_FOLLOWUP set).
 //	slow                wait for SIGINT (pause), then end the turn
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
 //	                    writes child.txt in the shared checkout and completes
@@ -368,6 +372,11 @@ func main() {
 			os.Exit(1)
 		case "hang":
 			time.Sleep(time.Hour) // until killed
+		case "moderation":
+			refusal := "I can't create that image: the request was blocked by the safety system under the content policy."
+			text(refusal)
+			result(false, refusal)
+			return
 		case "empty":
 		default:
 			_ = os.MkdirAll(".lazyagents/outbox", 0o755)
@@ -448,6 +457,7 @@ func main() {
 			body, isErr = err.Error(), true
 		case res.IsError:
 			body, isErr = res.Content[0].(*mcp.TextContent).Text, true
+			out["error"] = body
 		default:
 			b, _ := json.Marshal(res.StructuredContent)
 			body = string(b)
@@ -472,7 +482,22 @@ func main() {
 	// chat-image: "image: <text>" asks for an image through MCP; any other prompt just answers.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-image" {
 		reply := "Chat reply: " + prompt
-		if want, ok := strings.CutPrefix(prompt, "image: "); ok {
+		if strings.HasPrefix(prompt, "(Vesper: this is an automatic follow-up") {
+			// The image follow-up: open the delivered images, try (and fail) to
+			// ask for another, and echo what it was told.
+			if os.Getenv("FAKE_HARNESS_FAIL_FOLLOWUP") != "" {
+				result(true, "follow-up crashed")
+				os.Exit(3)
+			}
+			seen := 0
+			for _, p := range regexp.MustCompile("`(\\.lazyagents/attachments/generated/[^`]+)`").FindAllStringSubmatch(prompt, -1) {
+				if b, err := os.ReadFile(p[1]); err == nil && len(b) > 0 {
+					seen++
+				}
+			}
+			again := call("generate_image", map[string]any{"prompt": "another one"})
+			reply = fmt.Sprintf("Follow-up (seen=%d, again=%v):\n%s", seen, again["error"], prompt)
+		} else if want, ok := strings.CutPrefix(prompt, "image: "); ok {
 			out := call("generate_image", map[string]any{"prompt": want})
 			reply = fmt.Sprintf("Chat reply (session=%s): making it (%v)", session, out["queued"])
 		}

@@ -11,8 +11,61 @@ import (
 	"github.com/google/uuid"
 )
 
+const chatImageJobsForFollowup = `-- name: ChatImageJobsForFollowup :many
+SELECT j.id, j.prompt, j.state, j.failure_kind, j.error, t.seq AS turn_seq,
+  a.filename AS attachment_filename, a.content_type AS attachment_content_type, a.blob_key AS attachment_blob_key
+FROM chat_image_jobs j
+JOIN run_turns t ON t.id = j.turn_id
+LEFT JOIN chat_attachments a ON a.id = j.attachment_id
+WHERE j.followup_turn_id = $1
+ORDER BY j.id
+`
+
+type ChatImageJobsForFollowupRow struct {
+	ID                    uuid.UUID
+	Prompt                string
+	State                 string
+	FailureKind           *string
+	Error                 *string
+	TurnSeq               int32
+	AttachmentFilename    *string
+	AttachmentContentType *string
+	AttachmentBlobKey     *string
+}
+
+// What an image_followup turn reports: each job with its image, if it got one.
+func (q *Queries) ChatImageJobsForFollowup(ctx context.Context, followupTurnID *uuid.UUID) ([]ChatImageJobsForFollowupRow, error) {
+	rows, err := q.db.Query(ctx, chatImageJobsForFollowup, followupTurnID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatImageJobsForFollowupRow{}
+	for rows.Next() {
+		var i ChatImageJobsForFollowupRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Prompt,
+			&i.State,
+			&i.FailureKind,
+			&i.Error,
+			&i.TurnSeq,
+			&i.AttachmentFilename,
+			&i.AttachmentContentType,
+			&i.AttachmentBlobKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const chatImageJobsForTurn = `-- name: ChatImageJobsForTurn :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 ORDER BY id
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 ORDER BY id
 `
 
 type ChatImageJobsForTurnParams struct {
@@ -42,6 +95,10 @@ func (q *Queries) ChatImageJobsForTurn(ctx context.Context, arg ChatImageJobsFor
 			&i.Error,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.FailureKind,
+			&i.OutboxFiles,
+			&i.AttachmentID,
+			&i.FollowupTurnID,
 		); err != nil {
 			return nil, err
 		}
@@ -71,7 +128,7 @@ func (q *Queries) CountChatImageJobsForTurn(ctx context.Context, arg CountChatIm
 
 const createChatImageJob = `-- name: CreateChatImageJob :one
 INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id
 `
 
 type CreateChatImageJobParams struct {
@@ -106,12 +163,16 @@ func (q *Queries) CreateChatImageJob(ctx context.Context, arg CreateChatImageJob
 		&i.Error,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.FailureKind,
+		&i.OutboxFiles,
+		&i.AttachmentID,
+		&i.FollowupTurnID,
 	)
 	return i, err
 }
 
 const failStaleChatImageJobs = `-- name: FailStaleChatImageJobs :exec
-UPDATE chat_image_jobs SET state = 'failed', error = 'interrupted', finished_at = now()
+UPDATE chat_image_jobs SET state = 'failed', error = 'interrupted', failure_kind = 'error', finished_at = now()
 WHERE run_id = $1 AND state = 'running'
 `
 
@@ -123,22 +184,48 @@ func (q *Queries) FailStaleChatImageJobs(ctx context.Context, runID uuid.UUID) e
 }
 
 const finishChatImageJob = `-- name: FinishChatImageJob :exec
-UPDATE chat_image_jobs SET state = $1, error = $2, finished_at = now() WHERE id = $3
+UPDATE chat_image_jobs SET state = $1, error = $2, failure_kind = $3,
+  outbox_files = $4::text[], finished_at = now()
+WHERE id = $5
 `
 
 type FinishChatImageJobParams struct {
-	State string
-	Error *string
-	ID    uuid.UUID
+	State       string
+	Error       *string
+	FailureKind *string
+	OutboxFiles []string
+	ID          uuid.UUID
 }
 
+// failure_kind is set exactly when the job failed ('moderation' or 'error').
 func (q *Queries) FinishChatImageJob(ctx context.Context, arg FinishChatImageJobParams) error {
-	_, err := q.db.Exec(ctx, finishChatImageJob, arg.State, arg.Error, arg.ID)
+	_, err := q.db.Exec(ctx, finishChatImageJob,
+		arg.State,
+		arg.Error,
+		arg.FailureKind,
+		arg.OutboxFiles,
+		arg.ID,
+	)
+	return err
+}
+
+const linkChatImageJobAttachment = `-- name: LinkChatImageJobAttachment :exec
+UPDATE chat_image_jobs SET attachment_id = $2 WHERE id = $1
+`
+
+type LinkChatImageJobAttachmentParams struct {
+	ID           uuid.UUID
+	AttachmentID *uuid.UUID
+}
+
+// The chat attachment a job's image became when its turn's reply was stored.
+func (q *Queries) LinkChatImageJobAttachment(ctx context.Context, arg LinkChatImageJobAttachmentParams) error {
+	_, err := q.db.Exec(ctx, linkChatImageJobAttachment, arg.ID, arg.AttachmentID)
 	return err
 }
 
 const queuedChatImageJobs = `-- name: QueuedChatImageJobs :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 AND state = 'queued' ORDER BY id
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 AND state = 'queued' ORDER BY id
 `
 
 type QueuedChatImageJobsParams struct {
@@ -168,6 +255,10 @@ func (q *Queries) QueuedChatImageJobs(ctx context.Context, arg QueuedChatImageJo
 			&i.Error,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.FailureKind,
+			&i.OutboxFiles,
+			&i.AttachmentID,
+			&i.FollowupTurnID,
 		); err != nil {
 			return nil, err
 		}
@@ -180,7 +271,7 @@ func (q *Queries) QueuedChatImageJobs(ctx context.Context, arg QueuedChatImageJo
 }
 
 const runningChatImageJobs = `-- name: RunningChatImageJobs :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at FROM chat_image_jobs WHERE run_id = $1 AND state = 'running'
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id FROM chat_image_jobs WHERE run_id = $1 AND state = 'running'
 `
 
 // This run's image jobs that are making an image now.
@@ -206,6 +297,10 @@ func (q *Queries) RunningChatImageJobs(ctx context.Context, runID uuid.UUID) ([]
 			&i.Error,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.FailureKind,
+			&i.OutboxFiles,
+			&i.AttachmentID,
+			&i.FollowupTurnID,
 		); err != nil {
 			return nil, err
 		}
@@ -252,6 +347,23 @@ type SetChatImageJobSessionParams struct {
 
 func (q *Queries) SetChatImageJobSession(ctx context.Context, arg SetChatImageJobSessionParams) error {
 	_, err := q.db.Exec(ctx, setChatImageJobSession, arg.ID, arg.CodexSessionID)
+	return err
+}
+
+const setChatImageJobsFollowup = `-- name: SetChatImageJobsFollowup :exec
+UPDATE chat_image_jobs SET followup_turn_id = $1
+WHERE run_id = $2 AND turn_id = $3 AND state IN ('done', 'failed')
+`
+
+type SetChatImageJobsFollowupParams struct {
+	FollowupTurnID *uuid.UUID
+	RunID          uuid.UUID
+	TurnID         uuid.UUID
+}
+
+// The finished jobs of a turn, reported to the assistant by its image_followup turn.
+func (q *Queries) SetChatImageJobsFollowup(ctx context.Context, arg SetChatImageJobsFollowupParams) error {
+	_, err := q.db.Exec(ctx, setChatImageJobsFollowup, arg.FollowupTurnID, arg.RunID, arg.TurnID)
 	return err
 }
 

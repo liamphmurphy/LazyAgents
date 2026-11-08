@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatStatus, chatStatusOf, chatTitle, interimLine, linkLabel, needsSwitchConfirm, replyCost, toolCalls } from "./chat-ui.ts";
+import { activityOf, bareTool, chatStatus, chatStatusOf, chatTitle, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -93,6 +93,8 @@ test("the chat status is high level and never leaks the call's details", () => {
     [{ tool: "Bash", input: { command: "git status" } }, "looking over the repository"],
     [{ tool: "Bash", input: { command: "rg -n token src" } }, "reading the code"],
     [{ tool: "exec_command", input: { cmd: "cp /h/.codex/generated_images/t/a.png .lazyagents/outbox/a.png" } }, "saving the image"],
+    [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/turn-1/1-fox.png" } }, "looking at the image"],
+    [{ tool: "Read", input: { file_path: "src/main.go" } }, "reading the code"],
     [{ tool: "Bash", input: { command: "python3 scripts/migrate.py" } }, "working in the terminal"],
     [{ tool: "some.other_tool", input: { secret: "x" } }, "working on it"],
   ];
@@ -112,4 +114,38 @@ test("the opening line shows only once a tool call follows it", () => {
   // An earlier turn's text and plan messages don't count.
   assert.equal(interimLine([msg(0, "old"), msg(1, "plan", { kind: "plan" }), call(2)], since), undefined);
   assert.equal(interimLine(undefined), undefined);
+});
+
+test("each turn's reply gets its own event window, including a follow-up with no user message", () => {
+  const t = (m) => `2026-11-06T10:${String(m).padStart(2, "0")}:00Z`;
+  const list = [
+    { id: "u1", role: "user", created_at: t(0) },
+    { id: "a1", role: "assistant", created_at: t(1), run_id: "r", turn_seq: 1 },
+    { id: "u2", role: "user", created_at: t(2) },
+    // The opening line and the answer of one turn share a window.
+    { id: "o2", role: "assistant", created_at: t(3), run_id: "r", turn_seq: 2 },
+    { id: "a2", role: "assistant", created_at: t(3), run_id: "r", turn_seq: 2 },
+    { id: "s2", role: "system", created_at: t(3), run_id: "r" },
+    // The image follow-up: another run turn the person didn't start.
+    { id: "f2", role: "assistant", created_at: t(5), run_id: "r", turn_seq: 3 },
+  ];
+  const w = turnWindows(list);
+  assert.deepEqual([...w.keys()], ["a1", "a2", "f2"]);
+  assert.deepEqual(w.get("a1"), { since: t(0), until: t(2), followup: false });
+  assert.deepEqual(w.get("a2"), { since: t(2), until: t(3), followup: false });
+  assert.deepEqual(w.get("f2"), { since: t(3), until: undefined, followup: true });
+  // Messages without a turn keep one window per user message, under its last reply.
+  const old = [list[0], { id: "x", role: "assistant", created_at: t(1) }, { id: "y", role: "assistant", created_at: t(1) }];
+  assert.deepEqual([...turnWindows(old).keys()], ["y"]);
+  assert.equal(turnWindows(undefined).size, 0);
+});
+
+test("the running turn starts at the newest message", () => {
+  const user = { id: "u", role: "user", created_at: "2026-11-06T10:00:00Z" };
+  const reply = { id: "a", role: "assistant", created_at: "2026-11-06T10:01:00Z", run_id: "r", turn_seq: 1 };
+  const note = { id: "s", role: "system", created_at: "2026-11-06T10:01:00.500Z" };
+  assert.equal(runningSince([user]), user.created_at);
+  // The image follow-up has no message of its own: it starts after the reply and its notes.
+  assert.equal(runningSince([user, reply, note]), note.created_at);
+  assert.equal(runningSince(undefined), undefined);
 });

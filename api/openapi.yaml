@@ -3509,7 +3509,7 @@ components:
       required: [seq, trigger, input_message, started_at, status, has_log]
       properties:
         seq: { type: integer }
-        trigger: { type: string, enum: [start, approval, comment, resume, delegation] }
+        trigger: { type: string, enum: [start, approval, comment, resume, delegation, image_followup], description: "image_followup: the automatic chat turn that shows the assistant the results of its generate_image calls (no user message)" }
         input_message: { type: string }
         started_at: { type: string, format: date-time }
         ended_at: { type: string, format: date-time }

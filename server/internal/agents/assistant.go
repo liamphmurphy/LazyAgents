@@ -85,7 +85,8 @@ const assistantImagesCodex = `
 const assistantImagesViaCodex = `
 
 ## Images
-- To make an image, call generate_image with a detailed prompt. It is created with Codex right after your reply and shown under it, so say that you're making it; never describe it as finished or claim to have seen it.
+- To make an image, call generate_image with a detailed prompt. Codex tries to create it right after your reply, and it can fail (for example when moderation refuses the request). So say you're trying to make it, never that it's done or on its way for certain, and don't describe it or claim to have seen it.
+- After your reply you get one automatic follow-up turn with the result: each image as a file to open and look at, or why it failed. React to it then, and tell the person plainly if an image wasn't made.
 - Don't paste file paths or image data into your reply.`
 
 // AssistantInstructionsFor is AssistantInstructions with the sections a
