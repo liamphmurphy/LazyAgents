@@ -5,7 +5,7 @@ import { useContext, useMemo, useState } from "react";
 import { workflowImageUrl, type Schemas } from "@/lib/api/client";
 import { useChatWorkflowRuns, useDecideGate, useStartWorkflow, useStopWorkflowRun, useWorkflows, type WorkflowRun } from "@/lib/api/workflow-hooks";
 import { cx } from "@/lib/cx";
-import { RUN_STATE_LABEL, canRequestChanges, gateSources, parseWorkflowRun, runActive, type Graph } from "@/lib/workflows";
+import { RUN_STATE_LABEL, canRequestChanges, failedGateCheck, gateSources, parseWorkflowRun, runActive, type Graph } from "@/lib/workflows";
 import { Button } from "@/components/ui/button";
 import { CodeFence } from "./code-fence";
 import { Markdown } from "./markdown";
@@ -82,6 +82,7 @@ export function WorkflowGatePanel({ run }: { run: WorkflowRun }) {
   if (!waiting || !gate) return null;
   const send = (decision: string) => decide.mutate({ node_id: gate.id, decision, ...(note.trim() ? { note } : {}) }, { onSuccess: () => setNote("") });
   const changes = canRequestChanges(gate, waiting.attempt);
+  const failedCheck = failedGateCheck(graph, gate, run.steps);
   const sources = gateSources(graph, gate).map((id) => ({ node: graph.nodes.find((n) => n.id === id), step: run.steps.find((s) => s.node_id === id) }));
   return (
     <div data-testid="workflow-gate" className="flex flex-col gap-3 rounded-xl border border-state-human bg-surface p-3.5">
@@ -98,10 +99,11 @@ export function WorkflowGatePanel({ run }: { run: WorkflowRun }) {
           </div>
         </details>
       ))}
+      {failedCheck && <p role="status" data-testid="workflow-gate-check-failed" className="text-[12.5px] text-pill-blocked-fg">{failedCheck.title} didn&apos;t pass, so this can&apos;t be approved. Request changes or reject it.</p>}
       {changes && <textarea aria-label="Note for the re-run" rows={2} placeholder="Note for the re-run (required when requesting changes)" value={note} onChange={(e) => setNote(e.target.value)} className={INPUT} />}
       {decide.error && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{decide.error.message}</p>}
       <div className="flex items-center gap-2">
-        <Button variant="primary" disabled={decide.isPending} onClick={() => send("approve")}>Approve</Button>
+        <Button variant="primary" disabled={decide.isPending || !!failedCheck} onClick={() => send("approve")}>Approve</Button>
         {changes && <Button disabled={decide.isPending || !note.trim()} onClick={() => send("changes")}>Request changes</Button>}
         <span className="flex-1" />
         <Button disabled={decide.isPending} onClick={() => send("reject")}>Reject and stop</Button>

@@ -52,7 +52,7 @@ func (e *chatEnv) finishWFStep(t *testing.T, runID, node, output string) map[str
 		t.Fatalf("%s isn't running: %v", node, step)
 	}
 	agent := uuid.MustParse(step["agent_run_id"].(string))
-	if err := e.runs.SubmitWorkflowOutput(t.Context(), agent, output); err != nil {
+	if err := e.runs.SubmitWorkflowOutput(t.Context(), agent, output, ""); err != nil {
 		t.Fatal(err)
 	}
 	e.setRunState(t, agent, "completed")

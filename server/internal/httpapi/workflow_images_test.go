@@ -114,7 +114,7 @@ func (e *chatEnv) generatedStep(t *testing.T, blobs *fakeS3, wf, chat string) (s
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.runs.SubmitWorkflowOutput(t.Context(), agent, "A map ![map](.lazyagents/outbox/map.png)"); err != nil {
+	if err := e.runs.SubmitWorkflowOutput(t.Context(), agent, "A map ![map](.lazyagents/outbox/map.png)", ""); err != nil {
 		t.Fatal(err)
 	}
 	e.setRunState(t, agent, "completed")

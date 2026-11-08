@@ -88,10 +88,24 @@ FROM workflow_steps s LEFT JOIN runs r ON r.id = s.agent_run_id
 WHERE s.run_id = $1 ORDER BY s.node_id, s.attempt DESC;
 
 -- name: FinishWorkflowStep :exec
-UPDATE workflow_steps SET state = $2, output = $3, decision = $4, note = $5, finished_at = now() WHERE id = $1;
+-- A verdict counts only once its step has finished: one cut short is dropped.
+UPDATE workflow_steps SET state = $2, output = $3, decision = $4, note = $5, finished_at = now(),
+  check_result = CASE WHEN state = 'running' AND $2 <> 'done' THEN '' ELSE check_result END
+WHERE id = $1;
 
 -- name: SetWorkflowStepOutput :exec
-UPDATE workflow_steps SET output = $2 WHERE id = $1;
+UPDATE workflow_steps SET output = $2, check_result = $3 WHERE id = $1;
+
+-- name: SettleWorkflowCheck :exec
+UPDATE workflow_steps SET state = 'done', check_result = $2, note = $3, finished_at = now() WHERE id = $1;
+
+-- name: CountFailedWorkflowChecks :one
+SELECT count(*) FROM workflow_steps WHERE run_id = $1 AND node_id = $2 AND check_result = 'failed' AND state IN ('done', 'stale');
+
+-- name: ListWorkflowCheckAttempts :many
+-- Every finished attempt of every check, oldest first: the run's history.
+SELECT node_id, attempt, check_result, output, note, finished_at FROM workflow_steps
+WHERE run_id = $1 AND check_result <> '' AND state IN ('done', 'stale') ORDER BY attempt, created_at;
 
 -- name: WorkflowStepForAgentRun :one
 SELECT * FROM workflow_steps WHERE agent_run_id = $1 FOR UPDATE;

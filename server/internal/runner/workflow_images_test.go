@@ -47,6 +47,17 @@ func newWFImageEnv(t *testing.T) wfImageEnv {
 // start publishes Generate -> Verify -> Gate -> Chat and runs it from a Claude chat.
 func (e wfImageEnv) start(t *testing.T) store.WorkflowRun {
 	t.Helper()
+	return e.startGraph(t, runs.WorkflowGraph{Nodes: []runs.WorkflowNode{
+		{ID: "start", Type: runs.NodeTrigger, Title: "Start"},
+		{ID: "gen", Type: runs.NodeAgent, Title: "Generate", Config: runs.WorkflowConfig{Prompt: "Draw a map", Images: true}},
+		{ID: "check", Type: runs.NodeAgent, Title: "Verify", Config: runs.WorkflowConfig{Prompt: "Check it against the request"}},
+		{ID: "ok", Type: runs.NodeGate, Title: "Approve", Config: runs.WorkflowConfig{RetryFrom: "gen"}},
+		{ID: "post", Type: runs.NodeChat, Title: "Post"},
+	}, Edges: []runs.WorkflowEdge{{From: "start", To: "gen"}, {From: "gen", To: "check"}, {From: "check", To: "ok"}, {From: "ok", To: "post"}}})
+}
+
+func (e wfImageEnv) startGraph(t *testing.T, g runs.WorkflowGraph) store.WorkflowRun {
+	t.Helper()
 	p := e.persona("Artist", false, true)
 	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "Maps", PersonaID: &p.ID})
 	if err != nil {
@@ -56,13 +67,6 @@ func (e wfImageEnv) start(t *testing.T) store.WorkflowRun {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := runs.WorkflowGraph{Nodes: []runs.WorkflowNode{
-		{ID: "start", Type: runs.NodeTrigger, Title: "Start"},
-		{ID: "gen", Type: runs.NodeAgent, Title: "Generate", Config: runs.WorkflowConfig{Prompt: "Draw a map", Images: true}},
-		{ID: "check", Type: runs.NodeAgent, Title: "Verify", Config: runs.WorkflowConfig{Prompt: "Check it against the request"}},
-		{ID: "ok", Type: runs.NodeGate, Title: "Approve", Config: runs.WorkflowConfig{RetryFrom: "gen"}},
-		{ID: "post", Type: runs.NodeChat, Title: "Post"},
-	}, Edges: []runs.WorkflowEdge{{From: "start", To: "gen"}, {From: "gen", To: "check"}, {From: "check", To: "ok"}, {From: "ok", To: "post"}}}
 	if _, err := e.runs.SaveWorkflow(e.ctx, e.ws, e.me.ID, w.ID, runs.WorkflowEdit{Graph: &g}); err != nil {
 		t.Fatal(err)
 	}

@@ -556,7 +556,7 @@ func main() {
 				submit("Here is a lovely map, in words.")
 			default:
 				content := os.Getenv("FAKE_IMAGE_CONTENT")
-				if strings.Contains(prompt, "A reviewer asked for changes") {
+				if strings.Contains(prompt, "asked for changes to the previous attempt") {
 					content = "revised"
 				}
 				_ = os.WriteFile(".lazyagents/outbox/map-"+newUUID()+".png", []byte("\x89PNG\r\n\x1a\n"+content), 0o644)
@@ -572,7 +572,14 @@ func main() {
 			if len(seen) == 0 || slices.ContainsFunc(seen, func(s string) bool { return strings.Contains(s, "bad") }) {
 				verdict = "FAIL"
 			}
-			submit(fmt.Sprintf("%s: looked at %d image(s)", verdict, len(seen)))
+			// FAKE_CHECK_VERDICT overrides the verdict a check reports; "missing" omits it.
+			args := map[string]any{"output": fmt.Sprintf("%s: looked at %d image(s)", verdict, len(seen)), "check": strings.ToLower(verdict)}
+			if v := os.Getenv("FAKE_CHECK_VERDICT"); v == "missing" {
+				delete(args, "check")
+			} else if v != "" {
+				args["check"] = v
+			}
+			call("submit_workflow_output", args)
 		}
 		text("Step done.")
 		result(false, "Step done.")

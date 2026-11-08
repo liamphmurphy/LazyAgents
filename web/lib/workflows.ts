@@ -14,9 +14,11 @@ export type GraphNode = {
     agent_handle?: string;
     web?: boolean;
     images?: boolean;
+    check?: boolean;
     show?: string[];
     retry_from?: string;
     max_attempts?: number;
+    requires_check?: string;
     path?: string;
     mode?: string;
     title?: string;
@@ -51,9 +53,11 @@ export function nodeSummary(n: GraphNode): string {
     case "enrich":
       return "Sharpens the request";
     case "agent":
+      if (c.check) return c.retry_from ? `Check · re-runs ${c.retry_from}` : "Check";
       if (c.images) return "Persona · images · Codex";
       return c.agent_handle ? `@${c.agent_handle}` : c.web ? "Persona · web" : "Persona · read-only";
     case "gate":
+      if (c.requires_check) return `Needs ${c.requires_check} to pass`;
       return c.retry_from ? `Can re-run ${c.retry_from}` : "Approve or reject";
     case "wiki":
       return c.path || "No path yet";
@@ -103,7 +107,7 @@ export function removeNode(g: Graph, id: string): Graph {
   return {
     nodes: g.nodes
       .filter((n) => n.id !== id)
-      .map((n) => (n.config.retry_from === id || n.config.show?.includes(id) ? { ...n, config: { ...n.config, retry_from: n.config.retry_from === id ? undefined : n.config.retry_from, show: n.config.show?.filter((s) => s !== id) } } : n)),
+      .map((n) => (n.config.retry_from === id || n.config.requires_check === id || n.config.show?.includes(id) ? { ...n, config: { ...n.config, retry_from: n.config.retry_from === id ? undefined : n.config.retry_from, requires_check: n.config.requires_check === id ? undefined : n.config.requires_check, show: n.config.show?.filter((s) => s !== id) } } : n)),
     edges: g.edges.filter((e) => e.from !== id && e.to !== id),
   };
 }
@@ -154,6 +158,20 @@ export function imagesByAttempt<I extends { attempt: number }>(images: I[]): { a
   const out = new Map<number, I[]>();
   for (const im of images) out.set(im.attempt, [...(out.get(im.attempt) ?? []), im]);
   return [...out.entries()].sort((a, b) => b[0] - a[0]).map(([attempt, list]) => ({ attempt, images: list }));
+}
+
+/** Checks connected directly into this gate: the ones it can be tied to. */
+export function parentChecks(g: Graph, id: string): GraphNode[] {
+  return g.nodes.filter((n) => n.type === "agent" && n.config.check && g.edges.some((e) => e.from === n.id && e.to === id));
+}
+
+/** The check keeping Approve shut, if any. The server enforces this too. */
+export function failedGateCheck<S extends { node_id: string; state: string; check_result: string }>(g: Graph, gate: GraphNode, steps: S[]): GraphNode | undefined {
+  const id = gate.config.requires_check;
+  if (!id) return undefined;
+  const step = steps.find((s) => s.node_id === id);
+  if (step?.state === "done" && step.check_result === "passed") return undefined;
+  return g.nodes.find((n) => n.id === id) ?? { id, type: "agent", title: id, config: {} };
 }
 
 /** Reviews left before Request changes stops being offered. */

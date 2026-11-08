@@ -54,6 +54,22 @@ func (q *Queries) AddWorkflowStepImageCall(ctx context.Context, agentRunID *uuid
 	return image_calls, err
 }
 
+const countFailedWorkflowChecks = `-- name: CountFailedWorkflowChecks :one
+SELECT count(*) FROM workflow_steps WHERE run_id = $1 AND node_id = $2 AND check_result = 'failed' AND state IN ('done', 'stale')
+`
+
+type CountFailedWorkflowChecksParams struct {
+	RunID  uuid.UUID
+	NodeID string
+}
+
+func (q *Queries) CountFailedWorkflowChecks(ctx context.Context, arg CountFailedWorkflowChecksParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countFailedWorkflowChecks, arg.RunID, arg.NodeID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countWorkflowStepImages = `-- name: CountWorkflowStepImages :one
 SELECT count(*) FROM workflow_step_images WHERE step_id = $1
 `
@@ -243,7 +259,7 @@ func (q *Queries) CreateWorkflowRun(ctx context.Context, arg CreateWorkflowRunPa
 
 const createWorkflowStep = `-- name: CreateWorkflowStep :one
 INSERT INTO workflow_steps (run_id, node_id, attempt, state, output, agent_run_id)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, run_id, node_id, attempt, state, output, agent_run_id, decision, note, created_at, finished_at, image_calls
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, run_id, node_id, attempt, state, output, agent_run_id, decision, note, created_at, finished_at, image_calls, check_result
 `
 
 type CreateWorkflowStepParams struct {
@@ -278,6 +294,7 @@ func (q *Queries) CreateWorkflowStep(ctx context.Context, arg CreateWorkflowStep
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.ImageCalls,
+		&i.CheckResult,
 	)
 	return i, err
 }
@@ -338,7 +355,9 @@ func (q *Queries) DeleteWorkflow(ctx context.Context, arg DeleteWorkflowParams) 
 }
 
 const finishWorkflowStep = `-- name: FinishWorkflowStep :exec
-UPDATE workflow_steps SET state = $2, output = $3, decision = $4, note = $5, finished_at = now() WHERE id = $1
+UPDATE workflow_steps SET state = $2, output = $3, decision = $4, note = $5, finished_at = now(),
+  check_result = CASE WHEN state = 'running' AND $2 <> 'done' THEN '' ELSE check_result END
+WHERE id = $1
 `
 
 type FinishWorkflowStepParams struct {
@@ -349,6 +368,7 @@ type FinishWorkflowStepParams struct {
 	Note     string
 }
 
+// A verdict counts only once its step has finished: one cut short is dropped.
 func (q *Queries) FinishWorkflowStep(ctx context.Context, arg FinishWorkflowStepParams) error {
 	_, err := q.db.Exec(ctx, finishWorkflowStep,
 		arg.ID,
@@ -466,7 +486,7 @@ func (q *Queries) KeepWorkflowImagesForSweep(ctx context.Context, chatID uuid.UU
 }
 
 const latestWorkflowSteps = `-- name: LatestWorkflowSteps :many
-SELECT DISTINCT ON (s.node_id) s.id, s.run_id, s.node_id, s.attempt, s.state, s.output, s.agent_run_id, s.decision, s.note, s.created_at, s.finished_at, s.image_calls, coalesce(r.state, '')::text AS agent_run_state, coalesce(r.outcome, '')::text AS agent_run_outcome
+SELECT DISTINCT ON (s.node_id) s.id, s.run_id, s.node_id, s.attempt, s.state, s.output, s.agent_run_id, s.decision, s.note, s.created_at, s.finished_at, s.image_calls, s.check_result, coalesce(r.state, '')::text AS agent_run_state, coalesce(r.outcome, '')::text AS agent_run_outcome
 FROM workflow_steps s LEFT JOIN runs r ON r.id = s.agent_run_id
 WHERE s.run_id = $1 ORDER BY s.node_id, s.attempt DESC
 `
@@ -484,6 +504,7 @@ type LatestWorkflowStepsRow struct {
 	CreatedAt       time.Time
 	FinishedAt      *time.Time
 	ImageCalls      int32
+	CheckResult     string
 	AgentRunState   string
 	AgentRunOutcome string
 }
@@ -511,6 +532,7 @@ func (q *Queries) LatestWorkflowSteps(ctx context.Context, runID uuid.UUID) ([]L
 			&i.CreatedAt,
 			&i.FinishedAt,
 			&i.ImageCalls,
+			&i.CheckResult,
 			&i.AgentRunState,
 			&i.AgentRunOutcome,
 		); err != nil {
@@ -627,6 +649,48 @@ func (q *Queries) ListPublishedWorkflows(ctx context.Context, arg ListPublishedW
 			&i.PublishedVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkflowCheckAttempts = `-- name: ListWorkflowCheckAttempts :many
+SELECT node_id, attempt, check_result, output, note, finished_at FROM workflow_steps
+WHERE run_id = $1 AND check_result <> '' AND state IN ('done', 'stale') ORDER BY attempt, created_at
+`
+
+type ListWorkflowCheckAttemptsRow struct {
+	NodeID      string
+	Attempt     int32
+	CheckResult string
+	Output      string
+	Note        string
+	FinishedAt  *time.Time
+}
+
+// Every finished attempt of every check, oldest first: the run's history.
+func (q *Queries) ListWorkflowCheckAttempts(ctx context.Context, runID uuid.UUID) ([]ListWorkflowCheckAttemptsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkflowCheckAttempts, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkflowCheckAttemptsRow{}
+	for rows.Next() {
+		var i ListWorkflowCheckAttemptsRow
+		if err := rows.Scan(
+			&i.NodeID,
+			&i.Attempt,
+			&i.CheckResult,
+			&i.Output,
+			&i.Note,
+			&i.FinishedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1033,16 +1097,32 @@ func (q *Queries) SetWorkflowRunState(ctx context.Context, arg SetWorkflowRunSta
 }
 
 const setWorkflowStepOutput = `-- name: SetWorkflowStepOutput :exec
-UPDATE workflow_steps SET output = $2 WHERE id = $1
+UPDATE workflow_steps SET output = $2, check_result = $3 WHERE id = $1
 `
 
 type SetWorkflowStepOutputParams struct {
-	ID     uuid.UUID
-	Output string
+	ID          uuid.UUID
+	Output      string
+	CheckResult string
 }
 
 func (q *Queries) SetWorkflowStepOutput(ctx context.Context, arg SetWorkflowStepOutputParams) error {
-	_, err := q.db.Exec(ctx, setWorkflowStepOutput, arg.ID, arg.Output)
+	_, err := q.db.Exec(ctx, setWorkflowStepOutput, arg.ID, arg.Output, arg.CheckResult)
+	return err
+}
+
+const settleWorkflowCheck = `-- name: SettleWorkflowCheck :exec
+UPDATE workflow_steps SET state = 'done', check_result = $2, note = $3, finished_at = now() WHERE id = $1
+`
+
+type SettleWorkflowCheckParams struct {
+	ID          uuid.UUID
+	CheckResult string
+	Note        string
+}
+
+func (q *Queries) SettleWorkflowCheck(ctx context.Context, arg SettleWorkflowCheckParams) error {
+	_, err := q.db.Exec(ctx, settleWorkflowCheck, arg.ID, arg.CheckResult, arg.Note)
 	return err
 }
 
@@ -1113,7 +1193,7 @@ func (q *Queries) WorkflowRunForMessage(ctx context.Context, messageID *uuid.UUI
 }
 
 const workflowStepForAgentRun = `-- name: WorkflowStepForAgentRun :one
-SELECT id, run_id, node_id, attempt, state, output, agent_run_id, decision, note, created_at, finished_at, image_calls FROM workflow_steps WHERE agent_run_id = $1 FOR UPDATE
+SELECT id, run_id, node_id, attempt, state, output, agent_run_id, decision, note, created_at, finished_at, image_calls, check_result FROM workflow_steps WHERE agent_run_id = $1 FOR UPDATE
 `
 
 func (q *Queries) WorkflowStepForAgentRun(ctx context.Context, agentRunID *uuid.UUID) (WorkflowStep, error) {
@@ -1132,6 +1212,7 @@ func (q *Queries) WorkflowStepForAgentRun(ctx context.Context, agentRunID *uuid.
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.ImageCalls,
+		&i.CheckResult,
 	)
 	return i, err
 }
