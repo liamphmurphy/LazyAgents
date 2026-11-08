@@ -34,6 +34,15 @@ type Turn struct {
 	// Images are files (relative to Workspace.Dir) attached to the prompt as
 	// image inputs. Only Codex takes them; other harnesses ignore them.
 	Images []string
+	// InlineImages are the same pictures for Claude Code, which takes them as
+	// content blocks in its first message rather than as file arguments.
+	InlineImages []InlineImage
+}
+
+// InlineImage is an image delivered as bytes.
+type InlineImage struct {
+	MediaType string
+	Data      []byte
 }
 
 // Invocation is what the runner executes.

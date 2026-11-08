@@ -795,6 +795,9 @@ func (s *Service) DeleteChat(ctx context.Context, ws, user, id uuid.UUID) error 
 		if err := stopWorkflowsForChat(ctx, q, chat.ID); err != nil {
 			return err
 		}
+		if err := q.KeepWorkflowImagesForSweep(ctx, chat.ID); err != nil {
+			return err
+		}
 		if chat.CurrentRunID != nil {
 			run, err := q.LockRun(ctx, *chat.CurrentRunID)
 			if err != nil {

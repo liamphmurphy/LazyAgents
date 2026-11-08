@@ -26,6 +26,7 @@
 //	                    generate_image once more and echoes its prompt (or fails,
 //	                    with FAKE_HARNESS_FAIL_FOLLOWUP set). FAKE_IMAGE_REFERENCES
 //	                    (comma-separated) is passed as generate_image references.
+//	workflow-image      a workflow step: see the handler below
 //	slow                wait for SIGINT (pause), then end the turn
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
 //	                    writes child.txt in the shared checkout and completes
@@ -56,6 +57,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -64,6 +66,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -177,7 +180,7 @@ func main() {
 	// Chat model discovery for `claude` (chatmodels.DiscoverLocal): answer the
 	// initialize control request with one model, then wait for EOF.
 	for _, a := range args {
-		if a == "--input-format" {
+		if a == "--input-format" && !slices.Contains(args, "--mcp-config") {
 			scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
 				var request struct {
@@ -322,6 +325,29 @@ func main() {
 	}
 	// A chat's first prompt carries a note for the agent; the scripted prompts
 	// ("slow", "quota", "read <id>") are what remains without it.
+	// A Claude turn with image inputs sends its message on stdin.
+	var inline []string
+	if slices.Contains(args, "--input-format") {
+		var m struct {
+			Message struct {
+				Content []struct {
+					Text   string `json:"text"`
+					Source struct {
+						Data string `json:"data"`
+					} `json:"source"`
+				} `json:"content"`
+			} `json:"message"`
+		}
+		_ = json.NewDecoder(os.Stdin).Decode(&m)
+		for _, c := range m.Message.Content {
+			if c.Source.Data == "" {
+				prompt = c.Text
+				continue
+			}
+			b, _ := base64.StdEncoding.DecodeString(c.Source.Data)
+			inline = append(inline, string(b))
+		}
+	}
 	prompt = regexp.MustCompile(`(?s)\n\n\(Vesper: this is the first message[^)]*\)`).ReplaceAllString(prompt, "")
 	session = resume
 	if session == "" {
@@ -338,6 +364,9 @@ func main() {
 		for _, p := range images {
 			b, _ := os.ReadFile(p)
 			imageFiles = append(imageFiles, p+"="+string(b))
+		}
+		for _, b := range inline {
+			imageFiles = append(imageFiles, "inline="+b)
 		}
 		line, _ := json.Marshal(map[string]any{"request": request, "cwd": wd, "resume": resume, "prompt": firstLine(prompt), "full_prompt": prompt, "images": strings.Join(imageFiles, "\n"),
 			"mode": os.Getenv("FAKE_HARNESS_MODE"), "model": model, "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
@@ -499,6 +528,45 @@ func main() {
 		return out
 	}
 	ticket := os.Getenv("LAZYAGENTS_TICKET")
+	// workflow-image: an image step does what FAKE_IMAGE_STEP says (ok, empty,
+	// moderation), its picture holding FAKE_IMAGE_CONTENT, or "revised" once a
+	// reviewer asked for changes. Any other step reports FAIL if an image it
+	// was given holds "bad", so what it says comes from the image itself.
+	if os.Getenv("FAKE_HARNESS_MODE") == "workflow-image" {
+		submit := func(output string) { call("submit_workflow_output", map[string]any{"output": output}) }
+		if strings.Contains(prompt, "Generate the image with your image generation tool") {
+			switch os.Getenv("FAKE_IMAGE_STEP") {
+			case "moderation":
+				refusal := "I can't create that image: it was blocked by the safety system under the content policy."
+				text(refusal)
+				result(false, refusal)
+				return
+			case "empty":
+				submit("Here is a lovely map, in words.")
+			default:
+				content := os.Getenv("FAKE_IMAGE_CONTENT")
+				if strings.Contains(prompt, "A reviewer asked for changes") {
+					content = "revised"
+				}
+				_ = os.WriteFile(".lazyagents/outbox/map-"+newUUID()+".png", []byte("\x89PNG\r\n\x1a\n"+content), 0o644)
+				submit("Made the map. ![map](.lazyagents/outbox/map.png)")
+			}
+		} else {
+			seen := slices.Clone(inline)
+			for _, p := range images {
+				b, _ := os.ReadFile(p)
+				seen = append(seen, string(b))
+			}
+			verdict := "PASS"
+			if len(seen) == 0 || slices.ContainsFunc(seen, func(s string) bool { return strings.Contains(s, "bad") }) {
+				verdict = "FAIL"
+			}
+			submit(fmt.Sprintf("%s: looked at %d image(s)", verdict, len(seen)))
+		}
+		text("Step done.")
+		result(false, "Step done.")
+		return
+	}
 	// chat-image: "image: <text>" asks for an image through MCP; any other prompt just answers.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-image" {
 		reply := "Chat reply: " + prompt

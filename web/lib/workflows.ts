@@ -13,6 +13,7 @@ export type GraphNode = {
     persona_id?: string;
     agent_handle?: string;
     web?: boolean;
+    images?: boolean;
     show?: string[];
     retry_from?: string;
     max_attempts?: number;
@@ -50,6 +51,7 @@ export function nodeSummary(n: GraphNode): string {
     case "enrich":
       return "Sharpens the request";
     case "agent":
+      if (c.images) return "Persona · images · Codex";
       return c.agent_handle ? `@${c.agent_handle}` : c.web ? "Persona · web" : "Persona · read-only";
     case "gate":
       return c.retry_from ? `Can re-run ${c.retry_from}` : "Approve or reject";
@@ -145,6 +147,13 @@ export function stepRows<S extends { node_id: string }>(g: Graph, steps: S[]): {
 /** What a reviewer reads at a gate: the configured nodes, else its direct parents. */
 export function gateSources(g: Graph, gate: GraphNode): string[] {
   return gate.config.show?.length ? gate.config.show : g.edges.filter((e) => e.to === gate.id).map((e) => e.from);
+}
+
+/** A run's images grouped by the attempt that made them, newest attempt first. */
+export function imagesByAttempt<I extends { attempt: number }>(images: I[]): { attempt: number; images: I[] }[] {
+  const out = new Map<number, I[]>();
+  for (const im of images) out.set(im.attempt, [...(out.get(im.attempt) ?? []), im]);
+  return [...out.entries()].sort((a, b) => b[0] - a[0]).map(([attempt, list]) => ({ attempt, images: list }));
 }
 
 /** Reviews left before Request changes stops being offered. */

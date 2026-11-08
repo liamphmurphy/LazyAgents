@@ -289,6 +289,7 @@ WITH d AS (
 )
 SELECT d.blob_key,
   (NOT EXISTS (SELECT 1 FROM chat_attachments a WHERE a.blob_key = d.blob_key)
+   AND NOT EXISTS (SELECT 1 FROM workflow_step_images i WHERE i.blob_key = d.blob_key)
    AND NOT EXISTS (SELECT 1 FROM library_items o WHERE o.blob_key = d.blob_key AND o.id <> $1))::boolean AS orphaned
 FROM d
 `
@@ -304,8 +305,8 @@ type DeleteLibraryItemRow struct {
 	Orphaned bool
 }
 
-// Removes one of the caller's items. orphaned says no chat attachment or
-// other item still uses its object, so the caller may delete it.
+// Removes one of the caller's items. orphaned says no chat attachment,
+// workflow image or other item still uses its object, so the caller may delete it.
 func (q *Queries) DeleteLibraryItem(ctx context.Context, arg DeleteLibraryItemParams) (DeleteLibraryItemRow, error) {
 	row := q.db.QueryRow(ctx, deleteLibraryItem, arg.ID, arg.WorkspaceID, arg.UserID)
 	var i DeleteLibraryItemRow

@@ -42,6 +42,29 @@ func (q *Queries) ActiveWorkflowRuns(ctx context.Context) ([]ActiveWorkflowRunsR
 	return items, nil
 }
 
+const addWorkflowStepImageCall = `-- name: AddWorkflowStepImageCall :one
+UPDATE workflow_steps SET image_calls = image_calls + 1 WHERE agent_run_id = $1 AND state = 'running' RETURNING image_calls
+`
+
+// Counts one native image tool call by a running step, for the per-step limit.
+func (q *Queries) AddWorkflowStepImageCall(ctx context.Context, agentRunID *uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, addWorkflowStepImageCall, agentRunID)
+	var image_calls int32
+	err := row.Scan(&image_calls)
+	return image_calls, err
+}
+
+const countWorkflowStepImages = `-- name: CountWorkflowStepImages :one
+SELECT count(*) FROM workflow_step_images WHERE step_id = $1
+`
+
+func (q *Queries) CountWorkflowStepImages(ctx context.Context, stepID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countWorkflowStepImages, stepID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createWorkflow = `-- name: CreateWorkflow :one
 INSERT INTO workflows (workspace_id, user_id, name, description, draft) VALUES ($1, $2, $3, $4, $5) RETURNING id, workspace_id, user_id, name, description, draft, published, published_version, created_at, updated_at
 `
@@ -220,7 +243,7 @@ func (q *Queries) CreateWorkflowRun(ctx context.Context, arg CreateWorkflowRunPa
 
 const createWorkflowStep = `-- name: CreateWorkflowStep :one
 INSERT INTO workflow_steps (run_id, node_id, attempt, state, output, agent_run_id)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, run_id, node_id, attempt, state, output, agent_run_id, decision, note, created_at, finished_at
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, run_id, node_id, attempt, state, output, agent_run_id, decision, note, created_at, finished_at, image_calls
 `
 
 type CreateWorkflowStepParams struct {
@@ -254,6 +277,44 @@ func (q *Queries) CreateWorkflowStep(ctx context.Context, arg CreateWorkflowStep
 		&i.Note,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.ImageCalls,
+	)
+	return i, err
+}
+
+const createWorkflowStepImage = `-- name: CreateWorkflowStepImage :one
+INSERT INTO workflow_step_images (step_id, run_id, filename, content_type, size_bytes, blob_key)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, step_id, run_id, filename, content_type, size_bytes, blob_key, created_at
+`
+
+type CreateWorkflowStepImageParams struct {
+	StepID      uuid.UUID
+	RunID       uuid.UUID
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+}
+
+func (q *Queries) CreateWorkflowStepImage(ctx context.Context, arg CreateWorkflowStepImageParams) (WorkflowStepImage, error) {
+	row := q.db.QueryRow(ctx, createWorkflowStepImage,
+		arg.StepID,
+		arg.RunID,
+		arg.Filename,
+		arg.ContentType,
+		arg.SizeBytes,
+		arg.BlobKey,
+	)
+	var i WorkflowStepImage
+	err := row.Scan(
+		&i.ID,
+		&i.StepID,
+		&i.RunID,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -361,8 +422,51 @@ func (q *Queries) GetWorkflowRun(ctx context.Context, arg GetWorkflowRunParams) 
 	return i, err
 }
 
+const getWorkflowRunImage = `-- name: GetWorkflowRunImage :one
+SELECT id, step_id, run_id, filename, content_type, size_bytes, blob_key, created_at FROM workflow_step_images WHERE id = $1 AND run_id = $2
+`
+
+type GetWorkflowRunImageParams struct {
+	ID    uuid.UUID
+	RunID uuid.UUID
+}
+
+func (q *Queries) GetWorkflowRunImage(ctx context.Context, arg GetWorkflowRunImageParams) (WorkflowStepImage, error) {
+	row := q.db.QueryRow(ctx, getWorkflowRunImage, arg.ID, arg.RunID)
+	var i WorkflowStepImage
+	err := row.Scan(
+		&i.ID,
+		&i.StepID,
+		&i.RunID,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const keepWorkflowImagesForSweep = `-- name: KeepWorkflowImagesForSweep :exec
+INSERT INTO chat_attachments (workspace_id, user_id, filename, content_type, size_bytes, blob_key, source)
+SELECT DISTINCT ON (i.blob_key) r.workspace_id, r.user_id, i.filename, i.content_type, i.size_bytes, i.blob_key, 'generated'
+FROM workflow_step_images i JOIN workflow_runs r ON r.id = i.run_id
+WHERE r.chat_id = $1
+  AND NOT EXISTS (SELECT 1 FROM chat_attachments a WHERE a.blob_key = i.blob_key)
+  AND NOT EXISTS (SELECT 1 FROM library_items l WHERE l.blob_key = i.blob_key)
+ORDER BY i.blob_key
+`
+
+// A chat's deletion cascades to its runs' image rows. Objects nothing else
+// holds become detached attachments first, so the stale-attachment sweep
+// removes them instead of leaving them behind.
+func (q *Queries) KeepWorkflowImagesForSweep(ctx context.Context, chatID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, keepWorkflowImagesForSweep, chatID)
+	return err
+}
+
 const latestWorkflowSteps = `-- name: LatestWorkflowSteps :many
-SELECT DISTINCT ON (s.node_id) s.id, s.run_id, s.node_id, s.attempt, s.state, s.output, s.agent_run_id, s.decision, s.note, s.created_at, s.finished_at, coalesce(r.state, '')::text AS agent_run_state, coalesce(r.outcome, '')::text AS agent_run_outcome
+SELECT DISTINCT ON (s.node_id) s.id, s.run_id, s.node_id, s.attempt, s.state, s.output, s.agent_run_id, s.decision, s.note, s.created_at, s.finished_at, s.image_calls, coalesce(r.state, '')::text AS agent_run_state, coalesce(r.outcome, '')::text AS agent_run_outcome
 FROM workflow_steps s LEFT JOIN runs r ON r.id = s.agent_run_id
 WHERE s.run_id = $1 ORDER BY s.node_id, s.attempt DESC
 `
@@ -379,6 +483,7 @@ type LatestWorkflowStepsRow struct {
 	Note            string
 	CreatedAt       time.Time
 	FinishedAt      *time.Time
+	ImageCalls      int32
 	AgentRunState   string
 	AgentRunOutcome string
 }
@@ -405,6 +510,7 @@ func (q *Queries) LatestWorkflowSteps(ctx context.Context, runID uuid.UUID) ([]L
 			&i.Note,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.ImageCalls,
 			&i.AgentRunState,
 			&i.AgentRunOutcome,
 		); err != nil {
@@ -521,6 +627,56 @@ func (q *Queries) ListPublishedWorkflows(ctx context.Context, arg ListPublishedW
 			&i.PublishedVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkflowRunImages = `-- name: ListWorkflowRunImages :many
+SELECT i.id, i.step_id, i.run_id, i.filename, i.content_type, i.size_bytes, i.blob_key, i.created_at, s.node_id, s.attempt FROM workflow_step_images i JOIN workflow_steps s ON s.id = i.step_id
+WHERE i.run_id = $1 ORDER BY s.attempt, i.created_at, i.id
+`
+
+type ListWorkflowRunImagesRow struct {
+	ID          uuid.UUID
+	StepID      uuid.UUID
+	RunID       uuid.UUID
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+	CreatedAt   time.Time
+	NodeID      string
+	Attempt     int32
+}
+
+// Every attempt's images, oldest first; callers pick the attempts they want.
+func (q *Queries) ListWorkflowRunImages(ctx context.Context, runID uuid.UUID) ([]ListWorkflowRunImagesRow, error) {
+	rows, err := q.db.Query(ctx, listWorkflowRunImages, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkflowRunImagesRow{}
+	for rows.Next() {
+		var i ListWorkflowRunImagesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StepID,
+			&i.RunID,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.BlobKey,
+			&i.CreatedAt,
+			&i.NodeID,
+			&i.Attempt,
 		); err != nil {
 			return nil, err
 		}
@@ -957,7 +1113,7 @@ func (q *Queries) WorkflowRunForMessage(ctx context.Context, messageID *uuid.UUI
 }
 
 const workflowStepForAgentRun = `-- name: WorkflowStepForAgentRun :one
-SELECT id, run_id, node_id, attempt, state, output, agent_run_id, decision, note, created_at, finished_at FROM workflow_steps WHERE agent_run_id = $1 FOR UPDATE
+SELECT id, run_id, node_id, attempt, state, output, agent_run_id, decision, note, created_at, finished_at, image_calls FROM workflow_steps WHERE agent_run_id = $1 FOR UPDATE
 `
 
 func (q *Queries) WorkflowStepForAgentRun(ctx context.Context, agentRunID *uuid.UUID) (WorkflowStep, error) {
@@ -975,6 +1131,7 @@ func (q *Queries) WorkflowStepForAgentRun(ctx context.Context, agentRunID *uuid.
 		&i.Note,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.ImageCalls,
 	)
 	return i, err
 }

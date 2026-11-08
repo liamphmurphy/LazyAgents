@@ -6,7 +6,7 @@ import { Background, Controls, ReactFlow, ReactFlowProvider, applyNodeChanges, u
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { useBootstrap, useChatMessages, useCreateChat, useSendChatMessage } from "@/lib/api/hooks";
+import { useBootstrap, useChat, useChatMessages, useCreateChat, useSendChatMessage } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { usePublishWorkflow, useResolveProposal, useSaveWorkflow, useWorkflow, type Workflow } from "@/lib/api/workflow-hooks";
 import { useRememberedProject } from "@/components/shell/project-scope";
@@ -14,6 +14,7 @@ import { TopBar } from "@/components/shell/topbar";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { Markdown } from "@/components/domain/markdown";
+import { PersonaAvatar } from "@/components/domain/persona-avatar";
 import { PALETTE, ancestors, canConnect, diffGraphs, newNodeId, removeNode, type Graph, type GraphNode, type NodeType } from "@/lib/workflows";
 import { FLOW_STYLE, NODE_TYPES, toFlowEdges, toFlowNodes, type FlowNode } from "./flow";
 
@@ -56,6 +57,10 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
           <label className="flex items-center gap-2 text-[13px] text-fg-2">
             <input type="checkbox" checked={!!c.web} onChange={(e) => config({ web: e.target.checked || undefined })} /> Read the web (this step can&apos;t read the workspace)
           </label>
+          <label className="flex items-center gap-2 text-[13px] text-fg-2">
+            <input type="checkbox" checked={!!c.images} disabled={!!c.agent_handle} onChange={(e) => config({ images: e.target.checked || undefined })} /> Generate images
+          </label>
+          {c.images && <p className="text-[12px] text-fg-tertiary">Always runs on Codex, as a persona allowed to generate images. Later steps can see the images.</p>}
         </>
       )}
       {node.type === "gate" && (
@@ -92,6 +97,7 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
           </Labeled>
         </>
       )}
+      {(node.type === "wiki" || node.type === "ticket") && <p className="text-[12px] text-fg-tertiary">Images from earlier steps are left out: this output is text only.</p>}
       {(node.type === "library" || node.type === "ticket") && (
         <Labeled label={node.type === "ticket" ? "Ticket title" : "Item title"}><TextInput aria-label="Item title" value={c.title ?? ""} onChange={(e) => config({ title: e.target.value })} /></Labeled>
       )}
@@ -113,6 +119,8 @@ function BuildChat({ workflow, chatId, onChatId, personaId, onPersonaId, onChatt
   const create = useCreateChat();
   const send = useSendChatMessage(chatId ?? "");
   const messages = useChatMessages(chatId);
+  const chat = useChat(chatId);
+  const working = create.isPending || send.isPending || chat.data?.state === "running";
   const transcript = useRef<HTMLDivElement>(null);
   const project = boot.data?.projects.find((p) => p.key === remembered && !p.archived) ?? boot.data?.projects.find((p) => !p.archived);
   const list = (messages.data?.messages ?? []).filter((m) => m.role !== "system");
@@ -137,8 +145,21 @@ function BuildChat({ workflow, chatId, onChatId, personaId, onPersonaId, onChatt
   const error = create.error ?? send.error;
   return (
     <div className="absolute bottom-3 left-1/2 z-10 flex w-[min(560px,calc(100%-104px))] -translate-x-1/2 flex-col gap-2 rounded-[10px] border border-border-strong bg-surface-raised p-2 shadow-lg" data-testid="workflow-build-chat">
-      {list.length > 0 && (
-        <button type="button" className="self-end text-xs text-fg-tertiary hover:text-fg-secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide conversation" : "Show conversation"}</button>
+      {(working || list.length > 0) && (
+        <div className="flex items-center justify-between gap-2">
+          {working && persona ? (
+            <div role="status" data-testid="workflow-build-working" className="flex items-center gap-2 px-1">
+              <span className="relative grid flex-none place-items-center">
+                <span aria-hidden className="absolute inset-0 rounded-full opacity-60 motion-safe:animate-ping" style={{ background: persona.color }} />
+                <PersonaAvatar name={persona.name} color={persona.color} src={persona.avatar_url} size={24} className="relative" />
+              </span>
+              <span className="animate-skeleton text-xs text-fg-secondary">{persona.name} is working…</span>
+            </div>
+          ) : <span />}
+          {list.length > 0 && (
+            <button type="button" className="text-xs text-fg-tertiary hover:text-fg-secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide conversation" : "Show conversation"}</button>
+          )}
+        </div>
       )}
       {open && list.length > 0 && (
         <div ref={transcript} className="flex max-h-[min(280px,40vh)] flex-col gap-2 overflow-y-auto px-1">

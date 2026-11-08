@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -108,7 +109,7 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 		}
 		return ToolDecision{Decision: "allow"}, nil
 	}
-	// A chat's image allowances apply when its frozen spec generates images
+	// A chat's (or an image workflow step's) image allowances apply when its frozen spec generates images
 	// itself (Codex), or while a Codex image step for it is running (a chat on
 	// another harness asked for an image: its spec lacks the option, and the
 	// step may only read, make the image and copy it out).
@@ -127,7 +128,19 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 			}
 		}
 	}
-	if run.Purpose == "chat" && (imageSession || stepRunning) {
+	if imageSession && run.Purpose == PurposeWorkflow && imageToolName(in.Tool) {
+		calls, err := q.AddWorkflowStepImageCall(ctx, &run.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return deny("This workflow step is no longer running")
+		} else if err != nil {
+			return ToolDecision{}, err
+		}
+		if calls > MaxWorkflowImagesPerStep {
+			return deny(fmt.Sprintf("This step can make at most %d images: submit what you have", MaxWorkflowImagesPerStep))
+		}
+		return ToolDecision{Decision: "allow"}, nil
+	}
+	if (run.Purpose == "chat" || (run.Purpose == PurposeWorkflow && imageSession)) && (imageSession || stepRunning) {
 		sessions := stepSessions
 		if imageSession && run.HarnessSessionID != nil {
 			sessions = append(sessions, *run.HarnessSessionID)

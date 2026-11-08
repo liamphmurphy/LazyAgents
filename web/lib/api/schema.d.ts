@@ -1746,6 +1746,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflow-runs/{id}/images/{imageId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One image a step of this run generated */
+        get: operations["getWorkflowRunImageContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workflow-runs/{id}/gate": {
         parameters: {
             query?: never;
@@ -4682,6 +4699,8 @@ export interface components {
                 persona_id?: string;
                 agent_handle?: string;
                 web?: boolean;
+                /** @description agent: generate images. The step runs on Codex as a persona allowed to make images */
+                images?: boolean;
                 show?: string[];
                 retry_from?: string;
                 max_attempts?: number;
@@ -4751,6 +4770,22 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             finished_at?: string;
+            /** @description What this attempt carries: the images it made, else those of the steps before it */
+            images?: components["schemas"]["WorkflowImage"][];
+        };
+        WorkflowImage: {
+            /** Format: uuid */
+            id: string;
+            /** @description The step that made it */
+            node_id: string;
+            /** @description The attempt of that step that made it */
+            attempt: number;
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: date-time */
+            created_at: string;
         };
         WorkflowRun: {
             /** Format: uuid */
@@ -4770,6 +4805,8 @@ export interface components {
             error: string;
             /** @description The newest attempt of each node that has started */
             steps: components["schemas"]["WorkflowStep"][];
+            /** @description Every image of every attempt, oldest first */
+            images?: components["schemas"]["WorkflowImage"][];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -8241,6 +8278,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowRun"];
+                };
+            };
+        };
+    };
+    getWorkflowRunImageContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
                 };
             };
         };

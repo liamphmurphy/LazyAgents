@@ -130,3 +130,42 @@ test("the run page shows step status and the gate", async ({ page }) => {
   await expect(page.getByTestId("workflow-gate")).toBeVisible();
   await page.screenshot({ path: "/tmp/workflow-run.png" });
 });
+
+test("the build chat shows who is working until the reply arrives", async ({ page }) => {
+  await installChatApi(page, { replyDelayMs: 1200, personas: [persona(1, { name: "Atlas", is_default: true, capabilities: { code: false, images: false, workflows: true } })] });
+  await serveWorkflows(page, { wf: workflow(), posts: [], runs: [] });
+  await page.goto(`/workflows/${WF}`);
+  await expect(page.getByTestId("workflow-build-working")).toHaveCount(0);
+  await page.getByRole("textbox", { name: "Describe a change" }).fill("Add a fact check");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByTestId("workflow-build-working")).toContainText("Atlas is working");
+  await expect(page.getByTestId("workflow-build-working")).toHaveCount(0, { timeout: 10000 });
+});
+
+test("the editor offers image generation and says the step runs on Codex", async ({ page }) => {
+  await installChatApi(page, { replyDelayMs: 10 });
+  const state = { wf: workflow(), posts: [] as { url: string; body: unknown }[], runs: [] as unknown[] };
+  await serveWorkflows(page, state);
+  await page.goto(`/workflows/${WF}`);
+  await page.getByTestId("node-work").click();
+  await page.getByRole("checkbox", { name: "Generate images" }).check();
+  await expect(page.getByTestId("workflow-inspector")).toContainText("Always runs on Codex");
+  await expect(page.getByTestId("node-work")).toContainText("Codex");
+  await expect.poll(() => JSON.stringify(state.posts), { timeout: 5000 }).toContain('"images":true');
+});
+
+test("gates show images and the run view keeps every attempt", async ({ page }) => {
+  await installChatApi(page, { replyDelayMs: 10 });
+  await serveWorkflows(page, { wf: workflow(), posts: [], runs: [] });
+  const image = (id: string, attempt: number) => ({ id, node_id: "work", attempt, filename: `a${attempt}.png`, content_type: "image/png", size_bytes: 4, created_at: now() });
+  const [old, latest] = ["55555555-5555-4555-8555-555555555551", "55555555-5555-4555-8555-555555555552"].map((id, i) => image(id, i + 1));
+  const base = run();
+  const withImages = { ...base, images: [old, latest], steps: base.steps.map((s) => (s.node_id === "work" ? { ...s, attempt: 2, images: [latest] } : s)) };
+  await page.route(new RegExp(`/api/v1/workflow-runs/${RUN}$`), (route) => route.fulfill({ json: withImages }));
+  await page.goto(`/workflows/runs/${RUN}`);
+  await expect(page.getByTestId("workflow-gate").getByRole("img", { name: "a2.png" })).toBeVisible();
+  await expect(page.getByTestId("workflow-gate").getByRole("img", { name: "a1.png" })).toHaveCount(0);
+  await page.getByTestId("node-work").click();
+  await expect(page.getByTestId("workflow-attempt-1").getByRole("img", { name: "a1.png" })).toBeVisible();
+  await expect(page.getByTestId("workflow-attempt-2").getByRole("img", { name: "a2.png" })).toBeVisible();
+});

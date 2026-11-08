@@ -36,14 +36,15 @@ LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 SELECT * FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3;
 
 -- name: DeleteLibraryItem :one
--- Removes one of the caller's items. orphaned says no chat attachment or
--- other item still uses its object, so the caller may delete it.
+-- Removes one of the caller's items. orphaned says no chat attachment,
+-- workflow image or other item still uses its object, so the caller may delete it.
 WITH d AS (
   DELETE FROM library_items WHERE library_items.id = sqlc.arg(id) AND library_items.workspace_id = sqlc.arg(workspace_id) AND library_items.user_id = sqlc.arg(user_id)
   RETURNING blob_key
 )
 SELECT d.blob_key,
   (NOT EXISTS (SELECT 1 FROM chat_attachments a WHERE a.blob_key = d.blob_key)
+   AND NOT EXISTS (SELECT 1 FROM workflow_step_images i WHERE i.blob_key = d.blob_key)
    AND NOT EXISTS (SELECT 1 FROM library_items o WHERE o.blob_key = d.blob_key AND o.id <> sqlc.arg(id)))::boolean AS orphaned
 FROM d;
 

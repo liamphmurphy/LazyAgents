@@ -788,6 +788,18 @@ type WorkflowStep struct {
 	Note       string
 	CreatedAt  time.Time
 	FinishedAt *time.Time
+	ImageCalls int32
+}
+
+type WorkflowStepImage struct {
+	ID          uuid.UUID
+	StepID      uuid.UUID
+	RunID       uuid.UUID
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+	CreatedAt   time.Time
 }
 
 type Workspace struct {
