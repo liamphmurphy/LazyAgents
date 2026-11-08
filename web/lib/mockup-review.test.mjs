@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { actualView, clampScale, fitView, fromFraction, MAX_SCALE, MIN_SCALE, svgSize, swipeKey, toFraction, zoomAt } from "./mockup-review.ts";
+import { actualView, clampScale, fitView, fromFraction, MAX_SCALE, MIN_SCALE, svgSize, swipeKey, toFraction, zoomAt, startView } from "./mockup-review.ts";
 
 test("svgSize reads width/height, then viewBox, then defaults", () => {
   assert.deepEqual(svgSize('<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900">'), { w: 1440, h: 900 });
@@ -52,4 +52,20 @@ test("swipeKey moves the handle and clamps it", () => {
   assert.equal(swipeKey(0.3, "Home"), 0);
   assert.equal(swipeKey(0.3, "End"), 1);
   assert.equal(swipeKey(0.3, "a"), null);
+});
+
+test("startView opens a little zoomed out and never enlarges", () => {
+  const small = startView({ w: 360, h: 640 }, { w: 1400, h: 900 });
+  assert.equal(small.scale, 0.85);
+  assert.equal(small.x, (1400 - 360 * 0.85) / 2);
+  assert.equal(small.y, (900 - 640 * 0.85) / 2);
+  const large = startView({ w: 2000, h: 1000 }, { w: 1400, h: 900 }, 32);
+  assert.equal(large.scale, (1400 - 64) / 2000);
+});
+
+test("startView opens something very tall at its top, still readable", () => {
+  const tall = startView({ w: 760, h: 6000 }, { w: 1400, h: 900 }, 32);
+  assert.equal(tall.scale, 0.6);
+  assert.equal(tall.y, 32);
+  assert.equal(tall.x, (1400 - 760 * 0.6) / 2);
 });

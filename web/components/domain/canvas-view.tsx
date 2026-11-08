@@ -16,7 +16,9 @@ import { CodeFence } from "@/components/domain/code-fence";
 import type { Slot } from "@/lib/canvas-source";
 import { Markdown, MarkdownSlots } from "@/components/domain/markdown";
 import { MockupCanvas, renderNode, useSourceHistory, viewBoxOf } from "@/components/domain/mockup-canvas";
+import { svgSize } from "@/lib/mockup-review";
 import { Button, IconButton } from "@/components/ui/button";
+import { CanvasBoard } from "./canvas-board";
 
 type Canvas = Schemas["ChatCanvas"];
 type Comment = Schemas["ChatCanvasComment"];
@@ -25,6 +27,9 @@ type View = "preview" | "changes" | "source" | "edit";
 /** What a new comment will be on. */
 type Target = { kind: "text"; start: number; end: number; quote: string } | { kind: "svg"; vid: string; point: { x: number; y: number }; label: string };
 type Toolbar = { start: number; end: number; quote: string; top: number; left: number };
+
+/** Width of a document page on the fullscreen board. */
+const TEXT_PAGE = 820;
 
 const QUICK = [
   ["Rewrite", "Rewrite this passage."],
@@ -177,7 +182,9 @@ function TextPreview({ c, threads, activeId, pending, commentable, slots, onTool
     if (!src) return onToolbar(null);
     const r = range.getBoundingClientRect();
     const o = root.getBoundingClientRect();
-    onToolbar({ ...src, quote: sel.toString().trim().slice(0, 140), top: r.bottom - o.top + 6, left: Math.max(0, Math.min(r.left - o.left, o.width - 300)) });
+    // Measured on screen, placed inside content a board may have scaled.
+    const k = root.offsetWidth / o.width;
+    onToolbar({ ...src, quote: sel.toString().trim().slice(0, 140), top: (r.bottom - o.top) * k + 6, left: Math.max(0, Math.min((r.left - o.left) * k, root.offsetWidth - 300)) });
   };
   return (
     <div ref={host} data-testid="canvas-text" className="relative" onMouseUp={settle} onKeyUp={settle}>
@@ -408,6 +415,13 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, onCollapse
       {label}
     </button>
   );
+  // Fullscreen shows the preview on a board at its natural size; other tabs stay plain.
+  const onBoard = !inline && view === "preview" && !!c && !q.isError;
+  const board = (content: ReactNode) => {
+    if (!onBoard || !c) return content;
+    if (c.kind === "svg") return <CanvasBoard width={svgSize(c.body).w + 16} selectable={false}>{content}</CanvasBoard>;
+    return <CanvasBoard width={TEXT_PAGE} selectable><div className="rounded-lg border border-border bg-surface p-10 shadow-[var(--shadow-float)]">{content}</div></CanvasBoard>;
+  };
   const failure = actions.apply.error ?? actions.restore.error ?? actions.promote.error ?? actions.setStatus.error ?? actions.remove.error ?? (target ? null : (actions.send.error ?? actions.add.error));
   return (
     <>
@@ -449,8 +463,8 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, onCollapse
       </div>
       {failure && <p role="alert" className="border-b border-border-row px-4 py-1 text-xs text-pill-blocked-fg">{errorText(failure)}</p>}
       <div className={cx("min-h-0 flex-1", inline ? "overflow-y-auto" : "flex overflow-hidden max-md:flex-col max-md:overflow-y-auto")}>
-        <div className={cx("relative min-w-0 flex-1 p-4", !inline && "md:overflow-auto")}>
-          {canComment && !target && !open.length && !resolved.length && <p className="mb-3 text-xs text-fg-tertiary">{c?.kind === "svg" ? "Click an element to comment on it." : "Select text to comment on it."}</p>}
+        <div className={cx("relative min-w-0 flex-1", onBoard ? "max-md:min-h-[60vh]" : "p-4", !inline && !onBoard && "md:overflow-auto")}>
+          {canComment && !target && !open.length && !resolved.length && <p className={cx("text-xs text-fg-tertiary", onBoard ? "pointer-events-none absolute left-4 top-3 z-10" : "mb-3")}>{c?.kind === "svg" ? "Click an element to comment on it." : "Select text to comment on it."}</p>}
           {q.isError ? (
             <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(q.error)}</p>
           ) : !c ? (
@@ -461,7 +475,8 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, onCollapse
             <Changes chatId={chatId} c={c} />
           ) : view === "source" ? (
             <CodeFence code={c.body} info={c.kind === "svg" ? "html" : "markdown"} />
-          ) : c.kind === "svg" ? (
+          ) : (
+            board(c.kind === "svg" ? (
             <SvgView source={c.body} title={c.title} threads={isCurrent ? open : []} activeId={activeId} selected={target?.kind === "svg" ? target.vid : undefined} onPick={canComment ? setTarget : undefined} onPin={setActiveId} />
           ) : (
             <div className="relative">
@@ -477,6 +492,7 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, onCollapse
                 </div>
               )}
             </div>
+            ))
           )}
         </div>
         {showRail && (

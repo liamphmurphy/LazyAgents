@@ -18,6 +18,11 @@ export const ZOOM_STEP = 1.25;
 /** Arrow-key pan distance in px (Shift multiplies it by 5). */
 export const PAN_STEP = 48;
 
+/** The most a board opens at. */
+const START_SCALE = 0.85;
+/** Below this a whole-drawing view is too small to read. */
+const TALL_SCALE = 0.6;
+
 const DEFAULT_SIZE: Size = { w: 1280, h: 800 };
 
 function length(v: string | undefined): number {
@@ -54,6 +59,17 @@ export function clampScale(s: number): number {
 /** The whole drawing, centred, as large as fits inside the viewport's padding. */
 export function fitView(drawing: Size, viewport: Size, pad = FIT_PAD): View {
   const scale = clampScale(Math.min((viewport.w - 2 * pad) / drawing.w, (viewport.h - 2 * pad) / drawing.h));
+  return { scale, x: (viewport.w - drawing.w * scale) / 2, y: (viewport.h - drawing.h * scale) / 2 };
+}
+
+/**
+ * Where a board opens: the whole drawing, a little zoomed out, never enlarged.
+ * Something too tall to fit legibly opens at its top instead.
+ */
+export function startView(drawing: Size, viewport: Size, pad = FIT_PAD): View {
+  const fit = fitView(drawing, viewport, pad);
+  const scale = Math.min(START_SCALE, fit.scale);
+  if (scale < TALL_SCALE) return { scale: TALL_SCALE, x: (viewport.w - drawing.w * TALL_SCALE) / 2, y: pad };
   return { scale, x: (viewport.w - drawing.w * scale) / 2, y: (viewport.h - drawing.h * scale) / 2 };
 }
 
