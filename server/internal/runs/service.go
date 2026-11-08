@@ -25,6 +25,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/transcript"
 )
 
 // Timeline verbs written by runs (see tracker/activity.go for the rest).
@@ -69,6 +70,9 @@ type Service struct {
 	// HandoffChars bounds the prior transcript handed to a chat segment started
 	// by a harness switch (0: DefaultHandoffChars).
 	HandoffChars int
+	// Transcripts fetches a chat message's YouTube links ahead of its turn; nil
+	// leaves that to the chat's own tool call.
+	Transcripts *transcript.YouTube
 }
 
 type Caller = agents.Caller

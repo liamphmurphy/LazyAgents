@@ -14,6 +14,18 @@ func TestAutoLevel(t *testing.T) {
 		"fix the failing test":              "high",
 		"look at chat.go":                   "high",
 		"do a thorough audit of the runner": "xhigh",
+		"thanks, that refactor looks great": "low",
+		"thanks for the fix":                "low",
+		"does that make sense":              "low",
+		"the test passed":                   "low",
+		"cool, add a test":                  "high",
+		"thanks, fix that too":              "high",
+		"thanks, now refactor the runner":   "xhigh",
+		"cool, refactor it":                 "xhigh",
+		"thanks, is chat.go ready?":         "high",
+		"why is the test failing?":          "high",
+		"can you make it faster":            "high",
+		"make me a battle map":              "high",
 	} {
 		if got := AutoLevel(text); got != want {
 			t.Errorf("AutoLevel(%q) = %q, want %q", text, got, want)

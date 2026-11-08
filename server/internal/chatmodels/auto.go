@@ -16,19 +16,28 @@ import (
 
 var (
 	deepAsk = regexp.MustCompile(`\b(thorough(ly)?|deep[- ]dive|in[- ]depth|comprehensive(ly)?|architecture|redesign|refactor|migrate|migration|audit|root cause|think (hard|carefully))\b`)
-	workAsk = regexp.MustCompile(`\b(implement|fix|add|build|change|update|debug|investigate|write|create|review|set|make|remove|rename|test|compare|plan|design|analy[sz]e|research)\b`)
+	workAsk = regexp.MustCompile(`\b(implement|fix|debug|investigate|compare|analy[sz]e|research|failing|broken|bugs?|crash(es|ing)?)\b`)
+	// asked finds a verb used as a request. Words like "make" or "test" are
+	// only work when asked for: "does that make sense" and "the test passed"
+	// aren't.
+	asked   = regexp.MustCompile(`(^|[.!?,;:\n]\s*|\b(and|then|also|please|pls|you|let'?s|lets|need to|needs to|want to|like to|have to|should|must|go ahead and)\s+)(implement|fix|debug|investigate|compare|analy[sz]e|research|add|build|change|update|write|create|review|set|make|remove|rename|test|plan|design|refactor|redesign|migrate|audit)\b`)
+	thanks  = regexp.MustCompile(`^(thanks|thank you|thx|ty|nice|great|awesome|perfect|cool|sweet|love it|looks good|good (job|work))\b`)
+	onward  = regexp.MustCompile(`\b(but|now|next|let'?s)\b`)
 	codeish = regexp.MustCompile("```|\\b[\\w-]+\\.(go|ts|tsx|js|py|sql|md|ya?ml|json)\\b")
 )
 
-// AutoLevel is the effort a message calls for: low for quick conversation,
-// scaling up with the size of the ask.
+// AutoLevel is the effort a message calls for: low for quick conversation and
+// thanks, scaling up with the size of the ask.
 func AutoLevel(text string) string {
 	t := strings.ToLower(text)
 	words := len(strings.Fields(t))
+	if words <= 12 && thanks.MatchString(t) && !strings.Contains(t, "?") && !onward.MatchString(t) && !asked.MatchString(t) && !codeish.MatchString(t) {
+		return "low"
+	}
 	switch {
 	case deepAsk.MatchString(t) || words > 200:
 		return "xhigh"
-	case workAsk.MatchString(t) || codeish.MatchString(t) || words > 60:
+	case workAsk.MatchString(t) || asked.MatchString(t) || codeish.MatchString(t) || words > 60:
 		return "high"
 	case words > 12 || (words >= 6 && strings.Contains(t, "?")):
 		return "medium"
