@@ -11,7 +11,6 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ThemeSwitch } from "@/components/shell/theme";
 import { ProjectsSection } from "./projects/projects-screen";
-import { ProfileSection } from "./profile-section";
 import { SecretsSection } from "./secrets-section";
 import { SetupChecklist } from "@/components/domain/setup";
 
@@ -29,7 +28,6 @@ export function SettingsScreen() {
   const missing = secrets.data ? missingConnections(secrets.data.secrets).length : 0;
   const activeProjects = boot.data?.projects.filter((p) => !p.archived).length ?? 0;
   const nav: { id: string; label: string; health: Health; badge?: string }[] = [
-    { id: "profile", label: "Profile", health: "idle" },
     { id: "workspace", label: "Workspace", health: !secrets.data ? "unknown" : secrets.data.key_configured ? "ok" : "attention" },
     { id: "secrets", label: "Provider secrets", health: !secrets.data ? "unknown" : missing || !secrets.data.key_configured ? "attention" : "ok", badge: missing ? `${missing} off` : undefined },
     { id: "projects", label: "Projects", health: !boot.data ? "unknown" : activeProjects ? "ok" : "attention" },
@@ -56,9 +54,6 @@ export function SettingsScreen() {
           ))}
         </nav>
         <div className="flex min-w-0 max-w-[820px] flex-col gap-10">
-          <Section id="profile" title="Profile" lead="How you appear to teammates: your picture, display name and role.">
-            <ProfileSection />
-          </Section>
           <Section id="workspace" title="Workspace" lead="Shared by every project. Secret encryption is configured on the API server.">
             <WorkspaceSection />
           </Section>

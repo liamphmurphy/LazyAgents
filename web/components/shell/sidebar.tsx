@@ -14,7 +14,6 @@ import { Segmented } from "@/components/ui/controls";
 import { Kbd } from "@/components/ui/primitives";
 import { floatPanel } from "@/components/domain/pickers";
 import { SidebarCapacity } from "@/components/domain/runner-capacity";
-import { HumanAvatar } from "@/components/domain/avatars";
 import { SidebarSavedViews } from "@/components/domain/saved-views";
 import { ChatHistory, NewConversationButton, PersonaRail } from "@/app/(app)/chat/_components/chat-history";
 import { useNavMode } from "./nav-mode";
@@ -29,7 +28,6 @@ export type SidebarProps = {
   wikiSuggestions?: number;
   /** Every project; archived ones are never offered. */
   projects: ScopedProject[];
-  user: { name: string; initials?: string; avatarUrl?: string; role: string };
 };
 
 const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "unread", runs: "running" };
@@ -220,7 +218,7 @@ function ProjectSwitcher({ projects, current }: { projects: ScopedProject[]; cur
   );
 }
 
-export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, projects, user }: SidebarProps) {
+export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, projects }: SidebarProps) {
   const pathname = usePathname();
   const search = useSearchParams();
   const remembered = useRememberedProject();
@@ -259,6 +257,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           <Mark />
         </span>
         <div className="flex flex-col items-center gap-1">
+          <ToggleButton expanded={false} onToggle={() => setExpanded(true)} />
           {chatting ? <NewConversationButton project={chatProject} id={viewed ?? undefined} rail /> : newTicket}
           <button
             type="button"
@@ -284,12 +283,6 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           ))}
         </nav>
         {chatting && <PersonaRail project={chatProject} id={viewed ?? undefined} viewed={viewed} />}
-        <div className="mt-auto flex flex-col items-center gap-2">
-          <Link href="/settings#profile" aria-label={`${user.name}: Profile`} title="Profile" className="rounded-full hover:opacity-80">
-            <HumanAvatar name={user.name} initials={user.initials} src={user.avatarUrl} size={26} label={false} />
-          </Link>
-          <ToggleButton expanded={false} onToggle={() => setExpanded(true)} />
-        </div>
       </aside>
     );
   }
@@ -302,7 +295,10 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
             <span className="text-[13.5px] font-semibold tracking-[-0.01em]">{workspace}</span>
             <Icon name="chev" size={14} strokeWidth={1.6} className="text-fg-tertiary" />
           </button>
-          {chatting ? <NewConversationButton project={chatProject} id={viewed ?? undefined} /> : newTicket}
+          <div className="flex flex-none items-center gap-1.5">
+            {!chatting && newTicket}
+            <ToggleButton expanded onToggle={() => setExpanded(false)} />
+          </div>
         </div>
         <ProjectSwitcher projects={active} current={current} />
       </div>
@@ -342,16 +338,6 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
 
       {chatting && <ChatHistory project={chatProject} id={viewed ?? undefined} viewed={viewed} />}
       {pathname === "/" && <SidebarCapacity />}
-      <div className={cx("flex items-center gap-2.5 px-1.5 py-1", pathname !== "/" && "mt-auto")}>
-        <Link href="/settings#profile" title="Profile" className="-mx-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-hover">
-          <HumanAvatar name={user.name} initials={user.initials} src={user.avatarUrl} size={26} label={false} />
-          <span className="flex min-w-0 flex-1 flex-col leading-tight">
-            <span className="truncate font-medium">{user.name}</span>
-            <span className="truncate text-[11.5px] text-fg-tertiary">{user.role}</span>
-          </span>
-        </Link>
-        <ToggleButton expanded onToggle={() => setExpanded(false)} />
-      </div>
     </aside>
   );
 }

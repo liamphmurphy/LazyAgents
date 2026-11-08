@@ -38,7 +38,7 @@ export function useNewConversation(project: string, id?: string) {
   return { start, disabled: !project || noHarness || create.isPending, error: create.isError ? errorText(create.error) : undefined };
 }
 
-/** The menu's + in Chat mode. Its error floats beside it, since the menu has no room to reflow. */
+/** New conversation: on the rail under the menu toggle, otherwise a small + beside the picked persona's name. Its error floats beside it, since the menu has no room to reflow. */
 export function NewConversationButton({ project, id, rail }: { project: string; id?: string; rail?: boolean }) {
   const conversation = useNewConversation(project, id);
   return (
@@ -49,9 +49,12 @@ export function NewConversationButton({ project, id, rail }: { project: string; 
         title="New conversation"
         disabled={conversation.disabled}
         onClick={conversation.start}
-        className="grid size-[30px] place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+        className={cx(
+          "grid place-items-center rounded-md border hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50",
+          rail ? "size-[30px] border-border-strong bg-btn-outline text-fg-2" : "size-6 border-accent bg-selected text-accent",
+        )}
       >
-        <Icon name="plus" size={15} strokeWidth={1.6} />
+        <Icon name="plus" size={rail ? 15 : 14} strokeWidth={1.6} />
       </button>
       {conversation.error && (
         <p role="alert" className={cx("absolute z-40 w-56 rounded-md border border-border-float bg-surface-raised p-2 text-xs text-pill-blocked-fg shadow-lg", rail ? "left-full top-0 ml-2" : "right-0 top-full mt-1")}>
@@ -321,6 +324,7 @@ export function ChatHistory({ project, id, viewed }: { project: string; id?: str
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
       <div className="flex items-center gap-0.5 pl-2">
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-secondary">{view === "archived" ? `${heading} · Archived` : heading}</span>
+        <NewConversationButton project={project} id={id} />
         <IconButton icon="search" size={24} label="Find in chats" aria-pressed={finding} onClick={() => (finding ? stopFinding() : setFinding(true))} />
         <IconButton icon="folder" size={24} label="Archived conversations" aria-pressed={view === "archived"} onClick={() => setView(view === "archived" ? "active" : "archived")} />
       </div>

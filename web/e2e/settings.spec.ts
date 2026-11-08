@@ -61,8 +61,9 @@ test("provider secrets show status and unlocks, are write-only, and saving refre
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Escape");
   const before = mock.models();
-  // Settings is in Work mode; the profile link reaches it from Chat without a reload.
-  await page.getByRole("complementary", { name: "Main menu" }).locator('a[href="/settings#profile"]').click();
+  // Settings is in Work mode; both steps stay client-side, so the model cache survives.
+  await page.getByRole("radio", { name: "Work" }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /Settings/ }).click();
 
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" })).toContainText("a setting runs need is missing");
