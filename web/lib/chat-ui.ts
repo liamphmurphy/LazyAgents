@@ -144,6 +144,12 @@ export function chatTitle(c: { title: string }): string {
   return c.title.trim() || "New conversation";
 }
 
+/** The most recently active chat: by its last message, else when it last changed. */
+export function newestChat<T extends { last_message_at?: string | null; updated_at: string }>(chats: T[] | undefined): T | undefined {
+  const t = (c: T) => Date.parse(c.last_message_at ?? c.updated_at);
+  return chats?.reduce<T | undefined>((a, c) => (!a || t(c) > t(a) ? c : a), undefined);
+}
+
 // ---- the chat tab's status line: what the persona is doing, at a glance ----
 
 /**
