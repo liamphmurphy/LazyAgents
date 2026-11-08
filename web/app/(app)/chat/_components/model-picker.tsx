@@ -11,16 +11,16 @@ export type Effort = Schemas["ChatEffort"];
 type Group = Schemas["ChatHarnessModels"];
 
 const EFFORT_LABELS: Record<Effort, string> = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" };
-export const effortLabel = (e: Effort | undefined) => (e ? EFFORT_LABELS[e] : "Default");
+export const effortLabel = (e: Effort | undefined) => (e ? EFFORT_LABELS[e] : "Automatic");
 
 /**
  * The efforts the selected model offers. A model the catalog doesn't list (the
  * definition's alias) gets its harness default model's, as the server allows.
  */
-export function modelEfforts(groups: Group[] | undefined, s: Selection): { efforts: Effort[]; defaultEffort?: Effort } {
+export function modelEfforts(groups: Group[] | undefined, s: Selection): { efforts: Effort[] } {
   const g = groups?.find((x) => x.harness === s.harness);
   const m = g?.models.find((x) => x.id === s.model) ?? g?.models.find((x) => x.default);
-  return { efforts: m?.efforts ?? [], defaultEffort: m?.default_effort };
+  return { efforts: m?.efforts ?? [] };
 }
 
 export const sameSelection = (a: Selection, b: Selection) => a.harness === b.harness && a.model === b.model;
@@ -99,13 +99,11 @@ export function ModelPicker({
 /** Reasoning effort for the next message; hidden when the model has no effort control. */
 export function EffortPicker({
   efforts,
-  defaultEffort,
   value,
   onChange,
   disabled,
 }: {
   efforts: Effort[];
-  defaultEffort?: Effort;
   value: Effort | undefined;
   onChange: (e: Effort | undefined) => void;
   disabled?: boolean;
@@ -132,7 +130,6 @@ export function EffortPicker({
             <DropdownMenu.Item key={e ?? "default"} className={item} onSelect={() => onChange(e)}>
               <span className="flex items-center gap-2">
                 {effortLabel(e)}
-                {!e && defaultEffort && <span className="text-xs text-fg-tertiary">({effortLabel(defaultEffort).toLowerCase()})</span>}
                 <span className="ml-auto w-4 text-accent">{value === e && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
               </span>
             </DropdownMenu.Item>

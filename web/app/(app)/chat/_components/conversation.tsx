@@ -303,7 +303,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const selection = picked ?? current;
   const pending = !!(picked && current && !sameSelection(picked, current));
   const offered = selection ? modelEfforts(groups, selection) : { efforts: [] };
-  // The effort the next message runs at; one the selected model lacks falls back to the default, as on the server.
+  // The effort the next message runs at; one the selected model lacks falls back to automatic, as on the server.
   const wanted = pickedEffort === null ? c?.effort : pickedEffort === "default" ? undefined : pickedEffort;
   const effort = wanted && offered.efforts.includes(wanted) ? wanted : undefined;
   const effortPending = !!c && effort !== c.effort;
@@ -945,7 +945,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked || running} />}
                 <EffortPicker
                   efforts={offered.efforts}
-                  defaultEffort={offered.defaultEffort}
                   value={effort}
                   onChange={(e) => setPickedEffort(e ?? "default")}
                   disabled={locked || running}

@@ -89,13 +89,13 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
-  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Default");
+  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Automatic");
   await send(page, "hello");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello");
   expect(mock.posted.at(-1)?.body).not.toHaveProperty("effort");
 
   await effort(page).click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Default", "Low", "Medium", "High", "Extra high", "Max"]);
+  await expect(page.getByRole("menuitem")).toHaveText(["Automatic", "Low", "Medium", "High", "Extra high", "Max"]);
   await page.getByRole("menuitem", { name: "Max" }).click();
   await expect(page.getByTestId("pending-effort")).toHaveText("Next message will use max effort");
   await send(page, "think hard");
@@ -109,13 +109,13 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
   await expect(page.getByTestId("assistant-message").nth(2)).toContainText("Echo: again");
   expect(mock.posted.at(-1)?.body).not.toHaveProperty("effort");
 
-  // Codex here offers low–high, with its own default named: max falls back to Default.
+  // Codex here offers low–high, so max falls back to Automatic.
   await picker(page).click();
   await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
   await page.getByRole("dialog", { name: "Switch to Codex · gpt-5-codex?" }).getByRole("button", { name: "Switch harness" }).click();
-  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Default");
+  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Automatic");
   await effort(page).click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Default(medium)", "Low", "Medium", "High"]);
+  await expect(page.getByRole("menuitem")).toHaveText(["Automatic", "Low", "Medium", "High"]);
   await page.keyboard.press("Escape");
   await send(page, "on codex");
   await expect(page.getByTestId("assistant-message").nth(3)).toContainText("Echo: on codex");

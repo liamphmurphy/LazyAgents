@@ -495,14 +495,14 @@ func TestChatEffort(t *testing.T) {
 	if run, eff := runEffort(id); run != run0 || eff != "max" {
 		t.Fatalf("run %s effort %q, want %s max", run, eff, run0)
 	}
-	// default clears it.
+	// default clears it: the chat goes automatic and "hi" runs at the lowest effort.
 	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
 	res = e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "effort": "default"}, http.StatusAccepted)
 	if _, ok := res["chat"].(map[string]any)["effort"]; ok {
 		t.Fatalf("effort not cleared %v", res["chat"])
 	}
-	if run, eff := runEffort(id); run != run0 || eff != "" {
-		t.Fatalf("run %s effort %q, want %s with none", run, eff, run0)
+	if run, eff := runEffort(id); run != run0 || eff != "low" {
+		t.Fatalf("run %s effort %q, want %s low", run, eff, run0)
 	}
 	// Switching to a model without the chat's effort drops it.
 	e.want("POST", "/chats/"+id+"/cancel", nil, 200)

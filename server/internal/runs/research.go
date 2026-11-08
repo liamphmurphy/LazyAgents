@@ -543,7 +543,7 @@ func startResearchWriteUp(ctx context.Context, q *store.Queries, chat store.Chat
 			}
 		}
 	}
-	chat, _, _, err = startChatTurn(ctx, q, chat, p.Key, researchWriteUpPrompt(job, tasks), false, 0)
+	chat, _, _, err = startChatTurn(ctx, q, chat, p.Key, researchWriteUpPrompt(job, tasks), "high", false, 0)
 	if err != nil {
 		var busy *apperr.ConflictError
 		if errors.As(err, &busy) {
