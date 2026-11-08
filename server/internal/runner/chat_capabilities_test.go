@@ -161,13 +161,29 @@ func TestCapabilityChangeEndsSegment(t *testing.T) {
 	}
 
 	off := false
-	if _, err = ps.Update(e.ctx, o, p.ID, personas.Patch{Revision: p.Revision, Images: &off}); err != nil {
+	if p, err = ps.Update(e.ctx, o, p.ID, personas.Patch{Revision: p.Revision, Images: &off}); err != nil {
 		t.Fatal(err)
 	}
 	e.say(chat.ID, "four")
 	third := e.chatRun(chat.ID)
 	if spec, _ = runs.Spec(third); third.ID == second.ID || spec.HarnessOptions[agentdef.OptionImageGeneration] != "" {
 		t.Fatalf("turning images off must take effect on the next message: %+v", spec.HarnessOptions)
+	}
+	if spec.HarnessOptions[agentdef.OptionWebSearch] != "true" {
+		t.Fatalf("a persona with web on must search: %+v", spec.HarnessOptions)
+	}
+
+	// Turning web off ends the segment too, for the same reason.
+	if _, err = ps.Update(e.ctx, o, p.ID, personas.Patch{Revision: p.Revision, Web: &off}); err != nil {
+		t.Fatal(err)
+	}
+	e.say(chat.ID, "five")
+	fourth := e.chatRun(chat.ID)
+	if spec, _ = runs.Spec(fourth); fourth.ID == third.ID || spec.HarnessOptions[agentdef.OptionWebSearch] != "" {
+		t.Fatalf("turning web off must take effect on the next message: %+v", spec.HarnessOptions)
+	}
+	if err := e.pool.QueryRow(e.ctx, `SELECT payload->>'reason' FROM run_events WHERE run_id=$1 AND payload->>'state'='chat_segment_ended'`, third.ID).Scan(&reason); err != nil || reason != "capabilities_changed" {
+		t.Fatalf("segment end reason after web change %q, %v", reason, err)
 	}
 }
 

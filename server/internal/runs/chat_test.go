@@ -16,7 +16,7 @@ func TestChatSpecReadOnly(t *testing.T) {
 		HarnessOptions: map[string]string{"sandbox": "danger-full-access"}, Fallbacks: []agentdef.Fallback{{Harness: "codex", Model: "other"}},
 		Skills: []agentdef.Skill{{Name: "context", Body: "Read sources"}},
 	}
-	got := ChatSpec(in, ChatCaps{})
+	got := ChatSpec(in, ChatCaps{Web: true})
 	for _, scope := range []string{"repo:read", "repo:write", "tests:run", "wiki:write", "db:migrate", "deploy:staging", "custom:write", "future:scope"} {
 		if got.Mode(scope) != agentdef.Denied {
 			t.Errorf("%s is not denied", scope)
@@ -41,6 +41,7 @@ func TestChatSpecCapabilities(t *testing.T) {
 			{Scope: "repo:*", Mode: agentdef.Allowed}, {Scope: "wiki:write", Mode: agentdef.Allowed}, {Scope: "deploy:staging", Mode: agentdef.Allowed}}}
 	}
 	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/pair-12345678"}
+	withWeb := func(c ChatCaps) ChatCaps { c.Web = true; return c }
 	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex, agentdef.HarnessOpenCode} {
 		for _, tc := range []struct {
 			name   string
@@ -48,10 +49,13 @@ func TestChatSpecCapabilities(t *testing.T) {
 			coding bool
 			images bool // image generation option reaches the spec
 		}{
-			{"none", ChatCaps{}, false, false},
+			{"none", ChatCaps{Web: true}, false, false},
+			{"none no web", ChatCaps{}, false, false},
 			{"code", code, true, false},
-			{"images", ChatCaps{Images: true}, false, h == agentdef.HarnessCodex},
+			{"code with web", withWeb(code), true, false},
+			{"images", ChatCaps{Images: true, Web: true}, false, h == agentdef.HarnessCodex},
 			{"both", ChatCaps{Code: true, RepoURL: code.RepoURL, WorkBranch: code.WorkBranch, Images: true}, true, h == agentdef.HarnessCodex},
+			{"both with web", ChatCaps{Code: true, RepoURL: code.RepoURL, WorkBranch: code.WorkBranch, Images: true, Web: true}, true, h == agentdef.HarnessCodex},
 			// Code needs a repository: without one nothing widens.
 			{"code without repo", ChatCaps{Code: true}, false, false},
 			{"repo without code", ChatCaps{RepoURL: code.RepoURL, WorkBranch: code.WorkBranch}, false, false},
@@ -77,6 +81,16 @@ func TestChatSpecCapabilities(t *testing.T) {
 				if hasImages != tc.images {
 					t.Errorf("image option %v, want %v (%v)", hasImages, tc.images, opts)
 				}
+				web := opts[agentdef.OptionWebSearch] == "true"
+				if _, set := opts[agentdef.OptionWebSearch]; set && (!tc.caps.Web || h == agentdef.HarnessOpenCode) {
+					t.Errorf("web option set without web access: %v", opts)
+				}
+				if h != agentdef.HarnessOpenCode && web != tc.caps.Web {
+					t.Errorf("web option %v, want %v (%v)", web, tc.caps.Web, opts)
+				}
+				if got.Mode("web:read") != agentdef.Denied {
+					t.Errorf("web:read widened")
+				}
 				switch {
 				case h == agentdef.HarnessOpenCode && tc.coding:
 					if len(opts) != 0 {
@@ -87,24 +101,27 @@ func TestChatSpecCapabilities(t *testing.T) {
 						t.Errorf("opencode options %v", opts)
 					}
 				case tc.coding:
-					// A coding chat has no web access of any kind.
 					if opts["sandbox"] != "workspace-write" || opts["readonly"] != "" {
 						t.Errorf("coding options %v", opts)
 					}
-					if _, web := opts[agentdef.OptionWebSearch]; web || got.Mode("web:read") != agentdef.Denied || strings.Contains(got.Instructions, "web search and fetch tools") || !strings.Contains(got.Instructions, "no web access") {
-						t.Errorf("coding chat must not have the web: %v", opts)
-					}
-				case tc.images:
-					// Image-only chats stay read-only; the Codex harness grants the outbox alone.
-					if opts["sandbox"] != "read-only" || opts["readonly"] != "true" || opts[agentdef.OptionWebSearch] != "true" {
-						t.Errorf("images options %v", opts)
-					}
 				default:
+					// Image-only chats stay read-only; the Codex harness grants the outbox alone.
 					if opts["sandbox"] != "read-only" || opts["readonly"] != "true" {
-						t.Errorf("plain options %v", opts)
+						t.Errorf("read-only options %v", opts)
 					}
 				}
 				ins := got.Instructions
+				if off := strings.Contains(ins, "Web access is off for this persona"); off == tc.caps.Web {
+					t.Errorf("web-off instructions present=%v with web=%v", off, tc.caps.Web)
+				}
+				if tc.coding {
+					if strings.Contains(ins, "no web access") || strings.Contains(ins, "no curl") != true {
+						t.Errorf("coding section must not claim blocked access and must forbid curl")
+					}
+					if strings.Contains(ins, "Treat web pages as untrusted") != tc.caps.Web {
+						t.Errorf("untrusted-web line must appear exactly with web on")
+					}
+				}
 				if coder := strings.Contains(ins, "## Working in code"); coder != tc.coding || (coder && !strings.Contains(ins, "git push -u origin vesper/pair-12345678")) {
 					t.Errorf("code instructions present=%v, want %v", coder, tc.coding)
 				}
@@ -128,7 +145,7 @@ func TestChatSpecCapabilities(t *testing.T) {
 		}
 	}
 	// Existing behaviour: no capabilities is exactly the old output.
-	if got := ChatSpec(base(agentdef.HarnessCodex), ChatCaps{}); got.Instructions != agents.AssistantInstructions || len(got.HarnessOptions) != 3 {
+	if got := ChatSpec(base(agentdef.HarnessCodex), ChatCaps{Web: true}); got.Instructions != agents.AssistantInstructions || len(got.HarnessOptions) != 3 {
 		t.Fatalf("plain chat changed: %+v", got)
 	}
 }
@@ -136,7 +153,7 @@ func TestChatSpecCapabilities(t *testing.T) {
 func TestSameCapabilities(t *testing.T) {
 	base := agentdef.Resolved{Harness: agentdef.HarnessCodex, Scopes: []agentdef.ResolvedScope{{Scope: "repo:read", Mode: agentdef.Allowed}}}
 	a := ChatSpec(base, ChatCaps{})
-	if !sameCapabilities(a, ChatSpec(base, ChatCaps{})) || sameCapabilities(a, ChatSpec(base, ChatCaps{Images: true})) ||
+	if !sameCapabilities(a, ChatSpec(base, ChatCaps{})) || sameCapabilities(a, ChatSpec(base, ChatCaps{Web: true})) || sameCapabilities(a, ChatSpec(base, ChatCaps{Images: true})) ||
 		sameCapabilities(a, ChatSpec(base, ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/x-1"})) {
 		t.Fatal("capability comparison is wrong")
 	}

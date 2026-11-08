@@ -369,6 +369,7 @@ type Persona struct {
 	CanCode            bool
 	CanGenerateImages  bool
 	Repos              []string
+	CanUseWeb          bool
 }
 
 type PlanStep struct {
