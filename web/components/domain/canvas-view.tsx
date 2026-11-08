@@ -256,7 +256,7 @@ function Thread({ c, n, replies, active, agent, readOnly, actions, onActivate }:
         <span className="font-semibold text-fg-2">{who(c)}</span>
         <span className="ml-auto">{statusLabel(c)}</span>
       </div>
-      {c.target_lost ? <p className="text-[11.5px] italic text-fg-tertiary">Original target removed</p> : target && <p className="truncate text-[11.5px] text-fg-tertiary">{target}</p>}
+      {c.target_lost && (c.status === "draft" || c.status === "open") ? <p className="text-[11.5px] italic text-fg-tertiary">Original target removed</p> : target && <p className="truncate text-[11.5px] text-fg-tertiary">{target}</p>}
       <p className="whitespace-pre-wrap text-fg">{c.body}</p>
       {c.suggestion != null && (
         <p className="rounded bg-pill-done-bg px-2 py-1 text-pill-done-fg"><span className="sr-only">Suggested: </span>{c.suggestion}</p>

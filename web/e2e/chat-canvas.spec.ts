@@ -231,13 +231,15 @@ test("threads can be applied, resolved, reopened, and show a lost target", async
   const base = { seq: 2, author_type: "agent", target_lost: false, created_at: at };
   const calls = await open(page, [
     { ...base, id: "s1", body: "Longer?", anchor: { start: 10, end: 17, quote: "Archive" }, status: "open", suggestion: "Store" },
-    { ...base, id: "s2", body: "Gone one", anchor: { start: 0, end: 1, quote: "x" }, status: "addressed", target_lost: true },
+    { ...base, id: "s2", body: "Gone one", anchor: { start: 0, end: 1, quote: "x" }, status: "open", target_lost: true },
+    { ...base, id: "s3", body: "Handled and rewritten", anchor: { start: 0, end: 1, quote: "x" }, status: "addressed", target_lost: true },
     { ...base, id: "r1", parent_id: "s2", body: "Handled it", anchor: {}, status: "open" },
   ]);
   const pane = await openDoc(page);
   const first = pane.getByTestId("canvas-comment").filter({ hasText: "Longer?" });
   const second = pane.getByTestId("canvas-comment").filter({ hasText: "Gone one" });
   await expect(second).toContainText("Original target removed");
+  await expect(pane.getByTestId("canvas-comment").filter({ hasText: "Handled and rewritten" })).not.toContainText("Original target removed");
   await expect(second).toContainText("Handled it");
   await first.getByRole("button", { name: "Apply" }).click();
   await expect.poll(() => calls.applied.length).toBe(1);
