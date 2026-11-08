@@ -40,6 +40,14 @@ test("a selection across bold covers the markers in the source", () => {
   assert.equal(md.slice(range.start, range.end), "ain **bo");
 });
 
+test("inline code maps inside its backticks", () => {
+  for (const md of ["a `code` b", "a `` c`ode `` b", "a `` code `` b"]) {
+    const run = runs(md).find((r) => r.text.includes("ode"));
+    const range = selectionToSource(md, { ...run, offset: run.text.indexOf("ode") }, { ...run, offset: run.text.length });
+    assert.equal(md.slice(range.start, range.end), "ode", md);
+  }
+});
+
 test("lists, headings and table cells map back", () => {
   const md = "# Title\n\n- one\n- two\n\n| a | b |\n|---|---|\n| cell | x |\n";
   for (const r of runs(md)) assert.equal(md.slice(r.start, r.end), r.text);

@@ -50,9 +50,15 @@ function entityWidth(entity: string): number {
  * For a text run, the source offset (within `src`) of each index of `rendered`,
  * plus one final entry for its end. Accounts for what Markdown removes inside
  * a run: backslash escapes, character references, and line prefixes such as a
- * blockquote's "> " after a soft break.
+ * blockquote's "> " after a soft break, and inline code's backticks.
  */
 export function renderedToSource(src: string, rendered: string): number[] {
+  // An inline code run's position includes its backticks; its content is literal.
+  const ticks = /^`+/.exec(src)?.[0].length ?? 0;
+  if (ticks && !rendered.startsWith(src.slice(0, ticks))) {
+    const padded = src.length - 2 * ticks > rendered.length && src[ticks] === " " ? 1 : 0;
+    return Array.from({ length: rendered.length + 1 }, (_, i) => ticks + padded + i);
+  }
   const map: number[] = [];
   let s = 0;
   for (let r = 0; r < rendered.length; ) {

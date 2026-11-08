@@ -289,6 +289,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "canvas: <id>" replies with a card for that canvas.
+    if (prompt.startsWith("canvas:")) {
+      add(c, "assistant", `Drafted it.\n\n\`\`\`canvas\n${prompt.slice(7).trim()}\n\`\`\``, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     // "svg:" replies with an SVG image; "badsvg:" with one the browser can't draw.
     if (prompt.startsWith("svg:") || prompt.startsWith("badsvg:")) {
       const svg = prompt.startsWith("svg:") ? `<svg viewBox="0 0 40 20" width="40" height="20"><script>document.title="ran"</script><rect width="40" height="20" fill="#36c"/></svg>` : "<svg><rect></svg>";
@@ -336,6 +342,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
     const fail = (e: ReturnType<typeof err>) => json(e.body, e.status);
 
+    if (/^\/chats\/[^/]+\/canvases$/.test(path)) return json({ canvases: [] });
     if (path === "/bootstrap") {
       return json({
         workspace: { id: uuid(), name: "Acme", slug: "acme" },

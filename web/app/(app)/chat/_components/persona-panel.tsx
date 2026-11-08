@@ -25,6 +25,7 @@ export function usePersonaPanel() {
     if (open) {
       q.set("personas", "1");
       q.delete("memory");
+      q.delete("canvas");
     } else q.delete("personas");
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };

@@ -54,7 +54,7 @@ const ATTRS: Record<string, string> = {
   "clip-path": "clipPath", mask: "mask", "marker-start": "markerStart", "marker-mid": "markerMid", "marker-end": "markerEnd",
   patternUnits: "patternUnits", patternTransform: "patternTransform", clipPathUnits: "clipPathUnits", maskUnits: "maskUnits",
   markerWidth: "markerWidth", markerHeight: "markerHeight", refX: "refX", refY: "refY", orient: "orient",
-  href: "href", rotate: "rotate", display: "display", visibility: "visibility",
+  "data-vid": "data-vid", href: "href", rotate: "rotate", display: "display", visibility: "visibility",
 };
 
 const ID = /^[A-Za-z_][\w.:-]*$/;
