@@ -18,6 +18,12 @@ export function WorkflowsScreen() {
   const [name, setName] = useState("");
   const list = workflows.data?.workflows ?? [];
   const add = () => create.mutate({ name }, { onSuccess: (w) => router.push(`/workflows/${w.id}`) });
+  const createForm = (
+    <form className="flex w-full max-w-[480px] gap-2" onSubmit={(e) => { e.preventDefault(); if (name.trim()) add(); }}>
+      <TextInput aria-label="New workflow name" placeholder="New workflow name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Button variant="primary" type="submit" disabled={!name.trim() || create.isPending}>Create</Button>
+    </form>
+  );
   return (
     <>
       <TopBar crumbs={[{ label: "Workflows" }]} />
@@ -27,15 +33,12 @@ export function WorkflowsScreen() {
             <h1 className="type-display">Workflows</h1>
             <p className="text-sm text-fg-secondary">Fixed sequences of steps Vesper runs for you. Start one from a chat with /workflow, or ask a persona and confirm its suggestion.</p>
           </div>
-          <form className="flex max-w-[480px] gap-2" onSubmit={(e) => { e.preventDefault(); if (name.trim()) add(); }}>
-            <TextInput aria-label="New workflow name" placeholder="New workflow name" value={name} onChange={(e) => setName(e.target.value)} />
-            <Button variant="primary" type="submit" disabled={!name.trim() || create.isPending}>Create</Button>
-          </form>
+          {list.length > 0 && createForm}
           {(create.error || workflows.error) && <Banner tone="blocked" title={(create.error ?? workflows.error)?.message} />}
           {workflows.isPending ? (
             <Skeleton className="h-24 w-full rounded-lg" />
           ) : list.length === 0 ? (
-            <EmptyState icon="graph" title="No workflows yet">Create one above, or ask a persona in a chat to build one with you.</EmptyState>
+            <EmptyState icon="graph" title="No workflows yet" actions={createForm}>Name your first one below, or ask a persona in a chat to build one with you.</EmptyState>
           ) : (
             <ul className="flex flex-col gap-2">
               {list.map((w) => (

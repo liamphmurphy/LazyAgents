@@ -104,6 +104,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
       </div>
       <form
         className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5"
+        onPaste={files.onPaste}
         onSubmit={(e) => {
           e.preventDefault();
           submit();

@@ -1,16 +1,16 @@
 "use client";
 
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { Dialog } from "radix-ui";
 import { chatAttachmentUrl, postForm, type Schemas } from "@/lib/api/client";
-import { ATTACH_ACCEPT, attachmentBadge, attachmentProblem, MAX_ATTACHMENTS } from "@/lib/attachments";
+import { ATTACH_ACCEPT, attachmentBadge, attachmentProblem, MAX_ATTACHMENTS, pastedImageName } from "@/lib/attachments";
 import { formatBytes } from "@/lib/files";
 import { cx } from "@/lib/cx";
 import { isImageType } from "@/lib/persona-ui";
 import { Icon } from "@/components/ui/icon";
 
 type Attachment = Schemas["ChatAttachment"];
-type Item = { key: number; name: string; size: number; status: "uploading" | "done" | "error"; id?: string; error?: string };
+type Item = { key: number; name: string; size: number; status: "uploading" | "done" | "error"; id?: string; error?: string; preview?: string };
 
 const chipClass = "inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border px-2 text-xs";
 
@@ -19,15 +19,31 @@ function Badge({ name }: { name: string }) {
 }
 
 /**
- * Files for the next message: each one uploads as soon as it's chosen or dropped
- * and becomes a chip. `ids` are the finished uploads; `pending` blocks sending.
+ * Files for the next message: each one uploads as soon as it's chosen, dropped or
+ * pasted and becomes a chip, or a thumbnail if it's an image. `ids` are the finished
+ * uploads; `pending` blocks sending.
  */
 export function useAttachments() {
   const [items, setItems] = useState<Item[]>([]);
   const next = useRef(0);
   // Keys counted toward the per-message limit: uploading or uploaded, not rejected or removed.
   const live = useRef(new Set<number>());
+  const pasted = useRef(0);
+  const previews = useRef(new Map<number, string>());
   const patch = (key: number, p: Partial<Item>) => setItems((xs) => xs.map((x) => (x.key === key ? { ...x, ...p } : x)));
+  const dropPreview = (key: number) => {
+    const url = previews.current.get(key);
+    if (url) URL.revokeObjectURL(url);
+    previews.current.delete(key);
+  };
+
+  useEffect(() => {
+    const urls = previews.current;
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
 
   function add(files: File[]) {
     for (const f of files) {
@@ -38,7 +54,9 @@ export function useAttachments() {
         continue;
       }
       live.current.add(key);
-      setItems((xs) => [...xs, { key, name: f.name, size: f.size, status: "uploading" }]);
+      const preview = isImageType(f.type) ? URL.createObjectURL(f) : undefined;
+      if (preview) previews.current.set(key, preview);
+      setItems((xs) => [...xs, { key, name: f.name, size: f.size, status: "uploading", preview }]);
       const form = new FormData();
       form.append("file", f);
       postForm<Attachment>("/chat-attachments", form).then(
@@ -52,16 +70,27 @@ export function useAttachments() {
   }
   function remove(key: number) {
     live.current.delete(key);
+    dropPreview(key);
     setItems((xs) => xs.filter((x) => x.key !== key));
+  }
+  // Spreadsheets and rich text also put a picture of the copied text on the
+  // clipboard, so anything with text stays an ordinary text paste.
+  function onPaste(e: ClipboardEvent) {
+    const images = [...e.clipboardData.files].filter((f) => isImageType(f.type));
+    if (images.length === 0 || e.clipboardData.getData("text/plain").trim()) return;
+    e.preventDefault();
+    add(images.map((f) => new File([f], pastedImageName(f.type, ++pasted.current), { type: f.type })));
   }
   return {
     items,
     add,
     remove,
+    onPaste,
     pending: items.some((x) => x.status === "uploading"),
     ids: items.flatMap((x) => (x.status === "done" && x.id ? [x.id] : [])),
     clear: () => {
       live.current.clear();
+      [...previews.current.keys()].forEach(dropPreview);
       setItems([]);
     },
   };
@@ -103,12 +132,39 @@ export function AttachButton({ onFiles, disabled }: { onFiles: (f: File[]) => vo
   );
 }
 
-/** Chips above the composer: uploading, ready, or rejected (red, with why). */
+/** An image waiting to be sent, shown as itself rather than as a named chip. */
+function ImagePreview({ item, onRemove }: { item: Item; onRemove: () => void }) {
+  return (
+    <li data-testid="attachment-chip" data-status={item.status} title={item.name} className="relative size-14 overflow-hidden rounded-md border border-border bg-surface">
+      {/* A local blob: URL, which next/image can't optimize. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={item.preview} alt={item.name} data-testid="attachment-preview" className="size-full object-cover" />
+      <button
+        type="button"
+        aria-label={`Remove ${item.name}`}
+        onClick={onRemove}
+        className="absolute right-0.5 top-0.5 grid size-4 place-items-center rounded-full border border-border bg-surface-raised text-fg-secondary hover:text-fg"
+      >
+        <Icon name="x" size={10} />
+      </button>
+      {item.status === "uploading" && (
+        <>
+          <span className="sr-only">Uploading…</span>
+          <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 animate-pulse bg-accent" />
+        </>
+      )}
+    </li>
+  );
+}
+
+/** Chips above the composer: uploading, ready, or rejected (red, with why). Images show a thumbnail. */
 export function AttachmentChips({ attachments }: { attachments: Attachments }) {
   if (attachments.items.length === 0) return null;
   return (
-    <ul aria-label="Attachments" className="flex flex-wrap gap-1.5" data-testid="attachment-chips">
-      {attachments.items.map((x) => (
+    <ul aria-label="Attachments" className="flex flex-wrap items-end gap-1.5" data-testid="attachment-chips">
+      {attachments.items.map((x) => x.preview && x.status !== "error" ? (
+        <ImagePreview key={x.key} item={x} onRemove={() => attachments.remove(x.key)} />
+      ) : (
         <li
           key={x.key}
           data-testid="attachment-chip"

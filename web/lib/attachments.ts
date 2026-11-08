@@ -18,6 +18,12 @@ export function attachmentProblem(file: { name: string; size: number }): string 
   return undefined;
 }
 
+/** A name for a pasted image: the clipboard calls every screenshot image.png, or nothing at all. */
+export function pastedImageName(contentType: string, n: number): string {
+  const subtype = contentType.split("/")[1]?.split(/[;+]/)[0]?.toLowerCase() ?? "";
+  return `pasted-image-${n}.${subtype === "jpeg" ? "jpg" : subtype}`;
+}
+
 /** The chip's badge: PDF, IMG, CSV, TXT, MD or JSON. */
 export function attachmentBadge(filename: string): string {
   const e = ext(filename);
