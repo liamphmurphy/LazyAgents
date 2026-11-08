@@ -201,7 +201,7 @@ function ArchivedRow({ chat, active, project, onDeleted, all }: { chat: Chat; ac
         aria-current={active ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
       >
-        <PersonaAvatar persona={personaLook(chat.persona)} />
+        {all && <PersonaAvatar persona={personaLook(chat.persona)} />}
         <span className="flex min-w-0 flex-col">
           <span className="truncate">{chatTitle(chat)}</span>
           <RowMeta chat={chat} showPersona={all} />
@@ -248,7 +248,7 @@ function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: 
             aria-current={active ? "page" : undefined}
             className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
           >
-            <PersonaAvatar persona={personaLook(chat.persona)} />
+            {all && <PersonaAvatar persona={personaLook(chat.persona)} />}
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="flex min-w-0 items-center gap-2">
                 {chat.state === "running" && <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-done" />}

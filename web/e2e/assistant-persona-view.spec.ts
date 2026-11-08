@@ -52,6 +52,8 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await expect(filter(page)).toHaveAccessibleName("Show conversations for: Atlas Prime (default)");
   await expect(history(page).getByRole("link", { name: /hello atlas/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hi nova/ })).toHaveCount(0);
+  // A row only needs its persona's picture when the list mixes personas.
+  await expect(history(page).getByRole("link", { name: /hello atlas/ }).locator(":scope > [aria-hidden]")).toHaveCount(0);
 
   // Another persona, then every persona.
   await filter(page).click();
@@ -66,6 +68,7 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await page.getByRole("menuitemradio", { name: "All personas" }).click();
   await expect(history(page).getByRole("link", { name: /hi nova/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hello atlas/ })).toBeVisible();
+  await expect(history(page).getByRole("link", { name: /hello atlas/ }).locator(":scope > [aria-hidden]")).toHaveCount(1);
   // All personas falls back to the default.
   await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
   await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Atlas Prime");
