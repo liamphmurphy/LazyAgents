@@ -29,6 +29,27 @@ export function toolCalls(events: RunEventLike[] | undefined, since?: string, un
   return out;
 }
 
+/**
+ * The running turn's opening line: the assistant's first text since `since`, but only
+ * once a tool call follows it. A turn that answers straight away has no tool call, so
+ * its text is the reply itself and isn't shown early.
+ */
+export function interimLine(events: RunEventLike[] | undefined, since?: string): string | undefined {
+  const t = since ? Date.parse(since) : 0;
+  let line: string | undefined;
+  for (const e of events ?? []) {
+    if (Date.parse(e.at) < t) continue;
+    const p = e.payload;
+    if (e.type === "message" && line === undefined && p.role === "assistant" && !p.kind) {
+      const text = str(p.text).trim();
+      if (text) line = text;
+    } else if (e.type === "tool_call" && line !== undefined) {
+      return clip(line, 280);
+    }
+  }
+  return undefined;
+}
+
 /** "mcp__lazyagents__read_page" (Claude) and "read_page" (Codex) are the same tool. */
 export function bareTool(tool: string): string {
   const mcp = /^mcp__(.+?)__(.+)$/.exec(tool);
