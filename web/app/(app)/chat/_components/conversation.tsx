@@ -100,7 +100,7 @@ function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatI
         )}
         style={mine || !m.persona ? undefined : { borderLeftColor: author.color, borderLeftWidth: 3 }}
       >
-        <ChatMarkdown>{m.body_md}</ChatMarkdown>
+        <ChatMarkdown replyId={mine ? undefined : m.id}>{m.body_md}</ChatMarkdown>
       </div>
       {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
       {!mine && <CodeChanges changes={m.code_changes} />}

@@ -7,6 +7,17 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *;
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, source)
 VALUES ($1, $2, 'image', $3, $4, $5, $6, $7, 'upload') RETURNING *;
 
+-- name: CreateLibraryDiagram :one
+-- Saving a diagram again returns the row it already has.
+INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id)
+VALUES ($1, $2, 'diagram', $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (workspace_id, user_id, blob_key) WHERE kind = 'diagram' DO UPDATE SET blob_key = EXCLUDED.blob_key
+RETURNING *;
+
+-- name: GetLibraryDiagram :one
+-- The caller's saved diagram with this content, if any.
+SELECT * FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'diagram';
+
 -- name: ListLibraryItems :many
 -- The caller's own items, newest first, with where each came from (the chat's
 -- title and the persona's name, while they still exist).

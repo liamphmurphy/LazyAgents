@@ -52,6 +52,15 @@ export function useUploadLibraryItem() {
   });
 }
 
+/** Keeps an SVG from an assistant reply. Saving the same one again changes nothing. */
+export function useSaveLibraryDiagram() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["LibraryDiagramSave"]) => unwrap(api.POST("/library/diagrams", { body })),
+    onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
+  });
+}
+
 /** Makes the item the person's (role self) or a persona's reference image, replacing the previous one. */
 export function useSetLibraryReference() {
   const qc = useQueryClient();

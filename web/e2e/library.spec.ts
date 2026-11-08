@@ -52,6 +52,16 @@ test("the Library lists generated images with their source and can remove one", 
   expect(api.deleted).toEqual(["img-2"]);
 });
 
+test("saved diagrams have their own tab and can't be references", async ({ page }) => {
+  await installLibrary(page, [item("dia-1", { kind: "diagram", title: "Auth flow", filename: "diagram.svg", content_type: "image/svg+xml", chat_id: "chat-1", chat_title: "Auth flow", project_key: "WEB" })]);
+  await page.goto("/library");
+  await page.getByRole("tab", { name: "Diagrams" }).click();
+  await page.getByRole("button", { name: "Open Auth flow" }).click();
+  const dialog = page.getByRole("dialog", { name: "Auth flow" });
+  await expect(dialog.getByRole("link", { name: "Download" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Use as reference" })).toHaveCount(0);
+});
+
 test("an empty Library explains how images get there", async ({ page }) => {
   await installLibrary(page, []);
   await page.goto("/library");

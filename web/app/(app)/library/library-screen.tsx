@@ -11,6 +11,7 @@ import {
   useSetLibraryReference,
   useUploadLibraryItem,
   type LibraryItem,
+  type LibraryItemKind,
 } from "@/lib/api/library-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
@@ -102,10 +103,12 @@ function ReferenceBadge({ item }: { item: LibraryItem }) {
   );
 }
 
-/** One image tile; a click opens the full image with Download, Remove and the reference actions. */
-function ImageTile({ item }: { item: LibraryItem }) {
+/** One tile; a click opens the full item with Download, Remove and, for an image, the reference actions. */
+function ItemTile({ item }: { item: LibraryItem }) {
   const del = useDeleteLibraryItem();
   const url = libraryItemUrl(item.id);
+  const diagram = item.kind === "diagram";
+  const noun = diagram ? "diagram" : "image";
   return (
     <li className="flex min-w-0 flex-col gap-1.5" data-testid="library-item">
       <Dialog.Root>
@@ -117,7 +120,7 @@ function ImageTile({ item }: { item: LibraryItem }) {
           >
             {/* A same-origin, private URL: next/image would only add a proxy hop. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={item.title} loading="lazy" className="size-full object-cover" />
+            <img src={url} alt={item.title} loading="lazy" className={cx("size-full", diagram ? "bg-white object-contain p-2" : "object-cover")} />
             <ReferenceBadge item={item} />
           </button>
         </Dialog.Trigger>
@@ -135,7 +138,7 @@ function ImageTile({ item }: { item: LibraryItem }) {
                   {referenceCaption(item) && ` · ${referenceCaption(item)}`}
                 </span>
               </div>
-              <ReferenceActions item={item} />
+              {!diagram && <ReferenceActions item={item} />}
               <a
                 href={libraryItemUrl(item.id, true)}
                 download={item.filename}
@@ -151,8 +154,8 @@ function ImageTile({ item }: { item: LibraryItem }) {
                 onClick={() => {
                   const msg =
                     item.source === "upload"
-                      ? "Remove this image from your Library?"
-                      : "Remove this image from your Library? It stays in its chat while that chat exists.";
+                      ? `Remove this ${noun} from your Library?`
+                      : `Remove this ${noun} from your Library? It stays in its chat while that chat exists.`;
                   if (window.confirm(msg)) del.mutate(item.id);
                 }}
               >
@@ -165,7 +168,7 @@ function ImageTile({ item }: { item: LibraryItem }) {
               </Dialog.Close>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={item.title} className="min-h-0 max-h-[80vh] w-full object-contain" />
+            <img src={url} alt={item.title} className={cx("min-h-0 max-h-[80vh] w-full object-contain", diagram && "bg-white")} />
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -211,9 +214,57 @@ function UploadButton() {
 
 const grid = "grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4";
 
-export function LibraryScreen() {
-  const lib = useLibrary("image");
+/** One kind's items, a page at a time. */
+function Items({ kind }: { kind: LibraryItemKind }) {
+  const lib = useLibrary(kind);
   const items = lib.data?.pages.flatMap((p) => p.items) ?? [];
+  if (lib.isError) {
+    return (
+      <Banner tone="blocked" title="Couldn't load your Library" actions={<Button onClick={() => lib.refetch()}>Retry</Button>}>
+        {lib.error.message}
+      </Banner>
+    );
+  }
+  if (lib.isPending) {
+    return (
+      <ul aria-busy="true" aria-label="Loading your Library" className={grid}>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <li key={i} className="flex flex-col gap-1.5">
+            <Skeleton className="aspect-square w-full rounded-lg" />
+            <Skeleton className="h-3 w-2/3" />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (items.length === 0) {
+    return (
+      <EmptyState icon="library" title="Nothing here yet">
+        {kind === "diagram"
+          ? "When a persona draws an SVG diagram in a chat, choose Save to Library on it to keep it here."
+          : "When a persona that can generate images makes one in a chat, it\u2019s added here. You can also upload your own, like a photo of yourself to use as your reference."}
+      </EmptyState>
+    );
+  }
+  return (
+    <>
+      <ul className={grid}>
+        {items.map((it) => (
+          <ItemTile key={it.id} item={it} />
+        ))}
+      </ul>
+      {lib.hasNextPage && (
+        <div className="flex justify-center">
+          <Button onClick={() => lib.fetchNextPage()} disabled={lib.isFetchingNextPage}>
+            {lib.isFetchingNextPage ? "Loading…" : "Show more"}
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function LibraryScreen() {
   const [tab, setTab] = useState("images");
   return (
     <>
@@ -225,47 +276,13 @@ export function LibraryScreen() {
               <h1 className="type-display">Library</h1>
               <p className="text-sm text-fg-secondary">
                 Keepsakes from your Assistant chats, private to you. Images your personas generate are saved here automatically and stay after their chat is deleted.
-                Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness.
+                Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams are kept when you choose Save to Library on them.
               </p>
             </div>
             <UploadButton />
           </div>
-          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "fridge", label: "Fridge" }]} />
-          {tab === "fridge" ? (
-            <Fridge />
-          ) : lib.isError ? (
-            <Banner tone="blocked" title="Couldn't load your Library" actions={<Button onClick={() => lib.refetch()}>Retry</Button>}>
-              {lib.error.message}
-            </Banner>
-          ) : lib.isPending ? (
-            <ul aria-busy="true" aria-label="Loading your Library" className={grid}>
-              {[0, 1, 2, 3, 4].map((i) => (
-                <li key={i} className="flex flex-col gap-1.5">
-                  <Skeleton className="aspect-square w-full rounded-lg" />
-                  <Skeleton className="h-3 w-2/3" />
-                </li>
-              ))}
-            </ul>
-          ) : items.length === 0 ? (
-            <EmptyState icon="library" title="Nothing here yet">
-              When a persona that can generate images makes one in a chat, it&apos;s added here. You can also upload your own, like a photo of yourself to use as your reference.
-            </EmptyState>
-          ) : (
-            <>
-              <ul className={grid}>
-                {items.map((it) => (
-                  <ImageTile key={it.id} item={it} />
-                ))}
-              </ul>
-              {lib.hasNextPage && (
-                <div className="flex justify-center">
-                  <Button onClick={() => lib.fetchNextPage()} disabled={lib.isFetchingNextPage}>
-                    {lib.isFetchingNextPage ? "Loading…" : "Show more"}
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
+          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "diagrams", label: "Diagrams" }, { key: "fridge", label: "Fridge" }]} />
+          {tab === "fridge" ? <Fridge /> : <Items kind={tab === "diagrams" ? "diagram" : "image"} />}
         </div>
       </Content>
     </>

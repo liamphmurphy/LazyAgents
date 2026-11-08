@@ -1608,9 +1608,9 @@ export interface paths {
         /**
          * The signed-in person's Library, newest first
          * @description The Library keeps what a person wants from their assistant chats for
-         *     good; for now, every image a persona generates is added
-         *     automatically. It is strictly per person, and items outlive the chat
-         *     they came from.
+         *     good: every image a persona generates is added automatically, and
+         *     SVG diagrams when the person saves them. It is strictly per person,
+         *     and items outlive the chat they came from.
          */
         get: operations["listLibraryItems"];
         put?: never;
@@ -1622,6 +1622,30 @@ export interface paths {
          *     type, an empty file, one over the limit or a full Library.
          */
         post: operations["uploadLibraryItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/diagrams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save an SVG diagram from a chat reply to your Library
+         * @description Keeps one SVG document from an assistant reply in a chat of the
+         *     caller's. Saving the same diagram again returns the existing item. It
+         *     counts against the same storage cap as images. 404 unless the message
+         *     is in one of your chats; 422 unless it is an assistant reply and the
+         *     source is an SVG document of at most 1 MiB, or for a full Library.
+         */
+        post: operations["saveLibraryDiagram"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1667,7 +1691,8 @@ export interface paths {
          *     self). Generated images of that persona or person start from it. Each
          *     persona and the caller have at most one: this replaces the previous
          *     one, and replaces any reference the image already was. 404 unless the
-         *     image is yours; 422 unless persona_id is one of your personas.
+         *     image is yours; 422 for a diagram, or unless persona_id is one of
+         *     your personas.
          */
         put: operations["setLibraryReference"];
         post?: never;
@@ -3981,12 +4006,12 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        LibraryItemKind: "image";
+        LibraryItemKind: "image" | "diagram";
         LibraryItem: {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["LibraryItemKind"];
-            /** @description For a generated image, the title of the chat it came from */
+            /** @description For a generated image or saved diagram, the title of the chat it came from */
             title: string;
             filename: string;
             content_type: string;
@@ -4033,6 +4058,15 @@ export interface components {
              * @description Required for role persona; one of your personas
              */
             persona_id?: string;
+        };
+        LibraryDiagramSave: {
+            /**
+             * Format: uuid
+             * @description The assistant reply the diagram is in
+             */
+            message_id: string;
+            /** @description The SVG document */
+            svg: string;
         };
         LibraryList: {
             items: components["schemas"]["LibraryItem"][];
@@ -7102,6 +7136,33 @@ export interface operations {
                     "application/json": components["schemas"]["LibraryItem"];
                 };
             };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveLibraryDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryDiagramSave"];
+            };
+        };
+        responses: {
+            /** @description Saved, or already in the Library */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
