@@ -8,7 +8,7 @@ const rows = (page: Page) => page.locator('[data-testid="persona-row"]:visible')
 
 async function openPanel(page: Page) {
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: /^Personas/ }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Personas", exact: true }).click();
   await expect(panel(page)).toBeVisible();
 }
 

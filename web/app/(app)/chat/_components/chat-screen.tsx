@@ -22,9 +22,9 @@ import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { ChipList } from "./context-chips";
 import { RestoreChat } from "./restore";
-import { MemoryButton, MemoryPanel, useMemoryPanel } from "./memory-panel";
+import { MemoryPanel, useMemoryPanel } from "./memory-panel";
 import { PersonaAvatar, PersonaFilter, PersonaName, PersonaSwitcher, RepoSelect, personaLook, useOpenPersonaManager, usePersonaFilter } from "./persona";
-import { PersonaPanel, PersonasButton, usePersonaPanel } from "./persona-panel";
+import { PersonaPanel, usePersonaPanel } from "./persona-panel";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -437,7 +437,7 @@ function HistorySidebar({ project, id, newChat }: { project: string; id?: string
  * The Personal Assistant (replaces Chat): one conversation surface with no agent
  * picker and a history sidebar (rename, archive, restore, delete) beside it.
  * /chat opens the newest conversation, or the first-time welcome; "New
- * conversation" starts afresh. Memory and Personas open as right-hand panels.
+ * conversation" starts afresh. Memory and Personas open as right-hand panels from the main menu.
  */
 export function ChatScreen({ id }: { id?: string }) {
   const router = useRouter();
@@ -476,12 +476,6 @@ export function ChatScreen({ id }: { id?: string }) {
     if (id && current.data?.message_count === 0 && current.data.persona?.id === persona_id) return;
     create.mutate({ project, ...(persona_id ? { persona_id } : {}) }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
   }
-  const actions = (
-    <>
-      <PersonasButton />
-      <MemoryButton />
-    </>
-  );
   // Sits under the sidebar's persona picker and follows it.
   const newChat = (
     <Button variant="secondary" icon="plus" className="w-full justify-center" disabled={!project || noHarness || create.isPending} onClick={newConversation}>
@@ -506,10 +500,9 @@ export function ChatScreen({ id }: { id?: string }) {
               </div>
             )}
             {id ? (
-              <Conversation key={id} id={id} actions={actions} />
+              <Conversation key={id} id={id} onNew={newConversation} />
             ) : (
               <>
-                <div className="flex items-center justify-end gap-2 border-b border-border-subtle px-6 py-2.5">{actions}</div>
                 {chats.isError ? (
                   <div className="p-6">
                     <Banner tone="blocked" title="Couldn’t load your conversations">{errorText(chats.error)}</Banner>

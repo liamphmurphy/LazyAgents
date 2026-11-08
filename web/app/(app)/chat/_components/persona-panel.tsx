@@ -8,7 +8,6 @@ import { BUILTIN_COLOR, MAX_PERSONAS, deleteConsequence, isConflict, promotionCa
 import { cx } from "@/lib/cx";
 import { PersonaAvatar, PersonaName } from "@/components/domain/persona-avatar";
 import { Button, IconButton } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { PersonaEditor } from "./persona-editor";
 import { CapabilityBadges } from "./persona";
@@ -29,29 +28,6 @@ export function usePersonaPanel() {
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
   return { open: search.has("personas"), show: () => go(true), close: () => go(false) };
-}
-
-/** Header entry point next to Memory: "Personas" with the count; toggles the panel. */
-export function PersonasButton() {
-  const panel = usePersonaPanel();
-  const list = usePersonas();
-  const total = list.data?.personas.length;
-  return (
-    <button
-      type="button"
-      aria-pressed={panel.open}
-      aria-label={total === undefined ? "Personas" : `Personas, ${total}`}
-      onClick={() => (panel.open ? panel.close() : panel.show())}
-      className={cx(
-        "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-[13px] transition-colors",
-        panel.open ? "border-accent bg-selected text-fg" : "border-btn-secondary-border bg-btn-secondary text-fg hover:bg-hover",
-      )}
-    >
-      <Icon name="users" size={14} className={panel.open ? "text-accent" : undefined} />
-      Personas
-      {total !== undefined && <span className="text-xs text-fg-tertiary">{total}</span>}
-    </button>
-  );
 }
 
 function DefaultBadge({ small }: { small?: boolean }) {
