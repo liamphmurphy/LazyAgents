@@ -1,4 +1,4 @@
--- Wiki pages, [[links]] and backlinks (PLAN.md §12).
+-- Wiki pages, [[links]] and backlinks (docs/dev/plan.md §12).
 
 -- name: GetNoteByPath :one
 SELECT * FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(path) = lower(sqlc.arg(path));

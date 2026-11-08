@@ -2,7 +2,7 @@
 
 Vesper is an issue tracker for autonomous coding agents. It holds projects, epics, tickets, agent assignments, approvals and the context documents (PRDs, specs, ADRs, reports) that agents read and write.
 
-The visual source of truth is `lazyagents-design/`. `DESIGN.md` there wins over the HTML mockups. This file covers everything else: architecture, data, APIs, infrastructure and the order we build in.
+The visual source of truth is `docs/design-system/`. `DESIGN.md` there wins over the HTML mockups. This file covers everything else: architecture, data, APIs, infrastructure and the order we build in.
 
 ---
 
@@ -79,7 +79,7 @@ LazyAgents/
 │   ├── app/                    # routes: /, /tickets, /tickets/[key], /epics, /agents, /artifacts, /inbox
 │   ├── components/             # ui/ (primitives), domain/ (TicketRow, AgentAvatar, StatusGlyph…)
 │   ├── lib/api/                # generated types + client
-│   ├── styles/tokens.css       # copied from lazyagents-design, mapped into Tailwind @theme
+│   ├── styles/tokens.css       # copied from docs/design-system, mapped into Tailwind @theme
 │   └── Dockerfile
 ├── deploy/
 │   ├── Caddyfile
@@ -328,7 +328,7 @@ Every agent has a **kind**: `main` (the default) or `sub`. This is identity, not
 - **Then the shell:** sidebar, top bar with breadcrumb, content container and optional right panel. Screens are composed from these pieces.
 - **Rendering:** data loads client-side through TanStack Query, and pages show layout-true skeletons until it arrives. *(Changed in Phase 2: the original plan was a server-side first load. Next 16's Cache Components make that a Suspense boundary per page, plus cookie forwarding to the API, for little gain on a laptop. Revisit if first-paint latency matters.)*
 - **Accessibility rules from DESIGN.md §6 are requirements,** not nice-to-haves: real links and buttons, `aria-label` on icon buttons, and glyph shapes that carry state independently of color.
-- **Visual regression:** Playwright screenshots of each seeded screen at 1440px, compared by eye against `lazyagents-design/shots/*.png` during build-out.
+- **Visual regression:** Playwright screenshots of each seeded screen at 1440px, compared by eye against `docs/design-system/shots/*.png` during build-out.
 
 ---
 
@@ -368,7 +368,7 @@ Each phase ends with something you can demo.
 - App shell (sidebar, top bar), dark and light themes
 - *Exit:* the foundations page and the empty shell match the mockups
 
-**Phase 2: Core tracker (people only)** ✅ *done. See CONTINUE.md for what shipped and what was deferred.*
+**Phase 2: Core tracker (people only)** ✅ *done. See docs/dev/handoff-log.md for what shipped and what was deferred.*
 - Schema and migrations for workspaces, users, projects, epics, tickets, criteria, labels and activity, plus session auth and seed data
 - Tickets list: grouping, view tabs, filters, selection, bulk bar, assign popover (agents as plain records for now)
 - Ticket detail: description, criteria, properties panel, activity timeline, comments, pager
@@ -387,25 +387,25 @@ Each phase ends with something you can demo.
 - Unmanaged sessions are working: `examples/fake-agent` (a script that drives the full lifecycle) plus a sample MCP config for a local Claude Code session
 - *Exit:* a local, unmanaged Claude Code session picks up PAY-214, posts a plan, requests `db:migrate` approval, a human approves it, and the migration runs through the broker
 
-**Phase 4.5: Wiki and agent memory** (§12) ✅ *done. Exit demo: `examples/README.md` (scripted agent writes memory on PAY-214; claiming PAY-224 returns it). Tags (`#migration`), embeds (`![[…]]` render as links), rewriting link text on rename and the workspace graph view are deferred; see CONTINUE.md.*
+**Phase 4.5: Wiki and agent memory** (§12) ✅ *done. Exit demo: `examples/README.md` (scripted agent writes memory on PAY-214; claiming PAY-224 returns it). Tags (`#migration`), embeds (`![[…]]` render as links), rewriting link text on rename and the workspace graph view are deferred; see docs/dev/handoff-log.md.*
 - `note` pages, `[[link]]` parsing into `knowledge_links`, link resolution and ghost pages, backlinks (linked and unlinked mentions) on pages, artifacts, tickets and epics
 - Wiki screen: page tree, editor with `[[` autocomplete, rendered links, backlinks panel, local graph. This extends the design system, since it isn't designed yet.
 - Agent memory: per-agent namespaces, the `wiki:write` scope, MCP tools `search_knowledge`, `read_page`, `write_note` and `get_backlinks`, and suggested edits that a person accepts
 - *Exit:* Atlas finishes PAY-214, writes "Partition rollback gotchas" into its memory linking `[[ADR-012]]` and `[[PAY-214]]`, and the next Atlas run on PAY-224 gets that note in its context. ADR-012 shows the note under backlinks.
 
-**Phase 5: Runner and harness adapters** ✅ *done. See CONTINUE.md for what shipped.*
+**Phase 5: Runner and harness adapters** ✅ *done. See docs/dev/handoff-log.md for what shipped.*
 - `agent-base` image, workspace preparation, container lifecycle, credential injection, scheduler and concurrency limits
 - The `Harness` interface with **Claude Code and Codex adapters**, normalized events, cost computation, turn-based approval / comment / pause resume, budget enforcement
 - Run-log viewer (normalized events live, raw log from SeaweedFS), Pause / Resume / Cancel in the UI
 - Dispatch flow (single and bulk), context files in the workspace, GitHub PR sync job (merged → Done)
 - *Exit:* assigning PAY-214 to Atlas runs it on Claude Code. A project override switches it to Codex, and the same approval flow works on both.
 
-**Phase 6: Realtime and attention surfaces** ✅ *implemented; integration exit passes; browser QA waived by user on 2026-11-02. See CONTINUE.md.*
+**Phase 6: Realtime and attention surfaces** ✅ *implemented; integration exit passes; browser QA waived by user on 2026-11-02. See docs/dev/handoff-log.md.*
 - SSE hub over LISTEN/NOTIFY with client-side invalidation
 - Inbox (approvals, mentions, reviews), the ⌘K command menu backed by `/search`, and the `C` new-ticket shortcut
 - *Exit:* approving in one tab resumes the run and updates another open tab within a second
 
-**Phase 7: Dashboard, Epics, Agents screens** ✅ *implemented. River rollups, live overview APIs and all three screens are in place; regression/build checks pass. See CONTINUE.md for metric definitions and verification limits.*
+**Phase 7: Dashboard, Epics, Agents screens** ✅ *implemented. River rollups, live overview APIs and all three screens are in place; regression/build checks pass. See docs/dev/handoff-log.md for metric definitions and verification limits.*
 - Dashboard KPIs and rollups (River periodic jobs for 7-day stats and median cycle time), agent capacity from runner slots
 - Epics: featured card, Q4 timeline, card grid, health
 - Agents: status filters, cards with current assignment, stats, enforcement levels for each scope, queue, plus an agent configuration editor (extending the design system, since it isn't designed yet)
@@ -413,7 +413,7 @@ Each phase ends with something you can demo.
 
 **Phase 8: Planning workflow implemented; remaining stretch deferred**
 - More harnesses (Gemini CLI, a Claude Agent SDK native adapter) and a remote or rootless runner backend
-- ✅ "Plan with an agent" from a goal/epic and "Generate tickets" from a markdown PRD/SPEC. Standalone restricted planning runs produce editable drafts; human acceptance atomically creates tickets with criteria, assignments and source context. Dispatch remains a separate human approval. Ticket dependencies and project/repository management are now implemented in the authorized follow-up below. Automatic dispatch waves and spend estimates remain deferred. See CONTINUE.md for contracts, restrictions and verification.
+- ✅ "Plan with an agent" from a goal/epic and "Generate tickets" from a markdown PRD/SPEC. Standalone restricted planning runs produce editable drafts; human acceptance atomically creates tickets with criteria, assignments and source context. Dispatch remains a separate human approval. Ticket dependencies and project/repository management are now implemented in the authorized follow-up below. Automatic dispatch waves and spend estimates remain deferred. See docs/dev/handoff-log.md for contracts, restrictions and verification.
 - GitHub App integration: short-lived tokens limited to one repo instead of the PAT, PRs authored by the bot, and webhooks for PR state and diff stats instead of agent self-reporting
 - ✅ Project/repository settings: create/edit/archive/restore with stable keys, GitHub URL/base-branch validation and approved repository snapshots. Ticket dependencies include cycle checks, planning suggestions, ready filtering and server-side dispatch enforcement (blockers must be Done).
 - OIDC login, multiple workspaces, remaining settings, empty and loading states (listed as "not designed yet")
@@ -445,7 +445,7 @@ Each phase ends with something you can demo.
 - **One agent per ticket.**
 - **Spend:** no caps. The runtime and turn limits on each run are optional runaway guards.
 - 📌 **Notifications:** pinned for later (Phase 8).
-- **Undesigned screens:** mocked in `lazyagents-design/` v0.2 (Inbox, ⌘K, new ticket, dispatch, agent config, run log, settings, states) and specified in DESIGN.md §4–5.
+- **Undesigned screens:** mocked in `docs/design-system/` v0.2 (Inbox, ⌘K, new ticket, dispatch, agent config, run log, settings, states) and specified in DESIGN.md §4–5.
 
 **Still open**
 1. **Logo:** deferred. The placeholder mark stays for now.

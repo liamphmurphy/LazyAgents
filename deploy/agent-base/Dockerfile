@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# The image every managed run's turns execute in (PLAN.md §6.5): git, gh,
+# The image every managed run's turns execute in (docs/dev/plan.md §6.5): git, gh,
 # common toolchains and both harness CLIs. Projects can extend it.
 FROM golang:1.26.0-bookworm AS go-tools
 # Build the pinned source as the main module: sqlc uses replace directives,

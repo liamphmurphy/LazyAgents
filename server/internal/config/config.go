@@ -37,7 +37,7 @@ type Config struct {
 	MemoryConsolidateInterval int // seconds
 }
 
-// Runner configures `lazyagents runner` (PLAN.md §6.5).
+// Runner configures `lazyagents runner` (docs/dev/plan.md §6.5).
 type Runner struct {
 	ModelPrices   map[string]harness.Price
 	Backend       string // docker | local

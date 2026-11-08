@@ -22,7 +22,7 @@ type demoDoc struct {
 	versions                         []string // earlier labels, oldest first
 }
 
-// Documents mirror lazyagents-design/screens/artifacts.html.
+// Documents mirror docs/design-system/screens/artifacts.html.
 var demoDocs = []demoDoc{
 	{
 		project: "PAY", typ: "prd", title: "Ledger v2 — Product requirements", label: "v3", epic: "Ledger v2", author: "maya",

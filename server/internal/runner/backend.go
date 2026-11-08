@@ -1,4 +1,4 @@
-// Package runner executes managed runs (PLAN.md §6.4–6.6): it takes
+// Package runner executes managed runs (docs/dev/plan.md §6.4–6.6): it takes
 // dispatched runs off the queue, prepares a workspace that persists between
 // turns, runs each turn as one headless harness invocation, streams its
 // events into run_events, and decides what happens when the process exits.

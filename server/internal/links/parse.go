@@ -1,4 +1,4 @@
-// Package links parses, resolves and indexes [[wikilinks]] (PLAN.md §12.2).
+// Package links parses, resolves and indexes [[wikilinks]] (docs/dev/plan.md §12.2).
 // It sits below artifacts and tracker, which call Index whenever markdown
 // they own is saved, so backlinks stay current wherever a link is written.
 package links

@@ -36,7 +36,7 @@ function Section({ title, meta, children }: { title: string; meta?: ReactNode; c
 /**
  * Everything a save would change, before it's saved: the instructions diff,
  * each scope change with what it means at run time, and the rest. Saving is
- * an explicit second step (PLAN.md: a new definition version).
+ * an explicit second step (docs/dev/plan.md: a new definition version).
  */
 export function ReviewDialog({
   detail,

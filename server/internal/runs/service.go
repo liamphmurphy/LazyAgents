@@ -1,5 +1,5 @@
 // Package runs is the run lifecycle shared by the Agent API (MCP and REST)
-// and the people supervising it (PLAN.md §5.2, §6.4): claiming tickets,
+// and the people supervising it (docs/dev/plan.md §5.2, §6.4): claiming tickets,
 // plans, usage, approvals and the run_gated broker, waiting and resuming.
 package runs
 

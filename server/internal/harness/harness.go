@@ -1,4 +1,4 @@
-// Package harness adapts coding-agent CLIs to Vesper runs (PLAN.md
+// Package harness adapts coding-agent CLIs to Vesper runs (docs/dev/plan.md
 // §6.2): how to invoke one turn (argv, env, files to write) and how to read
 // its event stream into normalized run events. Adapters know nothing about
 // containers or the database; the runner does both.
@@ -127,7 +127,7 @@ func AnthropicModel(m string) string {
 	return m
 }
 
-// AgentsMD renders the instructions file for every harness (PLAN.md §6.2).
+// AgentsMD renders the instructions file for every harness (docs/dev/plan.md §6.2).
 // existing is the repo's own AGENTS.md, kept outside our marked section.
 func AgentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string) []byte {
 	return agentsMD(existing, spec, contextFiles, ticket, false)

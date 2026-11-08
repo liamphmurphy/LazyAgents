@@ -137,7 +137,7 @@ func minPositive(a, b int) int {
 	return b
 }
 
-// Resolve merges a project override over an agent spec (PLAN.md §6.1):
+// Resolve merges a project override over an agent spec (docs/dev/plan.md §6.1):
 //   - scalars replace (harness, model);
 //   - instructions_append and mcp_servers_add append;
 //   - scopes merge key by key and can only tighten; wildcard denials apply

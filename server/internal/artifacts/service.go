@@ -1,6 +1,6 @@
 // Package artifacts is the domain service for PRDs, specs, ADRs, reports and
 // designs: versioned markdown in Postgres, binary files in object storage,
-// outlines extracted from headings, and agent read tracking (PLAN.md §4).
+// outlines extracted from headings, and agent read tracking (docs/dev/plan.md §4).
 package artifacts
 
 import (
@@ -27,7 +27,7 @@ import (
 var Types = []string{"prd", "spec", "adr", "report", "design", "note", "mockup"}
 
 // Version states. Suggested versions are agent edits to shared notes waiting
-// for a person (PLAN.md §12.5); they never become current on their own.
+// for a person (docs/dev/plan.md §12.5); they never become current on their own.
 const (
 	Published = "published"
 	Suggested = "suggested"

@@ -73,7 +73,7 @@ WHERE id = (
 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms
 `
 
-// The runner (PLAN.md §6.4–6.6): queue, turns, heartbeats, PR sync.
+// The runner (docs/dev/plan.md §6.4–6.6): queue, turns, heartbeats, PR sync.
 // The oldest queued run whose agent has a free slot (max_concurrency from
 // the frozen definition; waiting runs don't hold a slot). A ticket run whose
 // blocker tickets aren't Done stays queued.

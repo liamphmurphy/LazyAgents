@@ -1,4 +1,4 @@
-// [[wikilinks]] in markdown (PLAN.md §12.2). Mirrors server/internal/links
+// [[wikilinks]] in markdown (docs/dev/plan.md §12.2). Mirrors server/internal/links
 // Parse: fenced code and inline code spans are skipped, "\|" inside tables
 // stands for "|".
 

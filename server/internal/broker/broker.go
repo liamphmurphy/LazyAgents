@@ -1,5 +1,5 @@
 // Package broker performs approval-gated actions on an agent's behalf
-// (PLAN.md §6.3, run_gated). The agent never holds the credential: the
+// (docs/dev/plan.md §6.3, run_gated). The agent never holds the credential: the
 // broker reads it server-side and runs exactly the action a person approved.
 package broker
 

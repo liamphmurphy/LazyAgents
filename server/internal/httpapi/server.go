@@ -79,7 +79,7 @@ func (s *Server) Handler() http.Handler {
 			writeError(w, http.StatusBadRequest, api.Invalid, err.Error(), "")
 		},
 	})
-	// Agent API (PLAN.md §5.2): bearer agent tokens, not the local user.
+	// Agent API (docs/dev/plan.md §5.2): bearer agent tokens, not the local user.
 	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker, Wiki: s.Wiki}
 	mux.Handle("/mcp", agentapi.MCPHandler(deps, s.Version, s.Log))
 	mux.Handle("/api/v1/agent/", agentapi.RESTHandler(deps))
@@ -87,7 +87,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 // localUser attaches the acting user to every API request. There is no
-// login for now (PLAN.md §5.4): everyone acts as the workspace's first user.
+// login for now (docs/dev/plan.md §5.4): everyone acts as the workspace's first user.
 func (s *Server) localUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/health" || !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/agent/") {

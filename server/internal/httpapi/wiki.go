@@ -18,7 +18,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
 )
 
-// Wiki and knowledge endpoints (PLAN.md §12).
+// Wiki and knowledge endpoints (docs/dev/plan.md §12).
 
 // same converts between structs that share JSON tags (domain → API); the
 // shapes are fixed, so a failure is a programming error.

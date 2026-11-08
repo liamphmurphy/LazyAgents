@@ -1,5 +1,5 @@
 @import "tailwindcss";
-/* Copied verbatim from lazyagents-design/tokens.css. Edit the design copy first. */
+/* Copied verbatim from docs/design-system/tokens.css. Edit the design copy first. */
 @import "../styles/tokens.css";
 
 /* next/font self-hosts Inter and JetBrains Mono under hashed family names,

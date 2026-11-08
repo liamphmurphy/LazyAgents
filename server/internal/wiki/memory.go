@@ -18,7 +18,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
-// ContextPage is one wiki page a run starts with (PLAN.md §12.3).
+// ContextPage is one wiki page a run starts with (docs/dev/plan.md §12.3).
 type ContextPage struct {
 	Target    links.Target `json:"target"`
 	Ref       string       `json:"ref"`    // what to pass to read_page

@@ -1,5 +1,5 @@
 // Command fake-harness stands in for the `claude`, `codex` and `opencode` CLIs in runner
-// tests and demos without API keys (PLAN.md §10). Invoked as `claude -p …`
+// tests and demos without API keys (docs/dev/plan.md §10). Invoked as `claude -p …`
 // it emits Claude's stream-json and reads the MCP server from --mcp-config;
 // invoked as `codex exec [resume] … --json` it emits Codex's JSONL and reads
 // the server from -c mcp_servers.lazyagents.* overrides. Either way it does

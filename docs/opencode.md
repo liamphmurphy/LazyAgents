@@ -17,7 +17,7 @@ default** (see [Isolation](#isolation-attestation)).
 > shell and MCP tools from modifying protected state or racing those guards.
 > Ticket file-tool policy remains blocked on LAZYAGENTS-26 (see Limitations).
 > Requirement-by-requirement evidence:
-> [`verification/LAZYAGENTS-25-requirements-matrix.md`](../verification/LAZYAGENTS-25-requirements-matrix.md).
+> [`docs/dev/verification/LAZYAGENTS-25-requirements-matrix.md`](dev/verification/LAZYAGENTS-25-requirements-matrix.md).
 
 Design and evidence: [`docs/contracts/opencode2/`](contracts/opencode2/ADR.md)
 (`ADR.md`, `verification.md`, `inventory.md`, `policy-evidence.md`).

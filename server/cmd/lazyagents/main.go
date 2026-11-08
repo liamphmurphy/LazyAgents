@@ -222,7 +222,7 @@ func healthcheck(ctx context.Context) error {
 	return nil
 }
 
-// runRunner executes dispatched runs (PLAN.md §6.4–6.6). It shares the
+// runRunner executes dispatched runs (docs/dev/plan.md §6.4–6.6). It shares the
 // database with the API and reaches it over /mcp like any agent.
 func runRunner(ctx context.Context, log *slog.Logger) error {
 	cfg, err := config.Load()

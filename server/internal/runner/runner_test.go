@@ -414,7 +414,7 @@ func deref(s *string) string {
 	return *s
 }
 
-// The exit criterion's second half (PLAN.md §9 Phase 5): a project override
+// The exit criterion's second half (docs/dev/plan.md §9 Phase 5): a project override
 // switches the agent to Codex, and the same approval flow works there.
 func TestCodexOverride(t *testing.T) {
 	e := setup(t)

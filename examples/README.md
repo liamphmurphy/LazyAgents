@@ -39,7 +39,7 @@ It stops at `request_approval`: approve the `db:migrate` request on PAY-214 in
 the UI and the migration runs through the broker. That needs a `db:staging`
 secret (Settings → Connections & secrets) pointing at a database it may change.
 
-It also exercises agent memory (PLAN.md §12): `claim_ticket` returns the wiki
+It also exercises agent memory (docs/dev/plan.md §12): `claim_ticket` returns the wiki
 pages the run starts with, and before finishing it appends to
 `agents/atlas/Partition rollback gotchas`, linking `[[ADR-012]]` and the
 ticket. Claim PAY-224 afterwards (it has ADR-012 attached) and that note is in

@@ -1,5 +1,5 @@
 // Package prsync polls GitHub for the state of tickets' pull requests
-// (PLAN.md §6.7). No webhooks: a laptop has no public URL. A merged PR moves
+// (docs/dev/plan.md §6.7). No webhooks: a laptop has no public URL. A merged PR moves
 // its ticket to Done; one closed without merging flags the ticket for a
 // person. Diff stats replace what agents reported.
 package prsync

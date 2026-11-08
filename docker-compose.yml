@@ -63,7 +63,7 @@ services:
     image: lazyagents/agent-base:latest
     command: ["true"]
 
-  # Executes dispatched runs (PLAN.md §6.4–6.6). It drives Docker through the
+  # Executes dispatched runs (docs/dev/plan.md §6.4–6.6). It drives Docker through the
   # socket, which is root-equivalent on the host: fine for a laptop (v1),
   # documented in README. Turn containers join this compose network and
   # reach the API as api:8000.

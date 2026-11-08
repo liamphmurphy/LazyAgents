@@ -585,7 +585,7 @@ type GetNoteByPathParams struct {
 	Path        string
 }
 
-// Wiki pages, [[links]] and backlinks (PLAN.md §12).
+// Wiki pages, [[links]] and backlinks (docs/dev/plan.md §12).
 func (q *Queries) GetNoteByPath(ctx context.Context, arg GetNoteByPathParams) (Artifact, error) {
 	row := q.db.QueryRow(ctx, getNoteByPath, arg.WorkspaceID, arg.Path)
 	var i Artifact

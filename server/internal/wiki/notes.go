@@ -1,4 +1,4 @@
-// Package wiki is the team wiki and agent memory (PLAN.md §12): notes
+// Package wiki is the team wiki and agent memory (docs/dev/plan.md §12): notes
 // (artifacts of type `note` addressed by path), saving and renaming them,
 // agent write permissions and suggestions, backlinks, the link graph,
 // knowledge search and the memory a run starts with.

@@ -42,7 +42,7 @@ function SourceLine({ m }: { m: Mention }) {
 }
 
 /**
- * Backlinks (PLAN.md §12.2): linked mentions with their snippets, then
+ * Backlinks (docs/dev/plan.md §12.2): linked mentions with their snippets, then
  * unlinked mentions with a one-click "Link it".
  */
 export function BacklinksPanel({ kind, id, compact }: { kind: NodeKind; id: string | undefined; compact?: boolean }) {

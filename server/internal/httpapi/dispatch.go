@@ -20,7 +20,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
 )
 
-// Dispatch (PLAN.md §6.6): a person reviews exactly what a run gets, then
+// Dispatch (docs/dev/plan.md §6.6): a person reviews exactly what a run gets, then
 // queues it for the runner.
 
 func (s *Server) runnerStatus(ctx context.Context) (api.RunnerStatus, error) {

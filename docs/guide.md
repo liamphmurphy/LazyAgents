@@ -126,7 +126,7 @@ the current turn; **Save to wiki** and **Save as artifact** preserve a reply.
 Chats use a scratch workspace and read-only context tools.
 
 Verification status and known gaps are recorded in
-[`verification/LAZYAGENTS-14-report.md`](../verification/LAZYAGENTS-14-report.md).
+[`docs/dev/verification/LAZYAGENTS-14-report.md`](dev/verification/LAZYAGENTS-14-report.md).
 The real Claude Code → Codex smoke is still pending API/runner mode alignment and
 a chat-capable runner; automated fake-harness coverage does not establish provider parity.
 
@@ -261,7 +261,7 @@ The API catalog uses its own configured backend; it does not discover runner
 capabilities. Mixed local/Docker pools have no backend-aware chat routing, so
 catalog availability cannot guarantee which runner claims a turn. Use a
 coordinated, consistent pool for chat verification. See the
-[runtime refresh procedure](../verification/LAZYAGENTS-14-runtime-evidence.md#coordinated-refresh-procedure)
+[runtime refresh procedure](dev/verification/LAZYAGENTS-14-runtime-evidence.md#coordinated-refresh-procedure)
 before replacing existing runners with active work. `make dev` replaces API/web
 listeners; use it only during a coordinated maintenance window.
 

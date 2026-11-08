@@ -1,5 +1,5 @@
 // Package agents manages agent identities, their versioned definitions and
-// per-project overrides (PLAN.md §6.1). The merge rules live in agentdef.
+// per-project overrides (docs/dev/plan.md §6.1). The merge rules live in agentdef.
 package agents
 
 import (

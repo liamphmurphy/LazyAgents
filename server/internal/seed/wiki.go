@@ -13,7 +13,7 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
 )
 
-// Demo wiki (PLAN.md §12): a few team pages, Atlas's memory from PAY-214,
+// Demo wiki (docs/dev/plan.md §12): a few team pages, Atlas's memory from PAY-214,
 // and a suggestion from Sentry waiting for a person.
 var demoPages = []struct{ path, body string }{
 	{"Payments/Ledger/Rollback runbook", `# Rollback runbook

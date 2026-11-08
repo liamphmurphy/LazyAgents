@@ -1,4 +1,4 @@
-// Package agentapi is the Agent API (PLAN.md §5.2): one table of tools,
+// Package agentapi is the Agent API (docs/dev/plan.md §5.2): one table of tools,
 // served over MCP at /mcp and mirrored as REST at /api/v1/agent/tools/{name}.
 // Every call authenticates with an agent bearer token (la_…).
 package agentapi
@@ -152,7 +152,7 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 	for _, s := range spec.Scopes {
 		scopes[s.Scope] = string(s.Mode)
 	}
-	// Wiki memory this run starts with (PLAN.md §12.3); delivered pages
+	// Wiki memory this run starts with (docs/dev/plan.md §12.3); delivered pages
 	// count as one read each.
 	memory := []wiki.ContextPage{}
 	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil && run.Mode != "managed" {

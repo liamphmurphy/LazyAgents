@@ -73,7 +73,7 @@ const INJECT_HELP = {
   search: "Everything in Linked, plus the best wiki matches for the ticket title.",
 } as const;
 
-/** Wiki memory a run starts with (PLAN.md §12.3). */
+/** Wiki memory a run starts with (docs/dev/plan.md §12.3). */
 function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; set: (p: Partial<AgentSpec>) => void }) {
   const m = spec.memory ?? DEFAULT_MEMORY;
   const put = (p: Partial<typeof m>) => set({ memory: { ...m, ...p } });

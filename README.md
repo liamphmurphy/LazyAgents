@@ -109,7 +109,7 @@ behind your own authenticating proxy, and only run projects you trust. See the
 - **[Kanban board](docs/board.md)**: statuses, estimates, and the board's agent tools.
 - **[OpenCode harness](docs/opencode.md)**: install, auth, isolation, and limits.
 - **[Example skills](examples/skills/)**: starter playbooks for your agents.
-- **[Project plan](PLAN.md)**: architecture and implementation details.
-- **[Design](lazyagents-design/)**: the app's design references.
+- **[Project plan](docs/dev/plan.md)**: architecture and implementation details.
+- **[Design](docs/design-system/)**: the app's design references.
 
 Have an idea or found something that could work better? [Open an issue](https://github.com/liamphmurphy/LazyAgents/issues).

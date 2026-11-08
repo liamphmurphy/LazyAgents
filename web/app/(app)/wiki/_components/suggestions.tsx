@@ -64,7 +64,7 @@ export function SuggestionDiff({ s }: { s: WikiSuggestion }) {
 }
 
 /**
- * One agent suggestion with Accept / Reject (PLAN.md §12.5). Amber: a
+ * One agent suggestion with Accept / Reject (docs/dev/plan.md §12.5). Amber: a
  * person needs to act.
  */
 export function SuggestionCard({ s, showPage }: { s: WikiSuggestion; showPage?: boolean }) {

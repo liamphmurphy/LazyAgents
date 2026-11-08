@@ -6,7 +6,7 @@ exactly what the CLIs emit; long fields (tool lists, cf-ray ids) were trimmed.
 
 `*-turn.jsonl` describe a working turn with tool calls. Their envelopes match
 the recorded ones; the tool lines follow each CLI's documented stream
-shapes. Re-record them from a real run with keys when convenient (PLAN.md §10
+shapes. Re-record them from a real run with keys when convenient (docs/dev/plan.md §10
 nightly smoke test).
 
 `opencode-real-*.jsonl` were recorded from the real OpenCode 2.2.1 binary without any model call

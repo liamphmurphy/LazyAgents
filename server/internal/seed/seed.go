@@ -1,6 +1,6 @@
 // Package seed creates the first workspace: either the Northwind Labs demo
 // from the design mockups (SEED=true) or an empty workspace with one local
-// user. With no login (PLAN.md §5.4), the first user created is who every
+// user. With no login (docs/dev/plan.md §5.4), the first user created is who every
 // request acts as: Maya Chen in the demo.
 package seed
 
@@ -123,7 +123,7 @@ type demoTicket struct {
 	criteria []string
 }
 
-// Ticket data mirrors lazyagents-design/screens/tickets.html.
+// Ticket data mirrors docs/design-system/screens/tickets.html.
 var payTickets = []demoTicket{
 	{num: 158, title: "Archive settlement CSV exports to object storage", status: "backlog", priority: "low", labels: []string{"data"}, epic: "Maintenance"},
 	{num: 162, title: "Evaluate multi-currency settlement accounts", status: "backlog", priority: "none", labels: []string{"research"}, due: "2026-11-21"},

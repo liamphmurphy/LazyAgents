@@ -72,7 +72,7 @@ func main() {
 	say("I'm %s (@%s), %s session", who["name"], who["handle"], who["session"])
 	claimed := call("claim_ticket", map[string]any{"ticket": *ticket})
 	say("claimed %s", *ticket)
-	// Wiki memory delivered with the claim (PLAN.md §12.3).
+	// Wiki memory delivered with the claim (docs/dev/plan.md §12.3).
 	if mem, _ := claimed["memory"].([]any); len(mem) > 0 {
 		for _, m := range mem {
 			page := m.(map[string]any)
