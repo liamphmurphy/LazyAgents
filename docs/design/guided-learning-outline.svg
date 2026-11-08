@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="system-ui, -apple-system, Inter, sans-serif">
+<rect width="1440" height="900" fill="#0B0B0D"/>
+<rect width="232" height="900" fill="#0E0E11"/><line x1="232" y1="0" x2="232" y2="900" stroke="#1C1C21"/>
+<rect x="14" y="14" width="22" height="22" rx="5" fill="#8B8FFF"/><text x="46" y="30" font-size="13.5" font-weight="600" fill="#EDEDEF">Vesper</text>
+<rect x="12" y="50" width="208" height="32" rx="6" fill="#111114" stroke="#26262C"/><text x="24" y="71" font-size="13" fill="#8B8B94">Search…</text>
+<g font-size="12" font-weight="500" fill="#8B8B94"><text x="20" y="112">Personal</text><text x="20" y="324">Project</text><text x="20" y="506">Workspace</text></g>
+<rect x="10" y="266" width="212" height="30" rx="6" fill="#1B1B21"/>
+<g font-size="13" font-weight="500" fill="#A1A1AA"><text x="20" y="136">Inbox</text><text x="20" y="166">Dashboard</text><text x="20" y="196">Assistant</text><text x="20" y="226">Library</text><text x="20" y="256">Workflows</text><text x="20" y="286" fill="#EDEDEF">Learn</text><text x="20" y="348">Board</text><text x="20" y="378">Tickets</text><text x="20" y="408">Epics</text><text x="20" y="438">Plans</text><text x="20" y="468">Artifacts</text><text x="20" y="530">Runs</text><text x="20" y="560">Costs</text><text x="20" y="590">Agents</text><text x="20" y="620">Wiki</text><text x="20" y="650">Settings</text></g>
+<line x1="232" y1="52" x2="1100" y2="52" stroke="#1C1C21"/>
+<text x="264" y="31" font-size="13" fill="#8B8B94">Learn  /</text><text x="316" y="31" font-size="13" font-weight="500" fill="#EDEDEF">Postgres MVCC and vacuum</text>
+
+<!-- Stepper -->
+<g font-size="12">
+<line x1="352" y1="82" x2="398" y2="82" stroke="#C9C9CF"/><line x1="416" y1="82" x2="1000" y2="82" stroke="#26262C"/>
+<circle cx="273" cy="82" r="9" fill="#C9C9CF"/><text x="273" y="86" font-size="10" font-weight="700" text-anchor="middle" fill="#0B0B0D">✓</text>
+<circle cx="407" cy="82" r="9" fill="#0B0B0D" stroke="#F0BF4C" stroke-width="2"/>
+<circle cx="541" cy="82" r="9" fill="#0B0B0D" stroke="#26262C"/><circle cx="675" cy="82" r="9" fill="#0B0B0D" stroke="#26262C"/><circle cx="809" cy="82" r="9" fill="#0B0B0D" stroke="#26262C"/><circle cx="943" cy="82" r="9" fill="#0B0B0D" stroke="#26262C"/>
+<rect x="288" y="74" width="64" height="16" fill="#0B0B0D"/><text x="288" y="86" fill="#A1A1AA">Scoping</text>
+<rect x="422" y="74" width="54" height="16" fill="#0B0B0D"/><text x="422" y="86" font-weight="600" fill="#F0BF4C">Outline</text>
+<rect x="556" y="74" width="66" height="16" fill="#0B0B0D"/><text x="556" y="86" fill="#8B8B94">Research</text>
+<rect x="690" y="74" width="66" height="16" fill="#0B0B0D"/><text x="690" y="86" fill="#8B8B94">Authoring</text>
+<rect x="824" y="74" width="56" height="16" fill="#0B0B0D"/><text x="824" y="86" fill="#8B8B94">Review</text>
+<rect x="958" y="74" width="46" height="16" fill="#0B0B0D"/><text x="958" y="86" fill="#8B8B94">Ready</text>
+</g>
+
+<rect x="264" y="106" width="804" height="36" rx="6" fill="#F0BF4C" fill-opacity=".12" stroke="#F0BF4C" stroke-opacity=".3"/>
+<text x="280" y="129" font-size="13" font-weight="500" fill="#F0BF4C">Review this outline. Research starts when you approve it.</text>
+
+<text x="264" y="176" font-size="19" font-weight="600" fill="#EDEDEF">Postgres MVCC and vacuum</text>
+<text x="264" y="198" font-size="13" fill="#A1A1AA">4 units · 10 lessons · about 3h · for debugging slow queries and table bloat</text>
+
+<!-- Unit 1 -->
+<rect x="264" y="212" width="804" height="112" rx="8" fill="#111114" stroke="#1F1F25"/>
+<text x="284" y="233" font-size="12" font-weight="600" fill="#C9C9CF">Unit 1 · Foundations</text>
+<line x1="264" y1="242" x2="1068" y2="242" stroke="#1C1C21"/>
+<g font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#8B8B94"><text x="284" y="266">1.1</text><text x="284" y="307">1.2</text></g>
+<g font-size="13" font-weight="500"><text x="322" y="262" fill="#8B8B94">Transactions and isolation levels</text><text x="322" y="303" fill="#EDEDEF">Heap pages and tuples</text></g>
+<g font-size="12" fill="#8B8B94"><text x="322" y="279">Compare what each isolation level promises</text><text x="322" y="318">Find a row version on a page</text></g>
+<rect x="990" y="255" width="62" height="24" rx="5" fill="#1B1B21" stroke="#26262C"/><text x="1021" y="271" font-size="11.5" font-weight="500" text-anchor="middle" fill="#C9C9CF">✓ Known</text>
+<rect x="990" y="295" width="62" height="24" rx="5" fill="none" stroke="#26262C"/><text x="1021" y="311" font-size="11.5" text-anchor="middle" fill="#8B8B94">Known</text>
+<line x1="264" y1="285" x2="1068" y2="285" stroke="#16161A"/>
+
+<!-- Unit 2 -->
+<rect x="264" y="332" width="804" height="152" rx="8" fill="#111114" stroke="#1F1F25"/>
+<text x="284" y="353" font-size="12" font-weight="600" fill="#C9C9CF">Unit 2 · Visibility</text>
+<line x1="264" y1="362" x2="1068" y2="362" stroke="#1C1C21"/><line x1="264" y1="403" x2="1068" y2="403" stroke="#16161A"/><line x1="264" y1="444" x2="1068" y2="444" stroke="#16161A"/>
+<g font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#8B8B94"><text x="284" y="386">2.1</text><text x="284" y="427">2.2</text><text x="284" y="468">2.3</text></g>
+<g font-size="13" font-weight="500" fill="#EDEDEF"><text x="322" y="381">Row versions: xmin and xmax</text><text x="322" y="422">Snapshots</text><text x="322" y="463">Hint bits and visibility checks</text></g>
+<g font-size="12" fill="#8B8B94"><text x="322" y="397">Trace what UPDATE writes to the heap</text><text x="322" y="438">Predict what a snapshot can see</text><text x="322" y="479">Explain why a read can dirty a page</text></g>
+<g font-size="11.5" font-family="ui-monospace, Menlo, monospace" fill="#A1A1AA" text-anchor="end"><text x="970" y="386">needs 1.2</text><text x="970" y="427">needs 1.1, 2.1</text><text x="970" y="468">needs 2.2</text></g>
+<g fill="none" stroke="#26262C"><rect x="990" y="371" width="62" height="24" rx="5"/><rect x="990" y="412" width="62" height="24" rx="5"/><rect x="990" y="453" width="62" height="24" rx="5"/></g>
+<g font-size="11.5" text-anchor="middle" fill="#8B8B94"><text x="1021" y="387">Known</text><text x="1021" y="428">Known</text><text x="1021" y="469">Known</text></g>
+
+<!-- Unit 3 -->
+<rect x="264" y="492" width="804" height="152" rx="8" fill="#111114" stroke="#1F1F25"/>
+<text x="284" y="513" font-size="12" font-weight="600" fill="#C9C9CF">Unit 3 · Vacuum</text>
+<line x1="264" y1="522" x2="1068" y2="522" stroke="#1C1C21"/><line x1="264" y1="563" x2="1068" y2="563" stroke="#16161A"/><line x1="264" y1="604" x2="1068" y2="604" stroke="#16161A"/>
+<g font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#8B8B94"><text x="284" y="546">3.1</text><text x="284" y="587">3.2</text><text x="284" y="628">3.3</text></g>
+<g font-size="13" font-weight="500" fill="#EDEDEF"><text x="322" y="541">Dead tuples and bloat</text><text x="322" y="582">What VACUUM actually does</text><text x="322" y="623">Tuning autovacuum</text></g>
+<g font-size="12" fill="#8B8B94"><text x="322" y="557">Measure bloat on a real table</text><text x="322" y="598">Say when space returns to the OS</text><text x="322" y="639">Pick thresholds for a hot table</text></g>
+<g font-size="11.5" font-family="ui-monospace, Menlo, monospace" fill="#A1A1AA" text-anchor="end"><text x="970" y="546">needs 2.2</text><text x="970" y="587">needs 3.1</text><text x="970" y="628">needs 3.2</text></g>
+<g fill="none" stroke="#26262C"><rect x="990" y="531" width="62" height="24" rx="5"/><rect x="990" y="572" width="62" height="24" rx="5"/><rect x="990" y="613" width="62" height="24" rx="5"/></g>
+<g font-size="11.5" text-anchor="middle" fill="#8B8B94"><text x="1021" y="547">Known</text><text x="1021" y="588">Known</text><text x="1021" y="629">Known</text></g>
+
+<!-- Unit 4 -->
+<rect x="264" y="652" width="804" height="112" rx="8" fill="#111114" stroke="#1F1F25"/>
+<text x="284" y="673" font-size="12" font-weight="600" fill="#C9C9CF">Unit 4 · Wraparound</text>
+<line x1="264" y1="682" x2="1068" y2="682" stroke="#1C1C21"/><line x1="264" y1="723" x2="1068" y2="723" stroke="#16161A"/>
+<g font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#8B8B94"><text x="284" y="706">4.1</text><text x="284" y="747">4.2</text></g>
+<g font-size="13" font-weight="500" fill="#EDEDEF"><text x="322" y="701">Transaction ID wraparound</text><text x="322" y="742">Freezing and anti-wraparound vacuum</text></g>
+<g font-size="12" fill="#8B8B94"><text x="322" y="717">Explain why 32-bit XIDs need freezing</text><text x="322" y="758">Read age(relfrozenxid) and act on it</text></g>
+<g font-size="11.5" font-family="ui-monospace, Menlo, monospace" fill="#A1A1AA" text-anchor="end"><text x="970" y="706">needs 2.1</text><text x="970" y="747">needs 3.2, 4.1</text></g>
+<g fill="none" stroke="#26262C"><rect x="990" y="691" width="62" height="24" rx="5"/><rect x="990" y="732" width="62" height="24" rx="5"/></g>
+<g font-size="11.5" text-anchor="middle" fill="#8B8B94"><text x="1021" y="707">Known</text><text x="1021" y="748">Known</text></g>
+
+<rect x="264" y="778" width="804" height="36" rx="6" fill="#F48A87" fill-opacity=".1" stroke="#F48A87" stroke-opacity=".3"/>
+<text x="280" y="801" font-size="13" fill="#F48A87">Can't move 2.2 above 2.1: Snapshots depends on Row versions.</text>
+<text x="264" y="840" font-size="12" fill="#8B8B94">Drag lessons to reorder. Every change is checked against the prerequisite map.</text>
+
+<!-- Right panel -->
+<rect x="1100" y="0" width="340" height="900" fill="#0D0D10"/><line x1="1100" y1="0" x2="1100" y2="900" stroke="#1C1C21"/>
+<rect x="1356" y="13" width="66" height="26" rx="6" fill="none" stroke="#26262C"/><text x="1389" y="31" font-size="13" text-anchor="middle" fill="#C9C9CF">Discard</text>
+<text x="1118" y="74" font-size="14" font-weight="600" fill="#EDEDEF">Prerequisite map</text>
+<g fill="none" stroke="#55555F" stroke-width="1.2">
+<path d="M1150 138H1166"/>
+<path d="M1150 112H1220"/><path d="M1204 138C1212 138 1212 112 1220 112"/>
+<path d="M1204 138C1212 138 1212 164 1220 164"/><path d="M1258 112H1274"/><path d="M1258 112C1266 112 1266 138 1274 138"/>
+<path d="M1312 138H1328"/><path d="M1366 138H1382"/><path d="M1366 138C1374 138 1374 164 1382 164"/><path d="M1258 164H1382"/>
+</g>
+<g fill="#16161B" stroke="#26262C"><rect x="1166" y="126" width="38" height="24" rx="5"/><rect x="1220" y="100" width="38" height="24" rx="5"/><rect x="1220" y="152" width="38" height="24" rx="5"/><rect x="1274" y="100" width="38" height="24" rx="5"/><rect x="1274" y="126" width="38" height="24" rx="5"/><rect x="1328" y="126" width="38" height="24" rx="5"/><rect x="1382" y="126" width="38" height="24" rx="5"/><rect x="1382" y="152" width="38" height="24" rx="5"/><rect x="1112" y="126" width="38" height="24" rx="5"/></g>
+<rect x="1112" y="100" width="38" height="24" rx="5" fill="#0D0D10" stroke="#26262C" stroke-dasharray="3 2"/>
+<g font-size="11" font-family="ui-monospace, Menlo, monospace" text-anchor="middle" fill="#C9C9CF"><text x="1131" y="116" fill="#8B8B94">1.1</text><text x="1131" y="142">1.2</text><text x="1185" y="142">2.1</text><text x="1239" y="116">2.2</text><text x="1239" y="168">4.1</text><text x="1293" y="116">2.3</text><text x="1293" y="142">3.1</text><text x="1347" y="142">3.2</text><text x="1401" y="142">3.3</text><text x="1401" y="168">4.2</text></g>
+<text x="1118" y="202" font-size="12" fill="#8B8B94">Order is valid. 1.1 is marked known and skipped.</text>
+
+<line x1="1118" y1="224" x2="1422" y2="224" stroke="#1C1C21"/>
+<text x="1118" y="252" font-size="14" font-weight="600" fill="#EDEDEF">What will be researched</text>
+<g font-size="12.5" fill="#C9C9CF"><text x="1118" y="280">Visibility rules in the current Postgres docs</text><text x="1118" y="304">How VACUUM and HOT reclaim space</text><text x="1118" y="328">Autovacuum defaults and tuning guidance</text><text x="1118" y="352">Freezing and wraparound by version</text></g>
+<line x1="1118" y1="374" x2="1422" y2="374" stroke="#1C1C21"/>
+<text x="1118" y="402" font-size="14" font-weight="600" fill="#EDEDEF">Limits</text>
+<g font-size="13" fill="#A1A1AA"><text x="1118" y="434">Sources</text><text x="1118" y="470">Time</text><text x="1118" y="506">Spend</text><text x="1118" y="542">Runs</text></g>
+<g fill="#111114" stroke="#26262C"><rect x="1322" y="416" width="100" height="28" rx="5"/><rect x="1322" y="452" width="100" height="28" rx="5"/><rect x="1322" y="488" width="100" height="28" rx="5"/></g>
+<g font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#EDEDEF" text-anchor="end"><text x="1412" y="434">40</text><text x="1412" y="470">30 min</text><text x="1412" y="506">no limit</text><text x="1422" y="542" fill="#A1A1AA">about 13</text></g>
+<text x="1118" y="574" font-size="12" fill="#8B8B94">Reviewer re-checks each lesson; one rewrite</text>
+<text x="1118" y="592" font-size="12" fill="#8B8B94">if it fails. Runs queue behind other work.</text>
+
+<rect x="1118" y="620" width="304" height="38" rx="6" fill="#8B8FFF"/><text x="1270" y="644" font-size="13" font-weight="600" text-anchor="middle" fill="#0B0B0D">Approve and start research</text>
+</svg>

@@ -84,6 +84,20 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	if err != nil {
 		return ToolDecision{}, err
 	}
+	if WebTool(in.Tool) && run.Purpose == PurposeLearning {
+		// Only a reviewer has the web, and only to open what the course cites.
+		url, _ := in.Input["url"].(string)
+		cited := false
+		if in.Tool == "WebFetch" && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+			if cited, err = q.LearningSourceForRun(ctx, store.LearningSourceForRunParams{RunID: run.ID, Url: url}); err != nil {
+				return ToolDecision{}, err
+			}
+		}
+		if !cited {
+			return deny("A reviewer may only open the exact source URLs listed in its task")
+		}
+		return ToolDecision{Decision: "allow"}, nil
+	}
 	if WebTool(in.Tool) && (run.Purpose == "chat" || run.Purpose == PurposeResearch || run.Purpose == PurposeWorkflow) && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
 		if in.Tool != "WebFetch" {
 			return ToolDecision{Decision: "allow"}, nil

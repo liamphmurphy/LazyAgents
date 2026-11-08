@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="system-ui, -apple-system, Inter, sans-serif">
+<rect width="1440" height="900" fill="#0B0B0D"/>
+<rect width="56" height="900" fill="#0E0E11"/><line x1="56" y1="0" x2="56" y2="900" stroke="#1C1C21"/>
+<rect x="17" y="14" width="22" height="22" rx="5" fill="#8B8FFF"/>
+<g fill="none" stroke="#8B8B94" stroke-width="1.3"><rect x="20" y="60" width="16" height="16" rx="4"/><rect x="20" y="96" width="16" height="16" rx="4"/><rect x="20" y="132" width="16" height="16" rx="4"/><rect x="20" y="168" width="16" height="16" rx="4"/></g>
+<rect x="12" y="200" width="32" height="32" rx="6" fill="#1B1B21"/><rect x="20" y="208" width="16" height="16" rx="4" fill="none" stroke="#EDEDEF" stroke-width="1.3"/>
+
+<!-- Course rail -->
+<rect x="56" y="0" width="256" height="900" fill="#0D0D10"/><line x1="312" y1="0" x2="312" y2="900" stroke="#1C1C21"/>
+<text x="74" y="31" font-size="13" fill="#8B8B94">← Learn</text>
+<line x1="56" y1="52" x2="312" y2="52" stroke="#1C1C21"/>
+<text x="74" y="82" font-size="14" font-weight="600" fill="#EDEDEF">Postgres MVCC and vacuum</text>
+<text x="74" y="104" font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#8B8B94">3 of 10 complete · 2 solid</text>
+<rect x="74" y="116" width="220" height="4" rx="2" fill="#26262C"/><rect x="74" y="116" width="66" height="4" rx="2" fill="#C9C9CF"/>
+<g font-size="11" font-weight="600" fill="#8B8B94"><text x="74" y="156">UNIT 1 · FOUNDATIONS</text><text x="74" y="252">UNIT 2 · VISIBILITY</text><text x="74" y="378">UNIT 3 · VACUUM</text><text x="74" y="504">UNIT 4 · WRAPAROUND</text></g>
+<rect x="66" y="294" width="236" height="30" rx="6" fill="#1B1B21"/>
+<g fill="#C9C9CF"><circle cx="82" cy="178" r="6"/><circle cx="82" cy="208" r="6"/><circle cx="82" cy="274" r="6"/></g>
+<g font-size="9" font-weight="700" text-anchor="middle" fill="#0B0B0D"><text x="82" y="181">✓</text><text x="82" y="211">✓</text><text x="82" y="277">✓</text></g>
+<circle cx="82" cy="309" r="6" fill="none" stroke="#8B8FFF" stroke-width="2"/>
+<g fill="none" stroke="#26262C" stroke-width="1.5"><circle cx="82" cy="340" r="6"/><circle cx="82" cy="400" r="6"/><circle cx="82" cy="470" r="6"/><circle cx="82" cy="526" r="6"/><circle cx="82" cy="556" r="6"/></g>
+<circle cx="82" cy="430" r="6" fill="none" stroke="#F0BF4C" stroke-width="1.5"/>
+<g font-size="13" fill="#A1A1AA"><text x="98" y="182">Transactions and isolation</text><text x="98" y="212">Heap pages and tuples</text><text x="98" y="278">Row versions</text><text x="98" y="313" fill="#EDEDEF" font-weight="500">Snapshots</text><text x="98" y="344">Hint bits and visibility</text><text x="98" y="404">Dead tuples and bloat</text><text x="98" y="434">What VACUUM actually does</text><text x="98" y="474">Tuning autovacuum</text><text x="98" y="530">Transaction ID wraparound</text><text x="98" y="560">Freezing</text></g>
+<text x="98" y="448" font-size="10.5" fill="#F0BF4C">Flagged: see reviewer note</text>
+
+<!-- Center -->
+<line x1="312" y1="52" x2="1100" y2="52" stroke="#1C1C21"/>
+<text x="344" y="31" font-size="13" fill="#8B8B94">Unit 2  /</text><text x="402" y="31" font-size="13" font-weight="500" fill="#EDEDEF">Snapshots</text>
+<rect x="1020" y="13" width="64" height="26" rx="6" fill="none" stroke="#26262C"/><text x="1052" y="31" font-size="13" text-anchor="middle" fill="#C9C9CF">Next →</text>
+
+<text x="380" y="92" font-size="10" font-weight="600" letter-spacing=".6" fill="#8B8B94">LESSON 4 OF 10</text>
+<text x="380" y="126" font-size="26" font-weight="600" fill="#EDEDEF">Snapshots decide what you can see</text>
+<text x="380" y="150" font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#8B8B94">8 min · 4 sources</text>
+<circle cx="520" cy="146" r="3" fill="#6FCF97"/><text x="529" y="150" font-size="12" fill="#6FCF97">Reviewed</text>
+<text x="600" y="150" font-size="12" fill="#A1A1AA">Goal: predict what a snapshot can see.</text>
+
+<g font-size="14" fill="#C9C9CF"><text x="380" y="186">A snapshot records which transactions were still in progress when it was taken. A row</text><text x="380" y="209">version is visible only if the transaction that created it had committed by then. <tspan fill="#A3A6FF">[1] [2]</tspan></text></g>
+
+<line x1="380" y1="228" x2="380" y2="286" stroke="#8B8B94" stroke-dasharray="3 3"/>
+<text x="392" y="240" font-size="10" font-weight="600" letter-spacing=".6" fill="#8B8B94">MODEL KNOWLEDGE · NOT SOURCED</text>
+<g font-size="14" fill="#C9C9CF"><text x="392" y="261">Think of it as a list of who had finished, not a copy of the data. Old row versions stay</text><text x="392" y="284">in the table until something cleans them up, which is why vacuum exists.</text></g>
+
+<rect x="380" y="302" width="640" height="118" rx="8" fill="#111114" stroke="#1F1F25"/>
+<text x="398" y="324" font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#A1A1AA">T130 snapshot · in progress = {120}</text>
+<g font-size="11" font-weight="600" fill="#8B8B94"><text x="398" y="350">VERSION</text><text x="490" y="350">XMIN</text><text x="570" y="350">XMAX</text><text x="650" y="350">TO THIS SNAPSHOT</text></g>
+<line x1="398" y1="358" x2="1002" y2="358" stroke="#1C1C21"/>
+<g font-size="12" font-family="ui-monospace, Menlo, monospace" fill="#EDEDEF"><text x="398" y="378">v1</text><text x="490" y="378">100</text><text x="570" y="378">120</text><text x="398" y="404">v2</text><text x="490" y="404">120</text><text x="570" y="404">0</text></g>
+<text x="650" y="378" font-size="13" fill="#EDEDEF">Visible: 120's update isn't in this snapshot</text>
+<text x="650" y="404" font-size="13" fill="#8B8B94">Hidden: 120 was still in progress</text>
+
+<rect x="380" y="436" width="640" height="346" rx="8" fill="#111114" stroke="#26262C"/>
+<text x="400" y="462" font-size="10" font-weight="600" letter-spacing=".6" fill="#8B8B94">CHECK 1 OF 2</text>
+<text x="400" y="488" font-size="14" font-weight="600" fill="#EDEDEF">T130's snapshot lists 120 as in progress. 120 commits a moment later.</text>
+<text x="400" y="510" font-size="14" font-weight="600" fill="#EDEDEF">Within that snapshot, which version does T130 read?</text>
+<rect x="400" y="526" width="600" height="40" rx="6" fill="#8B8FFF" fill-opacity=".15" stroke="#8B8FFF"/>
+<g fill="#0F0F12" stroke="#26262C"><rect x="400" y="574" width="600" height="40" rx="6"/><rect x="400" y="622" width="600" height="40" rx="6"/><rect x="400" y="670" width="600" height="40" rx="6"/></g>
+<circle cx="420" cy="546" r="6" fill="#8B8FFF"/><g fill="none" stroke="#8B8B94"><circle cx="420" cy="594" r="6"/><circle cx="420" cy="642" r="6"/><circle cx="420" cy="690" r="6"/></g>
+<g font-size="13" fill="#C9C9CF"><text x="438" y="551" fill="#EDEDEF">v1, because 120 was in progress when the snapshot was taken</text><text x="438" y="599">v2, because 120 has now committed</text><text x="438" y="647">Neither, because the row is locked</text><text x="438" y="695">It depends on which page is read first</text></g>
+<text x="400" y="752" font-size="12" fill="#A1A1AA">How sure are you?</text>
+<rect x="510" y="734" width="240" height="28" rx="6" fill="#0F0F12" stroke="#26262C"/><rect x="590" y="734" width="80" height="28" fill="#1B1B21" stroke="#26262C"/>
+<g font-size="12" text-anchor="middle" fill="#A1A1AA"><text x="550" y="752">Guessing</text><text x="630" y="752" fill="#EDEDEF">Fairly</text><text x="710" y="752">Certain</text></g>
+<rect x="882" y="732" width="118" height="32" rx="6" fill="#8B8FFF"/><text x="941" y="753" font-size="13" font-weight="600" text-anchor="middle" fill="#0B0B0D">Check answer</text>
+
+<text x="380" y="812" font-size="12" font-weight="600" fill="#A1A1AA">Sources</text>
+<g font-size="12" fill="#8B8B94"><text x="380" y="834"><tspan fill="#A3A6FF">[1]</tspan> PostgreSQL documentation, Chapter 13: Concurrency Control</text><text x="380" y="854"><tspan fill="#A3A6FF">[2]</tspan> PostgreSQL source: heapam_visibility.c</text></g>
+
+<!-- Tutor -->
+<rect x="1100" y="0" width="340" height="900" fill="#0D0D10"/><line x1="1100" y1="0" x2="1100" y2="900" stroke="#1C1C21"/>
+<rect x="1118" y="15" width="22" height="22" rx="5" fill="#26262C"/><text x="1129" y="31" font-size="11" font-weight="600" text-anchor="middle" fill="#EDEDEF">T</text>
+<text x="1150" y="31" font-size="13" font-weight="600" fill="#EDEDEF">Theo, your tutor</text>
+<text x="1422" y="31" font-size="11" text-anchor="end" fill="#8B8B94">Not reviewed</text>
+<line x1="1100" y1="52" x2="1440" y2="52" stroke="#1C1C21"/>
+
+<rect x="1166" y="74" width="256" height="50" rx="8" fill="#16161B"/>
+<g font-size="13" fill="#EDEDEF"><text x="1178" y="94">Why doesn't T130 just read the</text><text x="1178" y="113">newest committed version?</text></g>
+<g font-size="13" fill="#C9C9CF"><text x="1118" y="154">What would happen to a long report if</text><text x="1118" y="174">rows changed under it halfway through?</text><text x="1118" y="202">Try answering that, then look at the xmax</text><text x="1118" y="222">column in the figure.</text></g>
+<rect x="1212" y="242" width="210" height="34" rx="8" fill="#16161B"/>
+<text x="1224" y="264" font-size="13" fill="#EDEDEF">It'd mix old and new totals.</text>
+<g font-size="13" fill="#C9C9CF"><text x="1118" y="306">Exactly. One consistent view of the data</text><text x="1118" y="326">is the point. So which version does that</text><text x="1118" y="346">snapshot have to keep using?</text></g>
+
+<g font-size="12" fill="#A1A1AA" text-anchor="middle">
+<rect x="1118" y="796" width="116" height="26" rx="13" fill="none" stroke="#26262C"/><text x="1176" y="813">Explain differently</text>
+<rect x="1242" y="796" width="88" height="26" rx="13" fill="none" stroke="#26262C"/><text x="1286" y="813">An example</text>
+<rect x="1338" y="796" width="62" height="26" rx="13" fill="none" stroke="#26262C"/><text x="1369" y="813">Quiz me</text>
+</g>
+<rect x="1118" y="832" width="304" height="44" rx="8" fill="#111114" stroke="#26262C"/><text x="1132" y="859" font-size="13" fill="#8B8B94">Ask about this lesson…</text>
+</svg>

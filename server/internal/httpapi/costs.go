@@ -22,7 +22,7 @@ const (
 	costTopTickets = 10
 )
 
-var costPurposeLabels = map[string]string{"ticket": "Ticket work", "planning": "Planning", "chat": "Chat", "research": "Research", "workflow": "Workflows"}
+var costPurposeLabels = map[string]string{"ticket": "Ticket work", "planning": "Planning", "chat": "Chat", "research": "Research", "workflow": "Workflows", "learning": "Learning"}
 
 // costAcc sums one breakdown row. Runs are counted once per row, so a chat run
 // split across models counts in each of its model rows.

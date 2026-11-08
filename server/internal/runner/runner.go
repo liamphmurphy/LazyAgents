@@ -260,6 +260,16 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 			return c, err
 		}
 		c.ticket = store.Ticket{WorkspaceID: job.WorkspaceID, ProjectID: chat.ProjectID, Key: "RES-" + job.ID.String()[:8], Title: job.Title}
+	} else if c.run.Purpose == runs.PurposeLearning {
+		course, err := q.LearningCourseForRun(ctx, c.run.ID)
+		if err != nil {
+			return c, err
+		}
+		chat, err := q.GetChatSession(ctx, store.GetChatSessionParams{ID: course.ChatID, WorkspaceID: course.WorkspaceID})
+		if err != nil {
+			return c, err
+		}
+		c.ticket = store.Ticket{WorkspaceID: course.WorkspaceID, ProjectID: chat.ProjectID, Key: "LRN-" + course.ID.String()[:8], Title: course.Topic}
 	} else if c.run.Purpose == runs.PurposeWorkflow {
 		wf, err := q.WorkflowRunForAgentRun(ctx, &c.run.ID)
 		if err != nil {
@@ -351,11 +361,14 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 	}
 	// Only a successful run's workspace goes: a failed or cancelled one keeps
 	// its checkout (unpushed commits included) for a retry or a person.
-	if c.run.ParentRunID == nil && (state == "completed" || c.run.Purpose == runs.PurposeResearch || c.run.Purpose == runs.PurposeWorkflow) {
+	if c.run.ParentRunID == nil && (state == "completed" || c.run.Purpose == runs.PurposeResearch || c.run.Purpose == runs.PurposeWorkflow || c.run.Purpose == runs.PurposeLearning) {
 		r.cleanup(context.Background(), c.run.ID) // a delegated run has no workspace of its own
 	}
 	if c.run.Purpose == runs.PurposeResearch {
 		r.advanceResearch(context.Background())
+	}
+	if c.run.Purpose == runs.PurposeResearch || c.run.Purpose == runs.PurposeLearning {
+		r.advanceLearning(context.Background())
 	}
 	if c.run.Purpose == runs.PurposeWorkflow {
 		r.advanceWorkflows(context.Background())
@@ -368,6 +381,12 @@ func (r *Runner) advanceWorkflows(ctx context.Context) {
 	}
 	if err := r.Workflows.AdvanceAll(ctx); err != nil && ctx.Err() == nil {
 		r.Log.Warn("advance workflows", "err", err)
+	}
+}
+
+func (r *Runner) advanceLearning(ctx context.Context) {
+	if err := runs.AdvanceLearningCourses(ctx, r.Pool); err != nil && ctx.Err() == nil {
+		r.Log.Warn("advance learning", "err", err)
 	}
 }
 
@@ -397,6 +416,7 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepChatAttachments(ctx)
 	defer r.sweepLinkPreviews(ctx)
+	defer r.advanceLearning(ctx)
 	defer r.advanceResearch(ctx)
 	defer r.advanceWorkflows(ctx)
 	defer r.refreshChatSuggestions(ctx, time.Now())
@@ -1417,6 +1437,11 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	// A researcher reports through its tool, so a clean exit is the end of it.
 	if c.run.Purpose == runs.PurposeResearch {
 		r.end(ctx, c, "completed", "Research finished.", runs.VerbRunCompleted)
+		return
+	}
+	// So does a course's run; the course checks what arrived.
+	if c.run.Purpose == runs.PurposeLearning {
+		r.end(ctx, c, "completed", "Course step finished.", runs.VerbRunCompleted)
 		return
 	}
 	// So does a workflow step; the engine checks that it did.
