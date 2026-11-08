@@ -169,7 +169,7 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 		return finish("Codex isn't set up")
 	}
 	plan = ChatSecretPlan(plan, spec)
-	if key, _ := HarnessKey(spec); NeedsHarnessKey(r.Cfg.RequireHarnessKey, spec) && !hasSecret(plan, key.Secret) {
+	if key, _ := HarnessKey(spec); r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
 		return finish("Codex isn't set up")
 	}
 	env, err := SecretEnv(ctx, r.Secrets, c.run.WorkspaceID, &c.project.ID, plan)
@@ -218,7 +218,7 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	before := r.outboxNames(ctx, c)
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
 		Name: fmt.Sprintf("lazyagents-image-%s-%d-%s", c.run.ID, turn.Seq, job.ID.String()[:8]),
-		Argv: append(append([]string{}, TurnWrapper...), inv.Argv...), Env: env, Dir: dir, Files: files, StateFiles: inv.StateFiles,
+		Argv: append(append([]string{}, TurnWrapper...), inv.Argv...), Env: env, Dir: dir, Files: files,
 	})
 	if err != nil {
 		r.Log.Warn("start image step", "run", c.run.ID, "err", err)

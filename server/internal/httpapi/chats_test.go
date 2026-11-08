@@ -4,15 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +23,6 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/realtime"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
-	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/seed"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/testdb"
@@ -174,14 +170,10 @@ func TestChatModelsCatalog(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&list); err != nil || res.StatusCode != 200 {
 		t.Fatalf("%d %v", res.StatusCode, err)
 	}
-	if len(list) != 3 || list[0].Harness != "claude-code" || list[1].Harness != "codex" || list[2].Harness != "opencode" {
+	if len(list) != 2 || list[0].Harness != "claude-code" || list[1].Harness != "codex" {
 		t.Fatalf("catalog %+v", list)
 	}
-	// Without an isolation attestation OpenCode is listed but unavailable.
-	if oc := list[2]; oc.Available || len(oc.Models) != 0 || !strings.Contains(oc.UnavailableReason, "RUNNER_OPENCODE_ISOLATED") {
-		t.Fatalf("opencode %+v", oc)
-	}
-	for _, h := range list[:2] {
+	for _, h := range list {
 		defaults := 0
 		for _, m := range h.Models {
 			if m.Default {
@@ -722,160 +714,4 @@ func testChatModels(_ context.Context, harness, _ string) ([]chatmodels.Model, e
 		models = append(models, chatmodels.Model{ID: id, Label: id, Default: i == 0, Efforts: efforts})
 	}
 	return models, nil
-}
-
-// openCodeEnv is a chat env with isolated OpenCode, real secrets and a
-// discovery stub that records which provider/key pairs were asked.
-func openCodeEnv(t *testing.T, calls *[]string, fail map[string]bool) *chatEnv {
-	t.Helper()
-	k := make([]byte, 32)
-	box, _ := secrets.NewBox(base64.StdEncoding.EncodeToString(k))
-	return newChatEnvWith(t, func(rs *runs.Service) {
-		rs.Secrets = &secrets.Service{Q: store.New(rs.Pool), Box: box}
-		rs.OpenCodeIsolated = true
-		rs.ModelDiscovery = func(_ context.Context, harness, key string) ([]chatmodels.Model, error) {
-			if key != "" { // the plain claude-code/codex entries discover locally, keyless
-				*calls = append(*calls, harness+":"+key)
-			}
-			if fail[harness] {
-				return nil, errors.New("provider down")
-			}
-			if harness == "codex" {
-				return []chatmodels.Model{{ID: "gpt-5-codex", Default: true}, {ID: "gpt-5-mini"}}, nil
-			}
-			return []chatmodels.Model{{ID: "opus-5.5", Default: true}, {ID: "sonnet-5.5"}}, nil
-		}
-	})
-}
-
-func (e *chatEnv) putKey(rs *secrets.Service, name string) {
-	e.t.Helper()
-	if _, err := rs.Set(context.Background(), e.me.WorkspaceID, e.me.ID, secrets.SetInput{Name: name, Value: "key-for-" + name}); err != nil {
-		e.t.Fatal(err)
-	}
-}
-
-func (e *chatEnv) openCodeEntry() map[string]any {
-	e.t.Helper()
-	res, err := http.Get(e.srv.URL + "/api/v1/chat-models")
-	if err != nil {
-		e.t.Fatal(err)
-	}
-	defer res.Body.Close()
-	var list []map[string]any
-	if err := json.NewDecoder(res.Body).Decode(&list); err != nil {
-		e.t.Fatal(err)
-	}
-	for _, h := range list {
-		if h["harness"] == "opencode" {
-			return h
-		}
-	}
-	e.t.Fatal("no opencode in catalog")
-	return nil
-}
-
-func modelIDs(h map[string]any) (ids []string, defaults []string) {
-	for _, m := range h["models"].([]any) {
-		m := m.(map[string]any)
-		ids = append(ids, m["id"].(string))
-		if m["default"] == true {
-			defaults = append(defaults, m["id"].(string))
-		}
-	}
-	return
-}
-
-// OpenCode availability follows the auth policy: isolation attested, at least
-// one provider key that is revealable and whose discovery works. Provider
-// models are qualified; keys never appear in the response.
-func TestChatModelsOpenCodeAvailability(t *testing.T) {
-	var calls []string
-	fail := map[string]bool{}
-	e := openCodeEnv(t, &calls, fail)
-	rs := e.runs.Secrets
-
-	oc := e.openCodeEntry()
-	reason, _ := oc["unavailable_reason"].(string)
-	if oc["available"] != false || !strings.Contains(reason, "harness:anthropic") || !strings.Contains(reason, "harness:openai") || len(calls) != 0 {
-		t.Fatalf("no keys: %+v calls=%v", oc, calls)
-	}
-
-	e.putKey(rs, "harness:openai")
-	oc = e.openCodeEntry()
-	ids, defaults := modelIDs(oc)
-	if oc["available"] != true || !slices.Equal(ids, []string{"openai/gpt-5-codex", "openai/gpt-5-mini"}) || !slices.Equal(defaults, []string{"openai/gpt-5-codex"}) {
-		t.Fatalf("openai only: %+v", oc)
-	}
-
-	e.putKey(rs, "harness:anthropic")
-	calls = nil
-	oc = e.openCodeEntry()
-	ids, defaults = modelIDs(oc)
-	if !slices.Equal(ids, []string{"anthropic/opus-5.5", "anthropic/sonnet-5.5", "openai/gpt-5-codex", "openai/gpt-5-mini"}) || !slices.Equal(defaults, []string{"anthropic/opus-5.5"}) {
-		t.Fatalf("both providers: %+v", oc)
-	}
-	// Discovery gets each provider's own key, via its own provider path.
-	if !slices.Equal(calls, []string{"claude-code:key-for-harness:anthropic", "codex:key-for-harness:openai"}) {
-		t.Fatalf("discovery calls %v", calls)
-	}
-	if b, _ := json.Marshal(oc); strings.Contains(string(b), "key-for-") {
-		t.Fatalf("key material in catalog: %s", b)
-	}
-
-	// A failing provider is skipped; if all fail the harness is unavailable.
-	fail["claude-code"] = true
-	ids, _ = modelIDs(e.openCodeEntry())
-	if !slices.Equal(ids, []string{"openai/gpt-5-codex", "openai/gpt-5-mini"}) {
-		t.Fatalf("anthropic down: %v", ids)
-	}
-	fail["codex"] = true
-	if oc = e.openCodeEntry(); oc["available"] != false || len(oc["models"].([]any)) != 0 {
-		t.Fatalf("all down: %+v", oc)
-	}
-}
-
-// Unknown harness/model for OpenCode is a field-specific 422 that leaves the
-// chat's stored selection (and idleness) untouched; a valid one is accepted.
-func TestChatSelectionOpenCode(t *testing.T) {
-	var calls []string
-	e := openCodeEnv(t, &calls, nil)
-	e.putKey(e.runs.Secrets, "harness:anthropic")
-	chat := e.newChat(nil)
-	id := chat["id"].(string)
-	harness0, model0 := chat["harness"], chat["model"]
-	unchanged := func() {
-		t.Helper()
-		got := e.want("GET", "/chats/"+id, nil, 200)
-		if got["harness"] != harness0 || got["model"] != model0 || got["state"] != "idle" || got["message_count"].(float64) != 0 {
-			t.Fatalf("selection changed after a rejected post: %v", got)
-		}
-	}
-	post := func(h, m string) map[string]any {
-		return map[string]any{"body": "hi", "harness": h, "model": m}
-	}
-	e.invalid("POST", "/chats/"+id+"/messages", post("opencode", "anthropic/not-a-model"), "model", "unknown")
-	unchanged()
-	e.invalid("POST", "/chats/"+id+"/messages", post("opencode", "openai/gpt-5-codex"), "model", "unknown") // no openai key
-	unchanged()
-	e.invalid("POST", "/chats/"+id+"/messages", post("opencode", "opus-5.5"), "model", "unknown")
-	unchanged()
-	e.invalid("POST", "/chats/"+id+"/messages", post("opencde", ""), "harness", "unknown")
-	unchanged()
-
-	res := e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "harness": "opencode"}, http.StatusAccepted)
-	if c := res["chat"].(map[string]any); c["harness"] != "opencode" || c["model"] != "anthropic/opus-5.5" {
-		t.Fatalf("default model selection %v", c)
-	}
-	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
-	res = e.want("POST", "/chats/"+id+"/messages", post("opencode", "anthropic/sonnet-5.5"), http.StatusAccepted)
-	if c := res["chat"].(map[string]any); c["model"] != "anthropic/sonnet-5.5" {
-		t.Fatalf("model change %v", c)
-	}
-	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
-
-	// Unattested isolation: the same selection is a harness 422.
-	e2 := newChatEnv(t)
-	c2 := e2.newChat(nil)["id"].(string)
-	e2.invalid("POST", "/chats/"+c2+"/messages", post("opencode", "anthropic/opus-5.5"), "harness", "isolated config")
 }

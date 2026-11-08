@@ -160,7 +160,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Artifacts:      arts,
 		Agents:         &agents.Service{Pool: pool},
 		Secrets:        secretsSvc,
-		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc, RequireHarnessKey: cfg.Runner.Backend == "docker", OpenCodeIsolated: cfg.Runner.OpenCodeIsolated, Transcripts: transcript.Shared},
+		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc, RequireHarnessKey: cfg.Runner.Backend == "docker", Transcripts: transcript.Shared},
 		Wiki:           &wiki.Service{Pool: pool, Artifacts: arts, Tracker: trackerSvc},
 		PublicURL:      cfg.PublicURL,
 		Blobs:          blobs,
@@ -247,7 +247,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	var backend runner.Backend
 	switch rc.Backend {
 	case "docker":
-		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network, OpenCodeIsolated: rc.OpenCodeIsolated}
+		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network}
 		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := d.Ping(pctx)
 		cancel()
@@ -264,16 +264,13 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		if rc.CodexBin != "" {
 			bins["codex"] = rc.CodexBin
 		}
-		if rc.OpenCodeBin != "" {
-			bins["opencode"] = rc.OpenCodeBin
-		}
-		backend = &runner.Local{Dir: rc.DataDir, Bins: bins, OpenCodeIsolated: rc.OpenCodeIsolated}
+		backend = &runner.Local{Dir: rc.DataDir, Bins: bins}
 	}
 	host, _ := os.Hostname()
 	blobs := blob.New(cfg.S3)
 	secretStore := &secrets.Service{Q: store.New(pool), Box: box}
 	workflows := runs.NewWorkflowEngine(pool, &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, &tracker.Service{Pool: pool})
-	workflows.Catalog = chatmodels.Catalog{RequireKey: rc.Backend == "docker", OpenCodeIsolated: rc.OpenCodeIsolated, Secrets: secretStore}
+	workflows.Catalog = chatmodels.Catalog{RequireKey: rc.Backend == "docker", Secrets: secretStore}
 	r := &runner.Runner{
 		Cfg: runner.Config{
 			ModelPrices: rc.ModelPrices,

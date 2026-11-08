@@ -60,9 +60,6 @@ type Service struct {
 	// RequireHarnessKey mirrors the runner's setting: chats can't select a
 	// harness whose API-key secret is missing.
 	RequireHarnessKey bool
-	// OpenCodeIsolated mirrors the runner's RUNNER_OPENCODE_ISOLATED: chats can
-	// select OpenCode only where isolated config is attested.
-	OpenCodeIsolated bool
 	// ModelDiscovery overrides live provider discovery for embedded backends and tests.
 	ModelDiscovery func(context.Context, string, string) ([]chatmodels.Model, error)
 	// Poll is how often waits re-check state (tests shorten it).

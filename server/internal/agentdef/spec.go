@@ -45,10 +45,9 @@ func Stricter(a, b Mode) Mode {
 const (
 	HarnessClaudeCode = "claude-code"
 	HarnessCodex      = "codex"
-	HarnessOpenCode   = "opencode"
 )
 
-var Harnesses = []string{HarnessClaudeCode, HarnessCodex, HarnessOpenCode}
+var Harnesses = []string{HarnessClaudeCode, HarnessCodex}
 
 // Budget is an optional runaway guard (no spend caps in v1). Zero = unset.
 type Budget struct {
@@ -165,14 +164,14 @@ func invalid(field, format string, a ...any) error {
 // OptionWebSearch ("true") enables a harness's built-in web search and page
 // fetch tools for a read-only run. Only the Personal Assistant's chat spec sets
 // it (definitions can't), and the tool policy honors it only on chat runs;
-// Claude Code and Codex support it, OpenCode doesn't accept it. See
+// Claude Code and Codex support it. See
 // ADR "Assistant web access".
 const OptionWebSearch = "web_search"
 
 // OptionImageGeneration ("true") turns on Codex's built-in image generation
 // for a chat. Only the Personal Assistant's chat spec sets it, for a persona
 // with the images capability; definitions can't, and Codex runs without it
-// have the feature switched off. Claude Code and OpenCode never receive it.
+// have the feature switched off. Claude Code never receives it.
 const OptionImageGeneration = "image_generation"
 
 // OptionNoTools ("true") makes a turn answer from its prompt alone: no MCP
@@ -309,14 +308,6 @@ func (s *Spec) Normalize() error {
 	s.Model = strings.TrimSpace(s.Model)
 	if s.Model == "" {
 		return invalid("model", "is required")
-	}
-	if err := ValidateTarget(s.Harness, s.Model, s.HarnessOptions[s.Harness]); err != nil {
-		return invalid("model", "%s", err.Error())
-	}
-	for _, f := range s.Fallbacks {
-		if err := ValidateTarget(f.Harness, f.Model, f.HarnessOptions); err != nil {
-			return invalid("fallbacks", "%s", err.Error())
-		}
 	}
 	if s.MaxConcurrency == 0 {
 		s.MaxConcurrency = 1

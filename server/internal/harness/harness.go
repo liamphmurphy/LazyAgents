@@ -19,7 +19,6 @@ import (
 // Workspace is where a turn runs, as seen from inside its environment.
 type Workspace struct {
 	DependencyCacheDir string // shared runner cache; execution scopes may write it
-	OpenCodeStateDir   string // backend-owned persistent path outside the checkout; required by OpenCode
 	Dir                string // absolute path of the checkout, e.g. /workspace
 	MCPURL             string // the Vesper MCP endpoint, reachable from the turn
 	Token              string // the run's agent token (vsp_…)
@@ -47,10 +46,9 @@ type InlineImage struct {
 
 // Invocation is what the runner executes.
 type Invocation struct {
-	Argv       []string
-	Env        map[string]string
-	Files      map[string][]byte // relative to Workspace.Dir; written before the turn
-	StateFiles map[string][]byte // relative to Workspace.OpenCodeStateDir; never staged in the checkout
+	Argv  []string
+	Env   map[string]string
+	Files map[string][]byte // relative to Workspace.Dir; written before the turn
 }
 
 // Event is a normalized run event (run_events.type + payload).
@@ -107,8 +105,6 @@ func For(name string) (Harness, error) {
 		return ClaudeCode{}, nil
 	case agentdef.HarnessCodex:
 		return Codex{}, nil
-	case agentdef.HarnessOpenCode:
-		return OpenCode{}, nil // fail-closed until the runner attests isolation
 	}
 	return nil, fmt.Errorf("harness: unknown harness %q", name)
 }
@@ -330,9 +326,6 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 			fmt.Fprintf(&b, "- `%s`: %s\n", s.Scope, strings.ReplaceAll(string(s.Mode), "_", " "))
 		}
 		b.WriteString("\n")
-	}
-	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode && spec.Harness != agentdef.HarnessCodex {
-		b.WriteString(skillsIndex(spec.Skills))
 	}
 	if len(contextFiles) > 0 {
 		b.WriteString("## Available context\n\nRead only the files relevant to this task, not every listed file. Reuse context already read in this session. Full sources are available through `read_artifact` and `read_page`, which record citations.\n\n")

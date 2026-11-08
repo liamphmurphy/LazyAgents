@@ -25,7 +25,7 @@ func recode[T any](v any) (T, error) {
 	return out, err
 }
 
-var harnessLabels = map[string]string{agentdef.HarnessClaudeCode: "Claude Code", agentdef.HarnessCodex: "Codex", agentdef.HarnessOpenCode: "OpenCode"}
+var harnessLabels = map[string]string{agentdef.HarnessClaudeCode: "Claude Code", agentdef.HarnessCodex: "Codex"}
 
 func (s *Server) agentByHandle(ctx context.Context, ws uuid.UUID, handle string) (store.Agent, error) {
 	a, err := s.Q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: handle})

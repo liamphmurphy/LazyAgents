@@ -65,7 +65,7 @@ test("provider secrets show status and unlocks, are write-only, and saving refre
 
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" })).toContainText("a setting runs need is missing");
-  await expect(page.getByRole("status").filter({ hasText: "Codex and OpenCode openai/… can’t run" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Codex can’t run" })).toBeVisible();
   const conn = page.locator("#secrets li");
   await expect(conn.filter({ hasText: "harness:anthropic" })).toContainText("Set");
   await expect(conn.filter({ hasText: "harness:anthropic" })).toContainText("✓ Claude Code");
@@ -80,10 +80,10 @@ test("provider secrets show status and unlocks, are write-only, and saving refre
   await expect(value).toHaveAttribute("type", "password");
   await value.fill(SECRET);
   await page.getByRole("button", { name: "Save key" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "harness:openai saved. Codex and OpenCode openai/… are now available." })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "harness:openai saved. Codex is now available." })).toBeVisible();
   expect(mock.puts).toEqual([{ name: "harness:openai", value: SECRET }]);
   await expect(page.getByLabel("New value for harness:openai")).toHaveCount(0);
-  await expect(page.getByText("Codex and OpenCode openai/… can’t run")).toHaveCount(0);
+  await expect(page.getByText("Codex can’t run")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Primary" })).not.toContainText("a setting runs need is missing");
   expect(await page.content()).not.toContain(SECRET);
 

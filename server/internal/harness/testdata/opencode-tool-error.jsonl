@@ -1,5 +1,0 @@
-{"type":"session","session_id":"ses_synthetic03"}
-{"type":"tool_start","call_id":"call-1","tool":"lazyagents_claim_ticket","input":{}}
-{"type":"tool_result","call_id":"call-1","output":"Operation denied. Authorization: Bearer la_SECRETSECRET123","is_error":true}
-{"type":"text","text":"The tool was denied; reporting that."}
-{"type":"completed","usage":{"input_tokens":50,"output_tokens":10}}

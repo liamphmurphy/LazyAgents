@@ -41,7 +41,7 @@ func TestChatSpecCapabilities(t *testing.T) {
 			{Scope: "repo:*", Mode: agentdef.Allowed}, {Scope: "wiki:write", Mode: agentdef.Allowed}, {Scope: "deploy:staging", Mode: agentdef.Allowed}}}
 	}
 	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/pair-12345678"}
-	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex, agentdef.HarnessOpenCode} {
+	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex} {
 		for _, tc := range []struct {
 			name   string
 			caps   ChatCaps
@@ -78,14 +78,6 @@ func TestChatSpecCapabilities(t *testing.T) {
 					t.Errorf("image option %v, want %v (%v)", hasImages, tc.images, opts)
 				}
 				switch {
-				case h == agentdef.HarnessOpenCode && tc.coding:
-					if len(opts) != 0 {
-						t.Errorf("opencode takes no options: %v", opts)
-					}
-				case h == agentdef.HarnessOpenCode:
-					if len(opts) != 1 || opts["readonly"] != "true" {
-						t.Errorf("opencode options %v", opts)
-					}
 				case tc.coding:
 					// A coding chat gets the assistant's web option (WebFetch stays
 					// on the allowlist), never the web:read scope.

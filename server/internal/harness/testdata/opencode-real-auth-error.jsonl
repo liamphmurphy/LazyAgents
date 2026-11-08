@@ -1,1 +1,0 @@
-{"type":"error","timestamp":1793737363936,"sessionID":"ses_e5cebef69ffe3F8OaMgPKkU2wR","error":{"type":"provider.auth","message":"invalid x-api-key","status":401,"response":{"body":"{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011CggcpJv8v11e2nNTXcu8o\"}"}}}

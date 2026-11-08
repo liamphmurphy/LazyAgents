@@ -8,7 +8,7 @@ const pay = { key: "PAY", name: "Payments", color: "#22c55e" };
 
 test("connections cover both harness keys and both git credentials", () => {
   assert.deepEqual(CONNECTIONS.map((c) => c.name), ["harness:anthropic", "harness:openai", "git:ssh", "git:pat"]);
-  assert.deepEqual(CONNECTIONS.find((c) => c.name === "harness:openai").unlocks, ["Codex", "OpenCode openai/…"]);
+  assert.deepEqual(CONNECTIONS.find((c) => c.name === "harness:openai").unlocks, ["Codex"]);
 });
 
 test("workspace secrets set a connection, project-only ones are partial", () => {
@@ -29,7 +29,7 @@ test("other secrets exclude workspace connections but keep project overrides", (
 });
 
 test("save message names what became available", () => {
-  assert.equal(savedMessage("harness:openai"), "harness:openai saved. Codex and OpenCode openai/… are now available.");
+  assert.equal(savedMessage("harness:openai"), "harness:openai saved. Codex is now available.");
   assert.equal(savedMessage("git:pat"), "git:pat saved. gh pull requests is now available.");
   assert.equal(savedMessage("db:staging"), "db:staging saved.");
 });

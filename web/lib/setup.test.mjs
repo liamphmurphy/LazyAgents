@@ -5,7 +5,6 @@ import { harnessHealth, orList, setupChecklist, systemBanner } from "./setup.ts"
 const groups = (anthropic, openai) => [
   { harness: "claude-code", label: "Claude Code", available: anthropic, ...(anthropic ? {} : { unavailable_reason: "no harness:anthropic secret" }) },
   { harness: "codex", label: "Codex", available: openai, ...(openai ? {} : { unavailable_reason: "No harness:openai secret" }) },
-  { harness: "opencode", label: "OpenCode", available: false, unavailable_reason: "OpenCode needs a usable harness:anthropic or harness:openai secret (and a reachable provider) to list models" },
 ];
 
 test("harness health names missing secrets once, by name only", () => {

@@ -321,9 +321,6 @@ func (s *Service) StartCourse(ctx context.Context, ws, user uuid.UUID, in Course
 		if err != nil {
 			return err
 		}
-		if chat.Harness == agentdef.HarnessOpenCode {
-			return apperr.Conflict("a module needs web research, which OpenCode doesn't have: choose Claude Code or Codex")
-		}
 		c, err = q.CreateLearningCourse(ctx, store.CreateLearningCourseParams{WorkspaceID: ws, UserID: user, ChatID: chat.ID, Topic: in.Topic, Goal: in.Goal, Level: in.Level, MinutesBudget: int32(in.MinutesBudget)})
 		if err != nil {
 			return err

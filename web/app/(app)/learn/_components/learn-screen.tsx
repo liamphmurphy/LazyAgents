@@ -47,8 +47,7 @@ function NewModule() {
   const projects = boot.data?.projects ?? [];
   // A module belongs to a project only for its model and permissions, so any open one will do.
   const project = currentProject("/learn", search, remembered, projects) ?? projects.find((p) => !p.archived);
-  // OpenCode has no web access, so it can't research a module.
-  const groups = models.data?.filter((g) => g.harness !== "opencode");
+  const groups = models.data;
   const fallback = groups?.flatMap((g) => g.models.filter((m) => m.default).map((m) => ({ harness: g.harness, model: m.id })))[0];
   const selection = picked ?? fallback;
   const list = personas.data?.personas ?? [];

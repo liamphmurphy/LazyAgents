@@ -27,7 +27,7 @@ import type { components } from "../lib/api/schema";
  * `chatPersonaFilters` records the persona_id each GET /chats asked for.
  */
 
-type Harness = "claude-code" | "codex" | "opencode";
+type Harness = "claude-code" | "codex";
 type State = "idle" | "running" | "failed";
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
@@ -71,7 +71,7 @@ export type MockProposal = {
   id: string; chat_id: string; name: string; tone: string; color: string; custom_instructions: string; reason: string;
   state: "pending" | "approved" | "declined"; proposed_by?: { id: string; name: string; color: string }; created_at: string;
 };
-export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }> };
+export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }> };
 
 /** A persona fixture for the persona specs. */
 export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona {
@@ -83,7 +83,7 @@ export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona
   };
 }
 
-export const catalog = (codexAvailable: boolean, opencodeAvailable = true): components["schemas"]["ChatHarnessModels"][] => [
+export const catalog = (codexAvailable: boolean): components["schemas"]["ChatHarnessModels"][] => [
   {
     harness: "claude-code", label: "Claude Code", available: true,
     models: [
@@ -94,14 +94,9 @@ export const catalog = (codexAvailable: boolean, opencodeAvailable = true): comp
   {
     harness: "codex", label: "Codex", available: codexAvailable,
     ...(codexAvailable ? {} : { unavailable_reason: "No harness:openai secret" }),
-    models: [{ id: "gpt-5-codex", label: "gpt-5-codex", default: true, efforts: ["low", "medium", "high"], default_effort: "medium" }],
-  },
-  {
-    harness: "opencode", label: "OpenCode", available: opencodeAvailable,
-    ...(opencodeAvailable ? {} : { unavailable_reason: "OpenCode is not installed" }),
     models: [
-      { id: "anthropic/claude-sonnet-4-5", label: "anthropic/claude-sonnet-4-5", default: true, efforts: [] },
-      { id: "openai/gpt-5", label: "openai/gpt-5", default: false, efforts: [] },
+      { id: "gpt-5-codex", label: "gpt-5-codex", default: true, efforts: ["low", "medium", "high"], default_effort: "medium" },
+      { id: "gpt-5-mini", label: "gpt-5-mini", default: false, efforts: [] },
     ],
   },
 ];
@@ -113,7 +108,6 @@ const err = (status: number, code: string, message: string, field?: string) => (
 
 export function installChatApi(page: Page, opts: MockOptions = {}) {
   const codexAvailable = opts.codexAvailable ?? true;
-  const opencodeAvailable = opts.opencodeAvailable ?? true;
   const delay = opts.replyDelayMs ?? 300;
   const chats: Chat[] = [];
   const messages = new Map<string, Message[]>();
@@ -144,7 +138,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
   const now = () => new Date().toISOString();
   const label = (h: Harness, m: string) => {
-    const g = catalog(true, true).find((x) => x.harness === h)!;
+    const g = catalog(true).find((x) => x.harness === h)!;
     return `${g.label} · ${g.models.find((x) => x.id === m)?.label ?? m}`;
   };
   const add = (c: Chat, role: Message["role"], body: string, extra: Partial<Message> = {}) => {
@@ -418,7 +412,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         days: [], agents: [], projects: [], models: [], purposes: [], top_tickets: [],
       });
     }
-    if (path === "/chat-models") return json(catalog(codexAvailable, opencodeAvailable));
+    if (path === "/chat-models") return json(catalog(codexAvailable));
     if (path === "/chat-suggestions") return json({ suggestions });
 
     if (path === "/memories" && method === "GET") {
@@ -577,8 +571,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         if (c.archived) return fail(err(409, "conflict", "This chat is archived."));
         if (!text.trim()) return fail(err(422, "invalid", "Message is empty", "body"));
         const harness = (b.harness as Harness | undefined) ?? c.harness;
-        const model = (b.model as string | undefined) ?? (harness === c.harness ? c.model : catalog(true, true).find((g) => g.harness === harness)!.models[0].id);
-        const g = catalog(codexAvailable, opencodeAvailable).find((x) => x.harness === harness);
+        const model = (b.model as string | undefined) ?? (harness === c.harness ? c.model : catalog(true).find((g) => g.harness === harness)!.models[0].id);
+        const g = catalog(codexAvailable).find((x) => x.harness === harness);
         if (!g || !g.models.some((x) => x.id === model) || !g.available) {
           return fail(err(422, "invalid", "Unknown or unavailable harness/model", "model"));
         }

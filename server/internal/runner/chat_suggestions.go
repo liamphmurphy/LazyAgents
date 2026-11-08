@@ -199,7 +199,7 @@ func (r *Runner) chatSuggestionEnv(ctx context.Context, q *store.Queries, due st
 		return nil, err
 	}
 	plan = slices.DeleteFunc(plan, func(d SecretDecision) bool { return d.Name != key.Secret })
-	if NeedsHarnessKey(r.Cfg.RequireHarnessKey, spec) && !hasSecret(plan, key.Secret) {
+	if r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
 		return nil, fmt.Errorf("%s isn't set up", spec.Harness)
 	}
 	return SecretEnv(ctx, r.Secrets, due.WorkspaceID, &due.ProjectID, plan)

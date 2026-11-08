@@ -123,8 +123,7 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
 
   // A model with no effort control hides the picker.
   await picker(page).click();
-  await page.getByRole("menuitem", { name: /OpenCode openai\/gpt-5/ }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Switch harness" }).click();
+  await page.getByRole("menuitem", { name: /Codex gpt-5-mini/ }).click();
   await expect(effort(page)).toHaveCount(0);
   expect(mock.unhandled).toEqual([]);
 });
@@ -393,14 +392,14 @@ test("save a reply as a report artifact with a link back to the chat", async ({ 
   expect(form).toContain(`(/chat/${mock.posted[0].chat})`);
 });
 
-test("OpenCode model is chosen with the keyboard, posted, and survives reload", async ({ page }) => {
+test("a model on another harness is chosen with the keyboard, posted, and survives reload", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
   await picker(page).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("menu")).toBeVisible();
-  const target = page.getByRole("menuitem", { name: /OpenCode openai\/gpt-5/ });
+  const target = page.getByRole("menuitem", { name: /Codex gpt-5-codex/ });
   // Walk down the menu until the target item has focus.
   for (let i = 0; i < 8 && !(await target.evaluate((el) => el === document.activeElement)); i++) {
     await page.keyboard.press("ArrowDown");
@@ -408,26 +407,26 @@ test("OpenCode model is chosen with the keyboard, posted, and survives reload", 
   }
   await expect(target).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(picker(page)).toHaveAttribute("aria-label", /OpenCode, openai\/gpt-5/);
-  await send(page, "hello opencode");
-  await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello opencode");
-  expect(mock.posted.at(-1)?.body).toMatchObject({ harness: "opencode", model: "openai/gpt-5" });
-  await expect(page.getByTestId("model-tag")).toHaveText("OpenCode · openai/gpt-5");
+  await expect(picker(page)).toHaveAttribute("aria-label", /Codex, gpt-5-codex/);
+  await send(page, "hello codex");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello codex");
+  expect(mock.posted.at(-1)?.body).toMatchObject({ harness: "codex", model: "gpt-5-codex" });
+  await expect(page.getByTestId("model-tag")).toHaveText("Codex · gpt-5-codex");
 
   await page.reload();
-  await expect(picker(page)).toHaveAttribute("aria-label", /OpenCode, openai\/gpt-5/);
-  await expect(page.getByTestId("model-tag")).toHaveText("OpenCode · openai/gpt-5");
+  await expect(picker(page)).toHaveAttribute("aria-label", /Codex, gpt-5-codex/);
+  await expect(page.getByTestId("model-tag")).toHaveText("Codex · gpt-5-codex");
   expect(mock.unhandled).toEqual([]);
 });
 
-test("unavailable OpenCode shows its reason and can't be selected", async ({ page }) => {
-  await installChatApi(page, { opencodeAvailable: false });
+test("an unavailable harness shows its reason and can't be selected", async ({ page }) => {
+  await installChatApi(page, { codexAvailable: false });
   await page.goto("/chat?project=WEB");
   await newChat(page);
   await picker(page).click();
-  const item = page.getByRole("menuitem", { name: /OpenCode anthropic\/claude-sonnet-4-5/ });
+  const item = page.getByRole("menuitem", { name: /Codex gpt-5-codex/ });
   await expect(item).toHaveAttribute("aria-disabled", "true");
-  await expect(item).toContainText("OpenCode is not installed");
+  await expect(item).toContainText("No harness:openai secret");
   await item.click({ force: true });
   await page.keyboard.press("Escape");
   await expect(picker(page)).toHaveAttribute("aria-label", /Claude Code/);
@@ -439,7 +438,7 @@ test("with no harness available, chat says why before anything is sent", async (
   await newChat(page);
   // The Anthropic key is removed: every harness becomes unavailable.
   await page.route("**/api/v1/chat-models", (route) =>
-    route.fulfill({ json: catalog(false, false).map((g) => ({ ...g, available: false, unavailable_reason: g.unavailable_reason ?? "no harness:anthropic secret" })) }),
+    route.fulfill({ json: catalog(false).map((g) => ({ ...g, available: false, unavailable_reason: g.unavailable_reason ?? "no harness:anthropic secret" })) }),
   );
   await page.reload();
   const guard = page.getByRole("status").filter({ hasText: "Claude Code is unavailable" });
@@ -456,7 +455,7 @@ test("with no harness available, chat says why before anything is sent", async (
   await expect(page.getByRole("status", { name: /Agents can’t run/ })).toBeVisible();
 });
 
-test("a rejected OpenCode post shows the error and keeps the selection", async ({ page }) => {
+test("a rejected post shows the error and keeps the selection", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
@@ -466,10 +465,10 @@ test("a rejected OpenCode post shows the error and keeps the selection", async (
       : route.fallback(),
   );
   await picker(page).click();
-  await page.getByRole("menuitem", { name: /OpenCode anthropic\/claude-sonnet-4-5/ }).click();
+  await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
   await send(page, "will fail");
   await expect(page.getByRole("alert").filter({ hasText: "Unknown or unavailable" })).toBeVisible();
-  await expect(picker(page)).toHaveAttribute("aria-label", /OpenCode, anthropic\/claude-sonnet-4-5/);
+  await expect(picker(page)).toHaveAttribute("aria-label", /Codex, gpt-5-codex/);
   await expect(composer(page)).toHaveValue("will fail");
   expect(mock.posted).toEqual([]);
 });

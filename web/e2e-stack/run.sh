@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Real-stack OpenCode chat e2e: Go API + runner (RUNNER_BACKEND=local) +
+# Real-stack e2e: Go API + runner (RUNNER_BACKEND=local) +
 # Postgres + SeaweedFS (S3) + Next, with the deterministic fake-harness binary
-# standing in for `opencode`, `claude` and `codex`. See README.md.
+# standing in for `claude` and `codex`. See README.md.
 #
 # Usage: web/e2e-stack/run.sh [playwright args...]
 # Env:   E2E_DATABASE_URL  use this (disposable!) Postgres instead of starting one
@@ -41,31 +41,27 @@ wait_for() { # url, label, seconds
   return 1
 }
 
-API_PORT="$(free_port)"; WEB_PORT="$(free_port)"; STUB_PORT="$(free_port)"
+API_PORT="$(free_port)"; WEB_PORT="$(free_port)"
 API_URL="http://127.0.0.1:$API_PORT"
 WEB_URL="http://127.0.0.1:$WEB_PORT"
 
 # --- Fake CLIs and the PATH guard ------------------------------------------
 echo ">> building fake-harness and vesper"
 (cd "$REPO/server" && go build -o "$TMP/fake-harness" ./cmd/fake-harness && go build -o "$TMP/vesper" ./cmd/vesper)
-for cli in claude codex opencode; do ln -s "$TMP/fake-harness" "$TMP/bin/$cli"; done
+for cli in claude codex; do ln -s "$TMP/fake-harness" "$TMP/bin/$cli"; done
 GIT_BIN="$(command -v git)" || { echo "git is required" >&2; exit 1; }
-# The local runner scrubs OpenCode's environment, so the fake's script mode
-# ("chat": answer without MCP; "slow" blocks until cancelled) comes from a file.
-echo chat >"$TMP/bin/fake-harness.mode"
 ln -s "$GIT_BIN" "$TMP/bin/git"
 # The API and runner see ONLY this PATH: the fake CLIs, git, and system dirs.
 # Real CLIs live in ~/.local/bin, ~/.nix-profile/bin, /opt/homebrew/bin: refuse
 # to start if any of them could be found from here.
 SAFE_PATH="$TMP/bin:/usr/bin:/bin"
-for cli in claude codex opencode; do
+for cli in claude codex; do
   found="$(PATH="$SAFE_PATH" command -v "$cli" || true)"
   if [ "$found" != "$TMP/bin/$cli" ]; then
     echo "PATH GUARD: '$cli' resolves to '${found:-nothing}' instead of $TMP/bin/$cli; refusing to start (a real CLI could run)" >&2
     exit 1
   fi
 done
-[ "$(PATH="$SAFE_PATH" "$TMP/bin/opencode" --version)" = "opencode v2.2.1" ] || { echo "fake opencode --version mismatch" >&2; exit 1; }
 
 # --- Postgres and S3 ---------------------------------------------------------
 if [ -n "${E2E_DATABASE_URL:-}" ]; then
@@ -94,13 +90,8 @@ else
   wait_for "$S3_ENDPOINT" seaweedfs 90
 fi
 
-# --- Provider-discovery stub ---------------------------------------------------
-node "$HERE/discovery-stub.mjs" "$STUB_PORT" >"$TMP/logs/stub.log" 2>&1 &
-PIDS+=($!)
-wait_for "http://127.0.0.1:$STUB_PORT/healthz" "discovery stub" 15
-
 # --- API and runner -------------------------------------------------------------
-# Same env for both. Every harness binary is the fake (script mode: see above).
+# Same env for both. Every harness binary is the fake.
 mkdir -p "$TMP/home"
 # One key for both processes (secrets are encrypted with it).
 SECRETS_KEY="$(head -c 32 /dev/urandom | base64)"
@@ -110,9 +101,7 @@ stack_env() {
     S3_ENDPOINT="$S3_ENDPOINT" SEED=false PR_SYNC_INTERVAL_S=0 \
     SECRETS_KEY="$SECRETS_KEY" PUBLIC_URL="$WEB_URL" \
     RUNNER_BACKEND=local RUNNER_DATA_DIR="$TMP/runs" RUNNER_MCP_URL="$API_URL/mcp" \
-    RUNNER_CLAUDE_BIN="$TMP/bin/claude" RUNNER_CODEX_BIN="$TMP/bin/codex" RUNNER_OPENCODE_BIN="$TMP/bin/opencode" \
-    RUNNER_OPENCODE_ISOLATED=true \
-    LAZYAGENTS_TEST_DISCOVERY_URL="http://127.0.0.1:$STUB_PORT" "$@"
+    RUNNER_CLAUDE_BIN="$TMP/bin/claude" RUNNER_CODEX_BIN="$TMP/bin/codex" "$@"
 }
 
 echo ">> starting api on :$API_PORT (runs migrations and first-boot seed)"
@@ -123,12 +112,6 @@ echo ">> starting runner"
 stack_env "$TMP/vesper" runner >"$TMP/logs/runner.log" 2>&1 &
 PIDS+=($!)
 
-# A dummy workspace secret (through the real API) makes OpenCode's catalog list
-# the stub provider's models. The value never leaves the stub.
-curl -fsS -X PUT "$API_URL/api/v1/secrets" -H 'content-type: application/json' \
-  -d '{"name":"harness:anthropic","value":"dummy-not-a-real-key"}' >/dev/null
-curl -fsS -X PUT "$API_URL/api/v1/secrets" -H 'content-type: application/json' \
-  -d '{"name":"harness:openai","value":"dummy-not-a-real-key"}' >/dev/null
 # Chats are project-scoped and a fresh workspace has none.
 curl -fsS -X POST "$API_URL/api/v1/projects" -H 'content-type: application/json' \
   -d '{"key":"E2E","name":"E2E stack","color":"#6366f1","repo_url":"git@github.com:example/e2e-stack.git","default_branch":"main"}' >/dev/null
@@ -147,7 +130,7 @@ psql_run() {
 psql_run -c "INSERT INTO epics (workspace_id, project_id, name, objective, health)
   SELECT workspace_id, id, 'Board e2e epic', 'Verify the Kanban flow end to end', 'on_track' FROM projects WHERE key = 'E2E'" >/dev/null
 CATALOG="$(curl -fsS "$API_URL/api/v1/chat-models")"
-for want in 'anthropic/claude-sonnet-5-5' 'openai/gpt-5' 'Claude Sonnet (fake)' 'GPT-5 Codex (fake)'; do
+for want in 'Claude Sonnet (fake)' 'GPT-5 Codex (fake)'; do
   grep -q "$want" <<<"$CATALOG" || { echo "chat-models catalog lacks '$want': $CATALOG" >&2; exit 1; }
 done
 

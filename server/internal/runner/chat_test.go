@@ -506,3 +506,11 @@ func TestChatOpeningLinePersists(t *testing.T) {
 		t.Fatalf("second turn %+v", msgs[3:])
 	}
 }
+
+func (e env) setOverride(o agentdef.Override) error {
+	return (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, e.assistant().Handle, "PAY", o)
+}
+
+func (e env) workspace(run store.Run) string {
+	return filepath.Join(e.dir, "work", "runs", run.ID.String(), "workspace")
+}

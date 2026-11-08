@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 // Real-stack suite (no page.route mocks): run it through e2e-stack/run.sh,
 // which starts Postgres, the Go API, a local runner and Next, then sets
-// E2E_STACK_BASE_URL. Fake CLIs stand in for opencode/claude/codex; see
+// E2E_STACK_BASE_URL. Fake CLIs stand in for claude/codex; see
 // e2e-stack/README.md. Chats share one workspace, so tests run serially.
 const baseURL = process.env.E2E_STACK_BASE_URL;
 if (!baseURL) {
