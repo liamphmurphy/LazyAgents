@@ -393,3 +393,36 @@
   .scene-layer,
   .scene-layer * { animation: none !important; }
 }
+
+/* The New Learning Module dialog (new-module-guide.tsx). */
+.guide-scrim[data-state="open"] { animation: guide-fade-in 200ms ease-out both; }
+.guide-scrim[data-state="closed"] { animation: guide-fade-out 140ms ease-in both; }
+.guide-panel[data-state="open"] { animation: guide-panel-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.guide-panel[data-state="closed"] { animation: guide-panel-out 140ms ease-in both; }
+.guide-stage { --guide-shift: 32px; }
+.guide-stage[data-direction="back"] { --guide-shift: -32px; }
+.guide-step-enter { animation: guide-step-in 340ms cubic-bezier(0.16, 1, 0.3, 1) 110ms both; }
+.guide-step-leave { animation: guide-step-out 150ms ease-in both; }
+.guide-step-enter .guide-stagger > * { animation: guide-rise 380ms cubic-bezier(0.16, 1, 0.3, 1) 110ms both; }
+.guide-step-enter .guide-stagger > :nth-child(2) { animation-delay: 165ms; }
+.guide-step-enter .guide-stagger > :nth-child(3) { animation-delay: 220ms; }
+.guide-step-enter .guide-stagger > :nth-child(4) { animation-delay: 275ms; }
+.guide-pop { animation: guide-pop 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes guide-fade-in { from { opacity: 0; } }
+@keyframes guide-fade-out { to { opacity: 0; } }
+@keyframes guide-panel-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
+@keyframes guide-panel-out { to { opacity: 0; transform: translateY(6px) scale(0.985); } }
+@keyframes guide-step-in { from { opacity: 0; transform: translateX(var(--guide-shift)); } }
+@keyframes guide-step-out { to { opacity: 0; transform: translateX(calc(var(--guide-shift) * -1)); } }
+@keyframes guide-rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes guide-pop { from { opacity: 0; transform: scale(0.4); } }
+
+/* Short rather than none: the dialog and its steps wait for animationend to clear. */
+@media (prefers-reduced-motion: reduce) {
+  .guide-scrim,
+  .guide-panel,
+  .guide-step-enter,
+  .guide-step-leave,
+  .guide-stagger > *,
+  .guide-pop { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+}

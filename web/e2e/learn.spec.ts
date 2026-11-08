@@ -70,12 +70,41 @@ test("a topic becomes an outline to approve", async ({ page }) => {
   await mock(page, course, posts);
   await page.goto("/learn");
   await expect(page.getByRole("link", { name: "Learn", exact: true })).toHaveAttribute("aria-current", "page");
-  await page.getByLabel("What do you want to learn?").fill("Postgres MVCC");
   await page.screenshot({ path: "test-results/learn-home.png" });
-  await page.getByRole("button", { name: "Draft outline" }).click();
+
+  await page.getByRole("button", { name: "New Learning Module" }).click();
+  const dialog = page.getByRole("dialog", { name: "New Learning Module" });
+  const topic = dialog.getByLabel("What do you want to learn?");
+  await expect(topic).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "Continue" })).toBeDisabled();
+  await topic.fill("Postgres MVCC");
+  await topic.press("Enter");
+
+  const goal = dialog.getByLabel("What's it for?");
+  await expect(goal).toBeFocused();
+  await dialog.getByRole("button", { name: "Skip" }).click();
+
+  const experienced = dialog.getByRole("radio", { name: /^Experienced/ });
+  await expect(dialog.getByRole("radio", { name: /^Some background/ })).toBeChecked();
+  await experienced.check({ force: true });
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await expect(dialog.getByRole("radio", { name: /^3 hours/ })).toBeChecked();
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await expect(dialog.getByText("Here's your module")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Edit topic" })).toContainText("Postgres MVCC");
+  await page.screenshot({ path: "test-results/learn-guide-review.png" });
+
+  // Editing an answer goes back to that step and keeps the rest.
+  await dialog.getByRole("button", { name: "Edit level" }).click();
+  await expect(experienced).toBeChecked();
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await dialog.getByRole("button", { name: "Continue" }).click();
+
+  await dialog.getByRole("button", { name: "Draft outline" }).click();
   await expect(page).toHaveURL(new RegExp(`/learn/${ID}`));
   await expect(page.getByText("Research starts when you approve it.")).toBeVisible();
-  expect(posts[0].body).toMatchObject({ topic: "Postgres MVCC", level: "some", minutes_budget: 180 });
+  expect(posts[0].body).toMatchObject({ topic: "Postgres MVCC", level: "experienced", minutes_budget: 180 });
+  expect(posts).toHaveLength(1);
   await page.screenshot({ path: "test-results/learn-outline.png", fullPage: true });
 
   await page.getByRole("button", { name: "Move Snapshots up" }).click();
