@@ -47,14 +47,21 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		"features.multi_agent=false", // delegation stays in the run-scoped service
 		`hooks.PreToolUse=[{matcher="*",hooks=[{type="command",command=` + tomlString(command) + `,timeout=20}]}]`,
 		"approval_policy=" + tomlString("never"), // nobody answers prompts headless
-		"mcp_servers." + lazyagentsServer + ".url=" + tomlString(ws.MCPURL),
-		"mcp_servers." + lazyagentsServer + ".bearer_token_env_var=" + tomlString(ws.TokenEnv),
-		// These are the service's own authenticated workflow tools. MCP's
-		// approval policy is separate from shell approval_policy: without
-		// this, unannotated tools prompt and are rejected headless. Scope
-		// checks and human approvals still happen inside Vesper.
-		"mcp_servers." + lazyagentsServer + ".default_tools_approval_mode=" + tomlString("approve"),
-		"mcp_servers." + lazyagentsServer + ".required=true",
+	}
+	// Codex can't switch its shell off here, so a no-tools turn gets a policy
+	// hook that denies every call (and still passes the launcher's preflight).
+	noTools := spec.HarnessOptions[agentdef.OptionNoTools] == "true"
+	if !noTools {
+		cfg = append(cfg,
+			"mcp_servers."+lazyagentsServer+".url="+tomlString(ws.MCPURL),
+			"mcp_servers."+lazyagentsServer+".bearer_token_env_var="+tomlString(ws.TokenEnv),
+			// These are the service's own authenticated workflow tools. MCP's
+			// approval policy is separate from shell approval_policy: without
+			// this, unannotated tools prompt and are rejected headless. Scope
+			// checks and human approvals still happen inside Vesper.
+			"mcp_servers."+lazyagentsServer+".default_tools_approval_mode="+tomlString("approve"),
+			"mcp_servers."+lazyagentsServer+".required=true",
+		)
 	}
 	for _, m := range spec.MCPServers {
 		cfg = append(cfg, "mcp_servers."+m.Name+".url="+tomlString(m.URL), "mcp_servers."+m.Name+".default_tools_approval_mode="+tomlString("approve"))
@@ -119,6 +126,9 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	files := SkillFilesFor(spec.Skills, agentdef.HarnessCodex)
 	files[toolHookPath] = toolHook
+	if noTools {
+		files[toolHookPath] = noToolsHook
+	}
 	files[".lazyagents/codex-launch.py"] = codexLauncher
 	argv = append([]string{"python3", ".lazyagents/codex-launch.py"}, argv...)
 	return Invocation{Argv: argv, Env: env, Files: files}, nil

@@ -399,6 +399,7 @@ func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepLinkPreviews(ctx)
 	defer r.advanceResearch(ctx)
 	defer r.advanceWorkflows(ctx)
+	defer r.refreshChatSuggestions(ctx, time.Now())
 	r.expireIdleChats(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx)
 	if err != nil {

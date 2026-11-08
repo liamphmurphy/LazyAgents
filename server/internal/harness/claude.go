@@ -43,6 +43,10 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	for _, m := range spec.MCPServers {
 		servers[m.Name] = mcpEntry{Type: "http", URL: m.URL}
 	}
+	noTools := spec.HarnessOptions[agentdef.OptionNoTools] == "true"
+	if noTools {
+		servers = map[string]mcpEntry{}
+	}
 	cfg, err := json.MarshalIndent(map[string]any{"mcpServers": servers}, "", "  ")
 	if err != nil {
 		return Invocation{}, err
@@ -105,6 +109,9 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	if len(deny) > 0 {
 		argv = append(argv, "--disallowedTools", strings.Join(deny, ","))
+	}
+	if noTools {
+		argv = append(argv, "--tools", "")
 	}
 	if t.SessionID != "" {
 		argv = append(argv, "--resume", t.SessionID)

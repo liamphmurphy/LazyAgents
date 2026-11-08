@@ -51,6 +51,12 @@ const paths = {
   trash: <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" />,
   sun: <><circle cx="8" cy="8" r="2.8" /><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1" /></>,
   moon: <path d="M13 9.5A5.5 5.5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5z" />,
+  bulb: <><path d="M6 13.5h4" /><path d="M6 11.5c0-1.3-2-2.2-2-4.8a4 4 0 0 1 8 0c0 2.6-2 3.5-2 4.8z" /></>,
+  dice: <><rect x="2.5" y="2.5" width="11" height="11" rx="2.2" /><circle cx="5.5" cy="5.5" r=".6" fill="currentColor" /><circle cx="10.5" cy="5.5" r=".6" fill="currentColor" /><circle cx="8" cy="8" r=".6" fill="currentColor" /><circle cx="5.5" cy="10.5" r=".6" fill="currentColor" /><circle cx="10.5" cy="10.5" r=".6" fill="currentColor" /></>,
+  gamepad: <><path d="M5 5h6a3.5 3.5 0 0 1 3.4 4.2l-.4 1.9a1.6 1.6 0 0 1-2.8.7L9.8 10.5H6.2l-1.4 1.3a1.6 1.6 0 0 1-2.8-.7l-.4-1.9A3.5 3.5 0 0 1 5 5z" /><path d="M5.5 7v2M4.5 8h2" /><circle cx="10.6" cy="8" r=".6" fill="currentColor" /></>,
+  compass: <><circle cx="8" cy="8" r="5.5" /><path d="m10.5 5.5-1.4 3.6-3.6 1.4 1.4-3.6z" /></>,
+  dumbbell: <path d="M5.5 8h5M4 5v6M2.5 6.5v3M12 5v6M13.5 6.5v3" />,
+  film: <><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="m6.7 6 3.3 2-3.3 2z" /></>,
   library: <><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><circle cx="6" cy="6.5" r="1.2" /><path d="m2.5 11 3.2-3 2.6 2.4 1.7-1.6 3.5 3.2" /></>,
 } as const;
 

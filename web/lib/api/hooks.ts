@@ -988,6 +988,7 @@ export const chatKeys = {
   messages: (id: string) => ["chats", "messages", id] as const,
   proposals: (id: string) => ["chats", "proposals", id] as const,
   models: ["chats", "models"] as const,
+  suggestions: ["chats", "suggestions"] as const,
 };
 
 // Slow fallback while a turn runs and the realtime connection is unavailable.
@@ -1008,6 +1009,14 @@ export function useChat(id?: string) {
     queryKey: chatKeys.detail(id ?? ""),
     queryFn: () => unwrap(api.GET("/chats/{id}", { params: { path: { id: id! } } })),
     refetchInterval: (q) => (q.state.data?.state === "running" ? CHAT_POLL_MS : false),
+  });
+}
+
+/** Conversation starters for an empty chat, written ahead of time by the runner. */
+export function useChatSuggestions() {
+  return useQuery({
+    queryKey: chatKeys.suggestions,
+    queryFn: () => unwrap(api.GET("/chat-suggestions")),
   });
 }
 

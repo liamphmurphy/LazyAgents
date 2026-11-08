@@ -3062,6 +3062,20 @@ paths:
                 items: { $ref: "#/components/schemas/ChatHarnessModels" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chat-suggestions:
+    get:
+      operationId: listChatSuggestions
+      summary: Conversation starters for the signed-in person's empty chats
+      description: Written ahead of time from the person's memory and recent messages, so this never waits on a model. Empty until the first batch exists.
+      tags: [chats]
+      responses:
+        "200":
+          description: Four suggestions, or none
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSuggestionList" }
+        default: { $ref: "#/components/responses/Error" }
+
   /personas:
     get:
       operationId: listPersonas
@@ -3568,6 +3582,23 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
         query: { type: string, maxLength: 2000 }
+    ChatSuggestionIcon:
+      type: string
+      enum: [msg, terminal, edit, wiki, agents, search, graph, bulb, dice, gamepad, compass, dumbbell, film, gear]
+    ChatSuggestion:
+      type: object
+      required: [title, prompt, icon]
+      properties:
+        title: { type: string, description: The short label on the card }
+        prompt: { type: string, description: The message sent when the person picks it }
+        icon: { $ref: "#/components/schemas/ChatSuggestionIcon" }
+    ChatSuggestionList:
+      type: object
+      required: [suggestions]
+      properties:
+        suggestions:
+          type: array
+          items: { $ref: "#/components/schemas/ChatSuggestion" }
     MemoryType:
       type: string
       description: "One of preference, project, person, life, work, fact, other, moment (a shared moment; persona memory only)"

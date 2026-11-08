@@ -2466,6 +2466,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chat-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Conversation starters for the signed-in person's empty chats
+         * @description Written ahead of time from the person's memory and recent messages, so this never waits on a model. Empty until the first batch exists.
+         */
+        get: operations["listChatSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/personas": {
         parameters: {
             query?: never;
@@ -2845,6 +2865,18 @@ export interface components {
         SavedViewPatch: {
             name?: string;
             query?: string;
+        };
+        /** @enum {string} */
+        ChatSuggestionIcon: "msg" | "terminal" | "edit" | "wiki" | "agents" | "search" | "graph" | "bulb" | "dice" | "gamepad" | "compass" | "dumbbell" | "film" | "gear";
+        ChatSuggestion: {
+            /** @description The short label on the card */
+            title: string;
+            /** @description The message sent when the person picks it */
+            prompt: string;
+            icon: components["schemas"]["ChatSuggestionIcon"];
+        };
+        ChatSuggestionList: {
+            suggestions: components["schemas"]["ChatSuggestion"][];
         };
         /** @description One of preference, project, person, life, work, fact, other, moment (a shared moment; persona memory only) */
         MemoryType: string;
@@ -9429,6 +9461,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatHarnessModels"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Four suggestions, or none */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSuggestionList"];
                 };
             };
             default: components["responses"]["Error"];

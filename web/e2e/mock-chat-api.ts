@@ -69,7 +69,7 @@ export type MockProposal = {
   id: string; chat_id: string; name: string; tone: string; color: string; custom_instructions: string; reason: string;
   state: "pending" | "approved" | "declined"; proposed_by?: { id: string; name: string; color: string }; created_at: string;
 };
-export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[] };
+export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }> };
 
 /** A persona fixture for the persona specs. */
 export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona {
@@ -121,6 +121,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const runEvents = new Map<string, Array<{ seq: number; type: string; at: string; payload: Record<string, unknown> }>>();
   const unhandled: string[] = [];
   const posted: Posted[] = [];
+  const suggestions = opts.suggestions ?? [];
   const created: Array<Record<string, unknown>> = [];
   const artifactForms: string[] = [];
   const memories: MockMemory[] = [];
@@ -416,6 +417,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       });
     }
     if (path === "/chat-models") return json(catalog(codexAvailable, opencodeAvailable));
+    if (path === "/chat-suggestions") return json({ suggestions });
 
     if (path === "/memories" && method === "GET") {
       memoryRequests.push(`GET ${path}${url.search}`);

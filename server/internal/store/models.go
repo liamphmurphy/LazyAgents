@@ -290,6 +290,14 @@ type ChatSession struct {
 	Hidden             bool
 }
 
+type ChatSuggestion struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Items       json.RawMessage
+	GeneratedAt *time.Time
+	AttemptedAt time.Time
+}
+
 type Comment struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID

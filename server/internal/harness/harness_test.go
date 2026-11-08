@@ -2,8 +2,11 @@ package harness
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -159,6 +162,50 @@ func TestCodexInvocation(t *testing.T) {
 	n := len(inv.Argv)
 	if inv.Argv[4] != "resume" || inv.Argv[n-2] != "th1" || inv.Argv[n-1] != "next" || strings.Contains(strings.Join(inv.Argv, " "), "network_access") {
 		t.Fatalf("resume argv %v", inv.Argv)
+	}
+}
+
+func TestNoToolsTurns(t *testing.T) {
+	s := spec()
+	s.HarnessOptions = map[string]string{agentdef.OptionNoTools: "true", "readonly": "true", "sandbox": "read-only"}
+	inv, err := ClaudeCode{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := slices.Index(inv.Argv, "--tools"); i < 0 || inv.Argv[i+1] != "" {
+		t.Fatalf("argv %v", inv.Argv)
+	}
+	if strings.Contains(string(inv.Files[".lazyagents/mcp.json"]), "lazyagents") {
+		t.Fatalf("mcp config %s", inv.Files[".lazyagents/mcp.json"])
+	}
+	s.Model = "gpt-5-codex"
+	inv, err = Codex{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := strings.Join(inv.Argv, " ")
+	if strings.Contains(a, "mcp_servers") || !strings.Contains(a, `sandbox_mode="read-only"`) || !strings.Contains(a, `web_search="disabled"`) || !strings.Contains(a, "hooks.PreToolUse") {
+		t.Fatalf("argv %s", a)
+	}
+	if !bytes.Equal(inv.Files[toolHookPath], noToolsHook) {
+		t.Fatal("no-tools turn kept the Vesper policy hook")
+	}
+}
+
+func TestNoToolsHookPassesPreflightAndDeniesCalls(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hook.py")
+	if err := os.WriteFile(path, noToolsHook, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("python3", path, "--check").Output()
+	if err != nil || strings.TrimSpace(string(out)) != "{}" {
+		t.Fatalf("preflight: %q %v", out, err)
+	}
+	call := exec.Command("python3", path)
+	call.Stdin = strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"pwd"}}`)
+	out, err = call.Output()
+	if err != nil || !strings.Contains(string(out), `"permissionDecision": "deny"`) {
+		t.Fatalf("call: %q %v", out, err)
 	}
 }
 

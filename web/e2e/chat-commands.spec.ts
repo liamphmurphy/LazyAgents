@@ -11,6 +11,34 @@ async function openChat(page: Page) {
   await expect(composer(page)).toBeFocused();
 }
 
+test("an empty chat offers four starters; picking one sends its prompt", async ({ page }) => {
+  const suggestions = [
+    { title: "Plan the next session", prompt: "Help me plan my next session.", icon: "dice" },
+    { title: "Tidy the runner", prompt: "What should I tidy in the runner?", icon: "terminal" },
+    { title: "Pick a book", prompt: "Suggest a book for this week.", icon: "wiki" },
+    { title: "Plan a ride", prompt: "Plan a bike ride for Saturday.", icon: "compass" },
+  ];
+  const mock = await installChatApi(page, { suggestions });
+  await openChat(page);
+  const starters = page.getByRole("list", { name: "Conversation starters" });
+  await expect(starters.getByRole("button")).toHaveCount(4);
+  // Picking one would drop what's being typed, so typing puts them away.
+  await composer(page).fill("draft");
+  await expect(starters).toHaveCount(0);
+  await composer(page).fill("");
+  await starters.getByRole("button", { name: /Plan a ride/ }).click();
+  await expect(page.getByTestId("assistant-message")).toContainText("Plan a bike ride for Saturday.");
+  await expect(starters).toHaveCount(0);
+  expect(mock.posted.map((p) => p.body.body)).toEqual(["Plan a bike ride for Saturday."]);
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("no starters leaves the plain greeting", async ({ page }) => {
+  await installChatApi(page);
+  await openChat(page);
+  await expect(page.getByRole("list", { name: "Conversation starters" })).toHaveCount(0);
+});
+
 test("/ lists the commands and /memory opens the Memory page without sending", async ({ page }) => {
   const mock = await installChatApi(page);
   await openChat(page);
