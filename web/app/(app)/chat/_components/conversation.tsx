@@ -216,7 +216,9 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const running = c?.state === "running";
   const stopping = running && (cancel.isPending || cancel.isSuccess);
   // Also locked while a persona switch creates the replacement chat, so nothing is sent to the one it drops.
-  const locked = running || send.isPending || create.isPending;
+  // A running reply doesn't lock the composer: a message sent then interrupts it,
+  // and the next reply answers both, picking up from what the stopped one had done.
+  const locked = send.isPending || create.isPending;
   const groups: Groups = models.data;
   const current: Selection | undefined = c && { harness: c.harness, model: c.model };
   const selection = picked ?? current;
@@ -575,8 +577,10 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                   disabled={locked}
                   placeholder={
                     locked
-                      ? "Waiting for the reply…"
-                      : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}… Type @ to bring in another persona, [[ to attach context. Enter sends, Shift+Enter adds a line.`
+                      ? "Sending…"
+                      : running
+                        ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to interrupt: the reply picks up from where it was, with your new message.`
+                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}… Type @ to bring in another persona, [[ to attach context. Enter sends, Shift+Enter adds a line.`
                   }
                   onKeyDown={(e) => {
                     if (suggestions.length > 0) {
@@ -610,13 +614,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 )}
                 <AttachButton onFiles={files.add} disabled={locked} />
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
-                {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked} />}
+                {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked || running} />}
                 <EffortPicker
                   efforts={offered.efforts}
                   defaultEffort={offered.defaultEffort}
                   value={effort}
                   onChange={(e) => setPickedEffort(e ?? "default")}
-                  disabled={locked}
+                  disabled={locked || running}
                 />
                 <span className="flex-1" />
                 {running && (
@@ -624,8 +628,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                     {stopping ? "Stopping…" : "Stop"}
                   </Button>
                 )}
-                <Button type="submit" variant="primary" disabled={locked || !!unavailable || files.pending || !text.trim()}>
-                  Send
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={locked || !!unavailable || files.pending || !text.trim()}
+                  title={running ? "Stop the reply and answer this together with your last message" : undefined}
+                >
+                  {running ? "Interrupt" : "Send"}
                 </Button>
               </div>
             </form>

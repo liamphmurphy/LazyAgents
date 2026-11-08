@@ -315,3 +315,32 @@ WHERE id = sqlc.arg(id) RETURNING *;
 -- A change only the chat's payload shows (participants, proposals): clients
 -- refetch on chat.updated.
 UPDATE chat_sessions SET revision = revision + 1, updated_at = now() WHERE id = $1 RETURNING *;
+
+-- name: SetChatInterrupt :one
+-- The message waiting for an interrupted reply to stop; NULL clears it.
+-- Not a revision bump: it changes together with the turn's state.
+UPDATE chat_sessions SET interrupt_message_id = sqlc.narg(interrupt_message_id)
+WHERE id = sqlc.arg(id) RETURNING *;
+
+-- name: GetChatMessage :one
+SELECT * FROM chat_messages WHERE id = $1;
+
+-- name: SetChatMessageTurn :exec
+-- Binds a waiting interruption to the turn that answers it, so the runner
+-- loads its context refs and attachments.
+UPDATE chat_messages SET run_id = $2, run_turn_id = $3, harness = $4, model = $5 WHERE id = $1;
+
+-- name: PreviousChatUserMessage :one
+SELECT * FROM chat_messages WHERE session_id = $1 AND role = 'user' AND seq < $2
+ORDER BY seq DESC LIMIT 1;
+
+-- name: InterruptedTurnEvents :many
+-- What an interrupted reply had written and which tools it called, oldest first.
+SELECT type, payload FROM run_events
+WHERE run_id = $1 AND at >= $2 AND (type = 'tool_call' OR (type = 'message' AND payload->>'role' = 'assistant'))
+ORDER BY seq LIMIT 200;
+
+-- name: PendingChatTurn :one
+-- The newest turn not yet claimed: what a chat interruption replaces when
+-- the reply hadn't started.
+SELECT * FROM run_turns WHERE run_id = $1 AND status = 'pending' ORDER BY seq DESC LIMIT 1;

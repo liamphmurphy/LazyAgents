@@ -163,24 +163,28 @@ func TestChatConcurrentPostsAndQueuedCancel(t *testing.T) {
 	close(start)
 	wg.Wait()
 	close(results)
-	success := 0
 	for err := range results {
-		if err == nil {
-			success++
-		} else {
-			requireConflict(t, err)
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
-	if success != 1 {
-		t.Fatalf("accepted %d concurrent posts", success)
-	}
+	// Posts serialize on the chat: each one before the reply starts replaces
+	// the queued turn, carrying its input along, so one turn answers them all.
 	run := e.chatRun(chat.ID)
 	turns, err := e.q.ListTurns(e.ctx, run.ID)
-	if err != nil || len(turns) != 1 {
+	if err != nil || len(turns) != n {
 		t.Fatalf("turns %+v %v", turns, err)
 	}
+	for i, turn := range turns {
+		if want := map[bool]string{true: "pending", false: "done"}[i == n-1]; turn.Status != want {
+			t.Fatalf("turn %d is %s", i, turn.Status)
+		}
+	}
+	if got := strings.Count(turns[n-1].InputMessage, "Concurrent question"); got != n {
+		t.Fatalf("last turn carries %d of %d messages:\n%s", got, n, turns[n-1].InputMessage)
+	}
 	msgs, err := e.q.ListChatMessages(e.ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 20})
-	if err != nil || len(msgs) != 1 {
+	if err != nil || len(msgs) != n {
 		t.Fatalf("messages %+v %v", msgs, err)
 	}
 	if _, err := e.runs.CancelChat(e.ctx, e.ws, e.me.ID, chat.ID); err != nil {
@@ -233,13 +237,9 @@ func TestChatCancelRunningAndRepost(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	first := e.chatRun(chat.ID)
-	_, err := e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Busy"})
-	requireConflict(t, err)
 	if _, err := e.runs.SetRunControl(e.ctx, e.ws, e.me.ID, first.ID, "cancel"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Still exiting"})
-	requireConflict(t, err)
 	e.runner.Wait()
 	if e.chat(chat.ID).State != "idle" || e.chatRun(chat.ID).State != "waiting" {
 		t.Fatal("cancel did not leave chat usable")

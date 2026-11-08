@@ -7,7 +7,9 @@ import type { components } from "../lib/api/schema";
  * the selected harness/model. Swap `installChatApi` for the real stack once
  * LAZYAGENTS-11 lands; the spec only talks to the UI.
  *
- * A message starting with "slow:" keeps the turn running until it is cancelled;
+ * A message starting with "slow:" keeps the turn running until it is cancelled
+ * or interrupted: a message sent while a turn runs stops it, and the next reply
+ * echoes "<new> (interrupting: <previous>)", like the server's merged turn;
  * its run reports one tool call (read_page Eng/Plan) for the live activity line.
  * Replies carry token usage and cost and a run_id whose events (GET /runs/{id}) hold the turn's tool calls.
  *
@@ -114,6 +116,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const chats: Chat[] = [];
   const messages = new Map<string, Message[]>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  // The running turn's prompt per chat, which an interruption folds in.
+  const prompts = new Map<string, string>();
   const runEvents = new Map<string, Array<{ seq: number; type: string; at: string; payload: Record<string, unknown> }>>();
   const unhandled: string[] = [];
   const posted: Posted[] = [];
@@ -475,7 +479,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         const b = body();
         const text = String(b.body ?? "");
         if (c.archived) return fail(err(409, "conflict", "This chat is archived."));
-        if (c.state === "running") return fail(err(409, "conflict", "A turn is already running."));
         if (!text.trim()) return fail(err(422, "invalid", "Message is empty", "body"));
         const harness = (b.harness as Harness | undefined) ?? c.harness;
         const model = (b.model as string | undefined) ?? (harness === c.harness ? c.model : catalog(true, true).find((g) => g.harness === harness)!.models[0].id);
@@ -498,7 +501,11 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         posted.push({ chat: c.id, body: b });
         const refs = (b.context_refs as Array<{ key?: string }> | undefined) ?? [];
         if (refs.some((r) => r.key === "OTHER-9")) return fail(err(422, "invalid", "OTHER-9 is not in this chat's project", "context_refs"));
+        const interrupted = c.state === "running" ? prompts.get(c.id) : undefined;
+        clearTimeout(timers.get(c.id));
         const user = add(c, "user", text, refs.length ? { context_refs: refs } : {});
+        const prompt = interrupted === undefined ? text : `${text} (interrupting: ${interrupted})`;
+        prompts.set(c.id, prompt);
         c.state = "running";
         c.error = undefined;
         c.current_run_id = uuid();
@@ -508,7 +515,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
           events.push({ seq: events.length + 1, type: "tool_call", at: now(), payload: { id: `call-${events.length + 1}`, tool: "mcp__lazyagents__read_page", input: { ref: PLAN.path } } });
           runEvents.set(c.current_run_id, events);
         }
-        if (!text.startsWith("slow:")) timers.set(c.id, setTimeout(() => finishTurn(c, text), delay));
+        if (!text.startsWith("slow:")) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
         void emit(c);
         return json({ chat: ref(c), message: user }, 202);
       }

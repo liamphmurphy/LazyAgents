@@ -351,12 +351,16 @@ func TestChatMessagesPostCancelAndHistory(t *testing.T) {
 	if chat["state"] != "running" || chat["title"] != "First question" || chat["message_count"].(float64) != 1 || chat["current_run_id"] == nil {
 		t.Fatalf("chat with first message %v", chat)
 	}
-	// A turn is queued: posting again conflicts, history shows the user message.
-	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "second"}, http.StatusConflict)
+	// A turn is queued: posting again replaces it (an interruption before the
+	// reply started), and history shows both user messages.
+	second := e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "second"}, http.StatusAccepted)
+	if m := second["message"].(map[string]any); second["chat"].(map[string]any)["state"] != "running" || m["run_id"] == nil {
+		t.Fatalf("interrupting post %v", second)
+	}
 	hist := e.want("GET", "/chats/"+id+"/messages", nil, 200)
 	msgs := hist["messages"].([]any)
 	first := msgs[0].(map[string]any)
-	if len(msgs) != 1 || first["role"] != "user" || first["seq"].(float64) != 1 || first["author"] == nil || hist["has_more"] != false ||
+	if len(msgs) != 2 || first["role"] != "user" || first["seq"].(float64) != 1 || first["author"] == nil || hist["has_more"] != false ||
 		first["harness"] == nil || first["model"] == nil || first["run_id"] == nil || len(first["context_refs"].([]any)) != 0 {
 		t.Fatalf("history %v", hist)
 	}
@@ -371,7 +375,7 @@ func TestChatMessagesPostCancelAndHistory(t *testing.T) {
 	// Post more messages; seq-based paging.
 	for i := range 3 {
 		res := e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "again"}, http.StatusAccepted)
-		if res["chat"].(map[string]any)["state"] != "running" || res["message"].(map[string]any)["seq"].(float64) != float64(i+2) {
+		if res["chat"].(map[string]any)["state"] != "running" || res["message"].(map[string]any)["seq"].(float64) != float64(i+3) {
 			t.Fatalf("post %d: %v", i, res)
 		}
 		e.want("POST", "/chats/"+id+"/cancel", nil, 200)
@@ -384,13 +388,13 @@ func TestChatMessagesPostCancelAndHistory(t *testing.T) {
 		}
 		return s, out["has_more"].(bool)
 	}
-	if s, more := seqs("/chats/" + id + "/messages?limit=2"); len(s) != 2 || s[0] != 3 || s[1] != 4 || !more {
+	if s, more := seqs("/chats/" + id + "/messages?limit=2"); len(s) != 2 || s[0] != 4 || s[1] != 5 || !more {
 		t.Fatalf("newest page %v more=%v", s, more)
 	}
 	if s, more := seqs("/chats/" + id + "/messages?limit=2&before=3"); len(s) != 2 || s[0] != 1 || s[1] != 2 || more {
 		t.Fatalf("older page %v more=%v", s, more)
 	}
-	if s, _ := seqs("/chats/" + id + "/messages?after=2"); len(s) != 2 || s[0] != 3 || s[1] != 4 {
+	if s, _ := seqs("/chats/" + id + "/messages?after=2"); len(s) != 3 || s[0] != 3 || s[2] != 5 {
 		t.Fatalf("after %v", s)
 	}
 	e.want("GET", "/chats/"+id+"/messages?limit=0", nil, http.StatusUnprocessableEntity)

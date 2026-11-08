@@ -119,22 +119,21 @@ func TestChatCancelClaimBoundary(t *testing.T) {
 	if e.chat(chat.ID).State != "running" || e.chatRun(chat.ID).State != "paused" {
 		t.Fatal("cancel missed the winning claimant")
 	}
-	_, err = e.runs.PostChatMessage(ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Still draining"})
+	// A message while the stopped reply drains waits for it (one at a time),
+	// then gets its own turn.
+	if _, err = e.runs.PostChatMessage(ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Still draining"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.runs.PostChatMessage(ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Again"})
 	requireConflict(t, err)
 	releaseProcess.Do(func() { close(gate.release) })
 	e.runner.Wait()
-	if e.chat(chat.ID).State != "idle" {
-		t.Fatal("cancel did not drain")
-	}
-	if _, err = e.runs.PostChatMessage(ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "After boundary"}); err != nil {
-		t.Fatal(err)
-	}
 	e.until("reply after boundary", func() bool { return e.chat(chat.ID).State == "idle" })
 	msgs, err := e.q.ListChatMessages(ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 5 || msgs[4].Role != "assistant" || !strings.Contains(msgs[4].BodyMd, "After boundary") {
+	if len(msgs) != 5 || msgs[3].BodyMd != "Still draining" || msgs[4].Role != "assistant" || !strings.Contains(msgs[4].BodyMd, "Still draining") || !strings.Contains(msgs[4].BodyMd, "> slow") {
 		t.Fatalf("history %+v", msgs)
 	}
 	turns, err := e.q.ListTurns(ctx, e.chatRun(chat.ID).ID)
@@ -200,8 +199,14 @@ func TestChatCancelWaitsForClaimCommit(t *testing.T) {
 	if err != nil || got.Status != "running" {
 		t.Fatalf("claimed turn %+v: %v", got, err)
 	}
-	_, err = e.runs.PostChatMessage(ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Busy"})
-	requireConflict(t, err)
+	// The claimed turn is still running: a message waits for it to stop.
+	msg, err := e.runs.PostChatMessage(ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Busy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := e.chat(chat.ID); c.State != "running" || c.InterruptMessageID == nil || *c.InterruptMessageID != msg.ID || msg.RunTurnID != nil {
+		t.Fatalf("interruption not waiting: %+v %+v", c, msg)
+	}
 }
 
 // A harness that ignores SIGINT must still stop promptly, independently of
