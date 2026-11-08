@@ -24,13 +24,17 @@ export function Segmented<T extends string>({
   onChange,
   label,
   small,
+  layout = "inline",
 }: {
-  options: ReadonlyArray<{ value: T; label: ReactNode }>;
+  /** name: the accessible name, when the label is only an icon. */
+  options: ReadonlyArray<{ value: T; label: ReactNode; name?: string }>;
   /** undefined (or a value not in options) leaves every option unchecked. */
   value: T | undefined;
   onChange: (v: T) => void;
   label: string;
   small?: boolean;
+  /** fill: equal options across the full width. column: stacked icon buttons. */
+  layout?: "inline" | "fill" | "column";
 }) {
   const checked = options.findIndex((o) => o.value === value);
   const current = Math.max(0, checked);
@@ -40,7 +44,7 @@ export function Segmented<T extends string>({
       role="radiogroup"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className="inline-flex gap-0.5 rounded-md border border-border bg-surface p-0.5"
+      className={cx("gap-0.5 rounded-md border border-border bg-surface p-0.5", layout === "inline" ? "inline-flex" : layout === "fill" ? "flex w-full" : "inline-flex flex-col")}
     >
       {options.map((o, i) => {
         const on = i === checked;
@@ -53,11 +57,14 @@ export function Segmented<T extends string>({
             type="button"
             role="radio"
             aria-checked={on}
+            aria-label={o.name}
+            title={o.name}
             tabIndex={i === current ? 0 : -1}
             onClick={() => onChange(o.value)}
             className={cx(
               "whitespace-nowrap rounded-[5px]",
-              small ? "h-6 px-[9px] text-xs" : "h-[26px] px-[11px] text-[12.5px]",
+              layout === "column" ? "grid size-[30px] place-items-center" : small ? "h-6 px-[9px] text-xs" : "h-[26px] px-[11px] text-[12.5px]",
+              layout === "fill" && "flex-1",
               on ? "bg-segment-on font-medium text-fg" : "text-fg-secondary hover:text-fg",
             )}
           >

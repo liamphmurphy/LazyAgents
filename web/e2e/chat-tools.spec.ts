@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installChatApi } from "./mock-chat-api";
 
+// History lives in the expanded menu.
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
+
 // Search, edit and retry, copying, selection quotes and following new replies.
 
 const box = (page: Page) => page.getByRole("combobox", { name: "Message" }).or(page.getByRole("textbox", { name: "Message" })).first();
@@ -21,6 +24,7 @@ async function open(page: Page, first = "plain hello", delay = 10) {
 
 test("search finds a message and jumps to it", async ({ page }) => {
   await open(page, "the kokoro comparison");
+  await page.getByRole("button", { name: "Find in chats" }).click();
   await page.getByRole("textbox", { name: "Find in chats" }).fill("kokoro");
   const hit = page.getByTestId("chat-search-hit").first();
   await expect(hit.locator("mark")).toHaveText("kokoro");

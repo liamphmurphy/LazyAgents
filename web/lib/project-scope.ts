@@ -55,6 +55,36 @@ export const ASSISTANT_VIEWS: { href: string; label: string; icon: IconName }[] 
   { href: "/personas", label: "Personas", icon: "users" },
 ];
 
+export type NavMode = "chat" | "work";
+
+/** Shown in both modes, so opening them leaves the mode alone. */
+const PINNED_ROUTES = ["/inbox", "/"];
+/** Everything else outside this list is Work. */
+const CHAT_ROUTES = ["/chat", "/memory", "/personas", "/library", "/workflows", "/learn"];
+
+/** The mode a page belongs to; undefined for the pinned pages. */
+export function routeMode(pathname: string): NavMode | undefined {
+  if (PINNED_ROUTES.some((r) => isActive(pathname, r))) return undefined;
+  return CHAT_ROUTES.some((r) => isActive(pathname, r)) ? "chat" : "work";
+}
+
+/** The page decides; a pinned page keeps the last mode, and Work is the first-run default. */
+export function navMode(pathname: string, remembered: NavMode | null | undefined): NavMode {
+  return routeMode(pathname) ?? remembered ?? "work";
+}
+
+/** Chat keeps all of Personal; Work keeps only its pinned items, above Project and Workspace. */
+export function navGroupsFor(mode: NavMode): NavGroup[] {
+  const [personal, ...work] = NAV_GROUPS;
+  if (mode === "chat") return [personal];
+  return [{ ...personal, items: personal.items.filter((i) => PINNED_ROUTES.includes(i.href)) }, ...work];
+}
+
+/** Where the Chat/Work toggle goes: Chat resumes the newest conversation, Work the last Work page. */
+export function modeHref(mode: NavMode, project: string | null | undefined, lastWork: string | null | undefined): string {
+  return withProject(mode === "chat" ? "/chat" : (lastWork ?? "/board"), project);
+}
+
 /** Routes whose content belongs to one project, read from ?project=. */
 export const PROJECT_ROUTES: Record<string, ProjectMode> = {
   "/board": "required",

@@ -27,8 +27,7 @@ import {
   unusedPreset,
   wheelPoint,
   wheelPosition,
-  withDefault,
-} from "./persona-ui.ts";
+  withDefault, splitPersonaStrip } from "./persona-ui.ts";
 
 const p = (id, name, extra = {}) => ({ id, name, color: "#8b8fff", is_default: false, created_at: "2026-11-01T00:00:00Z", ...extra });
 
@@ -223,4 +222,17 @@ test("mentionSuggestions prefers names that start with the query", async () => {
 test("insertMention replaces the query and moves the caret", async () => {
   const { insertMention } = await import("./persona-ui.ts");
   assert.deepEqual(insertMention("hey @be what", 4, 7, "Bea"), { text: "hey @Bea  what", caret: 9 });
+});
+
+test("the persona strip shows the most used and keeps an overflow pick visible", () => {
+  const p = (id, chat_count) => ({ id, chat_count });
+  const few = [p("a", 1), p("b", 5)];
+  assert.deepEqual(splitPersonaStrip(few, "default", 6), { shown: [p("b", 5), p("a", 1)], overflow: [] });
+  const many = ["a", "b", "c", "d", "e", "f", "g", "h"].map((id, i) => p(id, 10 - i));
+  const plain = splitPersonaStrip(many, "default", 6);
+  assert.deepEqual(plain.shown.map((x) => x.id), ["a", "b", "c", "d", "e"]);
+  assert.deepEqual(plain.overflow.map((x) => x.id), ["f", "g", "h"]);
+  const picked = splitPersonaStrip(many, "g", 6);
+  assert.deepEqual(picked.shown.map((x) => x.id), ["a", "b", "c", "d", "g"]);
+  assert.deepEqual(picked.overflow.map((x) => x.id), ["e", "f", "h"]);
 });

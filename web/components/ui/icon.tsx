@@ -48,6 +48,7 @@ const paths = {
   edit: <path d="M10.5 3 13 5.5 6 12.5H3.5V10z" />,
   history: <><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.6h2.6" /><path d="M8 5v3l2 1.5" /></>,
   sidebar: <><rect x="2.5" y="3" width="11" height="10" rx="2" /><path d="M6.5 3v10" /></>,
+  briefcase: <><rect x="2.5" y="5" width="11" height="8" rx="1.5" /><path d="M6 5V3.5h4V5M2.5 8.5h11" /></>,
   bookmark: <path d="M4.5 2.5h7v11L8 11l-3.5 2.5z" />,
   trash: <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" />,
   sun: <><circle cx="8" cy="8" r="2.8" /><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1" /></>,

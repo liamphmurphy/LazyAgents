@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NAV_GROUPS, currentProject, hasFilters, isActive, projectSection, resolveProject, switchHref, withProject } from "./project-scope.ts";
+import { NAV_GROUPS, currentProject, hasFilters, isActive, modeHref, navGroupsFor, navMode, projectSection, resolveProject, routeMode, switchHref, withProject } from "./project-scope.ts";
 
 const web = { key: "WEB", name: "Web app", color: "#6e56cf", archived: false };
 const ops = { key: "OPS", name: "Operations", color: "#3e9bff", archived: false };
@@ -81,3 +81,27 @@ test("cross-project links on optional routes show All projects, bare routes the 
   assert.equal(currentProject("/board", q("epic=e1"), "WEB", projects), web);
 });
 
+
+test("each page belongs to a mode, and pinned pages keep the last one", () => {
+  for (const p of ["/chat", "/chat/1", "/memory", "/personas", "/library", "/workflows", "/learn/2"]) assert.equal(routeMode(p), "chat", p);
+  for (const p of ["/board", "/tickets/WEB-1", "/runs/1", "/settings/projects", "/wiki"]) assert.equal(routeMode(p), "work", p);
+  for (const p of ["/", "/inbox"]) assert.equal(routeMode(p), undefined, p);
+  assert.equal(navMode("/board", "chat"), "work");
+  assert.equal(navMode("/inbox", "chat"), "chat");
+  assert.equal(navMode("/", null), "work");
+});
+
+test("Work pins Inbox and Dashboard above Project and Workspace; Chat keeps all of Personal", () => {
+  const labels = (m) => navGroupsFor(m).map((g) => [g.label, g.items.map((i) => i.label)]);
+  assert.deepEqual(labels("chat"), [["Personal", NAV_GROUPS[0].items.map((i) => i.label)]]);
+  assert.deepEqual(labels("work")[0], ["Personal", ["Inbox", "Dashboard"]]);
+  assert.deepEqual(labels("work").slice(1).map(([l]) => l), ["Project", "Workspace"]);
+});
+
+test("the toggle resumes chat and returns to the last Work page in the current project", () => {
+  assert.equal(modeHref("chat", "WEB", "/runs"), "/chat?project=WEB");
+  assert.equal(modeHref("work", "WEB", "/tickets"), "/tickets?project=WEB");
+  assert.equal(modeHref("work", "WEB", "/runs/1"), "/runs/1");
+  assert.equal(modeHref("work", "WEB", null), "/board?project=WEB");
+  assert.equal(modeHref("work", undefined, null), "/board");
+});
