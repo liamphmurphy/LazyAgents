@@ -7,6 +7,7 @@ export const CHAT_COMMANDS: ChatCommand[] = [
   { name: "model", args: "model", hint: "Switch the model for the next message" },
   { name: "effort", args: "effort", hint: "Set the reasoning effort for the next message" },
   { name: "persona", args: "persona", hint: "Start a new chat with another persona" },
+  { name: "workflow", args: "workflow", hint: "Run one of your published workflows" },
   { name: "new", hint: "Start a new conversation" },
   { name: "repo", args: "repository", hint: "Start a new chat in another repository" },
   { name: "memory", hint: "Open or close your memory" },

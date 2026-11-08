@@ -1,0 +1,352 @@
+"use client";
+
+import "@xyflow/react/dist/style.css";
+
+import { Background, Controls, ReactFlow, ReactFlowProvider, applyNodeChanges, useReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
+import { useParams } from "next/navigation";
+import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useBootstrap, useChatMessages, useCreateChat, useSendChatMessage } from "@/lib/api/hooks";
+import { usePersonas } from "@/lib/api/persona-hooks";
+import { usePublishWorkflow, useResolveProposal, useSaveWorkflow, useWorkflow, type Workflow } from "@/lib/api/workflow-hooks";
+import { useRememberedProject } from "@/components/shell/project-scope";
+import { TopBar } from "@/components/shell/topbar";
+import { Button } from "@/components/ui/button";
+import { Tabs } from "@/components/ui/controls";
+import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
+import { Markdown } from "@/components/domain/markdown";
+import { PALETTE, ancestors, canConnect, diffGraphs, newNodeId, removeNode, type Graph, type GraphNode, type NodeType } from "@/lib/workflows";
+import { FLOW_STYLE, NODE_TYPES, toFlowEdges, toFlowNodes, type FlowNode } from "./flow";
+
+const SAVE_DELAY = 700;
+const LABEL = "text-xs text-fg-secondary";
+
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="flex flex-col gap-1"><span className={LABEL}>{label}</span>{children}</label>;
+}
+
+const SELECT = "h-[30px] rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg";
+
+function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: GraphNode; onChange: (patch: Partial<GraphNode>) => void; onRemove: () => void }) {
+  const personas = usePersonas();
+  const c = node.config;
+  const config = (patch: Partial<GraphNode["config"]>) => onChange({ config: { ...c, ...patch } });
+  const before = ancestors(graph, node.id);
+  const rerunnable = before.filter((n) => n.type === "enrich" || n.type === "agent");
+  const promptLabel: Partial<Record<NodeType, string>> = { enrich: "Extra instructions (optional)", agent: "What this step should do", gate: "Message to the reviewer" };
+  return (
+    <div className="flex flex-col gap-3" data-testid="workflow-inspector">
+      <Labeled label="Title"><TextInput aria-label="Title" value={node.title} onChange={(e) => onChange({ title: e.target.value })} /></Labeled>
+      <p className="font-mono text-[11px] text-fg-tertiary">{`{{${node.id}.output}}`}</p>
+      {node.type !== "trigger" && (
+        <Labeled label={promptLabel[node.type] ?? "Body (empty uses the previous step's output)"}>
+          <TextArea aria-label="Prompt" rows={5} value={c.prompt ?? ""} onChange={(e) => config({ prompt: e.target.value })} />
+        </Labeled>
+      )}
+      {node.type === "agent" && (
+        <>
+          <Labeled label="Run as persona">
+            <select aria-label="Persona" className={SELECT} value={c.persona_id ?? ""} disabled={!!c.agent_handle} onChange={(e) => config({ persona_id: e.target.value || undefined })}>
+              <option value="">The chat&apos;s persona</option>
+              {personas.data?.personas.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Labeled>
+          <Labeled label="Or as agent (handle)">
+            <TextInput mono aria-label="Agent handle" placeholder="atlas" value={c.agent_handle ?? ""} onChange={(e) => config({ agent_handle: e.target.value.trim() || undefined, persona_id: undefined })} />
+          </Labeled>
+          <label className="flex items-center gap-2 text-[13px] text-fg-2">
+            <input type="checkbox" checked={!!c.web} onChange={(e) => config({ web: e.target.checked || undefined })} /> Read the web (this step can&apos;t read the workspace)
+          </label>
+        </>
+      )}
+      {node.type === "gate" && (
+        <>
+          <Labeled label="If changes are requested">
+            <select aria-label="Re-run from" className={SELECT} value={c.retry_from ?? ""} onChange={(e) => config({ retry_from: e.target.value || undefined })}>
+              <option value="">Only approve or reject</option>
+              {rerunnable.map((n) => <option key={n.id} value={n.id}>Re-run from {n.title}</option>)}
+            </select>
+          </Labeled>
+          {c.retry_from && (
+            <Labeled label="Reviews allowed">
+              <TextInput aria-label="Reviews allowed" type="number" min={1} max={5} value={c.max_attempts ?? 3} onChange={(e) => config({ max_attempts: Number(e.target.value) || undefined })} />
+            </Labeled>
+          )}
+          <fieldset className="flex flex-col gap-1">
+            <legend className={LABEL}>Show for review (none selected shows the previous steps)</legend>
+            {before.filter((n) => n.type !== "trigger").map((n) => (
+              <label key={n.id} className="flex items-center gap-2 text-[13px] text-fg-2">
+                <input type="checkbox" checked={c.show?.includes(n.id) ?? false} onChange={(e) => config({ show: e.target.checked ? [...(c.show ?? []), n.id] : c.show?.filter((s) => s !== n.id) })} /> {n.title}
+              </label>
+            ))}
+          </fieldset>
+        </>
+      )}
+      {node.type === "wiki" && (
+        <>
+          <Labeled label="Page path"><TextInput mono aria-label="Page path" placeholder="Research/Findings" value={c.path ?? ""} onChange={(e) => config({ path: e.target.value })} /></Labeled>
+          <Labeled label="If the page exists">
+            <select aria-label="Wiki mode" className={SELECT} value={c.mode ?? "replace"} onChange={(e) => config({ mode: e.target.value })}>
+              <option value="replace">Replace it (history is kept)</option>
+              <option value="append">Add to the end</option>
+            </select>
+          </Labeled>
+        </>
+      )}
+      {(node.type === "library" || node.type === "ticket") && (
+        <Labeled label={node.type === "ticket" ? "Ticket title" : "Item title"}><TextInput aria-label="Item title" value={c.title ?? ""} onChange={(e) => config({ title: e.target.value })} /></Labeled>
+      )}
+      {node.type !== "trigger" && <div><Button onClick={onRemove}>Delete node</Button></div>}
+    </div>
+  );
+}
+
+/** A chat with a persona about this workflow. Its edits arrive as suggestions on the canvas. */
+function BuildChat({ workflow, onChatting }: { workflow: Workflow; onChatting: () => void }) {
+  const [chatId, setChatId] = useState<string>();
+  const [text, setText] = useState("");
+  const boot = useBootstrap();
+  const remembered = useRememberedProject();
+  const create = useCreateChat();
+  const send = useSendChatMessage(chatId ?? "");
+  const messages = useChatMessages(chatId);
+  const project = boot.data?.projects.find((p) => p.key === remembered && !p.archived) ?? boot.data?.projects.find((p) => !p.archived);
+  const list = (messages.data?.messages ?? []).filter((m) => m.role !== "system");
+  const submit = () => {
+    const body = text.trim();
+    if (!body) return;
+    setText("");
+    onChatting();
+    if (chatId) return send.mutate({ body });
+    create.mutate(
+      { project: project!.key, title: `Workflow: ${workflow.name}`.slice(0, 200), message: { body: `I'm editing my workflow "${workflow.name}" (id ${workflow.id}). ${body}` } },
+      { onSuccess: (c) => setChatId(c.id) },
+    );
+  };
+  const error = create.error ?? send.error;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="workflow-build-chat">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        {list.length === 0 && <p className="text-[13px] text-fg-secondary">Describe what you want in plain words. Your persona proposes changes here on the canvas, and nothing changes until you apply them.</p>}
+        {list.map((m) => (
+          <div key={m.id} className={m.role === "user" ? "self-end rounded-lg bg-selected px-2.5 py-1.5 text-[13px] text-fg" : "text-[13px]"}>
+            {m.role === "user" ? m.body_md.replace(/^I'm editing my workflow "[^"]*" \(id [^)]*\)\. /, "") : <Markdown>{m.body_md}</Markdown>}
+          </div>
+        ))}
+      </div>
+      {error && <Banner tone="blocked" title={error.message} />}
+      <form onSubmit={(e) => { e.preventDefault(); submit(); }} className="flex flex-col gap-2">
+        <TextArea aria-label="Describe a change" rows={3} placeholder='"Add a fact check before the gate"' value={text} onChange={(e) => setText(e.target.value)} />
+        <Button variant="primary" type="submit" disabled={!text.trim() || !project || create.isPending || send.isPending}>Send</Button>
+      </form>
+    </div>
+  );
+}
+
+function Canvas({ workflow, onApplied, setPoll }: { workflow: Workflow; onApplied: () => void; setPoll: (on: boolean) => void }) {
+  const [graph, setGraph] = useState(workflow.draft as Graph);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [panel, setPanel] = useState("inspect");
+  const flow = useReactFlow();
+  const save = useSaveWorkflow(workflow.id);
+  const publish = usePublishWorkflow(workflow.id);
+  const resolve = useResolveProposal(workflow.id);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const canvas = useRef<HTMLDivElement>(null);
+  const pending = useRef<Graph | null>(null);
+  const mutate = save.mutate;
+
+  useEffect(() => () => {
+    // Leaving the editor mid-edit still saves it.
+    clearTimeout(timer.current);
+    if (pending.current) mutate({ graph: pending.current as never });
+  }, [mutate]);
+
+  const update = (next: Graph) => {
+    setGraph(next);
+    pending.current = next;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      const graph = pending.current;
+      pending.current = null;
+      if (graph) mutate({ graph: graph as never });
+    }, SAVE_DELAY);
+  };
+
+  const proposal = workflow.proposals[0];
+  const preview = proposal?.graph as Graph | undefined;
+  const diff = preview ? diffGraphs(graph, preview) : null;
+  const shown: Graph = preview ? { nodes: [...preview.nodes, ...(diff?.removedNodes ?? [])], edges: [...preview.edges, ...(diff?.removedEdges ?? [])] } : graph;
+  const added = new Set(diff?.addedEdges.map((e) => `${e.from}->${e.to}`));
+  const removed = new Set(diff?.removedEdges.map((e) => `${e.from}->${e.to}`));
+  const nodes = toFlowNodes(shown, (n) => ({ diff: diff?.nodes.get(n.id) }), selected);
+  const edges = toFlowEdges(shown, (e) => {
+    const k = `${e.from}->${e.to}`;
+    return added.has(k) ? { stroke: "var(--accent)", strokeDasharray: "5 4" } : removed.has(k) ? { stroke: "var(--state-blocked)", strokeDasharray: "2 4" } : undefined;
+  });
+  const node = graph.nodes.find((n) => n.id === selected);
+
+  const addNode = (type: NodeType, label: string, x?: number, y?: number) => {
+    const id = newNodeId(graph, type);
+    // A click drops it in view, staggered so repeated clicks don't stack.
+    const box = canvas.current?.getBoundingClientRect();
+    const middle = flow.screenToFlowPosition({ x: (box?.left ?? 0) + (box?.width ?? 0) / 2, y: (box?.top ?? 0) + (box?.height ?? 0) / 3 });
+    const shift = (graph.nodes.length % 6) * 28;
+    update({ ...graph, nodes: [...graph.nodes, { id, type, title: label, x: x ?? middle.x + shift, y: y ?? middle.y + shift, config: {} }] });
+    setSelected(id);
+    setPanel("inspect");
+  };
+  const onNodesChange = (changes: NodeChange<FlowNode>[]) => {
+    if (preview) return;
+    const moved = applyNodeChanges(changes.filter((c) => c.type === "position"), nodes);
+    if (changes.some((c) => c.type === "position")) {
+      update({ ...graph, nodes: graph.nodes.map((n) => { const f = moved.find((m) => m.id === n.id); return f ? { ...n, x: f.position.x, y: f.position.y } : n; }) });
+    }
+    for (const c of changes) {
+      if (c.type === "select" && c.selected) setSelected(c.id);
+      if (c.type === "remove" && graph.nodes.find((n) => n.id === c.id)?.type !== "trigger") update(removeNode(graph, c.id));
+    }
+  };
+  const onEdgesChange = (changes: EdgeChange[]) => {
+    if (preview) return;
+    const gone = new Set(changes.filter((c) => c.type === "remove").map((c) => c.id));
+    if (gone.size) update({ ...graph, edges: graph.edges.filter((e) => !gone.has(`${e.from}->${e.to}`)) });
+  };
+  const onConnect = (c: Connection) => {
+    if (!preview && canConnect(graph, c.source, c.target)) update({ ...graph, edges: [...graph.edges, { from: c.source, to: c.target }] });
+  };
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    const [type, label] = e.dataTransfer.getData("application/vesper-node").split("|");
+    if (!type || preview) return;
+    const p = flow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    addNode(type as NodeType, label, p.x, p.y);
+  };
+  const flushAndPublish = () => {
+    clearTimeout(timer.current);
+    const next = pending.current;
+    pending.current = null;
+    if (next) mutate({ graph: next as never }, { onSuccess: () => publish.mutate() });
+    else publish.mutate();
+  };
+
+  const issues = workflow.issues;
+  const error = save.error ?? publish.error ?? resolve.error;
+  return (
+    <>
+      <TopBar
+        crumbs={[{ label: "Workflows", href: "/workflows" }, { label: workflow.name }]}
+        actions={
+          <>
+            <span className="font-mono text-xs text-fg-tertiary">{workflow.published_version > 0 ? `v${workflow.published_version}${workflow.unpublished_changes ? " · edited" : ""}` : "Draft"}</span>
+            <span className="text-xs text-fg-tertiary">{save.isPending ? "Saving…" : "Saved"}</span>
+            <Button variant="primary" onClick={flushAndPublish} disabled={issues.length > 0 || publish.isPending || !!preview || !workflow.unpublished_changes} hint={issues[0]?.message}>Publish</Button>
+          </>
+        }
+      />
+      <div className="flex min-h-0 flex-1 max-md:flex-col">
+        <aside aria-label="Node types" className="w-[176px] flex-none overflow-y-auto border-r border-border-subtle bg-bg-sidebar p-3 max-md:hidden">
+          {PALETTE.map((g) => (
+            <div key={g.group} className="mb-4">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-tertiary">{g.group}</p>
+              {g.items.map((i) => (
+                <button
+                  key={i.type}
+                  type="button"
+                  draggable
+                  disabled={!!preview}
+                  onDragStart={(e) => e.dataTransfer.setData("application/vesper-node", `${i.type}|${i.label}`)}
+                  onClick={() => addNode(i.type, i.label)}
+                  className="mb-1.5 block w-full rounded-md border border-border-strong bg-surface px-2.5 py-1.5 text-left text-[13px] text-fg-2 hover:bg-hover disabled:opacity-50"
+                >
+                  {i.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </aside>
+        <div ref={canvas} className="relative min-h-[320px] min-w-0 flex-1" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+          {proposal && (
+            <div data-testid="workflow-proposal" className="absolute left-1/2 top-3 z-10 flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-[10px] border border-accent bg-surface-raised px-3 py-2 shadow-lg">
+              <span className="text-[13px] text-fg">{proposal.summary}</span>
+              <Button variant="primary" disabled={resolve.isPending} onClick={() => resolve.mutate({ proposalId: proposal.id, action: "apply" }, { onSuccess: onApplied })}>Apply</Button>
+              <Button disabled={resolve.isPending} onClick={() => resolve.mutate({ proposalId: proposal.id, action: "discard" })}>Discard</Button>
+            </div>
+          )}
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={NODE_TYPES}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onPaneClick={() => setSelected(null)}
+            nodesDraggable={!preview}
+            nodesConnectable={!preview}
+            deleteKeyCode={preview ? null : ["Backspace", "Delete"]}
+            style={FLOW_STYLE}
+            fitView
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background gap={20} size={1} />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        </div>
+        <aside aria-label="Workflow details" className="flex w-[320px] flex-none flex-col gap-3 overflow-y-auto border-l border-border-subtle bg-bg-panel p-4 max-md:w-full">
+          <Tabs label="Panel" value={panel} onChange={(k) => { setPanel(k); setPoll(k === "build"); }} items={[{ key: "inspect", label: "Inspect" }, { key: "build", label: "Build with chat" }]} />
+          {error && <Banner tone="blocked" title={error.message} />}
+          {panel === "build" ? (
+            <BuildChat workflow={workflow} onChatting={() => setPoll(true)} />
+          ) : node ? (
+            <Inspector graph={graph} node={node} onChange={(patch) => update({ ...graph, nodes: graph.nodes.map((n) => (n.id === node.id ? { ...n, ...patch } : n)) })} onRemove={() => { update(removeNode(graph, node.id)); setSelected(null); }} />
+          ) : (
+            <WorkflowSettings workflow={workflow} />
+          )}
+          {panel === "inspect" && issues.length > 0 && (
+            <div data-testid="workflow-issues" className="flex flex-col gap-1 border-t border-border-subtle pt-3">
+              <p className={LABEL}>Before you can publish</p>
+              {issues.map((i, n) => (
+                <button key={n} type="button" className="text-left text-[12.5px] text-pill-human-fg" onClick={() => i.node && setSelected(i.node)}>{i.message}</button>
+              ))}
+            </div>
+          )}
+        </aside>
+      </div>
+    </>
+  );
+}
+
+function WorkflowSettings({ workflow }: { workflow: Workflow }) {
+  const save = useSaveWorkflow(workflow.id);
+  const [name, setName] = useState(workflow.name);
+  const [description, setDescription] = useState(workflow.description);
+  return (
+    <div className="flex flex-col gap-3">
+      <Labeled label="Name"><TextInput aria-label="Workflow name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== workflow.name && save.mutate({ name })} /></Labeled>
+      <Labeled label="When to use it (personas read this to recognize a request)">
+        <TextArea aria-label="Description" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => description !== workflow.description && save.mutate({ description })} />
+      </Labeled>
+      <p className="text-[12.5px] text-fg-tertiary">Select a node to edit it. Drag from a node&apos;s right edge to connect it.</p>
+    </div>
+  );
+}
+
+export function WorkflowEditorScreen() {
+  const { id } = useParams<{ id: string }>();
+  const [poll, setPoll] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const workflow = useWorkflow(id, poll);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {workflow.error ? (
+        <div className="p-6"><Banner tone="blocked" title={workflow.error.message} /></div>
+      ) : !workflow.data ? (
+        <Skeleton className="m-6 h-96" />
+      ) : (
+        <ReactFlowProvider>
+          {/* Applying a suggestion replaces the draft, so the canvas starts over from it. */}
+          <Canvas key={revision} workflow={workflow.data} onApplied={() => setRevision((r) => r + 1)} setPoll={setPoll} />
+        </ReactFlowProvider>
+      )}
+    </div>
+  );
+}

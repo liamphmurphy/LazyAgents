@@ -83,7 +83,7 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	if err != nil {
 		return ToolDecision{}, err
 	}
-	if WebTool(in.Tool) && (run.Purpose == "chat" || run.Purpose == PurposeResearch) && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
+	if WebTool(in.Tool) && (run.Purpose == "chat" || run.Purpose == PurposeResearch || run.Purpose == PurposeWorkflow) && spec.HarnessOptions[agentdef.OptionWebSearch] == "true" {
 		if in.Tool != "WebFetch" {
 			return ToolDecision{Decision: "allow"}, nil
 		}

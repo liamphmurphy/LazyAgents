@@ -11,7 +11,7 @@ test("nav is three groups with unique hrefs", () => {
   assert.deepEqual(NAV_GROUPS.map((g) => g.label), ["Personal", "Project", "Workspace"]);
   const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
   assert.equal(new Set(hrefs).size, hrefs.length);
-  assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Assistant", "Library"]);
+  assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Assistant", "Library", "Workflows"]);
   assert.deepEqual(NAV_GROUPS[1].items.map((i) => i.label), ["Board", "Tickets", "Epics", "Plans", "Artifacts"]);
 });
 

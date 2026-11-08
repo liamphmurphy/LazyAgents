@@ -1639,6 +1639,167 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's workflows, most recently edited first */
+        get: operations["listWorkflows"];
+        put?: never;
+        /** Start a workflow draft */
+        post: operations["createWorkflow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflows/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** One workflow with its draft and any pending suggestion */
+        get: operations["getWorkflow"];
+        put?: never;
+        post?: never;
+        /** Delete a workflow; runs already started keep going */
+        delete: operations["deleteWorkflow"];
+        options?: never;
+        head?: never;
+        /** Save the draft; publishing is what validates it */
+        patch: operations["updateWorkflow"];
+        trace?: never;
+    };
+    "/workflows/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate the draft and make it what new runs use */
+        post: operations["publishWorkflow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflows/{id}/proposals/{proposalId}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply or discard a persona's suggested edit */
+        post: operations["resolveWorkflowProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's workflow runs, newest first */
+        get: operations["listWorkflowRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One workflow run and its steps */
+        get: operations["getWorkflowRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow-runs/{id}/gate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a gate, request changes or reject it */
+        post: operations["decideWorkflowGate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow-runs/{id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop a workflow run */
+        post: operations["stopWorkflowRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** The chat's workflow runs, oldest first */
+        get: operations["listChatWorkflowRuns"];
+        put?: never;
+        /** Confirm and start a published workflow from a chat */
+        post: operations["startChatWorkflow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library": {
         parameters: {
             query?: never;
@@ -3278,7 +3439,7 @@ export interface components {
              * @description What the run works on: a ticket, a plan or a chat
              * @enum {string}
              */
-            purpose: "ticket" | "planning" | "chat" | "research";
+            purpose: "ticket" | "planning" | "chat" | "research" | "workflow";
             /** Format: uuid */
             planning_id?: string;
             /**
@@ -3583,7 +3744,7 @@ export interface components {
             /** Format: uuid */
             run_id: string;
             /** @enum {string} */
-            purpose: "ticket" | "planning" | "chat" | "research";
+            purpose: "ticket" | "planning" | "chat" | "research" | "workflow";
             agent: components["schemas"]["AgentRef"];
             ticket_key?: string;
             ticket_title?: string;
@@ -3792,7 +3953,7 @@ export interface components {
              * @description question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes
              * @enum {string}
              */
-            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion";
+            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion" | "workflow_gate";
             title: string;
             summary: string;
             href: string;
@@ -4295,6 +4456,132 @@ export interface components {
         ChatSearchResults: {
             hits: components["schemas"]["ChatSearchHit"][];
         };
+        WorkflowNode: {
+            id: string;
+            /** @enum {string} */
+            type: "trigger" | "enrich" | "agent" | "gate" | "wiki" | "library" | "ticket" | "chat";
+            title: string;
+            /** Format: double */
+            x?: number;
+            /** Format: double */
+            y?: number;
+            config: {
+                prompt?: string;
+                persona_id?: string;
+                agent_handle?: string;
+                web?: boolean;
+                show?: string[];
+                retry_from?: string;
+                max_attempts?: number;
+                path?: string;
+                mode?: string;
+                title?: string;
+            };
+        };
+        WorkflowEdge: {
+            from: string;
+            to: string;
+        };
+        WorkflowGraph: {
+            nodes: components["schemas"]["WorkflowNode"][];
+            edges: components["schemas"]["WorkflowEdge"][];
+        };
+        WorkflowIssue: {
+            node?: string;
+            message: string;
+        };
+        WorkflowProposal: {
+            /** Format: uuid */
+            id: string;
+            summary: string;
+            graph: components["schemas"]["WorkflowGraph"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        Workflow: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            draft: components["schemas"]["WorkflowGraph"];
+            /** @description What stops the draft being published */
+            issues: components["schemas"]["WorkflowIssue"][];
+            /** @description 0 until first published */
+            published_version: number;
+            unpublished_changes: boolean;
+            proposals: components["schemas"]["WorkflowProposal"][];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        Workflows: {
+            workflows: components["schemas"]["Workflow"][];
+        };
+        NewWorkflow: {
+            name: string;
+            description?: string;
+        };
+        WorkflowPatch: {
+            name?: string;
+            description?: string;
+            graph?: components["schemas"]["WorkflowGraph"];
+        };
+        WorkflowStep: {
+            node_id: string;
+            attempt: number;
+            /** @enum {string} */
+            state: "running" | "waiting" | "done" | "failed" | "stale";
+            output: string;
+            /** Format: uuid */
+            agent_run_id?: string;
+            decision: string;
+            note: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        WorkflowRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            workflow_id?: string;
+            /** Format: uuid */
+            message_id?: string;
+            name: string;
+            version: number;
+            graph: components["schemas"]["WorkflowGraph"];
+            input: string;
+            /** @enum {string} */
+            state: "running" | "waiting" | "done" | "failed" | "stopped";
+            error: string;
+            /** @description The newest attempt of each node that has started */
+            steps: components["schemas"]["WorkflowStep"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        WorkflowRuns: {
+            runs: components["schemas"]["WorkflowRun"][];
+        };
+        WorkflowRunStart: {
+            /** Format: uuid */
+            workflow_id: string;
+            input: string;
+            /**
+             * Format: uuid
+             * @description The reply that proposed this run; omit for /workflow
+             */
+            message_id?: string;
+        };
+        WorkflowGateDecision: {
+            node_id: string;
+            /** @description approve, changes or reject */
+            decision: string;
+            note?: string;
+        };
         ResearchStart: {
             /**
              * Format: uuid
@@ -4382,7 +4669,7 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        LibraryItemKind: "image" | "diagram" | "link";
+        LibraryItemKind: "image" | "diagram" | "link" | "document";
         LibraryItem: {
             /** Format: uuid */
             id: string;
@@ -6342,7 +6629,7 @@ export interface operations {
                 agent?: string;
                 /** @description Project key */
                 project?: string;
-                purpose?: "ticket" | "planning" | "chat" | "research";
+                purpose?: "ticket" | "planning" | "chat" | "research" | "workflow";
                 /** @description Ticket key: every run on that ticket, delegated runs included */
                 ticket?: string;
                 offset?: number;
@@ -7541,6 +7828,302 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             default: components["responses"]["Error"];
+        };
+    };
+    listWorkflows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workflows"];
+                };
+            };
+        };
+    };
+    createWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewWorkflow"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workflow"];
+                };
+            };
+        };
+    };
+    getWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workflow"];
+                };
+            };
+        };
+    };
+    deleteWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workflow"];
+                };
+            };
+        };
+    };
+    publishWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workflow"];
+                };
+            };
+        };
+    };
+    resolveWorkflowProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                proposalId: string;
+                action: "apply" | "discard";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workflow"];
+                };
+            };
+        };
+    };
+    listWorkflowRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRuns"];
+                };
+            };
+        };
+    };
+    getWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRun"];
+                };
+            };
+        };
+    };
+    decideWorkflowGate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowGateDecision"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRun"];
+                };
+            };
+        };
+    };
+    stopWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRun"];
+                };
+            };
+        };
+    };
+    listChatWorkflowRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRuns"];
+                };
+            };
+        };
+    };
+    startChatWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRunStart"];
+            };
+        };
+        responses: {
+            /** @description Started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRun"];
+                };
+            };
         };
     };
     listLibraryItems: {

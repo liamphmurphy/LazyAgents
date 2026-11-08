@@ -278,6 +278,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		},
 		Pool: pool, Backend: backend, Secrets: &secrets.Service{Q: store.New(pool), Box: box},
 		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
+		Workflows: runs.NewWorkflowEngine(pool, &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, &tracker.Service{Pool: pool}),
 	}
 	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
 	return r.Run(ctx)

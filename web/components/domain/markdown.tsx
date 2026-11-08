@@ -23,6 +23,8 @@ import { youtubeMoment } from "@/lib/chat-recommend";
 import { isResearchPlanFence } from "@/lib/chat-research";
 import { ChoicesFence } from "./choices-fence";
 import { ResearchFence } from "./research-fence";
+import { isWorkflowRunFence } from "@/lib/workflows";
+import { WorkflowRunFence } from "./workflow-cards";
 import { CiteMarker, MomentLink } from "./cite-marker";
 import { CodeFence } from "./code-fence";
 import { MermaidFence, isMermaidFence } from "./mermaid-fence";
@@ -104,6 +106,7 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
           if (isMermaidFence(info)) return <MermaidFence code={code.children} info={info} />;
           if (isChoicesFence(info)) return <ChoicesFence code={code.children} info={info} />;
           if (isResearchPlanFence(info)) return <ResearchFence code={code.children} info={info} />;
+          if (isWorkflowRunFence(info)) return <WorkflowRunFence code={code.children} info={info} />;
           // ```recommend fences show as preview cards.
           if (isRecommendFence(info)) return <RecommendFence code={code.children} info={info} />;
           return <CodeFence code={code.children} info={info} />;

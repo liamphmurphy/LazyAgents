@@ -72,6 +72,12 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}
+	case r.Purpose == runs.PurposeWorkflow:
+		if w, err := s.Q.WorkflowRunForAgentRun(ctx, &r.ID); err == nil {
+			out.ChatId, out.WorkTitle, projectID = &w.ChatID, &w.Name, w.ProjectID
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return out, err
+		}
 	case r.Purpose == "chat":
 		// A chat run without its session (deleted chat) still renders.
 		if c, err := s.Q.ChatSessionOfRun(ctx, &r.ID); err == nil {
@@ -233,6 +239,15 @@ func (s *Server) readableRun(ctx context.Context, id uuid.UUID) (store.Run, erro
 	}
 	if r.Purpose == runs.PurposeResearch {
 		owns, err := s.Q.OwnsResearchRun(ctx, store.OwnsResearchRunParams{RunID: r.ID, UserID: u.ID})
+		if err != nil {
+			return r, err
+		}
+		if !owns {
+			return r, apperr.ErrNotFound
+		}
+	}
+	if r.Purpose == runs.PurposeWorkflow {
+		owns, err := s.Q.OwnsWorkflowAgentRun(ctx, store.OwnsWorkflowAgentRunParams{AgentRunID: &r.ID, UserID: u.ID})
 		if err != nil {
 			return r, err
 		}
