@@ -11,7 +11,6 @@ import { usePublishWorkflow, useResolveProposal, useSaveWorkflow, useWorkflow, t
 import { useRememberedProject } from "@/components/shell/project-scope";
 import { TopBar } from "@/components/shell/topbar";
 import { Button } from "@/components/ui/button";
-import { Tabs } from "@/components/ui/controls";
 import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { Markdown } from "@/components/domain/markdown";
 import { PALETTE, ancestors, canConnect, diffGraphs, newNodeId, removeNode, type Graph, type GraphNode, type NodeType } from "@/lib/workflows";
@@ -100,52 +99,75 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
   );
 }
 
-/** A chat with a persona about this workflow. Its edits arrive as suggestions on the canvas. */
-function BuildChat({ workflow, onChatting }: { workflow: Workflow; onChatting: () => void }) {
-  const [chatId, setChatId] = useState<string>();
+/** A chat with a persona about this workflow, floating over the canvas. Its edits arrive as suggestions there. */
+function BuildChat({ workflow, chatId, onChatId, onChatting }: { workflow: Workflow; chatId?: string; onChatId: (id: string) => void; onChatting: () => void }) {
   const [text, setText] = useState("");
+  const [open, setOpen] = useState(true);
   const boot = useBootstrap();
   const remembered = useRememberedProject();
   const create = useCreateChat();
   const send = useSendChatMessage(chatId ?? "");
   const messages = useChatMessages(chatId);
+  const transcript = useRef<HTMLDivElement>(null);
   const project = boot.data?.projects.find((p) => p.key === remembered && !p.archived) ?? boot.data?.projects.find((p) => !p.archived);
   const list = (messages.data?.messages ?? []).filter((m) => m.role !== "system");
+  const canSend = !!text.trim() && !!project && !create.isPending && !send.isPending;
+
+  useEffect(() => {
+    transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
+  }, [list.length, open]);
+
   const submit = () => {
     const body = text.trim();
-    if (!body) return;
+    if (!canSend) return;
     setText("");
+    setOpen(true);
     onChatting();
     if (chatId) return send.mutate({ body });
     create.mutate(
       { project: project!.key, title: `Workflow: ${workflow.name}`.slice(0, 200), message: { body: `I'm editing my workflow "${workflow.name}" (id ${workflow.id}). ${body}` } },
-      { onSuccess: (c) => setChatId(c.id) },
+      { onSuccess: (c) => onChatId(c.id) },
     );
   };
   const error = create.error ?? send.error;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="workflow-build-chat">
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-        {list.length === 0 && <p className="text-[13px] text-fg-secondary">Describe what you want in plain words. Your persona proposes changes here on the canvas, and nothing changes until you apply them.</p>}
-        {list.map((m) => (
-          <div key={m.id} className={m.role === "user" ? "self-end rounded-lg bg-selected px-2.5 py-1.5 text-[13px] text-fg" : "text-[13px]"}>
-            {m.role === "user" ? m.body_md.replace(/^I'm editing my workflow "[^"]*" \(id [^)]*\)\. /, "") : <Markdown>{m.body_md}</Markdown>}
-          </div>
-        ))}
-      </div>
+    <div className="absolute bottom-3 left-1/2 z-10 flex w-[min(560px,calc(100%-104px))] -translate-x-1/2 flex-col gap-2 rounded-[10px] border border-border-strong bg-surface-raised p-2 shadow-lg" data-testid="workflow-build-chat">
+      {list.length > 0 && (
+        <button type="button" className="self-end text-xs text-fg-tertiary hover:text-fg-secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide conversation" : "Show conversation"}</button>
+      )}
+      {open && list.length > 0 && (
+        <div ref={transcript} className="flex max-h-[min(280px,40vh)] flex-col gap-2 overflow-y-auto px-1">
+          {list.map((m) => (
+            <div key={m.id} className={m.role === "user" ? "self-end rounded-lg bg-selected px-2.5 py-1.5 text-[13px] text-fg" : "text-[13px]"}>
+              {m.role === "user" ? m.body_md.replace(/^I'm editing my workflow "[^"]*" \(id [^)]*\)\. /, "") : <Markdown>{m.body_md}</Markdown>}
+            </div>
+          ))}
+        </div>
+      )}
       {error && <Banner tone="blocked" title={error.message} />}
-      <form onSubmit={(e) => { e.preventDefault(); submit(); }} className="flex flex-col gap-2">
-        <TextArea aria-label="Describe a change" rows={3} placeholder='"Add a fact check before the gate"' value={text} onChange={(e) => setText(e.target.value)} />
-        <Button variant="primary" type="submit" disabled={!text.trim() || !project || create.isPending || send.isPending}>Send</Button>
+      <form onSubmit={(e) => { e.preventDefault(); submit(); }} className="flex items-end gap-2">
+        <TextArea
+          aria-label="Describe a change"
+          className="min-w-0 flex-1 resize-none"
+          rows={1}
+          placeholder='Describe a change, like "Add a fact check before the gate"'
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            submit();
+          }}
+        />
+        <Button variant="primary" type="submit" disabled={!canSend}>Send</Button>
       </form>
     </div>
   );
 }
 
-function Canvas({ workflow, onApplied, setPoll }: { workflow: Workflow; onApplied: () => void; setPoll: (on: boolean) => void }) {
+function Canvas({ workflow, chatId, onChatId, onApplied, onChatting }: { workflow: Workflow; chatId?: string; onChatId: (id: string) => void; onApplied: () => void; onChatting: () => void }) {
   const [graph, setGraph] = useState(workflow.draft as Graph);
   const [selected, setSelected] = useState<string | null>(null);
-  const [panel, setPanel] = useState("inspect");
   const flow = useReactFlow();
   const save = useSaveWorkflow(workflow.id);
   const publish = usePublishWorkflow(workflow.id);
@@ -193,7 +215,6 @@ function Canvas({ workflow, onApplied, setPoll }: { workflow: Workflow; onApplie
     const shift = (graph.nodes.length % 6) * 28;
     update({ ...graph, nodes: [...graph.nodes, { id, type, title: label, x: x ?? middle.x + shift, y: y ?? middle.y + shift, config: {} }] });
     setSelected(id);
-    setPanel("inspect");
   };
   const onNodesChange = (changes: NodeChange<FlowNode>[]) => {
     if (preview) return;
@@ -290,18 +311,16 @@ function Canvas({ workflow, onApplied, setPoll }: { workflow: Workflow; onApplie
             <Background gap={20} size={1} />
             <Controls showInteractive={false} />
           </ReactFlow>
+          <BuildChat workflow={workflow} chatId={chatId} onChatId={onChatId} onChatting={onChatting} />
         </div>
         <aside aria-label="Workflow details" className="flex w-[320px] flex-none flex-col gap-3 overflow-y-auto border-l border-border-subtle bg-bg-panel p-4 max-md:w-full">
-          <Tabs label="Panel" value={panel} onChange={(k) => { setPanel(k); setPoll(k === "build"); }} items={[{ key: "inspect", label: "Inspect" }, { key: "build", label: "Build with chat" }]} />
           {error && <Banner tone="blocked" title={error.message} />}
-          {panel === "build" ? (
-            <BuildChat workflow={workflow} onChatting={() => setPoll(true)} />
-          ) : node ? (
+          {node ? (
             <Inspector graph={graph} node={node} onChange={(patch) => update({ ...graph, nodes: graph.nodes.map((n) => (n.id === node.id ? { ...n, ...patch } : n)) })} onRemove={() => { update(removeNode(graph, node.id)); setSelected(null); }} />
           ) : (
             <WorkflowSettings workflow={workflow} />
           )}
-          {panel === "inspect" && issues.length > 0 && (
+          {issues.length > 0 && (
             <div data-testid="workflow-issues" className="flex flex-col gap-1 border-t border-border-subtle pt-3">
               <p className={LABEL}>Before you can publish</p>
               {issues.map((i, n) => (
@@ -334,9 +353,11 @@ export function WorkflowEditorScreen() {
   const { id } = useParams<{ id: string }>();
   const [poll, setPoll] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [chatId, setChatId] = useState<string>();
   const workflow = useWorkflow(id, poll);
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // The shell only sets a minimum height, so hold the editor to the viewport to keep the floating chat on screen.
+    <div className="flex min-h-0 flex-1 flex-col md:sticky md:top-0 md:h-dvh md:flex-none">
       {workflow.error ? (
         <div className="p-6"><Banner tone="blocked" title={workflow.error.message} /></div>
       ) : !workflow.data ? (
@@ -344,7 +365,7 @@ export function WorkflowEditorScreen() {
       ) : (
         <ReactFlowProvider>
           {/* Applying a suggestion replaces the draft, so the canvas starts over from it. */}
-          <Canvas key={revision} workflow={workflow.data} onApplied={() => setRevision((r) => r + 1)} setPoll={setPoll} />
+          <Canvas key={revision} workflow={workflow.data} chatId={chatId} onChatId={setChatId} onApplied={() => setRevision((r) => r + 1)} onChatting={() => setPoll(true)} />
         </ReactFlowProvider>
       )}
     </div>

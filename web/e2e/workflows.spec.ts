@@ -53,6 +53,7 @@ test("the canvas shows the draft and adding a node saves it", async ({ page }) =
   await serveWorkflows(page, state);
   await page.goto(`/workflows/${WF}`);
   await expect(page.getByTestId("node-work")).toBeVisible();
+  await expect(page.getByTestId("workflow-build-chat")).toBeInViewport({ ratio: 1 });
   await page.getByRole("button", { name: "Post to chat" }).click();
   await expect(page.getByTestId("node-chat_1")).toBeVisible();
   await expect(page.getByTestId("workflow-inspector")).toBeVisible();
