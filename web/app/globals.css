@@ -151,3 +151,10 @@
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* Shiki dual-theme tokens (lib/highlight.ts): dark by default, light with the theme. */
+.shiki-tok { color: var(--shiki-dark); }
+:root[data-theme="light"] .shiki-tok { color: var(--shiki-light); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .shiki-tok { color: var(--shiki-light); }
+}

@@ -8,6 +8,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 )
 
@@ -20,6 +22,9 @@ const (
 	// MaxChatAttachmentStorageBytes caps what one person keeps in uploads,
 	// sent or not (unsent ones are swept after a day).
 	MaxChatAttachmentStorageBytes = 500 << 20
+	// MaxGeneratedImageStorageBytes caps the images an assistant has generated
+	// for one person in a workspace, separately from their uploads.
+	MaxGeneratedImageStorageBytes = 1 << 30
 )
 
 // CheckChatAttachmentQuota refuses an upload of size that would take a person
@@ -29,6 +34,22 @@ func CheckChatAttachmentQuota(stored, size int64) error {
 		return apperr.Invalid("file", "you've reached the 500 MB limit for uploaded files: delete chats with attachments you no longer need")
 	}
 	return nil
+}
+
+// ChatAttachmentKey is where an attachment's bytes live in the artifact
+// bucket: uploads and the images an assistant generates share the scheme.
+func ChatAttachmentKey(ws, user uuid.UUID) string {
+	return "chat-attachments/" + ws.String() + "/" + user.String() + "/" + uuid.NewString()
+}
+
+// GeneratedImageType sniffs an image the assistant produced. Only formats a
+// browser renders inline are kept, whatever the file is called.
+func GeneratedImageType(head []byte) (string, bool) {
+	switch ct := http.DetectContentType(head); ct {
+	case "image/png", "image/jpeg", "image/webp", "image/gif":
+		return ct, true
+	}
+	return "", false
 }
 
 // chatAttachmentTypes maps a supported extension to the stored content type.

@@ -16,7 +16,7 @@ func TestChatSpecReadOnly(t *testing.T) {
 		HarnessOptions: map[string]string{"sandbox": "danger-full-access"}, Fallbacks: []agentdef.Fallback{{Harness: "codex", Model: "other"}},
 		Skills: []agentdef.Skill{{Name: "context", Body: "Read sources"}},
 	}
-	got := ChatSpec(in)
+	got := ChatSpec(in, ChatCaps{})
 	for _, scope := range []string{"repo:read", "repo:write", "tests:run", "wiki:write", "db:migrate", "deploy:staging", "custom:write", "future:scope"} {
 		if got.Mode(scope) != agentdef.Denied {
 			t.Errorf("%s is not denied", scope)
@@ -31,5 +31,123 @@ func TestChatSpecReadOnly(t *testing.T) {
 	}
 	if in.Scopes[0].Mode != agentdef.Allowed || in.HarnessOptions["sandbox"] != "danger-full-access" || len(in.Fallbacks) != 1 {
 		t.Fatal("mutated original definition")
+	}
+}
+
+// The matrix: capabilities widen a chat's spec only as coded, per harness.
+func TestChatSpecCapabilities(t *testing.T) {
+	base := func(h string) agentdef.Resolved {
+		return agentdef.Resolved{Harness: h, Model: "m", Scopes: []agentdef.ResolvedScope{
+			{Scope: "repo:*", Mode: agentdef.Allowed}, {Scope: "wiki:write", Mode: agentdef.Allowed}, {Scope: "deploy:staging", Mode: agentdef.Allowed}}}
+	}
+	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/pair-12345678"}
+	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex, agentdef.HarnessOpenCode} {
+		for _, tc := range []struct {
+			name   string
+			caps   ChatCaps
+			coding bool
+			images bool // image generation option reaches the spec
+		}{
+			{"none", ChatCaps{}, false, false},
+			{"code", code, true, false},
+			{"images", ChatCaps{Images: true}, false, h == agentdef.HarnessCodex},
+			{"both", ChatCaps{Code: true, RepoURL: code.RepoURL, WorkBranch: code.WorkBranch, Images: true}, true, h == agentdef.HarnessCodex},
+			// Code needs a repository: without one nothing widens.
+			{"code without repo", ChatCaps{Code: true}, false, false},
+			{"repo without code", ChatCaps{RepoURL: code.RepoURL, WorkBranch: code.WorkBranch}, false, false},
+		} {
+			t.Run(h+"/"+tc.name, func(t *testing.T) {
+				got := ChatSpec(base(h), tc.caps)
+				for _, scope := range []string{"repo:read", "repo:write", "tests:run"} {
+					want := agentdef.Denied
+					if tc.coding {
+						want = agentdef.Allowed
+					}
+					if got.Mode(scope) != want {
+						t.Errorf("%s is %s, want %s", scope, got.Mode(scope), want)
+					}
+				}
+				for _, scope := range []string{"wiki:write", "deploy:staging", "repo:admin", "web:read", "db:migrate"} {
+					if got.Mode(scope) != agentdef.Denied {
+						t.Errorf("%s widened to %s", scope, got.Mode(scope))
+					}
+				}
+				opts := got.HarnessOptions
+				_, hasImages := opts[agentdef.OptionImageGeneration]
+				if hasImages != tc.images {
+					t.Errorf("image option %v, want %v (%v)", hasImages, tc.images, opts)
+				}
+				switch {
+				case h == agentdef.HarnessOpenCode && tc.coding:
+					if len(opts) != 0 {
+						t.Errorf("opencode takes no options: %v", opts)
+					}
+				case h == agentdef.HarnessOpenCode:
+					if len(opts) != 1 || opts["readonly"] != "true" {
+						t.Errorf("opencode options %v", opts)
+					}
+				case tc.coding:
+					// A coding chat has no web access of any kind.
+					if opts["sandbox"] != "workspace-write" || opts["readonly"] != "" {
+						t.Errorf("coding options %v", opts)
+					}
+					if _, web := opts[agentdef.OptionWebSearch]; web || got.Mode("web:read") != agentdef.Denied || strings.Contains(got.Instructions, "web search and fetch tools") || !strings.Contains(got.Instructions, "no web access") {
+						t.Errorf("coding chat must not have the web: %v", opts)
+					}
+				case tc.images:
+					// Image-only chats stay read-only; the Codex harness grants the outbox alone.
+					if opts["sandbox"] != "read-only" || opts["readonly"] != "true" || opts[agentdef.OptionWebSearch] != "true" {
+						t.Errorf("images options %v", opts)
+					}
+				default:
+					if opts["sandbox"] != "read-only" || opts["readonly"] != "true" {
+						t.Errorf("plain options %v", opts)
+					}
+				}
+				ins := got.Instructions
+				if coder := strings.Contains(ins, "## Working in code"); coder != tc.coding || (coder && !strings.Contains(ins, "git push -u origin vesper/pair-12345678")) {
+					t.Errorf("code instructions present=%v, want %v", coder, tc.coding)
+				}
+				if tc.coding == strings.Contains(ins, "Never claim tickets, run or execute project work, change code") {
+					t.Errorf("the no-code bullet must go exactly when coding")
+				}
+				if !strings.Contains(ins, "Never claim tickets, delegate to other agents, or write the shared wiki") && tc.coding {
+					t.Errorf("the coder bullet lost the ticket, delegation and wiki limits")
+				}
+				images := strings.Contains(ins, "## Images")
+				if images != tc.caps.Images || strings.Contains(ins, ".lazyagents/outbox/") != (tc.caps.Images && h == agentdef.HarnessCodex) {
+					t.Errorf("images instructions: section %v", images)
+				}
+				if tc.caps.Images && h != agentdef.HarnessCodex && !strings.Contains(ins, "needs a Codex model") {
+					t.Errorf("non-Codex chat should say image generation needs Codex")
+				}
+			})
+		}
+	}
+	// Existing behaviour: no capabilities is exactly the old output.
+	if got := ChatSpec(base(agentdef.HarnessCodex), ChatCaps{}); got.Instructions != agents.AssistantInstructions || len(got.HarnessOptions) != 3 {
+		t.Fatalf("plain chat changed: %+v", got)
+	}
+}
+
+func TestSameCapabilities(t *testing.T) {
+	base := agentdef.Resolved{Harness: agentdef.HarnessCodex, Scopes: []agentdef.ResolvedScope{{Scope: "repo:read", Mode: agentdef.Allowed}}}
+	a := ChatSpec(base, ChatCaps{})
+	if !sameCapabilities(a, ChatSpec(base, ChatCaps{})) || sameCapabilities(a, ChatSpec(base, ChatCaps{Images: true})) ||
+		sameCapabilities(a, ChatSpec(base, ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/x-1"})) {
+		t.Fatal("capability comparison is wrong")
+	}
+	// Unrelated edits to the assistant's definition don't count.
+	edited := base
+	edited.Instructions = "different"
+	edited.Skills = []agentdef.Skill{{Name: "s", Body: "b"}}
+	edited.Budget = agentdef.Budget{MaxTurns: 3}
+	edited.Scopes = []agentdef.ResolvedScope{{Scope: "wiki:write", Mode: agentdef.Allowed}, {Scope: "repo:read", Mode: agentdef.Denied}}
+	if !sameCapabilities(a, ChatSpec(edited, ChatCaps{})) {
+		t.Fatal("editing the assistant's instructions, skills or scopes must not change what a chat can do")
+	}
+	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/x-1"}
+	if !sameCapabilities(ChatSpec(base, code), ChatSpec(edited, code)) {
+		t.Fatal("coding chat: unrelated edits changed the capabilities")
 	}
 }

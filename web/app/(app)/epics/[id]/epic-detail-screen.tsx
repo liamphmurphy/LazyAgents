@@ -192,7 +192,7 @@ function Details({ epic: e }: { epic: EpicOverview }) {
       <dd>
         {e.owner ? (
           <span className="flex items-center gap-2">
-            <HumanAvatar name={e.owner.name} initials={e.owner.initials} color={e.owner.avatar_color} />
+            <HumanAvatar name={e.owner.name} initials={e.owner.initials} color={e.owner.avatar_color} src={e.owner.avatar_url} />
             {e.owner.name}
           </span>
         ) : "Unassigned"}

@@ -25,7 +25,7 @@ export type SidebarProps = {
   wikiSuggestions?: number;
   /** Every project; archived ones are never offered. */
   projects: ScopedProject[];
-  user: { name: string; initials?: string; role: string };
+  user: { name: string; initials?: string; avatarUrl?: string; role: string };
 };
 
 function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
@@ -241,7 +241,9 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           ))}
         </nav>
         <div className="mt-auto flex flex-col items-center gap-2">
-          <HumanAvatar name={user.name} initials={user.initials} size={26} label={false} />
+          <Link href="/settings#profile" aria-label={`${user.name}: Profile`} title="Profile" className="rounded-full hover:opacity-80">
+            <HumanAvatar name={user.name} initials={user.initials} src={user.avatarUrl} size={26} label={false} />
+          </Link>
           <ToggleButton expanded={false} onToggle={() => setExpanded(true)} />
         </div>
       </aside>
@@ -299,11 +301,13 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
 
       {pathname === "/" && <SidebarCapacity />}
       <div className={cx("flex items-center gap-2.5 px-1.5 py-1", pathname !== "/" && "mt-auto")}>
-        <HumanAvatar name={user.name} initials={user.initials} size={26} label={false} />
-        <span className="flex flex-1 flex-col leading-tight">
-          <span className="font-medium">{user.name}</span>
-          <span className="text-[11.5px] text-fg-tertiary">{user.role}</span>
-        </span>
+        <Link href="/settings#profile" title="Profile" className="-mx-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-hover">
+          <HumanAvatar name={user.name} initials={user.initials} src={user.avatarUrl} size={26} label={false} />
+          <span className="flex min-w-0 flex-1 flex-col leading-tight">
+            <span className="truncate font-medium">{user.name}</span>
+            <span className="truncate text-[11.5px] text-fg-tertiary">{user.role}</span>
+          </span>
+        </Link>
         <ToggleButton expanded onToggle={() => setExpanded(false)} />
       </div>
     </aside>

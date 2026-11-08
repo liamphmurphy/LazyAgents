@@ -5,7 +5,13 @@ import {
   CHAT_BG,
   MIN_CONTRAST,
   PRESET_COLORS,
+  addRepo,
   avatarUploadError,
+  checkRepoUrl,
+  codesInRepos,
+  imageHint,
+  isImageType,
+  repoShortName,
   checkAvatarFile,
   colorPicker,
   contrastRatio,
@@ -157,4 +163,44 @@ test("initials and delete copy", () => {
   assert.equal(deleteConsequence(0), "It has no conversations.");
   assert.equal(deleteConsequence(1), "Its conversation is kept and continues with the built-in Assistant.");
   assert.equal(deleteConsequence(12), "Its 12 conversations are kept and continue with the built-in Assistant.");
+});
+
+test("repo URLs: https, ssh and scp-style pass; credentials and junk fail", () => {
+  for (const u of ["https://github.com/acme/app", "https://github.com/acme/app.git", "ssh://git@github.com/acme/app.git", "git@github.com:acme/app.git"]) {
+    assert.deepEqual(checkRepoUrl(` ${u} `), { ok: true, url: u }, u);
+  }
+  const cred = checkRepoUrl("https://user:token@github.com/acme/app");
+  assert.equal(cred.ok, false);
+  assert.match(cred.message, /Connections & secrets/);
+  assert.equal(checkRepoUrl("https://token@github.com/acme/app").ok, false);
+  assert.equal(checkRepoUrl("http://github.com/acme/app").ok, false);
+  assert.equal(checkRepoUrl("github.com/acme/app").ok, false);
+  assert.equal(checkRepoUrl("https://github.com/acme").ok, false);
+  assert.equal(checkRepoUrl("").ok, false);
+});
+
+test("repo short name is owner/repo", () => {
+  assert.equal(repoShortName("https://github.com/acme/app.git"), "acme/app");
+  assert.equal(repoShortName("git@github.com:acme/app.git"), "acme/app");
+  assert.equal(repoShortName("ssh://git@gitlab.com/group/sub/app"), "sub/app");
+  assert.equal(repoShortName("nonsense"), "nonsense");
+});
+
+test("adding repos dedupes and caps at 10", () => {
+  assert.deepEqual(addRepo([], "https://github.com/a/b"), { repos: ["https://github.com/a/b"] });
+  assert.ok("error" in addRepo(["https://github.com/a/b"], "https://GitHub.com/a/b"));
+  assert.ok("error" in addRepo([], "nope"));
+  const ten = Array.from({ length: 10 }, (_, i) => `https://github.com/a/r${i}`);
+  assert.ok("error" in addRepo(ten, "https://github.com/a/more"));
+});
+
+test("image and ability helpers", () => {
+  assert.equal(isImageType("image/png"), true);
+  assert.equal(isImageType("application/pdf"), false);
+  assert.equal(codesInRepos({ capabilities: { code: true }, repos: ["x"] }), true);
+  assert.equal(codesInRepos({ capabilities: { code: true }, repos: [] }), false);
+  assert.equal(codesInRepos(undefined), false);
+  assert.equal(imageHint(true, "claude"), "Image generation needs a Codex model.");
+  assert.equal(imageHint(true, "codex"), null);
+  assert.equal(imageHint(false, "claude"), null);
 });

@@ -5,6 +5,7 @@ import { DropdownMenu } from "radix-ui";
 import type { Schemas } from "@/lib/api/client";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
+import { repoShortName } from "@/lib/persona-ui";
 import { Icon } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
 import { usePersonaPanel } from "./persona-panel";
@@ -30,6 +31,50 @@ const TONE: Record<Schemas["PersonaTone"], string> = {
   playful: "Playful",
 };
 export const toneLabel = (t?: Schemas["PersonaTone"]) => (t ? TONE[t] : "Neutral");
+
+/** Small icons for what a persona can do (code, images); nothing when it can't do either. */
+export function CapabilityBadges({ capabilities, className }: { capabilities?: Schemas["PersonaCapabilities"]; className?: string }) {
+  if (!capabilities?.code && !capabilities?.images) return null;
+  return (
+    <span className={cx("inline-flex flex-none items-center gap-1 text-fg-tertiary", className)} data-testid="capability-badges">
+      {capabilities.code && (
+        <span title="Can write code" className="inline-flex items-center rounded bg-selected p-0.5">
+          <Icon name="terminal" size={12} />
+          <span className="sr-only">Can write code</span>
+        </span>
+      )}
+      {capabilities.images && (
+        <span title="Can generate images" className="inline-flex items-center rounded bg-selected p-0.5">
+          <Icon name="artifacts" size={12} />
+          <span className="sr-only">Can generate images</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Which of the persona's repositories a new conversation works in. */
+export function RepoSelect({ repos, value, onChange, disabled }: { repos: string[]; value: string; onChange: (url: string) => void; disabled?: boolean }) {
+  return (
+    <label className="inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-raised px-2.5 text-xs text-fg-secondary">
+      <Icon name="branch" size={13} className="flex-none" />
+      <select
+        aria-label="Repository for this conversation"
+        value={value}
+        disabled={disabled}
+        title={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-w-0 max-w-[220px] cursor-pointer truncate bg-transparent font-mono text-xs text-fg outline-none disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {repos.map((r) => (
+          <option key={r} value={r}>
+            {repoShortName(r)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 /** Avatar image cropped to a circle, or the initial on a tint of the persona color. */
 export function PersonaAvatar({ persona, size = 20, className }: { persona: PersonaLook; size?: number; className?: string }) {
@@ -225,6 +270,7 @@ export function PersonaFilter({ filter }: { filter: PersonaFilterState }) {
                 <DropdownMenu.RadioItem key={p.id} value={p.id} className={item}>
                   <PersonaAvatar persona={p} />
                   <PersonaName persona={p} className="truncate" />
+                  <CapabilityBadges capabilities={p.capabilities} />
                   {count(p)}
                   <Check on={value === p.id} />
                 </DropdownMenu.RadioItem>
@@ -302,6 +348,7 @@ export function PersonaSwitcher({
               <DropdownMenu.RadioItem key={p.id} value={p.id} className={item}>
                 <PersonaAvatar persona={p} />
                 <PersonaName persona={p} className="truncate" />
+                <CapabilityBadges capabilities={p.capabilities} />
                 <span className="truncate text-[11px] text-fg-tertiary">
                   {p.id === defaultId ? "(default) · " : ""}
                   {toneLabel(p.tone)}

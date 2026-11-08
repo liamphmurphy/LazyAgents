@@ -11,6 +11,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { PersonaEditor } from "./persona-editor";
+import { CapabilityBadges } from "./persona";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -136,6 +137,7 @@ function Row({ p, onEdit, onDelete }: { p: Persona; onEdit: () => void; onDelete
         <div className="flex items-center gap-2">
           <PersonaName name={p.name} color={p.color} className="truncate text-sm" />
           {p.is_default && <DefaultBadge />}
+          <CapabilityBadges capabilities={p.capabilities} />
         </div>
         <p className="truncate text-xs text-fg-secondary">
           {toneLabel(p.tone)}

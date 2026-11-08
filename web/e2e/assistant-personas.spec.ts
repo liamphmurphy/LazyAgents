@@ -192,3 +192,64 @@ test("the list follows persona.updated, and a stale edit offers a reload", async
   expect(nova).toMatchObject({ name: "Nova Prime", tone: "formal" });
   expect(mock.unhandled).toEqual([]);
 });
+
+test("abilities: Write code reveals repositories; they validate, save with the capabilities, and persist when code is off", async ({ page }) => {
+  const mock = await installChatApi(page, { personas: team() });
+  await openPanel(page);
+  await panel(page).getByRole("button", { name: "Edit Nova" }).click();
+
+  await expect(editor(page).getByLabel("Repositories")).toHaveCount(0);
+  await editor(page).getByRole("switch", { name: "Write code" }).check();
+  await expect(editor(page)).toContainText("Add at least one repository to work in.");
+
+  const input = editor(page).getByLabel("Repositories", { exact: true }).and(page.locator("input"));
+  await input.fill("https://user:token@github.com/acme/app");
+  await input.press("Enter");
+  await expect(editor(page).getByRole("alert")).toContainText("Connections & secrets");
+  await input.fill("github.com/acme/app");
+  await input.press("Enter");
+  await expect(editor(page).getByRole("alert")).toContainText("Use https://");
+
+  await input.fill("https://github.com/acme/app");
+  await input.press("Enter");
+  await expect(editor(page).getByTestId("persona-repo")).toHaveCount(1);
+  await input.fill("https://github.com/acme/app");
+  await input.press("Enter");
+  await expect(editor(page).getByRole("alert")).toContainText("Already in the list");
+
+  await editor(page).getByRole("switch", { name: "Generate images" }).check();
+  await editor(page).getByRole("button", { name: "Save persona" }).click();
+  await expect(editor(page)).toHaveCount(0);
+  const nova = mock.personas.find((p) => p.name === "Nova")!;
+  expect(nova.capabilities).toEqual({ code: true, images: true });
+  expect(nova.repos).toEqual(["https://github.com/acme/app"]);
+  await expect(rows(page).filter({ hasText: "Nova" }).getByTestId("capability-badges")).toBeVisible();
+
+  // Turning code off keeps the repositories and still sends them.
+  await panel(page).getByRole("button", { name: "Edit Nova" }).click();
+  await editor(page).getByRole("switch", { name: "Write code" }).uncheck();
+  await editor(page).getByRole("button", { name: "Save persona" }).click();
+  await expect(editor(page)).toHaveCount(0);
+  expect(nova.capabilities.code).toBe(false);
+  expect(nova.repos).toEqual(["https://github.com/acme/app"]);
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("a coding persona's new chat shows its repo and work branch in the header", async ({ page }) => {
+  const repos = ["https://github.com/acme/app.git", "git@github.com:acme/api.git"];
+  const mock = await installChatApi(page, {
+    personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: true }, repos })],
+  });
+  await page.goto("/chat?project=WEB");
+  await page.getByLabel("Repository for this conversation").selectOption(repos[1]);
+  await page.getByLabel("Message").fill("fix the build");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page).toHaveURL(/\/chat\/[^/]+/);
+  const chip = page.getByTestId("repo-chip").first();
+  await expect(chip).toContainText("acme/api");
+  await expect(chip).toContainText("vesper/dev-");
+  await expect(chip).toHaveAttribute("title", repos[1]);
+  await expect(page.getByTestId("image-hint").first()).toContainText("Image generation needs a Codex model.");
+  expect(mock.created[0]).toMatchObject({ persona_id: mock.personas[0].id, repo_url: repos[1] });
+  expect(mock.unhandled).toEqual([]);
+});

@@ -250,6 +250,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's profile */
+        get: operations["getProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit your display name and role title
+         * @description Only the caller's own profile. Initials are recomputed from the new
+         *     name. 422 for an empty name or anything over the limits.
+         */
+        patch: operations["updateProfile"];
+        trace?: never;
+    };
+    "/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set or replace your profile picture
+         * @description Same rules as PUT /personas/{id}/avatar: PNG, JPEG or WebP, at most
+         *     1 MB (1,048,576 bytes), sniffed by the server; SVG is never accepted.
+         *     413 over the limit, 415 for any other type, 422 for an empty file.
+         */
+        put: operations["uploadProfileAvatar"];
+        post?: never;
+        /** Remove your profile picture (idempotent) */
+        delete: operations["deleteProfileAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userId}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A workspace member's profile picture
+         * @description Any member of the caller's workspace. Served like persona avatars:
+         *     the type sniffed at upload, `X-Content-Type-Options: nosniff` and a
+         *     locked-down CSP. 404 when the person has no picture or is in another
+         *     workspace.
+         */
+        get: operations["getUserAvatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/bootstrap": {
         parameters: {
             query?: never;
@@ -1769,6 +1839,14 @@ export interface components {
             initials: string;
             role_title: string;
             avatar_color?: string;
+            /** @description GET /users/{userId}/avatar with a cache-busting ?v=<updated_at unix>; absent without a picture */
+            avatar_url?: string;
+        };
+        ProfilePatch: {
+            /** @description Display name; trimmed */
+            name?: string;
+            /** @description Empty string clears it */
+            role_title?: string;
         };
         Project: {
             /** Format: uuid */
@@ -1917,6 +1995,8 @@ export interface components {
             name: string;
             initials: string;
             avatar_color?: string;
+            /** @description GET /users/{userId}/avatar with a cache-busting ?v=<updated_at unix>; absent without a picture */
+            avatar_url?: string;
         };
         EpicRef: {
             /** Format: uuid */
@@ -3581,6 +3661,10 @@ export interface components {
              */
             current_run_id?: string;
             persona?: components["schemas"]["PersonaSummary"];
+            /** @description The git repository a coding persona works in for this chat; fixed for the chat's life. Absent when the chat has no repository. */
+            repo_url?: string;
+            /** @description The branch this chat commits and pushes to (vesper/<persona>-<chat id prefix>); set with repo_url */
+            work_branch?: string;
             archived: boolean;
             revision: number;
             message_count: number;
@@ -3603,6 +3687,8 @@ export interface components {
              * @description One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life.
              */
             persona_id?: string;
+            /** @description One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise. */
+            repo_url?: string;
             message?: components["schemas"]["NewChatMessage"];
         };
         ChatPatch: {
@@ -3625,6 +3711,11 @@ export interface components {
             content_type: string;
             /** Format: int64 */
             size_bytes: number;
+            /**
+             * @description upload: the person attached it; generated: the assistant created it (e.g. an image)
+             * @enum {string}
+             */
+            source?: "upload" | "generated";
             /** Format: date-time */
             created_at: string;
         };
@@ -3647,8 +3738,10 @@ export interface components {
             turn_seq?: number;
             context_refs?: components["schemas"]["ChatContextRef"][];
             citations?: components["schemas"]["ChatCitation"][];
-            /** @description Files the person attached to a user message */
+            /** @description Files the person attached to a user message, or files (images) the assistant generated in an assistant message */
             attachments?: components["schemas"]["ChatAttachment"][];
+            /** @description Files a coding persona changed during the turn that produced an assistant message (git diff from the turn's starting commit to the working tree, commits included, plus new untracked files). Secrets the run used are redacted. Absent when nothing changed. */
+            code_changes?: components["schemas"]["ChatCodeChange"][];
             author?: components["schemas"]["UserRef"];
             /** Format: int64 */
             input_tokens?: number;
@@ -3673,6 +3766,22 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        ChatCodeChange: {
+            /** @description Repository-relative path after the change */
+            path: string;
+            /** @description The path before a rename */
+            old_path?: string;
+            /** @enum {string} */
+            status: "added" | "modified" | "deleted" | "renamed";
+            additions: number;
+            deletions: number;
+            /** @description Binary files have no patch */
+            binary: boolean;
+            /** @description The file's unified diff hunks (from the first @@ line; no diff --git header), at most 40 KB; absent for binary files or when the turn's total budget (200 KB) ran out */
+            patch?: string;
+            /** @description The patch was cut short or left out to stay within the limits */
+            truncated: boolean;
+        };
         ChatModel: {
             /** @description Value for the model field, e.g. opus-5.5 or gpt-5-codex */
             id: string;
@@ -3693,6 +3802,16 @@ export interface components {
          * @enum {string}
          */
         PersonaTone: "neutral" | "friendly" | "concise" | "formal" | "playful";
+        /**
+         * @description What a persona may do beyond answering. These are enforced in code
+         *     (chat scopes, sandbox and harness options), never by prompt text.
+         */
+        PersonaCapabilities: {
+            /** @description Clone the chat's repo, edit and run code, commit and push its own work branch, open PRs */
+            code: boolean;
+            /** @description Generate images (Codex image generation; needs a Codex model in the chat) */
+            images: boolean;
+        };
         /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */
         PersonaSummary: {
             /** Format: uuid */
@@ -3701,11 +3820,13 @@ export interface components {
             color: string;
             /** @description GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar */
             avatar_url?: string;
+            capabilities?: components["schemas"]["PersonaCapabilities"];
         };
         /**
          * @description A named variant of the caller's Personal Assistant, private to them.
          *     Its tone and custom instructions shape the assistant's voice in chats
-         *     only; they never change scopes, tools or memory rules.
+         *     only; they never change scopes, tools or memory rules. Only the
+         *     structured capabilities (and repos) widen what its chats may do.
          */
         Persona: {
             /** Format: uuid */
@@ -3717,6 +3838,9 @@ export interface components {
             /** @description GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar */
             avatar_url?: string;
             custom_instructions: string;
+            capabilities: components["schemas"]["PersonaCapabilities"];
+            /** @description Git repositories (https or ssh URLs, normalized) a coding persona may work in */
+            repos: string[];
             is_default: boolean;
             /** @description Chats (archived included) that use this persona */
             chat_count: number;
@@ -3746,6 +3870,9 @@ export interface components {
             /** @description Defaults to #64748b */
             color?: string;
             custom_instructions?: string;
+            capabilities?: components["schemas"]["PersonaCapabilities"];
+            /** @description https://host/owner/repo(.git), ssh://git@host/owner/repo(.git) or git@host:owner/repo(.git); no credentials in the URL */
+            repos?: string[];
             /**
              * @description Make it the default (replacing the current one)
              * @default false
@@ -3759,6 +3886,9 @@ export interface components {
             color?: string;
             /** @description Empty string clears them */
             custom_instructions?: string;
+            capabilities?: components["schemas"]["PersonaCapabilities"];
+            /** @description Replaces the whole list; existing chats keep their repo */
+            repos?: string[];
         };
     };
     responses: {
@@ -4166,6 +4296,132 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+        };
+    };
+    getProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfilePatch"];
+            };
+        };
+        responses: {
+            /** @description The updated profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadProfileAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Your profile with its new avatar_url */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            413: components["responses"]["Error"];
+            415: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteProfileAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Your profile without an avatar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getUserAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    "X-Content-Type-Options"?: "nosniff";
+                    "Content-Security-Policy"?: string;
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     getBootstrap: {

@@ -155,7 +155,7 @@ export function ReviewPanel({
         </p>
         {review?.reviewed_by && (
           <p className="flex items-center gap-1.5 text-xs text-fg-secondary">
-            <HumanAvatar name={review.reviewed_by.name} initials={review.reviewed_by.initials} color={review.reviewed_by.avatar_color} size={16} label={false} />
+            <HumanAvatar name={review.reviewed_by.name} initials={review.reviewed_by.initials} color={review.reviewed_by.avatar_color} src={review.reviewed_by.avatar_url} size={16} label={false} />
             {review.reviewed_by.name}
             {review.reviewed_at && <time dateTime={review.reviewed_at} title={absoluteTime(review.reviewed_at)} className="text-fg-tertiary">· {timelineTime(review.reviewed_at)}</time>}
           </p>

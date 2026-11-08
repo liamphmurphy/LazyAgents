@@ -12,6 +12,8 @@ type Source string
 const (
 	FromAgent   Source = "agent"
 	FromProject Source = "project"
+	// FromPersona marks scopes a persona's structured capabilities grant a chat.
+	FromPersona Source = "persona"
 )
 
 // ResolvedScope is one scope after merging, with where its mode came from.

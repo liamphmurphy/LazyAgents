@@ -27,6 +27,12 @@ func TestCostAndCumulativeUsageMigration(t *testing.T) {
 	mustExec(t, pool, `ALTER TABLE epics ADD COLUMN status text NOT NULL DEFAULT 'open'`)
 	// ...and the epic review flag (migration 27).
 	mustExec(t, pool, `ALTER TABLE tickets ADD COLUMN epic_review boolean NOT NULL DEFAULT false`)
+	// ...and the personas table (migrations 37 and 38): the seed gives its user a default persona.
+	mustExec(t, pool, `CREATE TABLE personas (id uuid DEFAULT uuid_v7(), workspace_id uuid, user_id uuid, name text, tone text DEFAULT 'neutral', color text DEFAULT '#64748b',
+		avatar_key text, avatar_content_type text, custom_instructions text DEFAULT '', is_default boolean DEFAULT false, last_used_at timestamptz, revision integer DEFAULT 1,
+		created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), can_code boolean DEFAULT false, can_generate_images boolean DEFAULT false, repos text[] DEFAULT '{}')`)
+	// ...and the user avatar columns (migration 40): every users query selects them.
+	mustExec(t, pool, `ALTER TABLE users ADD COLUMN avatar_key text, ADD COLUMN avatar_content_type text`)
 	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
 		t.Fatal(err)
 	}

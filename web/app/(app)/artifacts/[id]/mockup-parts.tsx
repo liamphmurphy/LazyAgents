@@ -69,7 +69,7 @@ export function MockupReviewBanner({ a, versionId, isOld }: { a: Artifact; versi
         <span className="font-mono text-xs text-fg-tertiary">{v.label}</span>
         {review?.reviewed_by && (
           <span className="flex items-center gap-1.5 text-[12.5px] text-fg-secondary">
-            <HumanAvatar name={review.reviewed_by.name} initials={review.reviewed_by.initials} color={review.reviewed_by.avatar_color} size={18} label={false} />
+            <HumanAvatar name={review.reviewed_by.name} initials={review.reviewed_by.initials} color={review.reviewed_by.avatar_color} src={review.reviewed_by.avatar_url} size={18} label={false} />
             {review.reviewed_by.name}
             {review.reviewed_at && (
               <time dateTime={review.reviewed_at} title={absoluteTime(review.reviewed_at)} className="text-fg-tertiary">

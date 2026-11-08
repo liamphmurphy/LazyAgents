@@ -692,3 +692,122 @@ func TestWebToolsFollowWebReadScope(t *testing.T) {
 		t.Errorf("readonly codex web search: %v", codex.Argv)
 	}
 }
+
+// Codex image generation is on by default in the CLI, so every Codex run
+// states it: off unless the chat's persona has the images capability.
+func TestCodexImageGenerationFlag(t *testing.T) {
+	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	for _, c := range []struct {
+		opts map[string]string
+		want string
+	}{
+		{map[string]string{}, "features.image_generation=false"},
+		{nil, "features.image_generation=false"},
+		{map[string]string{agentdef.OptionImageGeneration: "false"}, "features.image_generation=false"},
+		{map[string]string{agentdef.OptionImageGeneration: "true"}, "features.image_generation=true"},
+	} {
+		s := spec("repo:read", "allowed")
+		s.HarnessOptions = c.opts
+		inv, err := (Codex{}).Invocation(w, Turn{Spec: s, Prompt: "hi"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for _, a := range inv.Argv {
+			if strings.HasPrefix(a, "features.image_generation=") {
+				n++
+			}
+		}
+		if !slices.Contains(inv.Argv, c.want) || n != 1 {
+			t.Fatalf("options %v: want %s in %v", c.opts, c.want, inv.Argv)
+		}
+	}
+}
+
+// Claude Code never receives the option as a flag or setting.
+func TestClaudeIgnoresImageGeneration(t *testing.T) {
+	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	s := spec("repo:read", "allowed")
+	s.HarnessOptions = map[string]string{agentdef.OptionImageGeneration: "true"}
+	inv, err := (ClaudeCode{}).Invocation(w, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(inv.Argv, " "), "image") {
+		t.Fatalf("claude argv mentions image generation: %v", inv.Argv)
+	}
+}
+
+func TestChatAgentsMDForCapabilities(t *testing.T) {
+	plain := string(ChatAgentsMD(spec("repo:write", "denied"), nil, "PAY", "", nil))
+	if !strings.Contains(plain, "Do not modify files, run shell commands, delegate work") {
+		t.Fatalf("plain chat lost its limits:\n%s", plain)
+	}
+	coder := string(ChatAgentsMD(spec("repo:write", "allowed"), nil, "PAY", "", nil))
+	if strings.Contains(coder, "Do not modify files") || !strings.Contains(coder, "Do not delegate work or write wiki notes") {
+		t.Fatalf("coder chat limits wrong:\n%s", coder)
+	}
+	img := spec("repo:write", "denied")
+	img.HarnessOptions = map[string]string{agentdef.OptionImageGeneration: "true"}
+	if md := string(ChatAgentsMD(img, nil, "PAY", "", nil)); !strings.Contains(md, "except to copy generated images") {
+		t.Fatalf("image chat limits wrong:\n%s", md)
+	}
+}
+
+// A coding chat has no web (web_search is not set and web:read stays denied):
+// Claude denies the tools outright, Codex turns search off.
+func TestCodingChatHasNoWeb(t *testing.T) {
+	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	s := spec("repo:read", "allowed", "repo:write", "allowed", "tests:run", "allowed", "web:read", "denied")
+	s.HarnessOptions = map[string]string{"sandbox": "workspace-write"}
+	claude, err := (ClaudeCode{}).Invocation(w, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allow, deny := strings.Split(flag(claude.Argv, "--allowedTools"), ","), strings.Split(flag(claude.Argv, "--disallowedTools"), ",")
+	for _, tool := range []string{"WebSearch", "WebFetch"} {
+		if slices.Contains(allow, tool) || !slices.Contains(deny, tool) {
+			t.Errorf("claude %s: allow %v deny %v", tool, allow, deny)
+		}
+	}
+	codex, err := (Codex{}).Invocation(w, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(codex.Argv, `web_search="disabled"`) {
+		t.Errorf("codex web search: %v", codex.Argv)
+	}
+}
+
+// An image-only Codex chat may write only the outbox; with repo:write the
+// repo-write profile applies instead.
+func TestCodexImageOutboxProfile(t *testing.T) {
+	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	const profile = `permissions.lazyagents-image-outbox={extends=":read-only",filesystem={":workspace_roots"={".lazyagents/outbox"="write"}}}`
+	images := spec("repo:read", "denied", "repo:write", "denied")
+	images.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true", agentdef.OptionWebSearch: "true", agentdef.OptionImageGeneration: "true"}
+	inv, err := (Codex{}).Invocation(w, Turn{Spec: images, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(inv.Argv, `default_permissions="lazyagents-image-outbox"`) || !slices.Contains(inv.Argv, profile) {
+		t.Errorf("image profile missing: %v", inv.Argv)
+	}
+	for _, a := range inv.Argv {
+		if strings.HasPrefix(a, "sandbox_mode=") {
+			t.Errorf("image-only chat got %s", a)
+		}
+	}
+	plain := spec("repo:read", "denied", "repo:write", "denied")
+	plain.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
+	inv, _ = (Codex{}).Invocation(w, Turn{Spec: plain, Prompt: "hi"})
+	if !slices.Contains(inv.Argv, `sandbox_mode="read-only"`) || slices.Contains(inv.Argv, profile) {
+		t.Errorf("a chat without images keeps the plain sandbox: %v", inv.Argv)
+	}
+	both := spec("repo:read", "allowed", "repo:write", "allowed", "tests:run", "allowed")
+	both.HarnessOptions = map[string]string{"sandbox": "workspace-write", agentdef.OptionImageGeneration: "true"}
+	inv, _ = (Codex{}).Invocation(w, Turn{Spec: both, Prompt: "hi"})
+	if !slices.Contains(inv.Argv, `default_permissions="lazyagents-repo-write"`) || slices.Contains(inv.Argv, profile) {
+		t.Errorf("coding + images uses the repo-write profile: %v", inv.Argv)
+	}
+}

@@ -217,7 +217,7 @@ export function EpicCard({ epic: e, today }: { epic: EpicOverview; today: string
       <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-3 text-xs">
         <span className="text-fg-secondary"><span className="font-mono text-fg">{epic.tickets_open}</span> open tickets</span>
         <span className="flex items-center gap-2 text-fg-secondary">
-          {e.owner ? <><HumanAvatar name={e.owner.name} initials={e.owner.initials} color={e.owner.avatar_color} />{e.owner.name}</>
+          {e.owner ? <><HumanAvatar name={e.owner.name} initials={e.owner.initials} color={e.owner.avatar_color} src={e.owner.avatar_url} />{e.owner.name}</>
             : <span className="text-fg-tertiary">No owner</span>}
         </span>
         <span className={overdue ? "text-pill-blocked-fg" : "text-fg-tertiary"}>

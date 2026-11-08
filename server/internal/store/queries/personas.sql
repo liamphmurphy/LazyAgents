@@ -39,8 +39,8 @@ SELECT EXISTS (
 )::bool;
 
 -- name: CreatePersona :one
-INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
+INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default, can_code, can_generate_images, repos)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *;
 
 -- name: UpdatePersona :one
 -- Returns no row when the persona isn't the caller's or the revision is stale.
@@ -49,6 +49,9 @@ UPDATE personas SET
   tone = COALESCE(sqlc.narg(tone)::text, tone),
   color = COALESCE(sqlc.narg(color)::text, color),
   custom_instructions = COALESCE(sqlc.narg(custom_instructions)::text, custom_instructions),
+  can_code = COALESCE(sqlc.narg(can_code)::boolean, can_code),
+  can_generate_images = COALESCE(sqlc.narg(can_generate_images)::boolean, can_generate_images),
+  repos = COALESCE(sqlc.narg(repos)::text[], repos),
   revision = revision + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND revision = sqlc.arg(revision)
 RETURNING *;

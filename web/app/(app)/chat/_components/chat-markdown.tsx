@@ -31,5 +31,5 @@ export function linkTicketKeys(md: string): string {
 
 export function ChatMarkdown({ children }: { children: string }) {
   const md = useMemo(() => linkTicketKeys(children), [children]);
-  return <Markdown>{md}</Markdown>;
+  return <Markdown codeBlocks>{md}</Markdown>;
 }

@@ -51,6 +51,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -303,6 +304,9 @@ func main() {
 			i++
 		}
 	}
+	// A chat's first prompt carries a note for the agent; the scripted prompts
+	// ("slow", "quota", "read <id>") are what remains without it.
+	prompt = regexp.MustCompile(`(?s)\n\n\(Vesper: this is the first message[^)]*\)`).ReplaceAllString(prompt, "")
 	session = resume
 	if session == "" {
 		session = newUUID()
@@ -337,6 +341,13 @@ func main() {
 			os.Exit(1)
 		}
 		answer := fmt.Sprintf("Chat reply (resumed=%v, session=%s, model=%s): %s", resume != "", session, model, prompt)
+		if first, ok := strings.CutPrefix(prompt, "sh: "); ok {
+			// Test hook: a prompt "sh: <command>" runs the command's first line in
+			// the workspace, like an agent using its shell, and reports its output.
+			first, _, _ = strings.Cut(first, "\n")
+			out, err := exec.Command("sh", "-c", first).CombinedOutput()
+			answer = fmt.Sprintf("Shell reply (err=%v): %s", err, strings.TrimSpace(string(out)))
+		}
 		text(answer)
 		result(false, answer)
 		return

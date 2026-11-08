@@ -90,7 +90,7 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		item := api.ChatSession{
 			Id: c.ID, Title: c.Title, Harness: api.Harness(c.Harness), Model: c.Model, State: api.ChatState(c.State),
 			CurrentRunId: c.CurrentRunID, Archived: c.Archived, Revision: int(c.Revision), MessageCount: counts[c.ID],
-			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, LastMessageAt: c.LastMessageAt,
+			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, LastMessageAt: c.LastMessageAt, RepoUrl: c.RepoUrl, WorkBranch: c.WorkBranch,
 		}
 		if i := slices.IndexFunc(projects, func(p store.Project) bool { return p.ID == c.ProjectID }); i >= 0 {
 			item.Project = projects[i].Key
@@ -156,9 +156,17 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 		refs, _ := recode[[]api.ChatContextRef](jsonOrEmpty(m.ContextRefs))
 		cites, _ := recode[[]api.ChatCitation](jsonOrEmpty(m.Citations))
 		item.ContextRefs, item.Citations = &refs, &cites
+		if m.Role == "assistant" && len(m.CodeChanges) > 2 {
+			if changes, err := recode[[]api.ChatCodeChange](m.CodeChanges); err == nil && len(changes) > 0 {
+				item.CodeChanges = &changes
+			}
+		}
 		if m.Role == "user" {
 			item.Author = toUserRef(u)
-			attached := files[m.ID]
+		}
+		// A user message always lists its attachments; an assistant message
+		// only when it has generated files.
+		if attached := files[m.ID]; m.Role == "user" || len(attached) > 0 {
 			if attached == nil {
 				attached = []api.ChatAttachment{}
 			}
@@ -295,7 +303,7 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 		return nil, apperr.Invalid("body", "required")
 	}
 	b := req.Body
-	in := runs.ChatInput{Project: b.Project, Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId}
+	in := runs.ChatInput{Project: b.Project, Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl)}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}

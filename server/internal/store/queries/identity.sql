@@ -21,3 +21,17 @@ SELECT * FROM users WHERE workspace_id = $1 ORDER BY name;
 -- name: GetLocalUser :one
 -- The user every request acts as while there is no login: the first one created.
 SELECT * FROM users ORDER BY created_at, id LIMIT 1;
+
+-- name: UpdateUserProfile :one
+UPDATE users SET name = $3, initials = $4, role_title = $5, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+RETURNING *;
+
+-- name: SetUserAvatar :one
+-- Both columns null clears the picture.
+UPDATE users SET avatar_key = $3, avatar_content_type = $4, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+RETURNING *;
+
+-- name: GetUserForUpdate :one
+SELECT * FROM users WHERE id = $1 AND workspace_id = $2 FOR UPDATE;

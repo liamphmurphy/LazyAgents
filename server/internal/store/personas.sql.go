@@ -45,8 +45,8 @@ func (q *Queries) CountPersonas(ctx context.Context, arg CountPersonasParams) (i
 }
 
 const createPersona = `-- name: CreatePersona :one
-INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at
+INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default, can_code, can_generate_images, repos)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos
 `
 
 type CreatePersonaParams struct {
@@ -57,6 +57,9 @@ type CreatePersonaParams struct {
 	Color              string
 	CustomInstructions string
 	IsDefault          bool
+	CanCode            bool
+	CanGenerateImages  bool
+	Repos              []string
 }
 
 func (q *Queries) CreatePersona(ctx context.Context, arg CreatePersonaParams) (Persona, error) {
@@ -68,6 +71,9 @@ func (q *Queries) CreatePersona(ctx context.Context, arg CreatePersonaParams) (P
 		arg.Color,
 		arg.CustomInstructions,
 		arg.IsDefault,
+		arg.CanCode,
+		arg.CanGenerateImages,
+		arg.Repos,
 	)
 	var i Persona
 	err := row.Scan(
@@ -85,12 +91,15 @@ func (q *Queries) CreatePersona(ctx context.Context, arg CreatePersonaParams) (P
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
 	)
 	return i, err
 }
 
 const defaultPersona = `-- name: DefaultPersona :one
-SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at FROM personas WHERE workspace_id = $1 AND user_id = $2 AND is_default
+SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos FROM personas WHERE workspace_id = $1 AND user_id = $2 AND is_default
 `
 
 type DefaultPersonaParams struct {
@@ -116,12 +125,15 @@ func (q *Queries) DefaultPersona(ctx context.Context, arg DefaultPersonaParams) 
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
 	)
 	return i, err
 }
 
 const deletePersona = `-- name: DeletePersona :one
-DELETE FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3 RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at
+DELETE FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3 RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos
 `
 
 type DeletePersonaParams struct {
@@ -148,12 +160,15 @@ func (q *Queries) DeletePersona(ctx context.Context, arg DeletePersonaParams) (P
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
 	)
 	return i, err
 }
 
 const getPersona = `-- name: GetPersona :one
-SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `
 
 type GetPersonaParams struct {
@@ -180,6 +195,9 @@ func (q *Queries) GetPersona(ctx context.Context, arg GetPersonaParams) (Persona
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
 	)
 	return i, err
 }
@@ -204,7 +222,7 @@ func (q *Queries) KeySharePersona(ctx context.Context, arg KeySharePersonaParams
 }
 
 const listPersonas = `-- name: ListPersonas :many
-SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at FROM personas WHERE workspace_id = $1 AND user_id = $2
+SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos FROM personas WHERE workspace_id = $1 AND user_id = $2
 ORDER BY is_default DESC, last_used_at DESC NULLS LAST, lower(btrim(name)), id
 `
 
@@ -238,6 +256,9 @@ func (q *Queries) ListPersonas(ctx context.Context, arg ListPersonasParams) ([]P
 			&i.Revision,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CanCode,
+			&i.CanGenerateImages,
+			&i.Repos,
 		); err != nil {
 			return nil, err
 		}
@@ -283,7 +304,7 @@ UPDATE personas SET is_default = true,
   revision = CASE WHEN is_default THEN revision ELSE revision + 1 END,
   updated_at = CASE WHEN is_default THEN updated_at ELSE now() END
 WHERE id = $1 AND workspace_id = $2 AND user_id = $3
-RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at
+RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos
 `
 
 type MarkDefaultPersonaParams struct {
@@ -311,6 +332,9 @@ func (q *Queries) MarkDefaultPersona(ctx context.Context, arg MarkDefaultPersona
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
 	)
 	return i, err
 }
@@ -411,7 +435,7 @@ func (q *Queries) PersonaNameTaken(ctx context.Context, arg PersonaNameTakenPara
 }
 
 const personasByIDs = `-- name: PersonasByIDs :many
-SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at FROM personas WHERE id = ANY($1::uuid[]) AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos FROM personas WHERE id = ANY($1::uuid[]) AND workspace_id = $2 AND user_id = $3
 `
 
 type PersonasByIDsParams struct {
@@ -445,6 +469,9 @@ func (q *Queries) PersonasByIDs(ctx context.Context, arg PersonasByIDsParams) ([
 			&i.Revision,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CanCode,
+			&i.CanGenerateImages,
+			&i.Repos,
 		); err != nil {
 			return nil, err
 		}
@@ -481,7 +508,7 @@ func (q *Queries) PromoteDefaultPersona(ctx context.Context, arg PromoteDefaultP
 const seedDefaultPersona = `-- name: SeedDefaultPersona :one
 INSERT INTO personas (workspace_id, user_id, name, is_default)
 VALUES ($1, $2, 'Assistant', true)
-ON CONFLICT DO NOTHING RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at
+ON CONFLICT DO NOTHING RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos
 `
 
 type SeedDefaultPersonaParams struct {
@@ -508,6 +535,9 @@ func (q *Queries) SeedDefaultPersona(ctx context.Context, arg SeedDefaultPersona
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
 	)
 	return i, err
 }
@@ -518,7 +548,7 @@ UPDATE personas SET
   avatar_content_type = $2::text,
   revision = revision + 1, updated_at = now()
 WHERE id = $3 AND workspace_id = $4 AND user_id = $5
-RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at
+RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos
 `
 
 type SetPersonaAvatarParams struct {
@@ -554,6 +584,9 @@ func (q *Queries) SetPersonaAvatar(ctx context.Context, arg SetPersonaAvatarPara
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
 	)
 	return i, err
 }
@@ -576,9 +609,12 @@ UPDATE personas SET
   tone = COALESCE($2::text, tone),
   color = COALESCE($3::text, color),
   custom_instructions = COALESCE($4::text, custom_instructions),
+  can_code = COALESCE($5::boolean, can_code),
+  can_generate_images = COALESCE($6::boolean, can_generate_images),
+  repos = COALESCE($7::text[], repos),
   revision = revision + 1, updated_at = now()
-WHERE id = $5 AND workspace_id = $6 AND user_id = $7 AND revision = $8
-RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at
+WHERE id = $8 AND workspace_id = $9 AND user_id = $10 AND revision = $11
+RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos
 `
 
 type UpdatePersonaParams struct {
@@ -586,6 +622,9 @@ type UpdatePersonaParams struct {
 	Tone               *string
 	Color              *string
 	CustomInstructions *string
+	CanCode            *bool
+	CanGenerateImages  *bool
+	Repos              []string
 	ID                 uuid.UUID
 	WorkspaceID        uuid.UUID
 	UserID             uuid.UUID
@@ -599,6 +638,9 @@ func (q *Queries) UpdatePersona(ctx context.Context, arg UpdatePersonaParams) (P
 		arg.Tone,
 		arg.Color,
 		arg.CustomInstructions,
+		arg.CanCode,
+		arg.CanGenerateImages,
+		arg.Repos,
 		arg.ID,
 		arg.WorkspaceID,
 		arg.UserID,
@@ -620,6 +662,9 @@ func (q *Queries) UpdatePersona(ctx context.Context, arg UpdatePersonaParams) (P
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
 	)
 	return i, err
 }

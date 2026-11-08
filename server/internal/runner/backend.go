@@ -47,6 +47,10 @@ type Backend interface {
 	EnsureWorkspace(ctx context.Context, runID string) error
 	RemoveWorkspace(ctx context.Context, runID string) error
 	Start(ctx context.Context, runID string, spec ExecSpec) (Process, error)
+	// ReadOutbox and RemoveOutbox serve an image-generating chat's outbox
+	// (see outbox.go).
+	ReadOutbox(ctx context.Context, runID string) (files []OutboxFile, skipped []string, err error)
+	RemoveOutbox(ctx context.Context, runID string, names []string) error
 	// Cleanup removes processes a previous runner left behind.
 	Cleanup(ctx context.Context) error
 }

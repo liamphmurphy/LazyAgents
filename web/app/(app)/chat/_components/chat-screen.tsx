@@ -7,6 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useChat, useChats, useCreateChat, useDeleteChat, useStartChat, useUpdateChat } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { chatTitle } from "@/lib/chat-ui";
+import { codesInRepos } from "@/lib/persona-ui";
 import { shortAgo } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
@@ -21,7 +22,7 @@ import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop
 import { ChipList } from "./context-chips";
 import { RestoreChat } from "./restore";
 import { MemoryButton, MemoryPanel, useMemoryPanel } from "./memory-panel";
-import { PersonaAvatar, PersonaFilter, PersonaName, PersonaSwitcher, personaLook, usePersonaFilter } from "./persona";
+import { PersonaAvatar, PersonaFilter, PersonaName, PersonaSwitcher, RepoSelect, personaLook, useOpenPersonaManager, usePersonaFilter } from "./persona";
 import { PersonaPanel, PersonasButton, usePersonaPanel } from "./persona-panel";
 
 type Chat = Schemas["ChatSession"];
@@ -44,7 +45,13 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
   // Undefined until picked: the chat gets the default persona.
   const [picked, setPicked] = useState<string>();
   const personaId = picked ?? personas.data?.default_persona_id;
-  const persona = personaLook(personas.data?.personas.find((p) => p.id === personaId));
+  const fullPersona = personas.data?.personas.find((p) => p.id === personaId);
+  const persona = personaLook(fullPersona);
+  // A coding persona works in one of its repos: the first unless another is picked.
+  const [repoPicked, setRepoPicked] = useState<string>();
+  const repos = fullPersona?.repos ?? [];
+  const repo = codesInRepos(fullPersona) ? (repoPicked && repos.includes(repoPicked) ? repoPicked : repos[0]) : undefined;
+  const managePersonas = useOpenPersonaManager();
   const [text, setText] = useState("");
   // A "Start chat" link with no chat yet (?attach=…) lands here; its chips go with the first message.
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
@@ -59,7 +66,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
     if (!body || locked || files.pending) return;
     const context_refs = toContextRefs(chips);
     start.mutate(
-      { project, persona_id: personaId, message: { body, ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
+      { project, persona_id: personaId, ...(repo ? { repo_url: repo } : {}), message: { body, ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
       { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) },
     );
   }
@@ -101,6 +108,14 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
         {start.isError && (
           <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(start.error)}</p>
         )}
+        {fullPersona?.capabilities.code && !repos.length && (
+          <p className="text-[12.5px] text-fg-secondary" data-testid="no-repos-hint">
+            {fullPersona.name} can write code but has no repository yet.{" "}
+            <button type="button" className="text-accent hover:underline" onClick={managePersonas}>
+              Edit the persona to add one
+            </button>
+          </p>
+        )}
         <AttachmentChips attachments={files} />
         <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
         <TextArea
@@ -120,6 +135,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
         />
         <div className="flex items-center gap-2">
           <PersonaSwitcher value={personaId} onChange={setPicked} disabled={locked} />
+          {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
           <AttachButton onFiles={files.add} disabled={locked} />
           <span className="flex-1" />
           <Button type="submit" variant="primary" disabled={locked || files.pending || !text.trim()}>

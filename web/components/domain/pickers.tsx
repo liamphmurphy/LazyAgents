@@ -104,7 +104,7 @@ export function UserMenu({
         <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-56")}>
           {users.map((u) => (
             <DropdownMenu.Item key={u.id} className={item} onSelect={() => onChange(u.id)}>
-              <HumanAvatar name={u.name} initials={u.initials} color={u.avatar_color} label={false} />
+              <HumanAvatar name={u.name} initials={u.initials} color={u.avatar_color} src={u.avatar_url} label={false} />
               {u.name}
               <Check on={u.id === value} />
             </DropdownMenu.Item>

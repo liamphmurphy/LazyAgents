@@ -15,14 +15,47 @@ import (
 	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
 	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
 	"github.com/liamphmurphy/lazyagents/server/internal/links"
+	"github.com/liamphmurphy/lazyagents/server/internal/personas"
 	"github.com/liamphmurphy/lazyagents/server/internal/store"
 )
 
+// ChatCaps are what a chat's persona lets it do beyond answering, loaded fresh
+// from the chat and its persona whenever a segment is created or checked. Only
+// these structured values widen the frozen spec (ADR "Assistant personas");
+// a persona's free text never does.
+type ChatCaps struct {
+	// Code is the persona's can_code; it only takes effect for a chat that has
+	// a repository (RepoURL and WorkBranch are fixed when the chat is created).
+	Code                bool
+	RepoURL, WorkBranch string
+	Images              bool
+}
+
+// Coding reports whether the chat may work in its repository.
+func (c ChatCaps) Coding() bool { return c.Code && c.RepoURL != "" && c.WorkBranch != "" }
+
+// codeScopes are what a coding chat is granted; every other scope stays denied.
+var codeScopes = []string{"repo:read", "repo:write", "tests:run"}
+
 // ChatSpec freezes a conversation's capabilities after project overrides.
-func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
+func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	r.Scopes = append([]agentdef.ResolvedScope{}, r.Scopes...)
 	for i := range r.Scopes {
 		r.Scopes[i].Mode = agentdef.Denied
+	}
+	coding := caps.Coding()
+	if coding {
+		// The strictest matching entry wins, so a denied wildcard like repo:*
+		// would cancel the grants below: drop every entry that covers one.
+		r.Scopes = slices.DeleteFunc(r.Scopes, func(s agentdef.ResolvedScope) bool {
+			return slices.ContainsFunc(codeScopes, func(c string) bool {
+				_, covers := agentdef.ModeFor(map[string]agentdef.Mode{s.Scope: agentdef.Denied}, c)
+				return covers
+			})
+		})
+		for _, scope := range codeScopes {
+			r.Scopes = append(r.Scopes, agentdef.ResolvedScope{Scope: scope, Mode: agentdef.Allowed, Source: agentdef.FromPersona})
+		}
 	}
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
@@ -30,15 +63,74 @@ func ChatSpec(r agentdef.Resolved) agentdef.Resolved {
 	// (Claude Code WebSearch/WebFetch, Codex live web search); see
 	// agentdef.OptionWebSearch.
 	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true", agentdef.OptionWebSearch: "true"}
+	if coding {
+		// A coding chat has no web access at all: its shell and git credentials
+		// plus a fetchable URL would be a way to carry repository data out.
+		r.HarnessOptions = map[string]string{"sandbox": "workspace-write"}
+	}
+	// Codex generates images with its own tool and copies them into the
+	// workspace outbox (the Codex harness grants write to only that directory
+	// for an image-only chat). Other harnesses can't, and never receive the option.
+	images := caps.Images && r.Harness == agentdef.HarnessCodex
+	if images {
+		r.HarnessOptions[agentdef.OptionImageGeneration] = "true"
+	}
 	if r.Harness == agentdef.HarnessOpenCode {
 		// OpenCode honors only readonly and rejects any other option.
 		r.HarnessOptions = map[string]string{"readonly": "true"}
+		if coding {
+			r.HarnessOptions = map[string]string{}
+		}
 	}
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
 	// Every chat is the Personal Assistant, whichever agent it was started with.
-	r.Instructions = agents.AssistantInstructions
+	branch := ""
+	if coding {
+		branch = caps.WorkBranch
+	}
+	r.Instructions = agents.AssistantInstructionsFor(branch, caps.Images, r.Harness == agentdef.HarnessCodex)
 	return r
+}
+
+// chatCaps loads a chat's capabilities from its persona, which must belong to
+// the chat's creator (a deleted persona gives none).
+func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (ChatCaps, error) {
+	if chat.PersonaID == nil {
+		return ChatCaps{}, nil
+	}
+	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *chat.PersonaID, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ChatCaps{}, nil
+	}
+	if err != nil {
+		return ChatCaps{}, err
+	}
+	// A repository the persona no longer lists revokes coding for this chat.
+	code := p.CanCode && chat.RepoUrl != nil && slices.Contains(p.Repos, *chat.RepoUrl)
+	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranch: deref(chat.WorkBranch), Images: p.CanGenerateImages}, nil
+}
+
+// sameCapabilities reports whether two chat specs grant the same persona
+// capabilities: the modes of the scopes a coding chat is granted, and the
+// sandbox, read-only, image generation and web search options. Instructions
+// and the rest of the assistant's definition are left out on purpose, so
+// editing them never ends a segment (the work branch is fixed for the chat's
+// life, so it only changes together with these).
+func sameCapabilities(a, b agentdef.Resolved) bool {
+	key := func(r agentdef.Resolved) string {
+		modes := map[string]agentdef.Mode{}
+		for _, scope := range codeScopes {
+			modes[scope] = r.Mode(scope)
+		}
+		opts := map[string]string{}
+		for _, k := range []string{"sandbox", "readonly", agentdef.OptionImageGeneration, agentdef.OptionWebSearch} {
+			opts[k] = r.HarnessOptions[k]
+		}
+		raw, _ := json.Marshal(map[string]any{"modes": modes, "options": opts})
+		return string(raw)
+	}
+	return key(a) == key(b)
 }
 
 // ChatInput opens an idle conversation with the Personal Assistant; its first
@@ -52,7 +144,10 @@ type ChatInput struct {
 	// PersonaID is one of the creator's personas; nil means their default
 	// persona (none when they have no default). Fixed for the chat's life.
 	PersonaID *uuid.UUID
-	Message   *ChatMessageInput
+	// RepoURL is one of the persona's repos; empty takes the first when the
+	// persona can code. Fixed for the chat's life.
+	RepoURL string
+	Message *ChatMessageInput
 }
 
 // ChatMessageInput is a single human prompt. A non-empty Harness/Model is
@@ -104,6 +199,7 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if err != nil {
 			return err
 		}
+		var persona *store.Persona
 		if in.PersonaID != nil {
 			_, err := q.KeySharePersona(ctx, store.KeySharePersonaParams{ID: *in.PersonaID, WorkspaceID: ws, UserID: user})
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -112,14 +208,41 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 			if err != nil {
 				return err
 			}
+			pp, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *in.PersonaID, WorkspaceID: ws, UserID: user})
+			if err != nil {
+				return err
+			}
+			persona = &pp
+		} else if pp, err := q.DefaultPersona(ctx, store.DefaultPersonaParams{WorkspaceID: ws, UserID: user}); err == nil {
+			// The same default CreateChatSession would pick; resolved here to read its repos.
+			persona = &pp
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		// Passed explicitly so the default can't change between the lookup above
+		// and the insert.
+		var personaID *uuid.UUID
+		if persona != nil {
+			personaID = &persona.ID
+		}
+		repo, err := chatRepo(persona, in.RepoURL)
+		if err != nil {
+			return err
 		}
 		title := in.Title
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: h, Model: m, PersonaID: in.PersonaID})
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: h, Model: m, PersonaID: personaID})
 		if err != nil {
 			return err
+		}
+		if repo != "" {
+			// The branch carries the chat id, so it is set once the chat exists.
+			out, err = q.SetChatRepo(ctx, store.SetChatRepoParams{ID: out.ID, RepoUrl: &repo, WorkBranch: ptr(personas.WorkBranch(persona.Name, out.ID))})
+			if err != nil {
+				return err
+			}
 		}
 		if in.Message != nil {
 			out, _, err = postChatMessage(ctx, q, s.ChatCatalog(), out, *in.Message, s.HandoffChars)
@@ -127,6 +250,26 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		return err
 	})
 	return out, err
+}
+
+// chatRepo picks the repository a new chat works in: the requested one, which
+// must be among a coding persona's repos (compared after normalization), or
+// the persona's first. "" means the chat has no repository.
+func chatRepo(persona *store.Persona, requested string) (string, error) {
+	if strings.TrimSpace(requested) == "" {
+		if persona != nil && persona.CanCode && len(persona.Repos) > 0 {
+			return persona.Repos[0], nil
+		}
+		return "", nil
+	}
+	if persona == nil || !persona.CanCode {
+		return "", apperr.Invalid("repo_url", "only a persona that can code can work in a repository")
+	}
+	url, err := personas.NormalizeRepoURL(requested)
+	if err != nil || !slices.Contains(persona.Repos, url) {
+		return "", apperr.Invalid("repo_url", "choose one of the persona's repositories")
+	}
+	return url, nil
 }
 
 // PostChatMessage serializes posts on the session row, including first-run creation.
@@ -142,6 +285,17 @@ func (s *Service) PostChatMessage(ctx context.Context, ws, user, id uuid.UUID, i
 		return err
 	})
 	return out, err
+}
+
+// assistantSpec is the Personal Assistant and its definition resolved for the
+// project, before ChatSpec freezes it for one segment.
+func assistantSpec(ctx context.Context, q *store.Queries, ws uuid.UUID, project string) (store.Agent, agentdef.Resolved, error) {
+	a, err := agents.EnsureAssistant(ctx, q, ws)
+	if err != nil {
+		return a, agentdef.Resolved{}, err
+	}
+	spec, err := agents.Resolve(ctx, q, ws, a, project)
+	return a, spec, err
 }
 
 func lockChat(ctx context.Context, q *store.Queries, ws, user, id uuid.UUID) (store.ChatSession, error) {
@@ -234,7 +388,37 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		if run.State != "waiting" {
 			return chat, msg, apperr.Conflict("the chat run is not ready for a message")
 		}
+		caps, err := chatCaps(ctx, q, chat)
+		if err != nil {
+			return chat, msg, err
+		}
+		// The segment's frozen spec was built from the persona's capabilities
+		// then; if they have changed since (or the instructions behind them),
+		// a fresh segment gets the current ones. Turning one off takes effect
+		// on the next message.
+		changed := false
+		if chat.Harness == run.Harness {
+			_, base, err := assistantSpec(ctx, q, chat.WorkspaceID, p.Key)
+			if err != nil {
+				return chat, msg, err
+			}
+			base.Harness, base.Model = run.Harness, run.Model
+			have, err := Spec(run)
+			if err != nil {
+				return chat, msg, err
+			}
+			changed = !sameCapabilities(ChatSpec(base, caps), have)
+		}
 		switch {
+		case changed:
+			outcome := "Chat capabilities changed."
+			if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
+				return chat, msg, err
+			}
+			if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_segment_ended", "reason": "capabilities_changed", "harness": chat.Harness}); err != nil {
+				return chat, msg, err
+			}
+			fresh = true
 		case chat.Harness != run.Harness:
 			// Every harness switch starts a fresh session, even back to an earlier
 			// harness: the native session is stale. The runner sweep removes the
@@ -257,7 +441,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	}
 	if fresh {
 		// Chats started before the Personal Assistant existed move to it at their next segment.
-		a, err := agents.EnsureAssistant(ctx, q, chat.WorkspaceID)
+		a, spec, err := assistantSpec(ctx, q, chat.WorkspaceID, p.Key)
 		if err != nil {
 			return chat, msg, err
 		}
@@ -267,12 +451,12 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			}
 			chat.AgentID = a.ID
 		}
-		spec, err := agents.Resolve(ctx, q, chat.WorkspaceID, a, p.Key)
+		caps, err := chatCaps(ctx, q, chat)
 		if err != nil {
 			return chat, msg, err
 		}
 		spec.Harness, spec.Model = chat.Harness, chat.Model
-		spec = ChatSpec(spec)
+		spec = ChatSpec(spec, caps)
 		raw, err := json.Marshal(spec)
 		if err != nil {
 			return chat, msg, err

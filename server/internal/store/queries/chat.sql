@@ -7,6 +7,11 @@ VALUES (sqlc.arg(workspace_id), sqlc.arg(project_id), sqlc.arg(title), sqlc.arg(
   COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)))
 RETURNING *;
 
+-- name: SetChatRepo :one
+-- A coding chat's repository and work branch, set once right after creation
+-- (the branch carries the chat id) and never changed.
+UPDATE chat_sessions SET repo_url = $2, work_branch = $3 WHERE id = $1 RETURNING *;
+
 -- name: ListChatSessions :many
 SELECT * FROM chat_sessions
 WHERE workspace_id = $1 AND project_id = $2 AND created_by = $3 AND NOT archived
@@ -40,6 +45,9 @@ WITH next AS (
   WHERE id = sqlc.arg(session_id)
 )
 SELECT * FROM ins;
+
+-- name: SetChatMessageCodeChanges :exec
+UPDATE chat_messages SET code_changes = $2 WHERE id = $1;
 
 -- name: ListChatMessages :many
 SELECT * FROM chat_messages WHERE session_id = $1 AND seq > $2 ORDER BY seq LIMIT $3;
@@ -214,9 +222,20 @@ UPDATE chat_attachments SET message_id = sqlc.arg(message_id)
 WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND message_id IS NULL
 RETURNING *;
 
+-- name: CreateGeneratedChatAttachment :one
+-- An image the assistant generated, bound to its own message.
+INSERT INTO chat_attachments (workspace_id, user_id, message_id, filename, content_type, size_bytes, blob_key, source)
+VALUES ($1, $2, $3, $4, $5, $6, $7, 'generated') RETURNING *;
+
 -- name: ChatAttachmentBytes :one
--- What a person has stored in uploads, for the per-person cap.
-SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM chat_attachments WHERE workspace_id = $1 AND user_id = $2;
+-- What a person has stored in uploads, for the per-person cap (generated
+-- images don't count against what they may upload).
+SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM chat_attachments WHERE workspace_id = $1 AND user_id = $2 AND source = 'upload';
+
+-- name: ChatGeneratedImageBytes :one
+-- What a person's assistant chats have generated, for the separate cap on
+-- generated images.
+SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM chat_attachments WHERE workspace_id = $1 AND user_id = $2 AND source = 'generated';
 
 -- name: DeleteStaleChatAttachments :many
 -- Removes up to row_limit uploads never sent (or detached by a chat's
@@ -232,7 +251,9 @@ WHERE id IN (
 RETURNING blob_key;
 
 -- name: ListChatAttachmentsForMessages :many
-SELECT * FROM chat_attachments WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) ORDER BY created_at, id;
+-- Images generated in one turn share a created_at (one transaction), so name
+-- order breaks the tie.
+SELECT * FROM chat_attachments WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) ORDER BY created_at, filename, id;
 
 -- name: ChatUserMentions :one
 -- Whether the person wrote text in this run's conversation (any segment).

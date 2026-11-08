@@ -1,10 +1,12 @@
 "use client";
 
 import { useRef, useState, type DragEvent } from "react";
+import { Dialog } from "radix-ui";
 import { chatAttachmentUrl, postForm, type Schemas } from "@/lib/api/client";
 import { ATTACH_ACCEPT, attachmentBadge, attachmentProblem, MAX_ATTACHMENTS } from "@/lib/attachments";
 import { formatBytes } from "@/lib/files";
 import { cx } from "@/lib/cx";
+import { isImageType } from "@/lib/persona-ui";
 import { Icon } from "@/components/ui/icon";
 
 type Attachment = Schemas["ChatAttachment"];
@@ -139,10 +141,10 @@ export function AttachmentChips({ attachments }: { attachments: Attachments }) {
 }
 
 /** Files on a sent message, each a link to its download. */
-export function SentAttachments({ attachments }: { attachments?: Attachment[] }) {
+export function SentAttachments({ attachments, align = "end" }: { attachments?: Attachment[]; align?: "start" | "end" }) {
   if (!attachments?.length) return null;
   return (
-    <ul aria-label="Attachments" className="flex flex-wrap justify-end gap-1" data-testid="sent-attachments">
+    <ul aria-label="Attachments" className={cx("flex flex-wrap gap-1", align === "end" && "justify-end")} data-testid="sent-attachments">
       {attachments.map((a) => (
         <li key={a.id} data-testid="sent-attachment">
           <a
@@ -158,6 +160,69 @@ export function SentAttachments({ attachments }: { attachments?: Attachment[] })
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A generated image as a thumbnail; a click opens the full image with a Download action. */
+function ImageThumb({ a }: { a: Attachment }) {
+  const url = chatAttachmentUrl(a.id);
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger asChild>
+        <button type="button" aria-label={`Open ${a.filename}`} data-testid="generated-image" className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          {/* A same-origin, private URL: next/image would only add a proxy hop. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={a.filename} loading="lazy" className="max-h-80 w-auto max-w-[min(480px,100%)] rounded-lg border border-border object-contain" />
+        </button>
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[min(1100px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-xl border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)] outline-none"
+        >
+          <div className="flex items-center gap-2">
+            <Dialog.Title className="min-w-0 flex-1 truncate text-[13px] text-fg">{a.filename}</Dialog.Title>
+            <a
+              href={url}
+              download={a.filename}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-xs text-fg hover:bg-hover"
+            >
+              <Icon name="download" size={14} />
+              Download
+            </a>
+            <Dialog.Close asChild>
+              <button type="button" aria-label="Close" className="text-fg-tertiary hover:text-fg">
+                <Icon name="x" size={15} />
+              </button>
+            </Dialog.Close>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={a.filename} className="min-h-0 max-h-[80vh] w-full object-contain" />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+/** Files on an assistant reply: generated images inline, anything else as a download chip. */
+export function ReplyAttachments({ attachments }: { attachments?: Attachment[] }) {
+  if (!attachments?.length) return null;
+  const images = attachments.filter((a) => isImageType(a.content_type));
+  const files = attachments.filter((a) => !isImageType(a.content_type));
+  return (
+    <div className="flex max-w-full flex-col items-start gap-2" data-testid="reply-attachments">
+      {images.length > 0 && (
+        <ul aria-label="Generated images" className="flex flex-wrap gap-2">
+          {images.map((a) => (
+            <li key={a.id}>
+              <ImageThumb a={a} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {files.length > 0 && <SentAttachments attachments={files} align="start" />}
+    </div>
   );
 }
 

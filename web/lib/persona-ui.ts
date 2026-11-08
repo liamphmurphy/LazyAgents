@@ -272,3 +272,59 @@ export function deleteConsequence(chatCount: number): string {
   if (chatCount === 1) return "Its conversation is kept and continues with the built-in Assistant.";
   return `Its ${chatCount} conversations are kept and continue with the built-in Assistant.`;
 }
+
+// ---- abilities (capabilities and repositories) ----
+
+export const MAX_REPOS = 10;
+export const REPO_MAX = 500;
+export const CREDENTIALS_HINT = "Don’t put a token in the URL. Store it in Settings → Connections & secrets instead.";
+export const REPO_FORMAT_HINT = "Use https://host/owner/repo, ssh://git@host/owner/repo or git@host:owner/repo.";
+
+/**
+ * Light client-side check of a repository URL before it joins the list: https://,
+ * ssh:// or user@host:owner/repo, never with credentials. The server normalizes
+ * and stays authoritative (422 with field "repos").
+ */
+export function checkRepoUrl(input: string): { ok: true; url: string } | { ok: false; message: string } {
+  const url = input.trim();
+  if (!url) return { ok: false, message: "Enter a repository URL." };
+  if (url.length > REPO_MAX) return { ok: false, message: `Up to ${REPO_MAX} characters.` };
+  if (/\s/.test(url)) return { ok: false, message: REPO_FORMAT_HINT };
+  if (/^https:\/\/[^/]*@/i.test(url) || /^ssh:\/\/[^/@]*:[^/@]*@/i.test(url)) return { ok: false, message: CREDENTIALS_HINT };
+  if (/^https:\/\/[^/@\s]+\/[^/\s]+\/[^\s]+$/i.test(url)) return { ok: true, url };
+  if (/^ssh:\/\/(?:[^/@\s]+@)?[^/@\s]+\/[^/\s]+\/[^\s]+$/i.test(url)) return { ok: true, url };
+  if (/^[A-Za-z0-9._-]+@[^/@\s:]+:[^/\s][^\s]*\/[^\s]+$/.test(url)) return { ok: true, url };
+  return { ok: false, message: REPO_FORMAT_HINT };
+}
+
+/** owner/repo from a git URL, for chips; the URL itself when it doesn't parse. */
+export function repoShortName(url: string): string {
+  const m = /^(?:[a-z][a-z0-9+.-]*:\/\/[^/]+\/|[^/@\s]+@[^/:\s]+:)(.+?)\/?$/i.exec(url.trim());
+  const path = m?.[1].replace(/\.git$/i, "");
+  if (!path) return url;
+  return path.split("/").slice(-2).join("/");
+}
+
+/** Adds a repo to the list: trimmed, validated, no duplicates, at most MAX_REPOS. */
+export function addRepo(repos: string[], input: string): { repos: string[] } | { error: string } {
+  const c = checkRepoUrl(input);
+  if (!c.ok) return { error: c.message };
+  if (repos.length >= MAX_REPOS) return { error: `Up to ${MAX_REPOS} repositories.` };
+  if (repos.some((r) => r.toLowerCase() === c.url.toLowerCase())) return { error: "Already in the list." };
+  return { repos: [...repos, c.url] };
+}
+
+export const isImageType = (contentType: string) => contentType.toLowerCase().startsWith("image/");
+
+type Abilities = { capabilities?: { code?: boolean; images?: boolean }; repos?: string[] };
+
+/** A persona that can code and has somewhere to do it. */
+export const codesInRepos = (p?: Abilities) => !!p?.capabilities?.code && !!p.repos?.length;
+
+/** True when the lists hold the same entries in the same order. */
+export const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+/** Image generation runs on Codex only: the hint to show when a chat's harness can't. */
+export function imageHint(imagesOn: boolean | undefined, harness?: string): string | null {
+  return imagesOn && harness !== "codex" ? "Image generation needs a Codex model." : null;
+}

@@ -166,6 +166,11 @@ func avatarJPEG(t *testing.T) []byte {
 // uploadAvatar PUTs data as the multipart file part with a declared name and type.
 func (e *chatEnv) uploadAvatar(id, filename, declared string, data []byte) (int, map[string]any) {
 	e.t.Helper()
+	return e.uploadAvatarTo("/personas/"+id+"/avatar", filename, declared, data)
+}
+
+func (e *chatEnv) uploadAvatarTo(path, filename, declared string, data []byte) (int, map[string]any) {
+	e.t.Helper()
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
 	h := textproto.MIMEHeader{}
@@ -177,7 +182,7 @@ func (e *chatEnv) uploadAvatar(id, filename, declared string, data []byte) (int,
 	}
 	pw.Write(data)
 	mw.Close()
-	req, _ := http.NewRequest("PUT", e.srv.URL+"/api/v1/personas/"+id+"/avatar", &body)
+	req, _ := http.NewRequest("PUT", e.srv.URL+"/api/v1"+path, &body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

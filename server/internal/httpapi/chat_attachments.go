@@ -18,13 +18,14 @@ import (
 // Chat attachments (LAZYAGENTS-72) are private to the person who uploaded
 // them: every lookup filters on the caller, and someone else's is a 404.
 
-// ChatAttachmentKey is where an upload's bytes live in the artifact bucket.
+// chatAttachmentKey is where an upload's bytes live in the artifact bucket.
 func chatAttachmentKey(ws, user uuid.UUID) string {
-	return "chat-attachments/" + ws.String() + "/" + user.String() + "/" + uuid.NewString()
+	return runs.ChatAttachmentKey(ws, user)
 }
 
 func toChatAttachment(a store.ChatAttachment) api.ChatAttachment {
-	return api.ChatAttachment{Id: a.ID, Filename: a.Filename, ContentType: a.ContentType, SizeBytes: a.SizeBytes, CreatedAt: a.CreatedAt}
+	source := api.ChatAttachmentSource(a.Source)
+	return api.ChatAttachment{Id: a.ID, Filename: a.Filename, ContentType: a.ContentType, SizeBytes: a.SizeBytes, Source: &source, CreatedAt: a.CreatedAt}
 }
 
 func (s *Server) UploadChatAttachment(ctx context.Context, req api.UploadChatAttachmentRequestObject) (api.UploadChatAttachmentResponseObject, error) {
@@ -92,7 +93,7 @@ func (s *Server) messageAttachments(ctx context.Context, msgs []store.ChatMessag
 	out := map[uuid.UUID][]api.ChatAttachment{}
 	var ids []uuid.UUID
 	for _, m := range msgs {
-		if m.Role == "user" {
+		if m.Role == "user" || m.Role == "assistant" { // assistant messages carry generated images
 			ids = append(ids, m.ID)
 		}
 	}

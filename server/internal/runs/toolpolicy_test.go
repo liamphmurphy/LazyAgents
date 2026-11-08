@@ -162,7 +162,7 @@ func TestToolPolicyWebAccess(t *testing.T) {
 	}
 	c.RunID = &run.ID
 	spec, _ := runs.Spec(run)
-	raw, _ := json.Marshal(runs.ChatSpec(spec))
+	raw, _ := json.Marshal(runs.ChatSpec(spec, runs.ChatCaps{}))
 	if _, err := pool.Exec(ctx, "UPDATE runs SET resolved_spec=$2 WHERE id=$1", run.ID, raw); err != nil {
 		t.Fatal(err)
 	}

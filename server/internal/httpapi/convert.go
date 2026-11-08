@@ -11,11 +11,11 @@ import (
 )
 
 func toUser(u store.User) api.User {
-	return api.User{Id: u.ID, Name: u.Name, Email: u.Email, Initials: u.Initials, RoleTitle: u.RoleTitle, AvatarColor: u.AvatarColor}
+	return api.User{Id: u.ID, Name: u.Name, Email: u.Email, Initials: u.Initials, RoleTitle: u.RoleTitle, AvatarColor: u.AvatarColor, AvatarUrl: userAvatarURL(u)}
 }
 
 func toUserRef(u store.User) *api.UserRef {
-	return &api.UserRef{Id: u.ID, Name: u.Name, Initials: u.Initials, AvatarColor: u.AvatarColor}
+	return &api.UserRef{Id: u.ID, Name: u.Name, Initials: u.Initials, AvatarColor: u.AvatarColor, AvatarUrl: userAvatarURL(u)}
 }
 
 func toAgent(a store.Agent) api.Agent {
