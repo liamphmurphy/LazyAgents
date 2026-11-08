@@ -350,6 +350,7 @@ type Memory struct {
 	RetiredReason       string
 	RetiredAt           *time.Time
 	ConsolidationExempt bool
+	PersonaID           *uuid.UUID
 }
 
 type MetricSnapshot struct {

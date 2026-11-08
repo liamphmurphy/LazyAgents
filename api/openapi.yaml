@@ -1788,14 +1788,19 @@ paths:
       summary: The signed-in person's assistant memories, newest change first (or ranked by q)
       description: |
         Memory is strictly per person: only the signed-in person's entries are
-        ever returned. With q, results are ranked by full-text relevance over
-        title, tags, summary and body (plus fuzzy title matching).
+        ever returned. That includes each of their personas' own memories
+        (persona_id set) unless about narrows it. With q, results are ranked
+        by full-text relevance over title, tags, summary and body (plus fuzzy
+        title matching).
       tags: [memories]
       parameters:
         - { name: q, in: query, description: Search text, schema: { type: string, maxLength: 500 } }
         - { name: type, in: query, description: Only entries of this type, schema: { $ref: "#/components/schemas/MemoryType" } }
         - { name: include_retired, in: query, description: Also list entries superseded by newer ones, schema: { type: boolean, default: false } }
         - { name: offset, in: query, description: "Skip this many (listing only; search returns the top 50)", schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+        - { name: about, in: query, description: "Whose memory: all (default), person (what the assistant remembers about the person) or persona (personas' own memories)", schema: { $ref: "#/components/schemas/MemoryAbout" } }
+        - { name: persona_id, in: query, description: Only this persona's own memory (implies about=persona), schema: { type: string, format: uuid } }
+        - { name: sort, in: query, description: "updated: newest change first (default); created: newest first. Listing only", schema: { type: string, enum: [updated, created], default: updated } }
       responses:
         "200":
           description: Memories, 50 per page
@@ -1803,12 +1808,35 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MemoryList" }
         default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createMemory
+      summary: Add a memory by hand, e.g. a moment to a persona's own memory
+      description: |
+        Saved like the assistant's own save_memory: a near-duplicate in the same
+        memory is updated instead (moments are always added), and text that
+        looks like a credential is refused with 422. Source is "manual". A
+        moment needs persona_id.
+      tags: [memories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryCreate" }
+      responses:
+        "200":
+          description: The saved (or updated near-duplicate) entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        default: { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteAllMemories
-      summary: Forget everything the assistant remembers about the signed-in person
+      summary: Forget everything the assistant remembers about the signed-in person, and its personas' own memories unless about narrows it
       tags: [memories]
       parameters:
         - { name: confirm, in: query, required: true, description: Must be true; guards against accidental wipes, schema: { type: boolean } }
+        - { name: about, in: query, description: "Whose memory: all (default), person or persona", schema: { $ref: "#/components/schemas/MemoryAbout" } }
+        - { name: persona_id, in: query, description: Only this persona's own memory (implies about=persona), schema: { type: string, format: uuid } }
       responses:
         "200":
           description: Deleted
@@ -2752,7 +2780,21 @@ components:
         query: { type: string, maxLength: 2000 }
     MemoryType:
       type: string
-      description: "One of preference, project, person, life, work, fact, other"
+      description: "One of preference, project, person, life, work, fact, other, moment (a shared moment; persona memory only)"
+    MemoryAbout:
+      type: string
+      enum: [all, person, persona]
+      default: all
+    MemoryCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, maxLength: 300 }
+        body: { type: string, maxLength: 20000 }
+        tags: { type: array, maxItems: 12, items: { type: string, maxLength: 40 } }
+        type: { $ref: "#/components/schemas/MemoryType" }
+        persona_id: { type: string, format: uuid, description: "Save to this persona's own memory; absent saves to the person's" }
     Memory:
       type: object
       description: |
@@ -2760,10 +2802,13 @@ components:
         from the shared wiki. superseded_by marks a retired entry and names the
         entry that replaced it; retired_reason and retired_at say why and when
         (a periodic consolidation pass retires duplicates this way). Restoring
-        an entry clears all three.
+        an entry clears all three. persona_id marks a persona's own memory
+        (who it is, and the moments it shared with the person); absent, the
+        entry is about the person.
       required: [id, title, summary, body, tags, type, source, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
+        persona_id: { type: string, format: uuid, description: "The persona whose own memory this is; absent for the person's memory" }
         title: { type: string }
         summary: { type: string, description: One line }
         body: { type: string }

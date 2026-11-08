@@ -151,11 +151,14 @@ const chatMemoryGuide = "## Memory\n\n" +
 
 // Persona is the person's chosen voice for one Assistant chat (wiki:
 // Architecture/ADR - Assistant personas). It only shapes the prompt's style
-// section: nothing that decides tools, scopes or memory reads it.
+// section and its own-memory section: nothing that decides tools or scopes
+// reads it.
 type Persona struct {
 	Name         string
 	Tone         string // one of the persona tone enum values
 	Instructions string // the person's custom instructions, may be empty
+	// Memory is the persona's own memory, rendered (memory.PersonaMarkdown).
+	Memory string
 }
 
 // personaTones maps each tone enum value to one fixed sentence. The person's
@@ -191,9 +194,33 @@ func personaSection(p *Persona) string {
 	return b.String()
 }
 
+// personaMemorySection renders the persona's own memory, loaded in full every
+// turn, with how to keep it apart from the person's memory.
+func personaMemorySection(p *Persona) string {
+	name := strings.Join(strings.Fields(p.Name), " ")
+	if name == "" {
+		name = "this persona"
+	}
+	var b strings.Builder
+	b.WriteString("## Your own memory (" + name + ")\n\n")
+	b.WriteString("As " + name + " you keep a memory of your own, apart from your memory of the person; it's loaded below every turn. Keep the two apart:\n" +
+		"- Facts about the person (their life, preferences, work, people) go in their memory: save_memory as usual.\n" +
+		"- Your own identity, traits, history and appearance go in yours: save_memory with about: \"persona\". Update an entry rather than adding a near-copy.\n" +
+		"- A shared moment worth keeping goes in yours as a moment: save_memory with about: \"persona\" and type: \"moment\", a short title and a one-line summary of what happened.\n" +
+		"- An entry about you in the person's memory belongs in yours: move it with update_memory(id, move_to: \"persona\"); move_to: \"person\" moves one back.\n" +
+		"- Tell the person when you save to or forget from your own memory too.\n\n")
+	if mem := strings.TrimSpace(p.Memory); mem != "" {
+		b.WriteString(mem + "\n\n")
+	} else {
+		b.WriteString("Nothing remembered yet.\n\n")
+	}
+	return b.String()
+}
+
 // ChatAgentsMD renders conversation instructions without ticket workflow
 // sections. memoryIndex is the person's always-loaded memory index (Markdown).
-// persona is the chat's persona, nil for the built-in Assistant (no section).
+// persona is the chat's persona, nil for the built-in Assistant (no persona
+// or own-memory section).
 func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memoryIndex string, persona *Persona) []byte {
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n# Vesper chat: project " + project + "\n\n")
@@ -223,6 +250,7 @@ func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memory
 	}
 	if persona != nil {
 		b.WriteString(personaSection(persona))
+		b.WriteString(personaMemorySection(persona))
 	}
 	if len(contextFiles) > 0 {
 		b.WriteString("## Context\n\n")

@@ -968,10 +968,10 @@ var Tools = []Tool{
 			_, err := d.Runs.Comment(ctx, c, in.Ticket, in.Body)
 			return ok(nil), err
 		}),
-	define("search_memory", "Search your memory of this person: ranked over titles, tags, summaries and bodies. Returns entries without bodies; open one with read_memory.", searchMemory),
+	define("search_memory", "Search your memory of this person (or, with about: persona, your own memory as this chat's persona): ranked over titles, tags, summaries and bodies. Returns entries without bodies; open one with read_memory.", searchMemory),
 	define("read_memory", "Read one memory entry in full.", readMemory),
-	define("save_memory", "Remember something about this person. Updates a near-duplicate entry instead of adding another. Never include secrets (credentials, tokens, passwords): they are refused. Tell the person what you saved.", saveMemory),
-	define("update_memory", "Change a memory entry, or retire it in favour of a newer one with superseded_by.", updateMemory),
+	define("save_memory", "Remember something about this person, or with about: persona something about yourself as this chat's persona (identity, traits, history, appearance) or a shared moment (type moment). Updates a near-duplicate entry instead of adding another. Never include secrets (credentials, tokens, passwords): they are refused. Tell the person what you saved.", saveMemory),
+	define("update_memory", "Change a memory entry, retire it in favour of a newer one with superseded_by, or move it between the person's memory and your own with move_to.", updateMemory),
 	define("forget_memory", "Delete a memory entry for good, e.g. when the person says 'forget that'.", forgetMemory),
 	define("set_chat_title", "Name this conversation after the person's first message: a concise title of 2 to 6 words. Does nothing if the person already named it.", setChatTitle),
 	define("generate_image", "Make an image. Only when the person asks for one and your instructions allow it. It is created with Codex right after your reply and shown under it; you don't get the image, so say you're making it. At most 2 per reply.", generateImage),
