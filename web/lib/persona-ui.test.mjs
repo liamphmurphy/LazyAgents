@@ -200,3 +200,27 @@ test("image and ability helpers", () => {
   assert.equal(codesInRepos({ capabilities: { code: true }, repos: [] }), false);
   assert.equal(codesInRepos(undefined), false);
 });
+
+test("mentionQuery finds the @mention being typed", async () => {
+  const { mentionQuery } = await import("./persona-ui.ts");
+  assert.deepEqual(mentionQuery("hi @Be", 6), { start: 3, query: "Be" });
+  assert.deepEqual(mentionQuery("@", 1), { start: 0, query: "" });
+  assert.deepEqual(mentionQuery("(@Writing co", 12), { start: 1, query: "Writing co" });
+  assert.equal(mentionQuery("me@host", 7), null);
+  assert.equal(mentionQuery("@Bea\nnext", 9), null);
+  assert.equal(mentionQuery("@ spaced", 8), null);
+  assert.equal(mentionQuery("no mention", 10), null);
+});
+
+test("mentionSuggestions prefers names that start with the query", async () => {
+  const { mentionSuggestions } = await import("./persona-ui.ts");
+  const ps = [{ name: "Writing coach" }, { name: "Bea" }, { name: "Coach Carter" }];
+  assert.deepEqual(mentionSuggestions(ps, "coa").map((p) => p.name), ["Coach Carter", "Writing coach"]);
+  assert.deepEqual(mentionSuggestions(ps, "").map((p) => p.name), ["Writing coach", "Bea", "Coach Carter"]);
+  assert.deepEqual(mentionSuggestions(ps, "zz"), []);
+});
+
+test("insertMention replaces the query and moves the caret", async () => {
+  const { insertMention } = await import("./persona-ui.ts");
+  assert.deepEqual(insertMention("hey @be what", 4, 7, "Bea"), { text: "hey @Bea  what", caret: 9 });
+});

@@ -975,6 +975,7 @@ var Tools = []Tool{
 	define("forget_memory", "Delete a memory entry for good, e.g. when the person says 'forget that'.", forgetMemory),
 	define("set_chat_title", "Name this conversation after the person's first message: a concise title of 2 to 6 words. Does nothing if the person already named it.", setChatTitle),
 	define("generate_image", "Make an image. Only when the person asks for one and your instructions allow it. It is created with Codex right after your reply and shown under it; you don't get the image, so say you're making it. At most 2 per reply.", generateImage),
+	define("propose_persona", "Propose a new persona for the person (another voice of their assistant). Only when the person asks for one and your instructions allow it. Nothing is created until the person approves it in the chat; it starts with no coding or image permissions. Tell the person you proposed it.", proposePersona),
 	define("list_runs", "List agent runs in the current chat project, newest first: live runs by default, or finished/all. Filter by ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One agent run in the current chat project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
 	define("list_epics", "List epics in the current chat project.", listChatEpics),

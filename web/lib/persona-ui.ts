@@ -323,3 +323,36 @@ export const codesInRepos = (p?: Abilities) => !!p?.capabilities?.code && !!p.re
 
 /** True when the lists hold the same entries in the same order. */
 export const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+// ---- @mentions (several personas in one chat) ----
+
+const WORD = /[\p{L}\p{N}_]/u;
+
+/**
+ * The @mention being typed just before the caret: where its @ is and what follows
+ * it. Like the server, the @ must start the text or follow a non-word character
+ * (so an email address isn't a mention); the query stops at a line break.
+ */
+export function mentionQuery(text: string, caret: number): { start: number; query: string } | null {
+  const before = text.slice(0, caret);
+  const at = before.lastIndexOf("@");
+  if (at < 0 || (at > 0 && WORD.test(before[at - 1]))) return null;
+  const query = before.slice(at + 1);
+  if (query.length > 60 || /[\n@]/.test(query) || /^\s/.test(query)) return null;
+  return { start: at, query };
+}
+
+/** Personas whose name starts with the query (then those containing it), case-insensitively; at most `max`. */
+export function mentionSuggestions<P extends { name: string }>(personas: P[], query: string, max = 6): P[] {
+  const q = query.trim().toLowerCase();
+  const name = (p: P) => p.name.trim().toLowerCase();
+  const starts = personas.filter((p) => name(p).startsWith(q));
+  const contains = q ? personas.filter((p) => !name(p).startsWith(q) && name(p).includes(q)) : [];
+  return [...starts, ...contains].slice(0, max);
+}
+
+/** Replaces the typed @query with @Name and a space; returns the new text and caret. */
+export function insertMention(text: string, start: number, caret: number, name: string): { text: string; caret: number } {
+  const mention = `@${name.trim()} `;
+  return { text: text.slice(0, start) + mention + text.slice(caret), caret: start + mention.length };
+}

@@ -20,7 +20,7 @@ import { usePersonas } from "@/lib/api/persona-hooks";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm } from "@/lib/chat-ui";
-import { codesInRepos, repoShortName } from "@/lib/persona-ui";
+import { codesInRepos, insertMention, mentionQuery, mentionSuggestions, repoShortName } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -39,7 +39,8 @@ import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
-import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
+import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
+import { PersonaProposals } from "./persona-proposals";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
@@ -78,6 +79,7 @@ type Turn = { since?: string; until?: string };
 function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string> }) {
   if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
   const mine = m.role === "user";
+  const author = m.persona ? personaLook(m.persona) : persona;
   return (
     <li className={cx("flex flex-col gap-1", mine ? "items-end" : "items-start")} data-testid={`${m.role}-message`}>
       {mine ? (
@@ -86,11 +88,12 @@ function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatI
           {m.author?.name ?? "You"}
         </span>
       ) : (
-        // Assistant replies carry the persona's avatar and its name in the persona's color.
+        // Assistant replies carry the avatar of the persona that wrote them (the chat's host
+        // when unset) and its name in its color, so a group chat reads like one.
         // The harness · model tag and usage live in the Activity tab, so the chat stays immersive.
         <span className="flex items-center gap-1.5 text-xs text-fg-tertiary" data-testid="assistant-identity">
-          <PersonaAvatar persona={persona} size={22} />
-          <PersonaName persona={persona} className="text-[13px]" />
+          <PersonaAvatar persona={author} size={22} />
+          <PersonaName persona={author} className="text-[13px]" />
         </span>
       )}
       <div
@@ -98,6 +101,7 @@ function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatI
           "max-w-[min(720px,100%)] rounded-xl border px-3.5 py-2.5 text-[13.5px]",
           mine ? "border-border-strong bg-selected" : "border-border bg-surface",
         )}
+        style={mine || !m.persona ? undefined : { borderLeftColor: author.color, borderLeftWidth: 3 }}
       >
         <ChatMarkdown>{m.body_md}</ChatMarkdown>
       </div>
@@ -225,6 +229,9 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const files = useAttachments();
   const area = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLLIElement>(null);
+  // The @mention being typed in the composer, and which suggestion is highlighted.
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
+  const [mentionActive, setMentionActive] = useState(0);
 
   const c = chat.data;
   const loaded = !!c;
@@ -245,6 +252,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
   const list = messages.data?.messages;
   const lastUser = list?.findLast((m) => m.role === "user");
+  // A turn a persona handed on starts after the previous reply, not the person's message.
+  const since = list?.at(-1)?.created_at ?? lastUser?.created_at;
   const turns = turnWindows(list);
   const drop = useFileDrop(files.add, !!c && !c.archived && !locked);
 
@@ -345,6 +354,28 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // A chat without a persona, or whose persona was deleted, is the built-in Assistant.
   const persona = personaLook(c.persona);
   const full = personas.data?.personas.find((p) => p.id === c.persona?.id);
+  const participants = (c.participants ?? (c.persona ? [c.persona] : [])).map(personaLook);
+  const group = participants.length > 1;
+  // Who answers next (or is answering now): the last speaker, else the host.
+  const speaker = personaLook(c.speaker ?? c.persona);
+  const suggestions = mention ? mentionSuggestions(personas.data?.personas ?? [], mention.query) : [];
+  const syncMention = (value: string) => {
+    const el = area.current;
+    const next = el ? mentionQuery(value, el.selectionStart) : null;
+    if (next?.query !== mention?.query) setMentionActive(0);
+    setMention(next);
+  };
+  const pickMention = (name: string) => {
+    const el = area.current;
+    if (!el || !mention) return;
+    const next = insertMention(text, mention.start, el.selectionStart, name);
+    setText(next.text);
+    setMention(null);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+    });
+  };
   // Restoring a chat opened from the Archived list shows it under Active again.
   const restored = () => {
     if (!search.has("view")) return;
@@ -362,11 +393,30 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
         <DropOverlay over={drop.over} />
         <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
           <h1 className="type-heading truncate">{chatTitle(c)}</h1>
-          <span className="flex flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden">
-            <span className="sr-only">Persona: </span>
-            <PersonaAvatar persona={persona} size={16} />
-            <PersonaName persona={persona} />
-          </span>
+          {group ? (
+            <span
+              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden"
+              data-testid="chat-participants"
+              title={participants.map((p) => p.name).join(", ")}
+            >
+              <span className="sr-only">Personas: </span>
+              <PersonaStack personas={participants} />
+              <span className="truncate">
+                {participants.map((p, i) => (
+                  <span key={p.id ?? p.name}>
+                    {i > 0 && <span className="text-fg-tertiary">, </span>}
+                    <PersonaName persona={p} />
+                  </span>
+                ))}
+              </span>
+            </span>
+          ) : (
+            <span className="flex flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden">
+              <span className="sr-only">Persona: </span>
+              <PersonaAvatar persona={persona} size={16} />
+              <PersonaName persona={persona} />
+            </span>
+          )}
           {c.repo_url && (
             <span
               data-testid="repo-chip"
@@ -433,6 +483,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               {list.map((m) => (
                 <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} />
               ))}
+              <PersonaProposals chatId={c.id} disabled={c.archived} />
               {pending && selection && (
                 <Divider testId="pending-switch">
                   {`Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}
@@ -443,8 +494,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               )}
               {running && (
                 <li className="flex flex-col gap-2" data-testid="thinking">
-                  <InterimReply runId={c.current_run_id} since={lastUser?.created_at} persona={persona} />
-                  <ChatStatus runId={c.current_run_id} since={lastUser?.created_at} persona={persona} stopping={stopping} />
+                  <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
+                  <ChatStatus runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} />
                 </li>
               )}
               <li ref={end} aria-hidden />
@@ -502,26 +553,77 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
             >
               <AttachmentChips attachments={files} />
               <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
-              <LinkEditor
-                inputRef={(el) => {
-                  area.current = el;
-                }}
-                mono={false}
-                aria-label="Message"
-                rows={3}
-                value={text}
-                onChange={setText}
-                onPick={attach}
-                accept={acceptTarget}
-                disabled={locked}
-                placeholder={locked ? "Waiting for the reply…" : `Message ${c.persona ? persona.name : "your assistant"}… Type [[ to attach context. Enter sends, Shift+Enter adds a line.`}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    submit(text);
+              <div className="relative">
+                {suggestions.length > 0 && (
+                  <ul
+                    role="listbox"
+                    aria-label="Mention a persona"
+                    data-testid="mention-suggestions"
+                    className="absolute bottom-full left-2 z-10 mb-1 flex min-w-[200px] flex-col rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
+                  >
+                    {suggestions.map((p, i) => (
+                      <li key={p.id} role="option" aria-selected={i === mentionActive}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onMouseEnter={() => setMentionActive(i)}
+                          onClick={() => pickMention(p.name)}
+                          className={cx("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]", i === mentionActive && "bg-selected")}
+                        >
+                          <PersonaAvatar persona={personaLook(p)} size={18} />
+                          <PersonaName persona={personaLook(p)} />
+                          {participants.some((x) => x.id === p.id) && <span className="ml-auto text-[11px] text-fg-tertiary">in chat</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <LinkEditor
+                  inputRef={(el) => {
+                    area.current = el;
+                  }}
+                  mono={false}
+                  aria-label="Message"
+                  rows={3}
+                  value={text}
+                  onChange={(v) => {
+                    setText(v);
+                    syncMention(v);
+                  }}
+                  onBlur={() => setTimeout(() => setMention(null), 120)}
+                  onPick={attach}
+                  accept={acceptTarget}
+                  disabled={locked}
+                  placeholder={
+                    locked
+                      ? "Waiting for the reply…"
+                      : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}… Type @ to bring in another persona, [[ to attach context. Enter sends, Shift+Enter adds a line.`
                   }
-                }}
-              />
+                  onKeyDown={(e) => {
+                    if (suggestions.length > 0) {
+                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setMentionActive((a) => (a + (e.key === "ArrowDown" ? 1 : suggestions.length - 1)) % suggestions.length);
+                        return;
+                      }
+                      if ((e.key === "Enter" || e.key === "Tab") && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        pickMention(suggestions[Math.min(mentionActive, suggestions.length - 1)].name);
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setMention(null);
+                        return;
+                      }
+                    }
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      submit(text);
+                    }
+                  }}
+                />
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
                 {fresh && c.persona && c.repo_url && (full?.repos.length ?? 0) > 1 && codesInRepos(full) && (

@@ -32,9 +32,9 @@ const TONE: Record<Schemas["PersonaTone"], string> = {
 };
 export const toneLabel = (t?: Schemas["PersonaTone"]) => (t ? TONE[t] : "Neutral");
 
-/** Small icons for what a persona can do (code, images); nothing when it can't do either. */
+/** Small icons for what a persona can do (code, images, create personas); nothing when it can't do any. */
 export function CapabilityBadges({ capabilities, className }: { capabilities?: Schemas["PersonaCapabilities"]; className?: string }) {
-  if (!capabilities?.code && !capabilities?.images) return null;
+  if (!capabilities?.code && !capabilities?.images && !capabilities?.personas) return null;
   return (
     <span className={cx("inline-flex flex-none items-center gap-1 text-fg-tertiary", className)} data-testid="capability-badges">
       {capabilities.code && (
@@ -47,6 +47,12 @@ export function CapabilityBadges({ capabilities, className }: { capabilities?: S
         <span title="Can generate images" className="inline-flex items-center rounded bg-selected p-0.5">
           <Icon name="artifacts" size={12} />
           <span className="sr-only">Can generate images</span>
+        </span>
+      )}
+      {capabilities.personas && (
+        <span title="Can propose new personas" className="inline-flex items-center rounded bg-selected p-0.5">
+          <Icon name="users" size={12} />
+          <span className="sr-only">Can propose new personas</span>
         </span>
       )}
     </span>
@@ -101,6 +107,19 @@ export function PersonaAvatar({ persona, size = 20, className }: { persona: Pers
       }}
     >
       {persona.name.trim().slice(0, 1).toUpperCase() || "A"}
+    </span>
+  );
+}
+
+/** Overlapping avatars of everyone in a group chat, host first. */
+export function PersonaStack({ personas, size = 16 }: { personas: PersonaLook[]; size?: number }) {
+  return (
+    <span className="flex flex-none items-center" data-testid="persona-stack">
+      {personas.map((p, i) => (
+        <span key={p.id ?? p.name} className="rounded-full ring-2 ring-surface" style={{ marginLeft: i ? -Math.round(size / 3) : 0, zIndex: personas.length - i }}>
+          <PersonaAvatar persona={p} size={size} />
+        </span>
+      ))}
     </span>
   );
 }
