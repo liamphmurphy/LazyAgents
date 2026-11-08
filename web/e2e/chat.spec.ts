@@ -202,11 +202,9 @@ test("[[ picks context as removable chips and sends them as context_refs", async
   // Picking the same thing twice doesn't duplicate; chips can be removed.
   await contextCaretReady(page);
   await composer(page).pressSequentially("[[WEB-");
-  // Enter is ignored for a moment while the suggestions refresh, so try until it picks.
-  await expect(async () => {
-    await composer(page).press("Enter");
-    await expect(composer(page)).toHaveValue("see ", { timeout: 300 });
-  }).toPass();
+  await expect(page.getByRole("option", { name: /WEB-3/ })).toBeVisible();
+  await composer(page).press("Enter");
+  await expect(composer(page)).toHaveValue("see ");
   await expect(chips(page)).toHaveCount(3);
   await page.getByRole("button", { name: "Remove Q3 report" }).click();
   await expect(chips(page)).toHaveCount(2);
