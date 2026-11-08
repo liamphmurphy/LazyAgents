@@ -61,3 +61,12 @@ func TestEnsureAssistant(t *testing.T) {
 		t.Fatal("deleted the assistant")
 	}
 }
+
+// Every persona is told how to write interactive apps, whatever its capabilities.
+func TestAssistantInstructionsInteractiveApps(t *testing.T) {
+	for _, ins := range []string{agents.AssistantInstructions, agents.AssistantInstructionsFor("vesper/pair-1", true, false)} {
+		if !strings.Contains(ins, "## Interactive apps") || !strings.Contains(ins, "fenced code block tagged app") {
+			t.Fatalf("instructions lack the interactive apps section:\n%s", ins)
+		}
+	}
+}

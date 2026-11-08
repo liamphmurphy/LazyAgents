@@ -213,6 +213,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "app:" replies with an interactive app: a counter, plus a fetch the sandbox must block.
+    if (prompt.startsWith("app:")) {
+      const app = `<!DOCTYPE html>\n<button id="b">Count: 0</button><p id="net">pending</p>\n<script>let n=0;b.onclick=()=>{b.textContent="Count: "+(++n)};fetch("/api/v1/bootstrap").then(()=>net.textContent="reached",()=>net.textContent="blocked");</script>`;
+      add(c, "assistant", `Here you go.\n\n\`\`\`app\n${app}\n\`\`\``, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE, ...(citations ? { citations } : {}) });
     void emit(c);
   }
