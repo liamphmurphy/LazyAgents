@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
@@ -655,7 +656,19 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 		if err != nil {
 			return nil, "Could not load the conversation's personas.", fmt.Errorf("chat group: %w", err)
 		}
-		return harness.ChatAgentsMDWithGroup(c.spec, paths, c.project.Key, idx, persona, group), "", nil
+		chat, err := q.ChatSessionForRun(ctx, &c.run.ID)
+		if err != nil {
+			return nil, "Could not load the conversation.", fmt.Errorf("chat session: %w", err)
+		}
+		svg, err := runs.SpeakerCanCreateSVGs(ctx, q, chat)
+		if err != nil {
+			return nil, "Could not load the conversation's persona.", fmt.Errorf("chat svg capability: %w", err)
+		}
+		spec := c.spec
+		if svg {
+			spec.Instructions += agents.AssistantSVGSection
+		}
+		return harness.ChatAgentsMDWithGroup(spec, paths, c.project.Key, idx, persona, group), "", nil
 	case "planning":
 		return []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n")), "", nil
 	}

@@ -442,7 +442,7 @@ function RepoList({ repos, setRepos, serverError }: { repos: string[]; setRepos:
 
 // ---- editor ----
 
-type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; personas: boolean; repos: string[] };
+type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; personas: boolean; svg: boolean; repos: string[] };
 
 const draftOf = (p?: Persona): Draft => ({
   name: p?.name ?? "",
@@ -452,6 +452,7 @@ const draftOf = (p?: Persona): Draft => ({
   code: p?.capabilities.code ?? false,
   images: p?.capabilities.images ?? false,
   personas: p?.capabilities.personas ?? false,
+  svg: p?.capabilities.svg ?? false,
   repos: p?.repos ?? [],
 });
 
@@ -517,7 +518,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           color: color.color,
           custom_instructions: draft.instructions,
           is_default: draft.makeDefault,
-          capabilities: { code: draft.code, images: draft.images, personas: draft.personas },
+          capabilities: { code: draft.code, images: draft.images, personas: draft.personas, svg: draft.svg },
           repos: draft.repos,
         });
       } else {
@@ -531,9 +532,10 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           draft.code !== p.capabilities.code ||
           draft.images !== p.capabilities.images ||
           draft.personas !== (p.capabilities.personas ?? false) ||
+          draft.svg !== (p.capabilities.svg ?? false) ||
           !sameList(draft.repos, p.repos)
         ) {
-          patch.capabilities = { code: draft.code, images: draft.images, personas: draft.personas };
+          patch.capabilities = { code: draft.code, images: draft.images, personas: draft.personas, svg: draft.svg };
           patch.repos = draft.repos;
         }
         if (Object.keys(patch).length > 1) p = await update.mutateAsync({ id: p.id, patch });
@@ -681,6 +683,13 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     onChange={(v) => set({ images: v })}
                     title="Generate images"
                     hint="Creates images with Codex; works with any model in the chat. Images appear in the conversation."
+                  />
+                  <Toggle
+                    id="persona-svg"
+                    checked={draft.svg}
+                    onChange={(v) => set({ svg: v })}
+                    title="Create SVG images"
+                    hint="Draws vector images such as design mockups and diagrams. They appear in the conversation."
                   />
                   <Toggle
                     id="persona-personas"

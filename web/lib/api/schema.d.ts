@@ -4141,6 +4141,8 @@ export interface components {
             images: boolean;
             /** @description Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona). */
             personas?: boolean;
+            /** @description Show SVG images in chat replies; a reply from a persona without it keeps its SVG as plain code. Absent in a request means unchanged (false for a new persona). */
+            svg?: boolean;
         };
         /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */
         PersonaSummary: {

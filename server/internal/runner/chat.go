@@ -230,10 +230,16 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 				if citations, err = runs.ChatCitations(ctx, q, run.ID, turn.StartedAt); err != nil {
 					return err
 				}
+				if body, err = runs.GateSVGFences(ctx, q, chat, body); err != nil {
+					return err
+				}
 			}
 			// The opening line the chat showed while the turn worked stays in
 			// the conversation, as its own reply ahead of the answer.
 			if opening := strings.TrimSpace(res.Opening); role == "assistant" && opening != "" && opening != strings.TrimSpace(body) {
+				if opening, err = runs.GateSVGFences(ctx, q, chat, opening); err != nil {
+					return err
+				}
 				if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: opening, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]"), PersonaID: speaker}); err != nil {
 					return err
 				}
