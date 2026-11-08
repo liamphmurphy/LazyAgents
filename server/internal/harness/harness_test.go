@@ -754,9 +754,9 @@ func TestChatAgentsMDForCapabilities(t *testing.T) {
 	}
 }
 
-// A coding chat has no web (web_search is not set and web:read stays denied):
-// Claude denies the tools outright, Codex turns search off.
-func TestCodingChatHasNoWeb(t *testing.T) {
+// A writable run without the web option or web:read gets no web: Claude
+// denies the tools outright, Codex turns search off.
+func TestWritableRunWithoutWebOption(t *testing.T) {
 	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
 	s := spec("repo:read", "allowed", "repo:write", "allowed", "tests:run", "allowed", "web:read", "denied")
 	s.HarnessOptions = map[string]string{"sandbox": "workspace-write"}
@@ -775,6 +775,32 @@ func TestCodingChatHasNoWeb(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !slices.Contains(codex.Argv, `web_search="disabled"`) {
+		t.Errorf("codex web search: %v", codex.Argv)
+	}
+}
+
+// A coding chat carries the web option with web:read still denied: Claude
+// allows WebSearch and WebFetch (the policy hook keeps the fetch allowlist),
+// Codex uses cached search only.
+func TestCodingChatHasWeb(t *testing.T) {
+	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	s := spec("repo:read", "allowed", "repo:write", "allowed", "tests:run", "allowed", "web:read", "denied")
+	s.HarnessOptions = map[string]string{"sandbox": "workspace-write", agentdef.OptionWebSearch: "true"}
+	claude, err := (ClaudeCode{}).Invocation(w, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allow, deny := strings.Split(flag(claude.Argv, "--allowedTools"), ","), strings.Split(flag(claude.Argv, "--disallowedTools"), ",")
+	for _, tool := range []string{"WebSearch", "WebFetch"} {
+		if !slices.Contains(allow, tool) || slices.Contains(deny, tool) {
+			t.Errorf("claude %s: allow %v deny %v", tool, allow, deny)
+		}
+	}
+	codex, err := (Codex{}).Invocation(w, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(codex.Argv, `web_search="cached"`) {
 		t.Errorf("codex web search: %v", codex.Argv)
 	}
 }
