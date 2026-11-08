@@ -180,12 +180,30 @@ type ChatAttachment struct {
 }
 
 type ChatCanvas struct {
-	ID        uuid.UUID
-	SessionID uuid.UUID
-	Kind      string
-	Title     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                 uuid.UUID
+	SessionID          uuid.UUID
+	Kind               string
+	Title              string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	PromotedArtifactID *uuid.UUID
+}
+
+type ChatCanvasComment struct {
+	ID              uuid.UUID
+	CanvasID        uuid.UUID
+	ParentID        *uuid.UUID
+	Seq             int32
+	AuthorType      string
+	AuthorID        uuid.UUID
+	Body            string
+	Anchor          json.RawMessage
+	TargetLost      bool
+	Status          string
+	Suggestion      *string
+	SentInMessageID *uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type ChatCanvasVersion struct {

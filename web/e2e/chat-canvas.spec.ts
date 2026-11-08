@@ -10,20 +10,89 @@ const summary = (id: string, kind: string, title: string, seq: number) => ({ id,
 const versions = (n: number) => Array.from({ length: n }, (_, i) => ({ seq: n - i, note: `Note ${n - i}`, author_type: "agent", created_at: at }));
 const svgBody = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20" onload="document.title='ran'"><script>document.title="ran"</script><rect data-vid="abc" width="40" height="20" fill="#36c"/></svg>`;
 
-async function open(page: Page) {
+type Comment = Record<string, unknown> & { id: string; status: string };
+type Calls = { comments: Comment[]; sent: Record<string, unknown>[]; added: Record<string, unknown>[]; saved: Record<string, unknown>[]; restored: unknown[]; promoted: number; applied: string[] };
+
+async function open(page: Page, initial: Comment[] = []) {
+  const calls: Calls = { comments: [...initial], sent: [], added: [], saved: [], restored: [], promoted: 0, applied: [] };
   await installChatApi(page, { replyDelayMs: 10 });
   await page.route(/\/api\/v1\/chats\/[^/]+\/canvases(\/|\?|$)/, (route) => {
-    const url = new URL(route.request().url());
+    const req = route.request();
+    const url = new URL(req.url());
     const seq = Number(url.searchParams.get("seq") ?? 2);
-    const json = (body: unknown) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
-    if (url.pathname.endsWith("/canvases")) return json({ canvases: [summary(DOC, "text", "Retention policy", 2), summary(SVG, "svg", "Run screen", 1)] });
-    if (url.pathname.endsWith(DOC)) return json({ ...summary(DOC, "text", "Retention policy", 2), viewing_seq: seq, body: `# Policy\n\nArchive after ${seq * 30} days.`, versions: versions(2) });
+    const body = () => (req.postDataJSON() ?? {}) as Record<string, unknown>;
+    const json = (data: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
+    const version = { seq: 3, note: "x", author_type: "user", created_at: at };
+    const p = url.pathname;
+    if (p.endsWith("/comments/send")) {
+      calls.sent.push(body());
+      for (const c of calls.comments) if ((body().comment_ids as string[]).includes(c.id) && c.status === "draft") c.status = "open";
+      return route.fulfill({ status: 204 });
+    }
+    if (p.endsWith("/apply")) {
+      calls.applied.push(p);
+      return json(version, 201);
+    }
+    const one = /\/comments\/([^/]+)$/.exec(p);
+    if (one) {
+      const c = calls.comments.find((x) => x.id === one[1])!;
+      if (req.method() === "DELETE") {
+        calls.comments = calls.comments.filter((x) => x !== c);
+        return route.fulfill({ status: 204 });
+      }
+      c.status = body().status as string;
+      return json(c);
+    }
+    if (p.endsWith("/comments")) {
+      if (req.method() === "GET") return json({ comments: calls.comments });
+      const b = body();
+      calls.added.push(b);
+      const id = `c${calls.added.length}`;
+      const c: Comment = { id, seq: 2, author_type: "user", body: b.body, anchor: b.vid ? { vid: b.vid, tag: "rect" } : { start: b.start, end: b.end, quote: "after" }, target_lost: false, status: "draft", created_at: at };
+      calls.comments.push(c);
+      return json(c, 201);
+    }
+    if (p.endsWith("/versions")) {
+      calls.saved.push(body());
+      return json(version, 201);
+    }
+    if (p.endsWith("/restore")) {
+      calls.restored.push(body().seq);
+      return json(version, 201);
+    }
+    if (p.endsWith("/promote")) {
+      calls.promoted++;
+      return json({ artifact_id: "33333333-3333-4333-8333-333333333333" });
+    }
+    if (p.endsWith("/canvases")) return json({ canvases: [summary(DOC, "text", "Retention policy", 2), summary(SVG, "svg", "Run screen", 1)] });
+    if (p.endsWith(DOC)) return json({ ...summary(DOC, "text", "Retention policy", 2), viewing_seq: seq, body: `# Policy\n\nArchive **after** ${seq * 30} days.`, versions: versions(2) });
     return json({ ...summary(SVG, "svg", "Run screen", 1), viewing_seq: 1, body: svgBody, versions: versions(1) });
   });
   await page.goto("/chat?project=WEB");
   await page.getByRole("textbox", { name: "Message" }).fill(`canvas: ${DOC}`);
   await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  return calls;
 }
+
+/** Selects `text` in the preview the way a mouse would. */
+async function select(page: Page, from: string, to: string) {
+  await page.getByTestId("canvas-text").evaluate((root, [a, b]) => {
+    const spans = [...root.querySelectorAll<HTMLElement>("[data-src-start]")];
+    const find = (s: string) => spans.find((x) => x.textContent!.includes(s))!;
+    const range = document.createRange();
+    range.setStart(find(a).firstChild!, find(a).textContent!.indexOf(a));
+    range.setEnd(find(b).firstChild!, find(b).textContent!.indexOf(b) + b.length);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(range);
+    root.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  }, [from, to]);
+}
+
+const openDoc = async (page: Page) => {
+  await page.getByTestId("canvas-card").click();
+  await expect(page.getByTestId("canvas-panel")).toContainText("days.");
+  return page.getByTestId("canvas-panel");
+};
 
 test("a card opens the canvas and versions can be stepped through", async ({ page }) => {
   await open(page);
@@ -33,13 +102,13 @@ test("a card opens the canvas and versions can be stepped through", async ({ pag
   await card.click();
 
   const pane = page.getByTestId("canvas-panel");
-  await expect(pane).toContainText("Archive after 60 days.");
+  await expect(pane).toContainText("after 60 days.");
   await expect(pane.getByTestId("canvas-version")).toHaveText("v2 of 2");
   await expect(pane).toContainText("Note 2");
   await expect(pane.getByRole("button", { name: "Next version" })).toBeDisabled();
 
   await pane.getByRole("button", { name: "Previous version" }).click();
-  await expect(pane).toContainText("Archive after 30 days.");
+  await expect(pane).toContainText("after 30 days.");
   await expect(pane.getByTestId("canvas-version")).toHaveText("v1 of 2");
 
   await pane.getByRole("tab", { name: "Source" }).click();
@@ -60,7 +129,7 @@ test("an SVG canvas draws sanitized elements that keep their ids", async ({ page
   expect(await page.title()).not.toBe("ran");
 
   await pane.getByRole("combobox", { name: "Canvas" }).selectOption(DOC);
-  await expect(pane).toContainText("Archive after 60 days.");
+  await expect(pane).toContainText("after 60 days.");
 });
 
 test("one right-hand panel at a time", async ({ page }) => {
@@ -72,6 +141,99 @@ test("one right-hand panel at a time", async ({ page }) => {
   await page.getByTestId("canvas-card").click();
   await expect(page.getByTestId("canvas-panel")).toBeVisible();
   await expect(page).not.toHaveURL(/memory=/);
+});
+
+test("a selection across formatting becomes a draft on the right source range, sent as a batch", async ({ page }) => {
+  const calls = await open(page);
+  const pane = await openDoc(page);
+  await select(page, "Archive", "aft");
+  await pane.getByTestId("canvas-toolbar").getByRole("button", { name: "Comment" }).click();
+  const composer = pane.getByTestId("canvas-composer");
+  await composer.getByRole("textbox", { name: "Comment" }).fill("Too short");
+  await composer.getByRole("button", { name: "Add to batch" }).click();
+  await expect(pane.getByTestId("canvas-comment")).toContainText("Too short");
+  // "# Policy\n\n" is 10 long; the range covers the ** markers.
+  expect(calls.added[0]).toMatchObject({ seq: 2, start: 10, end: 23, body: "Too short" });
+  expect(calls.sent).toHaveLength(0);
+
+  // The draft is painted without changing the rendered text.
+  await expect.poll(() => page.evaluate(() => CSS.highlights.get("canvas-comment")?.size)).toBeGreaterThan(0);
+
+  await pane.getByRole("button", { name: "Send 1 comment" }).click();
+  await expect(pane.getByRole("button", { name: "Send 1 comment" })).toHaveCount(0);
+  expect(calls.sent[0]).toEqual({ comment_ids: ["c1"] });
+});
+
+test("a quick action sends straight away", async ({ page }) => {
+  const calls = await open(page);
+  const pane = await openDoc(page);
+  await select(page, "Archive", "Archive");
+  await pane.getByTestId("canvas-toolbar").getByRole("button", { name: "Shorter" }).click();
+  await expect.poll(() => calls.sent.length).toBe(1);
+  expect(calls.added[0]).toMatchObject({ body: "Make this shorter.", start: 10, end: 17 });
+  expect(calls.sent[0]).toEqual({ comment_ids: ["c1"], message: "Make this shorter." });
+});
+
+test("clicking an SVG element comments on it and pins the thread", async ({ page }) => {
+  const calls = await open(page);
+  await page.getByRole("button", { name: "Canvas, 2 open" }).click();
+  const pane = page.getByTestId("canvas-panel");
+  await pane.getByTestId("canvas-svg").locator('rect[data-vid="abc"]').click();
+  const composer = pane.getByTestId("canvas-composer");
+  await composer.getByRole("textbox", { name: "Comment" }).fill("Confirm first");
+  await composer.getByRole("button", { name: "Send now" }).click();
+  await expect(pane.getByTestId("canvas-pin")).toHaveCount(1);
+  expect(calls.added[0]).toMatchObject({ seq: 1, vid: "abc", body: "Confirm first" });
+  expect(calls.added[0].point).toEqual({ x: expect.any(Number), y: expect.any(Number) });
+  expect(calls.sent[0]).toEqual({ comment_ids: ["c1"] });
+});
+
+test("threads can be applied, resolved, reopened, and show a lost target", async ({ page }) => {
+  const base = { seq: 2, author_type: "agent", target_lost: false, created_at: at };
+  const calls = await open(page, [
+    { ...base, id: "s1", body: "Longer?", anchor: { start: 10, end: 17, quote: "Archive" }, status: "open", suggestion: "Store" },
+    { ...base, id: "s2", body: "Gone one", anchor: { start: 0, end: 1, quote: "x" }, status: "addressed", target_lost: true },
+    { ...base, id: "r1", parent_id: "s2", body: "Handled it", anchor: {}, status: "open" },
+  ]);
+  const pane = await openDoc(page);
+  const first = pane.getByTestId("canvas-comment").filter({ hasText: "Longer?" });
+  const second = pane.getByTestId("canvas-comment").filter({ hasText: "Gone one" });
+  await expect(second).toContainText("Original target removed");
+  await expect(second).toContainText("Handled it");
+  await first.getByRole("button", { name: "Apply" }).click();
+  await expect.poll(() => calls.applied.length).toBe(1);
+
+  await second.getByRole("button", { name: "Resolve" }).click();
+  await expect(pane.getByText("1 resolved")).toBeVisible();
+  await pane.getByText("1 resolved").click();
+  await pane.getByTestId("canvas-comment").filter({ hasText: "Gone one" }).getByRole("button", { name: "Reopen" }).click();
+  await expect(pane.getByText("1 resolved")).toHaveCount(0);
+});
+
+test("edit saves a version, changes show a diff, older versions restore, and it can become an artifact", async ({ page }) => {
+  const calls = await open(page);
+  const pane = await openDoc(page);
+
+  await pane.getByRole("tab", { name: "Changes" }).click();
+  const diff = pane.getByTestId("canvas-diff");
+  await expect(diff).toContainText("Removed: ");
+  await expect(diff).toContainText("30 days");
+  await expect(diff).toContainText("60 days");
+
+  await pane.getByRole("tab", { name: "Edit" }).click();
+  await pane.getByRole("textbox", { name: "Canvas text" }).fill("Mine");
+  await pane.getByRole("button", { name: "Save version" }).click();
+  await expect.poll(() => calls.saved.length).toBe(1);
+  expect(calls.saved[0]).toMatchObject({ base_seq: 2, body: "Mine" });
+
+  await pane.getByRole("tab", { name: "Preview" }).click();
+  await pane.getByRole("button", { name: "Previous version" }).click();
+  await expect(pane.getByRole("tab", { name: "Edit" })).toBeDisabled();
+  await pane.getByRole("button", { name: "Restore" }).click();
+  await expect.poll(() => calls.restored).toEqual([1]);
+
+  await pane.getByRole("button", { name: "Save as artifact" }).click();
+  await expect.poll(() => calls.promoted).toBe(1);
 });
 
 test("a failing canvas request doesn't hold up the composer", async ({ page }) => {

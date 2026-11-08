@@ -7,13 +7,23 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+const clearChatCanvasCommentSuggestion = `-- name: ClearChatCanvasCommentSuggestion :exec
+UPDATE chat_canvas_comments SET suggestion = NULL, updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) ClearChatCanvasCommentSuggestion(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearChatCanvasCommentSuggestion, id)
+	return err
+}
+
 const createChatCanvas = `-- name: CreateChatCanvas :one
-INSERT INTO chat_canvases (session_id, kind, title) VALUES ($1, $2, $3) RETURNING id, session_id, kind, title, created_at, updated_at
+INSERT INTO chat_canvases (session_id, kind, title) VALUES ($1, $2, $3) RETURNING id, session_id, kind, title, created_at, updated_at, promoted_artifact_id
 `
 
 type CreateChatCanvasParams struct {
@@ -30,6 +40,56 @@ func (q *Queries) CreateChatCanvas(ctx context.Context, arg CreateChatCanvasPara
 		&i.SessionID,
 		&i.Kind,
 		&i.Title,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PromotedArtifactID,
+	)
+	return i, err
+}
+
+const createChatCanvasComment = `-- name: CreateChatCanvasComment :one
+INSERT INTO chat_canvas_comments (canvas_id, parent_id, seq, author_type, author_id, body, anchor, status, suggestion)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, canvas_id, parent_id, seq, author_type, author_id, body, anchor, target_lost, status, suggestion, sent_in_message_id, created_at, updated_at
+`
+
+type CreateChatCanvasCommentParams struct {
+	CanvasID   uuid.UUID
+	ParentID   *uuid.UUID
+	Seq        int32
+	AuthorType string
+	AuthorID   uuid.UUID
+	Body       string
+	Anchor     json.RawMessage
+	Status     string
+	Suggestion *string
+}
+
+func (q *Queries) CreateChatCanvasComment(ctx context.Context, arg CreateChatCanvasCommentParams) (ChatCanvasComment, error) {
+	row := q.db.QueryRow(ctx, createChatCanvasComment,
+		arg.CanvasID,
+		arg.ParentID,
+		arg.Seq,
+		arg.AuthorType,
+		arg.AuthorID,
+		arg.Body,
+		arg.Anchor,
+		arg.Status,
+		arg.Suggestion,
+	)
+	var i ChatCanvasComment
+	err := row.Scan(
+		&i.ID,
+		&i.CanvasID,
+		&i.ParentID,
+		&i.Seq,
+		&i.AuthorType,
+		&i.AuthorID,
+		&i.Body,
+		&i.Anchor,
+		&i.TargetLost,
+		&i.Status,
+		&i.Suggestion,
+		&i.SentInMessageID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -73,8 +133,25 @@ func (q *Queries) CreateChatCanvasVersion(ctx context.Context, arg CreateChatCan
 	return i, err
 }
 
+const deleteChatCanvasDraftComment = `-- name: DeleteChatCanvasDraftComment :execrows
+DELETE FROM chat_canvas_comments WHERE id = $1 AND canvas_id = $2 AND status = 'draft'
+`
+
+type DeleteChatCanvasDraftCommentParams struct {
+	ID       uuid.UUID
+	CanvasID uuid.UUID
+}
+
+func (q *Queries) DeleteChatCanvasDraftComment(ctx context.Context, arg DeleteChatCanvasDraftCommentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteChatCanvasDraftComment, arg.ID, arg.CanvasID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getChatCanvas = `-- name: GetChatCanvas :one
-SELECT id, session_id, kind, title, created_at, updated_at FROM chat_canvases WHERE id = $1 AND session_id = $2
+SELECT id, session_id, kind, title, created_at, updated_at, promoted_artifact_id FROM chat_canvases WHERE id = $1 AND session_id = $2
 `
 
 type GetChatCanvasParams struct {
@@ -90,6 +167,38 @@ func (q *Queries) GetChatCanvas(ctx context.Context, arg GetChatCanvasParams) (C
 		&i.SessionID,
 		&i.Kind,
 		&i.Title,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PromotedArtifactID,
+	)
+	return i, err
+}
+
+const getChatCanvasComment = `-- name: GetChatCanvasComment :one
+SELECT id, canvas_id, parent_id, seq, author_type, author_id, body, anchor, target_lost, status, suggestion, sent_in_message_id, created_at, updated_at FROM chat_canvas_comments WHERE id = $1 AND canvas_id = $2
+`
+
+type GetChatCanvasCommentParams struct {
+	ID       uuid.UUID
+	CanvasID uuid.UUID
+}
+
+func (q *Queries) GetChatCanvasComment(ctx context.Context, arg GetChatCanvasCommentParams) (ChatCanvasComment, error) {
+	row := q.db.QueryRow(ctx, getChatCanvasComment, arg.ID, arg.CanvasID)
+	var i ChatCanvasComment
+	err := row.Scan(
+		&i.ID,
+		&i.CanvasID,
+		&i.ParentID,
+		&i.Seq,
+		&i.AuthorType,
+		&i.AuthorID,
+		&i.Body,
+		&i.Anchor,
+		&i.TargetLost,
+		&i.Status,
+		&i.Suggestion,
+		&i.SentInMessageID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -141,6 +250,45 @@ func (q *Queries) LatestChatCanvasVersion(ctx context.Context, canvasID uuid.UUI
 	return i, err
 }
 
+const listChatCanvasComments = `-- name: ListChatCanvasComments :many
+SELECT id, canvas_id, parent_id, seq, author_type, author_id, body, anchor, target_lost, status, suggestion, sent_in_message_id, created_at, updated_at FROM chat_canvas_comments WHERE canvas_id = $1 ORDER BY created_at, id
+`
+
+func (q *Queries) ListChatCanvasComments(ctx context.Context, canvasID uuid.UUID) ([]ChatCanvasComment, error) {
+	rows, err := q.db.Query(ctx, listChatCanvasComments, canvasID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatCanvasComment{}
+	for rows.Next() {
+		var i ChatCanvasComment
+		if err := rows.Scan(
+			&i.ID,
+			&i.CanvasID,
+			&i.ParentID,
+			&i.Seq,
+			&i.AuthorType,
+			&i.AuthorID,
+			&i.Body,
+			&i.Anchor,
+			&i.TargetLost,
+			&i.Status,
+			&i.Suggestion,
+			&i.SentInMessageID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChatCanvasVersions = `-- name: ListChatCanvasVersions :many
 SELECT id, seq, note, author_type, created_at FROM chat_canvas_versions WHERE canvas_id = $1 ORDER BY seq DESC
 `
@@ -181,18 +329,19 @@ func (q *Queries) ListChatCanvasVersions(ctx context.Context, canvasID uuid.UUID
 }
 
 const listChatCanvases = `-- name: ListChatCanvases :many
-SELECT c.id, c.session_id, c.kind, c.title, c.created_at, c.updated_at, (SELECT max(v.seq) FROM chat_canvas_versions v WHERE v.canvas_id = c.id)::int AS seq
+SELECT c.id, c.session_id, c.kind, c.title, c.created_at, c.updated_at, c.promoted_artifact_id, (SELECT max(v.seq) FROM chat_canvas_versions v WHERE v.canvas_id = c.id)::int AS seq
 FROM chat_canvases c WHERE c.session_id = $1 ORDER BY c.created_at, c.id
 `
 
 type ListChatCanvasesRow struct {
-	ID        uuid.UUID
-	SessionID uuid.UUID
-	Kind      string
-	Title     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Seq       int32
+	ID                 uuid.UUID
+	SessionID          uuid.UUID
+	Kind               string
+	Title              string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	PromotedArtifactID *uuid.UUID
+	Seq                int32
 }
 
 // The chat's canvases, oldest first, each with its current version number.
@@ -212,6 +361,7 @@ func (q *Queries) ListChatCanvases(ctx context.Context, sessionID uuid.UUID) ([]
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PromotedArtifactID,
 			&i.Seq,
 		); err != nil {
 			return nil, err
@@ -225,7 +375,7 @@ func (q *Queries) ListChatCanvases(ctx context.Context, sessionID uuid.UUID) ([]
 }
 
 const lockChatCanvas = `-- name: LockChatCanvas :one
-SELECT id, session_id, kind, title, created_at, updated_at FROM chat_canvases WHERE id = $1 AND session_id = $2 FOR UPDATE
+SELECT id, session_id, kind, title, created_at, updated_at, promoted_artifact_id FROM chat_canvases WHERE id = $1 AND session_id = $2 FOR UPDATE
 `
 
 type LockChatCanvasParams struct {
@@ -243,8 +393,129 @@ func (q *Queries) LockChatCanvas(ctx context.Context, arg LockChatCanvasParams) 
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PromotedArtifactID,
 	)
 	return i, err
+}
+
+const openChatCanvasDraftComments = `-- name: OpenChatCanvasDraftComments :many
+UPDATE chat_canvas_comments SET status = 'open', updated_at = now()
+WHERE canvas_id = $1 AND id = ANY($2::uuid[]) AND status = 'draft' RETURNING id
+`
+
+type OpenChatCanvasDraftCommentsParams struct {
+	CanvasID uuid.UUID
+	Ids      []uuid.UUID
+}
+
+// The ids of the drafts among these that are now open.
+func (q *Queries) OpenChatCanvasDraftComments(ctx context.Context, arg OpenChatCanvasDraftCommentsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, openChatCanvasDraftComments, arg.CanvasID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reanchorChatCanvasComment = `-- name: ReanchorChatCanvasComment :exec
+UPDATE chat_canvas_comments SET anchor = $2, seq = $3, target_lost = $4, updated_at = now() WHERE id = $1
+`
+
+type ReanchorChatCanvasCommentParams struct {
+	ID         uuid.UUID
+	Anchor     json.RawMessage
+	Seq        int32
+	TargetLost bool
+}
+
+func (q *Queries) ReanchorChatCanvasComment(ctx context.Context, arg ReanchorChatCanvasCommentParams) error {
+	_, err := q.db.Exec(ctx, reanchorChatCanvasComment,
+		arg.ID,
+		arg.Anchor,
+		arg.Seq,
+		arg.TargetLost,
+	)
+	return err
+}
+
+const returnChatCanvasCommentsToDraft = `-- name: ReturnChatCanvasCommentsToDraft :exec
+UPDATE chat_canvas_comments SET status = 'draft', updated_at = now() WHERE id = ANY($1::uuid[])
+`
+
+func (q *Queries) ReturnChatCanvasCommentsToDraft(ctx context.Context, ids []uuid.UUID) error {
+	_, err := q.db.Exec(ctx, returnChatCanvasCommentsToDraft, ids)
+	return err
+}
+
+const setChatCanvasCommentStatus = `-- name: SetChatCanvasCommentStatus :one
+UPDATE chat_canvas_comments SET status = $2, updated_at = now() WHERE id = $1 RETURNING id, canvas_id, parent_id, seq, author_type, author_id, body, anchor, target_lost, status, suggestion, sent_in_message_id, created_at, updated_at
+`
+
+type SetChatCanvasCommentStatusParams struct {
+	ID     uuid.UUID
+	Status string
+}
+
+func (q *Queries) SetChatCanvasCommentStatus(ctx context.Context, arg SetChatCanvasCommentStatusParams) (ChatCanvasComment, error) {
+	row := q.db.QueryRow(ctx, setChatCanvasCommentStatus, arg.ID, arg.Status)
+	var i ChatCanvasComment
+	err := row.Scan(
+		&i.ID,
+		&i.CanvasID,
+		&i.ParentID,
+		&i.Seq,
+		&i.AuthorType,
+		&i.AuthorID,
+		&i.Body,
+		&i.Anchor,
+		&i.TargetLost,
+		&i.Status,
+		&i.Suggestion,
+		&i.SentInMessageID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setChatCanvasCommentsSent = `-- name: SetChatCanvasCommentsSent :exec
+UPDATE chat_canvas_comments SET sent_in_message_id = $1 WHERE id = ANY($2::uuid[])
+`
+
+type SetChatCanvasCommentsSentParams struct {
+	MessageID *uuid.UUID
+	Ids       []uuid.UUID
+}
+
+func (q *Queries) SetChatCanvasCommentsSent(ctx context.Context, arg SetChatCanvasCommentsSentParams) error {
+	_, err := q.db.Exec(ctx, setChatCanvasCommentsSent, arg.MessageID, arg.Ids)
+	return err
+}
+
+const setChatCanvasPromoted = `-- name: SetChatCanvasPromoted :exec
+UPDATE chat_canvases SET promoted_artifact_id = $2 WHERE id = $1
+`
+
+type SetChatCanvasPromotedParams struct {
+	ID                 uuid.UUID
+	PromotedArtifactID *uuid.UUID
+}
+
+func (q *Queries) SetChatCanvasPromoted(ctx context.Context, arg SetChatCanvasPromotedParams) error {
+	_, err := q.db.Exec(ctx, setChatCanvasPromoted, arg.ID, arg.PromotedArtifactID)
+	return err
 }
 
 const touchChatCanvas = `-- name: TouchChatCanvas :exec

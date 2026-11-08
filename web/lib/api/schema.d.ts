@@ -2017,6 +2017,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/canvases/{canvasId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save a person's edit as a new version */
+        post: operations["saveChatCanvas"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/canvases/{canvasId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make an earlier version current by writing it again */
+        post: operations["restoreChatCanvas"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/canvases/{canvasId}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save the current version as a project artifact; a canvas already promoted returns its artifact */
+        post: operations["promoteChatCanvas"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/canvases/{canvasId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        /** The canvas's comments and replies, oldest first */
+        get: operations["listChatCanvasComments"];
+        put?: never;
+        /** Add a draft comment on the current version, or a reply to a thread */
+        post: operations["createChatCanvasComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/canvases/{canvasId}/comments/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open these comments and send them to the agent as one message */
+        post: operations["sendChatCanvasComments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/canvases/{canvasId}/comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a draft comment */
+        delete: operations["deleteChatCanvasComment"];
+        options?: never;
+        head?: never;
+        /** Move a sent thread between open, addressed and resolved */
+        patch: operations["updateChatCanvasComment"];
+        trace?: never;
+    };
+    "/chats/{id}/canvases/{canvasId}/comments/{commentId}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply a comment's suggested text as a new version */
+        post: operations["applyChatCanvasComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -2724,6 +2868,70 @@ export interface components {
             /** Format: date-time */
             reviewed_at?: string;
         };
+        ChatCanvasSave: {
+            /**
+             * Format: int32
+             * @description The version this edit started from
+             */
+            base_seq: number;
+            body: string;
+            note?: string;
+        };
+        ChatCanvasPoint: {
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        };
+        /** @description A passage (start, end and quote, in UTF-16 code units) or an SVG element (vid). Empty on a reply. */
+        ChatCanvasAnchor: {
+            start?: number;
+            end?: number;
+            quote?: string;
+            prefix?: string;
+            suffix?: string;
+            vid?: string;
+            tag?: string;
+            label?: string;
+            point?: components["schemas"]["ChatCanvasPoint"];
+        };
+        ChatCanvasComment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            parent_id?: string | null;
+            /** Format: int32 */
+            seq: number;
+            author_type: string;
+            body: string;
+            anchor: components["schemas"]["ChatCanvasAnchor"];
+            target_lost: boolean;
+            /** @description draft, open, addressed or resolved */
+            status: string;
+            suggestion?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ChatCanvasComments: {
+            comments: components["schemas"]["ChatCanvasComment"][];
+        };
+        NewChatCanvasComment: {
+            body: string;
+            /**
+             * Format: int32
+             * @description The version the anchor is in; required unless replying
+             */
+            seq?: number;
+            /**
+             * Format: uuid
+             * @description The thread to reply to
+             */
+            parent_id?: string;
+            start?: number;
+            end?: number;
+            vid?: string;
+            point?: components["schemas"]["ChatCanvasPoint"];
+        };
         ChatCanvasSummary: {
             /** Format: uuid */
             id: string;
@@ -2758,6 +2966,8 @@ export interface components {
              * @description The version body belongs to
              */
             viewing_seq: number;
+            /** Format: uuid */
+            promoted_artifact_id?: string | null;
             body: string;
             /** @description Newest first */
             versions: components["schemas"]["ChatCanvasVersion"][];
@@ -4147,10 +4357,10 @@ export interface components {
         /** @description Something attached to a message for the assistant to read. Exactly one of id or key; must belong to the chat's project (notes may be workspace-wide). */
         ChatContextRef: {
             /** @enum {string} */
-            kind: "artifact" | "section" | "ticket" | "page";
+            kind: "artifact" | "section" | "ticket" | "page" | "canvas";
             /**
              * Format: uuid
-             * @description Artifact or wiki page id
+             * @description Artifact, wiki page or canvas id
              */
             id?: string;
             /** @description Ticket key */
@@ -4737,6 +4947,7 @@ export interface components {
         TicketKey: string;
         AgentHandle: string;
         ArtifactId: string;
+        CanvasId: string;
         ChatId: string;
         PersonaId: string;
     };
@@ -8130,6 +8341,273 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveChatCanvas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatCanvasSave"];
+            };
+        };
+        responses: {
+            /** @description The new version */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCanvasVersion"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    restoreChatCanvas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int32 */
+                    seq: number;
+                };
+            };
+        };
+        responses: {
+            /** @description The new version */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCanvasVersion"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    promoteChatCanvas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The artifact */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        artifact_id: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatCanvasComments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Comments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCanvasComments"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createChatCanvasComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewChatCanvasComment"];
+            };
+        };
+        responses: {
+            /** @description The comment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCanvasComment"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    sendChatCanvasComments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    comment_ids: string[];
+                    /** @description The chat message to send; a summary of the comments when omitted */
+                    message?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteChatCanvasComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateChatCanvasComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    status: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The comment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCanvasComment"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    applyChatCanvasComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                canvasId: components["parameters"]["CanvasId"];
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new version */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCanvasVersion"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

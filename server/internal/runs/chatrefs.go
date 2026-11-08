@@ -10,13 +10,14 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/canvas"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // ChatContextRef is something a person attached to a chat message. It mirrors
 // the API's ChatContextRef and is stored as-is in chat_messages.context_refs.
 type ChatContextRef struct {
-	Kind   string     `json:"kind"` // artifact, section, ticket or page
+	Kind   string     `json:"kind"` // artifact, section, ticket, page or canvas
 	ID     *uuid.UUID `json:"id,omitempty"`
 	Key    string     `json:"key,omitempty"` // ticket key; for a page, optionally the wiki path
 	Anchor string     `json:"anchor,omitempty"`
@@ -47,13 +48,13 @@ type ChatRefDoc struct {
 // first failure as a 422 naming it (field context_refs). Wiki notes with no
 // project are readable from any project. Nothing is returned for a partly
 // resolvable list, so callers queue nothing.
-func ResolveChatRefs(ctx context.Context, q *store.Queries, ws, project uuid.UUID, refs []ChatContextRef) ([]ChatRefDoc, error) {
+func ResolveChatRefs(ctx context.Context, q *store.Queries, ws, project, chat uuid.UUID, refs []ChatContextRef) ([]ChatRefDoc, error) {
 	if len(refs) > MaxChatContextRefs {
 		return nil, apperr.Invalid("context_refs", "attach at most %d references", MaxChatContextRefs)
 	}
 	out := make([]ChatRefDoc, 0, len(refs))
 	for _, r := range refs {
-		d, err := resolveChatRef(ctx, q, ws, project, r)
+		d, err := resolveChatRef(ctx, q, ws, project, chat, r)
 		if err != nil {
 			return nil, err
 		}
@@ -62,12 +63,25 @@ func ResolveChatRefs(ctx context.Context, q *store.Queries, ws, project uuid.UUI
 	return out, nil
 }
 
-func resolveChatRef(ctx context.Context, q *store.Queries, ws, project uuid.UUID, r ChatContextRef) (ChatRefDoc, error) {
+func resolveChatRef(ctx context.Context, q *store.Queries, ws, project, chat uuid.UUID, r ChatContextRef) (ChatRefDoc, error) {
 	r.Key, r.Anchor = strings.TrimSpace(r.Key), strings.TrimSpace(r.Anchor)
 	unknown := apperr.Invalid("context_refs", "%s is not in this project", r)
 	bad := func(why string) error { return apperr.Invalid("context_refs", "%s: %s", r, why) }
 	d := ChatRefDoc{Ref: r}
 	switch r.Kind {
+	case "canvas":
+		if r.ID == nil || r.Key != "" || r.Anchor != "" {
+			return d, bad("a canvas ref needs an id and nothing else")
+		}
+		title, body, err := canvas.ContextDoc(ctx, q, chat, *r.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return d, unknown
+		}
+		if err != nil {
+			return d, err
+		}
+		d.Title, d.Body = title, body
+		return d, nil
 	case "ticket":
 		if r.Key == "" || r.ID != nil {
 			return d, bad("a ticket ref needs a key and no id")
@@ -133,5 +147,5 @@ func resolveChatRef(ctx context.Context, q *store.Queries, ws, project uuid.UUID
 		}
 		return d, nil
 	}
-	return d, bad("kind must be artifact, section, ticket or page")
+	return d, bad("kind must be artifact, section, ticket, page or canvas")
 }

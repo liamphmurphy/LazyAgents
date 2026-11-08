@@ -17,7 +17,7 @@ import (
 // chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list"}
+	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"}
 
 // chatScope is the project a chat run may read from.
 type chatScope struct {

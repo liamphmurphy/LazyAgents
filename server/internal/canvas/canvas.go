@@ -3,7 +3,6 @@ package canvas
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -126,18 +125,7 @@ func (s *Service) Create(ctx context.Context, chat uuid.UUID, in New, by Actor) 
 // edit made against text someone has since changed is refused, not merged.
 func (s *Service) Patch(ctx context.Context, chat, id uuid.UUID, base int32, ops []Op, note string, by Actor) (store.ChatCanvasVersion, error) {
 	var v store.ChatCanvasVersion
-	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		q := store.New(tx)
-		c, err := q.LockChatCanvas(ctx, store.LockChatCanvasParams{ID: id, SessionID: chat})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return apperr.ErrNotFound
-		} else if err != nil {
-			return err
-		}
-		cur, err := q.LatestChatCanvasVersion(ctx, c.ID)
-		if err != nil {
-			return err
-		}
+	err := s.locked(ctx, chat, id, func(q *store.Queries, c store.ChatCanvas, cur store.ChatCanvasVersion) error {
 		if base != cur.Seq {
 			return apperr.Conflict("this canvas is at version %d, not %d; read it again and redo your edit", cur.Seq, base)
 		}
@@ -148,10 +136,8 @@ func (s *Service) Patch(ctx context.Context, chat, id uuid.UUID, base int32, ops
 		if body == cur.Body {
 			return apperr.Invalid("ops", "these ops change nothing")
 		}
-		if v, err = q.CreateChatCanvasVersion(ctx, store.CreateChatCanvasVersionParams{CanvasID: c.ID, Seq: cur.Seq + 1, Body: body, Note: note, AuthorType: by.Type, AuthorID: by.ID}); err != nil {
-			return err
-		}
-		return q.TouchChatCanvas(ctx, c.ID)
+		v, err = writeVersion(ctx, q, c, cur, body, note, by)
+		return err
 	})
 	return v, err
 }
