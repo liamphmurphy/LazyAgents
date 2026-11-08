@@ -40,6 +40,7 @@ const TRIGGER: Record<Turn["trigger"], string> = {
   comment: "Resumed: a person replied",
   resume: "Resumed",
   delegation: "Resumed: a sub agent finished",
+  image_followup: "Resumed: generated images to react to",
 };
 
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
