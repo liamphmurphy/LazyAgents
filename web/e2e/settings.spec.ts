@@ -39,8 +39,8 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
   await page.route("**/api/v1/runner", (route) =>
     route.fulfill({
       json: opts.runners === false
-        ? { online: false, runners: [], slots: 0, busy: 0, queued: 3 }
-        : { online: true, runners: [{ id: "mbp-4242", backend: "docker", max_concurrent: 4, running: 2, version: "0.9.1", heartbeat_at: new Date().toISOString() }], slots: 4, busy: 2, queued: 3 },
+        ? { online: false, runners: [], slots: 0, busy: 0, live: 0, queued: 3 }
+        : { online: true, runners: [{ id: "mbp-4242", backend: "docker", max_concurrent: 4, running: 2, version: "0.9.1", heartbeat_at: new Date().toISOString() }], slots: 4, busy: 2, live: 2, queued: 3 },
     }),
   );
   // Like the server: Codex is available once harness:openai exists.

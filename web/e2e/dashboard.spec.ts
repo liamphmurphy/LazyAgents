@@ -85,12 +85,12 @@ async function installDashboardApi(page: Page, init: Partial<State> = {}) {
       stats: { range: "30d", generated_at: new Date().toISOString(), performance: { completed: 4, median_cycle_seconds: null, merged_prs: 0, closed_prs: 0, spend_usd: 0, unpriced_runs: 0 },
         daily: [{ date: today, count: 3 }, { date: "2000-01-01", count: 99 }] },
       counts: { total: 0, backlog: 0, todo: 0, in_progress: 0, in_review: 0, done: 0 }, review_over_day: 0, agents: [], projects: [], attention: [], recent_artifacts: [],
-      runner: { online: state.runner, runners: [], slots: 1, busy: 0, queued: 0 },
+      runner: { online: state.runner, runners: [], slots: 1, busy: 0, live: 0, queued: 0 },
       weekly_spend: { since: minutesAgo(60), cost_usd: 42.18, runs: 14, unpriced_runs: 0 },
     });
     if (path === "/runner") return json(state.runner
-      ? { online: true, runners: [{ id: "mbp", backend: "docker", max_concurrent: 4, running: 0, heartbeat_at: minutesAgo(0) }], slots: 4, busy: 0, queued: 0 }
-      : { online: false, runners: [], slots: 0, busy: 0, queued: 0 });
+      ? { online: true, runners: [{ id: "mbp", backend: "docker", max_concurrent: 4, running: 0, heartbeat_at: minutesAgo(0) }], slots: 4, busy: 0, live: 0, queued: 0 }
+      : { online: false, runners: [], slots: 0, busy: 0, live: 0, queued: 0 });
     if (path === "/chat-models") return json([
       { harness: "claude-code", label: "Claude Code", available: state.harness, ...(state.harness ? {} : { unavailable_reason: "no harness:anthropic secret" }), models: [{ id: "opus", label: "Opus", default: true }] },
       { harness: "codex", label: "Codex", available: false, unavailable_reason: "no harness:openai secret", models: [{ id: "gpt-5-codex", label: "gpt-5-codex", default: true }] },

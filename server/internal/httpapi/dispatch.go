@@ -36,6 +36,11 @@ func (s *Server) runnerStatus(ctx context.Context) (api.RunnerStatus, error) {
 		out.Busy += int(r.Running)
 	}
 	out.Online = len(rs) > 0
+	live, err := s.Q.LiveWorkRunsCount(ctx)
+	if err != nil {
+		return out, err
+	}
+	out.Live = int(live)
 	n, err := s.Q.QueuedRunsCount(ctx)
 	out.Queued = int(n)
 	return out, err

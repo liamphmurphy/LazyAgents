@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Sidebar
             workspace={data.workspace.name}
             inboxCount={data.counts.inbox}
-            liveRuns={runner.data?.busy ?? 0}
+            liveRuns={runner.data?.live ?? 0}
             wikiSuggestions={data.counts.wiki_suggestions}
             projects={data.projects}
             user={{

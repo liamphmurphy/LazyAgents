@@ -3776,12 +3776,13 @@ components:
         heartbeat_at: { type: string, format: date-time }
     RunnerStatus:
       type: object
-      required: [online, runners, slots, busy, queued]
+      required: [online, runners, slots, busy, live, queued]
       properties:
         online: { type: boolean }
         runners: { type: array, items: { $ref: "#/components/schemas/RunnerInfo" } }
         slots: { type: integer }
-        busy: { type: integer }
+        busy: { type: integer, description: Runner slots in use, Personal Assistant chat turns included }
+        live: { type: integer, description: "Ticket and planning runs starting or running: the Runs nav count (chat runs live in Chat)" }
         queued: { type: integer }
     EnvironmentTool:
       type: object
