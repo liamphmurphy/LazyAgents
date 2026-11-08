@@ -1120,16 +1120,24 @@ export type MemoryType = Schemas["MemoryType"];
 
 export const memoryKeys = {
   all: ["memories"] as const,
-  list: (q: string, type?: string) => ["memories", "list", q, type ?? ""] as const,
+  list: (q: string, type?: string, whose = "") => ["memories", "list", q, type ?? "", whose] as const,
   detail: (id: string) => ["memories", "detail", id] as const,
 };
 
-/** First 50 matches (ranked when q is set); `total` counts every entry of the type. */
-export function useMemories(q = "", type?: MemoryType, offset = 0) {
+/**
+ * First 50 matches (ranked when q is set); `total` counts every entry of the type.
+ * whose: "" for everything, "person" for what the assistant remembers about the
+ * person, "persona" for every persona's own memory, or one persona's id.
+ */
+export function useMemories(q = "", type?: MemoryType, offset = 0, whose = "") {
+  const scope: { about?: Schemas["MemoryAbout"]; persona_id?: string } =
+    whose === "person" || whose === "persona" ? { about: whose } : whose ? { persona_id: whose } : {};
   return useQuery({
-    queryKey: [...memoryKeys.list(q, type), offset] as const,
+    queryKey: [...memoryKeys.list(q, type, whose), offset] as const,
     queryFn: () =>
-      unwrap(api.GET("/memories", { params: { query: { ...(q ? { q } : {}), ...(type ? { type } : {}), ...(offset ? { offset } : {}) } } })),
+      unwrap(
+        api.GET("/memories", { params: { query: { ...(q ? { q } : {}), ...(type ? { type } : {}), ...(offset ? { offset } : {}), ...scope } } }),
+      ),
   });
 }
 

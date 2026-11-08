@@ -15,13 +15,17 @@ import (
 const countMemories = `-- name: CountMemories :one
 SELECT count(*) FROM memories
 WHERE workspace_id = $1 AND user_id = $2
-  AND ($3::bool OR superseded_by IS NULL)
-  AND ($4::text IS NULL OR type = $4)
+  AND CASE $3::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'chat' THEN persona_id IS NULL OR persona_id = $4 ELSE persona_id IS NOT DISTINCT FROM $4 END
+  AND ($5::bool OR superseded_by IS NULL)
+  AND ($6::text IS NULL OR type = $6)
 `
 
 type CountMemoriesParams struct {
 	WorkspaceID    uuid.UUID
 	UserID         uuid.UUID
+	Scope          string
+	PersonaID      *uuid.UUID
 	IncludeRetired bool
 	Type           *string
 }
@@ -30,6 +34,8 @@ func (q *Queries) CountMemories(ctx context.Context, arg CountMemoriesParams) (i
 	row := q.db.QueryRow(ctx, countMemories,
 		arg.WorkspaceID,
 		arg.UserID,
+		arg.Scope,
+		arg.PersonaID,
 		arg.IncludeRetired,
 		arg.Type,
 	)
@@ -40,14 +46,15 @@ func (q *Queries) CountMemories(ctx context.Context, arg CountMemoriesParams) (i
 
 const createMemory = `-- name: CreateMemory :one
 
-INSERT INTO memories (workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id)
-VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10)
-RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt
+INSERT INTO memories (workspace_id, user_id, persona_id, title, summary, body, tags, type, source, source_chat_id, source_run_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7::text[], $8, $9, $10, $11)
+RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id
 `
 
 type CreateMemoryParams struct {
 	WorkspaceID  uuid.UUID
 	UserID       uuid.UUID
+	PersonaID    *uuid.UUID
 	Title        string
 	Summary      string
 	Body         string
@@ -60,10 +67,19 @@ type CreateMemoryParams struct {
 
 // Personal assistant memory. Every query is scoped to one person:
 // (workspace_id, user_id) is always in the WHERE clause.
+//
+// Within a person, persona_id splits the person's own memory (NULL) from each
+// persona's own memory. Queries that take @scope reach:
+//
+//	own       exactly persona_id = sqlc.narg(persona_id) (NULL: the person's own)
+//	chat      the person's own plus that one persona's (a persona chat)
+//	personas  every persona's, none of the person's own
+//	all       everything the person has (the memory manager)
 func (q *Queries) CreateMemory(ctx context.Context, arg CreateMemoryParams) (Memory, error) {
 	row := q.db.QueryRow(ctx, createMemory,
 		arg.WorkspaceID,
 		arg.UserID,
+		arg.PersonaID,
 		arg.Title,
 		arg.Summary,
 		arg.Body,
@@ -92,21 +108,31 @@ func (q *Queries) CreateMemory(ctx context.Context, arg CreateMemoryParams) (Mem
 		&i.RetiredReason,
 		&i.RetiredAt,
 		&i.ConsolidationExempt,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
 const deleteAllMemories = `-- name: DeleteAllMemories :execrows
 DELETE FROM memories WHERE workspace_id = $1 AND user_id = $2
+  AND CASE $3::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'chat' THEN persona_id IS NULL OR persona_id = $4 ELSE persona_id IS NOT DISTINCT FROM $4 END
 `
 
 type DeleteAllMemoriesParams struct {
 	WorkspaceID uuid.UUID
 	UserID      uuid.UUID
+	Scope       string
+	PersonaID   *uuid.UUID
 }
 
 func (q *Queries) DeleteAllMemories(ctx context.Context, arg DeleteAllMemoriesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteAllMemories, arg.WorkspaceID, arg.UserID)
+	result, err := q.db.Exec(ctx, deleteAllMemories,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Scope,
+		arg.PersonaID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -115,16 +141,26 @@ func (q *Queries) DeleteAllMemories(ctx context.Context, arg DeleteAllMemoriesPa
 
 const deleteMemory = `-- name: DeleteMemory :execrows
 DELETE FROM memories WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+  AND CASE $4::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'chat' THEN persona_id IS NULL OR persona_id = $5 ELSE persona_id IS NOT DISTINCT FROM $5 END
 `
 
 type DeleteMemoryParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
 	UserID      uuid.UUID
+	Scope       string
+	PersonaID   *uuid.UUID
 }
 
 func (q *Queries) DeleteMemory(ctx context.Context, arg DeleteMemoryParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteMemory, arg.ID, arg.WorkspaceID, arg.UserID)
+	result, err := q.db.Exec(ctx, deleteMemory,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Scope,
+		arg.PersonaID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -132,14 +168,14 @@ func (q *Queries) DeleteMemory(ctx context.Context, arg DeleteMemoryParams) (int
 }
 
 const duplicateMemoryPairs = `-- name: DuplicateMemoryPairs :many
-SELECT a.workspace_id, a.user_id, a.id AS keep_id, a.title AS keep_title,
+SELECT a.workspace_id, a.user_id, a.persona_id, a.id AS keep_id, a.title AS keep_title,
   b.id AS retire_id, b.title AS retire_title, b.updated_at AS retire_updated_at,
   greatest(similarity(lower(a.title), lower(b.title)),
            CASE WHEN a.summary <> '' AND b.summary <> '' THEN similarity(lower(a.summary), lower(b.summary)) ELSE 0 END)::float8 AS score
 FROM memories a
-JOIN memories b ON b.workspace_id = a.workspace_id AND b.user_id = a.user_id AND b.type = a.type
+JOIN memories b ON b.workspace_id = a.workspace_id AND b.user_id = a.user_id AND b.persona_id IS NOT DISTINCT FROM a.persona_id AND b.type = a.type
   AND (b.updated_at, b.id) < (a.updated_at, a.id) AND b.superseded_by IS NULL AND NOT b.consolidation_exempt
-WHERE a.superseded_by IS NULL AND NOT a.consolidation_exempt
+WHERE a.superseded_by IS NULL AND NOT a.consolidation_exempt AND a.type <> 'moment'
   AND (similarity(lower(a.title), lower(b.title)) >= $1::float8
        OR (a.summary <> '' AND b.summary <> '' AND similarity(lower(a.summary), lower(b.summary)) >= $2::float8))
 ORDER BY a.workspace_id, a.user_id, a.updated_at DESC, a.id DESC, score DESC
@@ -155,6 +191,7 @@ type DuplicateMemoryPairsParams struct {
 type DuplicateMemoryPairsRow struct {
 	WorkspaceID     uuid.UUID
 	UserID          uuid.UUID
+	PersonaID       *uuid.UUID
 	KeepID          uuid.UUID
 	KeepTitle       string
 	RetireID        uuid.UUID
@@ -163,9 +200,10 @@ type DuplicateMemoryPairsRow struct {
 	Score           float64
 }
 
-// Pairs of one person's live entries of the same type that look like the same
-// thing: a similar title or a near-identical summary, neither restored by the
-// person after an earlier merge. keep is the more
+// Pairs of live entries of one memory (the person's own, or one persona's) of
+// the same type that look like the same thing: a similar title or a
+// near-identical summary, neither restored by the person after an earlier
+// merge. Moments are each their own thing and never pair. keep is the more
 // recently changed of the two. Newest keep first, best match first.
 func (q *Queries) DuplicateMemoryPairs(ctx context.Context, arg DuplicateMemoryPairsParams) ([]DuplicateMemoryPairsRow, error) {
 	rows, err := q.db.Query(ctx, duplicateMemoryPairs, arg.TitleThreshold, arg.SummaryThreshold, arg.Lim)
@@ -179,6 +217,7 @@ func (q *Queries) DuplicateMemoryPairs(ctx context.Context, arg DuplicateMemoryP
 		if err := rows.Scan(
 			&i.WorkspaceID,
 			&i.UserID,
+			&i.PersonaID,
 			&i.KeepID,
 			&i.KeepTitle,
 			&i.RetireID,
@@ -197,7 +236,7 @@ func (q *Queries) DuplicateMemoryPairs(ctx context.Context, arg DuplicateMemoryP
 }
 
 const exportMemories = `-- name: ExportMemories :many
-SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt FROM memories WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at, id
+SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id FROM memories WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at, id
 `
 
 type ExportMemoriesParams struct {
@@ -205,7 +244,8 @@ type ExportMemoriesParams struct {
 	UserID      uuid.UUID
 }
 
-// Everything the person has, retired entries included, oldest first.
+// Everything the person has, retired entries and personas' memories
+// included, oldest first.
 func (q *Queries) ExportMemories(ctx context.Context, arg ExportMemoriesParams) ([]Memory, error) {
 	rows, err := q.db.Query(ctx, exportMemories, arg.WorkspaceID, arg.UserID)
 	if err != nil {
@@ -233,6 +273,7 @@ func (q *Queries) ExportMemories(ctx context.Context, arg ExportMemoriesParams) 
 			&i.RetiredReason,
 			&i.RetiredAt,
 			&i.ConsolidationExempt,
+			&i.PersonaID,
 		); err != nil {
 			return nil, err
 		}
@@ -245,17 +286,27 @@ func (q *Queries) ExportMemories(ctx context.Context, arg ExportMemoriesParams) 
 }
 
 const getMemory = `-- name: GetMemory :one
-SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt FROM memories WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id FROM memories WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+  AND CASE $4::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'chat' THEN persona_id IS NULL OR persona_id = $5 ELSE persona_id IS NOT DISTINCT FROM $5 END
 `
 
 type GetMemoryParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
 	UserID      uuid.UUID
+	Scope       string
+	PersonaID   *uuid.UUID
 }
 
 func (q *Queries) GetMemory(ctx context.Context, arg GetMemoryParams) (Memory, error) {
-	row := q.db.QueryRow(ctx, getMemory, arg.ID, arg.WorkspaceID, arg.UserID)
+	row := q.db.QueryRow(ctx, getMemory,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Scope,
+		arg.PersonaID,
+	)
 	var i Memory
 	err := row.Scan(
 		&i.ID,
@@ -275,35 +326,45 @@ func (q *Queries) GetMemory(ctx context.Context, arg GetMemoryParams) (Memory, e
 		&i.RetiredReason,
 		&i.RetiredAt,
 		&i.ConsolidationExempt,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
 const listMemories = `-- name: ListMemories :many
-SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt FROM memories
+SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id FROM memories
 WHERE workspace_id = $1 AND user_id = $2
-  AND ($3::bool OR superseded_by IS NULL)
-  AND ($4::text IS NULL OR type = $4)
-ORDER BY updated_at DESC, id DESC
-LIMIT $6 OFFSET $5
+  AND CASE $3::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'chat' THEN persona_id IS NULL OR persona_id = $4 ELSE persona_id IS NOT DISTINCT FROM $4 END
+  AND ($5::bool OR superseded_by IS NULL)
+  AND ($6::text IS NULL OR type = $6)
+ORDER BY CASE WHEN $7::bool THEN created_at ELSE updated_at END DESC, id DESC
+LIMIT $9 OFFSET $8
 `
 
 type ListMemoriesParams struct {
 	WorkspaceID    uuid.UUID
 	UserID         uuid.UUID
+	Scope          string
+	PersonaID      *uuid.UUID
 	IncludeRetired bool
 	Type           *string
+	ByCreated      bool
 	Off            int32
 	Lim            int32
 }
 
-// Newest change first. Retired entries only when include_retired.
+// Newest change first, or newest first when by_created. Retired entries only
+// when include_retired.
 func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]Memory, error) {
 	rows, err := q.db.Query(ctx, listMemories,
 		arg.WorkspaceID,
 		arg.UserID,
+		arg.Scope,
+		arg.PersonaID,
 		arg.IncludeRetired,
 		arg.Type,
+		arg.ByCreated,
 		arg.Off,
 		arg.Lim,
 	)
@@ -332,6 +393,7 @@ func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]M
 			&i.RetiredReason,
 			&i.RetiredAt,
 			&i.ConsolidationExempt,
+			&i.PersonaID,
 		); err != nil {
 			return nil, err
 		}
@@ -344,14 +406,15 @@ func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]M
 }
 
 const nearDuplicateMemory = `-- name: NearDuplicateMemory :one
-SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at, m.retired_reason, m.retired_at, m.consolidation_exempt,
+SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at, m.retired_reason, m.retired_at, m.consolidation_exempt, m.persona_id,
   greatest(similarity(lower(m.title), lower($1::text)),
            CASE WHEN $2::text <> '' AND m.summary <> '' THEN similarity(lower(m.summary), lower($2::text)) ELSE 0 END)::float8 AS score,
   similarity(lower(m.title), lower($1::text))::float8 AS title_score
 FROM memories m
-WHERE m.workspace_id = $3 AND m.user_id = $4 AND m.superseded_by IS NULL
-  AND (similarity(lower(m.title), lower($1::text)) >= $5::float8
-       OR ($2::text <> '' AND m.summary <> '' AND similarity(lower(m.summary), lower($2::text)) >= $6::float8))
+WHERE m.workspace_id = $3 AND m.user_id = $4 AND m.persona_id IS NOT DISTINCT FROM $5
+  AND m.superseded_by IS NULL AND m.type <> 'moment'
+  AND (similarity(lower(m.title), lower($1::text)) >= $6::float8
+       OR ($2::text <> '' AND m.summary <> '' AND similarity(lower(m.summary), lower($2::text)) >= $7::float8))
 ORDER BY score DESC, m.updated_at DESC
 LIMIT 1
 `
@@ -361,6 +424,7 @@ type NearDuplicateMemoryParams struct {
 	Summary          string
 	WorkspaceID      uuid.UUID
 	UserID           uuid.UUID
+	PersonaID        *uuid.UUID
 	TitleThreshold   float64
 	SummaryThreshold float64
 }
@@ -371,14 +435,16 @@ type NearDuplicateMemoryRow struct {
 	TitleScore float64
 }
 
-// The person's live entry most like a new one: a similar title, or (when both
-// have one) a near-identical summary.
+// The live entry of the same memory (the person's own, or the same persona's)
+// most like a new one: a similar title, or (when both have one) a
+// near-identical summary. Moments never match.
 func (q *Queries) NearDuplicateMemory(ctx context.Context, arg NearDuplicateMemoryParams) (NearDuplicateMemoryRow, error) {
 	row := q.db.QueryRow(ctx, nearDuplicateMemory,
 		arg.Title,
 		arg.Summary,
 		arg.WorkspaceID,
 		arg.UserID,
+		arg.PersonaID,
 		arg.TitleThreshold,
 		arg.SummaryThreshold,
 	)
@@ -401,18 +467,80 @@ func (q *Queries) NearDuplicateMemory(ctx context.Context, arg NearDuplicateMemo
 		&i.Memory.RetiredReason,
 		&i.Memory.RetiredAt,
 		&i.Memory.ConsolidationExempt,
+		&i.Memory.PersonaID,
 		&i.Score,
 		&i.TitleScore,
 	)
 	return i, err
 }
 
+const personaContextMemories = `-- name: PersonaContextMemories :many
+SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id FROM memories
+WHERE workspace_id = $1 AND user_id = $2 AND persona_id = $3 AND superseded_by IS NULL
+ORDER BY (type = 'moment'), CASE WHEN type = 'moment' THEN created_at ELSE updated_at END DESC, id DESC
+LIMIT $4
+`
+
+type PersonaContextMemoriesParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	PersonaID   *uuid.UUID
+	Lim         int32
+}
+
+// A persona's live entries for its always-loaded memory: who it is first
+// (most recently changed first), then its moments, newest first.
+func (q *Queries) PersonaContextMemories(ctx context.Context, arg PersonaContextMemoriesParams) ([]Memory, error) {
+	rows, err := q.db.Query(ctx, personaContextMemories,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.PersonaID,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Memory{}
+	for rows.Next() {
+		var i Memory
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.Title,
+			&i.Summary,
+			&i.Body,
+			&i.Tags,
+			&i.Type,
+			&i.Source,
+			&i.SourceChatID,
+			&i.SourceRunID,
+			&i.SupersededBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.RetiredReason,
+			&i.RetiredAt,
+			&i.ConsolidationExempt,
+			&i.PersonaID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const retireDuplicateMemory = `-- name: RetireDuplicateMemory :one
 UPDATE memories m SET superseded_by = $1, retired_reason = $2::text, retired_at = now(), updated_at = now()
 WHERE m.id = $3 AND m.workspace_id = $4 AND m.user_id = $5
   AND m.superseded_by IS NULL AND m.updated_at = $6
-  AND EXISTS (SELECT 1 FROM memories n WHERE n.id = $1 AND n.workspace_id = $4 AND n.user_id = $5 AND n.superseded_by IS NULL FOR SHARE)
-RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt
+  AND EXISTS (SELECT 1 FROM memories n WHERE n.id = $1 AND n.workspace_id = $4 AND n.user_id = $5
+    AND n.persona_id IS NOT DISTINCT FROM m.persona_id AND n.superseded_by IS NULL FOR SHARE)
+RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id
 `
 
 type RetireDuplicateMemoryParams struct {
@@ -425,7 +553,7 @@ type RetireDuplicateMemoryParams struct {
 }
 
 // The consolidation pass retires a live entry in favour of another live entry
-// of the same person. No row when either was retired or changed meanwhile.
+// of the same memory. No row when either was retired or changed meanwhile.
 // FOR SHARE: see SetMemorySupersededBy.
 func (q *Queries) RetireDuplicateMemory(ctx context.Context, arg RetireDuplicateMemoryParams) (Memory, error) {
 	row := q.db.QueryRow(ctx, retireDuplicateMemory,
@@ -455,28 +583,33 @@ func (q *Queries) RetireDuplicateMemory(ctx context.Context, arg RetireDuplicate
 		&i.RetiredReason,
 		&i.RetiredAt,
 		&i.ConsolidationExempt,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
 const searchMemories = `-- name: SearchMemories :many
-SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at, m.retired_reason, m.retired_at, m.consolidation_exempt,
+SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.type, m.source, m.source_chat_id, m.source_run_id, m.superseded_by, m.created_at, m.updated_at, m.retired_reason, m.retired_at, m.consolidation_exempt, m.persona_id,
   (ts_rank(memory_search_vector(m.title, m.summary, m.body, m.tags), websearch_to_tsquery('english', $1::text))
    + similarity(lower(m.title), lower($1::text)))::float8 AS rank
 FROM memories m
 WHERE m.workspace_id = $2 AND m.user_id = $3
-  AND ($4::bool OR m.superseded_by IS NULL)
-  AND ($5::text IS NULL OR m.type = $5)
+  AND CASE $4::text WHEN 'all' THEN true WHEN 'personas' THEN m.persona_id IS NOT NULL
+        WHEN 'chat' THEN m.persona_id IS NULL OR m.persona_id = $5 ELSE m.persona_id IS NOT DISTINCT FROM $5 END
+  AND ($6::bool OR m.superseded_by IS NULL)
+  AND ($7::text IS NULL OR m.type = $7)
   AND (memory_search_vector(m.title, m.summary, m.body, m.tags) @@ websearch_to_tsquery('english', $1::text)
        OR similarity(lower(m.title), lower($1::text)) >= 0.3)
 ORDER BY rank DESC, m.updated_at DESC, m.id DESC
-LIMIT $6
+LIMIT $8
 `
 
 type SearchMemoriesParams struct {
 	Q              string
 	WorkspaceID    uuid.UUID
 	UserID         uuid.UUID
+	Scope          string
+	PersonaID      *uuid.UUID
 	IncludeRetired bool
 	Type           *string
 	Lim            int32
@@ -494,6 +627,8 @@ func (q *Queries) SearchMemories(ctx context.Context, arg SearchMemoriesParams) 
 		arg.Q,
 		arg.WorkspaceID,
 		arg.UserID,
+		arg.Scope,
+		arg.PersonaID,
 		arg.IncludeRetired,
 		arg.Type,
 		arg.Lim,
@@ -523,6 +658,7 @@ func (q *Queries) SearchMemories(ctx context.Context, arg SearchMemoriesParams) 
 			&i.Memory.RetiredReason,
 			&i.Memory.RetiredAt,
 			&i.Memory.ConsolidationExempt,
+			&i.Memory.PersonaID,
 			&i.Rank,
 		); err != nil {
 			return nil, err
@@ -542,9 +678,12 @@ UPDATE memories m SET superseded_by = $1,
   consolidation_exempt = consolidation_exempt OR ($1::uuid IS NULL AND $3::bool),
   updated_at = now()
 WHERE m.id = $4 AND m.workspace_id = $5 AND m.user_id = $6
+  AND CASE $7::text WHEN 'all' THEN true WHEN 'personas' THEN m.persona_id IS NOT NULL
+        WHEN 'chat' THEN m.persona_id IS NULL OR m.persona_id = $8 ELSE m.persona_id IS NOT DISTINCT FROM $8 END
   AND ($1::uuid IS NULL OR EXISTS (
-    SELECT 1 FROM memories n WHERE n.id = $1 AND n.workspace_id = $5 AND n.user_id = $6 AND n.superseded_by IS NULL FOR SHARE))
-RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt
+    SELECT 1 FROM memories n WHERE n.id = $1 AND n.workspace_id = $5 AND n.user_id = $6
+      AND n.persona_id IS NOT DISTINCT FROM m.persona_id AND n.superseded_by IS NULL FOR SHARE))
+RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id
 `
 
 type SetMemorySupersededByParams struct {
@@ -554,10 +693,13 @@ type SetMemorySupersededByParams struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.UUID
 	UserID           uuid.UUID
+	Scope            string
+	PersonaID        *uuid.UUID
 }
 
-// Retires an entry in favour of another of the same person's entries, or
-// restores it when superseded_by is null.
+// Retires an entry in favour of another of the same person's entries in the
+// same memory (the person's own or the same persona's), or restores it when
+// superseded_by is null.
 // Retiring records the reason and time; restoring clears them, and a person's
 // restore exempts the entry from consolidation. FOR SHARE on the new entry
 // waits out a concurrent retire of it, so two entries can't supersede each
@@ -570,6 +712,8 @@ func (q *Queries) SetMemorySupersededBy(ctx context.Context, arg SetMemorySupers
 		arg.ID,
 		arg.WorkspaceID,
 		arg.UserID,
+		arg.Scope,
+		arg.PersonaID,
 	)
 	var i Memory
 	err := row.Scan(
@@ -590,6 +734,7 @@ func (q *Queries) SetMemorySupersededBy(ctx context.Context, arg SetMemorySupers
 		&i.RetiredReason,
 		&i.RetiredAt,
 		&i.ConsolidationExempt,
+		&i.PersonaID,
 	)
 	return i, err
 }
@@ -601,12 +746,18 @@ UPDATE memories SET
   body = coalesce($3, body),
   tags = coalesce($4::text[], tags),
   type = coalesce($5, type),
-  source = coalesce($6, source),
-  source_chat_id = CASE WHEN $6::text IS NULL THEN source_chat_id ELSE $7 END,
-  source_run_id = CASE WHEN $6::text IS NULL THEN source_run_id ELSE $8 END,
+  persona_id = CASE WHEN $6::bool THEN $7::uuid ELSE persona_id END,
+  source = coalesce($8, source),
+  source_chat_id = CASE WHEN $8::text IS NULL THEN source_chat_id ELSE $9 END,
+  source_run_id = CASE WHEN $8::text IS NULL THEN source_run_id ELSE $10 END,
   updated_at = now()
-WHERE id = $9 AND workspace_id = $10 AND user_id = $11
-RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt
+WHERE memories.id = $11 AND memories.workspace_id = $12 AND memories.user_id = $13
+  AND CASE $14::text WHEN 'all' THEN true WHEN 'personas' THEN memories.persona_id IS NOT NULL
+        WHEN 'chat' THEN memories.persona_id IS NULL OR memories.persona_id = $15
+        ELSE memories.persona_id IS NOT DISTINCT FROM $15 END
+  AND (NOT $6::bool OR $7::uuid IS NULL OR EXISTS (
+    SELECT 1 FROM personas p WHERE p.id = $7 AND p.workspace_id = $12 AND p.user_id = $13))
+RETURNING id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id
 `
 
 type UpdateMemoryParams struct {
@@ -615,16 +766,22 @@ type UpdateMemoryParams struct {
 	Body         *string
 	Tags         []string
 	Type         *string
+	Move         bool
+	ToPersonaID  *uuid.UUID
 	Source       *string
 	SourceChatID *uuid.UUID
 	SourceRunID  *uuid.UUID
 	ID           uuid.UUID
 	WorkspaceID  uuid.UUID
 	UserID       uuid.UUID
+	Scope        string
+	PersonaID    *uuid.UUID
 }
 
 // Absent fields keep their value. A non-empty source replaces the old one (the
-// latest conversation that touched the entry).
+// latest conversation that touched the entry). move sets persona_id to
+// to_persona_id (NULL: the person's own memory), which must be one of the
+// person's personas.
 func (q *Queries) UpdateMemory(ctx context.Context, arg UpdateMemoryParams) (Memory, error) {
 	row := q.db.QueryRow(ctx, updateMemory,
 		arg.Title,
@@ -632,12 +789,16 @@ func (q *Queries) UpdateMemory(ctx context.Context, arg UpdateMemoryParams) (Mem
 		arg.Body,
 		arg.Tags,
 		arg.Type,
+		arg.Move,
+		arg.ToPersonaID,
 		arg.Source,
 		arg.SourceChatID,
 		arg.SourceRunID,
 		arg.ID,
 		arg.WorkspaceID,
 		arg.UserID,
+		arg.Scope,
+		arg.PersonaID,
 	)
 	var i Memory
 	err := row.Scan(
@@ -658,6 +819,7 @@ func (q *Queries) UpdateMemory(ctx context.Context, arg UpdateMemoryParams) (Mem
 		&i.RetiredReason,
 		&i.RetiredAt,
 		&i.ConsolidationExempt,
+		&i.PersonaID,
 	)
 	return i, err
 }

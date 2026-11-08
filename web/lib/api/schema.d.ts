@@ -1373,13 +1373,22 @@ export interface paths {
         /**
          * The signed-in person's assistant memories, newest change first (or ranked by q)
          * @description Memory is strictly per person: only the signed-in person's entries are
-         *     ever returned. With q, results are ranked by full-text relevance over
-         *     title, tags, summary and body (plus fuzzy title matching).
+         *     ever returned. That includes each of their personas' own memories
+         *     (persona_id set) unless about narrows it. With q, results are ranked
+         *     by full-text relevance over title, tags, summary and body (plus fuzzy
+         *     title matching).
          */
         get: operations["listMemories"];
         put?: never;
-        post?: never;
-        /** Forget everything the assistant remembers about the signed-in person */
+        /**
+         * Add a memory by hand, e.g. a moment to a persona's own memory
+         * @description Saved like the assistant's own save_memory: a near-duplicate in the same
+         *     memory is updated instead (moments are always added), and text that
+         *     looks like a credential is refused with 422. Source is "manual". A
+         *     moment needs persona_id.
+         */
+        post: operations["createMemory"];
+        /** Forget everything the assistant remembers about the signed-in person, and its personas' own memories unless about narrows it */
         delete: operations["deleteAllMemories"];
         options?: never;
         head?: never;
@@ -1605,7 +1614,14 @@ export interface paths {
          */
         get: operations["listLibraryItems"];
         put?: never;
-        post?: never;
+        /**
+         * Add an image of your own to your Library
+         * @description Stores one image (PNG, JPEG, GIF or WebP, up to 25 MB) in the caller's
+         *     Library, e.g. a photo to use as their reference image. It counts
+         *     against the same storage cap as generated images. 422 for another
+         *     type, an empty file, one over the limit or a full Library.
+         */
+        post: operations["uploadLibraryItem"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1629,6 +1645,37 @@ export interface paths {
          * @description The image stays in its chat while that chat exists. 404 unless it is yours.
          */
         delete: operations["deleteLibraryItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{itemId}/reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Use an image as a reference likeness
+         * @description Marks the image as what one of the caller's personas looks like
+         *     (role persona, with persona_id) or what the caller looks like (role
+         *     self). Generated images of that persona or person start from it. Each
+         *     persona and the caller have at most one: this replaces the previous
+         *     one, and replaces any reference the image already was. 404 unless the
+         *     image is yours; 422 unless persona_id is one of your personas.
+         */
+        put: operations["setLibraryReference"];
+        post?: never;
+        /**
+         * Stop using an image as a reference
+         * @description The image stays in the Library. 404 unless it is yours.
+         */
+        delete: operations["clearLibraryReference"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2183,18 +2230,42 @@ export interface components {
             name?: string;
             query?: string;
         };
-        /** @description One of preference, project, person, life, work, fact, other */
+        /** @description One of preference, project, person, life, work, fact, other, moment (a shared moment; persona memory only) */
         MemoryType: string;
+        /**
+         * @default all
+         * @enum {string}
+         */
+        MemoryAbout: "all" | "person" | "persona";
+        MemoryCreate: {
+            title: string;
+            summary?: string;
+            body?: string;
+            tags?: string[];
+            type?: components["schemas"]["MemoryType"];
+            /**
+             * Format: uuid
+             * @description Save to this persona's own memory; absent saves to the person's
+             */
+            persona_id?: string;
+        };
         /**
          * @description One thing the personal assistant remembers about its person, kept apart
          *     from the shared wiki. superseded_by marks a retired entry and names the
          *     entry that replaced it; retired_reason and retired_at say why and when
          *     (a periodic consolidation pass retires duplicates this way). Restoring
-         *     an entry clears all three.
+         *     an entry clears all three. persona_id marks a persona's own memory
+         *     (who it is, and the moments it shared with the person); absent, the
+         *     entry is about the person.
          */
         Memory: {
             /** Format: uuid */
             id: string;
+            /**
+             * Format: uuid
+             * @description The persona whose own memory this is; absent for the person's memory
+             */
+            persona_id?: string;
             title: string;
             /** @description One line */
             summary: string;
@@ -2995,8 +3066,11 @@ export interface components {
         };
         RunTurn: {
             seq: number;
-            /** @enum {string} */
-            trigger: "start" | "approval" | "comment" | "resume" | "delegation";
+            /**
+             * @description image_followup: the automatic chat turn that shows the assistant the results of its generate_image calls (no user message)
+             * @enum {string}
+             */
+            trigger: "start" | "approval" | "comment" | "resume" | "delegation" | "image_followup";
             input_message: string;
             /** Format: date-time */
             started_at: string;
@@ -3874,8 +3948,33 @@ export interface components {
              */
             persona_id?: string;
             persona_name?: string;
+            /**
+             * @description generated: a persona made it in a chat; upload: the person added it
+             * @enum {string}
+             */
+            source?: "generated" | "upload";
+            reference?: components["schemas"]["LibraryReferenceRole"];
+            /**
+             * Format: uuid
+             * @description With reference persona: the persona this image shows
+             */
+            reference_persona_id?: string;
+            reference_persona_name?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        /**
+         * @description persona: what one of the person's personas looks like; self: what the person looks like
+         * @enum {string}
+         */
+        LibraryReferenceRole: "persona" | "self";
+        LibraryReferenceSet: {
+            role: components["schemas"]["LibraryReferenceRole"];
+            /**
+             * Format: uuid
+             * @description Required for role persona; one of your personas
+             */
+            persona_id?: string;
         };
         LibraryList: {
             items: components["schemas"]["LibraryItem"][];
@@ -6460,6 +6559,12 @@ export interface operations {
                 include_retired?: boolean;
                 /** @description Skip this many (listing only; search returns the top 50) */
                 offset?: number;
+                /** @description Whose memory: all (default), person (what the assistant remembers about the person) or persona (personas' own memories) */
+                about?: components["schemas"]["MemoryAbout"];
+                /** @description Only this persona's own memory (implies about=persona) */
+                persona_id?: string;
+                /** @description updated: newest change first (default); created: newest first. Listing only */
+                sort?: "updated" | "created";
             };
             header?: never;
             path?: never;
@@ -6479,11 +6584,40 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    createMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryCreate"];
+            };
+        };
+        responses: {
+            /** @description The saved (or updated near-duplicate) entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     deleteAllMemories: {
         parameters: {
             query: {
                 /** @description Must be true; guards against accidental wipes */
                 confirm: boolean;
+                /** @description Whose memory: all (default), person or persona */
+                about?: components["schemas"]["MemoryAbout"];
+                /** @description Only this persona's own memory (implies about=persona) */
+                persona_id?: string;
             };
             header?: never;
             path?: never;
@@ -6852,6 +6986,35 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    uploadLibraryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     deleteLibraryItem: {
         parameters: {
             query?: never;
@@ -6864,6 +7027,55 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setLibraryReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryReferenceSet"];
+            };
+        };
+        responses: {
+            /** @description Set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    clearLibraryReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared */
             204: {
                 headers: {
                     [name: string]: unknown;

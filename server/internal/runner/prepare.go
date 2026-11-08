@@ -662,9 +662,9 @@ func chatGroup(ctx context.Context, q *store.Queries, run store.Run) (string, er
 }
 
 // chatPersona loads the persona answering this turn (the chat's speaker, else
-// its host) fresh each turn, so edits show on the next turn, a new segment
-// (harness switch, idle cleanup) keeps the same voice, and each persona in a
-// shared chat answers in its own. It must belong to the chat's creator; nil
+// its host) and that persona's own memory fresh each turn, so edits show on
+// the next turn, a new segment (harness switch, idle cleanup) keeps the same
+// voice, and each persona in a shared chat answers in its own. It must belong to the chat's creator; nil
 // is the built-in Assistant.
 func chatPersona(ctx context.Context, q *store.Queries, run store.Run) (*harness.Persona, error) {
 	chat, err := q.ChatSessionForRun(ctx, &run.ID)
@@ -682,5 +682,12 @@ func chatPersona(ctx context.Context, q *store.Queries, run store.Run) (*harness
 	if err != nil {
 		return nil, err
 	}
-	return &harness.Persona{Name: p.Name, Tone: p.Tone, Instructions: p.CustomInstructions}, nil
+	// The persona's own memory, loaded in full (within a budget) every turn.
+	o := memory.Owner{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy}.Persona(p.ID)
+	entries, total, err := memory.New(q).PersonaContext(ctx, o)
+	if err != nil {
+		return nil, fmt.Errorf("persona memory: %w", err)
+	}
+	return &harness.Persona{Name: p.Name, Tone: p.Tone, Instructions: p.CustomInstructions,
+		Memory: memory.PersonaMarkdown(entries, total)}, nil
 }

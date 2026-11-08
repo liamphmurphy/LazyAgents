@@ -1788,14 +1788,19 @@ paths:
       summary: The signed-in person's assistant memories, newest change first (or ranked by q)
       description: |
         Memory is strictly per person: only the signed-in person's entries are
-        ever returned. With q, results are ranked by full-text relevance over
-        title, tags, summary and body (plus fuzzy title matching).
+        ever returned. That includes each of their personas' own memories
+        (persona_id set) unless about narrows it. With q, results are ranked
+        by full-text relevance over title, tags, summary and body (plus fuzzy
+        title matching).
       tags: [memories]
       parameters:
         - { name: q, in: query, description: Search text, schema: { type: string, maxLength: 500 } }
         - { name: type, in: query, description: Only entries of this type, schema: { $ref: "#/components/schemas/MemoryType" } }
         - { name: include_retired, in: query, description: Also list entries superseded by newer ones, schema: { type: boolean, default: false } }
         - { name: offset, in: query, description: "Skip this many (listing only; search returns the top 50)", schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+        - { name: about, in: query, description: "Whose memory: all (default), person (what the assistant remembers about the person) or persona (personas' own memories)", schema: { $ref: "#/components/schemas/MemoryAbout" } }
+        - { name: persona_id, in: query, description: Only this persona's own memory (implies about=persona), schema: { type: string, format: uuid } }
+        - { name: sort, in: query, description: "updated: newest change first (default); created: newest first. Listing only", schema: { type: string, enum: [updated, created], default: updated } }
       responses:
         "200":
           description: Memories, 50 per page
@@ -1803,12 +1808,35 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MemoryList" }
         default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createMemory
+      summary: Add a memory by hand, e.g. a moment to a persona's own memory
+      description: |
+        Saved like the assistant's own save_memory: a near-duplicate in the same
+        memory is updated instead (moments are always added), and text that
+        looks like a credential is refused with 422. Source is "manual". A
+        moment needs persona_id.
+      tags: [memories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryCreate" }
+      responses:
+        "200":
+          description: The saved (or updated near-duplicate) entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        default: { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteAllMemories
-      summary: Forget everything the assistant remembers about the signed-in person
+      summary: Forget everything the assistant remembers about the signed-in person, and its personas' own memories unless about narrows it
       tags: [memories]
       parameters:
         - { name: confirm, in: query, required: true, description: Must be true; guards against accidental wipes, schema: { type: boolean } }
+        - { name: about, in: query, description: "Whose memory: all (default), person or persona", schema: { $ref: "#/components/schemas/MemoryAbout" } }
+        - { name: persona_id, in: query, description: Only this persona's own memory (implies about=persona), schema: { type: string, format: uuid } }
       responses:
         "200":
           description: Deleted
@@ -2080,6 +2108,32 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/LibraryList" }
         default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: uploadLibraryItem
+      summary: Add an image of your own to your Library
+      description: |
+        Stores one image (PNG, JPEG, GIF or WebP, up to 25 MB) in the caller's
+        Library, e.g. a photo to use as their reference image. It counts
+        against the same storage cap as generated images. 422 for another
+        type, an empty file, one over the limit or a full Library.
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
 
   /library/{itemId}:
     parameters:
@@ -2091,6 +2145,40 @@ paths:
       tags: [library]
       responses:
         "204": { description: Removed }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /library/{itemId}/reference:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setLibraryReference
+      summary: Use an image as a reference likeness
+      description: |
+        Marks the image as what one of the caller's personas looks like
+        (role persona, with persona_id) or what the caller looks like (role
+        self). Generated images of that persona or person start from it. Each
+        persona and the caller have at most one: this replaces the previous
+        one, and replaces any reference the image already was. 404 unless the
+        image is yours; 422 unless persona_id is one of your personas.
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryReferenceSet" }
+      responses:
+        "204": { description: Set }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: clearLibraryReference
+      summary: Stop using an image as a reference
+      description: The image stays in the Library. 404 unless it is yours.
+      tags: [library]
+      responses:
+        "204": { description: Cleared }
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
@@ -2807,7 +2895,21 @@ components:
         query: { type: string, maxLength: 2000 }
     MemoryType:
       type: string
-      description: "One of preference, project, person, life, work, fact, other"
+      description: "One of preference, project, person, life, work, fact, other, moment (a shared moment; persona memory only)"
+    MemoryAbout:
+      type: string
+      enum: [all, person, persona]
+      default: all
+    MemoryCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, maxLength: 300 }
+        body: { type: string, maxLength: 20000 }
+        tags: { type: array, maxItems: 12, items: { type: string, maxLength: 40 } }
+        type: { $ref: "#/components/schemas/MemoryType" }
+        persona_id: { type: string, format: uuid, description: "Save to this persona's own memory; absent saves to the person's" }
     Memory:
       type: object
       description: |
@@ -2815,10 +2917,13 @@ components:
         from the shared wiki. superseded_by marks a retired entry and names the
         entry that replaced it; retired_reason and retired_at say why and when
         (a periodic consolidation pass retires duplicates this way). Restoring
-        an entry clears all three.
+        an entry clears all three. persona_id marks a persona's own memory
+        (who it is, and the moments it shared with the person); absent, the
+        entry is about the person.
       required: [id, title, summary, body, tags, type, source, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
+        persona_id: { type: string, format: uuid, description: "The persona whose own memory this is; absent for the person's memory" }
         title: { type: string }
         summary: { type: string, description: One line }
         body: { type: string }
@@ -3564,7 +3669,7 @@ components:
       required: [seq, trigger, input_message, started_at, status, has_log]
       properties:
         seq: { type: integer }
-        trigger: { type: string, enum: [start, approval, comment, resume, delegation] }
+        trigger: { type: string, enum: [start, approval, comment, resume, delegation, image_followup], description: "image_followup: the automatic chat turn that shows the assistant the results of its generate_image calls (no user message)" }
         input_message: { type: string }
         started_at: { type: string, format: date-time }
         ended_at: { type: string, format: date-time }
@@ -4399,7 +4504,21 @@ components:
         project_key: { type: string, description: The project of the chat it came from, for linking to it }
         persona_id: { type: string, format: uuid, description: "The persona that made it, while that persona exists" }
         persona_name: { type: string }
+        source: { type: string, enum: [generated, upload], description: "generated: a persona made it in a chat; upload: the person added it" }
+        reference: { $ref: "#/components/schemas/LibraryReferenceRole" }
+        reference_persona_id: { type: string, format: uuid, description: "With reference persona: the persona this image shows" }
+        reference_persona_name: { type: string }
         created_at: { type: string, format: date-time }
+    LibraryReferenceRole:
+      type: string
+      enum: [persona, self]
+      description: "persona: what one of the person's personas looks like; self: what the person looks like"
+    LibraryReferenceSet:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/LibraryReferenceRole" }
+        persona_id: { type: string, format: uuid, description: Required for role persona; one of your personas }
     LibraryList:
       type: object
       required: [items, has_more]

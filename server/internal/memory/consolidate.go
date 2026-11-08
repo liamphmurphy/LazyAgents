@@ -33,7 +33,8 @@ type Merge struct {
 }
 
 // Consolidate merges each person's duplicate memories: of two live entries of
-// the same type with a near-identical title or summary, the older one is
+// the same memory (the person's own, or one persona's; moments never merge)
+// and type with a near-identical title or summary, the older one is
 // retired in favour of the more recently changed one. Retiring is reversible
 // (restore clears superseded_by) and every merge is recorded on the retired
 // entry (retired_reason, retired_at) and returned, so the person can see
@@ -72,7 +73,7 @@ func (s *Service) Consolidate(ctx context.Context) ([]Merge, error) {
 			}
 			retired[p.RetireID] = true
 			n++
-			out = append(out, Merge{Owner: Owner{WorkspaceID: p.WorkspaceID, UserID: p.UserID},
+			out = append(out, Merge{Owner: Owner{WorkspaceID: p.WorkspaceID, UserID: p.UserID, PersonaID: p.PersonaID},
 				RetiredID: p.RetireID, KeptID: p.KeepID, Retired: p.RetireTitle, Kept: p.KeepTitle, Score: p.Score})
 		}
 		// A short batch was everything; a batch that merged nothing would

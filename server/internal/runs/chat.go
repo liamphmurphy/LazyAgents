@@ -96,7 +96,7 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 // speaker, else its host), which must belong to the chat's creator (a deleted
 // persona gives none).
 func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (ChatCaps, error) {
-	id := chatSpeakerID(chat)
+	id := ChatSpeakerID(chat)
 	if id == nil {
 		return ChatCaps{}, nil
 	}
@@ -419,7 +419,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession, project, body string, relay bool, handoffChars int) (store.ChatSession, store.Run, store.RunTurn, error) {
 	var run store.Run
 	var turn store.RunTurn
-	if id := chatSpeakerID(chat); id != nil {
+	if id := ChatSpeakerID(chat); id != nil {
 		// Recency orders the persona list and picks the successor when the default is deleted.
 		if err := q.TouchPersonaUsed(ctx, *id); err != nil {
 			return chat, run, turn, err

@@ -5,6 +5,8 @@
 import { bareTool, type RunEventLike } from "./chat-ui.ts";
 
 export const MEMORY_TYPES = ["preference", "fact", "project", "person", "work", "life", "other"] as const;
+/** A persona's own memory can also hold moments it shared with the person. */
+export const PERSONA_MEMORY_TYPES = [...MEMORY_TYPES, "moment"] as const;
 
 export const typeLabel = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : "Other");
 
@@ -99,6 +101,7 @@ type MemoryLike = {
   type: string;
   source: string;
   superseded_by?: string;
+  persona_id?: string;
   created_at: string;
   updated_at: string;
 };
@@ -111,6 +114,7 @@ export function memoriesMarkdown(memories: MemoryLike[], exportedAt: string): st
     if (m.summary) lines.push(m.summary, ``);
     if (m.body && m.body !== m.summary) lines.push(m.body, ``);
     lines.push(`- Type: ${m.type}`);
+    if (m.persona_id) lines.push(`- Persona's own memory: ${m.persona_id}`);
     if (m.tags.length) lines.push(`- Tags: ${m.tags.join(", ")}`);
     lines.push(`- Source: ${m.source || "unknown"}`, `- Created: ${m.created_at}`, `- Updated: ${m.updated_at}`);
     if (m.superseded_by) lines.push(`- Superseded by: ${m.superseded_by}`);
@@ -192,7 +196,8 @@ export function parseMemoryImport(text: string): ImportParse {
   const entries: ImportEntry[] = [];
   let skipped = 0;
   for (const item of list) {
-    if (!isObj(item) || s(item.superseded_by)) {
+    // Retired entries, and a persona's own memory from our export (it's not about the person).
+    if (!isObj(item) || s(item.superseded_by) || s(item.persona_id)) {
       skipped++;
       continue;
     }

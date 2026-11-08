@@ -122,6 +122,9 @@ func TestChatSpecCapabilities(t *testing.T) {
 				if tc.caps.Images && h != agentdef.HarnessCodex && !strings.Contains(ins, "call generate_image") {
 					t.Errorf("non-Codex chat should be told to call generate_image")
 				}
+				if tc.caps.Images && h != agentdef.HarnessCodex && (!strings.Contains(ins, "say you're trying") || !strings.Contains(ins, "follow-up turn")) {
+					t.Errorf("non-Codex chat should be told it's only trying, and that a follow-up turn brings the result")
+				}
 				if strings.Contains(ins, "Codex model") || (h == agentdef.HarnessCodex && strings.Contains(ins, "generate_image")) {
 					t.Errorf("image instructions: switch-model guidance or generate_image for a Codex chat")
 				}

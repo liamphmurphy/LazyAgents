@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/memory"
 	"github.com/liamphmurphy/vesper/server/internal/personas"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // The persona is read from the chat on every turn: an edit shows on the next
@@ -25,6 +27,15 @@ func TestChatPersonaAppliesPerTurn(t *testing.T) {
 	tone, ins := "formal", "Sign off as Coach."
 	p, err := ps.Create(e.ctx, o, personas.NewInput{Name: "Writing coach", Tone: &tone, Instructions: &ins})
 	if err != nil {
+		t.Fatal(err)
+	}
+	// The persona's own memory loads in its own section, never in the person's index.
+	mem := memory.New(store.New(e.pool))
+	mo := memory.Owner{WorkspaceID: e.ws, UserID: e.me.ID}
+	if _, err := mem.Save(e.ctx, mo.Persona(p.ID), memory.Input{Title: "Rowing history", Body: "Taught rowing for ten years."}, memory.Source{Label: "manual"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mem.Save(e.ctx, mo.Persona(p.ID), memory.Input{Title: "First essay together", Summary: "We fixed the intro", Type: memory.TypeMoment}, memory.Source{Label: "manual"}); err != nil {
 		t.Fatal(err)
 	}
 	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "Persona chat", PersonaID: &p.ID, Message: &runs.ChatMessageInput{Body: "Message one"}})
@@ -48,6 +59,13 @@ func TestChatPersonaAppliesPerTurn(t *testing.T) {
 	}
 	if strings.Index(md, "Do not call claim_ticket") > strings.Index(md, "## Persona") {
 		t.Errorf("persona precedes the chat rules:\n%s", md)
+	}
+	own := strings.Index(md, "## Your own memory (Writing coach)")
+	if own < 0 || !strings.Contains(md[own:], "Taught rowing for ten years.") || !strings.Contains(md[own:], "First essay together: We fixed the intro") {
+		t.Errorf("persona memory section missing:\n%s", md)
+	}
+	if idx := md[strings.Index(md, "### Memory index"):strings.Index(md, "## Instructions")]; strings.Contains(idx, "Rowing history") {
+		t.Errorf("persona memory in the person's index:\n%s", idx)
 	}
 
 	// An edit applies to the next turn of the same, resumed segment.

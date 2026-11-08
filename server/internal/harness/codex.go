@@ -33,6 +33,12 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		sandbox = "workspace-write"
 	}
 	opts := []string{"--json", "--skip-git-repo-check", "--dangerously-bypass-hook-trust", "--strict-config"}
+	if len(t.Images) > 0 {
+		// --image takes several comma-separated files (exec and exec resume,
+		// codex-cli 0.167.0) and keeps consuming values, so it goes first: the
+		// flags after it end the list before the positional prompt.
+		opts = append([]string{"--image", strings.Join(t.Images, ",")}, opts...)
+	}
 	if spec.Model != "" {
 		opts = append(opts, "-m", spec.Model)
 	}

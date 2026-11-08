@@ -968,13 +968,14 @@ var Tools = []Tool{
 			_, err := d.Runs.Comment(ctx, c, in.Ticket, in.Body)
 			return ok(nil), err
 		}),
-	define("search_memory", "Search your memory of this person: ranked over titles, tags, summaries and bodies. Returns entries without bodies; open one with read_memory.", searchMemory),
+	define("search_memory", "Search your memory of this person (or, with about: persona, your own memory as this chat's persona): ranked over titles, tags, summaries and bodies. Returns entries without bodies; open one with read_memory.", searchMemory),
 	define("read_memory", "Read one memory entry in full.", readMemory),
-	define("save_memory", "Remember something about this person. Updates a near-duplicate entry instead of adding another. Never include secrets (credentials, tokens, passwords): they are refused. Tell the person what you saved.", saveMemory),
-	define("update_memory", "Change a memory entry, or retire it in favour of a newer one with superseded_by.", updateMemory),
+	define("save_memory", "Remember something about this person, or with about: persona something about yourself as this chat's persona (identity, traits, history, appearance) or a shared moment (type moment). Updates a near-duplicate entry instead of adding another. Never include secrets (credentials, tokens, passwords): they are refused. Tell the person what you saved.", saveMemory),
+	define("update_memory", "Change a memory entry, retire it in favour of a newer one with superseded_by, or move it between the person's memory and your own with move_to.", updateMemory),
 	define("forget_memory", "Delete a memory entry for good, e.g. when the person says 'forget that'.", forgetMemory),
 	define("set_chat_title", "Name this conversation after the person's first message: a concise title of 2 to 6 words. Does nothing if the person already named it.", setChatTitle),
-	define("generate_image", "Make an image. Only when the person asks for one and your instructions allow it. It is created with Codex right after your reply and shown under it; you don't get the image, so say you're making it. At most 2 per reply.", generateImage),
+	define("generate_image", "Try to make an image. Only when the person asks for one and your instructions allow it. Codex attempts it right after your reply and it may fail (e.g. a moderation refusal), so say you're trying, never that it's done. You then get a follow-up turn with the image (or why it failed) to react to. At most 2 per reply; not available in that follow-up.", generateImage),
+	define("get_video_transcript", "Read the timestamped captions of a YouTube video the person shared, to watch along with them: react to what's actually said. Pass from_seconds/to_seconds for the part they're at.", videoTranscript),
 	define("propose_persona", "Propose a new persona for the person (another voice of their assistant). Only when the person asks for one and your instructions allow it. Nothing is created until the person approves it in the chat; it starts with no coding or image permissions. Tell the person you proposed it.", proposePersona),
 	define("list_runs", "List agent runs in the current chat project, newest first: live runs by default, or finished/all. Filter by ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One agent run in the current chat project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/memory"
@@ -12,17 +14,36 @@ import (
 )
 
 // Memory manager endpoints. Memory is strictly per person: every call is
-// scoped to the signed-in user, so another person's entries are a 404.
+// scoped to the signed-in user, so another person's entries are a 404. The
+// manager reaches all of the person's memory: theirs and each of their
+// personas' own.
 
 const memoryPageSize = 50
 
 func memoryOwner(ctx context.Context) memory.Owner {
 	u, _, ws := me(ctx)
-	return memory.Owner{WorkspaceID: ws, UserID: u.ID}
+	return memory.Owner{WorkspaceID: ws, UserID: u.ID, Scope: memory.ScopeAll}
+}
+
+// memoryFilter narrows the person's memory to about or one persona's.
+func memoryFilter(ctx context.Context, about *api.MemoryAbout, persona *uuid.UUID) (memory.Owner, error) {
+	o := memoryOwner(ctx)
+	switch {
+	case persona != nil:
+		return o.Persona(*persona), nil
+	case about == nil || *about == api.MemoryAboutAll:
+		return o, nil
+	case *about == api.MemoryAboutPerson:
+		return o.Person(), nil
+	case *about == api.MemoryAboutPersona:
+		o.Scope = memory.ScopePersonas
+		return o, nil
+	}
+	return o, apperr.Invalid("about", "must be all, person or persona")
 }
 
 func toMemory(m store.Memory) api.Memory {
-	out := api.Memory{Id: m.ID, Title: m.Title, Summary: m.Summary, Body: m.Body, Tags: m.Tags, Type: m.Type, Source: m.Source,
+	out := api.Memory{Id: m.ID, PersonaId: m.PersonaID, Title: m.Title, Summary: m.Summary, Body: m.Body, Tags: m.Tags, Type: m.Type, Source: m.Source,
 		SourceChatId: m.SourceChatID, SourceRunId: m.SourceRunID, SupersededBy: m.SupersededBy, RetiredAt: m.RetiredAt,
 		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
 	if m.RetiredReason != "" {
@@ -32,8 +53,11 @@ func toMemory(m store.Memory) api.Memory {
 }
 
 func (s *Server) ListMemories(ctx context.Context, req api.ListMemoriesRequestObject) (api.ListMemoriesResponseObject, error) {
-	o := memoryOwner(ctx)
-	q := memory.Query{Limit: memoryPageSize + 1}
+	o, err := memoryFilter(ctx, req.Params.About, req.Params.PersonaId)
+	if err != nil {
+		return nil, err
+	}
+	q := memory.Query{Limit: memoryPageSize + 1, ByCreated: req.Params.Sort != nil && *req.Params.Sort == api.Created}
 	if req.Params.Q != nil {
 		q.Text = *req.Params.Q
 	}
@@ -71,6 +95,27 @@ func (s *Server) GetMemory(ctx context.Context, req api.GetMemoryRequestObject) 
 		return nil, err
 	}
 	return api.GetMemory200JSONResponse(toMemory(m)), nil
+}
+
+// CreateMemory saves an entry by hand, to the person's memory or one of their
+// personas' (Save checks the persona is theirs).
+func (s *Server) CreateMemory(ctx context.Context, req api.CreateMemoryRequestObject) (api.CreateMemoryResponseObject, error) {
+	if req.Body == nil {
+		return nil, apperr.Invalid("body", "required")
+	}
+	b, o := req.Body, memoryOwner(ctx).Person()
+	if b.PersonaId != nil {
+		o = o.Persona(*b.PersonaId)
+	}
+	in := memory.Input{Title: b.Title, Summary: deref(b.Summary), Body: deref(b.Body), Type: deref(b.Type)}
+	if b.Tags != nil {
+		in.Tags = *b.Tags
+	}
+	res, err := memory.New(s.Q).Save(ctx, o, in, memory.Source{Label: "manual"})
+	if err != nil {
+		return nil, err
+	}
+	return api.CreateMemory200JSONResponse(toMemory(res.Memory)), nil
 }
 
 func (s *Server) UpdateMemory(ctx context.Context, req api.UpdateMemoryRequestObject) (api.UpdateMemoryResponseObject, error) {
@@ -116,7 +161,11 @@ func (s *Server) DeleteAllMemories(ctx context.Context, req api.DeleteAllMemorie
 	if !req.Params.Confirm {
 		return nil, apperr.Invalid("confirm", "must be true to delete every memory")
 	}
-	n, err := memory.New(s.Q).DeleteAll(ctx, memoryOwner(ctx))
+	o, err := memoryFilter(ctx, req.Params.About, req.Params.PersonaId)
+	if err != nil {
+		return nil, err
+	}
+	n, err := memory.New(s.Q).DeleteAll(ctx, o)
 	if err != nil {
 		return nil, err
 	}

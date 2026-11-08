@@ -17,7 +17,7 @@ import (
 // chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "propose_persona"}
+	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona"}
 
 // chatScope is the project a chat run may read from.
 type chatScope struct {
@@ -26,6 +26,9 @@ type chatScope struct {
 	ProjectKey string
 	// UserID is the person the chat belongs to: the owner of its memory.
 	UserID uuid.UUID
+	// PersonaID is the persona answering the chat (its speaker, else its host),
+	// the one persona memory it may reach.
+	PersonaID *uuid.UUID
 }
 
 // chatScopeFor is nil unless the caller's token belongs to a chat run.
@@ -51,7 +54,7 @@ func chatScopeFor(ctx context.Context, d Deps, c agents.Caller) (*chatScope, err
 	if err != nil {
 		return nil, err
 	}
-	return &chatScope{ChatID: chat.ID, ProjectID: chat.ProjectID, ProjectKey: p.Key, UserID: chat.CreatedBy}, nil
+	return &chatScope{ChatID: chat.ID, ProjectID: chat.ProjectID, ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: runs.ChatSpeakerID(chat)}, nil
 }
 
 // allowsArtifact: workspace-level pages (no project) are shared; the rest must
@@ -65,8 +68,8 @@ func (s *chatScope) allowsTicket(t store.Ticket) bool { return s == nil || t.Pro
 const chatInstructions = `You are the person's Personal Assistant, chatting about project %s (chat %s). Answer directly.
 Look things up with list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks; search first and open only what matters. Cite what you used with [[…]] links.
 Use create_ticket and create_epic when asked and return their identifiers. Never claim tickets, execute project work, or delegate.
-You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this".
-set_chat_title names the conversation on its first message.`
+You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this". In a persona chat, about: "persona" reaches the persona's own memory (its identity and shared moments) instead.
+set_chat_title names the conversation on its first message. When the person shares a YouTube link, read it with get_video_transcript before reacting to the video.`
 
 // sourceVisible reports whether a link target or backlink source of this kind
 // (artifact, ticket, comment) is in the chat's project or workspace-wide.
@@ -165,7 +168,8 @@ func createChatEpic(ctx context.Context, d Deps, c agents.Caller, in NewEpicIn) 
 }
 
 type GenerateImageIn struct {
-	Prompt string `json:"prompt" jsonschema:"A detailed description of the image to create (1–4000 characters)"`
+	Prompt     string   `json:"prompt" jsonschema:"A detailed description of the image to create (1–4000 characters)"`
+	References []string `json:"references,omitempty" jsonschema:"Likenesses to keep: persona when the image shows you, person when it shows the person. Each uses the reference image set in the person's Library; omit when the image shows neither."`
 }
 
 // generateImage queues an image for the runner to make with Codex after this
@@ -178,10 +182,12 @@ func generateImage(ctx context.Context, d Deps, c agents.Caller, in GenerateImag
 	if s == nil {
 		return nil, apperr.Conflict("generate_image only works in a chat with a person")
 	}
-	if _, err := d.Runs.QueueChatImage(ctx, c.Agent.WorkspaceID, *c.RunID, in.Prompt); err != nil {
+	if _, err := d.Runs.QueueChatImage(ctx, c.Agent.WorkspaceID, *c.RunID, in.Prompt, in.References); err != nil {
 		return nil, err
 	}
-	return map[string]any{"queued": true, "tell_the_person": "Queued. The image is generated with Codex right after your reply and appears under it. Tell the person you're making it; don't describe it as finished."}, nil
+	return map[string]any{"queued": true, "tell_the_person": "Queued. Codex tries to make the image right after your reply; it may still fail (for example if moderation refuses it). " +
+		"Tell the person you're trying to make it; don't describe it as finished or promise it will appear. " +
+		"You'll get a follow-up turn with the image to look at, or the reason it failed, to react to."}, nil
 }
 
 type ProposePersonaIn struct {

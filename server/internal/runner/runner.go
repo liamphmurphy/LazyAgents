@@ -916,9 +916,33 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		ctxFiles = append(ctxFiles, attFiles...)
 		prompt += attPrompt
+		if turn.Trigger == runs.TriggerImageFollowup {
+			// The images (and failures) the previous turn's generate_image calls made.
+			imgFiles, imgPrompt, err := r.imageFollowup(ctx, q, turn)
+			if err != nil {
+				log.Warn("image follow-up", "err", err)
+				r.failChat(ctx, c, "Could not load the generated images.")
+				return
+			}
+			ctxFiles = append(ctxFiles, imgFiles...)
+			prompt += imgPrompt
+		}
+	}
+	// Reference images aren't context files: they stay out of the AGENTS.md list.
+	var refFiles map[string][]byte
+	if c.run.Purpose == "chat" {
+		var refPrompt string
+		refFiles, refPrompt = r.chatTurnReferences(ctx, q, c)
+		// The image follow-up can't make images, so it doesn't need the hint.
+		if turn.Trigger != runs.TriggerImageFollowup {
+			prompt += refPrompt
+		}
 	}
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}
+	for k, v := range refFiles {
+		files[k] = v
+	}
 	for i, f := range ctxFiles {
 		paths[i] = f.Path
 		files[f.Path] = f.Body

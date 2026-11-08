@@ -34,9 +34,9 @@ const (
 	MaxProposalReasonRunes = 500
 )
 
-// chatSpeakerID is the persona answering the chat: its speaker, else its host.
+// ChatSpeakerID is the persona answering the chat: its speaker, else its host.
 // nil is the built-in Assistant.
-func chatSpeakerID(chat store.ChatSession) *uuid.UUID {
+func ChatSpeakerID(chat store.ChatSession) *uuid.UUID {
 	if chat.SpeakerPersonaID != nil {
 		return chat.SpeakerPersonaID
 	}
@@ -98,7 +98,7 @@ func joinChat(ctx context.Context, q *store.Queries, chat store.ChatSession, id 
 // mentioned persona joins the chat.
 func routeHumanMessage(ctx context.Context, q *store.Queries, chat store.ChatSession, body string) (*uuid.UUID, []uuid.UUID, error) {
 	if !strings.Contains(body, "@") {
-		return chatSpeakerID(chat), []uuid.UUID{}, nil
+		return ChatSpeakerID(chat), []uuid.UUID{}, nil
 	}
 	ps, err := ownerPersonas(ctx, q, chat)
 	if err != nil {
@@ -106,7 +106,7 @@ func routeHumanMessage(ctx context.Context, q *store.Queries, chat store.ChatSes
 	}
 	ids := PersonaMentions(body, ps)
 	if len(ids) == 0 {
-		return chatSpeakerID(chat), []uuid.UUID{}, nil
+		return ChatSpeakerID(chat), []uuid.UUID{}, nil
 	}
 	for _, id := range ids {
 		if err := joinChat(ctx, q, chat, id); err != nil {
@@ -154,7 +154,7 @@ func GroupNote(ctx context.Context, q *store.Queries, chat store.ChatSession) (s
 	if err != nil {
 		return "", err
 	}
-	speaker := chatSpeakerID(chat)
+	speaker := ChatSpeakerID(chat)
 	canCreate := false
 	if speaker != nil {
 		if i := slices.IndexFunc(ps, func(p store.Persona) bool { return p.ID == *speaker }); i >= 0 {
@@ -219,7 +219,7 @@ func RelayChat(ctx context.Context, q *store.Queries, chatID uuid.UUID, reply st
 	if err != nil {
 		return err
 	}
-	from := chatSpeakerID(chat)
+	from := ChatSpeakerID(chat)
 	queue := slices.Clone(chat.QueuedPersonaIds)
 	if strings.Contains(reply, "@") {
 		for _, id := range PersonaMentions(reply, ps) {
@@ -305,7 +305,7 @@ func (s *Service) ProposePersona(ctx context.Context, ws, runID uuid.UUID, in Pe
 		if err != nil {
 			return err
 		}
-		speaker := chatSpeakerID(chat)
+		speaker := ChatSpeakerID(chat)
 		if speaker == nil {
 			return apperr.Conflict("The built-in Assistant can't create personas; tell the person to enable it for a persona in Manage personas.")
 		}

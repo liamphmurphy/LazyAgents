@@ -19,7 +19,7 @@ import {
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
-import { chatTitle, needsSwitchConfirm } from "@/lib/chat-ui";
+import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
 import { codesInRepos, insertMention, mentionQuery, mentionSuggestions, repoShortName } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
@@ -73,9 +73,6 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project: string; agent: { name: string } };
 
-/** The window of run events that belongs to an assistant reply: from its turn's message to the next one. */
-type Turn = { since?: string; until?: string };
-
 function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string> }) {
   if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
   const mine = m.role === "user";
@@ -121,12 +118,13 @@ const snippet = (s: string) => (s.length > 120 ? `${s.slice(0, 120).trimEnd()}â€
  * and memory changes (with Undo), plus the running turn's live activity. Kept out of the
  * chat tab so the conversation reads as if no tools ran.
  */
-function ActivityLog({ list, turns, groups, running, runId, since }: { list: Message[] | undefined; turns: Map<string, Turn>; groups: Groups; running: boolean; runId?: string; since?: string }) {
+function ActivityLog({ list, turns, groups, running, runId, since }: { list: Message[] | undefined; turns: Map<string, TurnWindow>; groups: Groups; running: boolean; runId?: string; since?: string }) {
   const replies = (list ?? []).filter((m) => turns.has(m.id));
   const prompt = new Map<string, string>();
   let last: Message | undefined;
   for (const m of list ?? []) {
     if (m.role === "user") last = m;
+    else if (turns.get(m.id)?.followup) prompt.set(m.id, "Follow-up: reacting to the generated images");
     else if (turns.has(m.id) && last) prompt.set(m.id, last.body_md);
   }
   if (!replies.length && !running) {
@@ -181,26 +179,6 @@ function dropDraft(id: string) {
   }
 }
 
-/**
- * Each turn's last assistant reply gets the window of events between its user
- * message and the next one, so a turn's memory notices show once, under its answer.
- */
-function turnWindows(list: Message[] | undefined): Map<string, Turn> {
-  const out = new Map<string, Turn>();
-  let since: string | undefined;
-  let reply: Message | undefined;
-  const close = (until?: string) => reply && out.set(reply.id, { since, until });
-  for (const m of list ?? []) {
-    if (m.role === "user") {
-      close(m.created_at);
-      since = m.created_at;
-      reply = undefined;
-    } else if (m.role === "assistant") reply = m;
-  }
-  close(undefined);
-  return out;
-}
-
 export function Conversation({ id, actions }: { id: string; actions?: ReactNode }) {
   const chat = useChat(id);
   const messages = useChatMessages(id);
@@ -252,8 +230,9 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
   const list = messages.data?.messages;
   const lastUser = list?.findLast((m) => m.role === "user");
-  // A turn a persona handed on starts after the previous reply, not the person's message.
-  const since = list?.at(-1)?.created_at ?? lastUser?.created_at;
+  // The running turn starts after the newest message, which may be a reply, not
+  // the person's: a persona handing on, or the image follow-up.
+  const since = runningSince(list) ?? lastUser?.created_at;
   const turns = turnWindows(list);
   const drop = useFileDrop(files.add, !!c && !c.archived && !locked);
 
@@ -453,7 +432,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               </span>
             )}
           </div>
-          <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={lastUser?.created_at} />
+          <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={since} />
         </div>
         <div role="tabpanel" aria-label="Chat" hidden={tab !== "chat"} className="flex-1 overflow-y-auto px-6 py-5">
           {messages.isError ? (

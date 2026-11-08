@@ -20,7 +20,12 @@
 //	                    prompt starts "Generate exactly one image") does what
 //	                    FAKE_IMAGE_STEP says: ok (default; writes exec-<uuid>.png into
 //	                    .lazyagents/outbox), empty (succeeds, writes nothing), fail
-//	                    (exits 1), hang (waits until killed)
+//	                    (exits 1), hang (waits until killed), moderation (succeeds
+//	                    with a content-policy refusal, writes nothing). The
+//	                    image_followup turn after it reads the delivered images, calls
+//	                    generate_image once more and echoes its prompt (or fails,
+//	                    with FAKE_HARNESS_FAIL_FOLLOWUP set). FAKE_IMAGE_REFERENCES
+//	                    (comma-separated) is passed as generate_image references.
 //	slow                wait for SIGINT (pause), then end the turn
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
 //	                    writes child.txt in the shared checkout and completes
@@ -167,6 +172,7 @@ func main() {
 	modeFromFile()
 	var prompt, resume, cfgPath, model string
 	var mcpURL, tokenEnv, mcpApproval string
+	var images []string // codex --image files (comma-separated)
 	args := os.Args[1:]
 	// Chat model discovery for `claude` (chatmodels.DiscoverLocal): answer the
 	// initialize control request with one model, then wait for EOF.
@@ -275,6 +281,9 @@ func main() {
 			case "-m":
 				model = args[i+1]
 				i++
+			case "--image":
+				images = strings.Split(args[i+1], ",")
+				i++
 			case "-s", "-C", "--add-dir":
 				i++
 			default:
@@ -324,7 +333,14 @@ func main() {
 	if path := os.Getenv("FAKE_HARNESS_LOG"); path != "" {
 		wd, _ := os.Getwd()
 		_, request, _ := strings.Cut(prompt, "Request: ") // an image step's job prompt
-		line, _ := json.Marshal(map[string]any{"request": request, "cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE"), "model": model, "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
+		// Each input image as "path=contents", so tests see what was delivered.
+		var imageFiles []string
+		for _, p := range images {
+			b, _ := os.ReadFile(p)
+			imageFiles = append(imageFiles, p+"="+string(b))
+		}
+		line, _ := json.Marshal(map[string]any{"request": request, "cwd": wd, "resume": resume, "prompt": firstLine(prompt), "full_prompt": prompt, "images": strings.Join(imageFiles, "\n"),
+			"mode": os.Getenv("FAKE_HARNESS_MODE"), "model": model, "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
 		if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			_, _ = f.Write(append(line, '\n'))
 			f.Close()
@@ -368,6 +384,11 @@ func main() {
 			os.Exit(1)
 		case "hang":
 			time.Sleep(time.Hour) // until killed
+		case "moderation":
+			refusal := "I can't create that image: the request was blocked by the safety system under the content policy."
+			text(refusal)
+			result(false, refusal)
+			return
 		case "empty":
 		default:
 			_ = os.MkdirAll(".lazyagents/outbox", 0o755)
@@ -448,6 +469,7 @@ func main() {
 			body, isErr = err.Error(), true
 		case res.IsError:
 			body, isErr = res.Content[0].(*mcp.TextContent).Text, true
+			out["error"] = body
 		default:
 			b, _ := json.Marshal(res.StructuredContent)
 			body = string(b)
@@ -472,8 +494,28 @@ func main() {
 	// chat-image: "image: <text>" asks for an image through MCP; any other prompt just answers.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-image" {
 		reply := "Chat reply: " + prompt
-		if want, ok := strings.CutPrefix(prompt, "image: "); ok {
-			out := call("generate_image", map[string]any{"prompt": want})
+		if strings.HasPrefix(prompt, "(Vesper: this is an automatic follow-up") {
+			// The image follow-up: open the delivered images, try (and fail) to
+			// ask for another, and echo what it was told.
+			if os.Getenv("FAKE_HARNESS_FAIL_FOLLOWUP") != "" {
+				result(true, "follow-up crashed")
+				os.Exit(3)
+			}
+			seen := 0
+			for _, p := range regexp.MustCompile("`(\\.lazyagents/attachments/generated/[^`]+)`").FindAllStringSubmatch(prompt, -1) {
+				if b, err := os.ReadFile(p[1]); err == nil && len(b) > 0 {
+					seen++
+				}
+			}
+			again := call("generate_image", map[string]any{"prompt": "another one"})
+			reply = fmt.Sprintf("Follow-up (seen=%d, again=%v):\n%s", seen, again["error"], prompt)
+		} else if want, ok := strings.CutPrefix(prompt, "image: "); ok {
+			want, _, _ = strings.Cut(want, "\n\n(Vesper:") // notes the runner appended
+			args := map[string]any{"prompt": want}
+			if refs := os.Getenv("FAKE_IMAGE_REFERENCES"); refs != "" {
+				args["references"] = strings.Split(refs, ",")
+			}
+			out := call("generate_image", args)
 			reply = fmt.Sprintf("Chat reply (session=%s): making it (%v)", session, out["queued"])
 		}
 		text(reply)
