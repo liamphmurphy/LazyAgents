@@ -31,6 +31,23 @@ func SpeakerCanCreateSVGs(ctx context.Context, q *store.Queries, chat store.Chat
 	return p.CanCreateSvgs, nil
 }
 
+// SpeakerCanCreateWorkflows reports whether the persona answering the chat's
+// turn may propose workflows. A deleted persona and the built-in Assistant can't.
+func SpeakerCanCreateWorkflows(ctx context.Context, q *store.Queries, chat store.ChatSession) (bool, error) {
+	id := ChatSpeakerID(chat)
+	if id == nil {
+		return false, nil
+	}
+	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *id, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return p.CanCreateWorkflows, nil
+}
+
 // GateSVGFences turns the svg-image fences in a reply into ordinary svg code
 // blocks when its speaker may not show SVG images, so the capability doesn't
 // rest on the prompt. It runs when the reply is stored: replies already in a

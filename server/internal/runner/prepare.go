@@ -666,6 +666,13 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 		}
 		spec := c.spec
 		spec.Instructions += agents.AssistantRecommendSection + agents.AssistantRichRepliesSection + agents.AssistantCanvasSection + agents.AssistantWorkflowSection
+		buildWorkflows, err := runs.SpeakerCanCreateWorkflows(ctx, q, chat)
+		if err != nil {
+			return nil, "Could not load the conversation's persona.", fmt.Errorf("chat workflow capability: %w", err)
+		}
+		if buildWorkflows {
+			spec.Instructions += agents.AssistantWorkflowBuildSection
+		}
 		workflows, err := runs.WorkflowNote(ctx, q, chat)
 		if err != nil {
 			return nil, "Could not load the person's workflows.", fmt.Errorf("chat workflows: %w", err)

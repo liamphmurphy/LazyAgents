@@ -193,7 +193,7 @@ SELECT kind, id, title, href, row_number() OVER (PARTITION BY kind ORDER BY titl
  -- Chats are private: only the asking user's, unarchived, matched by title.
  SELECT 'chat',c.id,c.title,'/chat/'||c.id
  FROM chat_sessions c JOIN projects p ON p.id=c.project_id
- WHERE c.workspace_id=$1 AND c.created_by=$4 AND NOT c.archived
+ WHERE c.workspace_id=$1 AND c.created_by=$4 AND NOT c.archived AND NOT c.hidden
  AND c.title ILIKE '%'||$2::text||'%'
  AND ($3::text IS NULL OR p.key=$3)
 ) matches

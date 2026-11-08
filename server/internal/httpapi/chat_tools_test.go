@@ -131,7 +131,9 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		code, out := call(token, tool.Name, args)
 		if slices.Contains(needArgs, tool.Name) {
 			seen++
-			if code == 409 {
+			// This chat's persona lacks the capability, which is refused after the allowlist.
+			noCapability := tool.Name == "propose_workflow_edit" && strings.Contains(fmt.Sprint(out["message"]), "can't create workflows")
+			if code == 409 && !noCapability {
 				t.Errorf("%s: %d %v", tool.Name, code, out)
 			}
 			continue
@@ -171,6 +173,9 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	}
 	if code, out := call(token, "create_ticket", map[string]any{"title": "Wrong project", "epic_id": foreignEpic.ID}); code != 422 {
 		t.Fatalf("foreign epic = %d %v", code, out)
+	}
+	if code, out := call(token, "propose_workflow_edit", map[string]any{"summary": "Add a step", "name": "New", "ops": []any{}}); code != 409 || !strings.Contains(fmt.Sprint(out), "can't create workflows") {
+		t.Fatalf("propose_workflow_edit without the capability = %d %v", code, out)
 	}
 
 	// create_epic takes optional criteria, all or nothing; list_epics shows counts.

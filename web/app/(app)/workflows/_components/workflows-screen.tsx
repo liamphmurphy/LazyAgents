@@ -43,7 +43,7 @@ export function WorkflowsScreen() {
             <ul className="flex flex-col gap-2">
               {list.map((w) => (
                 <li key={w.id}>
-                  <Card className="flex items-center gap-3 p-3">
+                  <Card bodyClassName="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <Link href={`/workflows/${w.id}`} className="text-[14px] font-semibold text-fg hover:underline">{w.name}</Link>
                       {w.description && <p className="truncate text-[12.5px] text-fg-secondary">{w.description}</p>}

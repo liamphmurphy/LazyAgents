@@ -104,7 +104,7 @@ SELECT *, row_number() OVER (PARTITION BY kind ORDER BY title,id) AS n FROM (
  -- Chats are private: only the asking user's, unarchived, matched by title.
  SELECT 'chat',c.id,c.title,'/chat/'||c.id
  FROM chat_sessions c JOIN projects p ON p.id=c.project_id
- WHERE c.workspace_id=sqlc.arg(workspace_id) AND c.created_by=sqlc.arg(user_id) AND NOT c.archived
+ WHERE c.workspace_id=sqlc.arg(workspace_id) AND c.created_by=sqlc.arg(user_id) AND NOT c.archived AND NOT c.hidden
  AND c.title ILIKE '%'||sqlc.arg(q)::text||'%'
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
 ) matches

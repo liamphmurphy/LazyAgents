@@ -287,6 +287,7 @@ type ChatSession struct {
 	RelayLimit         int32
 	InterruptMessageID *uuid.UUID
 	LastReadSeq        int64
+	Hidden             bool
 }
 
 type Comment struct {
@@ -460,6 +461,7 @@ type Persona struct {
 	Repos              []string
 	CanCreatePersonas  bool
 	CanCreateSvgs      bool
+	CanCreateWorkflows bool
 }
 
 type PersonaProposal struct {

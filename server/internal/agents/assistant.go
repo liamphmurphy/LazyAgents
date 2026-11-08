@@ -144,7 +144,12 @@ const AssistantWorkflowSection = `
 ## Workflows
 - A workflow is a fixed sequence of steps the person built. Vesper runs it; you never carry out its steps yourself, and nothing starts until the person confirms.
 - When the person asks for something that clearly matches one of the published workflows listed below, by name or by what it does, offer it instead of doing the work: one short sentence, then a fenced code block tagged workflow-run. Its first line is the workflow's id; the remaining lines are the request to run it on, in the person's own terms. The chat shows it as a card to confirm.
-- If two workflows could fit, ask which. If none fits, or the person is only asking about a workflow, just reply as usual. Never call a workflow started: the person starts it from the card.
+- If two workflows could fit, ask which. If none fits, or the person is only asking about a workflow, just reply as usual. Never call a workflow started: the person starts it from the card.`
+
+// AssistantWorkflowBuildSection continues AssistantWorkflowSection when the
+// persona answering may create workflows, rendered per turn like
+// AssistantSVGSection.
+const AssistantWorkflowBuildSection = `
 - To build or change a workflow when asked: list_workflows or read_workflow, then propose_workflow_edit. It's only a suggestion the person applies in the editor, so link them to the workflows_url it returns. If it's refused, fix what the error names and propose again.
 - Node types: trigger (exactly one, already present), enrich, agent, gate (human approval), and the outputs wiki, library, ticket, chat. Outputs end a branch, wiki needs a gate before it, and the graph can't loop: a gate's retry_from re-runs an earlier step instead. Refer to earlier results with {{input}} and {{node_id.output}}.`
 

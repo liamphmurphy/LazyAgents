@@ -3,6 +3,7 @@
 import "@xyflow/react/dist/style.css";
 
 import { Background, Controls, ReactFlow, ReactFlowProvider, applyNodeChanges, useReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useBootstrap, useChatMessages, useCreateChat, useSendChatMessage } from "@/lib/api/hooks";
@@ -100,10 +101,14 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
 }
 
 /** A chat with a persona about this workflow, floating over the canvas. Its edits arrive as suggestions there. */
-function BuildChat({ workflow, chatId, onChatId, onChatting }: { workflow: Workflow; chatId?: string; onChatId: (id: string) => void; onChatting: () => void }) {
+function BuildChat({ workflow, chatId, onChatId, personaId, onPersonaId, onChatting }: { workflow: Workflow; chatId?: string; onChatId: (id?: string) => void; personaId?: string; onPersonaId: (id: string) => void; onChatting: () => void }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(true);
   const boot = useBootstrap();
+  const personas = usePersonas();
+  // Listed default first, so that's who a new build chat starts with.
+  const builders = personas.data?.personas.filter((p) => p.capabilities.workflows) ?? [];
+  const persona = builders.find((p) => p.id === personaId) ?? builders[0];
   const remembered = useRememberedProject();
   const create = useCreateChat();
   const send = useSendChatMessage(chatId ?? "");
@@ -111,7 +116,7 @@ function BuildChat({ workflow, chatId, onChatId, onChatting }: { workflow: Workf
   const transcript = useRef<HTMLDivElement>(null);
   const project = boot.data?.projects.find((p) => p.key === remembered && !p.archived) ?? boot.data?.projects.find((p) => !p.archived);
   const list = (messages.data?.messages ?? []).filter((m) => m.role !== "system");
-  const canSend = !!text.trim() && !!project && !create.isPending && !send.isPending;
+  const canSend = !!text.trim() && !!project && !!persona && !create.isPending && !send.isPending;
 
   useEffect(() => {
     transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
@@ -125,7 +130,7 @@ function BuildChat({ workflow, chatId, onChatId, onChatting }: { workflow: Workf
     onChatting();
     if (chatId) return send.mutate({ body });
     create.mutate(
-      { project: project!.key, title: `Workflow: ${workflow.name}`.slice(0, 200), message: { body: `I'm editing my workflow "${workflow.name}" (id ${workflow.id}). ${body}` } },
+      { project: project!.key, title: `Workflow: ${workflow.name}`.slice(0, 200), persona_id: persona!.id, hidden: true, message: { body: `I'm editing my workflow "${workflow.name}" (id ${workflow.id}). ${body}` } },
       { onSuccess: (c) => onChatId(c.id) },
     );
   };
@@ -145,6 +150,27 @@ function BuildChat({ workflow, chatId, onChatId, onChatting }: { workflow: Workf
         </div>
       )}
       {error && <Banner tone="blocked" title={error.message} />}
+      {personas.data && !builders.length && (
+        <p className="px-1 text-xs text-fg-secondary">No persona can create workflows yet. Turn on Create workflows for one in <Link href="/personas" className="underline">Personas</Link>.</p>
+      )}
+      {builders.length > 0 && (
+        <div role="radiogroup" aria-label="Build as persona" className="flex flex-wrap gap-1">
+          {builders.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={p.id === persona?.id}
+              // A chat keeps its persona for life, so switching starts a new one.
+              onClick={() => { if (p.id !== persona?.id) { onPersonaId(p.id); onChatId(undefined); } }}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${p.id === persona?.id ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover"}`}
+            >
+              <span aria-hidden className="size-2 rounded-full" style={{ background: p.color }} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
       <form onSubmit={(e) => { e.preventDefault(); submit(); }} className="flex items-end gap-2">
         <TextArea
           aria-label="Describe a change"
@@ -165,7 +191,7 @@ function BuildChat({ workflow, chatId, onChatId, onChatting }: { workflow: Workf
   );
 }
 
-function Canvas({ workflow, chatId, onChatId, onApplied, onChatting }: { workflow: Workflow; chatId?: string; onChatId: (id: string) => void; onApplied: () => void; onChatting: () => void }) {
+function Canvas({ workflow, chatId, onChatId, personaId, onPersonaId, onApplied, onChatting }: { workflow: Workflow; chatId?: string; onChatId: (id?: string) => void; personaId?: string; onPersonaId: (id: string) => void; onApplied: () => void; onChatting: () => void }) {
   const [graph, setGraph] = useState(workflow.draft as Graph);
   const [selected, setSelected] = useState<string | null>(null);
   const flow = useReactFlow();
@@ -311,7 +337,7 @@ function Canvas({ workflow, chatId, onChatId, onApplied, onChatting }: { workflo
             <Background gap={20} size={1} />
             <Controls showInteractive={false} />
           </ReactFlow>
-          <BuildChat workflow={workflow} chatId={chatId} onChatId={onChatId} onChatting={onChatting} />
+          <BuildChat workflow={workflow} chatId={chatId} onChatId={onChatId} personaId={personaId} onPersonaId={onPersonaId} onChatting={onChatting} />
         </div>
         <aside aria-label="Workflow details" className="flex w-[320px] flex-none flex-col gap-3 overflow-y-auto border-l border-border-subtle bg-bg-panel p-4 max-md:w-full">
           {error && <Banner tone="blocked" title={error.message} />}
@@ -354,6 +380,7 @@ export function WorkflowEditorScreen() {
   const [poll, setPoll] = useState(false);
   const [revision, setRevision] = useState(0);
   const [chatId, setChatId] = useState<string>();
+  const [personaId, setPersonaId] = useState<string>();
   const workflow = useWorkflow(id, poll);
   return (
     // The shell only sets a minimum height, so hold the editor to the viewport to keep the floating chat on screen.
@@ -365,7 +392,7 @@ export function WorkflowEditorScreen() {
       ) : (
         <ReactFlowProvider>
           {/* Applying a suggestion replaces the draft, so the canvas starts over from it. */}
-          <Canvas key={revision} workflow={workflow.data} chatId={chatId} onChatId={setChatId} onApplied={() => setRevision((r) => r + 1)} onChatting={() => setPoll(true)} />
+          <Canvas key={revision} workflow={workflow.data} chatId={chatId} onChatId={setChatId} personaId={personaId} onPersonaId={setPersonaId} onApplied={() => setRevision((r) => r + 1)} onChatting={() => setPoll(true)} />
         </ReactFlowProvider>
       )}
     </div>

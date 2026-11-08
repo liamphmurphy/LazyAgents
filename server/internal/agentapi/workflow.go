@@ -113,6 +113,17 @@ func proposeWorkflowEdit(ctx context.Context, d Deps, c agents.Caller, in Propos
 	if err != nil {
 		return nil, err
 	}
+	chat, err := d.Q.GetChatSession(ctx, store.GetChatSessionParams{ID: s.ChatID, WorkspaceID: c.Agent.WorkspaceID})
+	if err != nil {
+		return nil, err
+	}
+	can, err := runs.SpeakerCanCreateWorkflows(ctx, d.Q, chat)
+	if err != nil {
+		return nil, err
+	}
+	if !can {
+		return nil, apperr.Conflict("This persona can't create workflows; tell the person it isn't enabled in Manage personas.")
+	}
 	p, err := d.Runs.ProposeWorkflowEdit(ctx, c.Agent.WorkspaceID, s.UserID, &s.ChatID, runs.WorkflowProposalInput{WorkflowID: in.WorkflowID, Name: in.Name, Description: in.Description, Summary: in.Summary, Ops: in.Ops})
 	if err != nil {
 		return nil, err

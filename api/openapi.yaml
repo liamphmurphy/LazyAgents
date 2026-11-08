@@ -5210,6 +5210,7 @@ components:
         effort: { $ref: "#/components/schemas/ChatEffort" }
         persona_id: { type: string, format: uuid, description: "One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life." }
         repo_url: { type: string, description: "One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise." }
+        hidden: { type: boolean, description: "Leave the chat out of chat lists, search and the dock; it stays reachable by id. For a chat that lives behind another screen, like the workflow editor. Fixed for the chat's life." }
         message: { $ref: "#/components/schemas/NewChatMessage" }
     ChatPatch:
       type: object
@@ -5651,6 +5652,7 @@ components:
         images: { type: boolean, description: "Generate images with Codex image generation; works with any chat model (non-Codex chats hand the image to a one-off Codex step)" }
         personas: { type: boolean, description: "Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona)." }
         svg: { type: boolean, description: "Show SVG images in chat replies; a reply from a persona without it keeps its SVG as plain code. Absent in a request means unchanged (false for a new persona)." }
+        workflows: { type: boolean, description: "Propose new workflows and edits to them from a chat; each is applied only when the person accepts it. Absent in a request means unchanged (false for a new persona)." }
     PersonaSummary:
       type: object
       description: What a chat needs to render its persona. Absent on a chat means the built-in Assistant.

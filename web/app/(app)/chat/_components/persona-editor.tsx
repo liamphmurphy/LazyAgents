@@ -442,7 +442,7 @@ function RepoList({ repos, setRepos, serverError }: { repos: string[]; setRepos:
 
 // ---- editor ----
 
-type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; personas: boolean; svg: boolean; repos: string[] };
+type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; personas: boolean; svg: boolean; workflows: boolean; repos: string[] };
 
 const draftOf = (p?: Persona): Draft => ({
   name: p?.name ?? "",
@@ -453,6 +453,7 @@ const draftOf = (p?: Persona): Draft => ({
   images: p?.capabilities.images ?? false,
   personas: p?.capabilities.personas ?? false,
   svg: p?.capabilities.svg ?? false,
+  workflows: p?.capabilities.workflows ?? false,
   repos: p?.repos ?? [],
 });
 
@@ -518,7 +519,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           color: color.color,
           custom_instructions: draft.instructions,
           is_default: draft.makeDefault,
-          capabilities: { code: draft.code, images: draft.images, personas: draft.personas, svg: draft.svg },
+          capabilities: { code: draft.code, images: draft.images, personas: draft.personas, svg: draft.svg, workflows: draft.workflows },
           repos: draft.repos,
         });
       } else {
@@ -533,9 +534,10 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           draft.images !== p.capabilities.images ||
           draft.personas !== (p.capabilities.personas ?? false) ||
           draft.svg !== (p.capabilities.svg ?? false) ||
+          draft.workflows !== (p.capabilities.workflows ?? false) ||
           !sameList(draft.repos, p.repos)
         ) {
-          patch.capabilities = { code: draft.code, images: draft.images, personas: draft.personas, svg: draft.svg };
+          patch.capabilities = { code: draft.code, images: draft.images, personas: draft.personas, svg: draft.svg, workflows: draft.workflows };
           patch.repos = draft.repos;
         }
         if (Object.keys(patch).length > 1) p = await update.mutateAsync({ id: p.id, patch });
@@ -697,6 +699,13 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     onChange={(v) => set({ personas: v })}
                     title="Create personas"
                     hint="Can propose new personas in a chat. Each one is created only after you approve it, with no abilities turned on."
+                  />
+                  <Toggle
+                    id="persona-workflows"
+                    checked={draft.workflows}
+                    onChange={(v) => set({ workflows: v })}
+                    title="Create workflows"
+                    hint="Can suggest new workflows and changes to them. Each suggestion is applied only after you accept it."
                   />
                 </fieldset>
               </div>

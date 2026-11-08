@@ -33,14 +33,15 @@ const TONE: Record<Schemas["PersonaTone"], string> = {
 export const toneLabel = (t?: Schemas["PersonaTone"]) => (t ? TONE[t] : "Neutral");
 
 /** What a persona can be allowed to do, in display order. */
-export const CAPABILITIES: { key: "code" | "images" | "svg" | "personas"; icon: IconName; label: string; title: string }[] = [
+export const CAPABILITIES: { key: "code" | "images" | "svg" | "personas" | "workflows"; icon: IconName; label: string; title: string }[] = [
   { key: "code", icon: "terminal", label: "Write code", title: "Can write code" },
   { key: "images", icon: "artifacts", label: "Generate images", title: "Can generate images" },
   { key: "svg", icon: "library", label: "Create SVG images", title: "Can create SVG images" },
   { key: "personas", icon: "users", label: "Create personas", title: "Can propose new personas" },
+  { key: "workflows", icon: "graph", label: "Create workflows", title: "Can propose workflows" },
 ];
 
-/** Small icons for what a persona can do (code, images, SVG images, create personas); nothing when it can't do any. */
+/** Small icons for what a persona can do (code, images, SVG images, create personas, create workflows); nothing when it can't do any. */
 export function CapabilityBadges({ capabilities, className }: { capabilities?: Schemas["PersonaCapabilities"]; className?: string }) {
   const granted = CAPABILITIES.filter((c) => capabilities?.[c.key]);
   if (!granted.length) return null;

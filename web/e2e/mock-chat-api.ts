@@ -62,7 +62,7 @@ const USAGE = { input_tokens: 48200, output_tokens: 1300, cached_input_tokens: 4
 export type Posted = { chat: string; body: Record<string, unknown> };
 export type MockPersona = {
   id: string; name: string; tone: string; color: string; avatar_url?: string; custom_instructions: string;
-  capabilities: { code: boolean; images: boolean; personas?: boolean; svg?: boolean }; repos: string[];
+  capabilities: { code: boolean; images: boolean; personas?: boolean; svg?: boolean; workflows?: boolean }; repos: string[];
   is_default: boolean; chat_count: number; last_used_at?: string; revision: number; created_at: string; updated_at: string;
 };
 export type MockProposal = {
