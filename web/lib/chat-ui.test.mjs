@@ -96,6 +96,10 @@ test("the chat status is high level and never leaks the call's details", () => {
     [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/turn-1/1-fox.png" } }, "looking at the image"],
     [{ tool: "Read", input: { file_path: "src/main.go" } }, "reading the code"],
     [{ tool: "Bash", input: { command: "python3 scripts/migrate.py" } }, "working in the terminal"],
+    [{ tool: "mcp__lazyagents__canvas_patch", input: { body: "secret" } }, "revising a canvas"],
+    [{ tool: "canvas_reply", input: { body: "secret" } }, "commenting on a canvas"],
+    [{ tool: "propose_workflow_edit", input: { graph: "secret" } }, "sketching a workflow"],
+    [{ tool: "get_video_transcript", input: { url: "https://example.com/private" } }, "watching a video"],
     [{ tool: "some.other_tool", input: { secret: "x" } }, "working on it"],
   ];
   for (const [call, want] of cases) assert.equal(chatStatusOf(call).phrase, want, call.tool);
@@ -107,41 +111,47 @@ test("each tool call maps to the kind of scene it shows", () => {
   const bash = (command) => ({ tool: "Bash", input: { command } });
   const cases = [
     [{ tool: "mcp__lazyagents__read_page", input: {} }, "wiki"],
-    [{ tool: "get_ticket", input: {} }, "wiki"],
+    [{ tool: "get_ticket", input: {} }, "tickets"],
+    [{ tool: "create_epic", input: {} }, "tickets"],
+    [{ tool: "get_run", input: {} }, "runs"],
     [{ tool: "Read", input: { file_path: "src/a.go" } }, "reading-code"],
     [bash("rg -n token src"), "reading-code"],
     [{ tool: "apply_patch", input: {} }, "writing-code"],
     [bash("go test ./..."), "tests"],
-    [bash("npm run lint"), "tests"],
+    [bash("npm run lint"), "build"],
+    [bash("npm ci"), "install"],
     [{ tool: "WebFetch", input: {} }, "web"],
     [{ tool: "generate_image", input: {} }, "image"],
     [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/t/1.png" } }, "image"],
+    [{ tool: "get_video_transcript", input: {} }, "video"],
+    [{ tool: "canvas_create", input: {} }, "canvas"],
+    [{ tool: "canvas_comment", input: {} }, "canvas-comment"],
+    [{ tool: "read_workflow", input: {} }, "workflow"],
     [{ tool: "save_memory", input: {} }, "memory"],
     [{ tool: "some.other_tool", input: {} }, "thinking"],
     [{ tool: "", input: undefined }, "thinking"],
-    [bash("python3 scripts/migrate.py"), "thinking"],
+    [bash("python3 scripts/migrate.py"), "terminal"],
   ];
   for (const [call, want] of cases) assert.equal(chatStatusOf(call).kind, want, call.tool);
 });
 
 test("GitHub work is detected from MCP tools, gh and repository commands, without leaking details", () => {
-  const github = (phrase) => ({ kind: "github", phrase });
   const bash = (command) => ({ tool: "Bash", input: { command } });
   const cases = [
-    [{ tool: "mcp__github__create_pull_request", input: { title: "secret" } }, "preparing a pull request"],
-    [{ tool: "github.update_pull_request", input: {} }, "preparing a pull request"],
-    [{ tool: "mcp__github__list_issues", input: { repo: "secret" } }, "working on GitHub"],
-    [{ tool: "mcp__plugin_github_github__get_issue", input: {} }, "working on GitHub"],
-    [bash("gh issue view 12"), "working on GitHub"],
-    [bash("gh run watch"), "working on GitHub"],
-    [bash("gh pr create --fill"), "preparing a pull request"],
-    [bash("git -C /work/repo push origin main"), "pushing its branch"],
-    [bash("git -c user.name=x commit -m secret"), "committing changes"],
-    [bash("git --no-pager log -3"), "looking over the repository"],
-    [bash("git add -A"), "looking over the repository"],
-    [bash("git stash"), "looking over the repository"],
+    [{ tool: "mcp__github__create_pull_request", input: { title: "secret" } }, "pull-request", "preparing a pull request"],
+    [{ tool: "github.update_pull_request", input: {} }, "pull-request", "preparing a pull request"],
+    [{ tool: "mcp__github__list_issues", input: { repo: "secret" } }, "github", "working on GitHub"],
+    [{ tool: "mcp__plugin_github_github__get_issue", input: {} }, "github", "working on GitHub"],
+    [bash("gh issue view 12"), "github", "working on GitHub"],
+    [bash("gh run watch"), "github", "working on GitHub"],
+    [bash("gh pr create --fill"), "pull-request", "preparing a pull request"],
+    [bash("git -C /work/repo push origin main"), "push", "pushing its branch"],
+    [bash("git -c user.name=x commit -m secret"), "commit", "committing changes"],
+    [bash("git --no-pager log -3"), "repo-history", "looking over the repository"],
+    [bash("git add -A"), "repo-history", "looking over the repository"],
+    [bash("git stash"), "repo-history", "looking over the repository"],
   ];
-  for (const [call, want] of cases) assert.deepEqual(chatStatusOf(call), github(want), call.tool);
+  for (const [call, kind, phrase] of cases) assert.deepEqual(chatStatusOf(call), { kind, phrase }, call.tool);
   // Tests win over reading the repository's state in one chained command.
   assert.equal(chatStatusOf(bash("git status && go test ./...")).kind, "tests");
 });

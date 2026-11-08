@@ -273,6 +273,122 @@
 }
 @keyframes scene-node { 50% { transform: scale(1.25); } }
 
+.scene-chip { animation: scene-chip 3.2s ease-in-out infinite both; }
+.scene-stamp { animation: scene-stamp 3.2s ease-out infinite both; }
+@keyframes scene-chip {
+  0% { transform: translateY(-4px); opacity: 0; }
+  12%, 35% { transform: none; opacity: 1; }
+  65%, 100% { transform: translate(var(--to-x), 27px) scale(0.3); opacity: 0; }
+}
+@keyframes scene-stamp {
+  0%, 68% { transform: scale(0); }
+  78% { transform: scale(1.5); }
+  86%, 100% { transform: scale(1); }
+}
+
+.scene-push { animation: scene-push 2.4s ease-in infinite both; }
+.scene-arrive { animation: scene-arrive 2.4s ease-out infinite; }
+@keyframes scene-push {
+  0% { transform: translate(-68px, 22px); opacity: 0; }
+  8%, 70% { opacity: 1; }
+  70% { transform: none; }
+  78%, 100% { transform: translate(3px, -1px); opacity: 0; }
+}
+@keyframes scene-arrive {
+  0%, 68% { transform: none; }
+  80% { transform: scale(1.1); }
+  100% { transform: none; }
+}
+
+.scene-pop { animation: scene-pop 4s ease-out infinite both; }
+@keyframes scene-pop {
+  0%, 25% { transform: scale(0); }
+  35% { transform: scale(1.25); }
+  42%, 85% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+.scene-log { animation: scene-log 4s ease-in-out infinite both; }
+@keyframes scene-log {
+  0% { transform: translateY(36px); opacity: 0; }
+  5%, 18% { transform: translateY(36px); opacity: 0.25; }
+  25%, 43% { transform: translateY(24px); }
+  50%, 68% { transform: translateY(12px); }
+  75%, 93% { transform: none; opacity: 0.25; }
+  100% { transform: none; opacity: 0; }
+}
+
+.scene-cursor { animation: scene-cursor 4s ease-in-out infinite; }
+.scene-pin { animation: scene-pin 4s ease-out infinite both; }
+@keyframes scene-cursor {
+  0%, 100% { transform: translate(-28px, -18px); }
+  30% { transform: none; }
+  60% { transform: translate(14px, -2px); }
+  85% { transform: translate(20px, 10px); }
+}
+@keyframes scene-pin {
+  0%, 40% { transform: translateY(-10px); opacity: 0; }
+  52% { transform: none; opacity: 1; }
+  58% { transform: translateY(-2px); }
+  64%, 90% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+
+.scene-row-1 { animation: scene-row-1 4s ease-out infinite both; }
+.scene-row-2 { animation: scene-row-2 4s ease-out infinite both; }
+.scene-row-3 { animation: scene-row-3 4s ease-out infinite both; }
+@keyframes scene-row-1 {
+  0% { transform: translateY(-14px); opacity: 0; }
+  12%, 85% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+@keyframes scene-row-2 {
+  0%, 25% { transform: translateY(-14px); opacity: 0; }
+  37%, 85% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+@keyframes scene-row-3 {
+  0%, 50% { transform: translateY(-14px); opacity: 0; }
+  62%, 85% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+
+.scene-card { animation: scene-card 3.6s ease-in-out infinite both; }
+@keyframes scene-card {
+  0% { transform: none; opacity: 0; }
+  6%, 15% { transform: none; opacity: 1; }
+  35%, 55% { transform: translateX(34px); }
+  75%, 90% { transform: translateX(68px); opacity: 1; }
+  100% { transform: translateX(68px); opacity: 0; }
+}
+
+.scene-drop { animation: scene-drop 2.4s ease-in infinite both; }
+.scene-bump { animation: scene-bump 0.8s ease-out infinite; }
+@keyframes scene-drop {
+  0% { transform: translateY(-8px); opacity: 0; }
+  15%, 55% { opacity: 1; }
+  65%, 100% { transform: translateY(22px); opacity: 0; }
+}
+@keyframes scene-bump {
+  0%, 60%, 80%, 100% { transform: none; }
+  68% { transform: translateY(2px); }
+}
+
+.scene-scroll-3 { animation: scene-scroll-3 3s steps(3) infinite; }
+.scene-scroll-2 { animation: scene-scroll-2 3s steps(2) infinite; }
+@keyframes scene-scroll-3 { to { transform: translateY(-30px); } }
+@keyframes scene-scroll-2 { to { transform: translateY(-16px); } }
+
+.scene-bar { animation: scene-bar 3s ease-in-out infinite alternate; }
+@keyframes scene-bar { from { transform: scaleX(0.15); } to { transform: scaleX(1); } }
+
+.scene-light { animation: scene-light 3.2s ease-in-out infinite both; }
+@keyframes scene-light {
+  0%, 100% { fill: var(--border-strong); }
+  15%, 60% { fill: var(--accent); }
+  80% { fill: var(--border-strong); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .scene-layer,
   .scene-layer * { animation: none !important; }
