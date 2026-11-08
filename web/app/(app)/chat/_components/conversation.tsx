@@ -1,5 +1,6 @@
 "use client";
 
+import { canvasFenceIds } from "@/lib/chat-canvas";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -483,6 +484,18 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const group = participants.length > 1;
   // Who answers next (or is answering now): the last speaker, else the host.
   const speaker = personaLook(c.speaker ?? c.persona);
+  const canvasCards = (() => {
+    const last = new Map<string, string>();
+    let newest: string | undefined;
+    for (const m of list ?? []) {
+      if (m.role !== "assistant") continue;
+      for (const canvasId of canvasFenceIds(m.body_md)) {
+        last.set(canvasId, m.id);
+        newest = canvasId;
+      }
+    }
+    return { newest, lastMessage: (canvasId: string) => last.get(canvasId), live: running, readOnly: c.archived, agent: (c.speaker ?? c.persona)?.name ?? "Assistant" };
+  })();
   const menu = commandDismissed ? null : commandMenu(text);
   const suggestions = mention && !menu ? mentionSuggestions(personas.data?.personas ?? [], mention.query) : [];
   const syncMention = (value: string) => {
@@ -693,7 +706,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           ) : (
             <>
             <VideoPlayers.Provider value={players}>
-            <RecommendActions.Provider value={{ ask: askAuthor, disabled: running || locked || !!unavailable || c.archived, chatId: c.id, project: c.project, researchMore, nextMessage: (id) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md }}>
+            <RecommendActions.Provider value={{ ask: askAuthor, disabled: running || locked || !!unavailable || c.archived, chatId: c.id, project: c.project, researchMore, canvas: canvasCards, nextMessage: (id) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md }}>
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m, i) => (
