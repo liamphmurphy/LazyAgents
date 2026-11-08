@@ -305,3 +305,36 @@ test("only the active step carries a detail, skipping bookkeeping and repeats", 
   const events = [{ seq: 1, type: "tool_call", at: "2026-11-06T10:01:00Z", payload: { id: "a", tool: "Read", input: { file_path: "/a/x.ts" } } }, { seq: 2, type: "lifecycle", at: "2026-11-06T10:01:01Z", payload: { state: "reply_block", kind: "app" } }];
   assert.deepEqual(chatSteps(chatCalls(events)).steps.map((s) => s.detail), [undefined, undefined]);
 });
+
+test("stepDetail names canvases, workflows, tickets, images, personas, runs and GitHub work", () => {
+  const cases = [
+    [{ tool: "mcp__lazyagents__canvas_create", input: { title: "Rail mockups", body: "secret" } }, "Drafting “Rail mockups”"],
+    [{ tool: "mcp__lazyagents__canvas_patch", input: { canvas_id: "c9", note: "tighten the intro" } }, "Revising: tighten the intro"],
+    [{ tool: "mcp__lazyagents__propose_workflow_edit", input: { name: "Map maker" } }, "Sketching “Map maker”"],
+    [{ tool: "mcp__lazyagents__propose_workflow_edit", input: { workflow_id: "w9", summary: "Adds a gate" } }, "Sketching: Adds a gate"],
+    [{ tool: "mcp__lazyagents__create_ticket", input: { title: "Fix login" } }, "Drafting “Fix login”"],
+    [{ tool: "mcp__lazyagents__create_epic", input: { name: "Billing" } }, "Drafting “Billing”"],
+    [{ tool: "mcp__lazyagents__generate_image", input: { prompt: "a cat on a bike" } }, "Creating “a cat on a bike”"],
+    [{ tool: "mcp__lazyagents__propose_persona", input: { name: "Nora", instructions: "secret" } }, "Sketching “Nora”"],
+    [{ tool: "mcp__lazyagents__list_runs", input: { ticket: "PAY-214" } }, "Checking runs of PAY-214"],
+    [{ tool: "mcp__lazyagents__get_video_transcript", input: { url: "https://youtu.be/x", from_seconds: 272 } }, "Watching from 4:32"],
+    [{ tool: "mcp__github__create_pull_request", input: { owner: "o", repo: "r", title: "Add rail", body: "secret" } }, "Working on “Add rail”"],
+    [{ tool: "mcp__github__get_issue", input: { owner: "o", repo: "r", issue_number: 12 } }, "Working on o/r#12"],
+    [{ tool: "mcp__lazyagents__save_memory", input: { body: "private" } }, "Making a note"],
+    [{ tool: "mcp__lazyagents__canvas_read", input: { canvas_id: "unknown" } }, "Looking at a canvas"],
+  ];
+  for (const [call, want] of cases) assert.equal(stepDetail(call), want, call.tool);
+});
+
+test("tools that take an id use the name an earlier call in the turn gave it", () => {
+  const detail = (calls) => stepsOf(calls).steps.at(-1).detail;
+  const created = { tool: "mcp__lazyagents__canvas_create", input: { title: "Rail" }, output: JSON.stringify({ canvas_id: "c1", version: 1 }) };
+  assert.equal(detail([created, { tool: "mcp__lazyagents__canvas_patch", input: { canvas_id: "c1", note: "n" } }]), "Revising “Rail”");
+  const listed = { tool: "list_workflows", input: {}, output: JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ workflows: [{ id: "w1", name: "Maps" }] }) }] }) };
+  assert.equal(detail([listed, { tool: "read_workflow", input: { workflow_id: "w1" } }]), "Looking over “Maps”");
+  const runs = { tool: "list_runs", input: {}, output: JSON.stringify({ runs: [{ id: "r1", ticket: "PAY-1" }] }) };
+  assert.equal(detail([runs, { tool: "get_run", input: { id: "r1" } }]), "Checking PAY-1");
+  const clipped = { tool: "canvas_read", input: { canvas_id: "c2" }, output: '{"body":"long and cut' };
+  // No name to show, so the detail would only repeat the step's title.
+  assert.equal(detail([clipped, { tool: "canvas_comment", input: { canvas_id: "c2" } }]), undefined);
+});
