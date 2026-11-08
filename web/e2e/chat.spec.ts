@@ -46,7 +46,7 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
   await composer(page).pressSequentially("world");
   await expect(composer(page)).toHaveValue("hello\nworld");
   await composer(page).press("Enter");
-  await expect(composer(page)).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Interrupt" })).toBeVisible();
   await expect(page.getByTestId("chat-status")).toHaveText(/ is thinking…$/);
   const first = page.getByTestId("assistant-message").first();
   await expect(first).toContainText("Echo: hello");
@@ -128,16 +128,34 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
   expect(mock.unhandled).toEqual([]);
 });
 
-test("stop re-enables the composer", async ({ page }) => {
+test("stop ends a running reply", async ({ page }) => {
   await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
   await send(page, "slow: take your time");
-  await expect(composer(page)).toBeDisabled();
+  await expect(composer(page)).toBeEnabled();
   await page.getByRole("button", { name: "Stop" }).click();
   await expect(composer(page)).toBeEnabled();
-  await expect(composer(page)).toBeFocused();
+  await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
   await expect(page.getByTestId("system-message")).toHaveText("Turn cancelled");
+});
+
+test("a message sent while a reply runs interrupts it, and the next reply answers both", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "slow: summarize the plan");
+  await expect(page.getByTestId("chat-status")).toBeVisible();
+  // The composer stays open; the model and effort wait for the reply to end.
+  await expect(composer(page)).toBeEnabled();
+  await expect(composer(page)).toHaveAttribute("placeholder", /is replying\. Send a message to interrupt/);
+  await expect(picker(page)).toBeDisabled();
+  await composer(page).fill("focus on the risks");
+  await page.getByRole("button", { name: "Interrupt" }).click();
+  await expect(page.getByTestId("assistant-message").last()).toContainText("Echo: focus on the risks (interrupting: slow: summarize the plan)");
+  await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+  expect(mock.posted.map((p) => p.body.body)).toEqual(["slow: summarize the plan", "focus on the risks"]);
+  expect(mock.unhandled).toEqual([]);
 });
 
 test("unavailable models are disabled with their reason", async ({ page }) => {

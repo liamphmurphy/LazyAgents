@@ -264,8 +264,8 @@ func TestOpenCodeChatModelChangeResumesSession(t *testing.T) {
 	}
 }
 
-// A post or selection switch while a turn runs is a 409; cancelling mid-flight
-// leaves the chat idle and the next post answers once, with no late reply.
+// Cancelling mid-flight leaves the chat idle and the next post answers once,
+// with no late reply.
 func TestOpenCodeChatCancelMidTurn(t *testing.T) {
 	e := openCodeChatEnv(t, "harness:anthropic")
 	e.useOpenCodeChat(ocSonnet)
@@ -279,13 +279,6 @@ func TestOpenCodeChatCancelMidTurn(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	first := e.chatRun(chat.ID)
-	_, err := e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Busy"})
-	requireConflict(t, err)
-	_, err = e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "Switch", Harness: "codex"})
-	requireConflict(t, err)
-	if c := e.chat(chat.ID); c.Harness != "opencode" || c.Model != ocSonnet {
-		t.Fatalf("rejected switch changed the selection: %s %s", c.Harness, c.Model)
-	}
 	if _, err := e.runs.SetRunControl(e.ctx, e.ws, e.me.ID, first.ID, "cancel"); err != nil {
 		t.Fatal(err)
 	}

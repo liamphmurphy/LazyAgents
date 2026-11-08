@@ -323,8 +323,14 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	if body == "" || len([]rune(body)) > 100000 {
 		return chat, msg, apperr.Invalid("body", "provide 1–100000 characters")
 	}
-	if chat.Archived || chat.State == "running" {
-		return chat, msg, apperr.Conflict("the chat is archived or a turn is still running")
+	if chat.Archived {
+		return chat, msg, apperr.Conflict("the chat is archived")
+	}
+	// A message during a running reply interrupts it (see chat_interrupt.go);
+	// one interruption at a time, while the stopped process exits.
+	interrupt := chat.State == "running" && chat.CurrentRunID != nil
+	if interrupt && chat.InterruptMessageID != nil {
+		return chat, msg, apperr.Conflict("still stopping the reply for your last message; send this again in a moment")
 	}
 	p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: chat.WorkspaceID})
 	if err != nil {
@@ -378,6 +384,40 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			}
 		}
 	}
+	prompt := body
+	if interrupt {
+		var stopped bool
+		var dropped *store.RunTurn
+		if chat, stopped, dropped, err = stopChatTurn(ctx, q, chat); err != nil {
+			return chat, msg, err
+		}
+		if !stopped {
+			// The reply's process is still exiting: the message waits on the
+			// chat, and the runner starts its turn (ResumeInterruptedChat).
+			appended, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "user", BodyMd: body, ContextRefs: rawRefs, Citations: []byte("[]")})
+			if err != nil {
+				return chat, msg, err
+			}
+			msg = store.ChatMessage(appended)
+			if chat, err = q.SetChatInterrupt(ctx, store.SetChatInterruptParams{ID: chat.ID, InterruptMessageID: &msg.ID}); err != nil {
+				return chat, msg, err
+			}
+			return chat, msg, bindChatAttachments(ctx, q, chat, msg, attachIDs)
+		}
+		// Nothing had started: this turn replaces the stopped one.
+		note := replacedTurnNote(dropped)
+		if note == "" {
+			if note, err = interruptNote(ctx, q, chat, lastUserSeq, nil, nil); err != nil {
+				return chat, msg, err
+			}
+		}
+		prompt = note + body
+	} else if chat.InterruptMessageID != nil {
+		// Left by a stop or failure that never resumed it.
+		if chat, err = q.SetChatInterrupt(ctx, store.SetChatInterruptParams{ID: chat.ID}); err != nil {
+			return chat, msg, err
+		}
+	}
 	// A mention picks who answers (and queues the rest); otherwise whoever
 	// spoke last carries on. The message may also set how long personas keep
 	// handing the conversation to each other.
@@ -388,7 +428,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0, RelayLimit: int32(RelayLimitIn(body))}); err != nil {
 		return chat, msg, err
 	}
-	chat, run, turn, err := startChatTurn(ctx, q, chat, p.Key, body, false, handoffChars)
+	chat, run, turn, err := startChatTurn(ctx, q, chat, p.Key, prompt, false, handoffChars)
 	if err != nil {
 		return chat, msg, err
 	}
@@ -397,18 +437,24 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		return chat, msg, err
 	}
 	msg = store.ChatMessage(appended)
-	if len(attachIDs) > 0 {
-		// Only the chat owner's own uploads that no message has claimed yet; any
-		// other id fails the whole post (the transaction rolls back).
-		bound, err := q.AttachChatAttachments(ctx, store.AttachChatAttachmentsParams{MessageID: &msg.ID, Ids: attachIDs, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
-		if err != nil {
-			return chat, msg, err
-		}
-		if len(bound) != len(attachIDs) {
-			return chat, msg, apperr.Invalid("attachment_ids", "upload the files again: an attachment is unknown or already sent")
-		}
+	return chat, msg, bindChatAttachments(ctx, q, chat, msg, attachIDs)
+}
+
+// bindChatAttachments claims the uploads a person's message carries.
+func bindChatAttachments(ctx context.Context, q *store.Queries, chat store.ChatSession, msg store.ChatMessage, attachIDs []uuid.UUID) error {
+	if len(attachIDs) == 0 {
+		return nil
 	}
-	return chat, msg, nil
+	// Only the chat owner's own uploads that no message has claimed yet; any
+	// other id fails the whole post (the transaction rolls back).
+	bound, err := q.AttachChatAttachments(ctx, store.AttachChatAttachmentsParams{MessageID: &msg.ID, Ids: attachIDs, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	if err != nil {
+		return err
+	}
+	if len(bound) != len(attachIDs) {
+		return apperr.Invalid("attachment_ids", "upload the files again: an attachment is unknown or already sent")
+	}
+	return nil
 }
 
 // startChatTurn queues a turn for the chat's current speaker: on the current
@@ -588,38 +634,15 @@ func (s *Service) CancelChat(ctx context.Context, ws, user, id uuid.UUID) (store
 		if chat.State != "running" || chat.CurrentRunID == nil {
 			return apperr.Conflict("no turn is running")
 		}
-		run, err := q.LockRun(ctx, *chat.CurrentRunID)
-		if err != nil {
-			return err
-		}
-		if run.State == "paused" {
-			return nil
-		} // cancellation is already draining setup/the turn
-		// Resolve the claim boundary first. At READ COMMITTED, this UPDATE
-		// waits for a winning claimant and rechecks its pending predicate;
-		// the following SELECT gets a fresh snapshot and sees that running turn.
-		// If we win, the row stays locked/done so a claimant cannot take it.
-		if err = q.DropPendingTurns(ctx, run.ID); err != nil {
-			return err
-		}
-		active, err := q.HasRunningChatTurn(ctx, run.ID)
-		if err != nil {
-			return err
-		}
-		state, reason := "waiting", "human_reply"
-		if active || run.State == "starting" {
-			state, reason = "paused", "pause"
-		}
-		if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: state, WaitReason: &reason}); err != nil {
-			return err
-		}
-		if state == "waiting" {
-			out, err = q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: chat.ID, CurrentRunID: &run.ID, State: "idle"})
-			if err != nil {
+		if chat.InterruptMessageID != nil {
+			// Stop also drops an interruption still waiting for its turn; the
+			// message stays in the conversation, unanswered.
+			if chat, err = q.SetChatInterrupt(ctx, store.SetChatInterruptParams{ID: chat.ID}); err != nil {
 				return err
 			}
 		}
-		return event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_turn_cancelled"})
+		out, _, _, err = stopChatTurn(ctx, q, chat)
+		return err
 	})
 	return out, err
 }

@@ -360,6 +360,14 @@ func main() {
 		if prompt == "slow" && resume == "" {
 			time.Sleep(60 * time.Second)
 		}
+		if prompt == "slow partial" && !opencode && !codex {
+			// Test hook: write a little and call a tool, then hang until stopped,
+			// like a reply the person interrupts.
+			text("Halfway there: the ledger balances.")
+			emit(map[string]any{"type": "assistant", "message": map[string]any{"role": "assistant", "content": []any{
+				map[string]any{"type": "tool_use", "id": "toolu_partial", "name": "mcp__lazyagents__read_page", "input": map[string]any{"page": "Ledger"}}}}})
+			time.Sleep(60 * time.Second)
+		}
 		if prompt == "quota" {
 			result(true, "You have hit your usage limit")
 			os.Exit(1)

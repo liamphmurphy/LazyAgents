@@ -618,7 +618,10 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			if err := q.SetRunWorkspace(ctx, store.SetRunWorkspaceParams{ID: run.ID, WorkspaceVolume: &vol}); err != nil {
 				return err
 			}
-			return idleChat(ctx, q, chat, cur, "idle")
+			if err := idleChat(ctx, q, chat, cur, "idle"); err != nil {
+				return err
+			}
+			return runs.ResumeInterruptedChat(ctx, q, chat.ID, run.ID, nil, 0)
 		}
 		if cur.State != "starting" {
 			return nil // cancelled while setting up
