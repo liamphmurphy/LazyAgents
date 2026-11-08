@@ -196,6 +196,7 @@ type ChatImageJob struct {
 	OutboxFiles    []string
 	AttachmentID   *uuid.UUID
 	FollowupTurnID *uuid.UUID
+	ReferenceRoles []string
 }
 
 type ChatMessage struct {
@@ -321,19 +322,22 @@ type Label struct {
 }
 
 type LibraryItem struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	UserID      uuid.UUID
-	Kind        string
-	Title       string
-	Filename    string
-	ContentType string
-	SizeBytes   int64
-	BlobKey     string
-	ChatID      *uuid.UUID
-	MessageID   *uuid.UUID
-	PersonaID   *uuid.UUID
-	CreatedAt   time.Time
+	ID                 uuid.UUID
+	WorkspaceID        uuid.UUID
+	UserID             uuid.UUID
+	Kind               string
+	Title              string
+	Filename           string
+	ContentType        string
+	SizeBytes          int64
+	BlobKey            string
+	ChatID             *uuid.UUID
+	MessageID          *uuid.UUID
+	PersonaID          *uuid.UUID
+	CreatedAt          time.Time
+	Reference          *string
+	ReferencePersonaID *uuid.UUID
+	Source             string
 }
 
 type Memory struct {

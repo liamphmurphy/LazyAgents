@@ -1605,7 +1605,14 @@ export interface paths {
          */
         get: operations["listLibraryItems"];
         put?: never;
-        post?: never;
+        /**
+         * Add an image of your own to your Library
+         * @description Stores one image (PNG, JPEG, GIF or WebP, up to 25 MB) in the caller's
+         *     Library, e.g. a photo to use as their reference image. It counts
+         *     against the same storage cap as generated images. 422 for another
+         *     type, an empty file, one over the limit or a full Library.
+         */
+        post: operations["uploadLibraryItem"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1629,6 +1636,37 @@ export interface paths {
          * @description The image stays in its chat while that chat exists. 404 unless it is yours.
          */
         delete: operations["deleteLibraryItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{itemId}/reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Use an image as a reference likeness
+         * @description Marks the image as what one of the caller's personas looks like
+         *     (role persona, with persona_id) or what the caller looks like (role
+         *     self). Generated images of that persona or person start from it. Each
+         *     persona and the caller have at most one: this replaces the previous
+         *     one, and replaces any reference the image already was. 404 unless the
+         *     image is yours; 422 unless persona_id is one of your personas.
+         */
+        put: operations["setLibraryReference"];
+        post?: never;
+        /**
+         * Stop using an image as a reference
+         * @description The image stays in the Library. 404 unless it is yours.
+         */
+        delete: operations["clearLibraryReference"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3818,8 +3856,33 @@ export interface components {
              */
             persona_id?: string;
             persona_name?: string;
+            /**
+             * @description generated: a persona made it in a chat; upload: the person added it
+             * @enum {string}
+             */
+            source?: "generated" | "upload";
+            reference?: components["schemas"]["LibraryReferenceRole"];
+            /**
+             * Format: uuid
+             * @description With reference persona: the persona this image shows
+             */
+            reference_persona_id?: string;
+            reference_persona_name?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        /**
+         * @description persona: what one of the person's personas looks like; self: what the person looks like
+         * @enum {string}
+         */
+        LibraryReferenceRole: "persona" | "self";
+        LibraryReferenceSet: {
+            role: components["schemas"]["LibraryReferenceRole"];
+            /**
+             * Format: uuid
+             * @description Required for role persona; one of your personas
+             */
+            persona_id?: string;
         };
         LibraryList: {
             items: components["schemas"]["LibraryItem"][];
@@ -6764,6 +6827,35 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    uploadLibraryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     deleteLibraryItem: {
         parameters: {
             query?: never;
@@ -6776,6 +6868,55 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setLibraryReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryReferenceSet"];
+            };
+        };
+        responses: {
+            /** @description Set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    clearLibraryReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared */
             204: {
                 headers: {
                     [name: string]: unknown;

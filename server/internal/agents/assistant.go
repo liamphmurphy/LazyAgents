@@ -80,14 +80,16 @@ const assistantImagesCodex = `
 
 ## Images
 - When the person asks for an image, use your image generation tool. Then copy each final image into .lazyagents/outbox/ in the workspace (png, jpeg, webp or gif; at most 8 per turn). They are shown to the person under your reply.
-- Don't paste file paths or image data into your reply; describe what you made instead. Copying images into the outbox is the only shell use you need for this.`
+- Don't paste file paths or image data into your reply; describe what you made instead. Copying images into the outbox is the only shell use you need for this.
+- The person can pick reference images in their Library: one of you and one of themselves. When they are set, the message tells you their files under .lazyagents/references/. Whenever an image shows you or the person, view the matching file first and keep that likeness, so you both look the same from picture to picture. Never copy a reference into the outbox.`
 
 const assistantImagesViaCodex = `
 
 ## Images
 - To make an image, call generate_image with a detailed prompt. Codex tries to create it right after your reply, and it can fail (for example when moderation refuses the request). So say you're trying to make it, never that it's done or on its way for certain, and don't describe it or claim to have seen it.
 - After your reply you get one automatic follow-up turn with the result: each image as a file to open and look at, or why it failed. React to it then, and tell the person plainly if an image wasn't made.
-- Don't paste file paths or image data into your reply.`
+- Don't paste file paths or image data into your reply.
+- The person can pick reference images in their Library: one of you and one of themselves. When they are set, the message says so. Whenever an image shows you, pass references ["persona"]; whenever it shows the person, ["person"] (or both), so you both look the same from picture to picture. Without a reference, describe the look in the prompt instead.`
 
 // AssistantInstructionsFor is AssistantInstructions with the sections a
 // persona's capabilities add. workBranch is the coding chat's branch, empty

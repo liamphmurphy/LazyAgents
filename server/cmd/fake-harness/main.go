@@ -24,7 +24,8 @@
 //	                    with a content-policy refusal, writes nothing). The
 //	                    image_followup turn after it reads the delivered images, calls
 //	                    generate_image once more and echoes its prompt (or fails,
-//	                    with FAKE_HARNESS_FAIL_FOLLOWUP set).
+//	                    with FAKE_HARNESS_FAIL_FOLLOWUP set). FAKE_IMAGE_REFERENCES
+//	                    (comma-separated) is passed as generate_image references.
 //	slow                wait for SIGINT (pause), then end the turn
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
 //	                    writes child.txt in the shared checkout and completes
@@ -171,6 +172,7 @@ func main() {
 	modeFromFile()
 	var prompt, resume, cfgPath, model string
 	var mcpURL, tokenEnv, mcpApproval string
+	var images []string // codex --image files (comma-separated)
 	args := os.Args[1:]
 	// Chat model discovery for `claude` (chatmodels.DiscoverLocal): answer the
 	// initialize control request with one model, then wait for EOF.
@@ -279,6 +281,9 @@ func main() {
 			case "-m":
 				model = args[i+1]
 				i++
+			case "--image":
+				images = strings.Split(args[i+1], ",")
+				i++
 			case "-s", "-C", "--add-dir":
 				i++
 			default:
@@ -328,7 +333,14 @@ func main() {
 	if path := os.Getenv("FAKE_HARNESS_LOG"); path != "" {
 		wd, _ := os.Getwd()
 		_, request, _ := strings.Cut(prompt, "Request: ") // an image step's job prompt
-		line, _ := json.Marshal(map[string]any{"request": request, "cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE"), "model": model, "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
+		// Each input image as "path=contents", so tests see what was delivered.
+		var imageFiles []string
+		for _, p := range images {
+			b, _ := os.ReadFile(p)
+			imageFiles = append(imageFiles, p+"="+string(b))
+		}
+		line, _ := json.Marshal(map[string]any{"request": request, "cwd": wd, "resume": resume, "prompt": firstLine(prompt), "full_prompt": prompt, "images": strings.Join(imageFiles, "\n"),
+			"mode": os.Getenv("FAKE_HARNESS_MODE"), "model": model, "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
 		if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			_, _ = f.Write(append(line, '\n'))
 			f.Close()
@@ -498,7 +510,12 @@ func main() {
 			again := call("generate_image", map[string]any{"prompt": "another one"})
 			reply = fmt.Sprintf("Follow-up (seen=%d, again=%v):\n%s", seen, again["error"], prompt)
 		} else if want, ok := strings.CutPrefix(prompt, "image: "); ok {
-			out := call("generate_image", map[string]any{"prompt": want})
+			want, _, _ = strings.Cut(want, "\n\n(Vesper:") // notes the runner appended
+			args := map[string]any{"prompt": want}
+			if refs := os.Getenv("FAKE_IMAGE_REFERENCES"); refs != "" {
+				args["references"] = strings.Split(refs, ",")
+			}
+			out := call("generate_image", args)
 			reply = fmt.Sprintf("Chat reply (session=%s): making it (%v)", session, out["queued"])
 		}
 		text(reply)

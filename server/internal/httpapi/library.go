@@ -3,12 +3,17 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"io"
+	"path"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -18,10 +23,18 @@ import (
 const libraryPageSize = 60
 
 func toLibraryItem(l store.ListLibraryItemsRow) api.LibraryItem {
-	return api.LibraryItem{
+	out := api.LibraryItem{
 		Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
 		ChatId: l.ChatID, ChatTitle: l.ChatTitle, ProjectKey: l.ProjectKey, PersonaId: l.PersonaID, PersonaName: l.PersonaName, CreatedAt: l.CreatedAt,
 	}
+	source := api.LibraryItemSource(l.Source)
+	out.Source = &source
+	// A persona reference whose persona was deleted stands for nobody.
+	if l.Reference != nil && (*l.Reference == "self" || l.ReferencePersonaID != nil) {
+		r := api.LibraryReferenceRole(*l.Reference)
+		out.Reference, out.ReferencePersonaId, out.ReferencePersonaName = &r, l.ReferencePersonaID, l.ReferencePersonaName
+	}
+	return out
 }
 
 func (s *Server) ListLibraryItems(ctx context.Context, req api.ListLibraryItemsRequestObject) (api.ListLibraryItemsResponseObject, error) {
@@ -81,4 +94,124 @@ func (s *Server) DeleteLibraryItem(ctx context.Context, req api.DeleteLibraryIte
 		_ = s.Blobs.Delete(context.WithoutCancel(ctx), s.ArtifactBucket, d.BlobKey)
 	}
 	return api.DeleteLibraryItem204Response{}, nil
+}
+
+// UploadLibraryItem stores an image of the person's own, e.g. their photo for
+// "this is me". Uploads share the generated-image cap: both are what the
+// Library keeps for good.
+func (s *Server) UploadLibraryItem(ctx context.Context, req api.UploadLibraryItemRequestObject) (api.UploadLibraryItemResponseObject, error) {
+	u, _, ws := me(ctx)
+	f, err := readForm(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer f.close()
+	if f.file == nil {
+		return nil, apperr.Invalid("file", "required")
+	}
+	head := make([]byte, 512)
+	n, err := io.ReadFull(f.tmp, head)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	if _, err := f.tmp.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	name := runs.ChatAttachmentName(f.file.Name)
+	ct, err := runs.ChatAttachmentType(name, f.file.Size, head[:n])
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := runs.GeneratedImageType(head[:n]); !ok {
+		return nil, apperr.Invalid("file", "%s isn't supported: the Library takes PNG, JPEG, GIF or WebP images", name)
+	}
+	// A soft cap: two concurrent uploads can each pass the check.
+	stored, err := s.Q.ChatGeneratedImageBytes(ctx, store.ChatGeneratedImageBytesParams{WorkspaceID: ws, UserID: u.ID})
+	if err != nil {
+		return nil, err
+	}
+	if stored+f.file.Size > runs.MaxGeneratedImageStorageBytes {
+		return nil, apperr.Invalid("file", "your Library is full (1 GB): remove images you no longer need")
+	}
+	title := strings.TrimSpace(strings.TrimSuffix(name, path.Ext(name)))
+	if title == "" {
+		title = "Uploaded image"
+	}
+	if r := []rune(title); len(r) > runs.MaxLibraryTitleRunes {
+		title = string(r[:runs.MaxLibraryTitleRunes])
+	}
+	key := runs.ChatAttachmentKey(ws, u.ID)
+	if err := s.Blobs.Put(ctx, s.ArtifactBucket, key, f.tmp, f.file.Size, ct); err != nil {
+		return nil, err
+	}
+	l, err := s.Q.CreateUploadedLibraryItem(ctx, store.CreateUploadedLibraryItemParams{WorkspaceID: ws, UserID: u.ID, Title: title, Filename: name, ContentType: ct, SizeBytes: f.file.Size, BlobKey: key})
+	if err != nil {
+		_ = s.Blobs.Delete(context.WithoutCancel(ctx), s.ArtifactBucket, key)
+		return nil, err
+	}
+	source := api.LibraryItemSource(l.Source)
+	return api.UploadLibraryItem201JSONResponse{Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
+		Source: &source, CreatedAt: l.CreatedAt}, nil
+}
+
+// SetLibraryReference makes one of the caller's images the reference for a
+// role, replacing the role's previous image and whatever this image stood for
+// before. The persona must be the caller's own.
+func (s *Server) SetLibraryReference(ctx context.Context, req api.SetLibraryReferenceRequestObject) (api.SetLibraryReferenceResponseObject, error) {
+	u, _, ws := me(ctx)
+	role := string(req.Body.Role)
+	var persona *uuid.UUID
+	switch req.Body.Role {
+	case api.LibraryReferenceRoleSelf:
+		if req.Body.PersonaId != nil {
+			return nil, apperr.Invalid("persona_id", "only for role persona")
+		}
+	case api.LibraryReferenceRolePersona:
+		if req.Body.PersonaId == nil {
+			return nil, apperr.Invalid("persona_id", "required for role persona")
+		}
+		if _, err := s.Q.GetPersona(ctx, store.GetPersonaParams{ID: *req.Body.PersonaId, WorkspaceID: ws, UserID: u.ID}); errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperr.Invalid("persona_id", "not one of your personas")
+		} else if err != nil {
+			return nil, err
+		}
+		persona = req.Body.PersonaId
+	default:
+		return nil, apperr.Invalid("role", "persona or self")
+	}
+	if err := s.setLibraryReference(ctx, ws, u.ID, req.ItemId, &role, persona); err != nil {
+		return nil, err
+	}
+	return api.SetLibraryReference204Response{}, nil
+}
+
+func (s *Server) ClearLibraryReference(ctx context.Context, req api.ClearLibraryReferenceRequestObject) (api.ClearLibraryReferenceResponseObject, error) {
+	u, _, ws := me(ctx)
+	if err := s.setLibraryReference(ctx, ws, u.ID, req.ItemId, nil, nil); err != nil {
+		return nil, err
+	}
+	return api.ClearLibraryReference204Response{}, nil
+}
+
+// setLibraryReference marks item for role (nil clears it) under the person's
+// reference lock, unmarking the role's current image first.
+func (s *Server) setLibraryReference(ctx context.Context, ws, user, item uuid.UUID, role *string, persona *uuid.UUID) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		q := s.Q.WithTx(tx)
+		if err := q.LockLibraryReferences(ctx, store.LockLibraryReferencesParams{WorkspaceID: ws, UserID: user}); err != nil {
+			return err
+		}
+		if _, err := q.GetLibraryItem(ctx, store.GetLibraryItemParams{ID: item, WorkspaceID: ws, UserID: user}); errors.Is(err, pgx.ErrNoRows) {
+			return apperr.ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		if role != nil {
+			if err := q.ClearLibraryReferenceRole(ctx, store.ClearLibraryReferenceRoleParams{WorkspaceID: ws, UserID: user, Role: *role, PersonaID: persona}); err != nil {
+				return err
+			}
+		}
+		_, err := q.SetLibraryReference(ctx, store.SetLibraryReferenceParams{ID: item, WorkspaceID: ws, UserID: user, Role: role, PersonaID: persona})
+		return err
+	})
 }

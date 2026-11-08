@@ -19,12 +19,14 @@ import (
 // DefaultChatImageTimeout bounds one Codex image step.
 const DefaultChatImageTimeout = 5 * time.Minute
 
-// imageStepPrompt wraps a job's prompt for the one-shot Codex step.
-const imageStepPrompt = "Generate exactly one image for this request with your image generation tool, then copy the final file into .lazyagents/outbox/ with cp. Don't do anything else. Request: "
+// imageStepPrompt wraps a job's prompt for the one-shot Codex step: this,
+// then any reference images' note, then "Request: " and the prompt.
+const imageStepPrompt = "Generate exactly one image for this request with your image generation tool, then copy the final file into .lazyagents/outbox/ with cp. Don't do anything else. "
 
 // imageStepInstructions is the step's AGENTS.md: a stand-in for the chat
 // persona's instructions, which are meant for the chat's own model.
 const imageStepInstructions = `This is a one-shot image step inside a chat. Make the one image the request asks for with your image generation tool, copy the final file into .lazyagents/outbox/ (png, jpeg, webp or gif), and stop. Don't modify any other file, don't run other commands, and don't call Vesper tools.
+Reference images may be attached to the request (files in .lazyagents/references/); the request says whom each shows. Use them as the likeness of those people wherever the image shows them, and don't copy them into the outbox.
 `
 
 // chatImages is what a turn's image jobs did, for finishChatTurn: whether any
@@ -181,10 +183,13 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 		cacheDir = backend.DependencyCacheDir()
 	}
 	dir := childDir(c.run)
+	// Only the likenesses the request asked for are in the workspace while
+	// the step runs (loadChatReferences blanks the rest).
+	refs := r.loadChatReferences(ctx, q, c.run, job.ReferenceRoles)
 	h := harness.Codex{Prices: r.Cfg.ModelPrices}
 	inv, err := h.Invocation(harness.Workspace{
 		DependencyCacheDir: cacheDir, Dir: r.Backend.WorkspaceDir(wsID(c.run)), MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
-	}, harness.Turn{Spec: spec, Prompt: imageStepPrompt + job.Prompt})
+	}, harness.Turn{Spec: spec, Prompt: imageStepPrompt + imageStepReferencePrompt(refs) + "Request: " + job.Prompt, Images: refs.images()})
 	if err != nil {
 		r.Log.Warn("image step invocation", "run", c.run.ID, "err", err)
 		return finish("Codex couldn't be started")
@@ -193,6 +198,9 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 		".lazyagents/agents-section.md": []byte(imageStepInstructions),
 		// The directory the step may write to; dot files are never harvested.
 		".lazyagents/outbox/.keep": {},
+	}
+	for k, v := range refs.files {
+		files[k] = v
 	}
 	for k, v := range inv.Files {
 		files[k] = v

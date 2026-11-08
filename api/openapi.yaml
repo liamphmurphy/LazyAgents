@@ -2080,6 +2080,32 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/LibraryList" }
         default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: uploadLibraryItem
+      summary: Add an image of your own to your Library
+      description: |
+        Stores one image (PNG, JPEG, GIF or WebP, up to 25 MB) in the caller's
+        Library, e.g. a photo to use as their reference image. It counts
+        against the same storage cap as generated images. 422 for another
+        type, an empty file, one over the limit or a full Library.
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
 
   /library/{itemId}:
     parameters:
@@ -2091,6 +2117,40 @@ paths:
       tags: [library]
       responses:
         "204": { description: Removed }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /library/{itemId}/reference:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setLibraryReference
+      summary: Use an image as a reference likeness
+      description: |
+        Marks the image as what one of the caller's personas looks like
+        (role persona, with persona_id) or what the caller looks like (role
+        self). Generated images of that persona or person start from it. Each
+        persona and the caller have at most one: this replaces the previous
+        one, and replaces any reference the image already was. 404 unless the
+        image is yours; 422 unless persona_id is one of your personas.
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryReferenceSet" }
+      responses:
+        "204": { description: Set }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: clearLibraryReference
+      summary: Stop using an image as a reference
+      description: The image stays in the Library. 404 unless it is yours.
+      tags: [library]
+      responses:
+        "204": { description: Cleared }
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
@@ -4333,7 +4393,21 @@ components:
         project_key: { type: string, description: The project of the chat it came from, for linking to it }
         persona_id: { type: string, format: uuid, description: "The persona that made it, while that persona exists" }
         persona_name: { type: string }
+        source: { type: string, enum: [generated, upload], description: "generated: a persona made it in a chat; upload: the person added it" }
+        reference: { $ref: "#/components/schemas/LibraryReferenceRole" }
+        reference_persona_id: { type: string, format: uuid, description: "With reference persona: the persona this image shows" }
+        reference_persona_name: { type: string }
         created_at: { type: string, format: date-time }
+    LibraryReferenceRole:
+      type: string
+      enum: [persona, self]
+      description: "persona: what one of the person's personas looks like; self: what the person looks like"
+    LibraryReferenceSet:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/LibraryReferenceRole" }
+        persona_id: { type: string, format: uuid, description: Required for role persona; one of your personas }
     LibraryList:
       type: object
       required: [items, has_more]

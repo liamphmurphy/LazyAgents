@@ -31,6 +31,9 @@ type Turn struct {
 	Spec      agentdef.Resolved
 	Prompt    string
 	SessionID string // resume this harness session when set
+	// Images are files (relative to Workspace.Dir) attached to the prompt as
+	// image inputs. Only Codex takes them; other harnesses ignore them.
+	Images []string
 }
 
 // Invocation is what the runner executes.
