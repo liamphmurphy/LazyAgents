@@ -64,6 +64,45 @@ function handle(route: Route, path: string, method: string, course: { current: u
   return json(route, course.current);
 }
 
+const DIAGRAM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 90" width="320" height="90"><rect x="24" y="20" width="104" height="48" rx="8" fill="var(--viz-panel)" stroke="var(--viz-line)"/><g data-step="2"><rect x="192" y="20" width="104" height="48" rx="8" fill="var(--viz-1-soft)" stroke="var(--viz-1)"/></g></svg>`;
+const CHART = JSON.stringify({ type: "line", title: "Dead tuples", categories: ["Mon", "Tue", "Wed"], series: [{ name: "Tuples", values: [10, 40, 25] }] });
+
+test("a lesson teaches with step-throughs and charts, and the tutor can draw", async ({ page }) => {
+  const course = { current: null as unknown };
+  await mock(page, course, []);
+  const data = ready();
+  data.lessons[0] = lesson("snapshots", "Snapshots", {
+    body: [
+      { kind: "diagram", text: DIAGRAM, alt: "Two row versions", caption: "Each UPDATE adds a version", steps: ["The first version", "A second version"], provenance: "sourced", sources: [1] },
+      { kind: "chart", text: CHART, alt: "Dead tuples rising midweek", provenance: "model_knowledge" },
+    ],
+    checks: [check()],
+  });
+  course.current = data;
+  await page.route(new RegExp(`/api/v1/chats/${CHAT}/messages.*$`), (route) => json(route, { messages: [{ id: "m1", role: "assistant", body_md: "Picture it:\n\n```chart\n" + CHART + "\n```\n\n```choices\nPick\n- A\n```" }] }));
+  await page.goto(`/learn/${ID}`);
+
+  const article = page.getByRole("article");
+  const diagram = article.getByTestId("svg-fence");
+  await expect(diagram.getByRole("img", { name: /Two row versions. Step 1 of 2: The first version/ })).toBeVisible();
+  await expect(diagram).toContainText("Each UPDATE adds a version");
+  await expect(diagram.getByRole("link", { name: "[1]" })).toBeVisible();
+  await expect(diagram.getByRole("tab", { name: "Code" })).toHaveCount(0);
+  await diagram.getByRole("button", { name: "Next step" }).click();
+  await expect(diagram.getByRole("img", { name: /Step 2 of 2: A second version/ })).toBeVisible();
+  await expect(diagram.getByRole("button", { name: "Next step" })).toBeDisabled();
+
+  const chart = article.getByTestId("chart");
+  await expect(chart.getByRole("img", { name: "Dead tuples rising midweek" })).toBeVisible();
+  await expect(article.getByText("MODEL KNOWLEDGE · NOT SOURCED")).toBeVisible();
+
+  const tutor = page.getByRole("complementary", { name: "Tutor" });
+  await expect(tutor.getByTestId("chart")).toBeVisible();
+  await expect(tutor).toContainText("- A");
+  await expect(tutor.getByRole("button", { name: "A", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/learn-visuals.png", fullPage: true });
+});
+
 test("a topic becomes an outline to approve", async ({ page }) => {
   const course = { current: null as unknown };
   const posts: { url: string; body: unknown }[] = [];

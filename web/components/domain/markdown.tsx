@@ -12,7 +12,6 @@ import { cx } from "@/lib/cx";
 import { headingAnchors } from "@/lib/slug";
 import { linkify, parseWikiLinks, WIKILINK_SCHEME } from "@/lib/wikilinks";
 import { isAppFence } from "@/lib/chat-app";
-import { isSvgFence } from "@/lib/chat-svg";
 import { isCanvasFence } from "@/lib/chat-canvas";
 import { rehypeSlots, rehypeSourceSpans, SLOT_CLASS, type Slot } from "@/lib/canvas-source";
 import { groupRecommendFences, isRecommendFence, RECOMMEND_ROW } from "@/lib/chat-recommend";
@@ -28,9 +27,8 @@ import { isWorkflowRunFence } from "@/lib/workflows";
 import { WorkflowRunFence } from "./workflow-cards";
 import { CiteMarker, MomentLink } from "./cite-marker";
 import { CodeFence } from "./code-fence";
-import { MermaidFence, isMermaidFence } from "./mermaid-fence";
 import { RecommendFence } from "./recommend-fence";
-import { SvgFence } from "./svg-fence";
+import { visualFence } from "./visuals";
 import { LinkTargets, WikiLink } from "./wikilink";
 
 const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) || url.startsWith(CITE_SCHEME) ? url : defaultUrlTransform(url));
@@ -51,7 +49,7 @@ function SlotContent({ id }: { id: string }) {
  * Renders user and agent markdown. react-markdown escapes raw HTML by
  * default, so agent-written content can't inject markup.
  */
-export function Markdown({ children, className, anchors, codeBlocks, sourceSpans, slots }: { children: string; className?: string; anchors?: boolean; codeBlocks?: boolean; sourceSpans?: boolean; slots?: Slot[] }) {
+export function Markdown({ children, className, anchors, codeBlocks, visualBlocks, sourceSpans, slots }: { children: string; className?: string; anchors?: boolean; codeBlocks?: boolean; visualBlocks?: boolean; sourceSpans?: boolean; slots?: Slot[] }) {
   // Heading ids come from source lines, so they match the API's outline
   // anchors and stay stable across re-renders.
   const ids = useMemo(() => (anchors ? headingAnchors(children) : undefined), [anchors, children]);
@@ -106,21 +104,23 @@ export function Markdown({ children, className, anchors, codeBlocks, sourceSpans
           }),
       pre: ({ children }) => {
         // Chat: fenced blocks get a header, Copy, lazy highlighting and collapse.
-        const code = codeBlocks && isValidElement<{ className?: string; children?: ReactNode }>(children) ? children.props : undefined;
+        const code = (codeBlocks || visualBlocks) && isValidElement<{ className?: string; children?: ReactNode }>(children) ? children.props : undefined;
         if (code && typeof code.children === "string") {
           const info = /language-(\S+)/.exec(code.className ?? "")?.[1];
-          // ```app fences run as sandboxed interactive apps.
-          if (isAppFence(info)) return <AppFence code={code.children} info={info} />;
-          // ```svg-image fences show as images.
-          if (isSvgFence(info)) return <SvgFence code={code.children} info={info} />;
-          if (isCanvasFence(info)) return <CanvasFence code={code.children} info={info} />;
-          if (isMermaidFence(info)) return <MermaidFence code={code.children} info={info} />;
-          if (isChoicesFence(info)) return <ChoicesFence code={code.children} info={info} />;
-          if (isResearchPlanFence(info)) return <ResearchFence code={code.children} info={info} />;
-          if (isWorkflowRunFence(info)) return <WorkflowRunFence code={code.children} info={info} />;
-          // ```recommend fences show as preview cards.
-          if (isRecommendFence(info)) return <RecommendFence code={code.children} info={info} />;
-          return <CodeFence code={code.children} info={info} />;
+          // Diagrams, step-throughs and charts: shared with Learn.
+          const visual = visualFence(info, code.children);
+          if (visual) return visual;
+          if (codeBlocks) {
+            // ```app fences run as sandboxed interactive apps.
+            if (isAppFence(info)) return <AppFence code={code.children} info={info} />;
+            if (isCanvasFence(info)) return <CanvasFence code={code.children} info={info} />;
+            if (isChoicesFence(info)) return <ChoicesFence code={code.children} info={info} />;
+            if (isResearchPlanFence(info)) return <ResearchFence code={code.children} info={info} />;
+            if (isWorkflowRunFence(info)) return <WorkflowRunFence code={code.children} info={info} />;
+            // ```recommend fences show as preview cards.
+            if (isRecommendFence(info)) return <RecommendFence code={code.children} info={info} />;
+            return <CodeFence code={code.children} info={info} />;
+          }
         }
         return (
         <pre className="overflow-x-auto rounded-lg border border-border bg-surface-sunken p-3 font-mono text-xs leading-relaxed [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0">
@@ -143,7 +143,7 @@ export function Markdown({ children, className, anchors, codeBlocks, sourceSpans
           </a>
         ),
     };
-  }, [anchors, codeBlocks, ids]);
+  }, [anchors, codeBlocks, visualBlocks, ids]);
   return (
     <LinkTargets.Provider value={targets}>
     <div className={cx("prose-code flex flex-col gap-2.5 [&_a]:text-accent [&_a]:underline-offset-2 hover:[&_a]:underline", className)}>

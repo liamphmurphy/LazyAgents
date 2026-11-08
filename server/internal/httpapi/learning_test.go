@@ -294,6 +294,9 @@ func TestCourseLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if can, err := runs.ChatCanDrawSVGs(ctx, e.q, session); err != nil || !can {
+		t.Fatalf("a tutor should draw whichever persona it has: %v, %v", can, err)
+	}
 	note, err := runs.LearningTutorNote(ctx, e.q, session)
 	if err != nil || !strings.Contains(note, "A claim about tuples") || !strings.Contains(note, "got this check wrong") {
 		t.Fatalf("note: %q %v", note, err)

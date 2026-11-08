@@ -10,6 +10,7 @@ func TestSVGFenceRewrite(t *testing.T) {
 		{"```svg\n```", "```svg\n```"},
 		{"an svg-image fence", "an svg-image fence"},
 		{"```svg-images\n```", "```svg-images\n```"},
+		{"```svg-steps\n<svg/>\n1. a\n```", "```svg\n<svg/>\n1. a\n```"},
 	} {
 		if got := svgFenceRe.ReplaceAllString(tc.in, "${1}${2}svg"); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.in, got, tc.want)
