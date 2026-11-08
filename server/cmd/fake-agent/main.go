@@ -1,7 +1,7 @@
 // Command fake-agent plays an agent over the real Agent API (MCP), so the
 // whole loop can be demoed and tested without an LLM or API keys:
 //
-//	LAZYAGENTS_TOKEN=la_… go run ./cmd/fake-agent -url http://localhost:8000/mcp -ticket PAY-214
+//	LAZYAGENTS_TOKEN=vsp_… go run ./cmd/fake-agent -url http://localhost:8000/mcp -ticket PAY-214
 //
 // It claims the ticket, reads its context, posts a plan, runs "tests",
 // requests db:migrate approval and waits for a person to approve it in the

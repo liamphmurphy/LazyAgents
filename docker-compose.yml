@@ -51,7 +51,7 @@ services:
       postgres: { condition: service_healthy }
       seaweedfs: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "lazyagents", "healthcheck"]
+      test: ["CMD", "vesper", "healthcheck"]
       interval: 3s
       timeout: 3s
       retries: 30
@@ -60,7 +60,7 @@ services:
   agent-base:
     build:
       context: ./deploy/agent-base
-    image: lazyagents/agent-base:latest
+    image: vesper/agent-base:latest
     command: ["true"]
 
   # Executes dispatched runs (docs/dev/plan.md §6.4–6.6). It drives Docker through the
@@ -75,7 +75,7 @@ services:
     environment:
       <<: *api-env
       RUNNER_BACKEND: docker
-      RUNNER_IMAGE: ${RUNNER_IMAGE:-lazyagents/agent-base:latest}
+      RUNNER_IMAGE: ${RUNNER_IMAGE:-vesper/agent-base:latest}
       RUNNER_NETWORK: lazyagents_default
       RUNNER_MCP_URL: http://api:8000/mcp
       RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-2}

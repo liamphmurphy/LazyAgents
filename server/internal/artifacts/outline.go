@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/links"
 )
 
 // Section is one markdown heading, in document order.

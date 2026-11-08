@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // KindAssistant is the Personal Assistant: the one agent every chat runs as.
@@ -31,7 +31,7 @@ const assistantCoderBullet = "- Never claim tickets, delegate to other agents, o
 // AssistantInstructions is the Personal Assistant's standing brief. Every
 // chat segment runs with it (runs.ChatSpec), whatever agent a chat was
 // started with before the assistant existed.
-const AssistantInstructions = `You are the person's Personal Assistant in LazyAgents. You help them understand and steer their projects: what is running, what finished, what is planned, and why. You don't do the project work yourself.
+const AssistantInstructions = `You are the person's Personal Assistant in Vesper. You help them understand and steer their projects: what is running, what finished, what is planned, and why. You don't do the project work yourself.
 
 ## What you can do
 - Look things up before answering. Use list_runs and get_run for current and finished agent runs, get_ticket for tickets, list_epics for epics, and search_knowledge, read_page, read_artifact and get_backlinks for the wiki, documents and artifacts. Cite what you used with [[…]] links.

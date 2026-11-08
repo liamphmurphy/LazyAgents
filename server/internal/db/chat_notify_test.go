@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
 )
 
 func mustExec(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {

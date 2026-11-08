@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func (s *Server) GetRunnerEnvironment(ctx context.Context, req api.GetRunnerEnvironmentRequestObject) (api.GetRunnerEnvironmentResponseObject, error) {

@@ -43,10 +43,10 @@ dev: dev-infra stop-dev ## Infra in Docker, API (hot reload) + Next dev on the h
 
 api: ## Run the API (hot reload if air is installed: go install github.com/air-verse/air@latest)
 	cd server && export RUNNER_BACKEND=$(RUNNER_BACKEND) PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000}; \
-	  if command -v air >/dev/null; then air; else go run ./cmd/lazyagents serve; fi
+	  if command -v air >/dev/null; then air; else go run ./cmd/vesper serve; fi
 
 runner: ## Run dispatched tickets (default local: host claude/codex logins, no isolation)
-	cd server && RUNNER_BACKEND=$(RUNNER_BACKEND) RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/lazyagents runner
+	cd server && RUNNER_BACKEND=$(RUNNER_BACKEND) RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/vesper runner
 
 web: ## Run Next dev server
 	cd web && npm run dev

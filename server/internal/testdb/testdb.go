@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/db"
+	"github.com/liamphmurphy/vesper/server/internal/db"
 )
 
 // New creates a uniquely named database, migrates it and drops it when the test ends.

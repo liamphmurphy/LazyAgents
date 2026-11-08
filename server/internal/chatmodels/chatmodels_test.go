@@ -3,8 +3,8 @@ package chatmodels
 import (
 	"context"
 	"github.com/google/uuid"
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"net/http"
 	"net/http/httptest"
 	"testing"

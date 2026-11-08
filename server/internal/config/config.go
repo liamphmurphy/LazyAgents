@@ -4,7 +4,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/liamphmurphy/lazyagents/server/internal/harness"
+	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"math"
 	"os"
 	"strconv"
@@ -37,7 +37,7 @@ type Config struct {
 	MemoryConsolidateInterval int // seconds
 }
 
-// Runner configures `lazyagents runner` (docs/dev/plan.md §6.5).
+// Runner configures `vesper runner` (docs/dev/plan.md §6.5).
 type Runner struct {
 	ModelPrices   map[string]harness.Price
 	Backend       string // docker | local
@@ -96,7 +96,7 @@ func Load() (Config, error) {
 	}
 	r := Runner{
 		Backend:      env("RUNNER_BACKEND", "docker"),
-		Image:        env("RUNNER_IMAGE", "lazyagents/agent-base:latest"),
+		Image:        env("RUNNER_IMAGE", "vesper/agent-base:latest"),
 		Network:      env("RUNNER_NETWORK", "lazyagents_default"),
 		DockerSocket: env("DOCKER_SOCKET", "/var/run/docker.sock"),
 		DataDir:      env("RUNNER_DATA_DIR", ".lazyagents/runs"),

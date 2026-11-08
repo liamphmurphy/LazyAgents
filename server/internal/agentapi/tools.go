@@ -1,6 +1,6 @@
 // Package agentapi is the Agent API (docs/dev/plan.md §5.2): one table of tools,
 // served over MCP at /mcp and mirrored as REST at /api/v1/agent/tools/{name}.
-// Every call authenticates with an agent bearer token (la_…).
+// Every call authenticates with an agent bearer token (vsp_…).
 package agentapi
 
 import (
@@ -15,14 +15,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
-	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
 type Deps struct {

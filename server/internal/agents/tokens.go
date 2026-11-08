@@ -12,12 +12,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // TokenPrefix marks Vesper agent tokens so secret scanners can find them.
-const TokenPrefix = "la_"
+const TokenPrefix = "vsp_"
+
+// LegacyTokenPrefix marks tokens minted before the rename from LazyAgents.
+// They still resolve until they expire or are revoked; new ones use TokenPrefix.
+const LegacyTokenPrefix = "la_"
 
 func hashToken(t string) []byte {
 	h := sha256.Sum256([]byte(t))
@@ -52,7 +56,7 @@ var ErrBadToken = errors.New("agents: invalid or revoked token")
 
 // ResolveToken authenticates a bearer token.
 func ResolveToken(ctx context.Context, q *store.Queries, token string) (Caller, error) {
-	if !strings.HasPrefix(token, TokenPrefix) {
+	if !strings.HasPrefix(token, TokenPrefix) && !strings.HasPrefix(token, LegacyTokenPrefix) {
 		return Caller{}, ErrBadToken
 	}
 	row, err := q.ResolveAgentToken(ctx, hashToken(token))

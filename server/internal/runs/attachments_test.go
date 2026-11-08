@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
 )
 
 func TestChatAttachmentName(t *testing.T) {

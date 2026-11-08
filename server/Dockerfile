@@ -6,12 +6,12 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 ARG VERSION=dev
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/lazyagents ./cmd/lazyagents
+    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/vesper ./cmd/vesper
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/lazyagents /usr/local/bin/lazyagents
+COPY --from=build /out/vesper /usr/local/bin/vesper
 ARG VERSION=dev
 ENV LAZYAGENTS_VERSION=${VERSION}
 EXPOSE 8000
-ENTRYPOINT ["lazyagents"]
+ENTRYPOINT ["vesper"]
 CMD ["serve"]

@@ -35,7 +35,7 @@ func TestFallbacks(t *testing.T) {
 	}
 }
 
-// Only LazyAgents sets the assistant-only options: a definition (or a
+// Only Vesper sets the assistant-only options: a definition (or a
 // fallback) that tries is refused.
 func TestAssistantOnlyOptionsRejected(t *testing.T) {
 	for _, opt := range []string{OptionWebSearch, OptionImageGeneration} {

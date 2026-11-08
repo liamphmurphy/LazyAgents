@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
 // HarnessOpenCode is the public harness id for the pinned OpenCode CLI. For

@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
 )
 
 func TestProfileUpdateAndValidation(t *testing.T) {

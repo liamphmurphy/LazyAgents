@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func TestScopedTicketListsAreComplete(t *testing.T) {

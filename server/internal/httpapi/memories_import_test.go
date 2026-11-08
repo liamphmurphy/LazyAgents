@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/seed"
+	"github.com/liamphmurphy/vesper/server/internal/seed"
 )
 
 type importResult struct {

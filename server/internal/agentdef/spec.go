@@ -180,10 +180,10 @@ var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 
 func validOptions(field string, opts map[string]string) error {
 	if _, ok := opts[OptionWebSearch]; ok {
-		return invalid(field, "%s is set by LazyAgents for the Personal Assistant only", OptionWebSearch)
+		return invalid(field, "%s is set by Vesper for the Personal Assistant only", OptionWebSearch)
 	}
 	if _, ok := opts[OptionImageGeneration]; ok {
-		return invalid(field, "%s is set by LazyAgents for the Personal Assistant only", OptionImageGeneration)
+		return invalid(field, "%s is set by Vesper for the Personal Assistant only", OptionImageGeneration)
 	}
 	if e, ok := opts["effort"]; ok && !slices.Contains(Efforts, e) {
 		return invalid(field, "effort must be one of %s", strings.Join(Efforts, ", "))

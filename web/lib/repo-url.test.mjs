@@ -7,7 +7,7 @@ test("empty is allowed (runs start in an empty workspace)", () => {
 });
 
 test("SSH forms are kept as typed", () => {
-  for (const u of ["git@github.com:liamphmurphy/LazyAgents.git", "git@github.com:a/b", "ssh://git@github.com/a/b.git"]) {
+  for (const u of ["git@github.com:liamphmurphy/Vesper.git", "git@github.com:a/b", "ssh://git@github.com/a/b.git"]) {
     assert.deepEqual(checkRepoURL(u), { state: "ok", kind: "ssh", saved: u });
   }
   assert.deepEqual(checkRepoURL(" git@github.com:a/b.git/ "), { state: "ok", kind: "ssh", saved: "git@github.com:a/b.git" });

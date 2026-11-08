@@ -3,7 +3,7 @@ package runs
 import (
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func TestImageOutboxTool(t *testing.T) {

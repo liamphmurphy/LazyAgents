@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/blob"
-	"github.com/liamphmurphy/lazyagents/server/internal/config"
+	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/config"
 )
 
 // Runs against a real S3 gateway when TEST_S3_ENDPOINT is set (dev compose

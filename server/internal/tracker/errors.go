@@ -3,7 +3,7 @@
 // same transaction (docs/dev/plan.md §4 Activity).
 package tracker
 
-import "github.com/liamphmurphy/lazyagents/server/internal/apperr"
+import "github.com/liamphmurphy/vesper/server/internal/apperr"
 
 var ErrNotFound = apperr.ErrNotFound
 

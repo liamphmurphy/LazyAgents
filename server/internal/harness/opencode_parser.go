@@ -111,7 +111,7 @@ type opencodePart struct {
 	} `json:"state"`
 }
 
-var opencodeSecrets = regexp.MustCompile(`(?i)(bearer\s+\S+|\bsk-[A-Za-z0-9_-]{8,}|\bla_[A-Za-z0-9_-]{8,}|(api[_-]?key|token|authorization)["':= ]+[^\s"',}]+)`)
+var opencodeSecrets = regexp.MustCompile(`(?i)(bearer\s+\S+|\bsk-[A-Za-z0-9_-]{8,}|\b(?:vsp|la)_[A-Za-z0-9_-]{8,}|(api[_-]?key|token|authorization)["':= ]+[^\s"',}]+)`)
 
 // redactSecrets removes credential-shaped substrings from text that is
 // persisted or shown.

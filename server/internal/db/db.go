@@ -13,7 +13,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivermigrate"
 
-	"github.com/liamphmurphy/lazyagents/server/migrations"
+	"github.com/liamphmurphy/vesper/server/migrations"
 )
 
 // Open connects to Postgres, retrying until ctx is done so the API can start

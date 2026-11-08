@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
 )
 
 func TestSQLMigration(t *testing.T) {

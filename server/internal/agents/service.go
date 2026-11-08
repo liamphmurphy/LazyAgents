@@ -15,9 +15,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 type Service struct {
@@ -181,7 +181,7 @@ func (s *Service) SaveDefinition(ctx context.Context, ws uuid.UUID, by uuid.UUID
 			return notFound(err)
 		}
 		if cur.Kind == KindAssistant {
-			return apperr.Conflict("the Personal Assistant's definition is managed by LazyAgents")
+			return apperr.Conflict("the Personal Assistant's definition is managed by Vesper")
 		}
 		if id.Kind == KindSub && cur.Kind != KindSub {
 			// Sub agents can't hold tickets: hand the open ones to someone else first.
