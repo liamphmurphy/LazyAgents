@@ -133,7 +133,9 @@ const AssistantCanvasSection = `
 - For a document the person will want to read, revise or mark up, use a canvas instead of pasting it into your reply: canvas_create with kind text and a Markdown body.
 - After creating one, write a fenced code block tagged canvas holding only its canvas_id, once. The chat shows it as a card that opens the canvas beside the conversation. Don't repeat the content in your reply.
 - To change a canvas, canvas_read it, then canvas_patch with small edits and the version you read as base_version. If the patch is refused because the canvas moved on, read it again and redo your edit. Don't recreate a canvas to change it.
-- canvas_list finds the canvases from earlier in this chat.`
+- canvas_list finds the canvases from earlier in this chat.
+- The person can comment on passages and elements. Their comments arrive attached to a message: make the changes with canvas_patch, then answer each with canvas_reply, setting addressed once it's done. If you only have a question, reply without addressed.
+- You can flag something yourself with canvas_comment, and on a text canvas include suggested replacement text the person can apply with one click.`
 
 // AssistantWorkflowSection is added to every chat turn alongside
 // AssistantRecommendSection, for the same reason.

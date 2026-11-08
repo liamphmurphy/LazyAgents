@@ -14,6 +14,7 @@ import { linkify, parseWikiLinks, WIKILINK_SCHEME } from "@/lib/wikilinks";
 import { isAppFence } from "@/lib/chat-app";
 import { isSvgFence } from "@/lib/chat-svg";
 import { isCanvasFence } from "@/lib/chat-canvas";
+import { rehypeSourceSpans } from "@/lib/canvas-source";
 import { groupRecommendFences, isRecommendFence, RECOMMEND_ROW } from "@/lib/chat-recommend";
 import { AppFence } from "./app-fence";
 import { CanvasFence } from "./canvas-fence";
@@ -38,17 +39,19 @@ const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) || url.st
 const remarkPlugins: Options["remarkPlugins"] = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]];
 const rehypePlugins: Options["rehypePlugins"] = [rehypeKatex];
 const chatRehypePlugins: Options["rehypePlugins"] = [rehypeKatex, groupRecommendFences];
+const sourceRehypePlugins: Options["rehypePlugins"] = [rehypeKatex, rehypeSourceSpans];
 
 /**
  * Renders user and agent markdown. react-markdown escapes raw HTML by
  * default, so agent-written content can't inject markup.
  */
-export function Markdown({ children, className, anchors, codeBlocks }: { children: string; className?: string; anchors?: boolean; codeBlocks?: boolean }) {
+export function Markdown({ children, className, anchors, codeBlocks, sourceSpans }: { children: string; className?: string; anchors?: boolean; codeBlocks?: boolean; sourceSpans?: boolean }) {
   // Heading ids come from source lines, so they match the API's outline
   // anchors and stay stable across re-renders.
   const ids = useMemo(() => (anchors ? headingAnchors(children) : undefined), [anchors, children]);
   // [[links]] become wikilink: links, resolved in one request per body.
-  const refs = useMemo(() => parseWikiLinks(children).map((r) => r.ref), [children]);
+  // With sourceSpans the text is parsed as written, so positions match its source.
+  const refs = useMemo(() => (sourceSpans ? [] : parseWikiLinks(children).map((r) => r.ref)), [children, sourceSpans]);
   const md = useMemo(() => (refs.length ? linkify(children) : children), [children, refs.length]);
   const resolved = useResolvedLinks(refs);
   const targets = useMemo(() => {
@@ -136,7 +139,7 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
   return (
     <LinkTargets.Provider value={targets}>
     <div className={cx("prose-code flex flex-col gap-2.5 [&_a]:text-accent [&_a]:underline-offset-2 hover:[&_a]:underline", className)}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={codeBlocks ? chatRehypePlugins : rehypePlugins} urlTransform={urlTransform} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={sourceSpans ? sourceRehypePlugins : codeBlocks ? chatRehypePlugins : rehypePlugins} urlTransform={urlTransform} components={components}>
         {md}
       </ReactMarkdown>
     </div>

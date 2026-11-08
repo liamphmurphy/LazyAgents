@@ -174,3 +174,178 @@ func TestSVGCanvasNeedsThePersonaCapabilityAndKeepsElementIDs(t *testing.T) {
 		t.Fatalf("patch without capability = %d %v", code, out)
 	}
 }
+
+// makeCanvas opens a chat with a running turn and a text canvas in it.
+func (e *chatEnv) makeCanvas(body string) (chat uuid.UUID, token, id string) {
+	e.t.Helper()
+	chat = uuid.MustParse(e.newChat(nil)["id"].(string))
+	token = e.canvasToken(chat)
+	code, out := e.tool(token, "canvas_create", map[string]any{"kind": "text", "title": "Policy", "body": body})
+	if code != 200 {
+		e.t.Fatalf("create = %d %v", code, out)
+	}
+	return chat, token, out["canvas_id"].(string)
+}
+
+func TestCanvasCommentsFollowTheirTextAndReachTheAgent(t *testing.T) {
+	e := newChatEnv(t)
+	const doc = "# Policy\n\nArchive after 30 days. Delete after 90."
+	chat, token, id := e.makeCanvas(doc)
+	base := "/chats/" + chat.String() + "/canvases/" + id
+	start := strings.Index(doc, "30 days")
+
+	c := e.want("POST", base+"/comments", map[string]any{"seq": 1, "start": start, "end": start + 7, "body": "Too short"}, 201)
+	if c["status"] != "draft" || c["anchor"].(map[string]any)["quote"] != "30 days" {
+		t.Fatalf("comment = %v", c)
+	}
+	cid := c["id"].(string)
+	e.want("POST", base+"/comments", map[string]any{"seq": 9, "start": 0, "end": 1, "body": "stale"}, 409)
+	e.want("POST", base+"/comments", map[string]any{"seq": 1, "start": 90, "end": 99, "body": "out of range"}, 422)
+
+	// A draft is the person's own until sent.
+	if _, r := e.tool(token, "canvas_read", map[string]any{"canvas_id": id}); len(r["comments"].([]any)) != 0 {
+		t.Fatalf("agent saw a draft: %v", r["comments"])
+	}
+	discard := e.want("POST", base+"/comments", map[string]any{"seq": 1, "start": 0, "end": 1, "body": "never mind"}, 201)["id"].(string)
+	e.want("DELETE", base+"/comments/"+discard, nil, 204)
+	e.want("PATCH", base+"/comments/"+cid, map[string]any{"status": "resolved"}, 409)
+
+	e.want("POST", base+"/comments/send", map[string]any{"comment_ids": []string{cid}}, 204)
+	list := func() []any { return e.want("GET", base+"/comments", nil, 200)["comments"].([]any) }
+	if got := list()[0].(map[string]any); got["status"] != "open" {
+		t.Fatalf("after send = %v", got)
+	}
+	msgs := e.want("GET", "/chats/"+chat.String()+"/messages", nil, 200)["messages"].([]any)
+	last := msgs[len(msgs)-1].(map[string]any)
+	if !strings.Contains(last["body_md"].(string), "1 comment on “Policy”") || last["context_refs"].([]any)[0].(map[string]any)["kind"] != "canvas" {
+		t.Fatalf("message = %v", last)
+	}
+
+	// What the turn is given, and only inside its own chat.
+	refs := []runs.ChatContextRef{{Kind: "canvas", ID: ptr(uuid.MustParse(id))}}
+	c0, _ := e.q.GetChatSession(t.Context(), store.GetChatSessionParams{ID: chat, WorkspaceID: e.me.WorkspaceID})
+	docs, err := runs.ResolveChatRefs(t.Context(), e.q, e.me.WorkspaceID, c0.ProjectID, chat, refs)
+	if err != nil || !strings.Contains(docs[0].Body, "> 30 days") || !strings.Contains(docs[0].Body, "Person: Too short") || !strings.Contains(docs[0].Body, cid) || !strings.Contains(docs[0].Body, doc) {
+		t.Fatalf("doc = %+v %v", docs, err)
+	}
+	if _, err := runs.ResolveChatRefs(t.Context(), e.q, e.me.WorkspaceID, c0.ProjectID, uuid.New(), refs); err == nil {
+		t.Fatal("resolved a canvas from another chat")
+	}
+
+	// An edit elsewhere moves the anchor; rewriting the passage loses it.
+	if code, out := e.tool(token, "canvas_patch", map[string]any{"canvas_id": id, "base_version": 1, "ops": []map[string]any{{"find": "# Policy", "replace": "# Retention policy"}}}); code != 200 {
+		t.Fatalf("patch = %d %v", code, out)
+	}
+	got := list()[0].(map[string]any)
+	a := got["anchor"].(map[string]any)
+	if got["seq"] != float64(2) || got["target_lost"] != false || a["start"] != float64(start+10) {
+		t.Fatalf("moved = %v", got)
+	}
+	if code, out := e.tool(token, "canvas_patch", map[string]any{"canvas_id": id, "base_version": 2, "ops": []map[string]any{{"find": "30 days", "replace": "60 weeks"}}}); code != 200 {
+		t.Fatalf("patch = %d %v", code, out)
+	}
+	if got = list()[0].(map[string]any); got["target_lost"] != true {
+		t.Fatalf("lost = %v", got)
+	}
+
+	// Restoring brings the passage, and the comment's place in it, back.
+	e.want("POST", base+"/restore", map[string]any{"seq": 2}, 201)
+	if got = list()[0].(map[string]any); got["target_lost"] != false {
+		t.Fatalf("restored = %v", got)
+	}
+
+	if code, out := e.tool(token, "canvas_reply", map[string]any{"canvas_id": id, "comment_id": cid, "body": "Made it 60", "addressed": true}); code != 200 {
+		t.Fatalf("reply = %d %v", code, out)
+	}
+	cs := list()
+	if len(cs) != 2 || cs[0].(map[string]any)["status"] != "addressed" || cs[1].(map[string]any)["parent_id"] != cid {
+		t.Fatalf("thread = %v", cs)
+	}
+	// A person replying reopens it.
+	e.want("POST", base+"/comments", map[string]any{"parent_id": cid, "body": "Still short"}, 201)
+	if got = list()[0].(map[string]any); got["status"] != "open" {
+		t.Fatalf("reopened = %v", got)
+	}
+	e.want("PATCH", base+"/comments/"+cid, map[string]any{"status": "resolved"}, 200)
+	e.want("POST", base+"/comments/send", map[string]any{"comment_ids": []string{cid}}, 422)
+}
+
+func TestCanvasSuggestionSaveAndPromote(t *testing.T) {
+	e := newChatEnv(t)
+	chat, token, id := e.makeCanvas("Archive after 30 days.")
+	base := "/chats/" + chat.String() + "/canvases/" + id
+
+	if code, out := e.tool(token, "canvas_comment", map[string]any{"canvas_id": id, "quote": "z", "body": "x"}); code != 422 {
+		t.Fatalf("missing quote = %d %v", code, out)
+	}
+	code, out := e.tool(token, "canvas_comment", map[string]any{"canvas_id": id, "quote": "30 days", "body": "Longer?", "suggestion": "60 days"})
+	if code != 200 {
+		t.Fatalf("comment = %d %v", code, out)
+	}
+	cid := out["comment_id"].(string)
+	if v := e.want("POST", base+"/comments/"+cid+"/apply", nil, 201); v["seq"] != float64(2) || v["author_type"] != "user" {
+		t.Fatalf("apply = %v", v)
+	}
+	if cur := e.want("GET", base, nil, 200); cur["body"] != "Archive after 60 days." {
+		t.Fatalf("applied = %v", cur)
+	}
+	got := e.want("GET", base+"/comments", nil, 200)["comments"].([]any)[0].(map[string]any)
+	if got["status"] != "addressed" || got["suggestion"] != nil {
+		t.Fatalf("after apply = %v", got)
+	}
+	e.want("POST", base+"/comments/"+cid+"/apply", nil, 409)
+
+	e.want("POST", base+"/versions", map[string]any{"base_seq": 1, "body": "stale"}, 409)
+	e.want("POST", base+"/versions", map[string]any{"base_seq": 2, "body": "Archive after 60 days."}, 422)
+	e.want("POST", base+"/versions", map[string]any{"base_seq": 2, "body": "My own words.", "note": "Tweaked"}, 201)
+	if cur := e.want("GET", base, nil, 200); cur["seq"] != float64(3) || cur["versions"].([]any)[0].(map[string]any)["author_type"] != "user" {
+		t.Fatalf("saved = %v", cur)
+	}
+
+	first := e.want("POST", base+"/promote", nil, 200)["artifact_id"].(string)
+	if again := e.want("POST", base+"/promote", nil, 200)["artifact_id"].(string); again != first {
+		t.Fatalf("promoted twice: %s %s", first, again)
+	}
+	art := e.want("GET", "/artifacts/"+first, nil, 200)
+	if art["type"] != "design" || art["title"] != "Policy" {
+		t.Fatalf("artifact = %v", art)
+	}
+	if e.want("GET", base, nil, 200)["promoted_artifact_id"] != first {
+		t.Fatal("promotion not recorded")
+	}
+}
+
+func TestSVGCanvasCommentsAndPromotion(t *testing.T) {
+	e := newChatEnv(t)
+	persona := e.dockPersona("Designer")
+	if _, err := e.pool.Exec(t.Context(), `UPDATE personas SET can_create_svgs = true WHERE id = $1`, persona); err != nil {
+		t.Fatal(err)
+	}
+	chat := e.dockChat(persona)
+	token := e.canvasToken(chat)
+	code, out := e.tool(token, "canvas_create", map[string]any{"kind": "svg", "title": "Run", "body": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text x="1" y="2">Stop run</text><rect width="1" height="1"/></svg>`})
+	if code != 200 {
+		t.Fatalf("create = %d %v", code, out)
+	}
+	id := out["canvas_id"].(string)
+	base := "/chats/" + chat.String() + "/canvases/" + id
+	body := e.want("GET", base, nil, 200)["body"].(string)
+	vid := strings.SplitN(strings.SplitN(body, `data-vid="`, 2)[1], `"`, 2)[0]
+
+	e.want("POST", base+"/comments", map[string]any{"seq": 1, "vid": "nope", "body": "x"}, 422)
+	c := e.want("POST", base+"/comments", map[string]any{"seq": 1, "vid": vid, "point": map[string]any{"x": .5, "y": .5}, "body": "Confirm first"}, 201)
+	a := c["anchor"].(map[string]any)
+	if a["tag"] != "text" || a["label"] != "Stop run" {
+		t.Fatalf("anchor = %v", a)
+	}
+	if code, out = e.tool(token, "canvas_patch", map[string]any{"canvas_id": id, "base_version": 1, "ops": []map[string]any{{"op": "remove", "vid": vid}}}); code != 200 {
+		t.Fatalf("patch = %d %v", code, out)
+	}
+	if got := e.want("GET", base+"/comments", nil, 200)["comments"].([]any)[0].(map[string]any); got["target_lost"] != true {
+		t.Fatalf("element gone = %v", got)
+	}
+	art := e.want("POST", base+"/promote", nil, 200)["artifact_id"].(string)
+	if got := e.want("GET", "/artifacts/"+art, nil, 200); got["type"] != "mockup" {
+		t.Fatalf("artifact = %v", got)
+	}
+}

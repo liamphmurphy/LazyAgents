@@ -12,7 +12,7 @@ import { SuggestionList } from "@/components/domain/link-editor";
 /** Only these kinds can be attached to a chat message. */
 export const acceptTarget = (t: LinkTarget) => chipFromTarget(t) !== null;
 
-const ICON = { artifact: "artifacts", page: "wiki", section: "artifacts", ticket: "tickets" } as const;
+const ICON = { artifact: "artifacts", page: "wiki", section: "artifacts", ticket: "tickets", canvas: "edit" } as const;
 
 function Label({ chip }: { chip: Chip }) {
   return (

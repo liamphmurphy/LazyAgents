@@ -2731,6 +2731,200 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chats/{id}/canvases/{canvasId}/versions:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { $ref: "#/components/parameters/CanvasId" }
+    post:
+      operationId: saveChatCanvas
+      summary: Save a person's edit as a new version
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatCanvasSave" }
+      responses:
+        "201":
+          description: The new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatCanvasVersion" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/canvases/{canvasId}/restore:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { $ref: "#/components/parameters/CanvasId" }
+    post:
+      operationId: restoreChatCanvas
+      summary: Make an earlier version current by writing it again
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seq]
+              properties:
+                seq: { type: integer, format: int32, minimum: 1 }
+      responses:
+        "201":
+          description: The new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatCanvasVersion" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/canvases/{canvasId}/promote:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { $ref: "#/components/parameters/CanvasId" }
+    post:
+      operationId: promoteChatCanvas
+      summary: Save the current version as a project artifact; a canvas already promoted returns its artifact
+      tags: [chats]
+      responses:
+        "200":
+          description: The artifact
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [artifact_id]
+                properties:
+                  artifact_id: { type: string, format: uuid }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/canvases/{canvasId}/comments:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { $ref: "#/components/parameters/CanvasId" }
+    get:
+      operationId: listChatCanvasComments
+      summary: The canvas's comments and replies, oldest first
+      tags: [chats]
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatCanvasComments" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createChatCanvasComment
+      summary: Add a draft comment on the current version, or a reply to a thread
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewChatCanvasComment" }
+      responses:
+        "201":
+          description: The comment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatCanvasComment" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/canvases/{canvasId}/comments/send:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { $ref: "#/components/parameters/CanvasId" }
+    post:
+      operationId: sendChatCanvasComments
+      summary: Open these comments and send them to the agent as one message
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [comment_ids]
+              properties:
+                comment_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, format: uuid }
+                message: { type: string, maxLength: 4000, description: The chat message to send; a summary of the comments when omitted }
+      responses:
+        "204": { description: Sent }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/canvases/{canvasId}/comments/{commentId}:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { $ref: "#/components/parameters/CanvasId" }
+      - { name: commentId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateChatCanvasComment
+      summary: Move a sent thread between open, addressed and resolved
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string }
+      responses:
+        "200":
+          description: The comment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatCanvasComment" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteChatCanvasComment
+      summary: Delete a draft comment
+      tags: [chats]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/canvases/{canvasId}/comments/{commentId}/apply:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { $ref: "#/components/parameters/CanvasId" }
+      - { name: commentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: applyChatCanvasComment
+      summary: Apply a comment's suggested text as a new version
+      tags: [chats]
+      responses:
+        "201":
+          description: The new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatCanvasVersion" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /chats/{id}/cancel:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -3056,6 +3250,11 @@ components:
       schema: { type: string }
     ArtifactId:
       name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CanvasId:
+      name: canvasId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -3535,6 +3734,64 @@ components:
           items: { $ref: "#/components/schemas/MockupPin" }
         reviewed_by: { $ref: "#/components/schemas/UserRef" }
         reviewed_at: { type: string, format: date-time }
+    ChatCanvasSave:
+      type: object
+      required: [base_seq, body]
+      properties:
+        base_seq: { type: integer, format: int32, description: The version this edit started from }
+        body: { type: string }
+        note: { type: string, maxLength: 200 }
+    ChatCanvasPoint:
+      type: object
+      required: [x, y]
+      properties:
+        x: { type: number, format: double, minimum: 0, maximum: 1 }
+        y: { type: number, format: double, minimum: 0, maximum: 1 }
+    ChatCanvasAnchor:
+      type: object
+      description: A passage (start, end and quote, in UTF-16 code units) or an SVG element (vid). Empty on a reply.
+      properties:
+        start: { type: integer }
+        end: { type: integer }
+        quote: { type: string }
+        prefix: { type: string }
+        suffix: { type: string }
+        vid: { type: string }
+        tag: { type: string }
+        label: { type: string }
+        point: { $ref: "#/components/schemas/ChatCanvasPoint" }
+    ChatCanvasComment:
+      type: object
+      required: [id, seq, author_type, body, anchor, target_lost, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        parent_id: { type: string, format: uuid, nullable: true }
+        seq: { type: integer, format: int32 }
+        author_type: { type: string }
+        body: { type: string }
+        anchor: { $ref: "#/components/schemas/ChatCanvasAnchor" }
+        target_lost: { type: boolean }
+        status: { type: string, description: "draft, open, addressed or resolved" }
+        suggestion: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    ChatCanvasComments:
+      type: object
+      required: [comments]
+      properties:
+        comments:
+          type: array
+          items: { $ref: "#/components/schemas/ChatCanvasComment" }
+    NewChatCanvasComment:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 4000 }
+        seq: { type: integer, format: int32, description: The version the anchor is in; required unless replying }
+        parent_id: { type: string, format: uuid, description: The thread to reply to }
+        start: { type: integer }
+        end: { type: integer }
+        vid: { type: string }
+        point: { $ref: "#/components/schemas/ChatCanvasPoint" }
     ChatCanvasSummary:
       type: object
       required: [id, kind, title, seq, created_at, updated_at]
@@ -3567,6 +3824,7 @@ components:
           required: [viewing_seq, body, versions]
           properties:
             viewing_seq: { type: integer, format: int32, description: The version body belongs to }
+            promoted_artifact_id: { type: string, format: uuid, nullable: true }
             body: { type: string }
             versions:
               type: array
@@ -4897,8 +5155,8 @@ components:
       required: [kind]
       description: Something attached to a message for the assistant to read. Exactly one of id or key; must belong to the chat's project (notes may be workspace-wide).
       properties:
-        kind: { type: string, enum: [artifact, section, ticket, page] }
-        id: { type: string, format: uuid, description: Artifact or wiki page id }
+        kind: { type: string, enum: [artifact, section, ticket, page, canvas] }
+        id: { type: string, format: uuid, description: "Artifact, wiki page or canvas id" }
         key: { type: string, description: Ticket key, e.g. PAY-214 }
         anchor: { type: string, description: Section anchor when kind is section }
     ChatCitation:

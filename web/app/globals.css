@@ -122,6 +122,10 @@
 @utility type-mono    { font: var(--text-mono); }
 
 /* Inline code inside prose and descriptions (DESIGN.md §2 Typography). */
+/* Canvas comments, painted without touching the rendered text. */
+::highlight(canvas-comment) { background-color: color-mix(in srgb, #e0b13a 32%, transparent); }
+::highlight(canvas-comment-active) { background-color: color-mix(in srgb, #e0b13a 62%, transparent); }
+
 @layer components {
   .prose-code code,
   code.inline {

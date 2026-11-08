@@ -2,6 +2,7 @@ package agentapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -123,7 +124,11 @@ func canvasRead(ctx context.Context, d Deps, c agents.Caller, in CanvasReadIn) (
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"canvas_id": cv.ID, "kind": cv.Kind, "title": cv.Title, "version": v.Seq, "body": v.Body}, nil
+	threads, err := canvasThreads(ctx, d, cv.ID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"canvas_id": cv.ID, "kind": cv.Kind, "title": cv.Title, "version": v.Seq, "body": v.Body, "comments": threads}, nil
 }
 
 func canvasList(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
@@ -140,4 +145,61 @@ func canvasList(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, err
 		out = append(out, map[string]any{"canvas_id": r.ID, "kind": r.Kind, "title": r.Title, "version": r.Seq})
 	}
 	return map[string]any{"canvases": out}, nil
+}
+
+type CanvasCommentIn struct {
+	CanvasID   uuid.UUID `json:"canvas_id"`
+	Quote      string    `json:"quote,omitempty" jsonschema:"Text canvas: the exact passage; it must occur exactly once"`
+	VID        string    `json:"vid,omitempty" jsonschema:"SVG canvas: the data-vid of the element"`
+	Body       string    `json:"body" jsonschema:"Your comment"`
+	Suggestion *string   `json:"suggestion,omitempty" jsonschema:"Text canvas: replacement text for the passage, which the person can apply"`
+}
+
+type CanvasReplyIn struct {
+	CanvasID  uuid.UUID `json:"canvas_id"`
+	CommentID uuid.UUID `json:"comment_id"`
+	Body      string    `json:"body" jsonschema:"Your reply"`
+	Addressed bool      `json:"addressed,omitempty" jsonschema:"You have made the change this comment asked for"`
+}
+
+func canvasComment(ctx context.Context, d Deps, c agents.Caller, in CanvasCommentIn) (any, error) {
+	s, err := canvasScope(ctx, d, c, "canvas_comment")
+	if err != nil {
+		return nil, err
+	}
+	svc := canvas.Service{Pool: d.Runs.Pool}
+	r, err := svc.AddAgentComment(ctx, s.ChatID, in.CanvasID, canvas.AgentComment{Quote: in.Quote, VID: in.VID, Body: in.Body, Suggestion: in.Suggestion}, canvas.Actor{Type: "agent", ID: c.Agent.ID})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"comment_id": r.ID}, nil
+}
+
+func canvasReply(ctx context.Context, d Deps, c agents.Caller, in CanvasReplyIn) (any, error) {
+	s, err := canvasScope(ctx, d, c, "canvas_reply")
+	if err != nil {
+		return nil, err
+	}
+	svc := canvas.Service{Pool: d.Runs.Pool}
+	r, err := svc.Reply(ctx, s.ChatID, in.CanvasID, in.CommentID, in.Body, in.Addressed, canvas.Actor{Type: "agent", ID: c.Agent.ID})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"reply_id": r.ID, "addressed": in.Addressed}, nil
+}
+
+// canvasThreads lists a canvas's open discussion for canvas_read.
+func canvasThreads(ctx context.Context, d Deps, id uuid.UUID) ([]map[string]any, error) {
+	rows, err := d.Q.ListChatCanvasComments(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		if r.Status == "draft" || r.Status == "resolved" {
+			continue
+		}
+		out = append(out, map[string]any{"comment_id": r.ID, "parent_id": r.ParentID, "from": r.AuthorType, "body": r.Body, "status": r.Status, "anchor": json.RawMessage(r.Anchor), "target_lost": r.TargetLost})
+	}
+	return out, nil
 }

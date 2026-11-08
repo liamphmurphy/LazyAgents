@@ -522,7 +522,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {id && canvas.open ? <CanvasPanel chatId={id} live={turnRunning} /> : personaPanel.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
+          {id && canvas.open ? <CanvasPanel chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : personaPanel.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
         </div>
       )}
     </div>

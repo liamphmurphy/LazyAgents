@@ -509,7 +509,7 @@ func PlanningRefFiles(ctx context.Context, q *store.Queries, run store.Run) ([]C
 	}
 	var files []ContextFile
 	for i, ref := range refs {
-		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, p.ProjectID, []runs.ChatContextRef{ref})
+		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, p.ProjectID, uuid.Nil, []runs.ChatContextRef{ref})
 		if errors.As(err, new(*apperr.ValidationError)) {
 			continue
 		}
@@ -542,7 +542,7 @@ func ChatTurnContext(ctx context.Context, q *store.Queries, run store.Run, proje
 	var b strings.Builder
 	b.WriteString("\n\nThe person attached these references to this message. Read them first:\n")
 	for i, ref := range refs {
-		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, project, []runs.ChatContextRef{ref})
+		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, project, msg.SessionID, []runs.ChatContextRef{ref})
 		if err != nil {
 			if errors.As(err, new(*apperr.ValidationError)) {
 				fmt.Fprintf(&b, "- %s (no longer available)\n", ref)

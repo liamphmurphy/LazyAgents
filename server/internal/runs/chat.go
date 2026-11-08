@@ -357,7 +357,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			attachIDs = append(attachIDs, id)
 		}
 	}
-	docs, err := ResolveChatRefs(ctx, q, chat.WorkspaceID, chat.ProjectID, in.ContextRefs)
+	docs, err := ResolveChatRefs(ctx, q, chat.WorkspaceID, chat.ProjectID, chat.ID, in.ContextRefs)
 	if err != nil {
 		return chat, msg, err
 	}

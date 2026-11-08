@@ -4,7 +4,7 @@
 export const MAX_CONTEXT_REFS = 20;
 
 export type ContextRef = {
-  kind: "artifact" | "section" | "ticket" | "page";
+  kind: "artifact" | "section" | "ticket" | "page" | "canvas";
   id?: string;
   key?: string;
   anchor?: string;
@@ -55,7 +55,7 @@ export function toContextRefs(chips: Chip[]): ContextRef[] | undefined {
 
 /** Read-only chip for a ref echoed back on a sent message. */
 export function chipFromRef(r: ContextRef, names?: Map<string, string>): Chip {
-  const label = names?.get(refKey(r)) ?? r.key ?? (r.anchor ? `${r.kind} #${r.anchor}` : `${r.kind} ${(r.id ?? "").slice(0, 8)}`);
+  const label = names?.get(refKey(r)) ?? (r.kind === "canvas" ? "Canvas" : undefined) ?? r.key ?? (r.anchor ? `${r.kind} #${r.anchor}` : `${r.kind} ${(r.id ?? "").slice(0, 8)}`);
   return { key: refKey(r), ref: r, label };
 }
 
