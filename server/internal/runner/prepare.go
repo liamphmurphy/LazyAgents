@@ -645,7 +645,7 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 		if err != nil {
 			return nil, "Could not load the conversation.", fmt.Errorf("chat session: %w", err)
 		}
-		svg, err := runs.SpeakerCanCreateSVGs(ctx, q, chat)
+		svg, err := runs.ChatCanDrawSVGs(ctx, q, chat)
 		if err != nil {
 			return nil, "Could not load the conversation's persona.", fmt.Errorf("chat svg capability: %w", err)
 		}

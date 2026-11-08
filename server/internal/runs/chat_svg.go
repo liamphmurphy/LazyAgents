@@ -9,9 +9,9 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// svgFenceRe matches the opening of an ```svg-image fence wherever Markdown
-// could start one, including inside a list or blockquote.
-var svgFenceRe = regexp.MustCompile("(?i)(`{3,}|~{3,})([ \t]*)svg-image\\b")
+// svgFenceRe matches the opening of an ```svg-image or ```svg-steps fence
+// wherever Markdown could start one, including inside a list or blockquote.
+var svgFenceRe = regexp.MustCompile("(?i)(`{3,}|~{3,})([ \t]*)svg-(?:image|steps)\\b")
 
 // SpeakerCanCreateSVGs reports whether the persona answering the chat's turn
 // (its speaker, else its host) may show SVG images. A deleted persona and the
@@ -29,6 +29,22 @@ func SpeakerCanCreateSVGs(ctx context.Context, q *store.Queries, chat store.Chat
 		return false, err
 	}
 	return p.CanCreateSvgs, nil
+}
+
+// ChatCanDrawSVGs reports whether a reply in this chat may show SVG images: a
+// module's tutor always can, since Learn teaches with diagrams whichever persona
+// is tutoring, and any other chat follows its speaker's capability.
+func ChatCanDrawSVGs(ctx context.Context, q *store.Queries, chat store.ChatSession) (bool, error) {
+	if chat.Hidden {
+		_, err := q.LearningCourseForChat(ctx, chat.ID)
+		if err == nil {
+			return true, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return false, err
+		}
+	}
+	return SpeakerCanCreateSVGs(ctx, q, chat)
 }
 
 // SpeakerCanCreateWorkflows reports whether the persona answering the chat's
@@ -56,7 +72,7 @@ func GateSVGFences(ctx context.Context, q *store.Queries, chat store.ChatSession
 	if !svgFenceRe.MatchString(body) {
 		return body, nil
 	}
-	can, err := SpeakerCanCreateSVGs(ctx, q, chat)
+	can, err := ChatCanDrawSVGs(ctx, q, chat)
 	if err != nil || can {
 		return body, err
 	}

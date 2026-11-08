@@ -267,6 +267,8 @@ const REPLY_BLOCK = "reply_block";
 const REPLY_BLOCK_STATUS: Record<string, ChatStatusInfo> = {
   app: status("canvas", "building an interactive app"),
   "svg-image": status("image", "drawing an image"),
+  "svg-steps": status("image", "drawing a step-through"),
+  chart: status("canvas", "drawing a chart"),
   mermaid: status("canvas", "drawing a diagram"),
   choices: status("canvas", "laying out your options"),
   "workflow-run": status("workflow", "lining up a workflow"),

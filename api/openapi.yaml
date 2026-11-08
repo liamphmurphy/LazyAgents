@@ -5750,11 +5750,14 @@ components:
       type: object
       required: [kind, text]
       properties:
-        kind: { type: string, enum: [heading, text, code] }
-        text: { type: string }
+        kind: { type: string, enum: [heading, text, code, diagram, chart] }
+        text: { type: string, description: "A diagram's SVG source or a chart's JSON spec, for those kinds" }
         lang: { type: string }
         provenance: { type: string, enum: [sourced, model_knowledge] }
         sources: { type: array, items: { type: integer } }
+        alt: { type: string, description: What a diagram or chart shows }
+        caption: { type: string, description: "A diagram's or chart's caption, in Markdown" }
+        steps: { type: array, items: { type: string }, description: A step-through diagram's captions }
     CourseReveal:
       type: object
       required: [answer, rubric, explanation]

@@ -5109,12 +5109,19 @@ export interface components {
         };
         CourseBlock: {
             /** @enum {string} */
-            kind: "heading" | "text" | "code";
+            kind: "heading" | "text" | "code" | "diagram" | "chart";
+            /** @description A diagram's SVG source or a chart's JSON spec, for those kinds */
             text: string;
             lang?: string;
             /** @enum {string} */
             provenance?: "sourced" | "model_knowledge";
             sources?: number[];
+            /** @description What a diagram or chart shows */
+            alt?: string;
+            /** @description A diagram's or chart's caption, in Markdown */
+            caption?: string;
+            /** @description A step-through diagram's captions */
+            steps?: string[];
         };
         CourseReveal: {
             answer: string[];
