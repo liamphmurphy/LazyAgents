@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ancestors, canConnect, canRequestChanges, diffGraphs, gateSources, isWorkflowRunFence, newNodeId, parseWorkflowRun, removeNode } from "./workflows.ts";
+import { ancestors, canConnect, canRequestChanges, diffGraphs, failedGateCheck, gateSources, isWorkflowRunFence, newNodeId, parentChecks, parseWorkflowRun, removeNode } from "./workflows.ts";
 
 const node = (id, type, config = {}) => ({ id, type, title: id, config });
 const graph = {
@@ -62,4 +62,21 @@ test("request changes stops at the limit", () => {
   assert.ok(canRequestChanges(gate, 1));
   assert.ok(!canRequestChanges(gate, 2));
   assert.ok(!canRequestChanges(node("ok", "gate"), 1));
+});
+
+test("a tied gate stays shut unless its check passed", () => {
+  const g = { nodes: [node("check", "agent", { check: true }), node("ok", "gate", { requires_check: "check" })], edges: [{ from: "check", to: "ok" }] };
+  const gate = g.nodes[1];
+  const step = (state, check_result) => [{ node_id: "check", state, check_result }];
+  assert.equal(failedGateCheck(g, gate, step("done", "failed"))?.id, "check");
+  assert.equal(failedGateCheck(g, gate, step("done", ""))?.id, "check");
+  assert.equal(failedGateCheck(g, gate, []).id, "check");
+  assert.equal(failedGateCheck(g, gate, step("done", "passed")), undefined);
+  assert.equal(failedGateCheck(g, node("ok", "gate"), step("done", "failed")), undefined);
+  assert.deepEqual(parentChecks(g, "ok").map((n) => n.id), ["check"]);
+});
+
+test("removing a check clears gates tied to it", () => {
+  const g = { nodes: [node("check", "agent", { check: true }), node("ok", "gate", { requires_check: "check" })], edges: [{ from: "check", to: "ok" }] };
+  assert.equal(removeNode(g, "check").nodes[0].config.requires_check, undefined);
 });

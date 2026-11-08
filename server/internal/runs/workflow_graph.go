@@ -28,6 +28,9 @@ const (
 	workflowMaxEdges    = 200
 	workflowMaxConfig   = 20000
 	workflowMaxAttempts = 5
+
+	workflowCheckPassed = "passed"
+	workflowCheckFailed = "failed"
 )
 
 var workflowOutputTypes = []string{NodeWiki, NodeLibrary, NodeTicket, NodeChat}
@@ -43,11 +46,14 @@ type WorkflowConfig struct {
 	Web         bool     `json:"web,omitempty" jsonschema:"agent: read the web. A web step can't read the workspace"`
 	Images      bool     `json:"images,omitempty" jsonschema:"agent: generate images. The step always runs on Codex, as a persona allowed to make images; not available with agent_handle"`
 	Show        []string `json:"show,omitempty" jsonschema:"gate: ids of upstream nodes whose output the reviewer sees; empty shows the gate's parents"`
-	RetryFrom   string   `json:"retry_from,omitempty" jsonschema:"gate: id of an upstream enrich or agent node to re-run on Request changes; empty offers only approve or reject"`
-	MaxAttempts int      `json:"max_attempts,omitempty" jsonschema:"gate: how many reviews before Request changes stops being offered, 1 to 5; default 3"`
-	Path        string   `json:"path,omitempty" jsonschema:"wiki: page path, e.g. Research/Findings"`
-	Mode        string   `json:"mode,omitempty" jsonschema:"wiki: replace (default) or append"`
-	Title       string   `json:"title,omitempty" jsonschema:"library and ticket: the item's title"`
+	Check       bool     `json:"check,omitempty" jsonschema:"agent: this step is a check that reports pass or fail. Unless it passes, nothing after it runs, apart from a gate tied to it with requires_check"`
+	RetryFrom   string   `json:"retry_from,omitempty" jsonschema:"gate: id of an upstream enrich or agent node to re-run on Request changes; empty offers only approve or reject. agent with check: the upstream node to re-run automatically when the check fails; empty doesn't retry"`
+	MaxAttempts int      `json:"max_attempts,omitempty" jsonschema:"gate: how many reviews before Request changes stops being offered, 1 to 5; default 3. agent with check: how many failures end the retries, 1 to 5; default 3"`
+	// RequiresCheck leaves the gate open to Request changes and Reject while the check has failed.
+	RequiresCheck string `json:"requires_check,omitempty" jsonschema:"gate: id of a check connected directly into this gate. Approve is refused unless it passed. If the gate has retry_from, re-running must include the check"`
+	Path          string `json:"path,omitempty" jsonschema:"wiki: page path, e.g. Research/Findings"`
+	Mode          string `json:"mode,omitempty" jsonschema:"wiki: replace (default) or append"`
+	Title         string `json:"title,omitempty" jsonschema:"library and ticket: the item's title"`
 }
 
 type WorkflowNode struct {
@@ -262,6 +268,16 @@ func ValidateWorkflow(g WorkflowGraph) []WorkflowIssue {
 			add(n.ID, "Connect this node to a next step or an output")
 		}
 		c := n.Config
+		if c.Check && n.Type != NodeAgent {
+			add(n.ID, "Only agent steps can be checks")
+		}
+		if c.RequiresCheck != "" && n.Type != NodeGate {
+			add(n.ID, "Only gates can be tied to a check")
+		}
+		retryable := func(id string) bool {
+			target, known := byID[id]
+			return known && ancestors[id] && (target.Type == NodeEnrich || target.Type == NodeAgent)
+		}
 		switch n.Type {
 		case NodeAgent:
 			if strings.TrimSpace(c.Prompt) == "" {
@@ -273,15 +289,32 @@ func ValidateWorkflow(g WorkflowGraph) []WorkflowIssue {
 			if c.Images && c.AgentHandle != "" {
 				add(n.ID, "Image steps run as a persona: remove the agent handle")
 			}
-		case NodeGate:
-			if c.RetryFrom != "" {
-				target, known := byID[c.RetryFrom]
-				if !ancestors[c.RetryFrom] || !known || (target.Type != NodeEnrich && target.Type != NodeAgent) {
-					add(n.ID, "Request changes must re-run an enrich or agent step before this gate")
+			if c.Check {
+				if c.Images {
+					add(n.ID, "A check can't also generate images: check them in a step after this one")
 				}
+				if c.RetryFrom != "" && !retryable(c.RetryFrom) {
+					add(n.ID, "A failed check must re-run an enrich or agent step before it")
+				}
+				if c.MaxAttempts < 0 || c.MaxAttempts > workflowMaxAttempts {
+					add(n.ID, "Attempts must be between 1 and %d", workflowMaxAttempts)
+				}
+			}
+		case NodeGate:
+			if c.RetryFrom != "" && !retryable(c.RetryFrom) {
+				add(n.ID, "Request changes must re-run an enrich or agent step before this gate")
 			}
 			if c.MaxAttempts < 0 || c.MaxAttempts > workflowMaxAttempts {
 				add(n.ID, "Reviews must be between 1 and %d", workflowMaxAttempts)
+			}
+			if c.RequiresCheck != "" {
+				check, known := byID[c.RequiresCheck]
+				switch {
+				case !known || check.Type != NodeAgent || !check.Config.Check || !slices.Contains(parents[n.ID], c.RequiresCheck):
+					add(n.ID, "This gate must be tied to a check connected directly into it")
+				case c.RetryFrom != "" && c.RetryFrom != c.RequiresCheck && !walkWorkflow(children, c.RetryFrom)[c.RequiresCheck]:
+					add(n.ID, "Request changes must re-run %s, or Approve could never unlock", check.Title)
+				}
 			}
 			for _, id := range c.Show {
 				if !ancestors[id] {
@@ -403,22 +436,31 @@ func renderWorkflowTemplate(t string, vars map[string]string) string {
 
 type workflowStepView struct {
 	State string
+	Check string
 }
 
 // workflowReady lists the nodes to start now, in order: their newest attempt
-// is missing or stale, and every parent's newest attempt is done.
+// is missing or stale, and every parent's newest attempt is done. A check
+// that hasn't passed holds back everything but a gate tied to it.
 func workflowReady(g WorkflowGraph, latest map[string]workflowStepView) []WorkflowNode {
 	order, ok := workflowOrder(g)
 	if !ok {
 		return nil
 	}
 	parents := workflowParents(g)
+	checks := map[string]bool{}
+	for _, n := range g.Nodes {
+		checks[n.ID] = n.Type == NodeAgent && n.Config.Check
+	}
 	var ready []WorkflowNode
 	for _, n := range order {
 		if s, started := latest[n.ID]; started && s.State != "stale" {
 			continue
 		}
-		if !slices.ContainsFunc(parents[n.ID], func(p string) bool { return latest[p].State != "done" }) {
+		tied := func(p string) bool { return n.Type == NodeGate && n.Config.RequiresCheck == p }
+		if !slices.ContainsFunc(parents[n.ID], func(p string) bool {
+			return latest[p].State != "done" || (checks[p] && latest[p].Check != workflowCheckPassed && !tied(p))
+		}) {
 			ready = append(ready, n)
 		}
 	}

@@ -22,6 +22,7 @@ function RunView({ run }: { run: WorkflowRun }) {
   const status = (id: string) => run.steps.find((s) => s.node_id === id)?.state as StepStatus;
   const step = run.steps.find((s) => s.node_id === selected);
   const node = graph.nodes.find((n) => n.id === selected);
+  const checks = run.check_attempts.filter((c) => c.node_id === selected);
   const attempts = imagesByAttempt((run.images ?? []).filter((im) => im.node_id === selected));
   // A step that made no images of its own shows what it passed along.
   const carried = attempts.length === 0 ? step?.images ?? [] : [];
@@ -63,10 +64,21 @@ function RunView({ run }: { run: WorkflowRun }) {
             <section className="rounded-xl border border-border bg-surface p-3.5" data-testid="workflow-step-detail">
               <div className="mb-2 flex items-baseline gap-2">
                 <h2 className="type-heading">{node.title}</h2>
-                {step && <span className="font-mono text-xs text-fg-tertiary">attempt {step.attempt} · {step.state}</span>}
+                {step && <span className="font-mono text-xs text-fg-tertiary">attempt {step.attempt} · {step.check_result || step.state}</span>}
                 {step?.agent_run_id && <Link className="text-[12.5px] text-accent hover:underline" href={`/runs/${step.agent_run_id}`}>Open run</Link>}
               </div>
               {step?.note && <p className="mb-2 text-[12.5px] text-fg-secondary">{step.note}</p>}
+              {checks.length > 0 && (
+                <div className="mb-3 flex flex-col gap-1" data-testid="workflow-check-attempts">
+                  {checks.map((c) => (
+                    <details key={c.attempt} className="rounded-lg border border-border-subtle bg-surface-sunken p-2">
+                      <summary className="cursor-pointer font-mono text-[11px] text-fg-secondary">Attempt {c.attempt} · {c.result}</summary>
+                      {c.note && <p className="mt-1 text-[12.5px] text-fg-secondary">{c.note}</p>}
+                      {c.output && <div className="mt-2 text-[13px]"><Markdown>{c.output}</Markdown></div>}
+                    </details>
+                  ))}
+                </div>
+              )}
               {attempts.map((a) => (
                 <div key={a.attempt} className="mb-3" data-testid={`workflow-attempt-${a.attempt}`}>
                   <p className="mb-1 font-mono text-[11px] text-fg-tertiary">Attempt {a.attempt}</p>

@@ -5311,9 +5311,11 @@ components:
             agent_handle: { type: string }
             web: { type: boolean }
             images: { type: boolean, description: "agent: generate images. The step runs on Codex as a persona allowed to make images" }
+            check: { type: boolean, description: "agent: reports pass or fail, and nothing after it runs unless it passes" }
             show: { type: array, items: { type: string } }
-            retry_from: { type: string }
+            retry_from: { type: string, description: "gate: the step Request changes re-runs. agent with check: the step re-run automatically on failure" }
             max_attempts: { type: integer }
+            requires_check: { type: string, description: "gate: a check connected directly into it. Approve is refused unless it passed" }
             path: { type: string }
             mode: { type: string }
             title: { type: string }
@@ -5375,7 +5377,7 @@ components:
         graph: { $ref: "#/components/schemas/WorkflowGraph" }
     WorkflowStep:
       type: object
-      required: [node_id, attempt, state, output, decision, note, created_at]
+      required: [node_id, attempt, state, output, decision, note, check_result, created_at]
       properties:
         node_id: { type: string }
         attempt: { type: integer }
@@ -5384,9 +5386,20 @@ components:
         agent_run_id: { type: string, format: uuid }
         decision: { type: string }
         note: { type: string }
+        check_result: { type: string, description: "A check step's verdict: passed, failed, or empty until it has one" }
         created_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time }
         images: { type: array, items: { $ref: "#/components/schemas/WorkflowImage" }, description: "What this attempt carries: the images it made, else those of the steps before it" }
+    WorkflowCheckAttempt:
+      type: object
+      required: [node_id, attempt, result, output, note]
+      properties:
+        node_id: { type: string }
+        attempt: { type: integer }
+        result: { type: string, description: "passed or failed" }
+        output: { type: string, description: "The check's findings" }
+        note: { type: string }
+        finished_at: { type: string, format: date-time }
     WorkflowImage:
       type: object
       required: [id, node_id, attempt, filename, content_type, size_bytes, created_at]
@@ -5400,7 +5413,7 @@ components:
         created_at: { type: string, format: date-time }
     WorkflowRun:
       type: object
-      required: [id, chat_id, name, version, graph, input, state, error, steps, created_at]
+      required: [id, chat_id, name, version, graph, input, state, error, steps, check_attempts, created_at]
       properties:
         id: { type: string, format: uuid }
         chat_id: { type: string, format: uuid }
@@ -5413,6 +5426,7 @@ components:
         state: { type: string, enum: [running, waiting, done, failed, stopped] }
         error: { type: string }
         steps: { type: array, items: { $ref: "#/components/schemas/WorkflowStep" }, description: "The newest attempt of each node that has started" }
+        check_attempts: { type: array, items: { $ref: "#/components/schemas/WorkflowCheckAttempt" }, description: "Every finished attempt of every check, oldest first" }
         images: { type: array, items: { $ref: "#/components/schemas/WorkflowImage" }, description: "Every image of every attempt, oldest first" }
         created_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time }

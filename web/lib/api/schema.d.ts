@@ -4701,9 +4701,14 @@ export interface components {
                 web?: boolean;
                 /** @description agent: generate images. The step runs on Codex as a persona allowed to make images */
                 images?: boolean;
+                /** @description agent: reports pass or fail, and nothing after it runs unless it passes */
+                check?: boolean;
                 show?: string[];
+                /** @description gate: the step Request changes re-runs. agent with check: the step re-run automatically on failure */
                 retry_from?: string;
                 max_attempts?: number;
+                /** @description gate: a check connected directly into it. Approve is refused unless it passed */
+                requires_check?: string;
                 path?: string;
                 mode?: string;
                 title?: string;
@@ -4766,12 +4771,25 @@ export interface components {
             agent_run_id?: string;
             decision: string;
             note: string;
+            /** @description A check step's verdict: passed, failed, or empty until it has one */
+            check_result: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             finished_at?: string;
             /** @description What this attempt carries: the images it made, else those of the steps before it */
             images?: components["schemas"]["WorkflowImage"][];
+        };
+        WorkflowCheckAttempt: {
+            node_id: string;
+            attempt: number;
+            /** @description passed or failed */
+            result: string;
+            /** @description The check's findings */
+            output: string;
+            note: string;
+            /** Format: date-time */
+            finished_at?: string;
         };
         WorkflowImage: {
             /** Format: uuid */
@@ -4805,6 +4823,8 @@ export interface components {
             error: string;
             /** @description The newest attempt of each node that has started */
             steps: components["schemas"]["WorkflowStep"][];
+            /** @description Every finished attempt of every check, oldest first */
+            check_attempts: components["schemas"]["WorkflowCheckAttempt"][];
             /** @description Every image of every attempt, oldest first */
             images?: components["schemas"]["WorkflowImage"][];
             /** Format: date-time */
