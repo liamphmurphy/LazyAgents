@@ -874,6 +874,20 @@ func (q *Queries) DefaultChatAgent(ctx context.Context, workspaceID uuid.UUID) (
 	return i, err
 }
 
+const deleteChatMessagesAfter = `-- name: DeleteChatMessagesAfter :exec
+DELETE FROM chat_messages WHERE session_id = $1 AND seq > $2
+`
+
+type DeleteChatMessagesAfterParams struct {
+	SessionID uuid.UUID
+	Seq       int64
+}
+
+func (q *Queries) DeleteChatMessagesAfter(ctx context.Context, arg DeleteChatMessagesAfterParams) error {
+	_, err := q.db.Exec(ctx, deleteChatMessagesAfter, arg.SessionID, arg.Seq)
+	return err
+}
+
 const deleteChatSession = `-- name: DeleteChatSession :exec
 DELETE FROM chat_sessions WHERE id = $1
 `
@@ -1090,6 +1104,33 @@ func (q *Queries) InterruptedTurnEvents(ctx context.Context, arg InterruptedTurn
 		return nil, err
 	}
 	return items, nil
+}
+
+const lastChatUserMessage = `-- name: LastChatUserMessage :one
+SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes, persona_id FROM chat_messages WHERE session_id = $1 AND role = 'user' ORDER BY seq DESC LIMIT 1
+`
+
+func (q *Queries) LastChatUserMessage(ctx context.Context, sessionID uuid.UUID) (ChatMessage, error) {
+	row := q.db.QueryRow(ctx, lastChatUserMessage, sessionID)
+	var i ChatMessage
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.Seq,
+		&i.Role,
+		&i.BodyMd,
+		&i.Harness,
+		&i.Model,
+		&i.RunID,
+		&i.RunTurnID,
+		&i.ContextRefs,
+		&i.Citations,
+		&i.Usage,
+		&i.CreatedAt,
+		&i.CodeChanges,
+		&i.PersonaID,
+	)
+	return i, err
 }
 
 const linkSourceInProject = `-- name: LinkSourceInProject :one
@@ -1878,6 +1919,88 @@ func (q *Queries) RunWebSearchEvents(ctx context.Context, runID uuid.UUID) ([]Ru
 	return items, nil
 }
 
+const searchChatMessages = `-- name: SearchChatMessages :many
+WITH q AS (SELECT websearch_to_tsquery('english', $1::text) AS tsq),
+hits AS (
+  SELECT m.id, m.session_id, m.seq, m.role, m.body_md, m.created_at, m.persona_id,
+    ts_rank(to_tsvector('english', left(m.body_md, 200000)), q.tsq) AS rank
+  FROM chat_messages m
+  JOIN chat_sessions c ON c.id = m.session_id
+  CROSS JOIN q
+  WHERE c.workspace_id = $2 AND c.created_by = $3
+    AND m.role IN ('user', 'assistant')
+    AND to_tsvector('english', left(m.body_md, 200000)) @@ q.tsq
+  ORDER BY rank DESC, m.created_at DESC
+  LIMIT $4
+)
+SELECT h.id, h.session_id, h.seq, h.role, h.created_at, c.title AS chat_title, c.archived, pr.key AS project_key, p.name AS persona_name,
+  ts_headline('english', left(h.body_md, 200000), q.tsq, 'StartSel=' || chr(57344) || ',StopSel=' || chr(57345) || ',MaxWords=30,MinWords=12,MaxFragments=1')::text AS snippet
+FROM hits h
+CROSS JOIN q
+JOIN chat_sessions c ON c.id = h.session_id
+JOIN projects pr ON pr.id = c.project_id
+LEFT JOIN personas p ON p.id = COALESCE(h.persona_id, c.persona_id)
+ORDER BY h.rank DESC, h.created_at DESC
+`
+
+type SearchChatMessagesParams struct {
+	Query       string
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	RowLimit    int32
+}
+
+type SearchChatMessagesRow struct {
+	ID          uuid.UUID
+	SessionID   uuid.UUID
+	Seq         int64
+	Role        string
+	CreatedAt   time.Time
+	ChatTitle   string
+	Archived    bool
+	ProjectKey  string
+	PersonaName *string
+	Snippet     string
+}
+
+// The caller's own messages matching a web-style query, best first. The snippet
+// marks each match with the private-use characters U+E000 and U+E001.
+func (q *Queries) SearchChatMessages(ctx context.Context, arg SearchChatMessagesParams) ([]SearchChatMessagesRow, error) {
+	rows, err := q.db.Query(ctx, searchChatMessages,
+		arg.Query,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchChatMessagesRow{}
+	for rows.Next() {
+		var i SearchChatMessagesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.Seq,
+			&i.Role,
+			&i.CreatedAt,
+			&i.ChatTitle,
+			&i.Archived,
+			&i.ProjectKey,
+			&i.PersonaName,
+			&i.Snippet,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setChatAgent = `-- name: SetChatAgent :exec
 UPDATE chat_sessions SET agent_id = $2 WHERE id = $1
 `
@@ -1935,6 +2058,20 @@ func (q *Queries) SetChatInterrupt(ctx context.Context, arg SetChatInterruptPara
 		&i.LastReadSeq,
 	)
 	return i, err
+}
+
+const setChatMessageBody = `-- name: SetChatMessageBody :exec
+UPDATE chat_messages SET body_md = $2 WHERE id = $1
+`
+
+type SetChatMessageBodyParams struct {
+	ID     uuid.UUID
+	BodyMd string
+}
+
+func (q *Queries) SetChatMessageBody(ctx context.Context, arg SetChatMessageBodyParams) error {
+	_, err := q.db.Exec(ctx, setChatMessageBody, arg.ID, arg.BodyMd)
+	return err
 }
 
 const setChatMessageCodeChanges = `-- name: SetChatMessageCodeChanges :exec

@@ -433,8 +433,8 @@ func (s *Server) ListChatMessages(ctx context.Context, req api.ListChatMessagesR
 	if req.Params.Limit != nil {
 		limit = *req.Params.Limit
 	}
-	if limit < 1 || limit > 200 {
-		return nil, apperr.Invalid("limit", "must be between 1 and 200")
+	if limit < 1 || limit > 1000 {
+		return nil, apperr.Invalid("limit", "must be between 1 and 1000")
 	}
 	if req.Params.After != nil && *req.Params.After < 0 {
 		return nil, apperr.Invalid("after", "must be 0 or more")

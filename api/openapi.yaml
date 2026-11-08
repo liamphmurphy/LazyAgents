@@ -2372,7 +2372,7 @@ paths:
       parameters:
         - { name: after, in: query, description: Only messages with a greater seq (refetch after chat.updated), schema: { type: integer, minimum: 0 } }
         - { name: before, in: query, description: Only messages with a smaller seq (page back through history), schema: { type: integer, minimum: 1 } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
       responses:
         "200":
           description: Messages, oldest first
@@ -2427,6 +2427,53 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/edit-last:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    post:
+      operationId: editLastChatMessage
+      summary: Replace your last message and redo its turn
+      description: |
+        Removes everything after your newest message, replaces its text and
+        queues a new turn. The same text retries the turn. 409 while a reply is
+        running, or when the chat is archived or has no message.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatMessageEdit" }
+      responses:
+        "202":
+          description: Message updated and turn queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chat, message]
+                properties:
+                  chat: { $ref: "#/components/schemas/ChatSession" }
+                  message: { $ref: "#/components/schemas/ChatMessage" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chat-search:
+    get:
+      operationId: searchChats
+      summary: Search the messages of your own chats
+      tags: [chats]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Best matches first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSearchResults" }
         default: { $ref: "#/components/responses/Error" }
 
   /chats/{id}/cancel:
@@ -4658,6 +4705,29 @@ components:
       required: [previews]
       properties:
         previews: { type: array, items: { $ref: "#/components/schemas/LinkPreview" } }
+    ChatMessageEdit:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string }
+    ChatSearchHit:
+      type: object
+      required: [message_id, chat_id, chat_title, project_key, role, archived, snippet, created_at]
+      properties:
+        message_id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        chat_title: { type: string }
+        project_key: { type: string }
+        role: { type: string, enum: [user, assistant] }
+        archived: { type: boolean }
+        persona_name: { type: string }
+        snippet: { type: string, description: "Matches are wrapped in U+E000 and U+E001" }
+        created_at: { type: string, format: date-time }
+    ChatSearchResults:
+      type: object
+      required: [hits]
+      properties:
+        hits: { type: array, items: { $ref: "#/components/schemas/ChatSearchHit" } }
     ChatAttachment:
       type: object
       required: [id, filename, content_type, size_bytes, created_at]

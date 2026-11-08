@@ -363,3 +363,37 @@ LEFT JOIN LATERAL (SELECT m.persona_id, m.body_md, m.seq FROM chat_messages m WH
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND NOT c.archived
   AND (c.state = 'running' OR u.unread > 0 OR p.waiting_approval)
 ORDER BY last_activity_at DESC;
+
+-- name: LastChatUserMessage :one
+SELECT * FROM chat_messages WHERE session_id = $1 AND role = 'user' ORDER BY seq DESC LIMIT 1;
+
+-- name: DeleteChatMessagesAfter :exec
+DELETE FROM chat_messages WHERE session_id = $1 AND seq > $2;
+
+-- name: SetChatMessageBody :exec
+UPDATE chat_messages SET body_md = $2 WHERE id = $1;
+
+-- name: SearchChatMessages :many
+-- The caller's own messages matching a web-style query, best first. The snippet
+-- marks each match with the private-use characters U+E000 and U+E001.
+WITH q AS (SELECT websearch_to_tsquery('english', sqlc.arg(query)::text) AS tsq),
+hits AS (
+  SELECT m.id, m.session_id, m.seq, m.role, m.body_md, m.created_at, m.persona_id,
+    ts_rank(to_tsvector('english', left(m.body_md, 200000)), q.tsq) AS rank
+  FROM chat_messages m
+  JOIN chat_sessions c ON c.id = m.session_id
+  CROSS JOIN q
+  WHERE c.workspace_id = sqlc.arg(workspace_id) AND c.created_by = sqlc.arg(user_id)
+    AND m.role IN ('user', 'assistant')
+    AND to_tsvector('english', left(m.body_md, 200000)) @@ q.tsq
+  ORDER BY rank DESC, m.created_at DESC
+  LIMIT sqlc.arg(row_limit)
+)
+SELECT h.id, h.session_id, h.seq, h.role, h.created_at, c.title AS chat_title, c.archived, pr.key AS project_key, p.name AS persona_name,
+  ts_headline('english', left(h.body_md, 200000), q.tsq, 'StartSel=' || chr(57344) || ',StopSel=' || chr(57345) || ',MaxWords=30,MinWords=12,MaxFragments=1')::text AS snippet
+FROM hits h
+CROSS JOIN q
+JOIN chat_sessions c ON c.id = h.session_id
+JOIN projects pr ON pr.id = c.project_id
+LEFT JOIN personas p ON p.id = COALESCE(h.persona_id, c.persona_id)
+ORDER BY h.rank DESC, h.created_at DESC;

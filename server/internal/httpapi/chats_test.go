@@ -398,7 +398,7 @@ func TestChatMessagesPostCancelAndHistory(t *testing.T) {
 		t.Fatalf("after %v", s)
 	}
 	e.want("GET", "/chats/"+id+"/messages?limit=0", nil, http.StatusUnprocessableEntity)
-	e.want("GET", "/chats/"+id+"/messages?limit=201", nil, http.StatusUnprocessableEntity)
+	e.want("GET", "/chats/"+id+"/messages?limit=1001", nil, http.StatusUnprocessableEntity)
 	e.invalid("POST", "/chats/"+id+"/messages", map[string]any{"body": ""}, "body", "1–100000")
 	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "x", "context_refs": 5}, http.StatusBadRequest)
 

@@ -156,6 +156,11 @@ export function LinkEditor({
         return;
       }
     }
+    // Suggestions are still loading: Enter must not act on a half-typed link.
+    if (open && suggest.isFetching && e.key === "Enter") {
+      e.preventDefault();
+      return;
+    }
     onKeyDown?.(e);
   };
 
@@ -183,7 +188,8 @@ export function LinkEditor({
         }}
         onClick={(e) => sync(value, e.currentTarget.selectionStart)}
         onBlur={(e) => {
-          setTimeout(() => setOpen(null), 120);
+          // Focus may already be back (a picker closing): then the list stays.
+          setTimeout(() => document.activeElement !== ref.current && setOpen(null), 120);
           onBlur?.(e);
         }}
         className={className}

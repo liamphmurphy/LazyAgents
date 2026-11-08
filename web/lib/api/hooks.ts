@@ -1011,11 +1011,32 @@ export function useChat(id?: string) {
   });
 }
 
-export function useChatMessages(id?: string) {
+/** limit above the usual 200 loads far enough back to reach a search hit. */
+export function useChatMessages(id?: string, limit = 200) {
   return useQuery({
     enabled: !!id,
-    queryKey: chatKeys.messages(id ?? ""),
-    queryFn: () => unwrap(api.GET("/chats/{id}/messages", { params: { path: { id: id! }, query: { limit: 200 } } })),
+    queryKey: limit === 200 ? chatKeys.messages(id ?? "") : ([...chatKeys.messages(id ?? ""), limit] as const),
+    queryFn: () => unwrap(api.GET("/chats/{id}/messages", { params: { path: { id: id! }, query: { limit } } })),
+  });
+}
+
+/** Replaces the last message and redoes its turn; the same text retries it. */
+export function useEditLastChatMessage(id: string) {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: (body: string) => unwrap(api.POST("/chats/{id}/edit-last", { params: { path: { id } }, body: { body } })),
+    onSettled: done,
+  });
+}
+
+/** Finds messages across the caller's chats; waits for at least two characters. */
+export function useChatSearch(q: string) {
+  const query = q.trim();
+  return useQuery({
+    enabled: query.length >= 2,
+    queryKey: ["chats", "search", query] as const,
+    queryFn: () => unwrap(api.GET("/chat-search", { params: { query: { q: query } } })),
+    staleTime: 10_000,
   });
 }
 

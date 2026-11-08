@@ -24,11 +24,11 @@ const WIDTH = "w-[380px] max-w-full";
 const ACTION = "inline-flex h-[30px] items-center gap-1.5 rounded-lg border border-border-strong px-2.5 text-[12.5px] font-medium text-fg transition-colors hover:bg-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent";
 
 function Note({ note }: { note: string }) {
-  return note ? <p className="mt-2 text-[12.5px] italic text-fg-secondary">“{note}”</p> : null;
+  return note ? <p className="mt-2 text-[13px] italic text-fg-secondary">“{note}”</p> : null;
 }
 
 function Badge({ children }: { children: string }) {
-  return <span className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold" style={{ background: "rgb(0 0 0 / 0.55)", color: "#fff" }}>{children}</span>;
+  return <span className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: "rgb(0 0 0 / 0.55)", color: "#fff" }}>{children}</span>;
 }
 
 function OpenMark() {
@@ -193,7 +193,8 @@ export function RecommendFence({ code, info }: { code: string; info?: string }) 
   const q = useLinkPreviews(parsed ? messageId : undefined);
   if (!parsed) return <CodeFence code={code} info={info} />;
   const { url, note } = parsed;
-  if (messageId && q.isPending) return <div data-testid="recommend-loading" aria-label="Loading preview" className={`${WIDTH} ${FRAME} h-16 animate-pulse`} />;
+  // Sized like the card it usually becomes, so the reply doesn't jump when it arrives.
+  if (messageId && q.isPending) return <div data-testid="recommend-loading" aria-label="Loading preview" className={`${WIDTH} ${FRAME} h-[372px] animate-pulse`} />;
   const preview = q.data?.previews.find((p) => p.url === url);
   const actions = <CardActions url={url} preview={preview} messageId={messageId} />;
   if (!preview?.title) return <CompactCard url={url} note={note} actions={actions} />;
