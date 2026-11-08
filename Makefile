@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 
-.PHONY: help up down stop-dev dev dev-infra api web runner gen gen-check test lint build reset
+.PHONY: help up down stop-dev dev dev-infra api web web-deps runner gen gen-check test lint build reset
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -48,10 +48,18 @@ api: ## Run the API (hot reload if air is installed: go install github.com/air-v
 runner: ## Run dispatched tickets (default local: host claude/codex logins, no isolation)
 	cd server && RUNNER_BACKEND=$(RUNNER_BACKEND) RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/vesper runner
 
-web: ## Run Next dev server
+WEB_DEPS := web/node_modules/.package-lock.json
+
+$(WEB_DEPS): web/package-lock.json
+	cd web && npm ci
+	@touch $@
+
+web-deps: $(WEB_DEPS) ## Install web dependencies if the lockfile changed
+
+web: web-deps ## Run Next dev server
 	cd web && npm run dev
 
-gen: ## Regenerate API code (Go + TS) and sqlc queries. Needs sqlc 1.31+ on PATH.
+gen: web-deps ## Regenerate API code (Go + TS) and sqlc queries. Needs sqlc 1.31+ on PATH.
 	cd server && go generate ./...
 	cd server && sqlc generate
 	cd web && npm run gen
@@ -60,15 +68,15 @@ gen-check: gen ## Fail if generated code is out of date
 	@git diff --exit-code -- server/internal/api server/internal/store web/lib/api || \
 	  (echo "generated code is stale: run 'make gen' and commit" && exit 1)
 
-test: ## Run Go and web tests
+test: web-deps ## Run Go and web tests
 	cd server && go test ./...
 	cd web && npm run typecheck
 
-lint: ## Vet Go, lint web
+lint: web-deps ## Vet Go, lint web
 	cd server && go vet ./... && test -z "$$(gofmt -l .)"
 	cd web && npm run lint
 
-build: ## Build both apps
+build: web-deps ## Build both apps
 	cd server && go build ./...
 	cd web && npm run build
 
