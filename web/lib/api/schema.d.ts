@@ -1589,6 +1589,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in person's Library, newest first
+         * @description The Library keeps what a person wants from their assistant chats for
+         *     good; for now, every image a persona generates is added
+         *     automatically. It is strictly per person, and items outlive the chat
+         *     they came from.
+         */
+        get: operations["listLibraryItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove an item from your Library
+         * @description The image stays in its chat while that chat exists. 404 unless it is yours.
+         */
+        delete: operations["deleteLibraryItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{itemId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Download one of your Library items
+         * @description 404 unless it is yours.
+         */
+        get: operations["getLibraryItemContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}": {
         parameters: {
             query?: never;
@@ -3718,6 +3785,39 @@ export interface components {
             source?: "upload" | "generated";
             /** Format: date-time */
             created_at: string;
+        };
+        /** @enum {string} */
+        LibraryItemKind: "image";
+        LibraryItem: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["LibraryItemKind"];
+            /** @description For a generated image, the title of the chat it came from */
+            title: string;
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /**
+             * Format: uuid
+             * @description The chat it came from, while that chat exists
+             */
+            chat_id?: string;
+            chat_title?: string;
+            /** @description The project of the chat it came from */
+            project_key?: string;
+            /**
+             * Format: uuid
+             * @description The persona that made it, while that persona exists
+             */
+            persona_id?: string;
+            persona_name?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        LibraryList: {
+            items: components["schemas"]["LibraryItem"][];
+            has_more: boolean;
         };
         ChatMessage: {
             /** Format: uuid */
@@ -6614,6 +6714,81 @@ export interface operations {
             header?: never;
             path: {
                 attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listLibraryItems: {
+        parameters: {
+            query?: {
+                /** @description Only items of this kind */
+                kind?: components["schemas"]["LibraryItemKind"];
+                /** @description Skip this many */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Items, 60 per page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteLibraryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryItemContent: {
+        parameters: {
+            query?: {
+                /** @description Serve as an attachment instead of inline */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                itemId: string;
             };
             cookie?: never;
         };

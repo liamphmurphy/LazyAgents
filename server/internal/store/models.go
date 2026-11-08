@@ -316,6 +316,22 @@ type Label struct {
 	UpdatedAt   time.Time
 }
 
+type LibraryItem struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Kind        string
+	Title       string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     string
+	ChatID      *uuid.UUID
+	MessageID   *uuid.UUID
+	PersonaID   *uuid.UUID
+	CreatedAt   time.Time
+}
+
 type Memory struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID

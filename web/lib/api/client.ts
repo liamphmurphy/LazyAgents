@@ -82,6 +82,11 @@ export function chatAttachmentUrl(attachmentId: string) {
   return `/api/v1/chat-attachments/${attachmentId}/content`;
 }
 
+/** URL of one of the caller's Library items. */
+export function libraryItemUrl(itemId: string, download = false) {
+  return `/api/v1/library/${itemId}/content${download ? "?download=true" : ""}`;
+}
+
 /** URL of one version's raw content (markdown text or the stored file). */
 export function contentUrl(artifactId: string, versionId: string, download = false) {
   return `/api/v1/artifacts/${artifactId}/versions/${versionId}/content${download ? "?download=true" : ""}`;

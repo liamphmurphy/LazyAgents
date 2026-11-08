@@ -243,6 +243,20 @@ func TestImageHarvest(t *testing.T) {
 			t.Fatalf("blob %s: %v", a.BlobKey, err)
 		}
 	}
+	// Each one is in the person's Library too, sharing its attachment's object.
+	lib, err := e.q.ListLibraryItems(e.ctx, store.ListLibraryItemsParams{WorkspaceID: e.ws, UserID: e.me.ID, RowLimit: 100})
+	if err != nil || len(lib) != len(atts) {
+		t.Fatalf("library %d items, %v", len(lib), err)
+	}
+	keys := map[string]bool{}
+	for _, a := range atts {
+		keys[a.BlobKey] = true
+	}
+	for _, l := range lib {
+		if !keys[l.BlobKey] || l.Kind != "image" || l.Title != "Art" || l.ChatID == nil || *l.ChatID != chat.ID || l.PersonaID == nil || *l.PersonaID != p.ID || l.MessageID == nil || *l.MessageID != last.ID {
+			t.Fatalf("library item %+v", l)
+		}
+	}
 	// Harvested files leave the outbox; the rest stays (and was reported).
 	outbox := filepath.Join(e.runner.Backend.WorkspaceDir(e.chatRun(chat.ID).ID.String()), ".lazyagents", "outbox")
 	left := map[string]bool{}

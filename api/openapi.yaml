@@ -38,6 +38,7 @@ tags:
   - name: chats
   - name: memories
   - name: personas
+  - name: library
 paths:
   /agents/{handle}/runs:
     get:
@@ -2050,6 +2051,59 @@ paths:
       summary: Download one of your chat attachments
       description: 404 unless the caller uploaded it.
       tags: [chats]
+      responses:
+        "200":
+          description: The file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /library:
+    get:
+      operationId: listLibraryItems
+      summary: The signed-in person's Library, newest first
+      description: |
+        The Library keeps what a person wants from their assistant chats for
+        good; for now, every image a persona generates is added
+        automatically. It is strictly per person, and items outlive the chat
+        they came from.
+      tags: [library]
+      parameters:
+        - { name: kind, in: query, description: Only items of this kind, schema: { $ref: "#/components/schemas/LibraryItemKind" } }
+        - { name: offset, in: query, description: Skip this many, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+      responses:
+        "200":
+          description: Items, 60 per page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /library/{itemId}:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deleteLibraryItem
+      summary: Remove an item from your Library
+      description: The image stays in its chat while that chat exists. 404 unless it is yours.
+      tags: [library]
+      responses:
+        "204": { description: Removed }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /library/{itemId}/content:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getLibraryItemContent
+      summary: Download one of your Library items
+      description: 404 unless it is yours.
+      tags: [library]
+      parameters:
+        - { name: download, in: query, description: Serve as an attachment instead of inline, schema: { type: boolean, default: false } }
       responses:
         "200":
           description: The file
@@ -4260,6 +4314,31 @@ components:
         size_bytes: { type: integer, format: int64 }
         source: { type: string, enum: [upload, generated], description: "upload: the person attached it; generated: the assistant created it (e.g. an image)" }
         created_at: { type: string, format: date-time }
+    LibraryItemKind:
+      type: string
+      enum: [image]
+    LibraryItem:
+      type: object
+      required: [id, kind, title, filename, content_type, size_bytes, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/LibraryItemKind" }
+        title: { type: string, description: "For a generated image, the title of the chat it came from" }
+        filename: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        chat_id: { type: string, format: uuid, description: "The chat it came from, while that chat exists" }
+        chat_title: { type: string }
+        project_key: { type: string, description: The project of the chat it came from, for linking to it }
+        persona_id: { type: string, format: uuid, description: "The persona that made it, while that persona exists" }
+        persona_name: { type: string }
+        created_at: { type: string, format: date-time }
+    LibraryList:
+      type: object
+      required: [items, has_more]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/LibraryItem" } }
+        has_more: { type: boolean }
     ChatMessage:
       type: object
       required: [id, seq, role, body_md, created_at]

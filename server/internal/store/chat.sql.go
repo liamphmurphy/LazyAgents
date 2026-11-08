@@ -228,7 +228,11 @@ func (q *Queries) ChatAttachmentBytes(ctx context.Context, arg ChatAttachmentByt
 }
 
 const chatGeneratedImageBytes = `-- name: ChatGeneratedImageBytes :one
-SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM chat_attachments WHERE workspace_id = $1 AND user_id = $2 AND source = 'generated'
+SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM (
+  SELECT blob_key, size_bytes FROM chat_attachments WHERE chat_attachments.workspace_id = $1 AND chat_attachments.user_id = $2 AND source = 'generated'
+  UNION
+  SELECT blob_key, size_bytes FROM library_items WHERE library_items.workspace_id = $1 AND library_items.user_id = $2
+) stored
 `
 
 type ChatGeneratedImageBytesParams struct {
@@ -237,7 +241,8 @@ type ChatGeneratedImageBytesParams struct {
 }
 
 // What a person's assistant chats have generated, for the separate cap on
-// generated images.
+// generated images: each stored object once, whether a chat or the Library
+// (which keeps them after their chat is deleted) holds it.
 func (q *Queries) ChatGeneratedImageBytes(ctx context.Context, arg ChatGeneratedImageBytesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, chatGeneratedImageBytes, arg.WorkspaceID, arg.UserID)
 	var total int64
@@ -679,13 +684,16 @@ func (q *Queries) DeleteChatSession(ctx context.Context, id uuid.UUID) error {
 }
 
 const deleteStaleChatAttachments = `-- name: DeleteStaleChatAttachments :many
-DELETE FROM chat_attachments
-WHERE id IN (
-  SELECT id FROM chat_attachments
-  WHERE message_id IS NULL AND created_at < $1::timestamptz
-  ORDER BY created_at LIMIT $2 FOR UPDATE SKIP LOCKED
-) AND message_id IS NULL
-RETURNING blob_key
+WITH d AS (
+  DELETE FROM chat_attachments
+  WHERE id IN (
+    SELECT id FROM chat_attachments
+    WHERE message_id IS NULL AND created_at < $1::timestamptz
+    ORDER BY created_at LIMIT $2 FOR UPDATE SKIP LOCKED
+  ) AND message_id IS NULL
+  RETURNING blob_key
+)
+SELECT d.blob_key FROM d WHERE NOT EXISTS (SELECT 1 FROM library_items l WHERE l.blob_key = d.blob_key)
 `
 
 type DeleteStaleChatAttachmentsParams struct {
@@ -696,7 +704,8 @@ type DeleteStaleChatAttachmentsParams struct {
 // Removes up to row_limit uploads never sent (or detached by a chat's
 // deletion) that are older than the cutoff, returning their blob keys. SKIP
 // LOCKED lets several runners sweep at once; a row a message is binding at
-// the same moment is re-checked after its lock and survives.
+// the same moment is re-checked after its lock and survives. Keys the
+// Library still holds are not returned: their objects stay.
 func (q *Queries) DeleteStaleChatAttachments(ctx context.Context, arg DeleteStaleChatAttachmentsParams) ([]string, error) {
 	rows, err := q.db.Query(ctx, deleteStaleChatAttachments, arg.Cutoff, arg.RowLimit)
 	if err != nil {
