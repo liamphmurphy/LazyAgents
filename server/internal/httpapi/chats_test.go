@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
@@ -167,6 +168,7 @@ func TestChatModelsCatalog(t *testing.T) {
 		Models            []struct {
 			ID      string
 			Default bool
+			Efforts []string
 		}
 	}
 	if err := json.NewDecoder(res.Body).Decode(&list); err != nil || res.StatusCode != 200 {
@@ -189,6 +191,9 @@ func TestChatModelsCatalog(t *testing.T) {
 		if !h.Available || defaults != 1 || len(h.Models) == 0 {
 			t.Fatalf("harness %+v", h)
 		}
+	}
+	if m := list[0].Models; len(m[0].Efforts) != len(agentdef.Efforts) || m[2].Efforts == nil || len(m[2].Efforts) != 0 {
+		t.Fatalf("efforts %+v", m)
 	}
 }
 
@@ -453,6 +458,58 @@ func TestChatSelectionValidation(t *testing.T) {
 	}
 }
 
+func TestChatEffort(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := context.Background()
+	runEffort := func(id string) (runID, effort string) {
+		t.Helper()
+		if err := e.pool.QueryRow(ctx, `SELECT r.id::text, coalesce(r.resolved_spec->'harness_options'->>'effort', '')
+			FROM runs r JOIN chat_sessions c ON c.current_run_id = r.id WHERE c.id = $1`, id).Scan(&runID, &effort); err != nil {
+			t.Fatal(err)
+		}
+		return runID, effort
+	}
+	chat := e.newChat(map[string]any{"harness": "claude-code", "model": "opus-5.5", "effort": "xhigh"})
+	id := chat["id"].(string)
+	if chat["effort"] != "xhigh" {
+		t.Fatalf("created effort %v", chat["effort"])
+	}
+	e.invalid("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "model": "haiku-5.5", "effort": "low"}, "effort", "doesn't offer")
+
+	// The first segment runs at the chat's effort.
+	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi"}, http.StatusAccepted)
+	run0, eff := runEffort(id)
+	if eff != "xhigh" {
+		t.Fatalf("segment effort %q", eff)
+	}
+	// A same-harness change keeps the segment and rewrites its spec.
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	res := e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "effort": "max"}, http.StatusAccepted)
+	if res["chat"].(map[string]any)["effort"] != "max" {
+		t.Fatalf("stored effort %v", res["chat"])
+	}
+	if run, eff := runEffort(id); run != run0 || eff != "max" {
+		t.Fatalf("run %s effort %q, want %s max", run, eff, run0)
+	}
+	// default clears it.
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	res = e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "effort": "default"}, http.StatusAccepted)
+	if _, ok := res["chat"].(map[string]any)["effort"]; ok {
+		t.Fatalf("effort not cleared %v", res["chat"])
+	}
+	if run, eff := runEffort(id); run != run0 || eff != "" {
+		t.Fatalf("run %s effort %q, want %s with none", run, eff, run0)
+	}
+	// Switching to a model without the chat's effort drops it.
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "harness": "codex", "model": "gpt-5-codex", "effort": "max"}, http.StatusAccepted)
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	res = e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "model": "gpt-5-mini"}, http.StatusAccepted)
+	if _, ok := res["chat"].(map[string]any)["effort"]; ok {
+		t.Fatalf("unoffered effort kept %v", res["chat"])
+	}
+}
+
 func TestChatContextRefsResolveInsideProject(t *testing.T) {
 	e := newChatEnv(t)
 	id := e.newChat(nil)["id"].(string)
@@ -651,7 +708,14 @@ func testChatModels(_ context.Context, harness, _ string) ([]chatmodels.Model, e
 	}
 	models := []chatmodels.Model{}
 	for i, id := range ids {
-		models = append(models, chatmodels.Model{ID: id, Label: id, Default: i == 0})
+		efforts := agentdef.Efforts
+		switch id {
+		case "haiku-5.5":
+			efforts = []string{}
+		case "gpt-5-mini":
+			efforts = []string{"low", "medium", "high"}
+		}
+		models = append(models, chatmodels.Model{ID: id, Label: id, Default: i == 0, Efforts: efforts})
 	}
 	return models, nil
 }

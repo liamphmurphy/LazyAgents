@@ -7,6 +7,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 )
 
@@ -106,14 +107,53 @@ func TestResolveAcceptsRestatedCurrentModel(t *testing.T) {
 		return []Model{{ID: "opus", Default: true}, {ID: "sonnet"}}, nil
 	}}
 	cc := agentdef.HarnessClaudeCode
-	h, m, err := catalog.Resolve(context.Background(), nil, uuid.New(), cc, "opus-5.5", cc, "opus-5.5")
-	if err != nil || h != cc || m != "opus-5.5" {
-		t.Fatalf("h=%q m=%q err=%v", h, m, err)
+	cur := Selection{Harness: cc, Model: "opus-5.5"}
+	sel, err := catalog.Resolve(context.Background(), nil, uuid.New(), cur, Selection{Harness: cc, Model: "opus-5.5"})
+	if err != nil || sel != cur {
+		t.Fatalf("sel=%+v err=%v", sel, err)
 	}
-	if _, _, err := catalog.Resolve(context.Background(), nil, uuid.New(), cc, "opus-5.5", cc, "haiku-5.5"); err == nil {
+	if _, err := catalog.Resolve(context.Background(), nil, uuid.New(), cur, Selection{Harness: cc, Model: "haiku-5.5"}); err == nil {
 		t.Fatal("expected an unlisted, changed model to be rejected")
 	}
-	if _, m, err := catalog.Resolve(context.Background(), nil, uuid.New(), cc, "opus-5.5", cc, "sonnet"); err != nil || m != "sonnet" {
-		t.Fatalf("m=%q err=%v", m, err)
+	if sel, err := catalog.Resolve(context.Background(), nil, uuid.New(), cur, Selection{Harness: cc, Model: "sonnet"}); err != nil || sel.Model != "sonnet" {
+		t.Fatalf("sel=%+v err=%v", sel, err)
+	}
+}
+
+func TestResolveEffort(t *testing.T) {
+	catalog := Catalog{Discover: func(_ context.Context, harness, _ string) ([]Model, error) {
+		if harness == agentdef.HarnessCodex {
+			return []Model{{ID: "gpt", Default: true, Efforts: []string{"low", "medium", "high"}}}, nil
+		}
+		return []Model{{ID: "opus", Default: true, Efforts: agentdef.Efforts}, {ID: "haiku-4", Efforts: []string{}}}, nil
+	}}
+	ctx, ws := context.Background(), uuid.New()
+	cc := agentdef.HarnessClaudeCode
+	cur := Selection{Harness: cc, Model: "opus"}
+	for _, tc := range []struct {
+		name     string
+		cur, req Selection
+		want     string
+		bad      bool
+	}{
+		{"set", cur, Selection{Effort: "max"}, "max", false},
+		{"kept when omitted", Selection{Harness: cc, Model: "opus", Effort: "xhigh"}, Selection{Model: "opus"}, "xhigh", false},
+		{"cleared by default", Selection{Harness: cc, Model: "opus", Effort: "xhigh"}, Selection{Effort: EffortDefault}, "", false},
+		{"dropped when the new model lacks it", Selection{Harness: cc, Model: "opus", Effort: "max"}, Selection{Harness: agentdef.HarnessCodex}, "", false},
+		{"kept across harnesses when offered", Selection{Harness: cc, Model: "opus", Effort: "high"}, Selection{Harness: agentdef.HarnessCodex}, "high", false},
+		{"alias takes the harness levels", Selection{Harness: cc, Model: "opus-5.5"}, Selection{Effort: "xhigh"}, "xhigh", false},
+		{"unoffered", cur, Selection{Model: "haiku-4", Effort: "low"}, "", true},
+		{"unknown", cur, Selection{Effort: "ultra"}, "", true},
+	} {
+		sel, err := catalog.Resolve(ctx, nil, ws, tc.cur, tc.req)
+		if tc.bad != (err != nil) || (!tc.bad && sel.Effort != tc.want) {
+			t.Errorf("%s: sel=%+v err=%v", tc.name, sel, err)
+		}
+	}
+}
+
+func TestKnownEffortsDropsUltra(t *testing.T) {
+	if got := knownEfforts([]string{"max", "ultra", "low"}); !slices.Equal(got, []string{"low", "max"}) {
+		t.Fatalf("got %v", got)
 	}
 }

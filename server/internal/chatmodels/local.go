@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"time"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
@@ -85,8 +86,10 @@ func localModels(name string, input io.Writer, output io.Reader) ([]Model, error
 				RequestID string `json:"request_id"`
 				Response  struct {
 					Models []struct {
-						Value string `json:"value"`
-						Label string `json:"displayName"`
+						Value          string   `json:"value"`
+						Label          string   `json:"displayName"`
+						SupportsEffort bool     `json:"supportsEffort"`
+						Efforts        []string `json:"supportedEffortLevels"`
 					} `json:"models"`
 				} `json:"response"`
 			} `json:"response"`
@@ -104,7 +107,11 @@ func localModels(name string, input io.Writer, output io.Reader) ([]Model, error
 			for _, m := range msg.Response.Response.Models {
 				if m.Value != "" && !seen[m.Value] {
 					seen[m.Value] = true
-					out = append(out, Model{ID: m.Value, Label: m.Label, Default: m.Value == "default"})
+					efforts := []string{}
+					if m.SupportsEffort {
+						efforts = knownEfforts(m.Efforts)
+					}
+					out = append(out, Model{ID: m.Value, Label: m.Label, Default: m.Value == "default", Efforts: efforts})
 				}
 			}
 			return normalizeLocalModels(out), nil
@@ -133,6 +140,10 @@ func localModels(name string, input io.Writer, output io.Reader) ([]Model, error
 				Label   string `json:"displayName"`
 				Default bool   `json:"isDefault"`
 				Hidden  bool   `json:"hidden"`
+				Efforts []struct {
+					Effort string `json:"reasoningEffort"`
+				} `json:"supportedReasoningEfforts"`
+				DefaultEffort string `json:"defaultReasoningEffort"`
 			} `json:"data"`
 			NextCursor *string `json:"nextCursor"`
 		}
@@ -142,7 +153,16 @@ func localModels(name string, input io.Writer, output io.Reader) ([]Model, error
 		for _, m := range page.Data {
 			if m.Model != "" && !m.Hidden && !seen[m.Model] {
 				seen[m.Model] = true
-				out = append(out, Model{ID: m.Model, Label: m.Label, Default: m.Default})
+				levels := make([]string, len(m.Efforts))
+				for i, e := range m.Efforts {
+					levels[i] = e.Effort
+				}
+				efforts := knownEfforts(levels)
+				def := m.DefaultEffort
+				if !slices.Contains(efforts, def) {
+					def = ""
+				}
+				out = append(out, Model{ID: m.Model, Label: m.Label, Default: m.Default, Efforts: efforts, DefaultEffort: def})
 			}
 		}
 		if page.NextCursor == nil || *page.NextCursor == "" {

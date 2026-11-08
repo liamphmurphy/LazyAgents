@@ -438,10 +438,10 @@ func TestCodexMCPPolicyOnResumeAndPlanning(t *testing.T) {
 }
 
 func TestEffortOption(t *testing.T) {
-	// Unset: Claude settings carry no modelSettings and Codex no reasoning override.
+	// Unset: Claude gets no --effort and Codex no reasoning override.
 	inv, _ := ClaudeCode{}.Invocation(ws, Turn{Spec: spec(), Prompt: "go"})
-	if strings.Contains(string(inv.Files[".lazyagents/claude-settings.json"]), "modelSettings") {
-		t.Fatalf("unset effort leaked into settings: %s", inv.Files[".lazyagents/claude-settings.json"])
+	if slices.Contains(inv.Argv, "--effort") {
+		t.Fatalf("unset effort leaked into argv: %v", inv.Argv)
 	}
 	inv, _ = Codex{}.Invocation(ws, Turn{Spec: spec(), Prompt: "go"})
 	if strings.Contains(strings.Join(inv.Argv, " "), "model_reasoning_effort") {
@@ -449,29 +449,18 @@ func TestEffortOption(t *testing.T) {
 	}
 
 	s := spec()
-	s.HarnessOptions["effort"] = "xhigh"
-	inv, err := ClaudeCode{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc struct {
-		ModelSettings map[string]struct {
-			EffortLevel string `json:"effortLevel"`
-		} `json:"modelSettings"`
-		Hooks map[string]any `json:"hooks"`
-	}
-	if err := json.Unmarshal(inv.Files[".lazyagents/claude-settings.json"], &doc); err != nil {
-		t.Fatal(err)
-	}
-	if doc.ModelSettings["claude-opus-5-5"].EffortLevel != "xhigh" || doc.Hooks["PreToolUse"] == nil {
-		t.Fatalf("settings %s", inv.Files[".lazyagents/claude-settings.json"])
-	}
-
-	for in, want := range map[string]string{"low": "low", "medium": "medium", "high": "high", "xhigh": "high", "max": "high"} {
-		s.HarnessOptions["effort"] = in
-		inv, _ := Codex{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
-		if !strings.Contains(strings.Join(inv.Argv, " "), `-c model_reasoning_effort="`+want+`"`) {
-			t.Errorf("effort %s: argv %v", in, inv.Argv)
+	for _, e := range agentdef.Efforts {
+		s.HarnessOptions["effort"] = e
+		inv, err := ClaudeCode{}.Invocation(ws, Turn{Spec: s, Prompt: "go", SessionID: "sess"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Join(inv.Argv, " "), "--effort "+e) {
+			t.Errorf("claude effort %s: argv %v", e, inv.Argv)
+		}
+		inv, _ = Codex{}.Invocation(ws, Turn{Spec: s, Prompt: "go"})
+		if !strings.Contains(strings.Join(inv.Argv, " "), `-c model_reasoning_effort="`+e+`"`) {
+			t.Errorf("codex effort %s: argv %v", e, inv.Argv)
 		}
 	}
 	s.HarnessOptions = map[string]string{"effort": "high"}

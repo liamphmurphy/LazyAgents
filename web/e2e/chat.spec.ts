@@ -3,6 +3,7 @@ import { catalog, installChatApi } from "./mock-chat-api";
 
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const picker = (page: Page) => page.getByRole("button", { name: /Model for the next message/ });
+const effort = (page: Page) => page.getByRole("button", { name: /Effort for the next message/ });
 
 const chips = (page: Page) => page.getByTestId("context-chip");
 
@@ -80,6 +81,50 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/chat/${chatId}`));
   await expect(page.getByTestId("user-message")).toHaveCount(2);
   await expect(page.getByRole("heading", { name: /what can I help with/ })).toHaveCount(0);
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("effort is picked per message, kept on the chat, and limited to what the model offers", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Default");
+  await send(page, "hello");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello");
+  expect(mock.posted.at(-1)?.body).not.toHaveProperty("effort");
+
+  await effort(page).click();
+  await expect(page.getByRole("menuitem")).toHaveText(["Default", "Low", "Medium", "High", "Extra high", "Max"]);
+  await page.getByRole("menuitem", { name: "Max" }).click();
+  await expect(page.getByTestId("pending-effort")).toHaveText("Next message will use max effort");
+  await send(page, "think hard");
+  await expect(page.getByTestId("assistant-message").nth(1)).toContainText("Echo: think hard");
+  expect(mock.posted.at(-1)?.body).toMatchObject({ effort: "max" });
+  await expect(page.getByTestId("pending-effort")).toHaveCount(0);
+  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Max");
+
+  // Unchanged effort isn't resent.
+  await send(page, "again");
+  await expect(page.getByTestId("assistant-message").nth(2)).toContainText("Echo: again");
+  expect(mock.posted.at(-1)?.body).not.toHaveProperty("effort");
+
+  // Codex here offers low–high, with its own default named: max falls back to Default.
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
+  await page.getByRole("dialog", { name: "Switch to Codex · gpt-5-codex?" }).getByRole("button", { name: "Switch harness" }).click();
+  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Default");
+  await effort(page).click();
+  await expect(page.getByRole("menuitem")).toHaveText(["Default(medium)", "Low", "Medium", "High"]);
+  await page.keyboard.press("Escape");
+  await send(page, "on codex");
+  await expect(page.getByTestId("assistant-message").nth(3)).toContainText("Echo: on codex");
+  expect(mock.posted.at(-1)?.body).toMatchObject({ harness: "codex", effort: "default" });
+
+  // A model with no effort control hides the picker.
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /OpenCode openai\/gpt-5/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Switch harness" }).click();
+  await expect(effort(page)).toHaveCount(0);
   expect(mock.unhandled).toEqual([]);
 });
 

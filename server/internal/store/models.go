@@ -230,6 +230,7 @@ type ChatSession struct {
 	PersonaID     *uuid.UUID
 	RepoUrl       *string
 	WorkBranch    *string
+	Effort        string
 }
 
 type Comment struct {
