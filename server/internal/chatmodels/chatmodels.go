@@ -161,7 +161,9 @@ func (c Catalog) Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, cu
 			}
 		}
 	}
-	if reqModel == "" && harnessName == currentHarness {
+	// Restating the current model is the same as omitting it: the definition's
+	// model (e.g. "opus-5.5") is an alias the live catalog may not list.
+	if harnessName == currentHarness && (reqModel == "" || reqModel == currentModel) {
 		return harnessName, model, nil
 	}
 	for _, m := range h.Models {
