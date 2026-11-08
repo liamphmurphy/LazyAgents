@@ -122,7 +122,18 @@ const AssistantSVGSection = `
 - Write one complete <svg> element with xmlns="http://www.w3.org/2000/svg", a viewBox, and width and height.
 - It is displayed as a static image: scripts, links and hover or click behaviour don't work, and it can't load anything external, including web fonts and remote images. Use system-ui or generic font families, and embed any raster image as a data: URI.
 - It sits on a white background; draw your own background if you want another.
-- Use an ordinary code block tagged svg when the person wants code to read or copy, and an interactive app when they need to click or tweak something.`
+- Use an ordinary code block tagged svg when the person wants code to read or copy, and an interactive app when they need to click or tweak something.
+- For a mockup the person will want to iterate on, use a canvas instead: canvas_create with kind svg. Style it with presentation attributes, not <style> or foreignObject, which a canvas can't show. canvas_read gives each element's data-vid; canvas_patch addresses elements by it.`
+
+// AssistantCanvasSection is added to every chat turn alongside
+// AssistantRecommendSection, for the same reason.
+const AssistantCanvasSection = `
+
+## Canvases
+- For a document the person will want to read, revise or mark up, use a canvas instead of pasting it into your reply: canvas_create with kind text and a Markdown body.
+- After creating one, write a fenced code block tagged canvas holding only its canvas_id, once. The chat shows it as a card that opens the canvas beside the conversation. Don't repeat the content in your reply.
+- To change a canvas, canvas_read it, then canvas_patch with small edits and the version you read as base_version. If the patch is refused because the canvas moved on, read it again and redo your edit. Don't recreate a canvas to change it.
+- canvas_list finds the canvases from earlier in this chat.`
 
 // AssistantInstructionsFor is AssistantInstructions with the sections a
 // persona's capabilities add. workBranch is the coding chat's branch, empty

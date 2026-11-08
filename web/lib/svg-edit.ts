@@ -110,6 +110,7 @@ export function remove(el: Element): boolean {
 
 function stripIds(el: Element) {
   el.removeAttribute("id");
+  el.removeAttribute("data-vid");
   for (const c of Array.from(el.childNodes)) if (c.nodeType === 1) stripIds(c as Element);
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { ResearchToggle } from "./reply-tools";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -22,6 +23,7 @@ import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { ChipList } from "./context-chips";
 import { RestoreChat } from "./restore";
+import { CanvasButton, CanvasPanel } from "./canvas-panel";
 import { MemoryButton, MemoryPanel, useMemoryPanel } from "./memory-panel";
 import { PersonaAvatar, PersonaFilter, PersonaName, PersonaSwitcher, RepoSelect, personaLook, useOpenPersonaManager, usePersonaFilter } from "./persona";
 import { PersonaPanel, PersonasButton, usePersonaPanel } from "./persona-panel";
@@ -450,6 +452,8 @@ export function ChatScreen({ id }: { id?: string }) {
     : scope.status === "ready" ? (scope.project?.key ?? "") : "";
   const memory = useMemoryPanel();
   const personaPanel = usePersonaPanel();
+  const canvas = useCanvasPanel();
+  const turnRunning = current.data?.state === "running";
   const create = useCreateChat();
   const personas = usePersonas();
   const health = useHarnessHealth();
@@ -478,6 +482,7 @@ export function ChatScreen({ id }: { id?: string }) {
   }
   const actions = (
     <>
+      {id && <CanvasButton chatId={id} live={turnRunning} />}
       <PersonasButton />
       <MemoryButton />
     </>
@@ -525,7 +530,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {personaPanel.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
+          {id && canvas.open ? <CanvasPanel chatId={id} live={turnRunning} /> : personaPanel.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
         </div>
       )}
     </div>

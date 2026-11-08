@@ -7,6 +7,10 @@ const NS = 'xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/19
 const run = (body, root = "svg") => sanitizeSvg(parse(`<${root} ${NS}>${body}</${root}>`).documentElement, "mk-1-");
 const flat = (n, out = []) => (out.push(n), n.children.forEach((c) => flat(c, out)), out);
 
+test("the canvas element id is kept", () => {
+  assert.equal(run('<rect data-vid="abc"/>').tree.children[0].attrs["data-vid"], "abc");
+});
+
 test("script, style, foreignObject and foreign namespaces are dropped and counted", () => {
   const { tree, skipped } = run(
     '<script>alert(1)</script><style>rect{fill:red}</style><foreignObject><div xmlns="http://www.w3.org/1999/xhtml"><b>x</b></div></foreignObject><h:p xmlns:h="http://www.w3.org/1999/xhtml"/><rect width="1"/>',
