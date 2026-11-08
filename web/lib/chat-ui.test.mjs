@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatStatus, chatStatusOf, chatTitle, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
+import { activityOf, bareTool, chatStatus, chatStatusOf, chatSteps, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -201,4 +201,37 @@ test("the running turn starts at the newest message", () => {
   // The image follow-up has no message of its own: it starts after the reply and its notes.
   assert.equal(runningSince([user, reply, note]), note.created_at);
   assert.equal(runningSince(undefined), undefined);
+});
+
+const stepsOf = (calls) => chatSteps(calls.map((c, key) => ({ key, done: true, input: {}, ...c })));
+
+test("chatSteps follows the newest whole-list plan and marks steps added after work began", () => {
+  const todo = (...rows) => ({ tool: "TodoWrite", input: { todos: rows.map(([content, status]) => ({ content, status })) } });
+  const { steps, planned } = stepsOf([todo(["Read", "in_progress"], ["Test", "pending"]), { tool: "Read" }, todo(["Read", "completed"], ["Fix", "in_progress"], ["Test", "pending"])]);
+  assert.equal(planned, true);
+  assert.deepEqual(steps.map((s) => [s.title, s.state, !!s.added]), [["Read", "done", false], ["Fix", "active", true], ["Test", "planned", false]]);
+  assert.deepEqual(stepsOf([{ tool: "update_plan", input: { plan: [{ step: "One", status: "in_progress" }] } }]).steps.map((s) => [s.title, s.state]), [["One", "active"]]);
+});
+
+test("chatSteps tracks TaskCreate and TaskUpdate by the id in the result", () => {
+  const create = (subject, id) => ({ tool: "TaskCreate", input: { subject }, output: `Task #${id} created successfully: ${subject}` });
+  const update = (taskId, status) => ({ tool: "TaskUpdate", input: { taskId, status } });
+  const { steps } = stepsOf([create("A", 7), create("B", 8), create("C", 9), update("7", "completed"), update("8", "in_progress"), update("9", "deleted"), create("D", 10)]);
+  assert.deepEqual(steps.map((s) => [s.title, s.state, !!s.added]), [["A", "done", false], ["B", "active", false], ["D", "planned", true]]);
+});
+
+test("chatSteps groups a planless turn's calls by kind, skipping bookkeeping", () => {
+  const { steps, planned } = stepsOf([{ tool: "Read" }, { tool: "ToolSearch" }, { tool: "Grep" }, { tool: "Edit" }, { tool: "Bash", input: { command: "go test ./..." } }]);
+  assert.equal(planned, false);
+  assert.deepEqual(steps.map((s) => s.state), ["done", "done", "active"]);
+  assert.equal(steps[0].title, chatStatusOf({ tool: "Read", input: {} }).phrase.replace(/^./, (c) => c.toUpperCase()));
+  assert.deepEqual(chatSteps([]), { steps: [], planned: false });
+});
+
+test("foldSteps folds old finished steps and caps upcoming ones", () => {
+  const make = (state, n, p) => Array.from({ length: n }, (_, i) => ({ key: `${p}${i}`, title: `${p}${i}`, state }));
+  const f = foldSteps([...make("done", 5, "d"), ...make("active", 1, "a"), ...make("planned", 6, "p")]);
+  assert.deepEqual([f.earlier, f.later], [3, 2]);
+  assert.deepEqual(f.shown.map((s) => s.key), ["d3", "d4", "a0", "p0", "p1", "p2", "p3"]);
+  assert.equal(foldSteps(make("done", 3, "d")).earlier, 0);
 });

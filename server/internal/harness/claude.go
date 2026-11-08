@@ -63,7 +63,7 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 			mode = "default"
 		}
 	}
-	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "Skill", "ToolSearch"}
+	allow := []string{"mcp__" + lazyagentsServer, "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "TaskCreate", "TaskUpdate", "Skill", "ToolSearch"}
 	for _, m := range spec.MCPServers {
 		allow = append(allow, "mcp__"+m.Name)
 	}

@@ -2,7 +2,7 @@
 // Kept free of React so `npm run test:unit` covers it.
 
 export type RunEventLike = { seq: number; type: string; at: string; payload: Record<string, unknown> };
-export type ToolCall = { key: number; tool: string; input: unknown; done: boolean };
+export type ToolCall = { key: number; tool: string; input: unknown; done: boolean; output?: string };
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 
@@ -23,7 +23,9 @@ export function toolCalls(events: RunEventLike[] | undefined, since?: string, un
       if (p.id) open.set(str(p.id), out.length);
       out.push({ key: e.seq, tool: str(p.tool), input: p.input, done: false });
     } else if (e.type === "tool_result" && p.id && open.has(str(p.id))) {
-      out[open.get(str(p.id))!].done = true;
+      const call = out[open.get(str(p.id))!];
+      call.done = true;
+      if (p.output) call.output = str(p.output);
     }
   }
   return out;
@@ -333,6 +335,9 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "apply_patch":
       return status("writing-code", "writing code");
     case "TodoWrite":
+    case "TaskCreate":
+    case "TaskUpdate":
+    case "update_plan":
       return status("thinking", "planning its next steps");
     case "shell":
     case "Bash":
@@ -347,4 +352,81 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
 /** The chat tab's status for a running turn: the newest call's, or "thinking" before any tool runs. */
 export function chatStatus(calls: { tool: string; input: unknown }[]): ChatStatusInfo {
   return calls.length ? chatStatusOf(calls[calls.length - 1]) : status("thinking", "thinking");
+}
+
+// ---- the chat tab's step rail: the turn's plan, or its work so far ----
+
+export type ChatStepState = "planned" | "active" | "done";
+export type ChatStep = { key: string; title: string; state: ChatStepState; added?: true };
+
+type PlanItem = { id: string; title: string; state: ChatStepState };
+
+const planState = (v: unknown): ChatStepState => (v === "completed" ? "done" : v === "in_progress" ? "active" : "planned");
+const planItems = (list: unknown, title: string): PlanItem[] =>
+  (Array.isArray(list) ? (list as Record<string, unknown>[]) : []).map((item, i) => ({ id: String(i), title: str(item[title]), state: planState(item.status) }));
+
+/** Every version of the plan in these calls, oldest first: TodoWrite and update_plan send the whole list, TaskCreate and TaskUpdate change one task. */
+function planVersions(calls: ToolCall[]): PlanItem[][] {
+  const versions: PlanItem[][] = [];
+  let tasks: PlanItem[] = [];
+  for (const call of calls) {
+    const o = (call.input && typeof call.input === "object" ? call.input : {}) as Record<string, unknown>;
+    switch (bareTool(call.tool)) {
+      case "TodoWrite":
+        versions.push(planItems(o.todos, "content"));
+        break;
+      case "update_plan":
+        versions.push(planItems(o.plan, "step"));
+        break;
+      case "TaskCreate":
+        tasks = [...tasks, { id: /#(\d+)/.exec(call.output ?? "")?.[1] ?? String(tasks.length + 1), title: str(o.subject), state: "planned" }];
+        versions.push(tasks);
+        break;
+      case "TaskUpdate": {
+        const id = str(o.taskId);
+        if (!tasks.some((t) => t.id === id)) break;
+        tasks = o.status === "deleted"
+          ? tasks.filter((t) => t.id !== id)
+          : tasks.map((t) => (t.id === id ? { ...t, title: o.subject ? str(o.subject) : t.title, state: o.status ? planState(o.status) : t.state } : t));
+        versions.push(tasks);
+        break;
+      }
+    }
+  }
+  return versions;
+}
+
+/**
+ * The turn's steps. The newest plan when the assistant wrote one, marking steps added after
+ * work began. Otherwise its tool calls grouped by kind of work, newest active, in the same
+ * high-level wording as the status line.
+ */
+export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: boolean } {
+  const versions = planVersions(calls);
+  const latest = versions[versions.length - 1];
+  if (latest?.length) {
+    const baseline = versions.find((v) => v.some((s) => s.state !== "planned"));
+    const original = new Set(baseline?.map((s) => s.title) ?? latest.map((s) => s.title));
+    const steps = latest.map((s, i): ChatStep => ({ key: `${i}:${s.title}`, title: s.title, state: s.state, ...(original.has(s.title) ? {} : { added: true as const }) }));
+    return { steps, planned: true };
+  }
+  const steps: ChatStep[] = [];
+  let last: ChatStatusKind | undefined;
+  for (const call of calls) {
+    const { kind, phrase } = chatStatusOf(call);
+    if (kind === "thinking" || kind === last) continue;
+    last = kind;
+    steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: "done" });
+  }
+  if (steps.length) steps[steps.length - 1].state = "active";
+  return { steps, planned: false };
+}
+
+/** Keeps the rail short on long turns: all but the newest two of more than three finished steps fold away, and at most four upcoming steps show. */
+export function foldSteps(steps: ChatStep[]): { earlier: number; shown: ChatStep[]; later: number } {
+  const done = steps.filter((s) => s.state === "done");
+  const hidden = new Set(done.length > 3 ? done.slice(0, -2) : []);
+  const upcoming = steps.filter((s) => s.state === "planned");
+  for (const s of upcoming.slice(4)) hidden.add(s);
+  return { earlier: done.length > 3 ? done.length - 2 : 0, shown: steps.filter((s) => !hidden.has(s)), later: Math.max(0, upcoming.length - 4) };
 }
