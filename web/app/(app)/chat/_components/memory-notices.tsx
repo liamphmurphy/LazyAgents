@@ -49,7 +49,7 @@ function Notice({ n }: { n: MemoryNotice }) {
       <span className={cx("min-w-0 flex-1 text-xs", muted ? "text-fg-secondary" : "text-fg")}>{text}</span>
       {actionable && (
         <span className="flex items-center gap-3">
-          <button type="button" className={linkBtn} onClick={() => router.push(`/memory?id=${encodeURIComponent(n.id)}`)}>
+          <button type="button" className={linkBtn} onClick={() => router.push(`/customization?id=${encodeURIComponent(n.id)}`)}>
             View
           </button>
           {n.kind === "saved" && (

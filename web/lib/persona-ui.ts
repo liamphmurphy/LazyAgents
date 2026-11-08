@@ -250,7 +250,7 @@ export function sortPersonas<T extends PersonaLike>(personas: T[]): T[] {
 }
 
 /** Avatars that fit the menu's persona strip, beside the All button; the default takes one. */
-export const STRIP_PERSONAS = 7;
+export const STRIP_PERSONAS = 6;
 
 /**
  * Which non-default personas get an avatar in the strip and which go behind "+N":

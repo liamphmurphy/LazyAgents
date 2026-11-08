@@ -1,17 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installChatApi, persona } from "./mock-chat-api";
 
-const panel = (page: Page) => page.getByRole("region", { name: "Personas", exact: true });
+const panel = (page: Page) => page.getByRole("region", { name: "Customization", exact: true });
 const editor = (page: Page) => page.getByRole("dialog");
 // Next keeps the page we navigated from mounted but hidden, so count only what is on screen.
 const rows = (page: Page) => page.locator('[data-testid="persona-row"]:visible');
 
 async function openPanel(page: Page) {
   await page.goto("/chat?project=WEB");
-  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Personas", exact: true }).click();
-  await expect(page).toHaveURL(/\/personas$/);
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Customization", exact: true }).click();
+  await expect(page).toHaveURL(/\/customization$/);
   await expect(panel(page)).toBeVisible();
 }
+
+const select = (page: Page, name: string) => rows(page).filter({ hasText: name }).click();
 
 /** What the shell's /events stream would send after a change somewhere else. */
 async function pushPersonaUpdated(page: Page, ids: string[]) {
@@ -31,7 +33,7 @@ test("with no personas the built-in Assistant is the default; New persona create
   const mock = await installChatApi(page);
   await openPanel(page);
   await expect(panel(page)).toContainText("No personas yet");
-  await expect(panel(page)).toContainText("Built-in · Neutral tone · can’t be deleted");
+  await expect(panel(page)).toContainText("The built-in Assistant is your default.");
 
   await panel(page).getByRole("button", { name: "New persona" }).first().click();
   await expect(editor(page).getByRole("heading", { name: "New persona" })).toBeVisible();
@@ -59,6 +61,7 @@ test("with no personas the built-in Assistant is the default; New persona create
 test("color: the wheel's hex input validates #rrggbb, Apply sets it, and a low-contrast color warns", async ({ page }) => {
   const mock = await installChatApi(page, { personas: team() });
   await openPanel(page);
+  await select(page, "Nova");
   await panel(page).getByRole("button", { name: "Edit Nova" }).click();
 
   await editor(page).getByRole("radio", { name: /Custom/ }).click();
@@ -104,6 +107,7 @@ test("color: the wheel's hex input validates #rrggbb, Apply sets it, and a low-c
 test("avatar: client checks and the server's 415 show inline; initials stay on the persona color", async ({ page }) => {
   const mock = await installChatApi(page, { personas: team() });
   await openPanel(page);
+  await select(page, "Sage");
   await panel(page).getByRole("button", { name: "Edit Sage" }).click();
   const file = editor(page).getByLabel("Avatar image");
 
@@ -140,7 +144,8 @@ test("set as default moves the badge; deleting the default asks who takes over",
   await expect(rows(page)).toHaveCount(3);
   await expect(rows(page).first()).toContainText("Atlas");
 
-  await rows(page).filter({ hasText: "Sage" }).getByRole("button", { name: "Set as default" }).click();
+  await select(page, "Sage");
+  await panel(page).getByRole("button", { name: "Set as default" }).click();
   await expect(rows(page).first()).toContainText("Sage");
   await expect(rows(page).first()).toContainText("Default");
   await expect(rows(page).filter({ hasText: "Atlas" })).not.toContainText("Default");
@@ -160,6 +165,7 @@ test("set as default moves the badge; deleting the default asks who takes over",
   await expect(rows(page).first()).toContainText("Default");
   expect(mock.personas.find((p) => p.is_default)?.name).toBe("Nova");
 
+  await select(page, "Atlas");
   await panel(page).getByRole("button", { name: "Delete Atlas" }).click();
   const plain = page.getByRole("dialog", { name: "Delete Atlas?" });
   await expect(plain.getByRole("radio")).toHaveCount(0);
@@ -175,6 +181,7 @@ test("the list follows persona.updated, and a stale edit offers a reload", async
 
   // Someone renames Nova in another tab.
   const nova = mock.personas.find((p) => p.name === "Nova")!;
+  await select(page, "Nova");
   await panel(page).getByRole("button", { name: "Edit Nova" }).click();
   nova.name = "Nova Prime";
   nova.revision++;
@@ -197,6 +204,7 @@ test("the list follows persona.updated, and a stale edit offers a reload", async
 test("abilities: Write code reveals repositories; they validate, save with the capabilities, and persist when code is off", async ({ page }) => {
   const mock = await installChatApi(page, { personas: team() });
   await openPanel(page);
+  await select(page, "Nova");
   await panel(page).getByRole("button", { name: "Edit Nova" }).click();
 
   await expect(editor(page).getByLabel("Repositories")).toHaveCount(0);
@@ -224,10 +232,12 @@ test("abilities: Write code reveals repositories; they validate, save with the c
   const nova = mock.personas.find((p) => p.name === "Nova")!;
   expect(nova.capabilities).toEqual({ code: true, images: true, personas: false, svg: false, workflows: false });
   expect(nova.repos).toEqual(["https://github.com/acme/app"]);
-  const granted = rows(page).filter({ hasText: "Nova" }).getByTestId("persona-permissions");
+  const granted = panel(page).getByTestId("persona-permissions");
   await expect(granted).toContainText("Write code");
   await expect(granted).toContainText("Generate images");
-  await expect(rows(page).filter({ hasText: "Atlas" })).toContainText("No extra permissions");
+  await select(page, "Atlas");
+  await expect(page.getByTestId("persona-profile")).toContainText("No extra permissions");
+  await select(page, "Nova");
 
   // Turning code off keeps the repositories and still sends them.
   await panel(page).getByRole("button", { name: "Edit Nova" }).click();

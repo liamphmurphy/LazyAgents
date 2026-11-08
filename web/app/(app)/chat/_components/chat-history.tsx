@@ -121,11 +121,11 @@ export function PersonaRail({ project, id, viewed }: { project: string; id?: str
   return (
     <div role="group" aria-label="Open a persona’s conversations" className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto border-t border-border-subtle py-2.5 [scrollbar-width:none]">
       <PersonaAvatarButton label={`${filter.defaultLook.name} (default)`} on={filter.value === "default"} state={filter.defaultId ? activity.get(filter.defaultId) : undefined} disabled={!project || filter.loading} onClick={() => pick("default")}>
-        <PersonaAvatar persona={filter.defaultLook} size={22} />
+        <PersonaAvatar persona={filter.defaultLook} size={26} />
       </PersonaAvatarButton>
       {others.map((p) => (
         <PersonaAvatarButton key={p.id} label={p.name} on={filter.value === p.id} state={activity.get(p.id)} disabled={!project} onClick={() => pick(p.id)}>
-          <PersonaAvatar persona={p} size={22} />
+          <PersonaAvatar persona={p} size={26} />
         </PersonaAvatarButton>
       ))}
     </div>

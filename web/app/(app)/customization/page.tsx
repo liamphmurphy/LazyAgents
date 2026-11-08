@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { PersonasScreen } from "./personas-screen";
+import { CustomizationScreen } from "./customization-screen";
 
 export default function Page() {
   return (
     <Suspense>
-      <PersonasScreen />
+      <CustomizationScreen />
     </Suspense>
   );
 }

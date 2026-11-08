@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Schemas } from "@/lib/api/client";
 import {
   exportMemories,
@@ -17,12 +17,10 @@ import {
 import { usePersonaLookup } from "@/lib/api/persona-memory-hooks";
 import { IMPORT_PROMPT, MEMORY_TYPES, PERSONA_MEMORY_TYPES, memoriesMarkdown, parseMemoryImport, parseTags, typeLabel } from "@/lib/memory-ui";
 import { cx } from "@/lib/cx";
-import { Content, TopBar } from "@/components/shell/topbar";
 import { Button, IconButton } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
-import { PersonaAvatar } from "../chat/_components/persona";
 
 type Memory = Schemas["Memory"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -213,7 +211,7 @@ function Page({
     <>
       {offset === 0 && rows.length === 0 && (
         <p className="col-span-full px-1 py-6 text-center text-[13px] text-fg-secondary">
-          {q || type || whose ? "No memories match." : "Nothing remembered yet. The assistant saves useful things as you talk and tells you when it does."}
+          {q || type ? "No memories match." : whose ? "Nothing remembered here yet." : "Nothing remembered yet. The assistant saves useful things as you talk and tells you when it does."}
         </p>
       )}
       {/* Every page's cards share the one grid. */}
@@ -240,7 +238,7 @@ function download(name: string, type: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function ExportMenu() {
+export function ExportMenu() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   async function run(format: "json" | "md") {
@@ -278,7 +276,7 @@ function ExportMenu() {
 }
 
 /** Import view: copy a prompt for another assistant, paste its reply, preview, then save. */
-function ImportView({ onClose }: { onClose: () => void }) {
+export function ImportView({ onClose }: { onClose: () => void }) {
   const imp = useImportMemories();
   const [text, setText] = useState("");
   const parsed = useMemo(() => parseMemoryImport(text), [text]);
@@ -412,22 +410,17 @@ function Focused({ id, onDone }: { id: string; onDone: () => void }) {
   return <Editor key={m.data.id} m={m.data} onDone={onDone} onDeleted={onDone} />;
 }
 
-const railItem = (on: boolean) =>
-  cx("flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-left text-[13px]", on ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover");
-
 /** The memory manager: a rail for whose memory it is, then search, filter, edit, delete and export every entry as cards. */
-export function MemoryScreen() {
+const FOCUS_DONE = "/customization";
+
+/** One person's or persona's memories: search, type filter and the cards. Delete everything only applies to the whole list. */
+export function MemorySection({ whose, heading, focus }: { whose: string; heading: string; focus?: string }) {
   const router = useRouter();
-  const focus = useSearchParams().get("id") ?? undefined;
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [type, setType] = useState<MemoryType | undefined>(undefined);
-  // "" everything, "person" about the person, "persona" every persona's own memory, or one persona's id.
-  const [whose, setWhose] = useState("");
-  const personas = usePersonaLookup();
   const [pages, setPages] = useState(1);
   const [editing, setEditing] = useState<string | undefined>(undefined);
-  const [importing, setImporting] = useState(false);
   const count = useMemories();
   // Debounce search typing; a new search or filter starts from the first page.
   useEffect(() => {
@@ -437,96 +430,51 @@ export function MemoryScreen() {
     }, 250);
     return () => clearTimeout(t);
   }, [text]);
-  const total = count.data?.total;
-  const pickWhose = (v: string) => {
-    setWhose(v);
-    setPages(1);
-  };
-  const rail = (value: string, name: string, lead: ReactNode) => (
-    <button key={value} type="button" aria-pressed={whose === value} className={railItem(whose === value)} onClick={() => pickWhose(value)}>
-      {lead}
-      <span className="truncate">{name}</span>
-    </button>
-  );
   return (
-    <section aria-label="Memory">
-      <TopBar
-        crumbs={[{ label: "Assistant", href: "/chat" }, { label: "Memory" }]}
-        actions={
-          <>
-            {total !== undefined && <span className="text-xs text-fg-tertiary">{total} entries</span>}
-            <button
-              type="button"
-              aria-pressed={importing}
-              onClick={() => setImporting((v) => !v)}
-              className={cx(
-                "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-[12.5px] text-fg",
-                importing ? "border-accent bg-selected" : "border-btn-secondary-border bg-btn-secondary hover:bg-hover",
-              )}
-            >
-              <Icon name="upload" size={14} />
-              Import
-            </button>
-            <ExportMenu />
-          </>
-        }
-      />
-      <Content>
-        {importing ? (
-          <div className="mx-auto max-w-2xl">
-            <ImportView onClose={() => setImporting(false)} />
-          </div>
-        ) : (
-          <div className="flex gap-8 max-md:flex-col max-md:gap-4">
-            <div role="group" aria-label="Whose memory" className="flex w-48 flex-none flex-col gap-px max-md:w-full max-md:flex-row max-md:flex-wrap">
-              {rail("", "Everything", <Icon name="bookmark" size={14} />)}
-              {rail("person", "About you", <Icon name="users" size={14} />)}
-              {personas.size > 0 && rail("persona", "Personas’ own", <Icon name="agents" size={14} />)}
-              {[...personas.values()].map((p) => rail(p.id, `${p.name}’s own`, <PersonaAvatar persona={p} size={16} />))}
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <TextInput type="search" aria-label="Search memories" placeholder="Search memories" value={text} onChange={(e) => setText(e.target.value)} />
-              <div role="group" aria-label="Filter by type" className="flex flex-wrap gap-1">
-                {[undefined, ...PERSONA_MEMORY_TYPES].map((t) => (
-                  <button
-                    key={t ?? "all"}
-                    type="button"
-                    aria-pressed={type === t}
-                    onClick={() => {
-                      setType(t);
-                      setPages(1);
-                    }}
-                    className={cx("rounded-md px-2.5 py-1 text-xs", type === t ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
-                  >
-                    {t ? typeLabel(t) : "All"}
-                  </button>
-                ))}
-              </div>
-              {focus && <Focused key={focus} id={focus} onDone={() => router.replace("/memory", { scroll: false })} />}
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-                {Array.from({ length: pages }, (_, i) => (
-                  <Page
-                    key={i}
-                    q={q}
-                    type={type}
-                    whose={whose}
-                    offset={i * 50}
-                    hide={focus}
-                    editing={editing}
-                    setEditing={setEditing}
-                    last={i === pages - 1}
-                    onMore={() => setPages((n) => n + 1)}
-                  />
-                ))}
-              </div>
-              <div className="mt-4 flex flex-col items-start gap-2 border-t border-border-subtle pt-3">
-                <DeleteAll total={total} />
-                <p className="text-[11.5px] text-fg-tertiary">Private to you. Never shared with the team wiki. Secrets and tokens are never saved.</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </Content>
-    </section>
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[13px] font-semibold text-fg">{heading}</h2>
+        <div className="w-60 max-sm:w-full">
+          <TextInput type="search" aria-label="Search memories" placeholder="Search memories" value={text} onChange={(e) => setText(e.target.value)} />
+        </div>
+      </div>
+      <div role="group" aria-label="Filter by type" className="flex flex-wrap gap-1">
+        {[undefined, ...PERSONA_MEMORY_TYPES].map((t) => (
+          <button
+            key={t ?? "all"}
+            type="button"
+            aria-pressed={type === t}
+            onClick={() => {
+              setType(t);
+              setPages(1);
+            }}
+            className={cx("rounded-md px-2.5 py-1 text-xs", type === t ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
+          >
+            {t ? typeLabel(t) : "All"}
+          </button>
+        ))}
+      </div>
+      {focus && <Focused key={focus} id={focus} onDone={() => router.replace(FOCUS_DONE, { scroll: false })} />}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+        {Array.from({ length: pages }, (_, i) => (
+          <Page
+            key={i}
+            q={q}
+            type={type}
+            whose={whose}
+            offset={i * 50}
+            hide={focus}
+            editing={editing}
+            setEditing={setEditing}
+            last={i === pages - 1}
+            onMore={() => setPages((n) => n + 1)}
+          />
+        ))}
+      </div>
+      <div className="mt-4 flex flex-col items-start gap-2 border-t border-border-subtle pt-3">
+        {!whose && <DeleteAll total={count.data?.total} />}
+        <p className="text-[11.5px] text-fg-tertiary">Private to you. Never shared with the team wiki. Secrets and tokens are never saved.</p>
+      </div>
+    </div>
   );
 }
