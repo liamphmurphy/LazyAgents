@@ -1,90 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { useBootstrap, useChatModels } from "@/lib/api/hooks";
-import { useCourses, useCreateCourse, type CourseSummary } from "@/lib/api/learning-hooks";
-import { usePersonas } from "@/lib/api/persona-hooks";
-import { currentProject } from "@/lib/project-scope";
+import { useCourses, type CourseSummary } from "@/lib/api/learning-hooks";
 import { BUILD_STEPS, COURSE_STATE_LABELS, buildStepIndex, type BuildState } from "@/lib/learning";
 import { cx } from "@/lib/cx";
-import { useRememberedProject } from "@/components/shell/project-scope";
 import { Content, TopBar } from "@/components/shell/topbar";
-import { Button } from "@/components/ui/button";
-import { Segmented } from "@/components/ui/controls";
-import { Banner, Card, EmptyState, Field, Skeleton, TextInput } from "@/components/ui/primitives";
-import { ModelPicker, type Selection } from "@/app/(app)/chat/_components/model-picker";
-
-const LEVELS = [
-  { value: "new", label: "New" },
-  { value: "some", label: "Some background" },
-  { value: "experienced", label: "Experienced" },
-] as const;
-const TIMES = [
-  { value: "60", label: "1h" },
-  { value: "180", label: "3h" },
-  { value: "480", label: "8h" },
-] as const;
-
-type Level = (typeof LEVELS)[number]["value"];
-type Time = (typeof TIMES)[number]["value"];
-
-function NewModule() {
-  const router = useRouter();
-  const search = useSearchParams();
-  const boot = useBootstrap();
-  const remembered = useRememberedProject();
-  const personas = usePersonas();
-  const models = useChatModels();
-  const create = useCreateCourse();
-  const [topic, setTopic] = useState("");
-  const [goal, setGoal] = useState("");
-  const [level, setLevel] = useState<Level>("some");
-  const [time, setTime] = useState<Time>("180");
-  const [tutor, setTutor] = useState("");
-  const [picked, setPicked] = useState<Selection | null>(null);
-  const projects = boot.data?.projects ?? [];
-  // A module belongs to a project only for its model and permissions, so any open one will do.
-  const project = currentProject("/learn", search, remembered, projects) ?? projects.find((p) => !p.archived);
-  const groups = models.data;
-  const fallback = groups?.flatMap((g) => g.models.filter((m) => m.default).map((m) => ({ harness: g.harness, model: m.id })))[0];
-  const selection = picked ?? fallback;
-  const list = personas.data?.personas ?? [];
-  const submit = () => {
-    if (!project || !topic.trim()) return;
-    create.mutate(
-      { project: project.key, topic: topic.trim(), goal: goal.trim() || undefined, level, minutes_budget: Number(time), persona_id: tutor || undefined, harness: selection?.harness, model: selection?.model },
-      { onSuccess: (c) => router.push(`/learn/${c.summary.id}`) },
-    );
-  };
-  return (
-    <Card>
-      <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <Field label="What do you want to learn?" htmlFor="learn-topic">
-          <TextInput id="learn-topic" maxLength={200} placeholder="How Postgres MVCC and vacuum actually work" value={topic} onChange={(e) => setTopic(e.target.value)} />
-        </Field>
-        <Field label="What's it for? This shapes what gets taught (optional)" htmlFor="learn-goal">
-          <TextInput id="learn-goal" maxLength={1000} placeholder="I debug slow queries at work and want to understand table bloat" value={goal} onChange={(e) => setGoal(e.target.value)} />
-        </Field>
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-          <Field label="Your level"><Segmented label="Your level" options={LEVELS} value={level} onChange={setLevel} /></Field>
-          <Field label="Time"><Segmented label="Time" options={TIMES} value={time} onChange={setTime} /></Field>
-          <Field label="Tutor" htmlFor="learn-tutor">
-            <select id="learn-tutor" value={tutor} onChange={(e) => setTutor(e.target.value)} className="h-[30px] rounded-md border border-border-strong bg-btn-outline px-2 text-[13px] text-fg-2">
-              <option value="">Default persona</option>
-              {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </Field>
-          {selection && <Field label="Model"><ModelPicker groups={groups} value={selection} onChange={setPicked} /></Field>}
-          <Button variant="primary" type="submit" className="ml-auto" disabled={!topic.trim() || !project || create.isPending}>{create.isPending ? "Starting…" : "Draft outline"}</Button>
-        </div>
-        <p className="text-xs text-fg-tertiary">Drafting takes one short run. You approve the outline before any research starts.</p>
-        {create.error && <Banner tone="blocked" title={create.error.message} />}
-      </form>
-    </Card>
-  );
-}
+import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { NewModuleGuide } from "./new-module-guide";
 
 function StatePill({ state }: { state: BuildState }) {
   const human = state === "outline_ready";
@@ -145,19 +67,18 @@ export function LearnScreen() {
   const ready = all.filter((c) => c.state === "ready");
   return (
     <>
-      <TopBar crumbs={[{ label: "Learn" }]} />
+      <TopBar crumbs={[{ label: "Learn" }]} actions={<NewModuleGuide />} />
       <Content>
         <div className="flex flex-col gap-6">
           <div className="space-y-1">
             <h1 className="type-display">Learn</h1>
             <p className="text-sm text-fg-secondary">Turn a topic into a sourced, properly ordered module, then work through it with a tutor.</p>
           </div>
-          <NewModule />
           {courses.error && <Banner tone="blocked" title={courses.error.message} />}
           {courses.isPending ? (
             <Skeleton className="h-28 w-full rounded-lg" />
           ) : all.length === 0 ? (
-            <EmptyState icon="learn" title="No modules yet">Name a topic above and you&apos;ll get an outline to review.</EmptyState>
+            <EmptyState icon="learn" title="No modules yet">Start a New Learning Module and you&apos;ll get an outline to review.</EmptyState>
           ) : (
             <>
               {building.length > 0 && (
