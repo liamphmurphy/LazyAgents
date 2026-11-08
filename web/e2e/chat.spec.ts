@@ -300,12 +300,13 @@ test("assistant messages list deduplicated Sources with version and section", as
 
   await send(page, "cite: risks");
   const sources = page.getByTestId("assistant-message").nth(1).getByTestId("sources");
+  await sources.getByRole("button", { name: /3 sources/ }).click();
   await expect(sources.getByTestId("source")).toHaveCount(3);
   const report = sources.getByRole("link", { name: /Q3 report/ });
   await expect(report).toContainText("v2");
   await expect(report).toContainText("risks");
   await expect(report).toHaveAttribute("href", "/artifacts/22222222-2222-4222-8222-222222222222?version=55555555-5555-4555-8555-555555555555#risks");
-  await expect(sources.getByRole("link", { name: /Eng\/Plan/ })).toHaveAttribute("href", "/wiki/Eng/Plan");
+  await expect(sources.getByRole("link", { name: /Plan/ })).toHaveAttribute("href", "/wiki/Eng/Plan");
   await expect(sources.getByRole("link", { name: /WEB-3/ })).toHaveAttribute("href", "/tickets/WEB-3");
 });
 

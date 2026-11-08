@@ -198,9 +198,29 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     runEvents.set(runId, events);
   }
 
+  // "web:" runs a search with three results; "webnone:" gets the same search and uses none of it.
+  function webEvents(c: Chat) {
+    const runId = c.current_run_id!;
+    const events = runEvents.get(runId) ?? [];
+    const lastUser = messages.get(c.id)!.findLast((x) => x.role === "user");
+    const at = new Date(Date.parse(lastUser?.created_at ?? now()) + 1).toISOString();
+    const links = [{ title: "Pricing page", url: "https://www.example.com/pricing" }, { title: "Latency notes", url: "https://b.example.org/latency" }, { title: "Unused forum", url: "https://forum.example.net/t/1" }];
+    const id = `web-${events.length + 1}`;
+    events.push({ seq: events.length + 1, type: "tool_call", at, payload: { id, tool: "WebSearch", input: { query: "tts pricing" } } });
+    events.push({ seq: events.length + 1, type: "tool_result", at, payload: { id, tool: "WebSearch", output: `Links: ${JSON.stringify(links)}` } });
+    runEvents.set(runId, events);
+  }
+
   function finishTurn(c: Chat, prompt: string) {
     c.state = "idle";
     memoryEvents(c, prompt);
+    if (prompt.startsWith("web:") || prompt.startsWith("webnone:")) webEvents(c);
+    if (prompt.startsWith("web:") || prompt.startsWith("webnone:")) {
+      const body = prompt.startsWith("web:") ? "The answer.\n\nSources:\n- https://example.com/pricing\n- https://b.example.org/latency" : "I found nothing useful.";
+      add(c, "assistant", body, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE, ...(prompt.startsWith("web:") ? { citations: [{ target: TICKET, title: TICKET.title }] } : {}) });
+      void emit(c);
+      return;
+    }
     // "cite:" prompts get citations (one duplicate, one versioned section, one ticket).
     const citations = prompt.startsWith("cite:")
       ? [
@@ -231,6 +251,19 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     if (prompt.startsWith("app:")) {
       const app = `<!DOCTYPE html>\n<button id="b">Count: 0</button><p id="net">pending</p>\n<script>let n=0;b.onclick=()=>{b.textContent="Count: "+(++n)};fetch("/api/v1/bootstrap").then(()=>net.textContent="reached",()=>net.textContent="blocked");</script>`;
       add(c, "assistant", `Here you go.\n\n\`\`\`app\n${app}\n\`\`\``, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
+    // "gfm:" replies with GitHub-flavored markdown.
+    if (prompt.startsWith("gfm:")) {
+      add(c, "assistant", "| Option | Cost |\n|---|--:|\n| OpenAI tts-1 | $0.015 |\n| Cartesia | $0.011 |\n\n- [x] Shipped\n- [ ] Pending\n\n~~old~~\n\n> Quoted", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
+    // "recommend:" replies with a video, a site and a page with no preview.
+    if (prompt.startsWith("recommend:")) {
+      const fence = (u: string, why: string) => `\`\`\`recommend\n${u}\n${why}\n\`\`\``;
+      add(c, "assistant", `Two things:\n\n${fence("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "Short and useful.")}\n\n${fence("https://trailatlas.example/routes", "Start with the river loop.")}\n\nAnd:\n\n${fence("https://notes.example/grinders", "Best comparison.")}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
       void emit(c);
       return;
     }
@@ -315,6 +348,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
       return route.fulfill({ status: 200, contentType: "image/png", body: png });
     }
+    if (path === "/persona-dock") return json({ personas: [] });
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, live: 0, queued: 0 });
     // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
     if (path === "/secrets") return json({ key_configured: true, known: [], secrets: ["harness:anthropic", "harness:openai"].map((name, i) => ({ id: `secret-${i}`, name, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" })) });
@@ -626,6 +660,17 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
         return route.fulfill({ status: 200, contentType: "image/png", body: png });
       }
+    }
+
+    if (/^\/chat-messages\/[^/]+\/link-previews$/.test(path)) return json({ previews: [
+      { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", kind: "video", title: "Why small rooms sound better", description: "", site: "Room Acoustics Lab",  saved: false, video_id: "dQw4w9WgXcQ", image_url: "/api/v1/link-previews/thumb/image" },
+      { url: "https://trailatlas.example/routes", kind: "site", title: "A field guide to quiet bike routes", description: "Routes", site: "", saved: false, image_url: "/api/v1/link-previews/site/image" },
+      { url: "https://notes.example/grinders", kind: "site", title: "", description: "", site: "", saved: false },
+    ] });
+    if (path === "/library/links" && method === "POST") return json({ id: "11111111-aaaa-4aaa-8aaa-111111111111", kind: "link", title: "T", filename: "link", content_type: "image/png", size_bytes: 9, created_at: now() }, 201);
+    if (/^\/link-previews\/[^/]+\/image$/.test(path)) {
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+      return route.fulfill({ status: 200, contentType: "image/png", body: png });
     }
 
     const run = /^\/runs\/([^/]+)$/.exec(path);

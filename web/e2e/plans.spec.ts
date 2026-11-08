@@ -192,14 +192,14 @@ test("review edits criteria and estimates, validates dependencies and accepts a 
   await expect(page.getByText("Changed from unestimated.")).toBeVisible();
   await page.getByLabel("Select draft 2").uncheck();
   await page.getByText("Ticket 2 · Index", { exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("which is not selected");
+  await expect(page.getByRole("alert").filter({ hasText: "which is not selected" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Accept selected (1)", exact: true }),
   ).toBeDisabled();
   await page.getByLabel("Select draft 2").check();
   await page.getByRole("button", { name: /2 · Index/ }).click();
   await page.getByText("Ticket 1 · Composer", { exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("cycle");
+  await expect(page.getByRole("alert").filter({ hasText: "cycle" })).toBeVisible();
   await page.getByText("Ticket 1 · Composer", { exact: true }).click();
   await page.getByRole("button", { name: /1 · Composer/ }).click();
   await page.getByText("Ticket 2 · Index", { exact: true }).click();

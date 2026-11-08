@@ -13,6 +13,9 @@ async function move(page: Page, key: string, to: string) {
   await page.getByRole("menuitem", { name: to, exact: true }).click();
 }
 
+// The menu starts as an icon rail; these tests use what the expanded menu shows.
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
+
 test("renders agreed columns, card anatomy, navigation and empty states", async ({ page }) => {
   const api = await installBoardApi(page);
   await page.goto("/board?project=WEB");

@@ -12,6 +12,9 @@ async function installWithArchived(page: Page) {
   return api;
 }
 
+// The menu starts as an icon rail; these tests use what the expanded menu shows.
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
+
 test("switching projects from the board rescopes the board and project nav, and is remembered", async ({ page }) => {
   const api = await installWithArchived(page);
   await page.goto("/board?project=WEB");
@@ -89,6 +92,7 @@ test("Inbox and Runs nav counts refresh on live updates", async ({ page }) => {
   await expect(runs).toHaveAccessibleName("Runs");
   api.counts.inbox = 2;
   api.runner.busy = 1;
+  api.runner.live = 1;
   await api.emit("run.started");
   await expect(inbox).toHaveAccessibleName(/^Inbox\s*2\s*unread$/);
   await expect(runs).toHaveAccessibleName(/^Runs\s*1\s*running$/);

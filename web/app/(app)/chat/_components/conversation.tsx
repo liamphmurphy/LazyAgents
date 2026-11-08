@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tooltip } from "radix-ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
@@ -31,6 +31,8 @@ import { CodeChanges } from "./code-changes";
 import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
+import { splitSourceList } from "@/lib/chat-sources";
+import { RecommendActions } from "@/components/domain/recommend-fence";
 import { EffortPicker, ModelPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
@@ -73,7 +75,9 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project: string; agent: { name: string } };
 
-function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string> }) {
+function Bubble({ m, chat, persona, saveable, names, turn }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow }) {
+  // The closing URL list shows as Sources cards, not as text. Saved replies keep it.
+  const parts = useMemo(() => (m.role === "assistant" ? splitSourceList(m.body_md) : { body: m.body_md, listed: [] }), [m.role, m.body_md]);
   if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
   const mine = m.role === "user";
   const author = m.persona ? personaLook(m.persona) : persona;
@@ -100,12 +104,12 @@ function Bubble({ m, chat, persona, saveable, names }: { m: Message; chat: ChatI
         )}
         style={mine || !m.persona ? undefined : { borderLeftColor: author.color, borderLeftWidth: 3 }}
       >
-        <ChatMarkdown replyId={mine ? undefined : m.id}>{m.body_md}</ChatMarkdown>
+        <ChatMarkdown replyId={mine ? undefined : m.id}>{parts.body}</ChatMarkdown>
       </div>
       {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
       {!mine && <CodeChanges changes={m.code_changes} />}
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
-      {!mine && <Sources citations={m.citations} />}
+      {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} />}
       {!mine && saveable && m.body_md.trim() && <SaveActions chat={chat} body={m.body_md} />}
     </li>
   );
@@ -291,6 +295,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     );
   }
 
+  // A card's Summarize button: goes to the persona that recommended the link. A mention
+  // is only needed when someone else would answer next.
+  function summarize(messageId: string, body: string) {
+    const by = list?.find((m) => m.id === messageId)?.persona;
+    send.mutate({ body: by && by.id !== (c?.speaker ?? c?.persona)?.id ? `@${by.name} ${body}` : body });
+  }
+
   // Before the first message the persona can still change: a chat keeps its persona for life,
   // so switching starts a fresh chat with the other persona and drops this empty one.
   const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
@@ -459,10 +470,11 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               />
             )
           ) : (
+            <RecommendActions.Provider value={{ summarize, disabled: running || locked || !!unavailable || c.archived }}>
             <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m) => (
-                <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} />
+                <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} />
               ))}
               <PersonaProposals chatId={c.id} disabled={c.archived} />
               {pending && selection && (
@@ -481,6 +493,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               )}
               <li ref={end} aria-hidden />
             </ol>
+            </RecommendActions.Provider>
           )}
         </div>
         <div className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5">

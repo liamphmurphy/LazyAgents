@@ -72,3 +72,18 @@ SELECT * FROM library_items
 WHERE workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
   AND (reference = 'self' OR (reference = 'persona' AND reference_persona_id = sqlc.narg(persona_id)::uuid))
 ORDER BY reference;
+
+-- name: GetLibraryLink :one
+-- The caller's saved copy of this link, if any.
+SELECT * FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND url = $3 AND kind = 'link';
+
+-- name: CreateLibraryLink :one
+-- Saving a link again returns the row it already has.
+INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, url, note, site, video_id)
+VALUES ($1, $2, 'link', $3, 'link', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+ON CONFLICT (workspace_id, user_id, url) WHERE kind = 'link' DO UPDATE SET url = EXCLUDED.url
+RETURNING *;
+
+-- name: SavedLibraryLinks :many
+-- Which of these URLs the caller has in their Library.
+SELECT url FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND kind = 'link' AND url = ANY(sqlc.arg(urls)::text[]);

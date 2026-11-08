@@ -67,3 +67,30 @@ test("an empty Library explains how images get there", async ({ page }) => {
   await page.goto("/library");
   await expect(page.getByRole("heading", { name: "Nothing here yet" })).toBeVisible();
 });
+
+test("the Links tab lists saved links, filters them, plays videos and removes one", async ({ page }) => {
+  const video = item("link-1", { kind: "link", title: "A talk", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", video_id: "dQw4w9WgXcQ", site: "Lab", note: "Short.", persona_name: "Gwen" });
+  const site = item("link-2", { kind: "link", title: "Routes", url: "https://a.example/routes", site: "", note: "Good.", size_bytes: 0, content_type: "text/uri-list" });
+  const api = await installLibrary(page, [video, site]);
+  await page.route(/youtube-nocookie/, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "ok" }));
+  page.on("dialog", (d) => d.accept());
+  await page.goto("/library");
+  await page.getByRole("tab", { name: "Links" }).click();
+
+  const links = page.getByTestId("library-link");
+  await expect(links).toHaveCount(2);
+  await expect(links.first()).toContainText("From Gwen");
+  await expect(links.nth(1)).toContainText("a.example");
+  await expect(links.nth(1).locator("img")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Pages" }).click();
+  await expect(links).toHaveCount(1);
+  await page.getByRole("button", { name: "Videos" }).click();
+  await links.first().getByRole("button", { name: "Play A talk" }).click();
+  await expect(links.first().locator("iframe")).toHaveAttribute("src", /youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/);
+
+  await page.getByRole("button", { name: "All" }).click();
+  await page.getByRole("button", { name: "Remove Routes" }).click();
+  await expect(links).toHaveCount(1);
+  expect(api.deleted).toEqual(["link-2"]);
+});

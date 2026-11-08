@@ -125,6 +125,7 @@ const row = (page: Page, key: string) => list(page).getByRole("button").filter({
 const selectedRow = (page: Page) => list(page).locator('[aria-current="true"]');
 
 test("triage from the keyboard: answer an await_human question, mark done, approve, then all clear", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
   const api = await installInboxApi(page);
   await page.goto("/inbox");
 

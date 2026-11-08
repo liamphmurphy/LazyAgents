@@ -1131,6 +1131,17 @@ export function useChatRunEvents(runId?: string, enabled = true, poll = true) {
   });
 }
 
+/** A reply's recommendation cards. The server fetches each page once, so one load is enough. */
+export function useLinkPreviews(messageId?: string) {
+  return useQuery({
+    enabled: !!messageId,
+    queryKey: ["link-previews", messageId ?? ""] as const,
+    queryFn: () => unwrap(api.GET("/chat-messages/{messageId}/link-previews", { params: { path: { messageId: messageId! } } })),
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
 // ---- Assistant memory (LAZYAGENTS-71): the signed-in person's private memory store ----
 
 type MemoryPatch = Schemas["MemoryPatch"];

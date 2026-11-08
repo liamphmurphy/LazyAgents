@@ -1598,6 +1598,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chat-messages/{messageId}/link-previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Preview cards for the pages and videos an assistant reply recommends
+         * @description Reads the reply's recommend fences, fetching each page once. 404 unless the chat is the caller's.
+         */
+        get: operations["listLinkPreviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/link-previews/{id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** A recommended page's stored preview image */
+        get: operations["getLinkPreviewImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library": {
         parameters: {
             query?: never;
@@ -1646,6 +1687,26 @@ export interface paths {
          *     source is an SVG document of at most 1 MiB, or for a full Library.
          */
         post: operations["saveLibraryDiagram"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a page or video a persona recommended to your Library
+         * @description The URL must be recommended by the reply. Saving the same link again returns the existing item.
+         */
+        post: operations["saveLibraryLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3990,6 +4051,25 @@ export interface components {
             /** @description Uploads from POST /chat-attachments that you made and haven't attached yet; the assistant gets the files with this message */
             attachment_ids?: string[];
         };
+        LinkPreview: {
+            url: string;
+            /** @enum {string} */
+            kind: "site" | "video";
+            /** @description Empty when the page couldn't be read */
+            title: string;
+            description: string;
+            /** @description The site's name, or a video's channel */
+            site: string;
+            /** @description The YouTube id */
+            video_id?: string;
+            /** @description Where Vesper serves the stored image */
+            image_url?: string;
+            /** @description Whether the caller has this link in their Library */
+            saved: boolean;
+        };
+        LinkPreviews: {
+            previews: components["schemas"]["LinkPreview"][];
+        };
         ChatAttachment: {
             /** Format: uuid */
             id: string;
@@ -4006,7 +4086,7 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        LibraryItemKind: "image" | "diagram";
+        LibraryItemKind: "image" | "diagram" | "link";
         LibraryItem: {
             /** Format: uuid */
             id: string;
@@ -4043,6 +4123,14 @@ export interface components {
              */
             reference_persona_id?: string;
             reference_persona_name?: string;
+            /** @description For a link: the page or video */
+            url?: string;
+            /** @description For a link: why the persona recommended it */
+            note?: string;
+            /** @description For a link: the site's name or a video's channel */
+            site?: string;
+            /** @description For a video link: the YouTube id */
+            video_id?: string;
             /** Format: date-time */
             created_at: string;
         };
@@ -4067,6 +4155,15 @@ export interface components {
             message_id: string;
             /** @description The SVG document */
             svg: string;
+        };
+        LibraryLinkSave: {
+            /**
+             * Format: uuid
+             * @description The assistant reply that recommends the link
+             */
+            message_id: string;
+            /** @description The URL, exactly as in the reply's recommend fence */
+            url: string;
         };
         LibraryList: {
             items: components["schemas"]["LibraryItem"][];
@@ -7085,6 +7182,54 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listLinkPreviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One preview per recommended URL, in reply order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPreviews"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLinkPreviewImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     listLibraryItems: {
         parameters: {
             query?: {
@@ -7164,6 +7309,32 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveLibraryLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryLinkSave"];
+            };
+        };
+        responses: {
+            /** @description The saved link */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
