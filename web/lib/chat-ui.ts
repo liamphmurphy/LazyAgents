@@ -398,7 +398,7 @@ export function chatStatus(calls: { tool: string; input: unknown }[]): ChatStatu
 // ---- the chat tab's step rail: the turn's plan, or its work so far ----
 
 export type ChatStepState = "planned" | "active" | "done";
-export type ChatStep = { key: string; title: string; state: ChatStepState; added?: true };
+export type ChatStep = { key: string; title: string; state: ChatStepState; added?: true; detail?: string };
 
 type PlanItem = { id: string; title: string; state: ChatStepState };
 
@@ -441,6 +441,56 @@ function planVersions(calls: ToolCall[]): PlanItem[][] {
 /** Calls that keep the turn running but aren't work to show: its plan, tool loading, the chat's title. */
 const BOOKKEEPING = new Set(["TodoWrite", "todowrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill", "set_chat_title", "whoami"]);
 
+const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
+
+/**
+ * What a step is doing right now, safe for the chat tab: a file's name but not its path,
+ * search terms, page names and sites. A shell command stays its kind of work ("Running tests"),
+ * since commands are long and can carry secrets.
+ */
+export function stepDetail(call: { tool: string; input: unknown }): string {
+  const o = (call.input && typeof call.input === "object" ? call.input : {}) as Record<string, unknown>;
+  const { kind, phrase } = chatStatusOf(call);
+  const general = phrase[0].toUpperCase() + phrase.slice(1);
+  const file = basename(str(o.file_path ?? o.notebook_path ?? o.path));
+  const quoted = `“${clip(str(o.pattern))}”`;
+  switch (bareTool(call.tool)) {
+    case "Read":
+    case "read_file":
+      return file && kind !== "image" ? `Reading ${file}` : general;
+    case "Edit":
+    case "MultiEdit":
+    case "NotebookEdit":
+      return file ? `Editing ${file}` : general;
+    case "Write":
+      return file ? `Writing ${file}` : general;
+    case "Grep":
+      return o.pattern ? `Searching ${quoted}` : general;
+    case "Glob":
+      return o.pattern ? `Finding ${quoted}` : general;
+    case "LS":
+    case "list_dir":
+      return file ? `Listing ${file}` : general;
+    case "apply_patch": {
+      // Codex reports each change as "<kind> <path>".
+      const files = Array.isArray(o.files) ? o.files.map((f) => basename(str(f).split(" ").slice(1).join(" "))) : [];
+      return files.length ? `Editing ${files[0]}${files.length > 1 ? ` and ${files.length - 1} more` : ""}` : general;
+    }
+  }
+  const a = activityOf(call);
+  return a.verb === "Using" || a.verb === "Running a command" ? general : [a.verb, a.label, a.text].filter(Boolean).join(" ");
+}
+
+/** Puts what's happening now on the step under way, unless it would only repeat the title. */
+function withDetail(steps: ChatStep[], calls: ToolCall[]): ChatStep[] {
+  const newest = calls.filter((c) => !BOOKKEEPING.has(bareTool(c.tool))).pop();
+  const active = steps.find((s) => s.state === "active");
+  if (!newest || !active || newest.tool === REPLY_BLOCK) return steps;
+  const detail = stepDetail(newest);
+  if (detail !== active.title) active.detail = detail;
+  return steps;
+}
+
 /**
  * The turn's steps. The newest plan when the assistant wrote one, marking steps added after
  * work began. Otherwise its consecutive tool calls with the same description as one step, newest active, in the same
@@ -466,7 +516,7 @@ export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: bool
       const { phrase } = chatStatusOf(call);
       steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: call === newest ? "active" : "done" });
     }
-    return { steps, planned: true };
+    return { steps: withDetail(steps, calls), planned: true };
   }
   const steps: ChatStep[] = [];
   let last: string | undefined;
@@ -478,7 +528,7 @@ export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: bool
     steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: "done" });
   }
   if (steps.length) steps[steps.length - 1].state = "active";
-  return { steps, planned: false };
+  return { steps: withDetail(steps, calls), planned: false };
 }
 
 /** Keeps the rail short on long turns: all but the newest two of more than three finished steps fold away, and at most four upcoming steps show. */

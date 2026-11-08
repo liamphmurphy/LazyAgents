@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
+import { activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -273,4 +273,35 @@ test("a command wrapped in a login shell is judged by the command inside", () =>
   assert.equal(shell("/bin/zsh -lc 'sed -n 1,5p main.go'"), "reading-code");
   assert.equal(shell("/bin/bash -lc \"git status\""), "repo-history");
   assert.equal(shell("/bin/zsh -lc pwd"), "terminal");
+});
+
+test("stepDetail names files and searches but never paths or commands", () => {
+  const cases = [
+    [{ tool: "Read", input: { file_path: "/Users/me/secret/project/app.tsx" } }, "Reading app.tsx"],
+    [{ tool: "Edit", input: { file_path: "/a/b.go" } }, "Editing b.go"],
+    [{ tool: "Write", input: { file_path: "/a/new.md" } }, "Writing new.md"],
+    [{ tool: "Grep", input: { pattern: "foldSteps" } }, "Searching “foldSteps”"],
+    [{ tool: "Glob", input: { pattern: "**/*.go" } }, "Finding “**/*.go”"],
+    [{ tool: "apply_patch", input: { files: ["update /r/a.go", "add /r/b.go", "delete /r/c.go"] } }, "Editing a.go and 2 more"],
+    [{ tool: "mcp__lazyagents__read_page", input: { ref: "Eng/Plan" } }, "Reading Plan"],
+    [{ tool: "WebFetch", input: { url: "https://www.example.com/private?token=x" } }, "Reading example.com"],
+    [{ tool: "WebSearch", input: { query: "tts pricing" } }, "Searching the web for “tts pricing”"],
+    [{ tool: "Bash", input: { command: "API_KEY=x go test ./..." } }, "Running tests"],
+    [{ tool: "shell", input: { command: "curl -H 'Authorization: x' host" } }, "Working in the terminal"],
+    [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/a.png" } }, "Looking at the image"],
+    [{ tool: "Read", input: {} }, "Reading the code"],
+    [{ tool: "mcp__other__mystery", input: { a: "b" } }, "Working on it"],
+  ];
+  for (const [call, want] of cases) assert.equal(stepDetail(call), want, call.tool);
+});
+
+test("only the active step carries a detail, skipping bookkeeping and repeats", () => {
+  const read = (file_path) => ({ tool: "Read", input: { file_path } });
+  const todo = { tool: "TodoWrite", input: { todos: [{ content: "One", status: "completed" }, { content: "Two", status: "in_progress" }, { content: "Three", status: "pending" }] } };
+  assert.deepEqual(stepsOf([todo, read("/a/one.ts"), read("/a/two.ts"), { tool: "ToolSearch" }]).steps.map((s) => s.detail), [undefined, "Reading two.ts", undefined]);
+  assert.deepEqual(stepsOf([{ tool: "Edit" }, read("/a/x.ts")]).steps.map((s) => s.detail), [undefined, "Reading x.ts"]);
+  assert.equal(stepsOf([{ tool: "Bash", input: { command: "go test ./..." } }]).steps[0].detail, undefined);
+  assert.equal(stepsOf([todo]).steps[1].detail, undefined);
+  const events = [{ seq: 1, type: "tool_call", at: "2026-11-06T10:01:00Z", payload: { id: "a", tool: "Read", input: { file_path: "/a/x.ts" } } }, { seq: 2, type: "lifecycle", at: "2026-11-06T10:01:01Z", payload: { state: "reply_block", kind: "app" } }];
+  assert.deepEqual(chatSteps(chatCalls(events)).steps.map((s) => s.detail), [undefined, undefined]);
 });

@@ -112,10 +112,15 @@ function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }
         </li>
       )}
       {shown.map((s) => (
-        <li key={s.key} data-step-state={s.state} className="flex min-w-0 items-center gap-2.5 motion-safe:animate-[scene-in_240ms_ease-out]">
+        <li key={s.key} data-step-state={s.state} className="flex min-w-0 items-start gap-2.5 motion-safe:animate-[scene-in_240ms_ease-out]">
           <span aria-hidden className={`grid size-4 flex-none place-items-center rounded-full text-[10px] ${STEP_DOT[s.state]} ${stepPulse(s, stopping)}`}>{s.state === "done" ? "✓" : ""}</span>
-          <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
-          {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
+              {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
+            </div>
+            {s.detail && <p data-testid="chat-step-detail" className="truncate text-xs text-fg-tertiary">{s.detail}</p>}
+          </div>
         </li>
       ))}
       {later > 0 && <li className="pl-[26px] text-fg-tertiary">+{later} more</li>}
@@ -126,7 +131,7 @@ function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }
 /**
  * The chat tab's card while a turn runs: "<Persona> is reading the code…" beside a small
  * scene for that kind of work, from the newest tool call at a high level only. The exact
- * calls stay in the Activity tab. Once a turn has two steps, a rail below lists them; it
+ * calls stay in the Activity tab. Once a turn has two steps, or one with a detail to show, a rail below lists them; the active one says what it's on, by safe label only. It
  * collapses to a progress strip, and folds old steps so a long turn stays short.
  */
 export function ChatStatus({ runId, since, persona, stopping }: { runId?: string; since?: string; persona: PersonaLook; stopping?: boolean }) {
@@ -136,7 +141,7 @@ export function ChatStatus({ runId, since, persona, stopping }: { runId?: string
   const { steps, planned } = useMemo(() => chatSteps(calls), [calls]);
   const [collapsed, setCollapsed] = useState(false);
   const scene = useHeldScene(status.kind);
-  const hasRail = steps.length > 1;
+  const hasRail = steps.length > 1 || !!steps[0]?.detail;
   const done = steps.filter((s) => s.state === "done").length;
   return (
     <div data-testid="chat-status-card" className="@container w-full max-w-[min(720px,100%)] rounded-xl border border-border bg-surface">
