@@ -13,7 +13,7 @@ import (
 func TestVideoID(t *testing.T) {
 	for in, want := range map[string]string{
 		"dQw4w9WgXcQ": "dQw4w9WgXcQ",
-		"https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s":    "dQw4w9WgXcQ",
+		"https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s":   "dQw4w9WgXcQ",
 		"youtube.com/watch?v=dQw4w9WgXcQ":                     "dQw4w9WgXcQ",
 		"https://youtu.be/dQw4w9WgXcQ?si=abc":                 "dQw4w9WgXcQ",
 		"https://m.youtube.com/shorts/dQw4w9WgXcQ":            "dQw4w9WgXcQ",
