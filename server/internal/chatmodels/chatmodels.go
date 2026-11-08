@@ -34,7 +34,7 @@ type Model struct {
 	DefaultEffort string
 }
 
-// EffortDefault in a request clears a chat's effort back to the harness's own default.
+// EffortDefault in a request clears a chat's effort back to automatic (AutoEffort).
 const EffortDefault = "default"
 
 // fallbackEfforts are what Claude Code and Codex models offer when discovery
@@ -150,11 +150,12 @@ func (c Catalog) List(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]Ha
 		}
 		out = append(out, h)
 	}
+	rememberOffered(ws, out)
 	return out, nil
 }
 
-// Selection is a chat's harness, model and reasoning effort ("" is the
-// harness's own default).
+// Selection is a chat's harness, model and reasoning effort ("" is
+// automatic: AutoEffort picks one each turn).
 type Selection struct {
 	Harness, Model, Effort string
 }

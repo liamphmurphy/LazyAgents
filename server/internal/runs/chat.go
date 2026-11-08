@@ -142,7 +142,7 @@ type ChatInput struct {
 	Title   string
 	Harness string
 	Model   string
-	// Effort is a reasoning effort the model offers; empty is the harness default.
+	// Effort is a reasoning effort the model offers; empty is automatic.
 	Effort string
 	// PersonaID is one of the creator's personas; nil means their default
 	// persona (none when they have no default). Fixed for the chat's life.
@@ -436,7 +436,11 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0, RelayLimit: int32(RelayLimitIn(body))}); err != nil {
 		return chat, msg, err
 	}
-	chat, run, turn, err := startChatTurn(ctx, q, chat, p.Key, prompt, false, handoffChars)
+	level := chatmodels.AutoLevel(body)
+	if in.Research {
+		level = "xhigh"
+	}
+	chat, run, turn, err := startChatTurn(ctx, q, chat, p.Key, prompt, level, false, handoffChars)
 	if err != nil {
 		return chat, msg, err
 	}
@@ -469,9 +473,9 @@ func bindChatAttachments(ctx context.Context, q *store.Queries, chat store.ChatS
 // segment when it is idle and its capabilities still match the speaker's, or
 // on a fresh segment that gets the conversation so far as a handoff. body is
 // the new message (the person's, or a relay's hand-over note). relay marks a turn one persona handed to
-// another, which has no new message from the person. The caller holds the
-// chat lock.
-func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession, project, body string, relay bool, handoffChars int) (store.ChatSession, store.Run, store.RunTurn, error) {
+// another, which has no new message from the person. level is the effort an
+// automatic chat aims for this turn. The caller holds the chat lock.
+func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession, project, body, level string, relay bool, handoffChars int) (store.ChatSession, store.Run, store.RunTurn, error) {
 	var run store.Run
 	var turn store.RunTurn
 	if id := ChatSpeakerID(chat); id != nil {
@@ -482,6 +486,10 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 	}
 	prompt := body
 	fresh := chat.CurrentRunID == nil
+	effort := chat.Effort
+	if effort == "" {
+		effort = chatmodels.AutoEffort(chat.WorkspaceID, chat.Harness, chat.Model, level)
+	}
 	if !fresh {
 		var err error
 		run, err = q.LockRun(ctx, *chat.CurrentRunID)
@@ -548,8 +556,8 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 			if err != nil {
 				return chat, run, turn, err
 			}
-			if have.HarnessOptions["effort"] != chat.Effort {
-				if err = q.SetRunEffort(ctx, store.SetRunEffortParams{ID: run.ID, Effort: chat.Effort}); err != nil {
+			if have.HarnessOptions["effort"] != effort {
+				if err = q.SetRunEffort(ctx, store.SetRunEffortParams{ID: run.ID, Effort: effort}); err != nil {
 					return chat, run, turn, err
 				}
 			}
@@ -573,8 +581,8 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 		}
 		spec.Harness, spec.Model = chat.Harness, chat.Model
 		spec = ChatSpec(spec, caps)
-		if chat.Effort != "" {
-			spec.HarnessOptions["effort"] = chat.Effort
+		if effort != "" {
+			spec.HarnessOptions["effort"] = effort
 		}
 		raw, err := json.Marshal(spec)
 		if err != nil {

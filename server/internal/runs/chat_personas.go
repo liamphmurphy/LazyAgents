@@ -308,7 +308,7 @@ func RelayChat(ctx context.Context, q *store.Queries, chatID uuid.UUID, reply st
 		return err
 	}
 	body := fmt.Sprintf("(Vesper: %s brought you into the conversation in their last reply. Answer as %s: pick up from there and add what you can, without repeating what has been said.)", fromName, strings.TrimSpace(next.Name))
-	_, _, _, err = startChatTurn(ctx, q, chat, p.Key, body, true, 0)
+	_, _, _, err = startChatTurn(ctx, q, chat, p.Key, body, "medium", true, 0)
 	return err
 }
 
@@ -492,6 +492,6 @@ func introduce(ctx context.Context, q *store.Queries, chat store.ChatSession, p 
 		return err
 	}
 	body := fmt.Sprintf("(Vesper: the person just approved you, %s, a new persona %s proposed. Introduce yourself in a sentence or two, in your own voice, and say how you can help with the conversation so far.)", strings.TrimSpace(p.Name), by)
-	_, _, _, err = startChatTurn(ctx, q, chat, proj.Key, body, true, 0)
+	_, _, _, err = startChatTurn(ctx, q, chat, proj.Key, body, "low", true, 0)
 	return err
 }
