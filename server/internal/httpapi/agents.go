@@ -7,11 +7,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // recode converts between agentdef and API types, which share JSON shapes.

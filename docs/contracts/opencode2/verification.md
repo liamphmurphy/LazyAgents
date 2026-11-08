@@ -348,5 +348,5 @@ accounting path, Windows, and any CLI version other than 2.2.1.
 
 Every inventory surface and accepted ADR capability is mapped to its implementation,
 named tests and an honest status (fake-CLI vs real) in
-[`verification/LAZYAGENTS-25-requirements-matrix.md`](../../../verification/LAZYAGENTS-25-requirements-matrix.md).
+[`docs/dev/verification/LAZYAGENTS-25-requirements-matrix.md`](../../dev/verification/LAZYAGENTS-25-requirements-matrix.md).
 Items under "Not verified" above remain UNVERIFIED there.

@@ -9,13 +9,13 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/seed"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/seed"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 func TestPathsOverlap(t *testing.T) {

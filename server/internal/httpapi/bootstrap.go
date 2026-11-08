@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObject) (api.GetBootstrapResponseObject, error) {

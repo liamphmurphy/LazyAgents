@@ -11,10 +11,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/blob"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 type memBlobs map[string][]byte

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/db"
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/db"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
 )
 
 func TestMigrateIsIdempotent(t *testing.T) {

@@ -1,9 +1,9 @@
-// Command lazyagents is the single Vesper binary.
+// Command vesper is the single Vesper binary.
 //
-//	lazyagents serve        run migrations, ensure buckets, serve HTTP (default)
-//	lazyagents migrate      run migrations and exit
-//	lazyagents runner       execute dispatched runs (docker or local backend)
-//	lazyagents healthcheck  exit 0 if the local API reports healthy (for container probes)
+//	vesper serve        run migrations, ensure buckets, serve HTTP (default)
+//	vesper migrate      run migrations and exit
+//	vesper runner       execute dispatched runs (docker or local backend)
+//	vesper healthcheck  exit 0 if the local API reports healthy (for container probes)
 package main
 
 import (
@@ -20,23 +20,23 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/blob"
-	"github.com/liamphmurphy/lazyagents/server/internal/config"
-	"github.com/liamphmurphy/lazyagents/server/internal/db"
-	"github.com/liamphmurphy/lazyagents/server/internal/httpapi"
-	"github.com/liamphmurphy/lazyagents/server/internal/memory"
-	"github.com/liamphmurphy/lazyagents/server/internal/metrics"
-	"github.com/liamphmurphy/lazyagents/server/internal/prsync"
-	"github.com/liamphmurphy/lazyagents/server/internal/realtime"
-	"github.com/liamphmurphy/lazyagents/server/internal/runner"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
-	"github.com/liamphmurphy/lazyagents/server/internal/seed"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
-	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/config"
+	"github.com/liamphmurphy/vesper/server/internal/db"
+	"github.com/liamphmurphy/vesper/server/internal/httpapi"
+	"github.com/liamphmurphy/vesper/server/internal/memory"
+	"github.com/liamphmurphy/vesper/server/internal/metrics"
+	"github.com/liamphmurphy/vesper/server/internal/prsync"
+	"github.com/liamphmurphy/vesper/server/internal/realtime"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/secrets"
+	"github.com/liamphmurphy/vesper/server/internal/seed"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
 func main() {
@@ -222,7 +222,7 @@ func healthcheck(ctx context.Context) error {
 	return nil
 }
 
-// runRunner executes dispatched runs (PLAN.md §6.4–6.6). It shares the
+// runRunner executes dispatched runs (docs/dev/plan.md §6.4–6.6). It shares the
 // database with the API and reaches it over /mcp like any agent.
 func runRunner(ctx context.Context, log *slog.Logger) error {
 	cfg, err := config.Load()

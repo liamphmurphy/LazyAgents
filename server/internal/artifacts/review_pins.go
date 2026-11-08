@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
 )
 
 // ReviewPin is a comment a reviewer pinned on a mockup version. X and Y are

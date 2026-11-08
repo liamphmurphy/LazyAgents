@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
 )
 
 // Avatar uploads (ADR Decision 4). The type comes from the bytes, never from

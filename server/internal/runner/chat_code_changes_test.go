@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/runner"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/secrets"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // bareRepo makes a local origin with one commit.

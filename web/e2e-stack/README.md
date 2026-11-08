@@ -39,7 +39,7 @@ failure or Ctrl-C):
 
 - **Postgres** `postgres:17-alpine` via `docker run --rm` on a free port, or
   `E2E_DATABASE_URL` (CI service container; must be disposable, it is
-  migrated and written to). `lazyagents serve` runs migrations and first-boot
+  migrated and written to). `vesper serve` runs migrations and first-boot
   seed (`SEED=false`).
 - **SeaweedFS** (S3, required by the API) via `docker run --rm` on a free port,
   or `E2E_S3_ENDPOINT`.

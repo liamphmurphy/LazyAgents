@@ -13,11 +13,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/blob"
-	"github.com/liamphmurphy/lazyagents/server/internal/personas"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // A person's profile: display name, role title and picture, editable only by

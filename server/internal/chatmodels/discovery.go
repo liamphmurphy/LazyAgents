@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
 // Discover asks the provider behind each supported harness for its current models.

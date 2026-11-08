@@ -27,7 +27,7 @@ import (
 // v1 targets a single laptop, where that's documented and accepted.
 type Docker struct {
 	Socket  string // /var/run/docker.sock
-	Image   string // lazyagents/agent-base:latest
+	Image   string // vesper/agent-base:latest
 	Network string // where api:8000 resolves; "" = default bridge
 	// OpenCodeIsolated attests image config is clean and an OS boundary
 	// prevents shell/MCP tools changing protected config/state or racing guards.

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/runner"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // spyBackend looks at the parent's workspace just before it's removed, i.e.

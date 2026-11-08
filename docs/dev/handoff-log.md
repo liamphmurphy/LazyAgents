@@ -1,6 +1,8 @@
-# CONTINUE: handoff for the next agent
+# Handoff log (historical)
 
-Read `PLAN.md` first for architecture and phases, then `lazyagents-design/DESIGN.md`, which is the visual source of truth.
+> Kept for reference. This is the log agents passed between sessions while building phases 0–8, under the project's earlier name, LazyAgents. Paths, phase status and instructions below may be out of date; the code and [plan.md](plan.md) are the current sources.
+
+Read `docs/dev/plan.md` first for architecture and phases, then `docs/design-system/DESIGN.md`, which is the visual source of truth.
 
 Phases 0–7 are committed on `main` (latest: `cb8c419 dashboards, epics, kpis`). The approved Phase 8 planning workflow and the project/dependency follow-up are implemented in the working tree. The user waived browser QA for this work. Ask the user before committing.
 
@@ -75,7 +77,7 @@ Phases 0–7 are committed on `main` (latest: `cb8c419 dashboards, epics, kpis`)
   - Component tokens: `bg-row-hover`, `border-border-float`, `bg-scrim`, …
   - Type utilities: `type-display | title | heading | body | reading | small | micro | mono`.
   - The default Tailwind palette is cleared.
-- `web/styles/tokens.css` is a copy of `lazyagents-design/tokens.css`. Edit the design copy, then copy it over.
+- `web/styles/tokens.css` is a copy of `docs/design-system/tokens.css`. Edit the design copy, then copy it over.
 - `components/ui`: icons, buttons, primitives (Card, Banner, EmptyState, Skeleton, Field, TextInput, …) and controls (Segmented, Toggle, Tabs).
 - `components/domain`: glyphs, avatars, labels, data, markdown, meta, and `pickers` (Radix: Status/Priority/User/Epic/Label menus, plus AgentPicker as a combobox popover).
 - `components/shell`: sidebar, top bar, app shell (bootstrap-driven, global `C` shortcut), theme (an inline head script plus a System/Dark/Light switch stored in `localStorage["la-theme"]`).
@@ -493,7 +495,7 @@ Raised by the user on 2026-11-02. The user subsequently approved a focused first
 - The compose stack was last left **down**. Its demo DB had PAY's repo URL cleared and a dummy `harness:anthropic` key added during testing.
 - Playwright still lives in the old scratchpad (`…/e3bd4d0c-…/scratchpad/pw`, `PLAYWRIGHT_BROWSERS_PATH=$P/browsers`). `wiki.js` there is this phase's walkthrough.
 
-## Decisions to keep (PLAN.md §11)
+## Decisions to keep (docs/dev/plan.md §11)
 
 - **Deployment:** laptop only, single workspace.
 - **Dispatch:** a person dispatches each ticket; assigning doesn't start a run. Anyone can approve.

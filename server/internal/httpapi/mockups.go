@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // reviewPins decodes a version's stored review_pins. It never returns nil, so

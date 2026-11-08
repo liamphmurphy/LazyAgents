@@ -77,7 +77,7 @@ function layout(g: GraphData, w: number, h: number): Placed[] {
 const W = 300;
 const H = 240;
 
-/** The local graph (1–2 hops) in a page's side panel (PLAN.md §12.2). */
+/** The local graph (1–2 hops) in a page's side panel (docs/dev/plan.md §12.2). */
 export function LocalGraph({ kind, id }: { kind: NodeKind; id: string | undefined }) {
   const router = useRouter();
   const { data } = useGraph(kind, id, 2);

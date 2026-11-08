@@ -1,6 +1,6 @@
 // Package seed creates the first workspace: either the Northwind Labs demo
 // from the design mockups (SEED=true) or an empty workspace with one local
-// user. With no login (PLAN.md §5.4), the first user created is who every
+// user. With no login (docs/dev/plan.md §5.4), the first user created is who every
 // request acts as: Maya Chen in the demo.
 package seed
 
@@ -16,11 +16,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/auth"
-	"github.com/liamphmurphy/lazyagents/server/internal/personas"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/auth"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 type Options struct {
@@ -123,7 +123,7 @@ type demoTicket struct {
 	criteria []string
 }
 
-// Ticket data mirrors lazyagents-design/screens/tickets.html.
+// Ticket data mirrors docs/design-system/screens/tickets.html.
 var payTickets = []demoTicket{
 	{num: 158, title: "Archive settlement CSV exports to object storage", status: "backlog", priority: "low", labels: []string{"data"}, epic: "Maintenance"},
 	{num: 162, title: "Evaluate multi-currency settlement accounts", status: "backlog", priority: "none", labels: []string{"research"}, due: "2026-11-21"},

@@ -6,14 +6,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/personas"
-	"github.com/liamphmurphy/lazyagents/server/internal/seed"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/seed"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 // Segments end only for what a persona's capabilities change, a repository

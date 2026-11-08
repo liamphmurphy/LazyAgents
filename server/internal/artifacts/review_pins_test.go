@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 )
 
 func TestCleanReviewPins(t *testing.T) {

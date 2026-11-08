@@ -12,11 +12,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/links"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 // Ref names something links can point at.

@@ -9,10 +9,10 @@ import (
 	"github.com/oapi-codegen/nullable"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/auth"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/auth"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 var viewStatuses = map[api.ListTicketsParamsView][]string{

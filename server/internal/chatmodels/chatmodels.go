@@ -5,13 +5,13 @@ package chatmodels
 
 import (
 	"context"
-	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
+	"github.com/liamphmurphy/vesper/server/internal/secrets"
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // KeySecret is the API-key secret each harness authenticates with headless.

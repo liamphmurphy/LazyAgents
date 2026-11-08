@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/harness"
-	"github.com/liamphmurphy/lazyagents/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/harness"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
 )
 
 // This probe needs no database or paid provider. It exercises actual 2.2.1

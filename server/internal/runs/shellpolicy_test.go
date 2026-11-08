@@ -1,7 +1,7 @@
 package runs_test
 
 import (
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"slices"
 	"testing"
 )

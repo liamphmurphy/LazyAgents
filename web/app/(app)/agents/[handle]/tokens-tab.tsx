@@ -22,7 +22,7 @@ function Command({ label, text }: { label: string; text: string }) {
 }
 
 /**
- * Tokens for unmanaged sessions (PLAN.md §1): someone runs Claude Code or
+ * Tokens for unmanaged sessions (docs/dev/plan.md §1): someone runs Claude Code or
  * Codex themselves and attaches it to this agent's identity. Vesper
  * can't enforce budgets or isolation on those, only brokered scopes.
  */

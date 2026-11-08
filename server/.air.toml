@@ -3,8 +3,8 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -o ./tmp/lazyagents ./cmd/lazyagents"
-  entrypoint = ["./tmp/lazyagents", "serve"]
+  cmd = "go build -o ./tmp/vesper ./cmd/vesper"
+  entrypoint = ["./tmp/vesper", "serve"]
   include_ext = ["go", "sql"]
   exclude_dir = ["tmp"]
   delay = 300

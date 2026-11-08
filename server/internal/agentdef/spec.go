@@ -1,5 +1,5 @@
 // Package agentdef defines what an agent is, independent of any harness
-// (PLAN.md §6.1): the versioned definition, per-project overrides, the merge
+// (docs/dev/plan.md §6.1): the versioned definition, per-project overrides, the merge
 // that resolves them, and how strongly each scope can be enforced (§6.3).
 package agentdef
 
@@ -102,7 +102,7 @@ const (
 	MaxSkillDescription = 1024
 )
 
-// Memory says what wiki context a run gets (PLAN.md §12.3). Inject levels
+// Memory says what wiki context a run gets (docs/dev/plan.md §12.3). Inject levels
 // default to selective previews. Legacy full-page modes are cumulative:
 // index (the agent's Memory page) → linked (plus pages
 // linked to or from the ticket and its artifacts) → search (plus the top
@@ -180,10 +180,10 @@ var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 
 func validOptions(field string, opts map[string]string) error {
 	if _, ok := opts[OptionWebSearch]; ok {
-		return invalid(field, "%s is set by LazyAgents for the Personal Assistant only", OptionWebSearch)
+		return invalid(field, "%s is set by Vesper for the Personal Assistant only", OptionWebSearch)
 	}
 	if _, ok := opts[OptionImageGeneration]; ok {
-		return invalid(field, "%s is set by LazyAgents for the Personal Assistant only", OptionImageGeneration)
+		return invalid(field, "%s is set by Vesper for the Personal Assistant only", OptionImageGeneration)
 	}
 	if e, ok := opts["effort"]; ok && !slices.Contains(Efforts, e) {
 		return invalid(field, "effort must be one of %s", strings.Join(Efforts, ", "))

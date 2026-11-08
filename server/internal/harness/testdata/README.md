@@ -6,7 +6,7 @@ exactly what the CLIs emit; long fields (tool lists, cf-ray ids) were trimmed.
 
 `*-turn.jsonl` describe a working turn with tool calls. Their envelopes match
 the recorded ones; the tool lines follow each CLI's documented stream
-shapes. Re-record them from a real run with keys when convenient (PLAN.md §10
+shapes. Re-record them from a real run with keys when convenient (docs/dev/plan.md §10
 nightly smoke test).
 
 `opencode-real-*.jsonl` were recorded from the real OpenCode 2.2.1 binary without any model call
@@ -24,4 +24,4 @@ The other `opencode-*.jsonl` files (not `opencode-real-*`) are SYNTHETIC. They f
 envelope documented at the end of the `opencode_parser.go` header comment, which the real CLI does not
 emit (the real success envelope is the `opencode-real-stub-*` one; a real-provider capture is still
 missing). Keep them only for the synthetic parser path. Strings that look like credentials in them
-(`sk-ant-…`, `la_…`) are fake and exist to prove redaction.
+(`sk-ant-…`, `vsp_…`) are fake and exist to prove redaction.

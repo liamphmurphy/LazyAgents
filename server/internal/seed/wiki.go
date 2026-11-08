@@ -6,14 +6,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
-	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
-// Demo wiki (PLAN.md §12): a few team pages, Atlas's memory from PAY-214,
+// Demo wiki (docs/dev/plan.md §12): a few team pages, Atlas's memory from PAY-214,
 // and a suggestion from Sentry waiting for a person.
 var demoPages = []struct{ path, body string }{
 	{"Payments/Ledger/Rollback runbook", `# Rollback runbook

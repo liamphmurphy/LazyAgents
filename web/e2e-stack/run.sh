@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEB="$(cd "$HERE/.." && pwd)"
 REPO="$(cd "$WEB/.." && pwd)"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/lazyagents-e2e-stack.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/vesper-e2e-stack.XXXXXX")"
 PIDS=()
 CONTAINERS=()
 
@@ -46,8 +46,8 @@ API_URL="http://127.0.0.1:$API_PORT"
 WEB_URL="http://127.0.0.1:$WEB_PORT"
 
 # --- Fake CLIs and the PATH guard ------------------------------------------
-echo ">> building fake-harness and lazyagents"
-(cd "$REPO/server" && go build -o "$TMP/fake-harness" ./cmd/fake-harness && go build -o "$TMP/lazyagents" ./cmd/lazyagents)
+echo ">> building fake-harness and vesper"
+(cd "$REPO/server" && go build -o "$TMP/fake-harness" ./cmd/fake-harness && go build -o "$TMP/vesper" ./cmd/vesper)
 for cli in claude codex opencode; do ln -s "$TMP/fake-harness" "$TMP/bin/$cli"; done
 GIT_BIN="$(command -v git)" || { echo "git is required" >&2; exit 1; }
 # The local runner scrubs OpenCode's environment, so the fake's script mode
@@ -116,11 +116,11 @@ stack_env() {
 }
 
 echo ">> starting api on :$API_PORT (runs migrations and first-boot seed)"
-stack_env "$TMP/lazyagents" serve >"$TMP/logs/api.log" 2>&1 &
+stack_env "$TMP/vesper" serve >"$TMP/logs/api.log" 2>&1 &
 PIDS+=($!)
 wait_for "$API_URL/api/v1/health" api 120
 echo ">> starting runner"
-stack_env "$TMP/lazyagents" runner >"$TMP/logs/runner.log" 2>&1 &
+stack_env "$TMP/vesper" runner >"$TMP/logs/runner.log" 2>&1 &
 PIDS+=($!)
 
 # A dummy workspace secret (through the real API) makes OpenCode's catalog list

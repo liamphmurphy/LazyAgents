@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func commentID(ev store.ActivityEvent) (uuid.UUID, bool) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sort"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // ListDelegationEfficiency reports, per sub agent, what delegating to it costs

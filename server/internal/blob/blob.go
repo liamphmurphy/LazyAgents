@@ -15,7 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/config"
+	"github.com/liamphmurphy/vesper/server/internal/config"
 )
 
 type Store struct {

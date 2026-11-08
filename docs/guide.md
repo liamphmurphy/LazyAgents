@@ -19,7 +19,7 @@ workspace instead.
 ### Running agents
 
 Assign a ticket to an agent, then **Review & dispatch** it. The `runner`
-service runs each turn in a container from `lazyagents/agent-base` (built by
+service runs each turn in a container from `vesper/agent-base` (built by
 compose, with Claude Code and Codex installed). Before dispatching:
 
 - set `SECRETS_KEY` in `.env` (`openssl rand -base64 32`);
@@ -126,7 +126,7 @@ the current turn; **Save to wiki** and **Save as artifact** preserve a reply.
 Chats use a scratch workspace and read-only context tools.
 
 Verification status and known gaps are recorded in
-[`verification/LAZYAGENTS-14-report.md`](../verification/LAZYAGENTS-14-report.md).
+[`docs/dev/verification/LAZYAGENTS-14-report.md`](dev/verification/LAZYAGENTS-14-report.md).
 The real Claude Code → Codex smoke is still pending API/runner mode alignment and
 a chat-capable runner; automated fake-harness coverage does not establish provider parity.
 
@@ -254,14 +254,14 @@ The API inherits this setting through hot reload too. Local execution has no
 isolation and uses the runner account's installed CLIs and logins. To develop
 with Docker runners, use `RUNNER_BACKEND=docker make api` (or `make dev`) and
 `RUNNER_BACKEND=docker make runner` in their respective terminals. Direct
-`lazyagents serve` / `runner` commands and the full Docker stack still default
+`vesper serve` / `runner` commands and the full Docker stack still default
 to Docker. Set `RUNNER_BACKEND=local` explicitly for direct local commands.
 
 The API catalog uses its own configured backend; it does not discover runner
 capabilities. Mixed local/Docker pools have no backend-aware chat routing, so
 catalog availability cannot guarantee which runner claims a turn. Use a
 coordinated, consistent pool for chat verification. See the
-[runtime refresh procedure](../verification/LAZYAGENTS-14-runtime-evidence.md#coordinated-refresh-procedure)
+[runtime refresh procedure](dev/verification/LAZYAGENTS-14-runtime-evidence.md#coordinated-refresh-procedure)
 before replacing existing runners with active work. `make dev` replaces API/web
 listeners; use it only during a coordinated maintenance window.
 
@@ -276,7 +276,7 @@ TEST_DATABASE_URL=postgres://lazyagents:lazyagents@localhost:5432/lazyagents?ssl
 | Path | What |
 |---|---|
 | `api/openapi.yaml` | REST contract. Go server interfaces and the TS client are generated from it. |
-| `server/` | Go module: the `lazyagents` binary (`serve`, `runner`, `migrate`) |
+| `server/` | Go module: the `vesper` binary (`serve`, `runner`, `migrate`) |
 | `server/internal/harness/` | Claude Code and Codex adapters: invocation and stream parsing |
 | `server/internal/runner/` | Queue, workspaces (Docker or local), turns, guards |
 | `deploy/agent-base/` | The image managed runs execute in |

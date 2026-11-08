@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/runner"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 // TestDockerBackend runs the approval round trip in real containers. It
@@ -23,15 +23,15 @@ import (
 // are injected, so no real model is ever called.
 func TestDockerBackend(t *testing.T) {
 	if os.Getenv("RUNNER_DOCKER_TEST") == "" {
-		t.Skip("set RUNNER_DOCKER_TEST=1 (needs Docker and lazyagents/agent-base)")
+		t.Skip("set RUNNER_DOCKER_TEST=1 (needs Docker and vesper/agent-base)")
 	}
-	const image = "lazyagents/agent-base:runner-test"
+	const image = "vesper/agent-base:runner-test"
 	docker, err := exec.LookPath("docker") // before setup narrows PATH
 	if err != nil {
 		t.Skip("docker not installed")
 	}
 	e := setupWith(t, func(t *testing.T, dir, bin, base string) (runner.Backend, string) {
-		df := "FROM lazyagents/agent-base:latest\nUSER root\nCOPY fake-claude /usr/local/bin/claude\nRUN rm -f /usr/local/bin/codex\nUSER node\n"
+		df := "FROM vesper/agent-base:latest\nUSER root\nCOPY fake-claude /usr/local/bin/claude\nRUN rm -f /usr/local/bin/codex\nUSER node\n"
 		if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(df), 0o644); err != nil {
 			t.Fatal(err)
 		}

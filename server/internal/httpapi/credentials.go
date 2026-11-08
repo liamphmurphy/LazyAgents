@@ -4,11 +4,11 @@ import (
 	"context"
 	"strings"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/secrets"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func (s *Server) mcpURL() string { return strings.TrimRight(s.PublicURL, "/") + "/mcp" }

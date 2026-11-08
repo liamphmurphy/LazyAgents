@@ -15,7 +15,7 @@
 <g transform="translate(0,40)">
   <rect width="1440" height="900" class="bg"/>
   <rect width="232" height="900" class="side"/><line x1="232" y1="0" x2="232" y2="900" class="bd"/>
-  <rect x="14" y="14" width="20" height="20" rx="5" class="acc"/><text x="44" y="29" class="t14" font-weight="600">LazyAgents</text>
+  <rect x="14" y="14" width="20" height="20" rx="5" class="acc"/><text x="44" y="29" class="t14" font-weight="600">Vesper</text>
   <text x="24" y="76" class="s">Inbox</text><text x="24" y="106" class="s">My work</text><text x="24" y="136" class="s">Tickets</text>
   <text x="24" y="166" class="s">Epics</text><text x="24" y="196" class="s">Runs</text><text x="24" y="226" class="s">Wiki</text>
   <rect x="10" y="240" width="212" height="28" rx="6" class="sel"/><circle cx="30" cy="254" r="5" class="acc"/><text x="44" y="259" class="t">Assistant</text>
@@ -101,7 +101,7 @@
 <g transform="translate(0,990)">
   <rect width="1440" height="900" class="bg"/>
   <rect width="232" height="900" class="side"/><line x1="232" y1="0" x2="232" y2="900" class="bd"/>
-  <rect x="14" y="14" width="20" height="20" rx="5" class="acc"/><text x="44" y="29" class="t14" font-weight="600">LazyAgents</text>
+  <rect x="14" y="14" width="20" height="20" rx="5" class="acc"/><text x="44" y="29" class="t14" font-weight="600">Vesper</text>
   <text x="24" y="76" class="s">Inbox</text><text x="24" y="106" class="s">My work</text><text x="24" y="136" class="s">Tickets</text>
   <text x="24" y="166" class="s">Epics</text><text x="24" y="196" class="s">Runs</text><text x="24" y="226" class="s">Wiki</text>
   <rect x="10" y="240" width="212" height="28" rx="6" class="sel"/><circle cx="30" cy="254" r="5" class="acc"/><text x="44" y="259" class="t">Assistant</text>
@@ -173,7 +173,7 @@
   <rect x="1028" y="456" width="40" height="18" rx="9" fill="#26262C"/><text x="1036" y="469" class="m11">time</text>
   <text x="1078" y="469" class="m11">Fact · from conversation · Oct 30</text>
   <rect x="1016" y="496" width="408" height="84" rx="8" class="bd"/>
-  <text x="1028" y="518" class="t">LazyAgents billing rewrite owner</text><text x="1412" y="518" text-anchor="end" class="m">⋯</text>
+  <text x="1028" y="518" class="t">Vesper billing rewrite owner</text><text x="1412" y="518" text-anchor="end" class="m">⋯</text>
   <text x="1028" y="537" class="s12">Priya owns the billing rewrite; ask her before re-scoping.</text>
   <rect x="1028" y="548" width="54" height="18" rx="9" fill="#26262C"/><text x="1036" y="561" class="m11">billing</text>
   <text x="1092" y="561" class="m11">Person · from LAZYAGENTS-41 ↗ · Oct 22</text>

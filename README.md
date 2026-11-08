@@ -24,7 +24,7 @@ plans, approvals, knowledge, and costs look the same no matter which model did
 the work.
 
 - **No CLI required.** You work in the web app. Managed runs execute in
-  containers from the `lazyagents/agent-base` image, which ships the pinned
+  containers from the `vesper/agent-base` image, which ships the pinned
   harness CLIs and authenticates with the provider keys you store in
   **Settings → Connections & secrets**. Nobody needs to install a CLI, log in,
   or keep a terminal open. If you prefer your own logins, a local runner can use
@@ -79,8 +79,8 @@ the work.
 You need Docker (Docker Desktop or OrbStack on a laptop, or Docker Engine on a server).
 
 ```sh
-git clone https://github.com/liamphmurphy/LazyAgents.git
-cd LazyAgents
+git clone https://github.com/liamphmurphy/Vesper.git
+cd Vesper
 cp .env.example .env
 docker compose up --build
 ```
@@ -109,7 +109,7 @@ behind your own authenticating proxy, and only run projects you trust. See the
 - **[Kanban board](docs/board.md)**: statuses, estimates, and the board's agent tools.
 - **[OpenCode harness](docs/opencode.md)**: install, auth, isolation, and limits.
 - **[Example skills](examples/skills/)**: starter playbooks for your agents.
-- **[Project plan](PLAN.md)**: architecture and implementation details.
-- **[Design](lazyagents-design/)**: the app's design references.
+- **[Project plan](docs/dev/plan.md)**: architecture and implementation details.
+- **[Design](docs/design-system/)**: the app's design references.
 
-Have an idea or found something that could work better? [Open an issue](https://github.com/liamphmurphy/LazyAgents/issues).
+Have an idea or found something that could work better? [Open an issue](https://github.com/liamphmurphy/Vesper/issues).

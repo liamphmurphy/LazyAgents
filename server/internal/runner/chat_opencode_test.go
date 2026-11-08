@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/chatmodels"
-	"github.com/liamphmurphy/lazyagents/server/internal/harness"
-	"github.com/liamphmurphy/lazyagents/server/internal/runner"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
+	"github.com/liamphmurphy/vesper/server/internal/harness"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // OpenCode chats against the fake CLI (synthetic envelope, see opencode_test.go).

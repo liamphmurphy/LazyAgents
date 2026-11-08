@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/harness"
+	"github.com/liamphmurphy/vesper/server/internal/harness"
 )
 
 // What a coding chat turn changed is read with git run by the runner in the
@@ -31,7 +31,7 @@ const (
 
 var commitRe = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 
-// codeChangePathspec leaves out what LazyAgents itself writes into the workspace.
+// codeChangePathspec leaves out what Vesper itself writes into the workspace.
 var codeChangePathspec = []string{"--", ".", ":(exclude,top).lazyagents", ":(exclude,top)AGENTS.md"}
 
 // gitCmd runs git in the run's workspace on any backend and returns stdout

@@ -1,7 +1,7 @@
 // Command fake-agent plays an agent over the real Agent API (MCP), so the
 // whole loop can be demoed and tested without an LLM or API keys:
 //
-//	LAZYAGENTS_TOKEN=la_… go run ./cmd/fake-agent -url http://localhost:8000/mcp -ticket PAY-214
+//	LAZYAGENTS_TOKEN=vsp_… go run ./cmd/fake-agent -url http://localhost:8000/mcp -ticket PAY-214
 //
 // It claims the ticket, reads its context, posts a plan, runs "tests",
 // requests db:migrate approval and waits for a person to approve it in the
@@ -72,7 +72,7 @@ func main() {
 	say("I'm %s (@%s), %s session", who["name"], who["handle"], who["session"])
 	claimed := call("claim_ticket", map[string]any{"ticket": *ticket})
 	say("claimed %s", *ticket)
-	// Wiki memory delivered with the claim (PLAN.md §12.3).
+	// Wiki memory delivered with the claim (docs/dev/plan.md §12.3).
 	if mem, _ := claimed["memory"].([]any); len(mem) > 0 {
 		for _, m := range mem {
 			page := m.(map[string]any)

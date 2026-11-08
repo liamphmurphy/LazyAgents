@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
 func TestClaudeControlModelsWithoutInference(t *testing.T) {

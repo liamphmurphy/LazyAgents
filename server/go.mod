@@ -1,4 +1,4 @@
-module github.com/liamphmurphy/lazyagents/server
+module github.com/liamphmurphy/vesper/server
 
 go 1.26.0
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
 )
 
 func TestCommitNotifications(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // webFetchAllowed is the assistant's WebFetch allowlist (ADR "Assistant web

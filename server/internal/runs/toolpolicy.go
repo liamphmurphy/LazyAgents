@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"mvdan.cc/sh/v3/syntax"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // ToolDecision is consumed by both harnesses' PreToolUse hooks. An approval

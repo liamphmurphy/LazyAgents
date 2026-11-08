@@ -21,7 +21,7 @@ type ActivityEvent struct {
 	Verb        string
 	Payload     json.RawMessage
 	CreatedAt   time.Time
-	Seq         *int64
+	Seq         int64
 }
 
 type Agent struct {
@@ -290,14 +290,6 @@ type KnowledgeLink struct {
 	Snippet         string
 	Position        int32
 	CreatedAt       time.Time
-}
-
-type LaUsageRepair struct {
-	ID        uuid.UUID
-	RunID     uuid.UUID
-	StartSeq  int64
-	EndSeq    interface{}
-	Corrected interface{}
 }
 
 type Label struct {

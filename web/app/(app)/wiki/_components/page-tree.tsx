@@ -295,7 +295,7 @@ function Reports({ depth, ctx }: { depth: number; ctx: TreeCtx }) {
 // ------------------------------------------------------------ tree
 
 /**
- * The wiki tree (PLAN.md §12.6): the namespaces Architecture, Patterns,
+ * The wiki tree (docs/dev/plan.md §12.6): the namespaces Architecture, Patterns,
  * Agent memory (agents/) and Reports, then other pages. Each folder shows
  * its page count; open folders are remembered per device and the current
  * page's folders are always open.

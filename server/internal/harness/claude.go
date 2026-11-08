@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
 // ClaudeCode runs `claude -p --output-format stream-json` (checked against

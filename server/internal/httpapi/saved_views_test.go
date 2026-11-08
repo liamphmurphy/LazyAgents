@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/seed"
+	"github.com/liamphmurphy/vesper/server/internal/seed"
 )
 
 func sendJSON(h http.Handler, method, path, body string) *httptest.ResponseRecorder {

@@ -1,4 +1,4 @@
-// 16px-grid stroke icons at 1.5px, matching lazyagents-design. Decorative by
+// 16px-grid stroke icons at 1.5px, matching docs/design-system. Decorative by
 // default: give the surrounding button an aria-label instead.
 const paths = {
   dashboard: <><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.2" /><rect x="9" y="2.5" width="4.5" height="4.5" rx="1.2" /><rect x="2.5" y="9" width="4.5" height="4.5" rx="1.2" /><rect x="9" y="9" width="4.5" height="4.5" rx="1.2" /></>,

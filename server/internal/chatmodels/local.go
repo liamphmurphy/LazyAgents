@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
 // DiscoverLocal uses only the harness control protocol, with the same CLI login

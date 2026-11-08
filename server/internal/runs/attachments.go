@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
 )
 
 // Chat attachments (LAZYAGENTS-72): files a person uploads in the assistant

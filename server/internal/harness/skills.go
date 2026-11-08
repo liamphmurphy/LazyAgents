@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
 // Skills reach an agent as files in the workspace. Claude Code loads

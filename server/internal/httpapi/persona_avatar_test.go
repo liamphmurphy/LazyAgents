@@ -24,10 +24,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/blob"
-	"github.com/liamphmurphy/lazyagents/server/internal/config"
-	"github.com/liamphmurphy/lazyagents/server/internal/personas"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/config"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // fakeS3 is an in-memory, path-style S3 gateway with just PutObject,

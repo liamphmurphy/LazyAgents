@@ -22,7 +22,7 @@ Paths are relative to repository root. These are future changes, not implemented
 | Usage and pricing | server/internal/harness/{harness,codex,claude}.go; server/internal/config/config.go; server/internal/runner/{runner,chat}.go | Exact provider/model pricing; explicit unknown/partial, deltas and terminal deduplication; no unknown-as-free |
 | Persistence | server/migrations; server/internal/store/queries; server/internal/store | Existing text harness/model/session and JSON usage suffice; no migration in this scope |
 | UI chat and activity | web/app/(app)/chat/_components/{model-picker,conversation,chat-screen}.tsx; web/components/domain/start-chat.tsx; web/app/(app)/runs/[id]/run-log.tsx | Use live catalog labels/availability and provider IDs; preserve switching warning, cancellation and unknown/partial cost display |
-| Manual onboarding/docs | web/app/(app)/agents/[handle]/tokens-tab.tsx; README.md; docs/guide.md; PLAN.md | Document executable/pin/provider auth with pinned 2.2.1 rollout; no new command promised now |
+| Manual onboarding/docs | web/app/(app)/agents/[handle]/tokens-tab.tsx; README.md; docs/guide.md; docs/dev/plan.md | Document executable/pin/provider auth with pinned 2.2.1 rollout; no new command promised now |
 | Fixtures and verification | server/internal/harness/testdata; server/internal/harness/{harness,parity,fallback}_test.go; server/internal/runner/*test.go; server/internal/httpapi/chats_test.go; web/e2e/{chat.spec.ts,mock-chat-api.ts,run-log.spec.ts} | Capture actual approved CLI envelopes; extend two-harness assumptions without rewriting existing evidence |
 | Generation gate | Makefile gen-check; .github/workflows/ci.yml | Go oapi-codegen + sqlc + openapi-typescript; no hand edits to generated files |
 

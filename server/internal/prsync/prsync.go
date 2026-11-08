@@ -1,5 +1,5 @@
 // Package prsync polls GitHub for the state of tickets' pull requests
-// (PLAN.md §6.7). No webhooks: a laptop has no public URL. A merged PR moves
+// (docs/dev/plan.md §6.7). No webhooks: a laptop has no public URL. A merged PR moves
 // its ticket to Done; one closed without merging flags the ticket for a
 // person. Diff stats replace what agents reported.
 package prsync
@@ -18,10 +18,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/runner"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 type Syncer struct {

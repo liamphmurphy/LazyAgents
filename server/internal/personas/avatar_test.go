@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
 )
 
 func testImage(w, h int) image.Image {

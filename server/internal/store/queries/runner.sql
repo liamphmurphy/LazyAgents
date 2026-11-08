@@ -1,4 +1,4 @@
--- The runner (PLAN.md §6.4–6.6): queue, turns, heartbeats, PR sync.
+-- The runner (docs/dev/plan.md §6.4–6.6): queue, turns, heartbeats, PR sync.
 
 -- name: ClaimQueuedRun :one
 -- The oldest queued run whose agent has a free slot (max_concurrency from

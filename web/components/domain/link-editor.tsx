@@ -72,7 +72,7 @@ export function SuggestionList({
 
 /**
  * Markdown textarea with [[ autocomplete over pages, artifacts, tickets,
- * epics and agents (PLAN.md §12.6). ↑↓ to move, ↵ or Tab to insert.
+ * epics and agents (docs/dev/plan.md §12.6). ↑↓ to move, ↵ or Tab to insert.
  */
 export function LinkEditor({
   value,

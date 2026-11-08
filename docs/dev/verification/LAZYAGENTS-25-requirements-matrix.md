@@ -10,7 +10,7 @@ Evidence types: **fake-CLI** (Go test with `server/cmd/fake-harness`), **unit**,
 **real-stack e2e with fake CLI** (`npm run e2e:stack`, fake binaries), **real CLI
 error capture** (two credential-free 2.2.1 error envelopes), **real CLI + stub
 provider** (real 2.2.1 binary, localhost stub, no paid call; see
-[verification.md](../docs/contracts/opencode2/verification.md#real-cli-against-a-localhost-stub-2026-11-05);
+[verification.md](../../contracts/opencode2/verification.md#real-cli-against-a-localhost-stub-2026-11-05);
 captures `S/internal/harness/testdata/opencode-real-stub-*.jsonl`, opt-in runner e2e
 `S/internal/runner/opencode_real_test.go`), **static**, **docs**.
 Plain Playwright specs in `web/e2e/` run against mocked APIs and count as unit-level UI
@@ -19,7 +19,7 @@ evidence.
 Status: VERIFIED (fake) = proven only against the fake CLI or synthetic fixtures;
 VERIFIED (real) = proven against real OpenCode 2.2.1; UNVERIFIED = needs a real
 provider call or deployment, see
-[verification.md "Not verified"](../docs/contracts/opencode2/verification.md#not-verified-needs-a-paid-model-call-or-a-real-deployment);
+[verification.md "Not verified"](../../contracts/opencode2/verification.md#not-verified-needs-a-paid-model-call-or-a-real-deployment);
 UNMET = known requirement not implemented.
 
 Paths below are relative to the repo root. `S/` = `server/`, `W/` = `web/`.

@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // Consolidation thresholds. Stricter than Save's near-duplicate check: nobody

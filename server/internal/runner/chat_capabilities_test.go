@@ -13,11 +13,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/blob"
-	"github.com/liamphmurphy/lazyagents/server/internal/personas"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func (e env) persona(name string, code, images bool, repos ...string) store.Persona {

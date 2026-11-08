@@ -13,7 +13,7 @@ type ScopeChoice = ScopeMode | "inherit";
 
 /**
  * Edit one project's override. Scope choices only offer modes at or above
- * the agent's (projects can only tighten, PLAN.md §6.1); the server enforces
+ * the agent's (projects can only tighten, docs/dev/plan.md §6.1); the server enforces
  * the same rule when resolving.
  */
 export function OverrideDialog({

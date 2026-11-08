@@ -1,4 +1,4 @@
-// Package wiki is the team wiki and agent memory (PLAN.md §12): notes
+// Package wiki is the team wiki and agent memory (docs/dev/plan.md §12): notes
 // (artifacts of type `note` addressed by path), saving and renaming them,
 // agent write permissions and suggestions, backlinks, the link graph,
 // knowledge search and the memory a run starts with.
@@ -14,12 +14,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/links"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 type Service struct {

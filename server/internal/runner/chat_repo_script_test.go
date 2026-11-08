@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
 )
 
 func TestChatRepoSetupScript(t *testing.T) {

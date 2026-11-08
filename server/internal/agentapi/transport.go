@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -14,10 +14,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/broker"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/broker"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 )
 
 type mcpServer = *mcp.Server
@@ -319,8 +319,8 @@ func requireAgent(d Deps, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="lazyagents"`)
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"code": "unauthenticated", "message": "send Authorization: Bearer la_…"})
+			w.Header().Set("WWW-Authenticate", `Bearer realm="vesper"`)
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"code": "unauthenticated", "message": "send Authorization: Bearer vsp_…"})
 			return
 		}
 		c, err := agents.ResolveToken(r.Context(), d.Q, strings.TrimSpace(tok))

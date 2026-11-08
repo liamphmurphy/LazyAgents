@@ -18,15 +18,15 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
-	"github.com/liamphmurphy/lazyagents/server/internal/secrets"
-	"github.com/liamphmurphy/lazyagents/server/internal/seed"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
-	"github.com/liamphmurphy/lazyagents/server/internal/wiki"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/secrets"
+	"github.com/liamphmurphy/vesper/server/internal/seed"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
 type bearer struct {
@@ -183,7 +183,7 @@ func TestAgentAPIOverMCP(t *testing.T) {
 	}
 	call("log_event", map[string]any{"kind": "test_run", "payload": map[string]any{"passed": 312, "failed": 0, "duration_s": 252}})
 	call("report_usage", map[string]any{"tool_calls": 186, "input_tokens": 1800000, "output_tokens": 300000, "cost_usd": 4.18})
-	// Memory (PLAN.md §12): Atlas writes what it learned, linked to the
+	// Memory (docs/dev/plan.md §12): Atlas writes what it learned, linked to the
 	// ticket and the ADR; shared pages become suggestions.
 	if w := call("write_note", map[string]any{"path": "agents/atlas/Partition rollback gotchas",
 		"body": "Detaching a partition locks the parent; see [[ADR-012#Decision]]. From [[PAY-214]]."}); w["state"] != "published" {

@@ -12,13 +12,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
-	"github.com/liamphmurphy/lazyagents/server/internal/artifacts"
-	"github.com/liamphmurphy/lazyagents/server/internal/links"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// ContextPage is one wiki page a run starts with (PLAN.md §12.3).
+// ContextPage is one wiki page a run starts with (docs/dev/plan.md §12.3).
 type ContextPage struct {
 	Target    links.Target `json:"target"`
 	Ref       string       `json:"ref"`    // what to pass to read_page

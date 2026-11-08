@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/seed"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/seed"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
 // The Personal Assistant is created once per workspace, sidesteps a taken
@@ -54,7 +54,7 @@ func TestEnsureAssistant(t *testing.T) {
 	if _, err := (&tracker.Service{Pool: pool}).Create(ctx, ws, tracker.UserActor(me.ID), tracker.NewTicket{ProjectKey: "PAY", Title: "For the assistant", AssigneeAgentID: &a.ID}); err == nil || !strings.Contains(err.Error(), "Personal Assistant") {
 		t.Fatal("assigned a ticket to the assistant")
 	}
-	if _, err := svc.SaveDefinition(ctx, ws, me.ID, a.Handle, agents.Identity{Name: "PA", Kind: agents.KindMain}, spec, "Make it main"); err == nil || !strings.Contains(err.Error(), "managed by LazyAgents") {
+	if _, err := svc.SaveDefinition(ctx, ws, me.ID, a.Handle, agents.Identity{Name: "PA", Kind: agents.KindMain}, spec, "Make it main"); err == nil || !strings.Contains(err.Error(), "managed by Vesper") {
 		t.Fatal("edited the assistant into a main agent")
 	}
 	if err := svc.Delete(ctx, ws, a.Handle); err == nil || !strings.Contains(err.Error(), "can't be deleted") {

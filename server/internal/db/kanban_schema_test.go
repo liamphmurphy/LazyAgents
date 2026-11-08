@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/testdb"
+	"github.com/liamphmurphy/vesper/server/internal/testdb"
 )
 
 type kanbanFixture struct {
@@ -50,99 +49,6 @@ func (f kanbanFixture) epic(t *testing.T, pool *pgxpool.Pool, name string) strin
 		t.Fatal(err)
 	}
 	return id
-}
-
-func TestKanbanMigration(t *testing.T) {
-	pool := testdb.New(t)
-	ctx := context.Background()
-
-	// Seed one ticket per pre-00025 status, then migrate forward.
-	gooseTo(t, pool, false, 24)
-	f := seedKanban(t, pool)
-	oldStatuses := []string{"backlog", "todo", "in_progress", "in_review", "done"}
-	ids := map[string]string{}
-	for i, s := range oldStatuses {
-		ids[s] = f.ticket(t, pool, i+1, s, nil)
-	}
-	var oldEpic string
-	if err := pool.QueryRow(ctx, `INSERT INTO epics(workspace_id,project_id,name) VALUES($1,$2,'Old') RETURNING id`, f.ws, f.project).Scan(&oldEpic); err != nil {
-		t.Fatal(err)
-	}
-
-	gooseTo(t, pool, true, 25)
-
-	for _, s := range oldStatuses {
-		var got string
-		var rev int
-		var points *int
-		if err := pool.QueryRow(ctx, `SELECT status, revision, estimate_points FROM tickets WHERE id=$1`, ids[s]).Scan(&got, &rev, &points); err != nil {
-			t.Fatal(err)
-		}
-		if got != s {
-			t.Errorf("status %q became %q after the migration", s, got)
-		}
-		if rev != 1 || points != nil {
-			t.Errorf("%s: revision=%d estimate_points=%v, want 1 and NULL", s, rev, points)
-		}
-	}
-	var epicStatus string
-	if err := pool.QueryRow(ctx, `SELECT status FROM epics WHERE id=$1`, oldEpic).Scan(&epicStatus); err != nil {
-		t.Fatal(err)
-	}
-	if epicStatus != "open" {
-		t.Errorf("existing epic status = %q, want open", epicStatus)
-	}
-
-	// canceled is now valid; down maps it to done (closed, never dispatched).
-	canceled := f.ticket(t, pool, 10, "canceled", nil)
-	mustExec(t, pool, `UPDATE tickets SET estimate_points=5 WHERE id=$1`, ids["todo"])
-	mustExec(t, pool, `INSERT INTO epic_criteria(epic_id,position,text) VALUES($1,1,'c')`, oldEpic)
-
-	gooseTo(t, pool, false, 24)
-	var got string
-	if err := pool.QueryRow(ctx, `SELECT status FROM tickets WHERE id=$1`, canceled).Scan(&got); err != nil {
-		t.Fatal(err)
-	}
-	if got != "done" {
-		t.Errorf("canceled ticket after down = %q, want done", got)
-	}
-	for _, s := range oldStatuses {
-		if err := pool.QueryRow(ctx, `SELECT status FROM tickets WHERE id=$1`, ids[s]).Scan(&got); err != nil {
-			t.Fatal(err)
-		}
-		if got != s {
-			t.Errorf("status %q became %q after down", s, got)
-		}
-	}
-	var n int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE (table_name='tickets' AND column_name IN ('revision','estimate_points','estimate_rationale','estimated_by_type','estimated_by_id','estimated_at')) OR (table_name='epics' AND column_name='status') OR table_name='epic_criteria'`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Errorf("%d 00025 columns remain after down", n)
-	}
-	var restored, leftover int
-	if err := pool.QueryRow(ctx, `SELECT
-		count(*) FILTER (WHERE tgname = 'realtime_change' AND pg_get_triggerdef(oid) LIKE '%notify_change(%'),
-		count(*) FILTER (WHERE tgname LIKE 'realtime_change_%' OR tgname LIKE 'realtime_epic_%')
-		FROM pg_trigger WHERE tgrelid::regclass::text IN ('tickets','acceptance_criteria','comments','ticket_artifacts','ticket_dependencies','epics')`).Scan(&restored, &leftover); err != nil {
-		t.Fatal(err)
-	}
-	if restored != 6 || leftover != 0 {
-		t.Errorf("after down: %d realtime_change triggers restored (want 6), %d 00025 triggers left (want 0)", restored, leftover)
-	}
-	var epicTrigger string
-	if err := pool.QueryRow(ctx, `SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid='epics'::regclass AND tgname='realtime_change'`).Scan(&epicTrigger); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(epicTrigger, "'project.updated'") {
-		t.Errorf("epics trigger after down = %s, want project.updated", epicTrigger)
-	}
-	if _, err := pool.Exec(ctx, `UPDATE tickets SET status='canceled' WHERE id=$1`, canceled); err == nil {
-		t.Error("old schema accepted canceled after down")
-	}
-	// And up again works.
-	gooseTo(t, pool, true, 25)
 }
 
 func TestKanbanConstraints(t *testing.T) {

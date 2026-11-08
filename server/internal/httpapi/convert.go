@@ -6,8 +6,8 @@ import (
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/api"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/api"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func toUser(u store.User) api.User {

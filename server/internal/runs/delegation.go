@@ -12,13 +12,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agents"
-	"github.com/liamphmurphy/lazyagents/server/internal/apperr"
-	"github.com/liamphmurphy/lazyagents/server/internal/store"
-	"github.com/liamphmurphy/lazyagents/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
-// Delegation (PLAN.md §6.8). Main agents take tickets; sub agents only run
+// Delegation (docs/dev/plan.md §6.8). Main agents take tickets; sub agents only run
 // when a main agent hands them part of a ticket. A delegated run is a child of
 // the main agent's run: same ticket, but it works in its own git worktree
 // (inside the parent's workspace) on its own branch cut from the parent's

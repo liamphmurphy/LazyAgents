@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 )
 
 func TestContractNormalizeAndPaths(t *testing.T) {

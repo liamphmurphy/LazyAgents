@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liamphmurphy/lazyagents/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
 // Codex runs `codex exec --json` (checked against codex-cli 0.167.0; features.image_generation needs 0.167 or newer).
