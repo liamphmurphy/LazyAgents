@@ -10,7 +10,7 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, Card, Field, Skeleton, TextInput } from "@/components/ui/primitives";
 import { HumanAvatar } from "@/components/domain/avatars";
 
-/** Settings → Profile: your picture, display name, role title and (read-only) email. */
+/** Customization → You: your picture, display name, role title and (read-only) email. */
 export function ProfileSection() {
   const boot = useBootstrap();
   if (boot.isError) {

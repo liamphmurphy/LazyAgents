@@ -15,6 +15,7 @@ import { PersonaAvatar } from "../chat/_components/persona";
 import { PersonaEditor } from "../chat/_components/persona-editor";
 import { ExportMenu, ImportView, MemorySection } from "./memory-section";
 import { DefaultBadge, DeleteDialog, PersonaProfile } from "./persona-profile";
+import { ProfileSection } from "./profile-section";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -29,14 +30,15 @@ function RailButton({ on, onClick, lead, testId, children }: { on: boolean; onCl
   );
 }
 
-function PlainHeader({ lead, title, detail }: { lead: ReactNode; title: string; detail: string }) {
+function PlainHeader({ lead, title, detail, actions }: { lead: ReactNode; title: string; detail: string; actions?: ReactNode }) {
   return (
     <header className="flex items-center gap-4">
       {lead}
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <h2 className="truncate text-lg font-semibold text-fg">{title}</h2>
         <p className="text-xs text-fg-secondary">{detail}</p>
       </div>
+      {actions}
     </header>
   );
 }
@@ -59,9 +61,11 @@ export function CustomizationScreen() {
   const [editing, setEditing] = useState<Persona | "new" | null>(null);
   const [deleting, setDeleting] = useState<Persona | null>(null);
   const [importing, setImporting] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const total = count.data?.total;
   const pick = (v: string) => {
     setImporting(false);
+    setEditingProfile(false);
     router.replace(v ? `/customization?who=${encodeURIComponent(v)}` : "/customization", { scroll: false });
   };
   const me = boot.data?.me;
@@ -135,7 +139,19 @@ export function CustomizationScreen() {
                 {selected ? (
                   <PersonaProfile p={selected} memories={scoped.data?.total} onEdit={() => setEditing(selected)} onDelete={() => setDeleting(selected)} />
                 ) : whose === "person" ? (
-                  <PlainHeader lead={<HumanAvatar name={me?.name ?? "You"} initials={me?.initials} src={me?.avatar_url} size={72} label={false} />} title={me?.name ?? "You"} detail="What your personas remember about you." />
+                  <>
+                    <PlainHeader
+                      lead={<HumanAvatar name={me?.name ?? "You"} initials={me?.initials} color={me?.avatar_color} src={me?.avatar_url} size={72} label={false} />}
+                      title={me?.name ?? "You"}
+                      detail={[me?.role_title, "What your personas remember about you."].filter(Boolean).join(" · ")}
+                      actions={<Button variant="secondary" aria-pressed={editingProfile} onClick={() => setEditingProfile((v) => !v)}>{editingProfile ? "Done" : "Edit profile"}</Button>}
+                    />
+                    {editingProfile && (
+                      <section aria-label="Profile">
+                        <ProfileSection />
+                      </section>
+                    )}
+                  </>
                 ) : (
                   <PlainHeader lead={<span className="grid size-[72px] place-items-center rounded-full bg-selected text-fg-secondary"><Icon name="bookmark" size={28} /></span>} title="Everything" detail="Every memory: about you, and each persona’s own." />
                 )}

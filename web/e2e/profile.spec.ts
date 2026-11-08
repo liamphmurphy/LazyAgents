@@ -1,17 +1,20 @@
 import { expect, test } from "@playwright/test";
 import { installChatApi } from "./mock-chat-api";
 
-// Settings → Profile: display name and role title, picture upload/replace/remove, shown in the shell.
+// Customization → You: display name and role title, picture upload/replace/remove. The menu has no profile.
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 const profile = (page: import("@playwright/test").Page) => page.getByRole("region", { name: "Profile" });
-const sidebarPic = (page: import("@playwright/test").Page) => page.getByRole("complementary", { name: "Main menu" }).locator("img:not([src$=\"logo.svg\"])");
+const headerPic = (page: import("@playwright/test").Page) => page.getByRole("region", { name: "Customization" }).locator("header img");
+
+async function openProfile(page: import("@playwright/test").Page) {
+  await page.goto("/customization?who=person");
+  await page.getByRole("button", { name: "Edit profile" }).click();
+}
 
 test("edit the display name and role: Save is gated, and the shell shows the new name", async ({ page }) => {
   const mock = await installChatApi(page);
-  // The sidebar starts collapsed; open it to read the name and role.
-  await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
-  await page.goto("/settings#profile");
+  await openProfile(page);
   const section = profile(page);
   await expect(section.getByLabel("Email")).toHaveValue("liam@example.com");
   await expect(section.getByLabel("Email")).toBeDisabled();
@@ -30,16 +33,17 @@ test("edit the display name and role: Save is gated, and the shell shows the new
   await save.click();
   await expect(section.getByRole("status")).toHaveText("Profile saved.");
   expect(mock.profileRequests).toEqual([`PATCH ${JSON.stringify({ name: "Maya Chen", role_title: "Engineering lead" })}`]);
-  const menu = page.getByRole("complementary", { name: "Main menu" });
-  await expect(menu.getByRole("link", { name: /Maya Chen/ })).toContainText("Engineering lead");
+  const header = page.getByRole("region", { name: "Customization" }).locator("header").last();
+  await expect(header).toContainText("Maya Chen");
+  await expect(header).toContainText("Engineering lead");
   await expect(save).toBeDisabled();
 });
 
-test("upload, replace and remove a picture; the sidebar follows", async ({ page }) => {
+test("upload, replace and remove a picture; the header follows", async ({ page }) => {
   const mock = await installChatApi(page);
-  await page.goto("/settings#profile");
+  await openProfile(page);
   const section = profile(page);
-  await expect(sidebarPic(page)).toHaveCount(0);
+  await expect(headerPic(page)).toHaveCount(0);
   await expect(section.getByRole("button", { name: "Remove" })).toHaveCount(0);
 
   // Client checks: a text file never reaches the server.
@@ -50,19 +54,26 @@ test("upload, replace and remove a picture; the sidebar follows", async ({ page 
   await section.getByLabel("Profile picture file").setInputFiles({ name: "me.png", mimeType: "image/png", buffer: PNG });
   await expect(section.getByRole("button", { name: "Replace picture" })).toBeVisible();
   await expect(section.locator("img")).toHaveCount(1);
-  await expect(sidebarPic(page)).toHaveCount(1);
+  await expect(headerPic(page)).toHaveCount(1);
   await expect(section.getByRole("alert")).toHaveCount(0);
 
   await section.getByRole("button", { name: "Remove" }).click();
   await expect(section.getByRole("button", { name: "Upload picture" })).toBeVisible();
-  await expect(sidebarPic(page)).toHaveCount(0);
+  await expect(headerPic(page)).toHaveCount(0);
   expect(mock.profileRequests).toEqual(["PUT avatar", "DELETE avatar"]);
 });
 
-test("the sidebar links to the profile section", async ({ page }) => {
+test("the profile is only under Customization, not in the menu or Settings", async ({ page }) => {
   await installChatApi(page);
+  await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
   await page.goto("/chat?project=WEB");
-  await page.getByRole("complementary", { name: "Main menu" }).getByRole("link", { name: /Liam/ }).click();
-  await expect(page).toHaveURL(/\/settings#profile$/);
+  const menu = page.getByRole("complementary", { name: "Main menu" });
+  await expect(menu.getByRole("button", { name: "New conversation" })).toBeVisible();
+  await expect(menu.getByRole("link", { name: /Liam/ })).toHaveCount(0);
+  await menu.getByRole("link", { name: "Customization", exact: true }).click();
+  await page.getByRole("button", { name: /^You/ }).click();
+  await page.getByRole("button", { name: "Edit profile" }).click();
   await expect(profile(page).getByLabel("Display name")).toHaveValue("Liam");
+  await page.goto("/settings");
+  await expect(page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: /Profile/ })).toHaveCount(0);
 });
