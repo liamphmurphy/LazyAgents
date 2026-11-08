@@ -382,6 +382,82 @@ type Label struct {
 	UpdatedAt   time.Time
 }
 
+type LearningAttempt struct {
+	ID         uuid.UUID
+	CheckID    uuid.UUID
+	UserID     uuid.UUID
+	Response   []string
+	Correct    *bool
+	Confidence int16
+	CreatedAt  time.Time
+}
+
+type LearningCheck struct {
+	ID          uuid.UUID
+	LessonID    uuid.UUID
+	Seq         int32
+	Objective   string
+	Kind        string
+	Prompt      string
+	Options     []string
+	Answer      string
+	Rubric      string
+	Explanation string
+	Sources     []int32
+}
+
+type LearningCourse struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	UserID        uuid.UUID
+	ChatID        uuid.UUID
+	ResearchJobID *uuid.UUID
+	Topic         string
+	Goal          string
+	Level         string
+	MinutesBudget int32
+	State         string
+	Error         string
+	Round         int32
+	MaxSources    int32
+	MaxMinutes    int32
+	MaxCostMicros *int64
+	Outline       []byte
+	CurrentLesson string
+	CreatedAt     time.Time
+	ReadyAt       *time.Time
+}
+
+type LearningLesson struct {
+	ID         uuid.UUID
+	CourseID   uuid.UUID
+	Seq        int32
+	UnitSeq    int32
+	Key        string
+	Title      string
+	Objectives []string
+	Prereqs    []string
+	Minutes    int32
+	Status     string
+	Body       json.RawMessage
+	Issues     []string
+}
+
+type LearningRun struct {
+	RunID    uuid.UUID
+	CourseID uuid.UUID
+	Role     string
+	Round    int32
+	UnitSeq  int32
+}
+
+type LearningSource struct {
+	CourseID uuid.UUID
+	N        int32
+	Title    string
+	Url      string
+}
+
 type LibraryItem struct {
 	ID                 uuid.UUID
 	WorkspaceID        uuid.UUID
@@ -556,6 +632,7 @@ type ResearchJob struct {
 	Report           []byte
 	CreatedAt        time.Time
 	FinishedAt       *time.Time
+	Kind             string
 }
 
 type ResearchTask struct {

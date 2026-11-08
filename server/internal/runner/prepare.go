@@ -678,11 +678,16 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 			return nil, "Could not load the person's workflows.", fmt.Errorf("chat workflows: %w", err)
 		}
 		spec.Instructions += workflows
+		tutor, err := runs.LearningTutorNote(ctx, q, chat)
+		if err != nil {
+			return nil, "Could not load the course.", fmt.Errorf("course note: %w", err)
+		}
+		spec.Instructions += tutor
 		if svg {
 			spec.Instructions += agents.AssistantSVGSection
 		}
 		return harness.ChatAgentsMDWithGroup(spec, paths, c.project.Key, idx, persona, group), "", nil
-	case runs.PurposeResearch, runs.PurposeWorkflow:
+	case runs.PurposeResearch, runs.PurposeWorkflow, runs.PurposeLearning:
 		return []byte(c.spec.Instructions), "", nil
 	case "planning":
 		return []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n")), "", nil

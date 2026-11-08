@@ -2153,6 +2153,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/learn/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The person's learning modules, newest first */
+        get: operations["listCourses"];
+        put?: never;
+        /** Start a module by drafting its outline */
+        post: operations["createCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learn/courses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** A module with its lessons and the person's progress; answer keys stay on the server until earned */
+        get: operations["getCourse"];
+        put?: never;
+        post?: never;
+        /** Delete a module and its tutor chat, stopping any build */
+        delete: operations["deleteCourse"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learn/courses/{id}/outline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Rearrange an outline awaiting approval; an unsound order is refused */
+        put: operations["editCourseOutline"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learn/courses/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve the outline and start research */
+        post: operations["approveCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learn/courses/{id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop a module's build */
+        post: operations["stopCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learn/courses/{id}/checks/{checkId}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                checkId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer a check; the server grades it */
+        post: operations["attemptCourseCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learn/courses/{id}/attempts/{attemptId}/grade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark your own short answer against its rubric */
+        post: operations["gradeCourseAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learn/courses/{id}/tutor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the module's tutor about a lesson */
+        post: operations["postCourseTutorMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/canvases": {
         parameters: {
             query?: never;
@@ -3698,7 +3852,7 @@ export interface components {
              * @description What the run works on: a ticket, a plan or a chat
              * @enum {string}
              */
-            purpose: "ticket" | "planning" | "chat" | "research" | "workflow";
+            purpose: "ticket" | "planning" | "chat" | "research" | "workflow" | "learning";
             /** Format: uuid */
             planning_id?: string;
             /**
@@ -4003,7 +4157,7 @@ export interface components {
             /** Format: uuid */
             run_id: string;
             /** @enum {string} */
-            purpose: "ticket" | "planning" | "chat" | "research" | "workflow";
+            purpose: "ticket" | "planning" | "chat" | "research" | "workflow" | "learning";
             agent: components["schemas"]["AgentRef"];
             ticket_key?: string;
             ticket_title?: string;
@@ -4882,6 +5036,158 @@ export interface components {
             /** @description approve, changes or reject */
             decision: string;
             note?: string;
+        };
+        /** @enum {string} */
+        CourseState: "scoping" | "outline_ready" | "researching" | "authoring" | "verifying" | "ready" | "stopped" | "failed";
+        CourseCreate: {
+            project: string;
+            topic: string;
+            goal?: string;
+            /** @enum {string} */
+            level: "new" | "some" | "experienced";
+            minutes_budget: number;
+            /**
+             * Format: uuid
+             * @description The tutor; omit for the default persona
+             */
+            persona_id?: string;
+            harness?: string;
+            model?: string;
+            effort?: components["schemas"]["ChatEffort"];
+        };
+        CourseSummary: {
+            /** Format: uuid */
+            id: string;
+            topic: string;
+            state: components["schemas"]["CourseState"];
+            error: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            ready_at?: string;
+            units: number;
+            /** @description Lessons there are to study */
+            lessons: number;
+            complete: number;
+            solid: number;
+            flagged: number;
+            minutes?: number;
+            /** @description Title of the first lesson not yet complete */
+            next_lesson?: string;
+            /** @description How far the current build stage has got */
+            build_note: string;
+        };
+        CourseOutlineLesson: {
+            key: string;
+            title: string;
+            objectives: string[];
+            prereqs: string[];
+            minutes: number;
+            known?: boolean;
+        };
+        CourseOutlineUnit: {
+            title: string;
+            question: string;
+            lessons: components["schemas"]["CourseOutlineLesson"][];
+        };
+        CourseOutline: {
+            summary: string;
+            units: components["schemas"]["CourseOutlineUnit"][];
+        };
+        CourseOutlineEdit: {
+            units: {
+                title: string;
+                lessons: string[];
+            }[];
+            known: string[];
+        };
+        CourseApprove: {
+            max_sources: number;
+            max_minutes: number;
+            /** @description Omit for no spend limit */
+            max_cost_usd?: number;
+        };
+        CourseBlock: {
+            /** @enum {string} */
+            kind: "heading" | "text" | "code";
+            text: string;
+            lang?: string;
+            /** @enum {string} */
+            provenance?: "sourced" | "model_knowledge";
+            sources?: number[];
+        };
+        CourseReveal: {
+            answer: string[];
+            rubric: string;
+            explanation: string;
+        };
+        CourseCheck: {
+            /** Format: uuid */
+            id: string;
+            objective: string;
+            /** @enum {string} */
+            kind: "mcq" | "order" | "short";
+            prompt: string;
+            /** @description Shuffled */
+            options: string[];
+            attempts: number;
+            solved: boolean;
+            last_correct?: boolean;
+            /**
+             * Format: uuid
+             * @description A short answer waiting for the person's own mark
+             */
+            ungraded_attempt_id?: string;
+            reveal?: components["schemas"]["CourseReveal"];
+        };
+        CourseLesson: {
+            key: string;
+            title: string;
+            unit_title: string;
+            objectives: string[];
+            prereqs: string[];
+            minutes: number;
+            /** @enum {string} */
+            status: "pending" | "written" | "verified" | "flagged" | "known";
+            body: components["schemas"]["CourseBlock"][];
+            issues: string[];
+            /** @enum {string} */
+            progress: "new" | "complete" | "solid";
+            /** @description Titles of prerequisites not yet complete */
+            shaky_prereqs: string[];
+            checks: components["schemas"]["CourseCheck"][];
+        };
+        CourseSource: {
+            n: number;
+            title: string;
+            url: string;
+        };
+        Course: {
+            summary: components["schemas"]["CourseSummary"];
+            goal: string;
+            /** @enum {string} */
+            level: "new" | "some" | "experienced";
+            minutes_budget: number;
+            /** Format: uuid */
+            chat_id: string;
+            max_sources: number;
+            max_minutes: number;
+            outline?: components["schemas"]["CourseOutline"];
+            lessons: components["schemas"]["CourseLesson"][];
+            sources: components["schemas"]["CourseSource"][];
+        };
+        CourseAttemptCreate: {
+            /** @description mcq: the chosen option. order: every item in order. short: the answer. */
+            response: string[];
+            /** @description 0 is not given; 1 to 3 is guessing to certain */
+            confidence: number;
+        };
+        CourseAttempt: {
+            /** Format: uuid */
+            id: string;
+            /** @description Absent for a short answer until the person marks it */
+            correct?: boolean;
+            reveal?: components["schemas"]["CourseReveal"];
         };
         ResearchStart: {
             /**
@@ -6933,7 +7239,7 @@ export interface operations {
                 agent?: string;
                 /** @description Project key */
                 project?: string;
-                purpose?: "ticket" | "planning" | "chat" | "research" | "workflow";
+                purpose?: "ticket" | "planning" | "chat" | "research" | "workflow" | "learning";
                 /** @description Ticket key: every run on that ticket, delegated runs included */
                 ticket?: string;
                 offset?: number;
@@ -8988,6 +9294,278 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listCourses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Modules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseSummary"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseCreate"];
+            };
+        };
+        responses: {
+            /** @description The module */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Course"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The module */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Course"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    editCourseOutline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseOutlineEdit"];
+            };
+        };
+        responses: {
+            /** @description The module */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Course"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    approveCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseApprove"];
+            };
+        };
+        responses: {
+            /** @description The module */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Course"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    stopCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The module */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Course"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    attemptCourseCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                checkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseAttemptCreate"];
+            };
+        };
+        responses: {
+            /** @description The result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseAttempt"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    gradeCourseAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    correct: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Marked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    postCourseTutorMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    body: string;
+                    /** @description The key of the lesson being studied */
+                    lesson: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

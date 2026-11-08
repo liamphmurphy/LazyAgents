@@ -72,6 +72,14 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}
+	case r.Purpose == runs.PurposeLearning:
+		if l, err := s.Q.LearningCourseForRun(ctx, r.ID); err == nil {
+			if c, err := s.Q.GetChatSession(ctx, store.GetChatSessionParams{ID: l.ChatID, WorkspaceID: l.WorkspaceID}); err == nil {
+				out.WorkTitle, projectID = &l.Topic, c.ProjectID
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return out, err
+		}
 	case r.Purpose == runs.PurposeWorkflow:
 		if w, err := s.Q.WorkflowRunForAgentRun(ctx, &r.ID); err == nil {
 			out.ChatId, out.WorkTitle, projectID = &w.ChatID, &w.Name, w.ProjectID
@@ -239,6 +247,15 @@ func (s *Server) readableRun(ctx context.Context, id uuid.UUID) (store.Run, erro
 	}
 	if r.Purpose == runs.PurposeResearch {
 		owns, err := s.Q.OwnsResearchRun(ctx, store.OwnsResearchRunParams{RunID: r.ID, UserID: u.ID})
+		if err != nil {
+			return r, err
+		}
+		if !owns {
+			return r, apperr.ErrNotFound
+		}
+	}
+	if r.Purpose == runs.PurposeLearning {
+		owns, err := s.Q.OwnsLearningRun(ctx, store.OwnsLearningRunParams{RunID: r.ID, UserID: u.ID})
 		if err != nil {
 			return r, err
 		}

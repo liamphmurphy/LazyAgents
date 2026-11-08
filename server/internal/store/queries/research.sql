@@ -1,6 +1,6 @@
 -- name: CreateResearchJob :one
-INSERT INTO research_jobs (workspace_id, chat_id, user_id, message_id, title, max_sources, max_minutes, max_cost_micros)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;
+INSERT INTO research_jobs (workspace_id, chat_id, user_id, message_id, title, max_sources, max_minutes, max_cost_micros, kind)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;
 
 -- name: CreateResearchTask :one
 INSERT INTO research_tasks (job_id, run_id, seq, label, question) VALUES ($1, $2, $3, $4, $5) RETURNING *;
@@ -15,7 +15,7 @@ SELECT * FROM research_jobs WHERE id = $1 AND chat_id = $2;
 SELECT * FROM research_jobs WHERE id = $1 FOR UPDATE;
 
 -- name: ListResearchJobs :many
-SELECT * FROM research_jobs WHERE chat_id = $1 ORDER BY created_at;
+SELECT * FROM research_jobs WHERE chat_id = $1 AND kind = 'chat' ORDER BY created_at;
 
 -- name: ActiveResearchJobs :many
 SELECT id, chat_id FROM research_jobs WHERE state IN ('running', 'finishing', 'ready', 'writing') ORDER BY created_at LIMIT 50;

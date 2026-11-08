@@ -152,7 +152,9 @@ type ChatInput struct {
 	RepoURL string
 	// Hidden keeps the chat out of chat lists, search and the dock, for a chat
 	// that lives behind another screen. Fixed for the chat's life.
-	Hidden  bool
+	Hidden bool
+	// NoRepo keeps a coding persona's chat out of its repositories.
+	NoRepo  bool
 	Message *ChatMessageInput
 }
 
@@ -188,6 +190,16 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		return out, apperr.Invalid("title", "must be at most 200 characters")
 	}
 	err := s.tx(ctx, func(q *store.Queries) error {
+		var err error
+		out, err = s.startChat(ctx, q, ws, user, in)
+		return err
+	})
+	return out, err
+}
+
+func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid.UUID, in ChatInput) (store.ChatSession, error) {
+	var out store.ChatSession
+	err := func() error {
 		p, err := q.LockProjectByKey(ctx, store.LockProjectByKeyParams{WorkspaceID: ws, Key: in.Project})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.Invalid("project", "unknown project")
@@ -241,6 +253,9 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if err != nil {
 			return err
 		}
+		if in.NoRepo {
+			repo = ""
+		}
 		title := in.Title
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
@@ -260,7 +275,7 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 			out, _, err = postChatMessage(ctx, q, s.ChatCatalog(), out, *in.Message, s.HandoffChars)
 		}
 		return err
-	})
+	}()
 	return out, err
 }
 

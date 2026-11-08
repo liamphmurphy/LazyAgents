@@ -28,6 +28,8 @@ info:
 servers:
   - url: /api/v1
 tags:
+  - name: learn
+    description: Guided Learning modules
   - name: system
   - name: workspace
   - name: tickets
@@ -1242,7 +1244,7 @@ paths:
           schema: { type: string, enum: [live, all, queued, starting, running, waiting, waiting_for_quota, paused, blocked, completed, failed, cancelled], default: live }
         - { name: agent, in: query, description: Agent handle, schema: { type: string } }
         - { name: project, in: query, description: Project key, schema: { type: string } }
-        - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat, research, workflow] } }
+        - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat, research, workflow, learning] } }
         - { name: ticket, in: query, description: "Ticket key: every run on that ticket, delegated runs included", schema: { type: string } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
       responses:
@@ -2709,6 +2711,195 @@ paths:
               schema: { $ref: "#/components/schemas/ResearchJob" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /learn/courses:
+    get:
+      operationId: listCourses
+      summary: The person's learning modules, newest first
+      tags: [learn]
+      responses:
+        "200":
+          description: Modules
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CourseSummary" } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createCourse
+      summary: Start a module by drafting its outline
+      tags: [learn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseCreate" }
+      responses:
+        "201":
+          description: The module
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /learn/courses/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getCourse
+      summary: A module with its lessons and the person's progress; answer keys stay on the server until earned
+      tags: [learn]
+      responses:
+        "200":
+          description: The module
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteCourse
+      summary: Delete a module and its tutor chat, stopping any build
+      tags: [learn]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /learn/courses/{id}/outline:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: editCourseOutline
+      summary: Rearrange an outline awaiting approval; an unsound order is refused
+      tags: [learn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseOutlineEdit" }
+      responses:
+        "200":
+          description: The module
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /learn/courses/{id}/approve:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: approveCourse
+      summary: Approve the outline and start research
+      tags: [learn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseApprove" }
+      responses:
+        "200":
+          description: The module
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /learn/courses/{id}/stop:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: stopCourse
+      summary: Stop a module's build
+      tags: [learn]
+      responses:
+        "200":
+          description: The module
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /learn/courses/{id}/checks/{checkId}/attempts:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: checkId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: attemptCourseCheck
+      summary: Answer a check; the server grades it
+      tags: [learn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseAttemptCreate" }
+      responses:
+        "201":
+          description: The result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseAttempt" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /learn/courses/{id}/attempts/{attemptId}/grade:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: gradeCourseAttempt
+      summary: Mark your own short answer against its rubric
+      tags: [learn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correct]
+              properties:
+                correct: { type: boolean }
+      responses:
+        "204": { description: Marked }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /learn/courses/{id}/tutor:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: postCourseTutorMessage
+      summary: Ask the module's tutor about a lesson
+      tags: [learn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body, lesson]
+              properties:
+                body: { type: string, minLength: 1 }
+                lesson: { type: string, description: The key of the lesson being studied }
+      responses:
+        "202": { description: Queued }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   /chats/{id}/canvases:
@@ -4399,7 +4590,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticket_key: { type: string, description: Empty for standalone planning runs }
-        purpose: { type: string, enum: [ticket, planning, chat, research, workflow], description: "What the run works on: a ticket, a plan or a chat" }
+        purpose: { type: string, enum: [ticket, planning, chat, research, workflow, learning], description: "What the run works on: a ticket, a plan or a chat" }
         planning_id: { type: string, format: uuid }
         chat_id: { type: string, format: uuid, description: The chat session of a chat run }
         project_key: { type: string, description: "Project of the ticket, plan or chat" }
@@ -4647,7 +4838,7 @@ components:
       required: [run_id, purpose, agent, reads, last_read_at]
       properties:
         run_id: { type: string, format: uuid }
-        purpose: { type: string, enum: [ticket, planning, chat, research, workflow] }
+        purpose: { type: string, enum: [ticket, planning, chat, research, workflow, learning] }
         agent: { $ref: "#/components/schemas/AgentRef" }
         ticket_key: { type: string }
         ticket_title: { type: string }
@@ -5480,6 +5671,161 @@ components:
         node_id: { type: string }
         decision: { type: string, description: "approve, changes or reject" }
         note: { type: string }
+    CourseState: { type: string, enum: [scoping, outline_ready, researching, authoring, verifying, ready, stopped, failed] }
+    CourseCreate:
+      type: object
+      required: [project, topic, level, minutes_budget]
+      properties:
+        project: { type: string }
+        topic: { type: string, minLength: 1, maxLength: 200 }
+        goal: { type: string, maxLength: 1000 }
+        level: { type: string, enum: [new, some, experienced] }
+        minutes_budget: { type: integer, minimum: 15, maximum: 1200 }
+        persona_id: { type: string, format: uuid, description: The tutor; omit for the default persona }
+        harness: { type: string }
+        model: { type: string }
+        effort: { $ref: "#/components/schemas/ChatEffort" }
+    CourseSummary:
+      type: object
+      required: [id, topic, state, error, created_at, units, lessons, complete, solid, flagged, build_note]
+      properties:
+        id: { type: string, format: uuid }
+        topic: { type: string }
+        state: { $ref: "#/components/schemas/CourseState" }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        ready_at: { type: string, format: date-time }
+        units: { type: integer }
+        lessons: { type: integer, description: Lessons there are to study }
+        complete: { type: integer }
+        solid: { type: integer }
+        flagged: { type: integer }
+        minutes: { type: integer }
+        next_lesson: { type: string, description: Title of the first lesson not yet complete }
+        build_note: { type: string, description: How far the current build stage has got }
+    CourseOutlineLesson:
+      type: object
+      required: [key, title, objectives, prereqs, minutes]
+      properties:
+        key: { type: string }
+        title: { type: string }
+        objectives: { type: array, items: { type: string } }
+        prereqs: { type: array, items: { type: string } }
+        minutes: { type: integer }
+        known: { type: boolean }
+    CourseOutlineUnit:
+      type: object
+      required: [title, question, lessons]
+      properties:
+        title: { type: string }
+        question: { type: string }
+        lessons: { type: array, items: { $ref: "#/components/schemas/CourseOutlineLesson" } }
+    CourseOutline:
+      type: object
+      required: [summary, units]
+      properties:
+        summary: { type: string }
+        units: { type: array, items: { $ref: "#/components/schemas/CourseOutlineUnit" } }
+    CourseOutlineEdit:
+      type: object
+      required: [units, known]
+      properties:
+        units:
+          type: array
+          items:
+            type: object
+            required: [title, lessons]
+            properties:
+              title: { type: string }
+              lessons: { type: array, items: { type: string } }
+        known: { type: array, items: { type: string } }
+    CourseApprove:
+      type: object
+      required: [max_sources, max_minutes]
+      properties:
+        max_sources: { type: integer, minimum: 5, maximum: 200 }
+        max_minutes: { type: integer, minimum: 5, maximum: 120 }
+        max_cost_usd: { type: number, description: Omit for no spend limit }
+    CourseBlock:
+      type: object
+      required: [kind, text]
+      properties:
+        kind: { type: string, enum: [heading, text, code] }
+        text: { type: string }
+        lang: { type: string }
+        provenance: { type: string, enum: [sourced, model_knowledge] }
+        sources: { type: array, items: { type: integer } }
+    CourseReveal:
+      type: object
+      required: [answer, rubric, explanation]
+      properties:
+        answer: { type: array, items: { type: string } }
+        rubric: { type: string }
+        explanation: { type: string }
+    CourseCheck:
+      type: object
+      required: [id, objective, kind, prompt, options, attempts, solved]
+      properties:
+        id: { type: string, format: uuid }
+        objective: { type: string }
+        kind: { type: string, enum: [mcq, order, short] }
+        prompt: { type: string }
+        options: { type: array, items: { type: string }, description: Shuffled }
+        attempts: { type: integer }
+        solved: { type: boolean }
+        last_correct: { type: boolean }
+        ungraded_attempt_id: { type: string, format: uuid, description: A short answer waiting for the person's own mark }
+        reveal: { $ref: "#/components/schemas/CourseReveal" }
+    CourseLesson:
+      type: object
+      required: [key, title, unit_title, objectives, prereqs, minutes, status, body, issues, progress, shaky_prereqs, checks]
+      properties:
+        key: { type: string }
+        title: { type: string }
+        unit_title: { type: string }
+        objectives: { type: array, items: { type: string } }
+        prereqs: { type: array, items: { type: string } }
+        minutes: { type: integer }
+        status: { type: string, enum: [pending, written, verified, flagged, known] }
+        body: { type: array, items: { $ref: "#/components/schemas/CourseBlock" } }
+        issues: { type: array, items: { type: string } }
+        progress: { type: string, enum: [new, complete, solid] }
+        shaky_prereqs: { type: array, items: { type: string }, description: Titles of prerequisites not yet complete }
+        checks: { type: array, items: { $ref: "#/components/schemas/CourseCheck" } }
+    CourseSource:
+      type: object
+      required: [n, title, url]
+      properties:
+        n: { type: integer }
+        title: { type: string }
+        url: { type: string }
+    Course:
+      type: object
+      required: [summary, goal, level, minutes_budget, chat_id, max_sources, max_minutes, lessons, sources]
+      properties:
+        summary: { $ref: "#/components/schemas/CourseSummary" }
+        goal: { type: string }
+        level: { type: string, enum: [new, some, experienced] }
+        minutes_budget: { type: integer }
+        chat_id: { type: string, format: uuid }
+        max_sources: { type: integer }
+        max_minutes: { type: integer }
+        outline: { $ref: "#/components/schemas/CourseOutline" }
+        lessons: { type: array, items: { $ref: "#/components/schemas/CourseLesson" } }
+        sources: { type: array, items: { $ref: "#/components/schemas/CourseSource" } }
+    CourseAttemptCreate:
+      type: object
+      required: [response, confidence]
+      properties:
+        response: { type: array, items: { type: string }, description: "mcq: the chosen option. order: every item in order. short: the answer." }
+        confidence: { type: integer, minimum: 0, maximum: 3, description: "0 is not given; 1 to 3 is guessing to certain" }
+    CourseAttempt:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        correct: { type: boolean, description: Absent for a short answer until the person marks it }
+        reveal: { $ref: "#/components/schemas/CourseReveal" }
     ResearchStart:
       type: object
       required: [message_id, title, questions, max_sources, max_minutes]

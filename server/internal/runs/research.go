@@ -27,6 +27,8 @@ import (
 const (
 	PurposeResearch = "research"
 
+	researchKindChat, researchKindCourse = "chat", "course"
+
 	researchMinSources, researchMaxSources = 5, 200
 	researchMinMinutes, researchMaxMinutes = 5, 120
 	researchMaxQuestions                   = 5
@@ -154,52 +156,59 @@ func (s *Service) StartResearch(ctx context.Context, ws, user, chatID uuid.UUID,
 		if p.Archived {
 			return apperr.Conflict("restore the archived project before researching")
 		}
-		agent, base, err := assistantSpec(ctx, q, ws, p.Key)
-		if err != nil {
-			return err
-		}
-		spec := ResearchSpec(base, chat.Harness, chat.Model, chat.Effort, in.MaxMinutes)
-		if err := spec.Validate(); err != nil {
-			return apperr.Invalid("harness", "%s", err.Error())
-		}
-		raw, err := json.Marshal(spec)
-		if err != nil {
-			return err
-		}
-		var capMicros *int64
-		if in.MaxCostUSD != nil {
-			m := int64(*in.MaxCostUSD * 1e6)
-			capMicros = &m
-		}
-		job, err = q.CreateResearchJob(ctx, store.CreateResearchJobParams{WorkspaceID: ws, ChatID: chat.ID, UserID: user, MessageID: &msg.ID, Title: in.Title,
-			MaxSources: int32(in.MaxSources), MaxMinutes: int32(in.MaxMinutes), MaxCostMicros: capMicros})
-		if err != nil {
-			return err
-		}
-		share := max(in.MaxSources/len(in.Questions), 1)
-		for i, question := range in.Questions {
-			run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, AgentID: agent.ID, Mode: "managed", State: "queued", ResolvedSpec: raw,
-				DefinitionVersionID: agent.CurrentDefinitionVersionID, Harness: spec.Harness, Model: spec.Model, Purpose: PurposeResearch})
-			if err != nil {
-				return err
-			}
-			if err := q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &user}); err != nil {
-				return err
-			}
-			prompt := fmt.Sprintf("Research topic: %s\nYour part (%s): %s\nOpen about %d sources at most. Report through submit_findings, then stop.", in.Title, question.Label, question.Question, share)
-			if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "start", InputMessage: prompt}); err != nil {
-				return err
-			}
-			if _, err := q.CreateResearchTask(ctx, store.CreateResearchTaskParams{JobID: job.ID, RunID: run.ID, Seq: int32(i), Label: question.Label, Question: question.Question}); err != nil {
-				return err
-			}
-			if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "queued", "purpose": PurposeResearch, "research_job_id": job.ID}); err != nil {
-				return err
-			}
-		}
-		return nil
+		job, err = createResearchRuns(ctx, q, ws, user, chat, p.Key, &msg.ID, researchKindChat, in)
+		return err
 	})
 	return job, err
+}
+
+// createResearchRuns creates the job and one queued read-only run per question.
+func createResearchRuns(ctx context.Context, q *store.Queries, ws, user uuid.UUID, chat store.ChatSession, projectKey string, messageID *uuid.UUID, kind string, in ResearchInput) (store.ResearchJob, error) {
+	var job store.ResearchJob
+	agent, base, err := assistantSpec(ctx, q, ws, projectKey)
+	if err != nil {
+		return job, err
+	}
+	spec := ResearchSpec(base, chat.Harness, chat.Model, chat.Effort, in.MaxMinutes)
+	if err := spec.Validate(); err != nil {
+		return job, apperr.Invalid("harness", "%s", err.Error())
+	}
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return job, err
+	}
+	var capMicros *int64
+	if in.MaxCostUSD != nil {
+		m := int64(*in.MaxCostUSD * 1e6)
+		capMicros = &m
+	}
+	job, err = q.CreateResearchJob(ctx, store.CreateResearchJobParams{WorkspaceID: ws, ChatID: chat.ID, UserID: user, MessageID: messageID, Title: in.Title,
+		MaxSources: int32(in.MaxSources), MaxMinutes: int32(in.MaxMinutes), MaxCostMicros: capMicros, Kind: kind})
+	if err != nil {
+		return job, err
+	}
+	share := max(in.MaxSources/len(in.Questions), 1)
+	for i, question := range in.Questions {
+		run, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, AgentID: agent.ID, Mode: "managed", State: "queued", ResolvedSpec: raw,
+			DefinitionVersionID: agent.CurrentDefinitionVersionID, Harness: spec.Harness, Model: spec.Model, Purpose: PurposeResearch})
+		if err != nil {
+			return job, err
+		}
+		if err := q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &user}); err != nil {
+			return job, err
+		}
+		prompt := fmt.Sprintf("Research topic: %s\nYour part (%s): %s\nOpen about %d sources at most. Report through submit_findings, then stop.", in.Title, question.Label, question.Question, share)
+		if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "start", InputMessage: prompt}); err != nil {
+			return job, err
+		}
+		if _, err := q.CreateResearchTask(ctx, store.CreateResearchTaskParams{JobID: job.ID, RunID: run.ID, Seq: int32(i), Label: question.Label, Question: question.Question}); err != nil {
+			return job, err
+		}
+		if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "queued", "purpose": PurposeResearch, "research_job_id": job.ID}); err != nil {
+			return job, err
+		}
+	}
+	return job, nil
 }
 
 // ResearchFinding is one claim a researcher submitted.
@@ -509,6 +518,9 @@ func advanceResearchJob(ctx context.Context, q *store.Queries, chatID, jobID uui
 		if job, err = q.SetResearchJobState(ctx, store.SetResearchJobStateParams{ID: job.ID, State: "ready", StopReason: job.StopReason}); err != nil {
 			return err
 		}
+	}
+	if job.Kind == researchKindCourse {
+		return nil // AdvanceLearningCourses takes the findings from here
 	}
 	switch job.State {
 	case "ready":

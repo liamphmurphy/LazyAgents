@@ -118,9 +118,10 @@ func TestMCPProfiles(t *testing.T) {
 	sub := connect(mkRun(&ticket.ID, &lead.ID, "ticket"))
 	leadSess := connect(leadTok)
 	check("subagent", sub, subTools)
-	check("lead", leadSess, without("submit_workflow_output", "list_workflows", "read_workflow", "propose_workflow_edit", "submit_findings", "submit_research_report", "list_saved_links", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"))
+	check("lead", leadSess, without("submit_outline", "submit_lesson", "submit_review", "submit_workflow_output", "list_workflows", "read_workflow", "propose_workflow_edit", "submit_findings", "submit_research_report", "list_saved_links", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"))
 	check("chat", connect(mkRun(nil, nil, "chat")), chatTools)
 	check("planning", connect(mkRun(nil, nil, "planning")), planTools)
+	check("course run", connect(mkRun(nil, nil, "learning")), []string{"submit_outline", "submit_lesson", "submit_review"})
 	check("workflow step", connect(mkRun(nil, nil, "workflow")), []string{"submit_workflow_output", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks"})
 	// A step that reads the web gets nothing from the workspace.
 	webRun, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, AgentID: atlas.ID, Mode: "managed", State: "running", ResolvedSpec: json.RawMessage(`{"harness_options":{"web_search":"true"}}`), Harness: "claude", Model: "test", Purpose: "workflow"})
