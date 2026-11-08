@@ -987,7 +987,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Pause, resume or cancel a run, or retry a failed one (returns the new run) */
+        /** Pause, resume or cancel a run, or retry a failed one (returns the new run). Resume on a waiting_for_quota run tries again immediately. */
         post: operations["controlRun"];
         delete?: never;
         options?: never;
@@ -1833,6 +1833,42 @@ export interface paths {
          *     the persona can't be created (name taken, persona limit).
          */
         post: operations["decidePersonaProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record that the person has seen the chat up to a message */
+        post: operations["markChatRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/persona-dock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's personas with live or unread chat activity, most recent first */
+        get: operations["getPersonaDock"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2978,7 +3014,20 @@ export interface components {
             /** @enum {string} */
             mode: "managed" | "unmanaged";
             /** @enum {string} */
-            state: "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+            state: "queued" | "starting" | "running" | "waiting" | "waiting_for_quota" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+            /**
+             * Format: date-time
+             * @description waiting_for_quota: when the run next tries to resume
+             */
+            hold_until?: string;
+            /** @description waiting_for_quota: hold_until is the provider's stated reset time, not a backoff */
+            hold_reset_known?: boolean;
+            /** @description Consecutive times this run has been held at a provider limit */
+            hold_attempts?: number;
+            /** @description Branch holding the run's unpushed work, pushed before its workspace was given up */
+            checkpoint_branch?: string;
+            /** @description Why the last checkpoint push failed; the workspace is kept until one succeeds */
+            checkpoint_error?: string;
             /** @description The harness session turns resume */
             session_id?: string;
             dispatched_by?: components["schemas"]["UserRef"];
@@ -4104,6 +4153,37 @@ export interface components {
             /** @description GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar */
             avatar_url?: string;
             capabilities?: components["schemas"]["PersonaCapabilities"];
+        };
+        /** @enum {string} */
+        PersonaDockState: "working" | "replied" | "needs_you";
+        PersonaDockChat: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            state: components["schemas"]["PersonaDockState"];
+            unread: number;
+            /** @description Last line of the latest reply */
+            last_line: string;
+            /**
+             * Format: int64
+             * @description Sequence of the latest reply, for marking the chat read
+             */
+            last_seq: number;
+            /** @description A persona proposal awaits the person; reading the chat doesn't clear it */
+            waiting_approval: boolean;
+            /** Format: date-time */
+            last_activity_at: string;
+        };
+        PersonaDockEntry: {
+            persona: components["schemas"]["PersonaSummary"];
+            state: components["schemas"]["PersonaDockState"];
+            unread: number;
+            /** Format: date-time */
+            last_activity_at: string;
+            chats: components["schemas"]["PersonaDockChat"][];
+        };
+        PersonaDock: {
+            personas: components["schemas"]["PersonaDockEntry"][];
         };
         /** @description A persona one of the chat's personas asked to create; nothing exists until the person approves it. */
         PersonaProposal: {
@@ -5813,7 +5893,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description live (queued to waiting, the default), all, or one run state */
-                state?: "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+                state?: "live" | "all" | "queued" | "starting" | "running" | "waiting" | "waiting_for_quota" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
                 /** @description Agent handle */
                 agent?: string;
                 /** @description Project key */
@@ -7349,6 +7429,56 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    markChatRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    seq: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPersonaDock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The dock */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaDock"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

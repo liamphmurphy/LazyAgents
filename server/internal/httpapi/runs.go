@@ -91,6 +91,11 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 	}
 	out.ParentRunId = r.ParentRunID
 	out.SessionId = r.HarnessSessionID
+	if r.State == "waiting_for_quota" {
+		attempts := int(r.HoldAttempts)
+		out.HoldUntil, out.HoldResetKnown, out.HoldAttempts = r.HoldUntil, &r.HoldResetKnown, &attempts
+	}
+	out.CheckpointBranch, out.CheckpointError = r.CheckpointBranch, r.CheckpointError
 	if r.DispatchedByUserID != nil {
 		if u, err := s.Q.GetUser(ctx, store.GetUserParams{ID: *r.DispatchedByUserID, WorkspaceID: r.WorkspaceID}); err == nil {
 			out.DispatchedBy = toUserRef(u)
@@ -319,7 +324,7 @@ func (s *Server) GetRun(ctx context.Context, req api.GetRunRequestObject) (api.G
 }
 
 // liveRunStates are the states the Runs index shows by default.
-var liveRunStates = []string{"queued", "starting", "running", "waiting", "paused", "blocked"}
+var liveRunStates = []string{"queued", "starting", "running", "waiting", "waiting_for_quota", "paused", "blocked"}
 
 func (s *Server) ListRuns(ctx context.Context, req api.ListRunsRequestObject) (api.ListRunsResponseObject, error) {
 	_, _, ws := me(ctx)

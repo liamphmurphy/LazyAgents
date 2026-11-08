@@ -68,7 +68,7 @@ export function useTickets(f: TicketFilters) {
   });
 }
 
-const LIVE_RUN = ["queued", "starting", "running", "waiting", "paused", "blocked"];
+const LIVE_RUN = ["queued", "starting", "running", "waiting", "waiting_for_quota", "paused", "blocked"];
 
 /** True while the ticket has a run an agent may still be working on. */
 export function hasLiveRun(t?: Ticket) {
@@ -667,7 +667,7 @@ export function useDecideRunApproval(runId: string) {
 
 export type RunListFilters = { state: string; agent?: string; project?: string; purpose?: "ticket" | "planning" | "chat" };
 
-type ListRunsState = "live" | "all" | "queued" | "starting" | "running" | "waiting" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
+type ListRunsState = "live" | "all" | "queued" | "starting" | "running" | "waiting" | "waiting_for_quota" | "paused" | "blocked" | "completed" | "failed" | "cancelled";
 
 function runListOptions(f: RunListFilters, offset: number) {
   return {
@@ -1016,6 +1016,24 @@ export function useChatMessages(id?: string) {
     enabled: !!id,
     queryKey: chatKeys.messages(id ?? ""),
     queryFn: () => unwrap(api.GET("/chats/{id}/messages", { params: { path: { id: id! }, query: { limit: 200 } } })),
+  });
+}
+
+/** Who is working, replied or needs the person, across their chats. SSE `chat.updated` refreshes it. */
+export function usePersonaDock() {
+  return useQuery({
+    queryKey: ["chats", "dock"] as const,
+    queryFn: () => unwrap(api.GET("/persona-dock")),
+  });
+}
+
+export function useMarkChatRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { id: string; seq: number }) => {
+      await api.POST("/chats/{id}/read", { params: { path: { id: v.id } }, body: { seq: v.seq } });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chats", "dock"] }),
   });
 }
 

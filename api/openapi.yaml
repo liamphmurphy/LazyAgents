@@ -1239,7 +1239,7 @@ paths:
         - name: state
           in: query
           description: "live (queued to waiting, the default), all, or one run state"
-          schema: { type: string, enum: [live, all, queued, starting, running, waiting, paused, blocked, completed, failed, cancelled], default: live }
+          schema: { type: string, enum: [live, all, queued, starting, running, waiting, waiting_for_quota, paused, blocked, completed, failed, cancelled], default: live }
         - { name: agent, in: query, description: Agent handle, schema: { type: string } }
         - { name: project, in: query, description: Project key, schema: { type: string } }
         - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat] } }
@@ -1293,7 +1293,7 @@ paths:
         schema: { type: string, enum: [pause, resume, cancel, retry] }
     post:
       operationId: controlRun
-      summary: Pause, resume or cancel a run, or retry a failed one (returns the new run)
+      summary: Pause, resume or cancel a run, or retry a failed one (returns the new run). Resume on a waiting_for_quota run tries again immediately.
       tags: [runs]
       responses:
         "200":
@@ -2383,6 +2383,40 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/read:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    post:
+      operationId: markChatRead
+      summary: Record that the person has seen the chat up to a message
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seq]
+              properties:
+                seq: { type: integer, format: int64, minimum: 0 }
+      responses:
+        "204": { description: Recorded }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /persona-dock:
+    get:
+      operationId: getPersonaDock
+      summary: The caller's personas with live or unread chat activity, most recent first
+      tags: [chats]
+      responses:
+        "200":
+          description: The dock
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonaDock" }
         default: { $ref: "#/components/responses/Error" }
 
   /chat-models:
@@ -3618,7 +3652,12 @@ components:
         child_count: { type: integer, description: "Direct delegated runs" }
         agent: { $ref: "#/components/schemas/AgentRef" }
         mode: { type: string, enum: [managed, unmanaged] }
-        state: { type: string, enum: [queued, starting, running, waiting, paused, blocked, completed, failed, cancelled] }
+        state: { type: string, enum: [queued, starting, running, waiting, waiting_for_quota, paused, blocked, completed, failed, cancelled] }
+        hold_until: { type: string, format: date-time, description: "waiting_for_quota: when the run next tries to resume" }
+        hold_reset_known: { type: boolean, description: "waiting_for_quota: hold_until is the provider's stated reset time, not a backoff" }
+        hold_attempts: { type: integer, description: "Consecutive times this run has been held at a provider limit" }
+        checkpoint_branch: { type: string, description: "Branch holding the run's unpushed work, pushed before its workspace was given up" }
+        checkpoint_error: { type: string, description: "Why the last checkpoint push failed; the workspace is kept until one succeeds" }
         session_id: { type: string, description: The harness session turns resume }
         dispatched_by: { $ref: "#/components/schemas/UserRef" }
         wait_reason: { type: string, enum: [approval, human_reply, pause, delegation, mockup_review], description: "delegation: waiting for a sub agent the run delegated to; mockup_review: waiting for a person to review a UI mockup" }
@@ -4625,6 +4664,35 @@ components:
         color: { type: string, pattern: "^#[0-9a-f]{6}$" }
         avatar_url: { type: string, description: "GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar" }
         capabilities: { $ref: "#/components/schemas/PersonaCapabilities" }
+    PersonaDockState:
+      type: string
+      enum: [working, replied, needs_you]
+    PersonaDockChat:
+      type: object
+      required: [id, title, state, unread, last_line, last_seq, waiting_approval, last_activity_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        state: { $ref: "#/components/schemas/PersonaDockState" }
+        unread: { type: integer }
+        last_line: { type: string, description: "Last line of the latest reply" }
+        last_seq: { type: integer, format: int64, description: "Sequence of the latest reply, for marking the chat read" }
+        waiting_approval: { type: boolean, description: "A persona proposal awaits the person; reading the chat doesn't clear it" }
+        last_activity_at: { type: string, format: date-time }
+    PersonaDockEntry:
+      type: object
+      required: [persona, state, unread, last_activity_at, chats]
+      properties:
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
+        state: { $ref: "#/components/schemas/PersonaDockState" }
+        unread: { type: integer }
+        last_activity_at: { type: string, format: date-time }
+        chats: { type: array, items: { $ref: "#/components/schemas/PersonaDockChat" } }
+    PersonaDock:
+      type: object
+      required: [personas]
+      properties:
+        personas: { type: array, items: { $ref: "#/components/schemas/PersonaDockEntry" } }
     PersonaProposal:
       type: object
       description: A persona one of the chat's personas asked to create; nothing exists until the person approves it.

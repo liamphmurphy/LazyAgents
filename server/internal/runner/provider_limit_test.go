@@ -321,7 +321,7 @@ func TestExhaustedFallbackReturnsToAvailablePrimary(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}()
-	e.until("both exhausted", e.state("PAY-214=failed"))
+	e.until("both exhausted", e.state("PAY-214=waiting_for_quota"))
 	lines := readHarnessLog(t, logPath)
 	if len(lines) != 2 || lines[0].Codex != "codex" || lines[1].Codex != "claude" {
 		t.Fatalf("codex limit must send the run back to claude: %+v", lines)
@@ -331,7 +331,7 @@ func TestExhaustedFallbackReturnsToAvailablePrimary(t *testing.T) {
 	}
 }
 
-func TestAllTargetsLimitedFails(t *testing.T) {
+func TestAllTargetsLimitedHolds(t *testing.T) {
 	e := setup(t)
 	logPath := filepath.Join(t.TempDir(), "log.jsonl")
 	t.Setenv("FAKE_HARNESS_LOG", logPath)
@@ -341,9 +341,9 @@ func TestAllTargetsLimitedFails(t *testing.T) {
 	e.setChain(run.ID, run.ResolvedSpec, 0, agentdef.Fallback{Harness: agentdef.HarnessClaudeCode, Model: "primary"}, codexFallback)
 	e.limit(agentdef.HarnessClaudeCode, time.Now().Add(time.Hour))
 	e.limit(agentdef.HarnessCodex, time.Now().Add(time.Hour))
-	e.until("failed", e.state("PAY-214=failed"))
+	e.until("held", e.state("PAY-214=waiting_for_quota"))
 	if lines := readHarnessLog(t, logPath); len(lines) != 1 || lines[0].Codex != "claude" {
-		t.Fatalf("stays on the primary and fails: %+v", lines)
+		t.Fatalf("stays on the primary and holds: %+v", lines)
 	}
 	if got := e.run("PAY-214"); got.Harness != agentdef.HarnessClaudeCode {
 		t.Fatalf("harness %s", got.Harness)

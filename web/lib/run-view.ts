@@ -171,7 +171,7 @@ export function cacheShare(input: number, cached: number | undefined): number | 
 
 // --------------------------------------------------------------- filters
 
-export const RUN_STATES = ["live", "all", "waiting", "running", "queued", "starting", "blocked", "completed", "failed", "cancelled", "paused"] as const;
+export const RUN_STATES = ["live", "all", "waiting", "waiting_for_quota", "running", "queued", "starting", "blocked", "completed", "failed", "cancelled", "paused"] as const;
 export const RUN_PURPOSES = ["ticket", "planning", "chat"] as const;
 
 export type RunFilters = { state: string; agent?: string; project?: string; purpose?: "ticket" | "planning" | "chat" };
@@ -359,6 +359,7 @@ export function nowLine(run: NowRun, events: Ev[]): string | null {
   const step = i >= 0 ? `plan step ${i + 1} of ${run.plan.length}: ${run.plan[i].text}` : "";
   if (run.state === "queued") return "Waiting for a runner slot";
   if (run.state === "paused") return `Paused${step ? ` · ${step}` : ""}`;
+  if (run.state === "waiting_for_quota") return `Waiting for provider usage to reset${step ? ` · ${step}` : ""}`;
   if (run.state === "waiting") return `${WAIT_NOW[run.wait_reason ?? ""] ?? "Waiting"}${step ? ` · ${step}` : ""}`;
   for (const e of [...events].sort((a, b) => b.seq - a.seq)) {
     const p = e.payload as P;

@@ -55,6 +55,18 @@ function lifecycleText(p: P): ReactNode {
           Preparing the workspace on <code className="inline">{str(p.backend)}</code> ({str(p.runner)})
         </>
       );
+    case "waiting_for_quota":
+      return p.reset_known ? <>Out of provider usage on {str(p.harness)}; holding until the limit resets</> : <>Out of provider usage on {str(p.harness)}; holding, attempt {str(p.attempt)}, reset time unknown</>;
+    case "quota_resume_requested":
+      return "A person asked to try again now";
+    case "quota_resumed":
+      return <>Resumed after the provider limit on {str(p.harness)}</>;
+    case "checkpoint_pushed":
+      return <>Unpushed work saved to <code className="inline">{str(p.branch)}</code></>;
+    case "checkpoint_recovered":
+      return <>Recovered work from an earlier run: <code className="inline">{str(p.branch)}</code></>;
+    case "checkpoint_failed":
+      return <>Could not save unpushed work, so the workspace was kept: {str(p.reason)}</>;
     case "environment_snapshot":
       return <Link href="/settings/runner" className="underline underline-offset-2">Runner environment recorded</Link>;
     case "workspace_ready":

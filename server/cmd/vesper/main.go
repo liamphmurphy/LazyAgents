@@ -274,7 +274,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 			ModelPrices: rc.ModelPrices,
 			ID:          fmt.Sprintf("%s-%d", host, os.Getpid()), MaxConcurrent: rc.MaxConcurrent, MCPURL: rc.MCPURL,
 			Grace: 30 * time.Second, LogBucket: "run-logs", AttachmentBucket: cfg.S3.ArtifactBucket, Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
-			ChatIdleTTL: rc.ChatIdleTTL,
+			ChatIdleTTL: rc.ChatIdleTTL, MaxHold: rc.MaxHold, MaxHoldAttempts: rc.MaxHoldAttempts,
 		},
 		Pool: pool, Backend: backend, Secrets: &secrets.Service{Q: store.New(pool), Box: box},
 		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,

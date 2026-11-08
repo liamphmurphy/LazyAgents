@@ -178,6 +178,20 @@ export function ActionBox({ d }: { d: RunDetail }) {
         </span>
       </div>
     );
+  } else if (run.state === "waiting_for_quota") {
+    const at = run.hold_until ? new Date(run.hold_until).toLocaleString() : "soon";
+    body = (
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[13px] text-fg-2">
+          <span className="font-medium text-fg">Out of provider usage.</span>{" "}
+          {run.hold_reset_known ? `It resumes after the limit resets at ${at}.` : `The reset time is unknown, so it tries again at ${at}.`}
+        </p>
+        <span className="flex gap-2">
+          <Button variant="approve" icon="play" disabled={control.isPending} onClick={() => control.mutate("resume")}>Try now</Button>
+          {cancel}
+        </span>
+      </div>
+    );
   } else if (run.state === "waiting") {
     switch (run.wait_reason) {
       case "approval":

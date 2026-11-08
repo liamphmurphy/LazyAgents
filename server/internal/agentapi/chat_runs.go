@@ -20,7 +20,7 @@ import (
 // chats stay private.
 
 var (
-	chatLiveRunStates     = []string{"queued", "starting", "running", "waiting", "paused", "blocked"}
+	chatLiveRunStates     = []string{"queued", "starting", "running", "waiting", "waiting_for_quota", "paused", "blocked"}
 	chatFinishedRunStates = []string{"completed", "failed", "cancelled"}
 )
 

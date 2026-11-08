@@ -33,6 +33,7 @@ const STATUS: { value: string; label: string }[] = [
   { value: "failed", label: "Failed" },
   { value: "cancelled", label: "Cancelled" },
   { value: "paused", label: "Paused" },
+  { value: "waiting_for_quota", label: "Waiting for quota" },
 ];
 const PURPOSES = [
   { value: "all", label: "All" },

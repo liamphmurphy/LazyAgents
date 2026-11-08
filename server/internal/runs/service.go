@@ -100,7 +100,7 @@ func RecomputeAgentStatus(ctx context.Context, q *store.Queries, agentID uuid.UU
 		switch r.State {
 		case "queued":
 			continue // dispatched, not started: the agent isn't busy yet
-		case "waiting", "paused":
+		case "waiting", "waiting_for_quota", "paused":
 			st = "waiting"
 		case "blocked":
 			st = "blocked"
@@ -372,6 +372,8 @@ func (s *Service) running(ctx context.Context, q *store.Queries, c Caller, key s
 		return run, t, apperr.Conflict("the run is waiting for a person (%s); call await_signal", deref(run.WaitReason))
 	case "paused":
 		return run, t, apperr.Conflict("a person paused this run; stop and call await_signal")
+	case "waiting_for_quota":
+		return run, t, apperr.Conflict("the run is waiting for provider usage to reset; stop and call await_signal")
 	default:
 		return run, t, apperr.Conflict("the run is %s", run.State)
 	}

@@ -26,7 +26,7 @@ func agentStatus(work []api.AgentWork) api.AgentStatus {
 		switch w.State {
 		case "queued":
 			continue
-		case "waiting", "paused":
+		case "waiting", "waiting_for_quota", "paused":
 			st = "waiting"
 		case "blocked":
 			st = "blocked"

@@ -6,6 +6,7 @@ export const RUN_STATE: Record<string, { tone: PillTone; label: string }> = {
   starting: { tone: "neutral", label: "Starting" },
   running: { tone: "done", label: "Running" },
   waiting: { tone: "human", label: "Waiting" },
+  waiting_for_quota: { tone: "neutral", label: "Waiting for quota" },
   paused: { tone: "human", label: "Paused" },
   blocked: { tone: "blocked", label: "Blocked" },
   completed: { tone: "review", label: "Completed" },
