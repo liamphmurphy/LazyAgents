@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -22,12 +25,14 @@ import (
 // mentioning it as @Name. One persona answers each turn: its voice and
 // capabilities apply to that turn only (chatCaps), and a reply that mentions
 // others hands the conversation on, at most MaxRelayTurns times per message
-// from the person.
+// from the person, unless that message asks for more or fewer (RelayLimitIn).
 
 const (
 	// MaxRelayTurns bounds the replies personas hand to each other after one
 	// message from the person, so two personas can't mention each other forever.
 	MaxRelayTurns = 4
+	// MaxRelayLimit bounds what a message from the person may raise that to.
+	MaxRelayLimit = 50
 	// MaxPendingPersonaProposals bounds proposals waiting in one chat.
 	MaxPendingPersonaProposals = 3
 	// MaxProposalReasonRunes bounds why a persona proposes another.
@@ -80,6 +85,46 @@ func PersonaMentions(body string, ps []store.Persona) []uuid.UUID {
 }
 
 func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' }
+
+var (
+	relayNumber = `(\d{1,4}|` + strings.Join(slices.Sorted(maps.Keys(numberWords)), "|") + `)`
+	// "talk up to 25 messages", "go for another ten rounds", "no more than 3 replies".
+	relayCount = regexp.MustCompile(`(?i)\b(?:up to|for|another|at most|max(?:imum)?(?: of)?|limit(?:ed)?(?: it)? (?:of|to|at)|no more than|keep (?:it )?(?:to|under)|until|talk|chat|go|continue)\s+` +
+		relayNumber + `\s+(?:more\s+)?(?:messages?|replies|reply|responses?|turns?|rounds?|exchanges?|times|hand-?offs?)\b`)
+	// "talk with no limit", "unlimited replies".
+	relayUnlimited = regexp.MustCompile(`(?i)\b(?:no (?:message |reply |turn )?limit|unlimited (?:messages|replies|turns|rounds))\b`)
+)
+
+var numberWords = map[string]int{
+	"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+	"eleven": 11, "twelve": 12, "fifteen": 15, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+}
+
+// RelayLimitIn reads how many replies the person's message lets personas hand
+// to each other ("talk up to 25 messages"), capped at MaxRelayLimit. It
+// returns 0 when the message doesn't say, so MaxRelayTurns applies.
+func RelayLimitIn(body string) int {
+	if relayUnlimited.MatchString(body) {
+		return MaxRelayLimit
+	}
+	m := relayCount.FindStringSubmatch(body)
+	if m == nil {
+		return 0
+	}
+	n, ok := numberWords[strings.ToLower(m[1])]
+	if !ok {
+		n, _ = strconv.Atoi(m[1])
+	}
+	return min(n, MaxRelayLimit)
+}
+
+// relayLimit is how many replies personas may hand on since the person last wrote.
+func relayLimit(chat store.ChatSession) int {
+	if chat.RelayLimit > 0 {
+		return int(chat.RelayLimit)
+	}
+	return MaxRelayTurns
+}
 
 func ownerPersonas(ctx context.Context, q *store.Queries, chat store.ChatSession) ([]store.Persona, error) {
 	return q.ListPersonas(ctx, store.ListPersonasParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
@@ -209,7 +254,7 @@ func RelayChat(ctx context.Context, q *store.Queries, chatID uuid.UUID, reply st
 		if len(chat.QueuedPersonaIds) == 0 {
 			return nil
 		}
-		_, err := q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: chat.SpeakerPersonaID, QueuedPersonaIds: []uuid.UUID{}, RelayTurns: chat.RelayTurns})
+		_, err := q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: chat.SpeakerPersonaID, QueuedPersonaIds: []uuid.UUID{}, RelayTurns: chat.RelayTurns, RelayLimit: chat.RelayLimit})
 		return err
 	}
 	if !ok || chat.Archived || chat.State == "running" {
@@ -243,11 +288,11 @@ func RelayChat(ctx context.Context, q *store.Queries, chatID uuid.UUID, reply st
 	if next == nil {
 		return clear()
 	}
-	if chat.RelayTurns >= MaxRelayTurns {
+	if limit := relayLimit(chat); int(chat.RelayTurns) >= limit {
 		if err := clear(); err != nil {
 			return err
 		}
-		body := fmt.Sprintf("Paused the hand-off to %s after %d replies in a row. Mention @%s to continue.", next.Name, MaxRelayTurns, next.Name)
+		body := fmt.Sprintf("Paused the hand-off to %s after %d replies in a row. Mention @%s to continue, or say how many more replies they may take (\"talk up to 25 messages\").", next.Name, limit, next.Name)
 		_, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: body, ContextRefs: []byte("[]"), Citations: []byte("[]")})
 		return err
 	}
@@ -259,7 +304,7 @@ func RelayChat(ctx context.Context, q *store.Queries, chatID uuid.UUID, reply st
 		return clear()
 	}
 	fromName := personaName(ps, from)
-	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: &next.ID, QueuedPersonaIds: queue, RelayTurns: chat.RelayTurns + 1}); err != nil {
+	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: &next.ID, QueuedPersonaIds: queue, RelayTurns: chat.RelayTurns + 1, RelayLimit: chat.RelayLimit}); err != nil {
 		return err
 	}
 	body := fmt.Sprintf("(Vesper: %s brought you into the conversation in their last reply. Answer as %s: pick up from there and add what you can, without repeating what has been said.)", fromName, strings.TrimSpace(next.Name))
@@ -443,7 +488,7 @@ func introduce(ctx context.Context, q *store.Queries, chat store.ChatSession, p 
 	if err != nil || proj.Archived {
 		return err
 	}
-	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: &p.ID, QueuedPersonaIds: []uuid.UUID{}, RelayTurns: 0}); err != nil {
+	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: &p.ID, QueuedPersonaIds: []uuid.UUID{}, RelayTurns: 0, RelayLimit: 0}); err != nil {
 		return err
 	}
 	body := fmt.Sprintf("(Vesper: the person just approved you, %s, a new persona %s proposed. Introduce yourself in a sentence or two, in your own voice, and say how you can help with the conversation so far.)", strings.TrimSpace(p.Name), by)
