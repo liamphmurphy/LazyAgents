@@ -3,24 +3,30 @@
 import { Dialog } from "radix-ui";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useArtifact, useBootstrap, useCreateChat, useSearch, useTicket, useWikiPage } from "@/lib/api/hooks";
+import { hasLiveRun, useArtifact, useAskChat, useBootstrap, useChats, useControlRun, useCreateChat, useDecideApproval, useInbox, useLiveRuns, useSearch, useTicket, useUpdateTicket, useWikiPage } from "@/lib/api/hooks";
 import { IconButton } from "@/components/ui/button";
 import { artifactTitle } from "@/components/domain/artifacts";
 import { cx } from "@/lib/cx";
 import { attachQuery, type ContextRef } from "@/lib/chat-context";
 import {
   linkFromTarget,
+  matchParts,
   matchesWords,
   pageContext,
+  parseFilters,
   parseRecent,
+  passesFilters,
+  promoteTop,
   projectOfKey,
   pushRecent,
+  removeToken,
+  snippetParts,
   sortByGroup,
   ticketKeyFrom,
   type PaletteGroup,
   type PaletteLink,
 } from "@/lib/command-palette";
-import { NAV_GROUPS, switchHref, withProject } from "@/lib/project-scope";
+import { NAV_GROUPS, projectSection, switchHref, withProject } from "@/lib/project-scope";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
 const RECENT_KEY = "la:palette-recent";
@@ -32,6 +38,14 @@ const GLYPH: Partial<Record<PaletteGroup, string>> = {
   Chats: "◌",
   Agents: "◍",
   Epics: "◆",
+  Runs: "▶",
+  Workflows: "⇢",
+  Personas: "☺",
+  Memories: "✧",
+  Library: "▣",
+  "Needs you": "!",
+  Running: "▶",
+  Continue: "◌",
   "Jump to": "↵",
   "Switch project": "⇄",
 };
@@ -46,20 +60,33 @@ type Item = {
   href?: string;
   recent?: PaletteLink;
   perform?: () => void;
+  snippet?: string;
+  score?: number;
+  /** Takes the query as its input, so it stays offered whatever was typed. */
+  fallback?: boolean;
+  /** Only offered once asked for: too specific, or too consequential, for the opening list. */
+  onDemand?: boolean;
 };
 
-function Match({ text, query }: { text: string; query: string }) {
-  const word = query.trim().split(/\s+/)[0] ?? "";
-  const at = word ? text.toLowerCase().indexOf(word.toLowerCase()) : -1;
-  return at < 0 ? (
-    <>{text}</>
-  ) : (
+const MARK = "underline decoration-accent underline-offset-4";
+const STATUSES = [
+  ["backlog", "Backlog"],
+  ["todo", "Todo"],
+  ["in_progress", "In progress"],
+  ["in_review", "In review"],
+  ["done", "Done"],
+] as const;
+
+function Parts({ parts }: { parts: { text: string; match: boolean }[] }) {
+  return (
     <>
-      {text.slice(0, at)}
-      <span className="underline decoration-accent underline-offset-4">{text.slice(at, at + word.length)}</span>
-      {text.slice(at + word.length)}
+      {parts.map((p, i) => (p.match ? <span key={i} className={MARK}>{p.text}</span> : <span key={i}>{p.text}</span>))}
     </>
   );
+}
+
+function Match({ text, query }: { text: string; query: string }) {
+  return <Parts parts={matchParts(text, query)} />;
 }
 
 /** Waits for typing to pause before searching (the server ranks; nothing is filtered client-side). */
@@ -77,6 +104,7 @@ export function CommandMenu() {
   const pathname = usePathname();
   const boot = useBootstrap();
   const createChat = useCreateChat();
+  const askChat = useAskChat();
   const remembered = useRememberedProject();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -85,19 +113,29 @@ export function CommandMenu() {
   const [mode, setMode] = useState<"root" | "projects">("root");
   const [active, setActive] = useState(0);
   const [recent, setRecent] = useState<PaletteLink[]>([]);
+  const [actionFailed, setActionFailed] = useState(false);
   const returnFocus = useRef<HTMLElement | null>(null);
+  const rememberedRef = useRef(remembered);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands = query.startsWith(">");
-  const title = query.replace(/^>\s*/, "").trim();
-  const text = useDebounced(mode === "root" && !commands ? query.trim() : "", 150);
+  const filters = parseFilters(commands ? "" : query);
+  const title = commands ? query.replace(/^>\s*/, "").trim() : filters.text;
+  const searchText = mode === "root" && !commands ? filters.text : "";
+  const text = useDebounced(searchText, 150);
   const search = useSearch(open ? text : "", scope ? project : undefined);
+  // Until the answer for exactly this text arrives, the rows on screen are stale.
+  const pending = !!searchText && (text !== searchText || search.isLoading || search.isPlaceholderData);
 
   // What the page is about (only fetched while open; the page usually has it cached).
   const ctx = pageContext(pathname);
   const ticket = useTicket(open && ctx?.kind === "ticket" ? ctx.key : "");
   const artifact = useArtifact(open && ctx?.kind === "artifact" ? ctx.id : undefined);
   const wiki = useWikiPage(open && ctx?.kind === "wiki" ? ctx.path : "");
+  const ticketKey = ctx?.kind === "ticket" ? ctx.key : "";
+  const updateTicket = useUpdateTicket(ticketKey);
+  const controlRun = useControlRun(ticketKey);
+  const decideApproval = useDecideApproval(ticketKey);
   let attach: { ref: ContextRef; label: string; project?: string } | undefined;
   if (ctx?.kind === "ticket") attach = { ref: { kind: "ticket", key: ctx.key }, label: ctx.key, project: projectOfKey(ctx.key) };
   const doc = ctx?.kind === "artifact" ? artifact.data : ctx?.kind === "wiki" ? wiki.data : undefined;
@@ -107,13 +145,32 @@ export function CommandMenu() {
   // Where actions happen: the page's project, then the URL's, then the remembered one.
   const actionProject = attach?.project ?? project ?? remembered ?? projects[0]?.key;
 
+  // The opening list: what's waiting on you, what's moving, where you left off.
+  const idle = open && mode === "root" && !query.trim();
+  const inbox = useInbox(undefined, idle);
+  const liveRuns = useLiveRuns(idle);
+  const chats = useChats(idle ? (actionProject ?? "") : "");
+
   const close = (next: boolean) => {
-    // A failed "New chat" alert belongs to that attempt only.
-    if (!next) createChat.reset();
+    // A failed action's alert belongs to that attempt only.
+    if (!next) {
+      createChat.reset();
+      askChat.reset();
+      setActionFailed(false);
+    }
     setOpen(next);
   };
 
-  const go = (item: Item) => {
+  const failed = () => {
+    setActionFailed(true);
+    setOpen(true);
+  };
+
+  const go = (item: Item, newTab = false) => {
+    if (newTab && item.href) {
+      window.open(item.href, "_blank", "noopener");
+      return;
+    }
     close(false);
     if (item.recent) {
       const next = pushRecent(recent, item.recent);
@@ -144,29 +201,42 @@ export function CommandMenu() {
     }))
     .filter((i) => matchesWords(i.title, mode === "projects" ? query : title.replace(/^(switch|project)\b\s*/i, "")));
 
-  const key = mode === "root" && !commands ? ticketKeyFrom(query) : undefined;
+  const key = mode === "root" && !commands ? ticketKeyFrom(query, actionProject) : undefined;
   const jump: Item[] = key
     ? [{ id: `jump-${key}`, title: `Open ${key}`, meta: `/tickets/${key}`, group: "Jump to", href: `/tickets/${key}`,
         recent: { id: `jump-${key}`, title: key, meta: key, href: `/tickets/${key}`, kind: "Tickets" } }]
     : [];
 
-  const hits: Item[] =
-    // Only once the debounce settles, so ↵ never opens a hit for an earlier query.
-    mode === "root" && !commands && query.trim() && text === query.trim()
-      ? sortByGroup(
+  const hits: Item[] = searchText
+    ? promoteTop(
+        sortByGroup(
           (search.data ?? []).flatMap((h) => {
             const link = linkFromTarget(h.target);
             if (!link) return [];
             const group = link.kind as PaletteGroup;
-            return [{ id: link.id, title: link.title, meta: link.meta, group, href: link.href, recent: link }];
+            if (!passesFilters({ group, status: link.status }, filters)) return [];
+            const meta = [link.meta, link.status?.replaceAll("_", " ")].filter(Boolean).join(" · ");
+            return [{ id: link.id, title: link.title, meta, group, glyph: GLYPH[group], href: link.href, recent: link, snippet: h.snippet, score: h.score }];
           }),
-        )
-      : [];
+        ),
+      )
+    : [];
 
   const recentItems: Item[] =
     mode === "root" && !query.trim()
       ? recent.map((r) => ({ id: `recent-${r.href}`, title: r.title, meta: r.meta, group: "Recent", glyph: GLYPH[r.kind as PaletteGroup], href: r.href, recent: r }))
       : [];
+
+  const needsYou: Item[] = idle
+    ? (inbox.data ?? []).filter((i) => !i.resolved).slice(0, 3).map((i) => ({ id: `inbox-${i.id}`, title: i.title, meta: i.ticket_key || i.project, group: "Needs you" as const, href: i.href }))
+    : [];
+  const running: Item[] = idle
+    ? (liveRuns.data?.runs ?? []).slice(0, 3).map((r) => ({ id: `live-${r.id}`, title: r.ticket_key ?? r.agent.name, meta: r.state, group: "Running" as const, href: `/runs/${r.id}` }))
+    : [];
+  const lastChat = idle ? chats.data?.chats[0] : undefined;
+  const resume: Item[] = lastChat
+    ? [{ id: `continue-${lastChat.id}`, title: lastChat.title || "Untitled chat", meta: "last chat", group: "Continue", href: `/chat/${lastChat.id}` }]
+    : [];
 
   const withQuery = (base: string, params: Record<string, string | undefined>) => {
     const q = new URLSearchParams();
@@ -181,8 +251,24 @@ export function CommandMenu() {
       meta: "C",
       glyph: "＋",
       group: "Actions",
+      fallback: true,
       href: withQuery("/tickets/new", { title: title || undefined, project: actionProject }),
     },
+    ...(title && actionProject
+      ? [{
+          id: "ask",
+          title: `Ask: ${title}`,
+          meta: "new chat",
+          glyph: "✉",
+          group: "Actions" as const,
+          fallback: true,
+          perform: () =>
+            askChat.mutate(
+              { project: actionProject, body: title },
+              { onSuccess: (c) => router.push(`/chat/${c.id}`), onError: () => setOpen(true) },
+            ),
+        }]
+      : []),
     {
       id: "new-chat",
       title: attach ? `New chat with ${attach.label} attached` : "New chat",
@@ -206,6 +292,7 @@ export function CommandMenu() {
       title: title ? `Start planning: ${title}` : "Start planning",
       glyph: "✦",
       group: "Actions",
+      fallback: true,
       href: withQuery("/plans", {
         project: actionProject,
         goal: title || undefined,
@@ -228,6 +315,44 @@ export function CommandMenu() {
     ...(ctx?.kind === "ticket" && ticket.data?.run
       ? [{ id: "run", title: `Go to run for ${ctx.key}`, glyph: "▶", group: "Actions" as const, meta: ticket.data.run.state, href: `/runs/${ticket.data.run.id}` }]
       : []),
+    ...(ctx?.kind === "ticket" && ticket.data && hasLiveRun(ticket.data) && ticket.data.run
+      ? [{
+          id: "cancel-run",
+          title: `Cancel run for ${ctx.key}`,
+          glyph: "■",
+          group: "Actions" as const,
+          onDemand: true,
+          perform: () => controlRun.mutate({ id: ticket.data!.run!.id, action: "cancel" }, { onError: failed }),
+        }]
+      : []),
+    ...(ticket.data && ctx?.kind === "ticket"
+      ? STATUSES.filter(([s]) => s !== ticket.data!.status).map(([status, label]) => ({
+          id: `status-${status}`,
+          title: `Set status: ${label}`,
+          glyph: "◇",
+          group: "Actions" as const,
+          onDemand: true,
+          perform: () => updateTicket.mutate({ status, revision: ticket.data!.revision }, { onError: failed }),
+        }))
+      : []),
+    ...(ticket.data && ctx?.kind === "ticket"
+      ? ticket.data.approvals.filter((a) => a.state === "pending").map((a) => ({
+          id: `approve-${a.id}`,
+          title: `Approve: ${a.action_summary}`,
+          glyph: "✓",
+          group: "Actions" as const,
+          onDemand: true,
+          perform: () => decideApproval.mutate({ id: a.id, decision: "approve" }, { onError: failed }),
+        }))
+      : []),
+    {
+      id: "copy-link",
+      title: "Copy link to this page",
+      glyph: "⧉",
+      group: "Actions",
+      onDemand: true,
+      perform: () => void navigator.clipboard.writeText(window.location.href).catch(failed),
+    },
     {
       id: "shortcuts",
       title: "Keyboard shortcuts",
@@ -237,7 +362,11 @@ export function CommandMenu() {
       perform: () => window.dispatchEvent(new Event("la:shortcuts")),
     },
   ];
-  const shownActions = commands ? actions.filter((a) => matchesWords(a.title, title)) : actions;
+  const shownActions = actions.filter((a) => {
+    if (commands) return matchesWords(a.title, title);
+    if (title) return a.fallback || matchesWords(a.title, title);
+    return !a.onDemand;
+  });
 
   // Same item set as the sidebar (lib/project-scope.ts), scoped to the remembered project.
   const goTo: Item[] = NAV_GROUPS.flatMap((g) =>
@@ -253,7 +382,7 @@ export function CommandMenu() {
   const items: Item[] =
     mode === "projects"
       ? projectItems
-      : [...recentItems, ...jump, ...hits, ...shownActions, ...(commands && title ? projectItems : []), ...goTo];
+      : [...needsYou, ...running, ...resume, ...recentItems, ...jump, ...hits, ...shownActions, ...(commands && title ? projectItems : []), ...goTo];
   const index = Math.max(0, Math.min(active, items.length - 1));
   const activeId = items.length ? `command-${index}` : undefined;
 
@@ -267,13 +396,19 @@ export function CommandMenu() {
   }, [activeId, open]);
 
   useEffect(() => {
+    rememberedRef.current = remembered;
+  }, [remembered]);
+
+  useEffect(() => {
     const show = () => {
       if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body)
         returnFocus.current = document.activeElement;
       else returnFocus.current = null;
       const currentProject =
         new URLSearchParams(window.location.search).get("project") ??
-        window.location.pathname.match(/^\/tickets\/([A-Z][A-Z0-9]*)-\d+$/)?.[1];
+        window.location.pathname.match(/^\/tickets\/([A-Z][A-Z0-9]*)-\d+$/)?.[1] ??
+        // A chat's URL may not name its project; the remembered one is what actions use too.
+        (projectSection(window.location.pathname) ? rememberedRef.current : undefined);
       setProject(currentProject ?? undefined);
       setScope(!!currentProject);
       setQuery("");
@@ -372,7 +507,7 @@ export function CommandMenu() {
                 setQuery(e.target.value);
                 setActive(0);
               }}
-              placeholder={mode === "projects" ? "Switch to project…" : "Search or jump to a ticket key…"}
+              placeholder={mode === "projects" ? "Switch to project…" : "Search, or try is:ticket status:done…"}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown" && items.length) {
@@ -391,9 +526,10 @@ export function CommandMenu() {
                   e.preventDefault();
                   setActive(items.length - 1);
                 }
-                if (e.key === "Enter" && items[index]) {
+                // While results are stale, ↵ must not fall through to an action or an old hit.
+                if (e.key === "Enter" && items[index] && (!pending || items[index].group === "Jump to")) {
                   e.preventDefault();
-                  go(items[index]);
+                  go(items[index], e.metaKey || e.ctrlKey);
                 }
                 if (e.key === "Backspace" && mode === "projects" && !query) {
                   e.preventDefault();
@@ -405,34 +541,53 @@ export function CommandMenu() {
                 }
               }}
             />
+            <span role="status" className="text-xs text-fg-tertiary">{pending ? "Searching…" : ""}</span>
             <span aria-hidden className="font-mono text-[11px] text-fg-tertiary">esc</span>
             <Dialog.Close asChild>
               <IconButton icon="x" label="Close search" />
             </Dialog.Close>
           </div>
+          {mode === "root" && filters.tokens.length > 0 && (
+            <div className="flex flex-wrap gap-1 border-b border-border px-4 py-2">
+              {filters.tokens.map((token) => (
+                <button
+                  key={token}
+                  type="button"
+                  aria-label={`Remove filter ${token}`}
+                  className="rounded border border-border px-2 font-mono text-xs text-fg-secondary"
+                  onClick={() => {
+                    setQuery(removeToken(query, token));
+                    inputRef.current?.focus();
+                  }}
+                >
+                  {token} ×
+                </button>
+              ))}
+            </div>
+          )}
           <div className="overflow-y-auto p-2">
-            {search.isFetching && (
-              <p role="status" className="p-3 text-xs text-fg-tertiary">
-                Searching…
-              </p>
-            )}
             {search.isError && (
               <p role="alert" className="p-3 text-xs text-pill-blocked-fg">
                 Search failed. Try again.
               </p>
             )}
-            {createChat.isError && (
+            {(createChat.isError || askChat.isError) && (
               <p role="alert" className="p-3 text-xs text-pill-blocked-fg">
                 Couldn’t start the chat.
               </p>
             )}
-            {mode === "root" && !commands && query.trim() && text === query.trim() && !search.isFetching && hits.length === 0 && !key && (
+            {actionFailed && (
+              <p role="alert" className="p-3 text-xs text-pill-blocked-fg">
+                That action didn’t go through. Try again.
+              </p>
+            )}
+            {searchText && !pending && hits.length === 0 && !key && (
               <p className="p-3 text-sm text-fg-tertiary">No results for “{query.trim()}”.</p>
             )}
             {mode === "projects" && items.length === 0 && (
               <p className="p-3 text-sm text-fg-tertiary">No project matches “{query}”.</p>
             )}
-            <div id="command-results" role="listbox" aria-label="Results">
+            <div id="command-results" role="listbox" aria-label="Results" aria-busy={pending} className={cx(pending && "opacity-60")}>
               {groups.map((g) => (
                 <div key={g.name} role="group" aria-labelledby={`command-group-${g.name.replace(/\s+/g, "-")}`}>
                   <div
@@ -448,7 +603,7 @@ export function CommandMenu() {
                       id={`command-${i}`}
                       role="option"
                       aria-selected={i === index}
-                      onClick={() => go(item)}
+                      onClick={(e) => go(item, e.metaKey || e.ctrlKey)}
                       onMouseMove={() => setActive(i)}
                       className={cx(
                         "flex min-h-[38px] w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left text-sm",
@@ -459,7 +614,14 @@ export function CommandMenu() {
                         {item.glyph ?? GLYPH[item.group] ?? ""}
                       </span>
                       <span className="min-w-0 flex-1 truncate">
-                        <Match text={item.title} query={mode === "projects" ? query : title} />
+                        <span className="block truncate">
+                          <Match text={item.title} query={mode === "projects" ? query : title} />
+                        </span>
+                        {item.snippet && (
+                          <span className="block truncate text-xs text-fg-tertiary">
+                            <Parts parts={snippetParts(item.snippet)} />
+                          </span>
+                        )}
                       </span>
                       {item.meta && <span className="font-mono text-xs text-fg-tertiary">{item.meta}</span>}
                     </div>
@@ -471,7 +633,7 @@ export function CommandMenu() {
           <div className="border-t border-border px-4 py-2 text-xs text-fg-tertiary">
             {mode === "projects"
               ? "↑↓ navigate · ↵ switch · ⌫ back · Esc close"
-              : "↑↓ navigate · ↵ open · Tab project scope · > commands only · ? shortcuts"}
+              : "↑↓ navigate · ↵ open · ⌘↵ new tab · Tab project scope · > commands · is: status: filters"}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

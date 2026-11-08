@@ -2,6 +2,10 @@
 // `npm run test:unit` covers it; the component is components/shell/command-menu.tsx.
 
 export type PaletteGroup =
+  | "Top result"
+  | "Needs you"
+  | "Running"
+  | "Continue"
   | "Recent"
   | "Jump to"
   | "Tickets"
@@ -10,12 +14,21 @@ export type PaletteGroup =
   | "Chats"
   | "Agents"
   | "Epics"
+  | "Runs"
+  | "Workflows"
+  | "Personas"
+  | "Memories"
+  | "Library"
   | "Actions"
   | "Switch project"
   | "Go to";
 
 /** Display order of groups; search hits are re-sorted into it. */
 export const GROUP_ORDER: PaletteGroup[] = [
+  "Top result",
+  "Needs you",
+  "Running",
+  "Continue",
   "Recent",
   "Jump to",
   "Tickets",
@@ -24,6 +37,11 @@ export const GROUP_ORDER: PaletteGroup[] = [
   "Chats",
   "Agents",
   "Epics",
+  "Runs",
+  "Workflows",
+  "Personas",
+  "Memories",
+  "Library",
   "Actions",
   "Switch project",
   "Go to",
@@ -36,6 +54,7 @@ export type PaletteLink = {
   meta?: string;
   href: string;
   kind: string;
+  status?: string;
 };
 
 type TargetLike = {
@@ -46,12 +65,87 @@ type TargetLike = {
   path?: string;
   display_id?: string;
   href?: string;
+  status?: string;
 };
 
-/** A ticket key typed on its own ("lazyagents-39 " → "LAZYAGENTS-39"). */
-export function ticketKeyFrom(query: string): string | undefined {
-  const m = query.trim().match(/^([A-Za-z][A-Za-z0-9]*-\d+)$/);
+/** A ticket key typed on its own ("lazyagents-39 " → "LAZYAGENTS-39"), or a bare number in `project`. */
+export function ticketKeyFrom(query: string, project?: string): string | undefined {
+  const text = query.trim();
+  if (project && /^\d+$/.test(text)) return `${project}-${text}`;
+  const m = text.match(/^([A-Za-z][A-Za-z0-9]*-\d+)$/);
   return m ? m[1].toUpperCase() : undefined;
+}
+
+const FILTER_GROUPS: Record<string, PaletteGroup> = {
+  ticket: "Tickets",
+  page: "Pages",
+  artifact: "Artifacts",
+  chat: "Chats",
+  agent: "Agents",
+  epic: "Epics",
+  run: "Runs",
+  workflow: "Workflows",
+  persona: "Personas",
+  memory: "Memories",
+  library: "Library",
+};
+
+export type PaletteFilters = { text: string; groups: PaletteGroup[]; status?: string; tokens: string[] };
+
+/** Splits `is:ticket status:done deploy` into filters and search text; unknown tokens stay text. */
+export function parseFilters(query: string): PaletteFilters {
+  const out: PaletteFilters = { text: "", groups: [], tokens: [] };
+  const words: string[] = [];
+  for (const word of query.trim().split(/\s+/).filter(Boolean)) {
+    const lower = word.toLowerCase();
+    const kind = lower.match(/^(?:is|in):(.+)$/)?.[1];
+    const status = lower.match(/^status:(.+)$/)?.[1];
+    if (kind && FILTER_GROUPS[kind]) {
+      out.groups.push(FILTER_GROUPS[kind]);
+      out.tokens.push(word);
+    } else if (status) {
+      out.status = status;
+      out.tokens.push(word);
+    } else words.push(word);
+  }
+  out.text = words.join(" ");
+  return out;
+}
+
+/** Whether a hit passes the parsed filters. */
+export function passesFilters(hit: { group: PaletteGroup; status?: string }, f: PaletteFilters): boolean {
+  return (!f.groups.length || f.groups.includes(hit.group)) && (!f.status || hit.status === f.status);
+}
+
+/** The query with one filter token taken out. */
+export function removeToken(query: string, token: string): string {
+  return query.trim().split(/\s+/).filter((w) => w !== token).join(" ");
+}
+
+/** Cuts a server snippet («match») into plain and marked runs. */
+export function snippetParts(snippet: string): { text: string; match: boolean }[] {
+  return snippet
+    .split(/(«[^»]*»)/)
+    .filter(Boolean)
+    .map((s) => (s.startsWith("«") && s.endsWith("»") ? { text: s.slice(1, -1), match: true } : { text: s, match: false }));
+}
+
+/** Cuts text around every query word, case-insensitively. */
+export function matchParts(text: string, query: string): { text: string; match: boolean }[] {
+  const words = query.split(/\s+/).filter(Boolean).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!words.length) return [{ text, match: false }];
+  const re = new RegExp(`(${words.join("|")})`, "gi");
+  return text.split(re).filter(Boolean).map((s) => ({ text: s, match: words.some((w) => new RegExp(`^${w}$`, "i").test(s)) }));
+}
+
+/** Lifts the best-scoring hit into "Top result" unless grouping already put it first. */
+export function promoteTop<T extends { group: PaletteGroup; score?: number }>(sorted: T[]): T[] {
+  let best = 0;
+  sorted.forEach((item, i) => {
+    if ((item.score ?? 0) > (sorted[best].score ?? 0)) best = i;
+  });
+  if (best === 0) return sorted;
+  return [{ ...sorted[best], group: "Top result" }, ...sorted.filter((_, i) => i !== best)];
 }
 
 /** The palette group a search hit belongs to; wiki pages are notes. */
@@ -65,6 +159,16 @@ export function groupOf(t: TargetLike): PaletteGroup {
       return "Agents";
     case "epic":
       return "Epics";
+    case "run":
+      return "Runs";
+    case "workflow":
+      return "Workflows";
+    case "persona":
+      return "Personas";
+    case "memory":
+      return "Memories";
+    case "library":
+      return "Library";
     default:
       return t.artifact_type === "note" ? "Pages" : "Artifacts";
   }
@@ -85,6 +189,7 @@ export function linkFromTarget(t: TargetLike): PaletteLink | undefined {
     meta,
     href: t.href,
     kind: groupOf(t),
+    ...(t.status ? { status: t.status } : {}),
   };
 }
 
@@ -184,6 +289,7 @@ export const SHORTCUTS: { section: string; items: { label: string; keys: string[
     items: [
       { label: "Move / open / close", keys: ["↑", "↓", "↵", "Esc"] },
       { label: "Toggle project scope · commands only", keys: ["Tab", ">"] },
+      { label: "Open in a new tab", keys: ["⌘/Ctrl", "↵"] },
     ],
   },
   {

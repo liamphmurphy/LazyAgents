@@ -177,50 +177,75 @@ func (q *Queries) ReadInboxItem(ctx context.Context, arg ReadInboxItemParams) er
 }
 
 const searchAttentionTargets = `-- name: SearchAttentionTargets :many
-SELECT kind,id,title,href FROM (
-SELECT kind, id, title, href, row_number() OVER (PARTITION BY kind ORDER BY title,id) AS n FROM (
- SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href
+WITH needle AS (SELECT lower(replace($4::text,'@','')) AS q)
+SELECT kind,id,title,href,status,score::float8 AS score FROM (
+SELECT kind, id, title, href, status, haystack, score, row_number() OVER (PARTITION BY kind ORDER BY score DESC,id DESC) AS n FROM (
+SELECT c.kind, c.id, c.title, c.href, c.status, c.haystack, greatest(word_similarity(needle.q,lower(c.haystack)),similarity(needle.q,lower(c.haystack))) AS score
+FROM needle CROSS JOIN LATERAL (
+ SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href,''::text AS status,e.name AS haystack
  FROM epics e JOIN projects p ON p.id=e.project_id
- WHERE e.workspace_id=$1 AND e.name ILIKE '%'||$2::text||'%'
- AND ($3::text IS NULL OR p.key=$3)
+ WHERE e.workspace_id=$1
+ AND ($2::text IS NULL OR p.key=$2)
  UNION ALL
- SELECT 'agent',a.id,a.name, '/agents/'||a.handle
+ SELECT 'agent',a.id,a.name,'/agents/'||a.handle,'',a.name||' '||a.handle
  FROM agents a WHERE a.workspace_id=$1 AND a.archived_at IS NULL
- AND (a.name ILIKE '%'||$2::text||'%' OR a.handle ILIKE replace($2,'@','')||'%')
- AND ($3::text IS NULL OR EXISTS (
- SELECT 1 FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.assignee_agent_id=a.id AND p.key=$3))
+ AND ($2::text IS NULL OR EXISTS (
+ SELECT 1 FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.assignee_agent_id=a.id AND p.key=$2))
  UNION ALL
  -- Chats are private: only the asking user's, unarchived, matched by title.
- SELECT 'chat',c.id,c.title,'/chat/'||c.id
+ SELECT 'chat',c.id,c.title,'/chat/'||c.id,'',c.title
  FROM chat_sessions c JOIN projects p ON p.id=c.project_id
- WHERE c.workspace_id=$1 AND c.created_by=$4 AND NOT c.archived AND NOT c.hidden
- AND c.title ILIKE '%'||$2::text||'%'
- AND ($3::text IS NULL OR p.key=$3)
+ WHERE c.workspace_id=$1 AND c.created_by=$3 AND NOT c.archived AND NOT c.hidden
+ AND ($2::text IS NULL OR p.key=$2)
+ UNION ALL
+ -- Ticket runs only: chat and workflow runs have their own pages.
+ SELECT 'run',r.id,t.key||' · '||a.name,'/runs/'||r.id,r.state,t.key||' '||t.title||' '||a.name
+ FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN agents a ON a.id=r.agent_id JOIN projects p ON p.id=t.project_id
+ WHERE r.workspace_id=$1
+ AND ($2::text IS NULL OR p.key=$2)
+ UNION ALL
+ SELECT 'workflow',w.id,w.name,'/workflows/'||w.id,'',w.name
+ FROM workflows w WHERE w.workspace_id=$1 AND w.user_id=$3
+ UNION ALL
+ SELECT 'persona',pe.id,pe.name,'/customization','',pe.name
+ FROM personas pe WHERE pe.workspace_id=$1 AND pe.user_id=$3
+ UNION ALL
+ SELECT 'memory',m.id,m.title,'/customization','',m.title||' '||m.summary
+ FROM memories m WHERE m.workspace_id=$1 AND m.user_id=$3 AND m.superseded_by IS NULL
+ UNION ALL
+ SELECT 'library',l.id,l.title,'/library','',l.title
+ FROM library_items l WHERE l.workspace_id=$1 AND l.user_id=$3
+) c
+WHERE lower(c.haystack) LIKE '%'||needle.q||'%' OR word_similarity(needle.q,lower(c.haystack))>=0.3
 ) matches
-) results WHERE n<=8 ORDER BY kind,title,id LIMIT 24
+) results WHERE n<=8 ORDER BY score DESC,kind,title,id LIMIT 40
 `
 
 type SearchAttentionTargetsParams struct {
 	WorkspaceID uuid.UUID
-	Q           string
 	Project     *string
 	UserID      uuid.UUID
+	Q           string
 }
 
 type SearchAttentionTargetsRow struct {
-	Kind  string
-	ID    uuid.UUID
-	Title string
-	Href  string
+	Kind   string
+	ID     uuid.UUID
+	Title  string
+	Href   string
+	Status string
+	Score  float64
 }
 
-// At most 8 per kind, so many chats or agents can't crowd epics out.
+// Best matches first, at most 8 per kind so many chats or agents can't crowd
+// epics out. Partial words and typos match through trigrams. Personas,
+// memories, Library items and workflows are private and belong to no project.
 func (q *Queries) SearchAttentionTargets(ctx context.Context, arg SearchAttentionTargetsParams) ([]SearchAttentionTargetsRow, error) {
 	rows, err := q.db.Query(ctx, searchAttentionTargets,
 		arg.WorkspaceID,
-		arg.Q,
 		arg.Project,
 		arg.UserID,
+		arg.Q,
 	)
 	if err != nil {
 		return nil, err
@@ -234,6 +259,8 @@ func (q *Queries) SearchAttentionTargets(ctx context.Context, arg SearchAttentio
 			&i.ID,
 			&i.Title,
 			&i.Href,
+			&i.Status,
+			&i.Score,
 		); err != nil {
 			return nil, err
 		}

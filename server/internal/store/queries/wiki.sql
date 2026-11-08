@@ -102,10 +102,12 @@ SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, 
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
   (ts_rank(ar.search, websearch_to_tsquery('english', sqlc.arg(q))) *
     (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l
-                 WHERE l.target_id = ar.id AND l.target_kind IN ('artifact', 'section')))))::float8 AS score
+                 WHERE l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
+   + CASE WHEN sqlc.arg(fuzzy)::boolean THEN word_similarity(lower(sqlc.arg(q)), lower(ar.title)) ELSE 0 END)::float8 AS score
 FROM artifacts ar
 WHERE ar.workspace_id = sqlc.arg(workspace_id) AND ar.current_version_id IS NOT NULL
-  AND (ar.search @@ websearch_to_tsquery('english', sqlc.arg(q)) OR ar.title ILIKE '%' || sqlc.arg(q) || '%')
+  AND (ar.search @@ websearch_to_tsquery('english', sqlc.arg(q)) OR ar.title ILIKE '%' || sqlc.arg(q) || '%'
+       OR (sqlc.arg(fuzzy)::boolean AND word_similarity(lower(sqlc.arg(q)), lower(ar.title)) >= 0.3))
   AND (sqlc.narg(types)::text[] IS NULL OR ar.type = ANY(sqlc.narg(types)::text[]))
   AND (sqlc.narg(project_id)::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = sqlc.narg(project_id))
 ORDER BY score DESC, ar.updated_at DESC
@@ -115,10 +117,14 @@ LIMIT sqlc.arg(lim);
 SELECT t.id, t.key, t.title, t.status, t.project_id,
   ts_headline('english', t.title || E'\n' || t.description_md, websearch_to_tsquery('english', sqlc.arg(q)),
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
-  ts_rank(t.search, websearch_to_tsquery('english', sqlc.arg(q)))::float8 AS score
+  ((ts_rank(t.search, websearch_to_tsquery('english', sqlc.arg(q)))
+    + CASE WHEN sqlc.arg(fuzzy)::boolean THEN word_similarity(lower(sqlc.arg(q)), lower(t.title)) ELSE 0 END)
+   * CASE WHEN sqlc.arg(fuzzy)::boolean AND t.status IN ('done', 'canceled') THEN 0.7 ELSE 1 END)::float8 AS score
 FROM tickets t
 WHERE t.workspace_id = sqlc.arg(workspace_id)
-  AND (t.search @@ websearch_to_tsquery('english', sqlc.arg(q)) OR t.key = upper(sqlc.arg(q)))
+  AND (t.search @@ websearch_to_tsquery('english', sqlc.arg(q)) OR t.key = upper(sqlc.arg(q))
+       OR (sqlc.arg(fuzzy)::boolean AND (t.title ILIKE '%' || sqlc.arg(q) || '%'
+           OR word_similarity(lower(sqlc.arg(q)), lower(t.title)) >= 0.3)))
   AND (sqlc.narg(project_id)::uuid IS NULL OR t.project_id = sqlc.narg(project_id))
 ORDER BY score DESC, t.updated_at DESC
 LIMIT sqlc.arg(lim);

@@ -4,11 +4,17 @@ import {
   GROUP_ORDER,
   groupOf,
   linkFromTarget,
+  matchParts,
   matchesWords,
   pageContext,
+  parseFilters,
   parseRecent,
+  passesFilters,
   projectOfKey,
+  promoteTop,
   pushRecent,
+  removeToken,
+  snippetParts,
   sortByGroup,
   ticketKeyFrom,
 } from "./command-palette.ts";
@@ -75,4 +81,39 @@ test("page context comes from the route", () => {
   assert.deepEqual(pageContext("/wiki/Payments/Rollback%20runbook"), { kind: "wiki", path: "Payments/Rollback runbook" });
   assert.equal(pageContext("/board"), undefined);
   assert.equal(projectOfKey("LAZYAGENTS-39"), "LAZYAGENTS");
+});
+
+test("a bare number is a ticket in the current project", () => {
+  assert.equal(ticketKeyFrom("143", "WEB"), "WEB-143");
+  assert.equal(ticketKeyFrom("143"), undefined);
+  assert.equal(ticketKeyFrom("pay-1", "WEB"), "PAY-1");
+});
+
+test("filters come out of the query and unknown tokens stay text", () => {
+  const f = parseFilters("is:ticket deploy STATUS:done is:nope");
+  assert.deepEqual(f, { text: "deploy is:nope", groups: ["Tickets"], status: "done", tokens: ["is:ticket", "STATUS:done"] });
+  assert.ok(passesFilters({ group: "Tickets", status: "done" }, f));
+  assert.ok(!passesFilters({ group: "Pages", status: "done" }, f));
+  assert.ok(!passesFilters({ group: "Tickets", status: "todo" }, f));
+  assert.equal(removeToken("is:ticket deploy", "is:ticket"), "deploy");
+});
+
+test("new hit kinds have groups and carry status", () => {
+  assert.equal(groupOf({ kind: "run", title: "r" }), "Runs");
+  assert.equal(groupOf({ kind: "memory", title: "m" }), "Memories");
+  assert.equal(linkFromTarget({ kind: "run", id: "1", title: "r", href: "/runs/1", status: "failed" }).status, "failed");
+});
+
+test("snippets and titles mark every match", () => {
+  assert.deepEqual(snippetParts("a «b» c"), [{ text: "a ", match: false }, { text: "b", match: true }, { text: " c", match: false }]);
+  assert.deepEqual(matchParts("Deploy the web", "web deploy").filter((p) => p.match).map((p) => p.text), ["Deploy", "web"]);
+  assert.deepEqual(matchParts("a.b", "."), [{ text: "a", match: false }, { text: ".", match: true }, { text: "b", match: false }]);
+});
+
+test("the best hit is promoted only when grouping buried it", () => {
+  const first = { group: "Tickets", score: 2 };
+  const page = { group: "Pages", score: 1 };
+  assert.deepEqual(promoteTop([first, page]), [first, page]);
+  const best = { group: "Agents", score: 5 };
+  assert.deepEqual(promoteTop([first, best]), [{ ...best, group: "Top result" }, first]);
 });

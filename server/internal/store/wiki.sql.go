@@ -1340,18 +1340,21 @@ SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, 
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
   (ts_rank(ar.search, websearch_to_tsquery('english', $1)) *
     (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l
-                 WHERE l.target_id = ar.id AND l.target_kind IN ('artifact', 'section')))))::float8 AS score
+                 WHERE l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
+   + CASE WHEN $2::boolean THEN word_similarity(lower($1), lower(ar.title)) ELSE 0 END)::float8 AS score
 FROM artifacts ar
-WHERE ar.workspace_id = $2 AND ar.current_version_id IS NOT NULL
-  AND (ar.search @@ websearch_to_tsquery('english', $1) OR ar.title ILIKE '%' || $1 || '%')
-  AND ($3::text[] IS NULL OR ar.type = ANY($3::text[]))
-  AND ($4::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = $4)
+WHERE ar.workspace_id = $3 AND ar.current_version_id IS NOT NULL
+  AND (ar.search @@ websearch_to_tsquery('english', $1) OR ar.title ILIKE '%' || $1 || '%'
+       OR ($2::boolean AND word_similarity(lower($1), lower(ar.title)) >= 0.3))
+  AND ($4::text[] IS NULL OR ar.type = ANY($4::text[]))
+  AND ($5::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = $5)
 ORDER BY score DESC, ar.updated_at DESC
-LIMIT $5
+LIMIT $6
 `
 
 type SearchKnowledgeArtifactsParams struct {
 	Q           string
+	Fuzzy       bool
 	WorkspaceID uuid.UUID
 	Types       []string
 	ProjectID   *uuid.UUID
@@ -1375,6 +1378,7 @@ type SearchKnowledgeArtifactsRow struct {
 func (q *Queries) SearchKnowledgeArtifacts(ctx context.Context, arg SearchKnowledgeArtifactsParams) ([]SearchKnowledgeArtifactsRow, error) {
 	rows, err := q.db.Query(ctx, searchKnowledgeArtifacts,
 		arg.Q,
+		arg.Fuzzy,
 		arg.WorkspaceID,
 		arg.Types,
 		arg.ProjectID,
@@ -1413,17 +1417,22 @@ const searchKnowledgeTickets = `-- name: SearchKnowledgeTickets :many
 SELECT t.id, t.key, t.title, t.status, t.project_id,
   ts_headline('english', t.title || E'\n' || t.description_md, websearch_to_tsquery('english', $1),
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
-  ts_rank(t.search, websearch_to_tsquery('english', $1))::float8 AS score
+  ((ts_rank(t.search, websearch_to_tsquery('english', $1))
+    + CASE WHEN $2::boolean THEN word_similarity(lower($1), lower(t.title)) ELSE 0 END)
+   * CASE WHEN $2::boolean AND t.status IN ('done', 'canceled') THEN 0.7 ELSE 1 END)::float8 AS score
 FROM tickets t
-WHERE t.workspace_id = $2
-  AND (t.search @@ websearch_to_tsquery('english', $1) OR t.key = upper($1))
-  AND ($3::uuid IS NULL OR t.project_id = $3)
+WHERE t.workspace_id = $3
+  AND (t.search @@ websearch_to_tsquery('english', $1) OR t.key = upper($1)
+       OR ($2::boolean AND (t.title ILIKE '%' || $1 || '%'
+           OR word_similarity(lower($1), lower(t.title)) >= 0.3)))
+  AND ($4::uuid IS NULL OR t.project_id = $4)
 ORDER BY score DESC, t.updated_at DESC
-LIMIT $4
+LIMIT $5
 `
 
 type SearchKnowledgeTicketsParams struct {
 	Q           string
+	Fuzzy       bool
 	WorkspaceID uuid.UUID
 	ProjectID   *uuid.UUID
 	Lim         int32
@@ -1442,6 +1451,7 @@ type SearchKnowledgeTicketsRow struct {
 func (q *Queries) SearchKnowledgeTickets(ctx context.Context, arg SearchKnowledgeTicketsParams) ([]SearchKnowledgeTicketsRow, error) {
 	rows, err := q.db.Query(ctx, searchKnowledgeTickets,
 		arg.Q,
+		arg.Fuzzy,
 		arg.WorkspaceID,
 		arg.ProjectID,
 		arg.Lim,
