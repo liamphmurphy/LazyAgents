@@ -240,6 +240,12 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 					if _, err := q.CreateGeneratedChatAttachment(ctx, store.CreateGeneratedChatAttachmentParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, MessageID: &msg.ID, Filename: im.name, ContentType: im.ct, SizeBytes: im.size, BlobKey: im.key}); err != nil {
 						return err
 					}
+					// Every generated image is kept in the person's Library too,
+					// sharing the attachment's object.
+					if _, err := q.CreateLibraryItem(ctx, store.CreateLibraryItemParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, Kind: "image", Title: runs.LibraryImageTitle(chat.Title),
+						Filename: im.name, ContentType: im.ct, SizeBytes: im.size, BlobKey: im.key, ChatID: &chat.ID, MessageID: &msg.ID, PersonaID: chat.PersonaID}); err != nil {
+						return err
+					}
 				}
 				bound = len(imgs) > 0
 				for _, reason := range jobs.failures {
