@@ -299,6 +299,10 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const effortPending = !!c && effort !== c.effort;
   // The next message would start a run on a harness that can't run: say why before sending.
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
+  const nextRunSettings = {
+    ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}),
+    ...(effortPending ? { effort: effort ?? ("default" as const) } : {}),
+  };
   const list = messages.data?.messages;
   const lastUser = list?.findLast((m) => m.role === "user");
   // The running turn starts after the newest message, which may be a reply, not
@@ -373,10 +377,15 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     setText("Go deeper on this report: ");
     area.current?.focus();
   };
-  const askAboutSelection = (selected: string, authorId?: string, author?: string) => {
-    const quote = quoteForComposer(selected, authorId && authorId !== (c?.speaker ?? c?.persona)?.id ? author : undefined);
-    setText((t) => quote + t);
-    area.current?.focus();
+  // Sent from its own box, so the draft in the composer (and its chips and files) stays put.
+  // A failed send moves the question to the composer rather than losing it.
+  const askAboutSelection = (selected: string, question: string, authorId?: string, author?: string) => {
+    if (locked || unavailable) return false;
+    const body = quoteForComposer(selected, authorId && authorId !== (c?.speaker ?? c?.persona)?.id ? author : undefined) + question;
+    cancel.reset();
+    pinned.current = true;
+    send.mutate({ body, ...nextRunSettings }, { onError: () => setText((t) => (t ? `${body}\n\n${t}` : body)) });
+    return true;
   };
 
   function submit(body: string) {
@@ -389,8 +398,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
       {
         body,
         ...(research ? { research: true } : {}),
-        ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}),
-        ...(effortPending ? { effort: effort ?? "default" } : {}),
+        ...nextRunSettings,
         ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) },
       {
         onSuccess: () => {
@@ -624,7 +632,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
             </ol>
             </RecommendActions.Provider>
             </VideoPlayers.Provider>
-            <AskAboutSelection root={log} onAsk={askAboutSelection} />
+            {!c.archived && <AskAboutSelection root={log} onAsk={askAboutSelection} />}
             {newReply && (
               <div className="sticky bottom-1 z-20 flex justify-center">
                 <button type="button" onClick={followLatest} className="flex items-center gap-1.5 rounded-full border border-border-float bg-surface-raised px-3 py-1 text-xs font-medium text-fg shadow-[var(--shadow-float)] hover:bg-hover">

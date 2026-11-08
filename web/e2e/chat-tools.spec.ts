@@ -58,12 +58,31 @@ test("Copy puts the reply's markdown on the clipboard", async ({ page, context }
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("| Option | Cost |");
 });
 
-test("selecting reply text offers Ask about this, which quotes it", async ({ page }) => {
+test("selecting reply text offers Ask about this, which sends from its own box", async ({ page }) => {
+  await open(page);
+  await box(page).fill("my draft");
+  await page.getByTestId("assistant-message").first().locator("p").first().selectText();
+  await page.getByTestId("ask-about-selection").click();
+  const ask = page.getByRole("textbox", { name: "Ask about this" });
+  await expect(ask).toBeFocused();
+  await ask.fill("why is that?");
+  await ask.press("Enter");
+  await expect(ask).toHaveCount(0);
+  const mine = page.getByTestId("user-message").last();
+  await expect(mine.locator("blockquote")).toContainText("Echo: plain hello");
+  await expect(mine).toContainText("why is that?");
+  await expect(box(page)).toHaveValue("my draft");
+});
+
+test("Escape closes the Ask about this box without sending", async ({ page }) => {
   await open(page);
   await page.getByTestId("assistant-message").first().locator("p").first().selectText();
   await page.getByTestId("ask-about-selection").click();
-  await expect(box(page)).toHaveValue(/^> Echo: plain hello\n\n$/);
-  await expect(page.getByTestId("ask-about-selection")).toHaveCount(0);
+  const ask = page.getByRole("textbox", { name: "Ask about this" });
+  await ask.fill("never mind");
+  await ask.press("Escape");
+  await expect(ask).toHaveCount(0);
+  await expect(page.getByTestId("user-message")).toHaveCount(1);
 });
 
 test("the composer starts at one line and grows", async ({ page }) => {
