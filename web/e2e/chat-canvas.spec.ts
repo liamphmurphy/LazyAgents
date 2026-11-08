@@ -13,7 +13,7 @@ const svgBody = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20" onl
 type Comment = Record<string, unknown> & { id: string; status: string };
 type Calls = { comments: Comment[]; sent: Record<string, unknown>[]; added: Record<string, unknown>[]; saved: Record<string, unknown>[]; restored: unknown[]; promoted: number; applied: string[] };
 
-async function open(page: Page, initial: Comment[] = []) {
+async function open(page: Page, initial: Comment[] = [], card = DOC) {
   const calls: Calls = { comments: [...initial], sent: [], added: [], saved: [], restored: [], promoted: 0, applied: [] };
   await installChatApi(page, { replyDelayMs: 10 });
   await page.route(/\/api\/v1\/chats\/[^/]+\/canvases(\/|\?|$)/, (route) => {
@@ -69,7 +69,7 @@ async function open(page: Page, initial: Comment[] = []) {
     return json({ ...summary(SVG, "svg", "Run screen", 1), viewing_seq: 1, body: svgBody, versions: versions(1) });
   });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill(`canvas: ${DOC}`);
+  await page.getByRole("textbox", { name: "Message" }).fill(`canvas: ${card}`);
   await page.getByRole("textbox", { name: "Message" }).press("Enter");
   return calls;
 }
@@ -89,18 +89,12 @@ async function select(page: Page, from: string, to: string) {
 }
 
 const openDoc = async (page: Page) => {
-  await page.getByTestId("canvas-card").click();
   await expect(page.getByTestId("canvas-panel")).toContainText("days.");
   return page.getByTestId("canvas-panel");
 };
 
-test("a card opens the canvas and versions can be stepped through", async ({ page }) => {
+test("the newest card opens in the chat, collapses, and steps through versions", async ({ page }) => {
   await open(page);
-  const card = page.getByTestId("canvas-card");
-  await expect(card).toContainText("Retention policy");
-  await expect(card).toContainText("Document · v2");
-  await card.click();
-
   const pane = page.getByTestId("canvas-panel");
   await expect(pane).toContainText("after 60 days.");
   await expect(pane.getByTestId("canvas-version")).toHaveText("v2 of 2");
@@ -114,22 +108,79 @@ test("a card opens the canvas and versions can be stepped through", async ({ pag
   await pane.getByRole("tab", { name: "Source" }).click();
   await expect(pane).toContainText("# Policy");
 
-  await pane.getByRole("button", { name: "Close canvas" }).click();
+  await pane.getByRole("button", { name: "Collapse canvas" }).click();
   await expect(pane).toHaveCount(0);
+  const card = page.getByTestId("canvas-card");
+  await expect(card).toContainText("Document · v2");
+  await card.click();
+  await expect(page.getByTestId("canvas-panel")).toBeVisible();
 });
 
 test("an SVG canvas draws sanitized elements that keep their ids", async ({ page }) => {
-  await open(page);
-  await page.getByRole("button", { name: "Canvas, 2 open" }).click();
+  await open(page, [], SVG);
   const pane = page.getByTestId("canvas-panel");
-  // Opened from the header: the newest.
   await expect(pane.getByTestId("canvas-svg").locator('rect[data-vid="abc"]')).toBeVisible();
   await expect(pane.getByTestId("canvas-svg").locator("script")).toHaveCount(0);
   await expect(pane).toContainText("can't be shown here");
   expect(await page.title()).not.toBe("ran");
+});
 
-  await pane.getByRole("combobox", { name: "Canvas" }).selectOption(DOC);
-  await expect(pane).toContainText("after 60 days.");
+test("only the latest card for a canvas is live; earlier ones lead to it", async ({ page }) => {
+  await open(page);
+  await expect(page.getByTestId("canvas-panel")).toBeVisible();
+  const composer = page.getByRole("combobox", { name: "Message" });
+  await expect(composer).toBeEnabled();
+  await composer.fill(`canvas: ${DOC}`);
+  await composer.press("Enter");
+  await expect(page.getByTestId("assistant-message")).toHaveCount(2);
+  await expect(page.getByTestId("assistant-message").last().getByTestId("canvas-panel")).toBeVisible();
+  await expect(page.getByTestId("canvas-panel")).toHaveCount(1);
+  await expect(page.getByTestId("assistant-message").first().getByTestId("canvas-card")).toBeVisible();
+});
+
+test("fullscreen covers the chat area, keeps a message box, and Escape returns", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  const calls = await open(page);
+  const inline = page.getByTestId("canvas-panel");
+  await expect(inline).toContainText("days.");
+  const history = page.getByRole("complementary", { name: "Chat history" });
+  await expect(history).toBeVisible();
+  const chat = (await page.getByRole("log", { name: "Conversation" }).boundingBox())!;
+  const box = (await inline.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(chat.x);
+  expect(box.x + box.width).toBeLessThanOrEqual(chat.x + chat.width);
+
+  await inline.getByRole("button", { name: "Fullscreen" }).click();
+  const full = page.getByTestId("canvas-fullscreen");
+  await expect(full).toContainText("days.");
+  await expect(inline).toHaveCount(0);
+  const historyBox = (await history.boundingBox())!;
+  const fullBox = (await full.boundingBox())!;
+  expect(fullBox.x).toBeLessThanOrEqual(historyBox.x);
+  await expect(full.getByTestId("canvas-latest-reply")).toContainText("Drafted it.");
+  await expect(full.getByRole("textbox", { name: "Message from fullscreen" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(full).toHaveCount(0);
+  await expect(inline).toContainText("days.");
+  expect(calls.sent).toHaveLength(0);
+});
+
+test("inline, a comment sits under its passage; fullscreen puts it alongside", async ({ page }) => {
+  await open(page);
+  const pane = await openDoc(page);
+  await select(page, "Archive", "Archive");
+  await pane.getByTestId("canvas-toolbar").getByRole("button", { name: "Comment" }).click();
+  await expect(page.getByTestId("canvas-text").getByTestId("canvas-composer")).toBeVisible();
+  await pane.getByRole("textbox", { name: "Comment" }).fill("Too short");
+  await pane.getByRole("button", { name: "Add to batch" }).click();
+  await expect(page.getByTestId("canvas-text").getByTestId("canvas-comment")).toContainText("Too short");
+  await expect(pane.getByRole("complementary", { name: "Comments" })).toHaveCount(0);
+
+  await pane.getByRole("button", { name: "Fullscreen" }).click();
+  const full = page.getByTestId("canvas-fullscreen");
+  await expect(full.getByRole("complementary", { name: "Comments" }).getByTestId("canvas-comment")).toContainText("Too short");
+  await expect(full.getByTestId("canvas-text").getByTestId("canvas-comment")).toHaveCount(0);
 });
 
 test("a selection across formatting becomes a draft on the right source range, sent as a batch", async ({ page }) => {
@@ -164,8 +215,7 @@ test("a quick action sends straight away", async ({ page }) => {
 });
 
 test("clicking an SVG element comments on it and pins the thread", async ({ page }) => {
-  const calls = await open(page);
-  await page.getByRole("button", { name: "Canvas, 2 open" }).click();
+  const calls = await open(page, [], SVG);
   const pane = page.getByTestId("canvas-panel");
   await pane.getByTestId("canvas-svg").locator('rect[data-vid="abc"]').click();
   const composer = pane.getByTestId("canvas-composer");
@@ -223,25 +273,6 @@ test("edit saves a version, changes show a diff, older versions restore, and it 
 
   await pane.getByRole("button", { name: "Save as artifact" }).click();
   await expect.poll(() => calls.promoted).toBe(1);
-});
-
-test("opening a canvas makes room: the header fits and no empty rail shows", async ({ page }) => {
-  await page.setViewportSize({ width: 1500, height: 900 });
-  await open(page);
-  await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
-  const pane = await openDoc(page);
-  await expect(page.getByRole("complementary", { name: "Chat history" })).toHaveCount(0);
-  await expect(pane.getByRole("complementary", { name: "Comments" })).toHaveCount(0);
-  await expect(pane).toContainText("Select text to comment on it.");
-  const paneBox = (await pane.boundingBox())!;
-  const button = (await page.getByRole("button", { name: "Canvas, 2 open" }).boundingBox())!;
-  expect(button.x + button.width).toBeLessThanOrEqual(paneBox.x);
-  const chat = (await page.getByRole("tab", { name: "Chat", exact: true }).boundingBox())!;
-  const activity = (await page.getByRole("tab", { name: "Activity", exact: true }).boundingBox())!;
-  expect(activity.y).toBe(chat.y);
-
-  await pane.getByRole("button", { name: "Close canvas" }).click();
-  await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
 });
 
 test("a failing canvas request doesn't hold up the composer", async ({ page }) => {

@@ -21,6 +21,8 @@ export const RecommendActions = createContext<{
   chatId?: string;
   project?: string;
   researchMore?: (artifactId: string, title: string) => void;
+  /** Where this chat's canvas cards are, and whether they can be changed right now. */
+  canvas?: { newest?: string; lastMessage: (canvasId: string) => string | undefined; live: boolean; readOnly: boolean; agent: string };
 } | undefined>(undefined);
 
 /** The chat's playing-capable videos by id, so a timestamp link can jump one to a moment. */

@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import { renderedToSource, rehypeSourceSpans, selectionToSource } from "./canvas-source.ts";
+import { renderedToSource, rehypeSlots, rehypeSourceSpans, selectionToSource } from "./canvas-source.ts";
 
 const render = (md) =>
   renderToStaticMarkup(
@@ -87,4 +87,12 @@ test("math and fenced code stay unwrapped and intact", () => {
     runs("Before\n\n$$x^2$$\n\n```js\nlet a\n```\n").map((r) => r.text),
     ["Before"],
   );
+});
+
+test("slots land after the block holding their offset", () => {
+  const md = "One.\n\nTwo.\n\nThree.";
+  const html = renderToStaticMarkup(createElement(ReactMarkdown, { rehypePlugins: [[rehypeSlots, [{ id: "a", offset: 8 }, { id: "z", offset: 999 }]], rehypeSourceSpans] }, md));
+  const at = (s) => html.indexOf(s);
+  assert.ok(at("Two.") < at("md-slot:a") && at("md-slot:a") < at("Three."), html);
+  assert.ok(at("Three.") < at("md-slot:z"), html);
 });

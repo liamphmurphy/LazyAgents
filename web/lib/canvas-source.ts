@@ -38,6 +38,26 @@ export function rehypeSourceSpans() {
   return (tree: HastNode) => wrap(tree);
 }
 
+export type Slot = { id: string; offset: number };
+export const SLOT_CLASS = "md-slot:";
+
+/**
+ * Rehype plugin: after the top-level block holding each slot's source offset,
+ * adds an empty div the renderer fills. Keeps inserted content in React's tree.
+ */
+export function rehypeSlots(slots: Slot[]) {
+  return (tree: HastNode) => {
+    const blocks = (tree.children ?? []).filter((n) => n.type === "element" && n.position?.end.offset !== undefined);
+    if (!blocks.length) return;
+    const after = new Map<HastNode, Slot[]>();
+    for (const s of slots) {
+      const b = blocks.find((n) => n.position!.end.offset! >= s.offset) ?? blocks[blocks.length - 1];
+      after.set(b, [...(after.get(b) ?? []), s]);
+    }
+    tree.children = tree.children!.flatMap((n) => [n, ...(after.get(n) ?? []).map((s) => ({ type: "element", tagName: "div", properties: { className: [SLOT_CLASS + s.id] }, children: [] }))]);
+  };
+}
+
 const ENTITY = /^&(#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]*);/;
 const PUNCTUATION = /[!-/:-@[-`{-~]/;
 

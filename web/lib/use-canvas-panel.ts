@@ -2,22 +2,30 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-/** The canvas pane beside a chat, in the URL. */
+/**
+ * Which canvas is open in a chat, in the URL. With no choice made the newest
+ * card is expanded; "none" means the person collapsed it.
+ */
 export function useCanvasPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
   const raw = search.get("canvas");
-  const go = (value: string | null) => {
+  const go = (canvas: string | null, full: boolean) => {
     const q = new URLSearchParams(search.toString());
-    if (value === null) q.delete("canvas");
-    else q.set("canvas", value);
+    if (canvas === null) q.delete("canvas");
+    else q.set("canvas", canvas);
+    if (full) q.set("canvas_view", "full");
+    else q.delete("canvas_view");
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
   return {
-    open: raw !== null,
-    focus: raw && raw !== "1" ? raw : undefined,
-    show: (id?: string) => go(id ?? "1"),
-    close: () => go(null),
+    focus: raw && raw !== "none" ? raw : undefined,
+    collapsed: raw === "none",
+    fullscreen: search.get("canvas_view") === "full",
+    show: (id: string) => go(id, false),
+    collapse: () => go("none", false),
+    openFull: (id: string) => go(id, true),
+    exitFull: () => go(raw, false),
   };
 }

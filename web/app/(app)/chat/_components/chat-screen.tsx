@@ -23,7 +23,7 @@ import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { ChipList } from "./context-chips";
 import { RestoreChat } from "./restore";
-import { CanvasButton, CanvasPanel } from "./canvas-panel";
+import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
 import { PersonaAvatar, PersonaFilter, PersonaName, PersonaSwitcher, RepoSelect, personaLook, useOpenPersonaManager, usePersonaFilter } from "./persona";
 
 type Chat = Schemas["ChatSession"];
@@ -492,8 +492,7 @@ export function ChatScreen({ id }: { id?: string }) {
         <ProjectScopeState base="/chat" scope={scope} />
       ) : (
         <div className="relative flex min-h-0 flex-1 max-md:flex-col">
-          {/* A canvas needs the width; closing it brings the history back. */}
-          {!(id && canvas.open) && <HistorySidebar project={project} id={id} newChat={newChat} />}
+          <HistorySidebar project={project} id={id} newChat={newChat} />
           <div className="flex min-w-0 flex-1 flex-col">
             {(noHarness || create.isError) && (
               <div className="flex flex-col gap-1 px-6 pt-3">
@@ -520,7 +519,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {id && canvas.open ? <CanvasPanel chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : null}
+          {id && canvas.fullscreen ? <CanvasFullscreen chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : null}
         </div>
       )}
     </div>

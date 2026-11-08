@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useCanvasActions, useCanvasComments, useChatCanvas, useChatCanvases } from "@/lib/api/canvas-hooks";
+import { useChatMessages, useSendChatMessage } from "@/lib/api/hooks";
 import type { Schemas } from "@/lib/api/client";
 import { rangeToSource, setHighlight, sourceOffsetAt, sourceToRanges } from "@/lib/canvas-dom";
 import { cx } from "@/lib/cx";
@@ -11,7 +12,8 @@ import { sanitizeSvg } from "@/lib/svg-sanitize";
 import { parseSvg } from "@/lib/svg-edit";
 import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { CodeFence } from "@/components/domain/code-fence";
-import { Markdown } from "@/components/domain/markdown";
+import type { Slot } from "@/lib/canvas-source";
+import { Markdown, MarkdownSlots } from "@/components/domain/markdown";
 import { MockupCanvas, renderNode, useSourceHistory, viewBoxOf } from "@/components/domain/mockup-canvas";
 import { Button, IconButton } from "@/components/ui/button";
 
@@ -31,24 +33,23 @@ const QUICK = [
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
-/** Header entry point, once the chat has a canvas; toggles the pane. */
+/** Header entry point, once the chat has a canvas: goes to the newest card, or fullscreen if it has none. */
 export function CanvasButton({ chatId, live }: { chatId: string; live: boolean }) {
   const panel = useCanvasPanel();
-  const total = useChatCanvases(chatId, live).data?.canvases.length ?? 0;
-  if (!total) return null;
+  const canvases = useChatCanvases(chatId, live).data?.canvases ?? [];
+  if (!canvases.length) return null;
+  const go = () => {
+    const card = Array.from(document.querySelectorAll<HTMLElement>("[data-canvas-card]")).at(-1);
+    const id = card?.dataset.canvasCard;
+    if (card && id) {
+      panel.show(id);
+      card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    } else panel.openFull(canvases[canvases.length - 1].id);
+  };
   return (
-    <button
-      type="button"
-      aria-pressed={panel.open}
-      aria-label={`Canvas, ${total} open`}
-      onClick={() => (panel.open ? panel.close() : panel.show())}
-      className={cx(
-        "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-[13px] transition-colors",
-        panel.open ? "border-accent bg-selected text-fg" : "border-btn-secondary-border bg-btn-secondary text-fg hover:bg-hover",
-      )}
-    >
+    <button type="button" aria-label={`Canvas, ${canvases.length} open`} onClick={go} className="inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-[13px] text-fg transition-colors hover:bg-hover">
       Canvas
-      <span className="text-fg-tertiary">{total}</span>
+      <span className="text-fg-tertiary">{canvases.length}</span>
     </button>
   );
 }
@@ -131,12 +132,13 @@ function SvgView({ source, title, threads, selected, activeId, onPick, onPin }: 
 }
 
 /** Rendered Markdown a person can select in; comments are painted over it. */
-function TextPreview({ c, threads, activeId, pending, commentable, onToolbar, onActivate }: {
+function TextPreview({ c, threads, activeId, pending, commentable, slots, onToolbar, onActivate }: {
   c: Canvas;
   threads: Comment[];
   activeId?: string;
   pending?: { start: number; end: number };
   commentable: boolean;
+  slots?: Slot[];
   onToolbar: (t: Toolbar | null) => void;
   onActivate: (id: string | undefined) => void;
 }) {
@@ -151,13 +153,14 @@ function TextPreview({ c, threads, activeId, pending, commentable, onToolbar, on
     const active = sourceToRanges(root, c.body, pending?.start ?? 0, pending?.end ?? 0);
     setHighlight("canvas-comment-active", [...active, ...paint(current.filter((t) => t.id === activeId))]);
   }, [c.body, threads, activeId, pending, commentable]);
-  useEffect(() => () => {
+  // A layout effect: the next canvas paints in its own, and this must run first.
+  useLayoutEffect(() => () => {
     setHighlight("canvas-comment", []);
     setHighlight("canvas-comment-active", []);
   }, []);
   const settle = (e: ReactMouseEvent | React.KeyboardEvent) => {
     const root = host.current;
-    if (!root || !commentable) return;
+    if (!root || !commentable || (e.target as Element).closest?.("[data-canvas-thread]")) return;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount || !root.contains(sel.anchorNode)) {
       onToolbar(null);
@@ -177,7 +180,7 @@ function TextPreview({ c, threads, activeId, pending, commentable, onToolbar, on
   };
   return (
     <div ref={host} data-testid="canvas-text" className="relative" onMouseUp={settle} onKeyUp={settle}>
-      <Markdown sourceSpans className="type-reading text-fg-2">{c.body}</Markdown>
+      <Markdown sourceSpans slots={slots} className="type-reading text-fg-2">{c.body}</Markdown>
     </div>
   );
 }
@@ -247,7 +250,7 @@ function Thread({ c, n, replies, active, agent, readOnly, actions, onActivate }:
     setReplying(false);
   };
   return (
-    <li data-testid="canvas-comment" aria-current={active || undefined} onClick={onActivate} className={cx("flex flex-col gap-1.5 rounded-lg border bg-surface p-2.5 text-[12.5px]", active ? "border-accent" : "border-border")}>
+    <li data-testid="canvas-comment" data-canvas-thread aria-current={active || undefined} onClick={onActivate} className={cx("flex flex-col gap-1.5 rounded-lg border bg-surface p-2.5 text-[12.5px]", active ? "border-accent" : "border-border")}>
       <div className="flex items-center gap-1.5 text-[11.5px] text-fg-tertiary">
         <span className="grid size-4 flex-none place-items-center rounded-full bg-fg-secondary text-[10px] font-bold text-surface">{n}</span>
         <span className="font-semibold text-fg-2">{who(c)}</span>
@@ -294,7 +297,7 @@ function Composer({ target, readOnly, actions, seq, onDone }: { target: Target; 
     onDone();
   };
   return (
-    <div data-testid="canvas-composer" className="flex flex-col gap-1.5 rounded-lg border border-accent bg-surface p-2.5">
+    <div data-testid="canvas-composer" data-canvas-thread className="flex flex-col gap-1.5 rounded-lg border border-accent bg-surface p-2.5">
       <p className="truncate text-[11.5px] text-fg-tertiary">On {target.kind === "text" ? `“${target.quote}”` : `“${target.label}”`}</p>
       <textarea aria-label="Comment" autoFocus rows={3} value={body} onChange={(e) => setBody(e.target.value)} className="w-full rounded border border-border bg-surface-sunken p-1.5 text-[12.5px] text-fg focus:border-accent focus:outline-none" />
       {(actions.add.isError || actions.send.isError) && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(actions.add.error ?? actions.send.error)}</p>}
@@ -307,7 +310,8 @@ function Composer({ target, readOnly, actions, seq, onDone }: { target: Target; 
   );
 }
 
-function Rail({ threads, replies, resolved, target, activeId, setActive, agent, readOnly, actions, seq, onComposerDone, numberOf }: {
+function Rail({ inline, threads, replies, resolved, target, activeId, setActive, agent, readOnly, actions, seq, onComposerDone, numberOf }: {
+  inline: boolean;
   threads: Comment[];
   replies: Map<string, Comment[]>;
   resolved: Comment[];
@@ -323,7 +327,7 @@ function Rail({ threads, replies, resolved, target, activeId, setActive, agent, 
 }) {
   const card = (c: Comment) => <Thread key={c.id} c={c} n={numberOf(c)} replies={replies.get(c.id) ?? []} active={c.id === activeId} agent={agent} readOnly={readOnly} actions={actions} onActivate={() => setActive(c.id)} />;
   return (
-    <aside aria-label="Comments" className="flex flex-none flex-col gap-2 border-border-subtle p-3 max-xl:border-t xl:w-[264px] xl:overflow-y-auto xl:border-l">
+    <aside aria-label="Comments" className={cx("flex flex-none flex-col gap-2 border-border-subtle p-3", inline ? "border-t" : "max-md:border-t md:w-[300px] md:overflow-y-auto md:border-l")}>
       {target && <Composer key={target.kind === "text" ? `${target.start}-${target.end}` : target.vid} target={target} readOnly={readOnly} actions={actions} seq={seq} onDone={onComposerDone} />}
       <ol className="flex flex-col gap-2">{threads.map(card)}</ol>
       {resolved.length > 0 && (
@@ -336,7 +340,8 @@ function Rail({ threads, replies, resolved, target, activeId, setActive, agent, 
   );
 }
 
-function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }: { chatId: string; canvasId: string; live: boolean; readOnly: boolean; agent: string; onClose: () => void; picker: ReactNode }) {
+/** One canvas: inline in a chat card (a fixed height, comments under their passages) or fullscreen (comments alongside). */
+export function CanvasView({ chatId, canvasId, live, readOnly, agent, onCollapse, onFullscreen, onExitFullscreen }: { chatId: string; canvasId: string; live: boolean; readOnly: boolean; agent: string; onCollapse?: () => void; onFullscreen?: () => void; onExitFullscreen?: () => void }) {
   // Undefined follows the current version as the agent revises it.
   const [seq, setSeq] = useState<number>();
   const [view, setView] = useState<View>("preview");
@@ -369,6 +374,28 @@ function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }
   // Agent edits shouldn't land under someone's cursor: canvases are read-only during a turn.
   const locked = readOnly || live;
   const canComment = isCurrent && !readOnly && view === "preview";
+  const inline = !onExitFullscreen;
+  // Inline, text comments sit under their passage; anything without a place there goes below.
+  const flowing = inline && c?.kind === "text" && isCurrent;
+  const anchored = useMemo(() => (flowing ? open.filter((x) => !x.target_lost && x.anchor.end != null) : []), [flowing, open]);
+  const inFlowComposer = flowing && canComment && target?.kind === "text";
+  const slotSpec = anchored.map((x) => `${x.id}:${x.anchor.end}`).join() + (inFlowComposer ? `|${target.end}` : "");
+  const slots = useMemo<Slot[]>(() => {
+    if (!flowing) return [];
+    const out: Slot[] = slotSpec.split("|")[0].split(",").filter(Boolean).map((p) => ({ id: p.split(":")[0], offset: Number(p.split(":")[1]) }));
+    const composer = slotSpec.split("|")[1];
+    if (composer) out.push({ id: "composer", offset: Number(composer) });
+    return out;
+  }, [flowing, slotSpec]);
+  const threadCard = (x: Comment) => <Thread key={x.id} c={x} n={numberOf(x)} replies={replies.get(x.id) ?? []} active={x.id === activeId} agent={agent} readOnly={locked} actions={actions} onActivate={() => setActiveId(x.id)} />;
+  const renderSlot = (id: string): ReactNode => {
+    if (id === "composer") return inFlowComposer && c ? <div className="my-2"><Composer key={`${target.start}-${target.end}`} target={target} readOnly={locked} actions={actions} seq={c.seq} onDone={() => setTarget(null)} /></div> : null;
+    const x = anchored.find((t) => t.id === id);
+    return x ? <ol className="my-2">{threadCard(x)}</ol> : null;
+  };
+  const railThreads = open.filter((x) => !anchored.includes(x));
+  const railTarget = canComment && !inFlowComposer ? target : null;
+  const showRail = !!c && view === "preview" && (railThreads.length > 0 || resolved.length > 0 || !!railTarget);
   const quick = async (t: Toolbar, message: string) => {
     if (!c) return;
     setToolbar(null);
@@ -384,7 +411,7 @@ function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }
   return (
     <>
       <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2.5">
-        <div className="min-w-0 flex-1">{picker ?? <h2 className="truncate text-[14px] font-semibold text-fg">{c?.title ?? "Canvas"}</h2>}</div>
+        <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-fg">{c?.title ?? "Canvas"}</h2>
         {drafts.length > 0 && (
           <Button variant="primary" disabled={locked || actions.send.isPending} onClick={() => actions.send.mutate({ comment_ids: drafts.map((d) => d.id) })}>
             Send {drafts.length} comment{drafts.length === 1 ? "" : "s"}
@@ -395,7 +422,9 @@ function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }
         ) : (
           c && <Button variant="secondary" disabled={actions.promote.isPending} onClick={() => actions.promote.mutate()}>Save as artifact</Button>
         )}
-        <IconButton icon="x" label="Close canvas" onClick={onClose} />
+        {onFullscreen && <IconButton icon="expand" label="Fullscreen" onClick={onFullscreen} />}
+        {onExitFullscreen && <IconButton icon="shrink" label="Exit fullscreen" onClick={onExitFullscreen} />}
+        {onCollapse && <IconButton icon="chevronUp" label="Collapse canvas" onClick={onCollapse} />}
       </div>
       <div className="flex items-center gap-2 border-b border-border-row px-4 py-1.5 text-xs text-fg-tertiary">
         {c && viewing !== undefined && (
@@ -418,8 +447,8 @@ function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }
         </span>
       </div>
       {failure && <p role="alert" className="border-b border-border-row px-4 py-1 text-xs text-pill-blocked-fg">{errorText(failure)}</p>}
-      <div className="flex min-h-0 flex-1 max-xl:flex-col max-xl:overflow-y-auto">
-        <div className="relative min-w-0 flex-1 p-4 xl:overflow-auto">
+      <div className={cx("min-h-0 flex-1", inline ? "overflow-y-auto" : "flex overflow-hidden max-md:flex-col max-md:overflow-y-auto")}>
+        <div className={cx("relative min-w-0 flex-1 p-4", !inline && "md:overflow-auto")}>
           {canComment && !target && !open.length && !resolved.length && <p className="mb-3 text-xs text-fg-tertiary">{c?.kind === "svg" ? "Click an element to comment on it." : "Select text to comment on it."}</p>}
           {q.isError ? (
             <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(q.error)}</p>
@@ -435,7 +464,9 @@ function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }
             <SvgView source={c.body} title={c.title} threads={isCurrent ? open : []} activeId={activeId} selected={target?.kind === "svg" ? target.vid : undefined} onPick={canComment ? setTarget : undefined} onPin={setActiveId} />
           ) : (
             <div className="relative">
-              <TextPreview c={c} threads={open} activeId={activeId} pending={target?.kind === "text" ? target : undefined} commentable={canComment} onToolbar={setToolbar} onActivate={setActiveId} />
+              <MarkdownSlots.Provider value={renderSlot}>
+                <TextPreview c={c} threads={open} activeId={activeId} pending={target?.kind === "text" ? target : undefined} commentable={canComment} slots={slots} onToolbar={setToolbar} onActivate={setActiveId} />
+              </MarkdownSlots.Provider>
               {toolbar && canComment && (
                 <div role="toolbar" aria-label="Selection" data-testid="canvas-toolbar" style={{ top: toolbar.top, left: toolbar.left }} className="absolute z-10 flex gap-0.5 rounded-lg border border-border-float bg-surface-raised p-1 text-[12.5px] shadow-[var(--shadow-float)]" onMouseUp={(e) => e.stopPropagation()}>
                   <button type="button" className="rounded px-2 py-0.5 font-semibold text-fg hover:bg-hover" onClick={() => { setTarget({ kind: "text", start: toolbar.start, end: toolbar.end, quote: toolbar.quote }); setToolbar(null); }}>Comment</button>
@@ -447,35 +478,59 @@ function CanvasView({ chatId, canvasId, live, readOnly, agent, onClose, picker }
             </div>
           )}
         </div>
-        {c && view === "preview" && (open.length > 0 || resolved.length > 0 || (canComment && target)) && (
-          <Rail threads={open} replies={replies} resolved={resolved} target={canComment ? target : null} activeId={activeId} setActive={setActiveId} agent={agent} readOnly={locked} actions={actions} seq={c.seq} onComposerDone={() => setTarget(null)} numberOf={numberOf} />
+        {showRail && (
+          <Rail inline={inline} threads={railThreads} replies={replies} resolved={resolved} target={railTarget} activeId={activeId} setActive={setActiveId} agent={agent} readOnly={locked} actions={actions} seq={c.seq} onComposerDone={() => setTarget(null)} numberOf={numberOf} />
         )}
       </div>
     </>
   );
 }
 
-/** The pane beside a chat: read, comment on and edit a canvas. */
-export function CanvasPanel({ chatId, live, readOnly, agent }: { chatId: string; live: boolean; readOnly: boolean; agent: string }) {
+/** Talking to the agent without leaving fullscreen: its latest reply and a message box. */
+function FullscreenChat({ chatId, live, readOnly }: { chatId: string; live: boolean; readOnly: boolean }) {
+  const [text, setText] = useState("");
+  const send = useSendChatMessage(chatId);
+  const messages = useChatMessages(chatId).data?.messages;
+  const reply = messages?.findLast((m) => m.role === "assistant")?.body_md.replace(/^ {0,3}(`{3,}|~{3,})[\s\S]*?^ {0,3}\1\s*$/gm, "").trim();
+  const disabled = live || readOnly || send.isPending;
+  const submit = () => {
+    if (!text.trim() || disabled) return;
+    send.mutate({ body: text }, { onSuccess: () => setText("") });
+  };
+  return (
+    <div className="flex flex-none flex-col gap-2 border-t border-border-subtle p-3">
+      {reply && <div data-testid="canvas-latest-reply" className="max-h-24 overflow-y-auto text-[13px]"><Markdown className="text-fg-2">{reply}</Markdown></div>}
+      {send.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(send.error)}</p>}
+      <div className="flex items-end gap-2">
+        <textarea aria-label="Message from fullscreen" rows={1} value={text} disabled={readOnly} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }} placeholder="Message" className="min-w-0 flex-1 resize-none rounded-lg border border-border bg-surface p-2 text-[13.5px] text-fg focus:border-accent focus:outline-none" />
+        <Button variant="primary" disabled={disabled || !text.trim()} onClick={submit}>Send</Button>
+      </div>
+    </div>
+  );
+}
+
+/** A canvas over the whole chat area, with the conversation reduced to a message box. */
+export function CanvasFullscreen({ chatId, live, readOnly, agent }: { chatId: string; live: boolean; readOnly: boolean; agent: string }) {
   const panel = useCanvasPanel();
   const canvases = useChatCanvases(chatId, live).data?.canvases;
-  // Opened without one in mind: the newest.
   const id = panel.focus ?? canvases?.at(-1)?.id;
-  const picker =
-    canvases && canvases.length > 1 ? (
-      <select aria-label="Canvas" value={id} onChange={(e) => panel.show(e.target.value)} className="max-w-full truncate rounded-sm border border-border bg-surface px-1.5 py-1 text-[13px] font-semibold text-fg">
-        {canvases.map((c) => (
-          <option key={c.id} value={c.id}>{c.title}</option>
-        ))}
-      </select>
-    ) : null;
+  const { exitFull } = panel;
+  const exit = useRef(exitFull);
+  useEffect(() => {
+    exit.current = exitFull;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !(e.target as Element).closest?.("input, textarea, select")) exit.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  if (!id) return null;
   return (
-    <aside aria-label="Canvas" data-testid="canvas-panel" className="flex w-[52%] min-w-[440px] max-w-[980px] flex-none flex-col border-l border-border-strong bg-surface-sunken max-md:absolute max-md:inset-0 max-md:z-20 max-md:w-full max-md:min-w-0 max-md:max-w-none">
-      {id ? (
-        <CanvasView key={id} chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={agent} onClose={panel.close} picker={picker} />
-      ) : (
-        <p className="p-4 text-xs text-fg-tertiary">This conversation has no canvases yet.</p>
-      )}
-    </aside>
+    <section role="dialog" aria-label="Canvas" data-testid="canvas-fullscreen" className="absolute inset-0 z-30 flex flex-col bg-surface-sunken">
+      <CanvasView key={id} chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={agent} onExitFullscreen={exitFull} />
+      <FullscreenChat chatId={chatId} live={live} readOnly={readOnly} />
+    </section>
   );
 }
