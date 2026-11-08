@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { DropdownMenu } from "radix-ui";
 import { useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -28,13 +28,16 @@ export type SidebarProps = {
   user: { name: string; initials?: string; role: string };
 };
 
-function NavLink({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
+function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
+      aria-label={label}
+      title={label}
       className={cx(
-        "flex h-[30px] items-center gap-2.5 rounded-sm px-2 text-[13px] font-medium",
+        "flex h-[30px] items-center gap-2.5 rounded-sm text-[13px] font-medium",
+        label ? "relative justify-center px-0" : "px-2",
         active ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
       )}
     >
@@ -75,6 +78,48 @@ function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, num
       {n}
       <span className="sr-only"> suggested edits to review</span>
     </span>
+  );
+}
+
+const EXPANDED_KEY = "lazyagents.sidebar-expanded";
+
+/** The main menu starts collapsed to an icon rail; expanding it is remembered per browser. */
+function useExpanded(): [boolean, (v: boolean) => void] {
+  const [expanded, setExpanded] = useState(false);
+  // Read after mount so the server render (always collapsed) matches the first client render.
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reading browser-only storage after hydration
+      if (localStorage.getItem(EXPANDED_KEY) === "1") setExpanded(true);
+    } catch {
+      /* No storage: stays collapsed. */
+    }
+  }, []);
+  const set = (v: boolean) => {
+    setExpanded(v);
+    try {
+      if (v) localStorage.setItem(EXPANDED_KEY, "1");
+      else localStorage.removeItem(EXPANDED_KEY);
+    } catch {
+      /* Not remembered. */
+    }
+  };
+  return [expanded, set];
+}
+
+function ToggleButton({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+  const label = expanded ? "Collapse menu" : "Expand menu";
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-expanded={expanded}
+      title={label}
+      onClick={onToggle}
+      className="grid size-[30px] flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg"
+    >
+      <Icon name="sidebar" size={15} strokeWidth={1.6} />
+    </button>
   );
 }
 
@@ -156,8 +201,54 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
   const current = currentProject(pathname, search, remembered, projects);
   const secrets = useSecrets();
   const counts: Record<NavBadge, number> = { inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
+  const [expanded, setExpanded] = useExpanded();
+  const newTicketHref = current ? `/tickets/new?project=${encodeURIComponent(current.key)}` : "/tickets/new";
+  if (!expanded) {
+    return (
+      <aside aria-label="Main menu" className="flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3">
+        <span title={workspace} className="grid size-[30px] place-items-center">
+          <Mark />
+        </span>
+        <div className="flex flex-col items-center gap-1">
+          <Link
+            href={newTicketHref}
+            aria-label="New ticket"
+            title="New ticket (C)"
+            className="grid size-[30px] place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover"
+          >
+            <Icon name="plus" size={15} strokeWidth={1.6} />
+          </Link>
+          <button
+            type="button"
+            aria-label="Search"
+            title="Search (⌘K)"
+            onClick={() => window.dispatchEvent(new Event("la:search"))}
+            className="grid size-[30px] place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg"
+          >
+            <Icon name="search" size={14} strokeWidth={1.6} />
+          </button>
+        </div>
+        <nav aria-label="Primary" className="flex w-full flex-col gap-3">
+          {NAV_GROUPS.map((g) => (
+            <div key={g.label} role="group" aria-label={g.label} className="flex flex-col gap-px">
+              {g.items.map((n) => (
+                <NavLink key={n.href} label={n.label} href={withProject(n.href, current?.key)} active={isActive(pathname, n.href) && !(n.href === "/tickets" && search.get("sv"))}>
+                  <Icon name={n.icon} />
+                  {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
+                </NavLink>
+              ))}
+            </div>
+          ))}
+        </nav>
+        <div className="mt-auto flex flex-col items-center gap-2">
+          <HumanAvatar name={user.name} initials={user.initials} size={26} label={false} />
+          <ToggleButton expanded={false} onToggle={() => setExpanded(true)} />
+        </div>
+      </aside>
+    );
+  }
   return (
-    <aside className="flex flex-[1_1_232px] flex-col gap-5 border-r border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3">
+    <aside aria-label="Main menu" className="flex flex-[1_1_232px] flex-col gap-5 border-r border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <button type="button" className="flex items-center gap-[9px] rounded-md px-1.5 py-[5px] hover:bg-hover">
@@ -166,7 +257,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
             <Icon name="chev" size={14} strokeWidth={1.6} className="text-fg-tertiary" />
           </button>
           <Link
-            href={current ? `/tickets/new?project=${encodeURIComponent(current.key)}` : "/tickets/new"}
+            href={newTicketHref}
             aria-label="New ticket"
             title="New ticket (C)"
             className="grid size-[30px] place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover"
@@ -213,6 +304,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           <span className="font-medium">{user.name}</span>
           <span className="text-[11.5px] text-fg-tertiary">{user.role}</span>
         </span>
+        <ToggleButton expanded onToggle={() => setExpanded(false)} />
       </div>
     </aside>
   );

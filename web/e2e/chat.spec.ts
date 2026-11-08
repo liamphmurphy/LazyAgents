@@ -49,7 +49,8 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
   await expect(page.getByText("Thinking…")).toBeVisible();
   const first = page.getByTestId("assistant-message").first();
   await expect(first).toContainText("Echo: hello");
-  await expect(first.getByTestId("model-tag")).toHaveText("Claude Code · Opus 5.5");
+  // The chat reads as a plain conversation: the model tag lives in the Activity tab.
+  await expect(first.getByTestId("model-tag")).toHaveCount(0);
   await expect(composer(page)).toBeEnabled();
   await expect(composer(page)).toBeFocused();
 
@@ -60,9 +61,13 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
   await expect(page.getByTestId("pending-switch")).toContainText("Next message will use Codex · gpt-5-codex");
   await send(page, "second");
   await expect(page.getByTestId("assistant-message").nth(1)).toContainText("Echo: second");
-  await expect(page.getByTestId("assistant-message").nth(1).getByTestId("model-tag")).toHaveText("Codex · gpt-5-codex");
   await expect(page.getByTestId("system-message")).toHaveText("Switched to Codex · gpt-5-codex");
   await expect(page.getByTestId("pending-switch")).toHaveCount(0);
+  // Each turn's model shows in the Activity tab.
+  await page.getByRole("tab", { name: "Activity" }).click();
+  await expect(page.getByTestId("activity-turn").nth(0).getByTestId("model-tag")).toHaveText("Claude Code · Opus 5.5");
+  await expect(page.getByTestId("activity-turn").nth(1).getByTestId("model-tag")).toHaveText("Codex · gpt-5-codex");
+  await page.getByRole("tab", { name: "Chat" }).click();
 
   // History survives a reload.
   await page.reload();
@@ -493,6 +498,10 @@ test("a running turn shows its newest tool call as a live line with a linked pag
   await newChat(page);
   await send(page, "slow: dig in");
   const live = page.getByTestId("live-activity");
+  // The chat only says it's thinking; tool calls show in the Activity tab.
+  await expect(page.getByText("Thinking…")).toBeVisible();
+  await expect(live).toBeHidden();
+  await page.getByRole("tab", { name: "Activity" }).click();
   await expect(live).toHaveText("Reading Plan…");
   await expect(live.getByRole("link", { name: /Plan/ })).toHaveAttribute("href", "/wiki/Eng/Plan");
   await expect(page.getByText("Tool calls (1)")).toBeVisible();
@@ -547,7 +556,10 @@ test("each reply shows its tokens and cost on hover or focus", async ({ page }) 
   await page.goto("/chat?project=WEB");
   await newChat(page);
   await send(page, "hello");
-  const reply = page.getByTestId("assistant-message");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello");
+  await expect(page.getByTestId("assistant-message")).not.toContainText("$0.042");
+  await page.getByRole("tab", { name: "Activity" }).click();
+  const reply = page.getByTestId("activity-turn");
   await expect(reply).toContainText("Claude Code · Opus 5.5 · $0.042");
   const tooltip = page.getByTestId("usage-tooltip");
   await expect(tooltip).toHaveCount(0);
