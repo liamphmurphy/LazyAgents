@@ -4316,7 +4316,7 @@ components:
       enum: [allowed, requires_approval, denied]
     Harness:
       type: string
-      enum: [claude-code, codex, opencode]
+      enum: [claude-code, codex]
     Budget:
       type: object
       properties:

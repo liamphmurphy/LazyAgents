@@ -1,8 +1,0 @@
-{"type":"session","session_id":"ses_synthetic01"}
-{"type":"text","text":"Looking at the ticket."}
-{"type":"tool_start","call_id":"call-1","tool":"lazyagents_get_ticket","input":{"key":"LAZYAGENTS-21"}}
-{"type":"tool_result","call_id":"call-1","output":"{\"key\":\"LAZYAGENTS-21\"}","is_error":false}
-{"type":"future_event","detail":"unknown nonterminal types are ignored"}
-{"type":"text","text":"Sanitized answer."}
-{"type":"completed","usage":{"input_tokens":120,"output_tokens":30,"cached_tokens":20}}
-{"type":"completed","usage":{"input_tokens":120,"output_tokens":30,"cached_tokens":20}}

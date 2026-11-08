@@ -12,37 +12,35 @@ async function saveDefinition(page: Page) {
   await save(page).click();
 }
 
-async function pickOpenCodeByKeyboard(page: Page) {
+async function pickCodexByKeyboard(page: Page) {
   await harness(page).getByRole("radio", { name: "Claude Code" }).focus();
   await page.keyboard.press("ArrowRight"); // Codex
-  await page.keyboard.press("ArrowRight"); // OpenCode
-  await expect(harness(page).getByRole("radio", { name: "OpenCode" })).toBeChecked();
+  await expect(harness(page).getByRole("radio", { name: "Codex" })).toBeChecked();
 }
 
-test("editor: choose OpenCode by keyboard, save, reload keeps it", async ({ page }) => {
+test("editor: choose Codex by keyboard, save, reload keeps it", async ({ page }) => {
   const mock = await installAgentApi(page);
   await page.goto("/agents/atlas?tab=settings");
-  await expect(harness(page).getByRole("radio", { name: "OpenCode" })).toBeVisible();
+  await expect(harness(page).getByRole("radio", { name: "Codex" })).toBeVisible();
   await expect(page.locator("#ag-models option[value='opus-5.5']")).toHaveCount(1);
 
-  await pickOpenCodeByKeyboard(page);
-  await expect(harness(page).getByRole("radio", { name: "OpenCode" })).toHaveText("OpenCode");
-  await expect(page.getByText("Use provider/model, e.g. anthropic/claude-sonnet-5-5")).toBeVisible();
-  await expect(page.locator("#ag-models option")).toHaveCount(3);
-  await expect(page.locator("#ag-models option[value='anthropic/claude-sonnet-5-5']")).toHaveCount(1);
+  await pickCodexByKeyboard(page);
+  await expect(harness(page).getByRole("radio", { name: "Codex" })).toHaveText("Codex");
+  await expect(page.locator("#ag-models option")).toHaveCount(2);
+  await expect(page.locator("#ag-models option[value='gpt-5-codex']")).toHaveCount(1);
   await expect(page.locator("#ag-models option[value='opus-5.5']")).toHaveCount(0);
 
-  await model(page).fill("anthropic/claude-sonnet-5-5");
+  await model(page).fill("gpt-5-codex");
   await saveDefinition(page);
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(review(page)).toBeDisabled();
   const spec = (mock.saved.definition.at(-1) as { spec: { harness: string; model: string } }).spec;
-  expect(spec.harness).toBe("opencode");
-  expect(spec.model).toBe("anthropic/claude-sonnet-5-5");
+  expect(spec.harness).toBe("codex");
+  expect(spec.model).toBe("gpt-5-codex");
 
   await page.reload();
-  await expect(harness(page).getByRole("radio", { name: "OpenCode" })).toBeChecked();
-  await expect(model(page)).toHaveValue("anthropic/claude-sonnet-5-5");
+  await expect(harness(page).getByRole("radio", { name: "Codex" })).toBeChecked();
+  await expect(model(page)).toHaveValue("gpt-5-codex");
   expect(mock.unhandled).toEqual([]);
 });
 
@@ -52,63 +50,58 @@ test("editor: codex suggests codex models", async ({ page }) => {
   await harness(page).getByRole("radio", { name: "Codex" }).click();
   await expect(page.locator("#ag-models option[value='gpt-5-codex']")).toHaveCount(1);
   await expect(page.locator("#ag-models option[value='opus-5.5']")).toHaveCount(0);
-  await expect(page.getByText("Use provider/model")).toHaveCount(0);
 });
 
-test("editor: fallback offers OpenCode and its default harness is not hardcoded", async ({ page }) => {
+test("editor: fallback's default harness is not hardcoded", async ({ page }) => {
   await installAgentApi(page);
   await page.goto("/agents/atlas?tab=settings");
-  await pickOpenCodeByKeyboard(page);
+  await pickCodexByKeyboard(page);
   await page.getByRole("button", { name: "Add fallback" }).click();
   const fb = page.getByRole("radiogroup", { name: "Fallback 1 harness" });
-  await expect(fb.getByRole("radio", { name: "OpenCode" })).toBeVisible();
   // Defaults to the first harness other than the agent's own.
   await expect(fb.getByRole("radio", { name: "Claude Code" })).toBeChecked();
-  await fb.getByRole("radio", { name: "OpenCode" }).click();
-  await expect(fb.getByRole("radio", { name: "OpenCode" })).toBeChecked();
-  const input = page.getByLabel("Fallback 1 model");
-  await expect(input).toHaveAttribute("placeholder", "provider/model");
-  await expect(page.locator("#ag-fb-models-0 option[value='openai/gpt-5']")).toHaveCount(1);
+  await expect(page.getByLabel("Fallback 1 model")).toHaveAttribute("placeholder", "Model");
+  await expect(page.locator("#ag-fb-models-0 option[value='opus-5.5']")).toHaveCount(1);
 });
 
 test("editor: 422 shows the error and keeps the draft", async ({ page }) => {
   const mock = await installAgentApi(page);
   await page.goto("/agents/atlas?tab=settings");
-  await pickOpenCodeByKeyboard(page);
-  await model(page).fill("sonnet-5.5");
+  await pickCodexByKeyboard(page);
+  await model(page).fill("rejected-model");
   await saveDefinition(page);
-  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("must be provider-qualified");
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("is not available");
   expect(mock.saved.definition).toHaveLength(1);
   await expect(save(page)).toBeEnabled();
   await page.getByRole("button", { name: "Back to editing" }).last().click();
-  await expect(model(page)).toHaveValue("sonnet-5.5");
-  await expect(harness(page).getByRole("radio", { name: "OpenCode" })).toBeChecked();
+  await expect(model(page)).toHaveValue("rejected-model");
+  await expect(harness(page).getByRole("radio", { name: "Codex" })).toBeChecked();
   await expect(page.getByText(/\d+ unsaved changes?/)).toBeVisible();
   await expect(review(page)).toBeEnabled();
 });
 
-test("override dialog: offers OpenCode, saves it, reload shows it", async ({ page }) => {
+test("override dialog: offers another harness, saves it, reload shows it", async ({ page }) => {
   const mock = await installAgentApi(page);
   await page.goto("/agents/atlas?tab=settings");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("menuitem", { name: "Web app" }).click();
   const dialog = page.getByRole("dialog");
-  const radio = dialog.getByRole("radiogroup", { name: "Harness" }).getByRole("radio", { name: "OpenCode" });
+  const radio = dialog.getByRole("radiogroup", { name: "Harness" }).getByRole("radio", { name: "Codex" });
   await expect(radio).toBeVisible();
   await radio.click();
   await expect(radio).toBeChecked();
-  await dialog.getByLabel("Model", { exact: true }).fill("openai/gpt-5");
+  await dialog.getByLabel("Model", { exact: true }).fill("gpt-5-codex");
   await dialog.getByRole("button", { name: "Save override" }).click();
   await expect(dialog).toBeHidden();
   const body = mock.saved.overrides.at(-1)!.body;
-  expect(body.harness).toBe("opencode");
-  expect(body.model).toBe("openai/gpt-5");
+  expect(body.harness).toBe("codex");
+  expect(body.model).toBe("gpt-5-codex");
 
   await page.reload();
   const panel = page.getByRole("complementary", { name: "Overrides and versions" });
-  await expect(panel.getByText("harness = opencode")).toBeVisible();
+  await expect(panel.getByText("harness = codex")).toBeVisible();
   await panel.getByRole("button", { name: /Web app \d+ change/ }).click();
-  await expect(page.getByRole("dialog").getByRole("radiogroup", { name: "Harness" }).getByRole("radio", { name: "OpenCode" })).toBeChecked();
+  await expect(page.getByRole("dialog").getByRole("radiogroup", { name: "Harness" }).getByRole("radio", { name: "Codex" })).toBeChecked();
 });
 
 test("editor saves selective memory and an explicit independent-review policy", async ({ page }) => {

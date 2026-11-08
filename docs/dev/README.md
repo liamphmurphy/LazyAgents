@@ -11,6 +11,6 @@ needed to run it; start with the [README](../../README.md) and the
 - [handoff-log.md](handoff-log.md): the running handoff log agents kept while
   building phases 0–8. It's a historical record, not current instructions.
 - [verification/](verification/): evidence and requirement matrices for
-  individual tickets, linked from the guide and the OpenCode docs.
+  individual tickets, linked from the guide.
 
 The visual design references live in [../design-system/](../design-system/).

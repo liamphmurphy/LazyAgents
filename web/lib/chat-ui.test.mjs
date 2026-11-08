@@ -55,7 +55,7 @@ test("only a harness change on a chat with messages asks first", () => {
   assert.equal(needsSwitchConfirm(claude, { harness: "claude-code" }, null, 3), false, "same harness, new model");
   assert.equal(needsSwitchConfirm(claude, codex, null, 0), false, "nothing to lose yet");
   assert.equal(needsSwitchConfirm(claude, codex, codex, 3), false, "already confirmed for codex");
-  assert.equal(needsSwitchConfirm(claude, { harness: "opencode" }, codex, 3), true);
+  assert.equal(needsSwitchConfirm(claude, { harness: "other" }, codex, 3), true);
 });
 
 test("reply cost keeps small turns visible and never shows unknown as free", () => {

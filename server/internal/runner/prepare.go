@@ -321,9 +321,8 @@ var HarnessKeys = map[string]struct {
 }
 
 // HarnessKey is the API-key secret and env vars a resolved spec authenticates
-// with. OpenCode resolves by the model's provider, so only that provider's key
-// is ever injected. A harness or provider with no mapping is an error: there
-// is no fallback to another harness's key.
+// with. A harness with no mapping is an error: there is no fallback to another
+// harness's key.
 func HarnessKey(spec agentdef.Resolved) (struct {
 	Secret string
 	Env    []string
@@ -332,25 +331,11 @@ func HarnessKey(spec agentdef.Resolved) (struct {
 		Secret string
 		Env    []string
 	}
-	if spec.Harness == agentdef.HarnessOpenCode {
-		secret, env, err := harness.OpenCodeCredentialEnv(spec.Model)
-		if err != nil {
-			return out, err
-		}
-		out.Secret, out.Env = secret, []string{env}
-		return out, nil
-	}
 	k, ok := HarnessKeys[spec.Harness]
 	if !ok {
 		return out, fmt.Errorf("runner: no credential mapping for harness %q", spec.Harness)
 	}
 	return k, nil
-}
-
-// NeedsHarnessKey reports whether a run must have its harness key. OpenCode
-// always does: it runs with an isolated HOME, so it has no host login to use.
-func NeedsHarnessKey(requireKey bool, spec agentdef.Resolved) bool {
-	return requireKey || spec.Harness == agentdef.HarnessOpenCode
 }
 
 // Revealer decrypts secrets (secrets.Service).

@@ -535,10 +535,6 @@ func TestEffortOption(t *testing.T) {
 			t.Errorf("codex effort %s: argv %v", e, inv.Argv)
 		}
 	}
-	s.HarnessOptions = map[string]string{"effort": "high"}
-	if err := validateOpenCodeOptions(s.HarnessOptions); err != nil {
-		t.Fatalf("opencode: %v", err)
-	}
 }
 
 func TestCodexDependencyCachePermissions(t *testing.T) {

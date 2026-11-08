@@ -1,6 +1,7 @@
 package agentdef
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -326,4 +327,18 @@ func itoa(n int) string {
 		b = append([]byte{byte('0' + n%10)}, b...)
 	}
 	return string(b)
+}
+
+// Validate checks that a run could execute a resolved definition's primary and
+// fallback targets. A frozen spec can name a harness this build no longer has.
+func (r Resolved) Validate() error {
+	if !slices.Contains(Harnesses, r.Harness) {
+		return fmt.Errorf("unsupported harness %q", r.Harness)
+	}
+	for _, f := range r.Fallbacks {
+		if !slices.Contains(Harnesses, f.Harness) {
+			return fmt.Errorf("fallback: unsupported harness %q", f.Harness)
+		}
+	}
+	return nil
 }

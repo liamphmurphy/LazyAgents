@@ -1,11 +1,9 @@
-// Command fake-harness stands in for the `claude`, `codex` and `opencode` CLIs in runner
+// Command fake-harness stands in for the `claude` and `codex` CLIs in runner
 // tests and demos without API keys (docs/dev/plan.md §10). Invoked as `claude -p …`
 // it emits Claude's stream-json and reads the MCP server from --mcp-config;
 // invoked as `codex exec [resume] … --json` it emits Codex's JSONL and reads
 // the server from -c mcp_servers.lazyagents.* overrides. Either way it does
-// real work through the Vesper MCP server. Invoked as `opencode run …` it
-// emits the SYNTHETIC OpenCode envelope the adapter's parser assumes, reads the
-// server from the generated ./opencode.json, and answers `opencode --version`.
+// real work through the Vesper MCP server.
 //
 // FAKE_HARNESS_MODE picks the first turn's script:
 //
@@ -46,9 +44,6 @@
 // for <file> before working; FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
 // that lost the session. The log line also names the harness (claude or codex).
 //
-// The mode can also come from a fake-harness.mode file in the binary's
-// directory when the variable is unset (OpenCode runs get a scrubbed env).
-//
 // Resumed turns (--resume) finish the run with complete_run, unless
 // FAKE_HARNESS_RESUME=idle.
 package main
@@ -83,14 +78,13 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 var (
-	session  string
-	codex    bool // speak Codex's JSONL instead of Claude's stream-json
-	opencode bool // speak the (synthetic) OpenCode JSONL
-	items    int
+	session string
+	codex   bool // speak Codex's JSONL instead of Claude's stream-json
+	items   int
 )
 
 func emit(v map[string]any) {
-	if !codex && !opencode {
+	if !codex {
 		v["session_id"] = session
 	}
 	b, _ := json.Marshal(v)
@@ -102,10 +96,6 @@ func item(event string, it map[string]any) {
 }
 
 func text(s string) {
-	if opencode {
-		emit(map[string]any{"type": "text", "text": s})
-		return
-	}
 	if codex {
 		items++
 		item("item.completed", map[string]any{"id": fmt.Sprintf("item_%d", items), "type": "agent_message", "text": s})
@@ -115,14 +105,6 @@ func text(s string) {
 }
 
 func result(isError bool, msg string) {
-	if opencode {
-		if isError {
-			emit(map[string]any{"type": "error", "message": msg})
-			return
-		}
-		emit(map[string]any{"type": "completed", "usage": map[string]any{"input_tokens": 1000, "output_tokens": 200, "cached_tokens": 500}})
-		return
-	}
 	if codex {
 		if isError {
 			emit(map[string]any{"type": "turn.failed", "error": map[string]any{"message": msg}})
@@ -157,22 +139,7 @@ func newUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-// modeFromFile lets a harness that scrubs its environment (the local OpenCode
-// runner passes no custom variables) still pick a script: with FAKE_HARNESS_MODE
-// unset, the first line of fake-harness.mode next to the invoked binary is used.
-// Absent file, nothing changes.
-func modeFromFile() {
-	if os.Getenv("FAKE_HARNESS_MODE") != "" || len(os.Args) == 0 {
-		return
-	}
-	if b, err := os.ReadFile(filepath.Join(filepath.Dir(os.Args[0]), "fake-harness.mode")); err == nil {
-		mode, _, _ := strings.Cut(string(b), "\n")
-		os.Setenv("FAKE_HARNESS_MODE", strings.TrimSpace(mode))
-	}
-}
-
 func main() {
-	modeFromFile()
 	var prompt, resume, cfgPath, model string
 	var mcpURL, tokenEnv, mcpApproval string
 	var images []string // codex --image files (comma-separated)
@@ -218,41 +185,6 @@ func main() {
 			fmt.Println(string(b))
 		}
 		return
-	}
-	if len(args) > 0 && args[0] == "--version" {
-		if os.Getenv("FAKE_HARNESS_MODE") == "version-hang" {
-			time.Sleep(time.Hour) // until killed
-		}
-		fmt.Println("opencode v2.2.1")
-		return
-	}
-	if len(args) > 0 && args[0] == "run" {
-		opencode = true
-		var pos []string
-		for i := 1; i < len(args); i++ {
-			switch args[i] {
-			case "--standalone":
-			case "--format":
-				i++
-			case "--model", "-m":
-				model = args[i+1]
-				i++
-			case "--session", "-s":
-				resume = args[i+1]
-				i++
-			default:
-				pos = append(pos, args[i])
-			}
-		}
-		if len(pos) > 0 {
-			prompt = pos[len(pos)-1]
-		}
-		if err := opencodeEnv(model); err != "" {
-			session = "ses_envcheck"
-			emit(map[string]any{"type": "session", "session_id": session})
-			result(true, err)
-			os.Exit(1)
-		}
 	}
 	if len(args) > 0 && args[0] == "exec" {
 		codex = true
@@ -305,7 +237,7 @@ func main() {
 		result(true, "MCP tool call requires approval, but approval policy is never")
 		os.Exit(1)
 	}
-	for i := 0; !codex && !opencode && i < len(args); i++ {
+	for i := 0; !codex && i < len(args); i++ {
 		switch args[i] {
 		case "-p", "--print":
 			if i+1 < len(args) {
@@ -352,9 +284,6 @@ func main() {
 	session = resume
 	if session == "" {
 		session = newUUID()
-		if opencode {
-			session = "ses_" + strings.ReplaceAll(session, "-", "")
-		}
 	}
 	if path := os.Getenv("FAKE_HARNESS_LOG"); path != "" {
 		wd, _ := os.Getwd()
@@ -375,9 +304,7 @@ func main() {
 			f.Close()
 		}
 	}
-	if opencode {
-		emit(map[string]any{"type": "session", "session_id": session})
-	} else if codex {
+	if codex {
 		emit(map[string]any{"type": "thread.started", "thread_id": session})
 		emit(map[string]any{"type": "turn.started"})
 	} else {
@@ -400,7 +327,7 @@ func main() {
 		if prompt == "slow" && resume == "" {
 			time.Sleep(60 * time.Second)
 		}
-		if prompt == "slow partial" && !opencode && !codex {
+		if prompt == "slow partial" && !codex {
 			// Test hook: write a little and call a tool, then hang until stopped,
 			// like a reply the person interrupts.
 			text("Halfway there: the ledger balances.")
@@ -453,9 +380,7 @@ func main() {
 		} `json:"mcpServers"`
 	}
 	var err error
-	if opencode {
-		cfg.MCPServers, err = opencodeServers()
-	} else if codex {
+	if codex {
 		cfg.MCPServers = map[string]struct {
 			URL     string            `json:"url"`
 			Headers map[string]string `json:"headers"`
@@ -498,10 +423,7 @@ func main() {
 		}
 		n++
 		id := fmt.Sprintf("toolu_%02d", n)
-		if opencode {
-			id = fmt.Sprintf("call_%02d", n)
-			emit(map[string]any{"type": "tool_start", "call_id": id, "tool": "lazyagents_" + name, "input": a})
-		} else if codex {
+		if codex {
 			items++
 			id = fmt.Sprintf("item_%d", items)
 			item("item.started", map[string]any{"id": id, "type": "mcp_tool_call", "server": "lazyagents", "tool": name, "arguments": a, "status": "in_progress"})
@@ -523,9 +445,7 @@ func main() {
 			body = string(b)
 			_ = json.Unmarshal(b, &out)
 		}
-		if opencode {
-			emit(map[string]any{"type": "tool_result", "call_id": id, "output": body, "is_error": isErr})
-		} else if codex {
+		if codex {
 			status := "completed"
 			if isErr {
 				status = "failed"
@@ -715,7 +635,7 @@ func main() {
 		result(false, "Done.")
 		return
 	}
-	if resume != "" && os.Getenv("FAKE_HARNESS_MODE") == "quota" && !codex && !opencode {
+	if resume != "" && os.Getenv("FAKE_HARNESS_MODE") == "quota" && !codex {
 		result(true, "You have hit your usage limit")
 		os.Exit(1)
 	}
@@ -762,9 +682,8 @@ func main() {
 
 	if os.Getenv("FAKE_HARNESS_MODE") == "quota" {
 		// Claude always hits the limit and Codex never does (the existing
-		// fixtures); OpenCode hits it until it is a fallback's fresh session.
-		// FAKE_HARNESS_CODEX_QUOTA makes Codex hit it too, after FAKE_HARNESS_QUOTA_SLEEP.
-		if (!codex && !opencode) || (opencode && !strings.Contains(prompt, "fresh session")) || (codex && os.Getenv("FAKE_HARNESS_CODEX_QUOTA") != "") {
+		// fixtures). FAKE_HARNESS_CODEX_QUOTA makes Codex hit it too, after FAKE_HARNESS_QUOTA_SLEEP.
+		if !codex || os.Getenv("FAKE_HARNESS_CODEX_QUOTA") != "" {
 			call("claim_ticket", map[string]any{"ticket": ticket})
 			_ = os.WriteFile("before-fallback.txt", []byte("work preserved"), 0o644)
 			if d, err := time.ParseDuration(os.Getenv("FAKE_HARNESS_QUOTA_SLEEP")); err == nil {
@@ -897,67 +816,4 @@ func firstLine(s string) string {
 		s = s[:80]
 	}
 	return s
-}
-
-// opencodeEnv checks what the adapter promised about the environment and
-// records which credential variables were present (names only) so tests can
-// assert that only the selected provider's key was injected.
-func opencodeEnv(model string) string {
-	var names []string
-	for _, kv := range os.Environ() {
-		if k, _, _ := strings.Cut(kv, "="); strings.HasSuffix(k, "_API_KEY") || strings.HasSuffix(k, "_TOKEN") {
-			names = append(names, k)
-		}
-	}
-	_ = os.MkdirAll(".lazyagents", 0o755)
-	f, err := os.OpenFile(".lazyagents/fake-opencode-env.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err == nil {
-		fmt.Fprintf(f, "%s %s\n", model, strings.Join(names, ","))
-		f.Close()
-	}
-	if !strings.Contains(os.Getenv("HOME"), "/.lazyagents/opencode/") || !strings.Contains(os.Getenv("XDG_CONFIG_HOME"), "/.lazyagents/opencode/") {
-		return "HOME and XDG roots are not isolated"
-	}
-	if _, err := os.Stat(os.Getenv("OPENCODE_CONFIG")); err != nil {
-		return "no generated opencode.json"
-	}
-	return ""
-}
-
-// opencodeServers reads the MCP server from the generated opencode.json,
-// resolving {env:NAME} the way the CLI does.
-func opencodeServers() (map[string]struct {
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers"`
-}, error) {
-	var cfg struct {
-		MCP struct {
-			Servers map[string]struct {
-				URL     string            `json:"url"`
-				Headers map[string]string `json:"headers"`
-			} `json:"servers"`
-		} `json:"mcp"`
-	}
-	raw, err := os.ReadFile(os.Getenv("OPENCODE_CONFIG"))
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, err
-	}
-	for name, srv := range cfg.MCP.Servers {
-		for k, v := range srv.Headers {
-			for {
-				i := strings.Index(v, "{env:")
-				if i < 0 {
-					break
-				}
-				j := strings.Index(v[i:], "}")
-				v = v[:i] + os.Getenv(v[i+5:i+j]) + v[i+j+1:]
-			}
-			srv.Headers[k] = v
-		}
-		cfg.MCP.Servers[name] = srv
-	}
-	return cfg.MCP.Servers, nil
 }

@@ -102,7 +102,7 @@ func setupWith(t *testing.T, mk backendFor) env {
 	}
 	// Belt and braces: only the fake can be found as claude or codex, so a
 	// bug in binary substitution can't reach a real, logged-in CLI.
-	for _, name := range []string{"claude", "codex", "opencode"} {
+	for _, name := range []string{"claude", "codex"} {
 		if err := os.Symlink(bin, filepath.Join(dir, name)); err != nil {
 			t.Fatal(err)
 		}
@@ -117,15 +117,14 @@ func setupWith(t *testing.T, mk backendFor) env {
 	}
 	safe := dir + ":/usr/bin:/bin"
 	for _, p := range filepath.SplitList(safe)[1:] {
-		for _, name := range []string{"claude", "codex", "opencode"} {
+		for _, name := range []string{"claude", "codex"} {
 			if _, err := os.Stat(filepath.Join(p, name)); err == nil {
 				t.Fatalf("a real %s is on the test PATH (%s); refusing to run", name, p)
 			}
 		}
 	}
 	t.Setenv("PATH", safe)
-	var backend runner.Backend = &runner.Local{Dir: filepath.Join(dir, "work"), Bins: map[string]string{"claude": bin, "codex": bin, "opencode": bin}, OnlyBins: true,
-		OpenCodeIsolated: true, ExtraHostEnv: []string{"FAKE_HARNESS_MODE", "FAKE_HARNESS_RESUME"}}
+	var backend runner.Backend = &runner.Local{Dir: filepath.Join(dir, "work"), Bins: map[string]string{"claude": bin, "codex": bin}, OnlyBins: true}
 	mcpURL := ts.URL + "/mcp"
 	if mk != nil {
 		backend, mcpURL = mk(t, dir, bin, ts.URL)
@@ -883,4 +882,16 @@ func TestEpicTicketStacksOnEpicBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.runner.Sweep(e.ctx)
+}
+
+func TestHarnessKeyMapping(t *testing.T) {
+	if k, err := runner.HarnessKey(agentdef.Resolved{Harness: agentdef.HarnessClaudeCode}); err != nil || k.Secret != "harness:anthropic" {
+		t.Errorf("claude mapping changed: %+v %v", k, err)
+	}
+	if k, err := runner.HarnessKey(agentdef.Resolved{Harness: agentdef.HarnessCodex}); err != nil || k.Secret != "harness:openai" || len(k.Env) != 2 {
+		t.Errorf("codex mapping changed: %+v %v", k, err)
+	}
+	if k, err := runner.HarnessKey(agentdef.Resolved{Harness: "mystery", Model: "x"}); err == nil {
+		t.Errorf("unknown harness resolved to %+v instead of failing", k)
+	}
 }

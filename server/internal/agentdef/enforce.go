@@ -12,9 +12,6 @@ type Caps struct {
 var Capabilities = map[string]Caps{
 	HarnessClaudeCode: {ToolGating: true, PermissionPrompt: true, NativeCost: true, Resume: true},
 	HarnessCodex:      {ToolGating: true, PermissionPrompt: true, NativeCost: false, Resume: true},
-	// OpenCode enforces nothing through hooks: its generated policy is not an
-	// authenticated pre-tool bridge, so gating and prompts stay false until verified.
-	HarnessOpenCode: {Resume: true},
 }
 
 // Enforcement is how strongly a scope holds (§6.3), strongest first:

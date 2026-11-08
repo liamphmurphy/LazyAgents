@@ -2,12 +2,11 @@
 
 -- name: NextChatSuggestionsDue :one
 -- The most recently active chat whose owner is due a new batch: it has gone
--- quiet since their last batch and nothing was attempted lately. OpenCode
--- chats are skipped: its turns need state a throwaway workspace doesn't have.
+-- quiet since their last batch and nothing was attempted lately.
 SELECT c.workspace_id, c.created_by, c.project_id, c.harness, c.model
 FROM chat_sessions c
 LEFT JOIN chat_suggestions s ON s.workspace_id = c.workspace_id AND s.user_id = c.created_by
-WHERE NOT c.hidden AND NOT c.archived AND c.harness <> 'opencode'
+WHERE NOT c.hidden AND NOT c.archived
   AND c.last_message_at < @quiet_before
   AND (s.generated_at IS NULL OR c.last_message_at > s.generated_at)
   AND (s.attempted_at IS NULL OR s.attempted_at < @retry_before)

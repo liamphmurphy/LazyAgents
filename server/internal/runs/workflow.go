@@ -910,7 +910,7 @@ func WorkflowSpec(base agentdef.Resolved, harness, model, effort string, web, im
 	if !web {
 		delete(r.HarnessOptions, agentdef.OptionWebSearch)
 	}
-	if effort != "" && harness != "" && r.Harness != agentdef.HarnessOpenCode {
+	if effort != "" && harness != "" {
 		r.HarnessOptions["effort"] = effort
 	}
 	return r
@@ -978,12 +978,6 @@ func (e *WorkflowEngine) startAgent(ctx context.Context, q *store.Queries, chat 
 		return uuid.Nil, "", err
 	}
 	inputs := len(workflowInputImages(g, n.ID, rows, allImages))
-	if inputs > 0 && spec.Harness == agentdef.HarnessOpenCode {
-		return uuid.Nil, "This step needs to see images from earlier steps, which OpenCode can't do: switch the chat to Claude Code or Codex.", nil
-	}
-	if web && spec.Harness == agentdef.HarnessOpenCode {
-		return uuid.Nil, "Web access isn't available on OpenCode: switch the chat to Claude Code or Codex.", nil
-	}
 	if err := spec.Validate(); err != nil {
 		return uuid.Nil, err.Error(), nil
 	}

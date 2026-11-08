@@ -77,7 +77,7 @@ func (r *Runner) preferredTarget(ctx context.Context, c runCtx, limited map[stri
 			unusable = cmp.Or(unusable, err)
 			continue
 		}
-		if NeedsHarnessKey(r.Cfg.RequireHarnessKey, cand) && !hasSecret(plan, key.Secret) {
+		if r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
 			unusable = cmp.Or(unusable, fmt.Errorf("%s (%s): %w", t.Harness, key.Secret, ErrNoHarnessKey))
 			continue
 		}

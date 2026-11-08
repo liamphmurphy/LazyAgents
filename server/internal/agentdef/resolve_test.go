@@ -335,3 +335,16 @@ func TestEffortOption(t *testing.T) {
 		t.Fatalf("unknown options must stay accepted: %v", err)
 	}
 }
+
+func TestResolvedValidateRejectsUnknownHarness(t *testing.T) {
+	ok := Resolved{Harness: HarnessCodex, Fallbacks: []Fallback{{Harness: HarnessClaudeCode, Model: "m"}}}
+	if err := ok.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (Resolved{Harness: "gone"}).Validate(); err == nil {
+		t.Fatal("unknown primary harness accepted")
+	}
+	if err := (Resolved{Harness: HarnessCodex, Fallbacks: []Fallback{{Harness: "gone", Model: "m"}}}).Validate(); err == nil {
+		t.Fatal("unknown fallback harness accepted")
+	}
+}

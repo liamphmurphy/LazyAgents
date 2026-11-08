@@ -5,11 +5,10 @@ import type { Page, Route } from "@playwright/test";
  * GET /agents/{handle}, PUT /agents/{handle}/definition,
  * PUT /agents/{handle}/overrides/{project}, GET /agents/{handle}/resolved,
  * GET /agents/{handle}/runs, GET /agent-overviews and GET /wiki/pages.
- * State is kept across page reloads. A definition whose harness is opencode
- * must have a provider-qualified model, like the server (agentdef/opencode.go).
+ * State is kept across page reloads. The model "rejected-model" gets a 422.
  */
 
-type Harness = "claude-code" | "codex" | "opencode";
+type Harness = "claude-code" | "codex";
 type Spec = {
   harness: Harness; model: string; instructions: string; scopes: Record<string, string>;
   budget: Record<string, unknown>; max_concurrency: number; mcp_servers: unknown[];
@@ -22,7 +21,6 @@ type Skill = { name: string; description: string; body: string };
 const HARNESSES = [
   { name: "claude-code", label: "Claude Code", tool_gating: true, permission_prompt: true, native_cost: true, resume: true },
   { name: "codex", label: "Codex", tool_gating: false, permission_prompt: false, native_cost: true, resume: true },
-  { name: "opencode", label: "OpenCode", tool_gating: true, permission_prompt: true, native_cost: false, resume: true },
 ];
 const PROJECT = { id: "00000000-0000-4000-8000-0000000000a1", key: "WEB", name: "Web app", color: "#6e56cf", default_branch: "main", archived: false, revision: 1 };
 const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -132,8 +130,8 @@ export async function installAgentApi(page: Page, opts: AgentApiOptions = {}) {
       const b = body();
       saved.definition.push(b);
       const s = b.spec as Spec;
-      if (s.harness === "opencode" && !/^[^/\s]+\/[^\s]+$/.test(s.model)) {
-        return json({ code: "invalid", field: "model", message: `opencode model "${s.model}" must be provider-qualified (provider/model)` }, 422);
+      if (s.model === "rejected-model") {
+        return json({ code: "invalid", field: "model", message: `model "${s.model}" is not available` }, 422);
       }
       spec = s;
       version++;

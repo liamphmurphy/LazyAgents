@@ -132,9 +132,6 @@ func (s *Service) StartResearch(ctx context.Context, ws, user, chatID uuid.UUID,
 		if chat.Archived {
 			return apperr.Conflict("the chat is archived")
 		}
-		if chat.Harness == agentdef.HarnessOpenCode {
-			return apperr.Conflict("research needs web access, which OpenCode chats don't have: switch this chat to Claude Code or Codex")
-		}
 		msg, err := q.GetChatMessage(ctx, in.MessageID)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && msg.SessionID != chat.ID) {
 			return apperr.Invalid("message_id", "that message isn't in this chat")

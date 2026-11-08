@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -29,14 +28,8 @@ type Docker struct {
 	Socket  string // /var/run/docker.sock
 	Image   string // vesper/agent-base:latest
 	Network string // where api:8000 resolves; "" = default bridge
-	// OpenCodeIsolated attests image config is clean and an OS boundary
-	// prevents shell/MCP tools changing protected config/state or racing guards.
-	// An ordinary writable container state volume alone is insufficient.
-	OpenCodeIsolated bool
-	client           *http.Client
+	client  *http.Client
 }
-
-func (d *Docker) OpenCodeConfigIsolated() bool { return d.OpenCodeIsolated }
 
 const (
 	dockerAPI     = "http://docker/v1.43"
@@ -103,8 +96,7 @@ func jsonBody(v any) io.Reader {
 	return bytes.NewReader(b)
 }
 
-func volumeName(runID string) string      { return "lazyagents-run-" + runID }
-func stateVolumeName(runID string) string { return volumeName(runID) + "-opencode" }
+func volumeName(runID string) string { return "lazyagents-run-" + runID }
 
 func (d *Docker) WorkspaceDir(string) string { return workspacePath }
 
@@ -131,10 +123,6 @@ func (d *Docker) EnsureWorkspace(ctx context.Context, runID string) error {
 
 func (d *Docker) RemoveWorkspace(ctx context.Context, runID string) error {
 	_, err := d.do(ctx, "DELETE", "/volumes/"+volumeName(runID)+"?force=1", nil, "", nil)
-	if err != nil && !isStatus(err, 404) {
-		return err
-	}
-	_, err = d.do(ctx, "DELETE", "/volumes/"+stateVolumeName(runID)+"?force=1", nil, "", nil)
 	if isStatus(err, 404) {
 		return nil
 	}
@@ -199,30 +187,10 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 			spec.Env[k] = v
 		}
 	}
-	oc := isOpenCode(spec.Argv)
 	mounts := []map[string]any{{"Type": "volume", "Source": volumeName(runID), "Target": workspacePath}}
 	// A persistent volume is shared by all runs and deliberately has no run
 	// label, so workspace cleanup never removes downloaded dependencies.
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": "lazyagents-dependency-cache", "Target": "/cache"})
-	if oc {
-		if !d.OpenCodeIsolated {
-			return nil, fmt.Errorf("runner: OpenCode requires OS-isolated config")
-		}
-		if _, err := d.do(ctx, "POST", "/volumes/create", jsonBody(map[string]any{
-			"Name": stateVolumeName(runID), "Labels": map[string]string{labelKey: runID},
-		}), "application/json", nil); err != nil {
-			return nil, err
-		}
-		mounts = append(mounts, map[string]any{"Type": "volume", "Source": stateVolumeName(runID), "Target": "/.lazyagents/opencode"})
-		state := d.OpenCodeStateDir(runID, spec.Dir)
-		spec = openCodeEnv(spec, state)
-		payload, _ := json.Marshal(map[string]any{"files": spec.Files, "state_files": spec.StateFiles, "state": state, "resume": slices.Contains(spec.Argv, "--session")})
-		spec.Argv = append([]string{"python3", "-c", openCodeStage, "/run/lazyagents-opencode/payload.json"}, spec.Argv...)
-		// The payload is uploaded into the fresh container's immutable-image
-		// directory, never into an agent-writable persistent volume. Keeping
-		// context out of argv also avoids Linux's per-argument size limit.
-		spec.Files = map[string][]byte{"payload.json": payload}
-	}
 	env := make([]string, 0, len(spec.Env))
 	for k, v := range spec.Env {
 		env = append(env, k+"="+v)
@@ -257,16 +225,12 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	}
 	p := &dockerProc{d: d, id: created.ID}
 	if len(spec.Files) > 0 {
-		archiveDir := dir
-		if oc {
-			archiveDir = "/run/lazyagents-opencode"
-		}
 		tb, err := tarFiles(spec.Files)
 		if err != nil {
 			p.remove()
 			return nil, err
 		}
-		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(archiveDir), tb, "application/x-tar", nil); err != nil {
+		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(dir), tb, "application/x-tar", nil); err != nil {
 			p.remove()
 			return nil, err
 		}

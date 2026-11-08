@@ -41,23 +41,6 @@ func TestClaudeCacheCoverageIncludesCreationAsUncached(t *testing.T) {
 	}
 }
 
-func TestOpenCodeExplicitAndMissingCacheCoverage(t *testing.T) {
-	for _, tc := range []struct {
-		summary string
-		known   int64
-	}{
-		{`{"input_tokens":100,"output_tokens":10,"cached_tokens":90}`, 100},
-		{`{"input_tokens":100,"output_tokens":10,"cached_tokens":0}`, 100},
-		{`{"input_tokens":100,"output_tokens":10}`, 0},
-	} {
-		p := (OpenCode{}).NewParser("test")
-		p.Line([]byte(`{"type":"completed","usage":` + tc.summary + `}`))
-		if p.Result().Usage.CacheReportedInputTokens != tc.known {
-			t.Fatalf("%s: %+v", tc.summary, p.Result().Usage)
-		}
-	}
-}
-
 func TestCodexDoesNotPriceMissingDiscountedCacheCounter(t *testing.T) {
 	p := (Codex{}).NewParser("gpt-5")
 	p.Line([]byte(`{"type":"turn.completed","usage":{"input_tokens":1000,"output_tokens":100}}`))

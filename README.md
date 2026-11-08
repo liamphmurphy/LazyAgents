@@ -9,7 +9,7 @@
     <a href="#get-started">Get started</a> ·
     <a href="docs/guide.md">Documentation</a>
   </p>
-  <p><strong>Self-hosted</strong> &nbsp; / &nbsp; Claude Code · Codex · OpenCode &nbsp; / &nbsp; Automatic fallbacks &nbsp; / &nbsp; Human approvals</p>
+  <p><strong>Self-hosted</strong> &nbsp; / &nbsp; Claude Code · Codex &nbsp; / &nbsp; Automatic fallbacks &nbsp; / &nbsp; Human approvals</p>
 </div>
 
 ![Vesper dashboard showing setup status, items that need you, live runs, blocked tickets, active chats, and epics at risk](docs/images/homepage.png)
@@ -18,8 +18,7 @@
 
 Vesper is a control plane for coding agents. You define an agent once (role,
 instructions, skills, scopes, model) and Vesper runs it headless on the
-frontier labs' own harnesses: **Claude Code**, **Codex**, and optionally
-**OpenCode**. Every agent reports back through the same MCP server, so tickets,
+frontier labs' own harnesses: **Claude Code** and **Codex**. Every agent reports back through the same MCP server, so tickets,
 plans, approvals, knowledge, and costs look the same no matter which model did
 the work.
 
@@ -107,7 +106,6 @@ behind your own authenticating proxy, and only run projects you trust. See the
 
 - **[Running and developing](docs/guide.md)**: setup, chat, skills, patterns, planning, dependencies, fallbacks, and development commands.
 - **[Kanban board](docs/board.md)**: statuses, estimates, and the board's agent tools.
-- **[OpenCode harness](docs/opencode.md)**: install, auth, isolation, and limits.
 - **[Example skills](examples/skills/)**: starter playbooks for your agents.
 - **[Project plan](docs/dev/plan.md)**: architecture and implementation details.
 - **[Design](docs/design-system/)**: the app's design references.

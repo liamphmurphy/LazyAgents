@@ -74,13 +74,6 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	if images {
 		r.HarnessOptions[agentdef.OptionImageGeneration] = "true"
 	}
-	if r.Harness == agentdef.HarnessOpenCode {
-		// OpenCode honors only readonly and rejects any other option.
-		r.HarnessOptions = map[string]string{"readonly": "true"}
-		if coding {
-			r.HarnessOptions = map[string]string{}
-		}
-	}
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
 	// Every chat is the Personal Assistant, whichever agent it was started with.
@@ -179,7 +172,7 @@ type ChatMessageInput struct {
 
 // ChatCatalog is the harness/model catalog chats validate against.
 func (s *Service) ChatCatalog() chatmodels.Catalog {
-	return chatmodels.Catalog{RequireKey: s.RequireHarnessKey, OpenCodeIsolated: s.OpenCodeIsolated, Secrets: s.Secrets, Discover: s.ModelDiscovery}
+	return chatmodels.Catalog{RequireKey: s.RequireHarnessKey, Secrets: s.Secrets, Discover: s.ModelDiscovery}
 }
 
 // StartChat creates a chat and optionally queues its first message atomically.
