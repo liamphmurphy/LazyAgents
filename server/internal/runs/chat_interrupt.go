@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -127,7 +126,7 @@ func ResumeInterruptedChat(ctx context.Context, q *store.Queries, chatID, runID 
 	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0, RelayLimit: int32(RelayLimitIn(msg.BodyMd))}); err != nil {
 		return err
 	}
-	_, run, turn, err := startChatTurn(ctx, q, chat, p.Key, note+msg.BodyMd, chatmodels.AutoLevel(msg.BodyMd), false, handoffChars)
+	_, run, turn, err := startClassifiedChatTurn(ctx, q, chat, p.Key, note+msg.BodyMd, msg.BodyMd, true, false, handoffChars)
 	if err != nil {
 		return err
 	}

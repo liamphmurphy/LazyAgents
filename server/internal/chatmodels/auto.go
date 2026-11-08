@@ -36,6 +36,9 @@ func AutoLevel(text string) string {
 	return "low"
 }
 
+// MentionsCode reports whether lowered text quotes code or names a source file.
+func MentionsCode(text string) bool { return codeish.MatchString(text) }
+
 var offered = struct {
 	sync.Mutex
 	byHarness map[string][]Model

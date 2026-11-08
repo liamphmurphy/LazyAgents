@@ -436,11 +436,13 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0, RelayLimit: int32(RelayLimitIn(body))}); err != nil {
 		return chat, msg, err
 	}
-	level := chatmodels.AutoLevel(body)
+	var run store.Run
+	var turn store.RunTurn
 	if in.Research {
-		level = "xhigh"
+		chat, run, turn, err = startChatTurn(ctx, q, chat, p.Key, prompt, "xhigh", false, handoffChars)
+	} else {
+		chat, run, turn, err = startClassifiedChatTurn(ctx, q, chat, p.Key, prompt, body, interrupt, false, handoffChars)
 	}
-	chat, run, turn, err := startChatTurn(ctx, q, chat, p.Key, prompt, level, false, handoffChars)
 	if err != nil {
 		return chat, msg, err
 	}

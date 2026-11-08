@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
-	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -77,7 +76,7 @@ func (s *Service) EditLastChatMessage(ctx context.Context, ws, user, id uuid.UUI
 		if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0, RelayLimit: int32(RelayLimitIn(body))}); err != nil {
 			return err
 		}
-		_, run, turn, err := startChatTurn(ctx, q, chat, p.Key, editNote(last.BodyMd, body)+body, chatmodels.AutoLevel(body), false, s.HandoffChars)
+		_, run, turn, err := startClassifiedChatTurn(ctx, q, chat, p.Key, editNote(last.BodyMd, body)+body, body, false, true, s.HandoffChars)
 		if err != nil {
 			return err
 		}
