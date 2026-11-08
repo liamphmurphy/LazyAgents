@@ -80,6 +80,8 @@ services:
       RUNNER_MCP_URL: http://api:8000/mcp
       RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-2}
       RUNNER_CHAT_IDLE_TTL_S: ${RUNNER_CHAT_IDLE_TTL_S:-14400}
+      RUNNER_MAX_HOLD_S: ${RUNNER_MAX_HOLD_S:-86400}
+      RUNNER_MAX_HOLD_ATTEMPTS: ${RUNNER_MAX_HOLD_ATTEMPTS:-12}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
