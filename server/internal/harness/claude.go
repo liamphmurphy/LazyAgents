@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 
@@ -114,6 +115,17 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		argv = append(argv, "--effort", effort)
 	}
 	files := SkillFiles(spec.Skills, true)
+	if len(t.InlineImages) > 0 {
+		input, err := claudeImageMessage(t.Prompt, t.InlineImages)
+		if err != nil {
+			return Invocation{}, err
+		}
+		files[claudeInputFile] = input
+		// Images need the stream-json message form, read from stdin (checked
+		// against claude 2.1.311), so the prompt moves out of the arguments.
+		argv = append([]string{"sh", "-c", `exec "$@" < ` + claudeInputFile, "lazyagents-claude-input", argv[0], argv[1]}, argv[3:]...)
+		argv = append(argv, "--input-format", "stream-json")
+	}
 	files[claudeMCPFile] = cfg
 	files[toolHookPath] = toolHook
 	settingsDoc := map[string]any{"hooks": map[string]any{"PreToolUse": []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": env["LAZYAGENTS_POLICY_HOOK_COMMAND"], "timeout": 20}}}}}}
@@ -318,3 +330,18 @@ func blockText(raw json.RawMessage) string {
 }
 
 func (p *claudeParser) Result() Result { return p.res }
+
+const claudeInputFile = ".lazyagents/claude-input.jsonl"
+
+// claudeImageMessage is the one user message of a turn with image inputs.
+func claudeImageMessage(prompt string, images []InlineImage) ([]byte, error) {
+	content := []map[string]any{{"type": "text", "text": prompt}}
+	for _, im := range images {
+		content = append(content, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": im.MediaType, "data": base64.StdEncoding.EncodeToString(im.Data)}})
+	}
+	raw, err := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": content}})
+	if err != nil {
+		return nil, err
+	}
+	return append(raw, '\n'), nil
+}

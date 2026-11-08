@@ -9,6 +9,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -179,11 +180,61 @@ func (s *Server) toWorkflowRun(ctx context.Context, r store.WorkflowRun) (api.Wo
 	if err != nil {
 		return out, err
 	}
+	all, err := s.Q.ListWorkflowRunImages(ctx, r.ID)
+	if err != nil {
+		return out, err
+	}
+	graph, err := runs.ParseWorkflowGraph(r.Graph)
+	if err != nil {
+		return out, err
+	}
+	carried := runs.WorkflowImagesByNode(graph, rows, all)
 	for _, st := range rows {
-		out.Steps = append(out.Steps, api.WorkflowStep{NodeId: st.NodeID, Attempt: int(st.Attempt), State: api.WorkflowStepState(st.State), Output: st.Output, AgentRunId: st.AgentRunID,
-			Decision: st.Decision, Note: st.Note, CreatedAt: st.CreatedAt, FinishedAt: st.FinishedAt})
+		step := api.WorkflowStep{NodeId: st.NodeID, Attempt: int(st.Attempt), State: api.WorkflowStepState(st.State), Output: st.Output, AgentRunId: st.AgentRunID,
+			Decision: st.Decision, Note: st.Note, CreatedAt: st.CreatedAt, FinishedAt: st.FinishedAt}
+		if images := carried[st.NodeID]; len(images) > 0 {
+			list := toWorkflowImages(images)
+			step.Images = &list
+		}
+		out.Steps = append(out.Steps, step)
+	}
+	if len(all) > 0 {
+		list := toWorkflowImages(all)
+		out.Images = &list
 	}
 	return out, nil
+}
+
+func toWorkflowImages(rows []runs.WorkflowImage) []api.WorkflowImage {
+	out := make([]api.WorkflowImage, len(rows))
+	for i, im := range rows {
+		out[i] = api.WorkflowImage{Id: im.ID, NodeId: im.NodeID, Attempt: int(im.Attempt), Filename: im.Filename, ContentType: im.ContentType, SizeBytes: im.SizeBytes, CreatedAt: im.CreatedAt}
+	}
+	return out
+}
+
+// GetWorkflowRunImageContent serves an image of the caller's own run; the run
+// lookup is the authorization, and an image of another run is a 404.
+func (s *Server) GetWorkflowRunImageContent(ctx context.Context, req api.GetWorkflowRunImageContentRequestObject) (api.GetWorkflowRunImageContentResponseObject, error) {
+	u, _, ws := me(ctx)
+	if _, err := s.Q.GetWorkflowRun(ctx, store.GetWorkflowRunParams{ID: req.Id, WorkspaceID: ws, UserID: u.ID}); errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	im, err := s.Q.GetWorkflowRunImage(ctx, store.GetWorkflowRunImageParams{ID: req.ImageId, RunID: req.Id})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	o, err := s.Blobs.Get(ctx, s.ArtifactBucket, im.BlobKey)
+	if errors.Is(err, blob.ErrNotFound) {
+		return nil, apperr.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	return contentResponse{body: o.Body, closer: o.Body, contentType: im.ContentType, length: im.SizeBytes, filename: im.Filename, inline: true}, nil
 }
 
 func (s *Server) toWorkflowRuns(ctx context.Context, rows []store.WorkflowRun) (api.WorkflowRuns, error) {

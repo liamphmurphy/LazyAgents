@@ -11,8 +11,8 @@ import { Content, TopBar } from "@/components/shell/topbar";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { Markdown } from "@/components/domain/markdown";
-import { RunStatePill, WorkflowGatePanel } from "@/components/domain/workflow-cards";
-import { runActive, type Graph } from "@/lib/workflows";
+import { RunStatePill, WorkflowGatePanel, WorkflowImages } from "@/components/domain/workflow-cards";
+import { imagesByAttempt, runActive, type Graph } from "@/lib/workflows";
 import { FLOW_STYLE, NODE_TYPES, toFlowEdges, toFlowNodes, type StepStatus } from "./flow";
 
 function RunView({ run }: { run: WorkflowRun }) {
@@ -22,6 +22,9 @@ function RunView({ run }: { run: WorkflowRun }) {
   const status = (id: string) => run.steps.find((s) => s.node_id === id)?.state as StepStatus;
   const step = run.steps.find((s) => s.node_id === selected);
   const node = graph.nodes.find((n) => n.id === selected);
+  const attempts = imagesByAttempt((run.images ?? []).filter((im) => im.node_id === selected));
+  // A step that made no images of its own shows what it passed along.
+  const carried = attempts.length === 0 ? step?.images ?? [] : [];
   return (
     <>
       <TopBar
@@ -64,6 +67,13 @@ function RunView({ run }: { run: WorkflowRun }) {
                 {step?.agent_run_id && <Link className="text-[12.5px] text-accent hover:underline" href={`/runs/${step.agent_run_id}`}>Open run</Link>}
               </div>
               {step?.note && <p className="mb-2 text-[12.5px] text-fg-secondary">{step.note}</p>}
+              {attempts.map((a) => (
+                <div key={a.attempt} className="mb-3" data-testid={`workflow-attempt-${a.attempt}`}>
+                  <p className="mb-1 font-mono text-[11px] text-fg-tertiary">Attempt {a.attempt}</p>
+                  <WorkflowImages runId={run.id} images={a.images} />
+                </div>
+              ))}
+              {carried.length > 0 && <div className="mb-3"><WorkflowImages runId={run.id} images={carried} /></div>}
               {step?.output ? <div className="text-[13px]"><Markdown>{step.output}</Markdown></div> : <p className="text-[13px] text-fg-tertiary">No output yet.</p>}
             </section>
           )}

@@ -298,6 +298,8 @@ SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM (
   SELECT blob_key, size_bytes FROM chat_attachments WHERE chat_attachments.workspace_id = $1 AND chat_attachments.user_id = $2 AND source = 'generated'
   UNION
   SELECT blob_key, size_bytes FROM library_items WHERE library_items.workspace_id = $1 AND library_items.user_id = $2
+  UNION
+  SELECT i.blob_key, i.size_bytes FROM workflow_step_images i JOIN workflow_runs r ON r.id = i.run_id WHERE r.workspace_id = $1 AND r.user_id = $2
 ) stored
 `
 
@@ -914,6 +916,7 @@ WITH d AS (
   RETURNING blob_key
 )
 SELECT d.blob_key FROM d WHERE NOT EXISTS (SELECT 1 FROM library_items l WHERE l.blob_key = d.blob_key)
+  AND NOT EXISTS (SELECT 1 FROM workflow_step_images i WHERE i.blob_key = d.blob_key)
 `
 
 type DeleteStaleChatAttachmentsParams struct {
@@ -925,7 +928,7 @@ type DeleteStaleChatAttachmentsParams struct {
 // deletion) that are older than the cutoff, returning their blob keys. SKIP
 // LOCKED lets several runners sweep at once; a row a message is binding at
 // the same moment is re-checked after its lock and survives. Keys the
-// Library still holds are not returned: their objects stay.
+// Library or a workflow run still holds are not returned: their objects stay.
 func (q *Queries) DeleteStaleChatAttachments(ctx context.Context, arg DeleteStaleChatAttachmentsParams) ([]string, error) {
 	rows, err := q.db.Query(ctx, deleteStaleChatAttachments, arg.Cutoff, arg.RowLimit)
 	if err != nil {

@@ -1045,6 +1045,21 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.run.HarnessSessionID != nil {
 		session = *c.run.HarnessSessionID
 	}
+	var inputImages []harness.InlineImage
+	var inputPaths []string
+	if c.run.Purpose == runs.PurposeWorkflow {
+		var imgFiles map[string][]byte
+		var failure string
+		imgFiles, inputPaths, inputImages, failure = r.workflowTurnImages(ctx, q, c)
+		if failure != "" {
+			_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
+			r.end(ctx, c, "failed", failure, runs.VerbRunFailed)
+			return
+		}
+		for k, v := range imgFiles {
+			files[k] = v
+		}
+	}
 	dir := childDir(c.run)
 	wsDir := r.Backend.WorkspaceDir(wsID(c.run))
 	if dir != "" {
@@ -1060,7 +1075,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	inv, err := h.Invocation(harness.Workspace{
 		DependencyCacheDir: cacheDir, OpenCodeStateDir: stateDir, Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
-	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session})
+	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session, Images: inputPaths, InlineImages: inputImages})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
 		return
@@ -1183,6 +1198,12 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	r.event(context.Background(), c.run.ID, "lifecycle", map[string]any{"state": "turn_ended", "turn": turn.Seq, "exit_code": code})
 	if ctx.Err() != nil {
 		return // shutting down: the turn re-runs on the next runner start
+	}
+	if c.run.Purpose == runs.PurposeWorkflow && c.spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" {
+		if failure := r.finishWorkflowImageStep(ctx, c, res, code, waitErr, sensitive); failure != "" {
+			r.end(ctx, c, "failed", failure, runs.VerbRunFailed)
+			return
+		}
 	}
 	r.afterTurn(ctx, c.run.ID, res, limitMsg, code, waitErr)
 }

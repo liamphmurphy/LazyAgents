@@ -472,6 +472,10 @@ func (r contentResponse) VisitGetArtifactContentResponse(w http.ResponseWriter) 
 	return r.write(w)
 }
 
+func (r contentResponse) VisitGetWorkflowRunImageContentResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
 func (r contentResponse) VisitGetChatAttachmentContentResponse(w http.ResponseWriter) error {
 	return r.write(w)
 }

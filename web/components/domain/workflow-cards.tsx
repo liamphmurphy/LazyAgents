@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useContext, useMemo, useState } from "react";
-import type { Schemas } from "@/lib/api/client";
+import { workflowImageUrl, type Schemas } from "@/lib/api/client";
 import { useChatWorkflowRuns, useDecideGate, useStartWorkflow, useStopWorkflowRun, useWorkflows, type WorkflowRun } from "@/lib/api/workflow-hooks";
 import { cx } from "@/lib/cx";
 import { RUN_STATE_LABEL, canRequestChanges, gateSources, parseWorkflowRun, runActive, type Graph } from "@/lib/workflows";
@@ -57,6 +57,21 @@ export function WorkflowStartCard({ workflow, chatId, input: initial = "", messa
   );
 }
 
+/** Images a workflow step generated, each opening at full size. */
+export function WorkflowImages({ runId, images }: { runId: string; images: Schemas["WorkflowImage"][] }) {
+  if (images.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2" data-testid="workflow-images">
+      {images.map((im) => (
+        <a key={im.id} href={workflowImageUrl(runId, im.id)} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-border-subtle">
+          {/* eslint-disable-next-line @next/next/no-img-element -- same-origin, authorized API image */}
+          <img src={workflowImageUrl(runId, im.id)} alt={im.filename} className="max-h-72 max-w-full object-contain" />
+        </a>
+      ))}
+    </div>
+  );
+}
+
 /** A gate's review: the outputs it's set to show, and the three decisions. */
 export function WorkflowGatePanel({ run }: { run: WorkflowRun }) {
   const graph = run.graph as Graph;
@@ -74,10 +89,13 @@ export function WorkflowGatePanel({ run }: { run: WorkflowRun }) {
         <h4 className="text-[14px] font-semibold text-fg">{gate.title}</h4>
         {gate.config.prompt && <p className="text-[12.5px] text-fg-secondary">{gate.config.prompt}</p>}
       </div>
-      {sources.map(({ node, step }) => step?.output && (
+      {sources.map(({ node, step }) => (step?.output || step?.images?.length) && (
         <details key={node?.id} open className="rounded-lg border border-border-subtle bg-surface-sunken p-2.5">
           <summary className="cursor-pointer text-[12px] font-medium text-fg-secondary">{node?.title}</summary>
-          <div className="mt-2 max-h-80 overflow-y-auto text-[13px]"><Markdown>{step.output}</Markdown></div>
+          <div className="mt-2 flex max-h-96 flex-col gap-2 overflow-y-auto text-[13px]">
+            <WorkflowImages runId={run.id} images={step.images ?? []} />
+            {step.output && <Markdown>{step.output}</Markdown>}
+          </div>
         </details>
       ))}
       {changes && <textarea aria-label="Note for the re-run" rows={2} placeholder="Note for the re-run (required when requesting changes)" value={note} onChange={(e) => setNote(e.target.value)} className={INPUT} />}

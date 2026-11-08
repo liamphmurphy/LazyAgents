@@ -41,6 +41,7 @@ type WorkflowConfig struct {
 	PersonaID   string   `json:"persona_id,omitempty" jsonschema:"agent: a persona's id to run as; empty uses the chat's persona"`
 	AgentHandle string   `json:"agent_handle,omitempty" jsonschema:"agent: a workspace agent's handle to run as, instead of a persona"`
 	Web         bool     `json:"web,omitempty" jsonschema:"agent: read the web. A web step can't read the workspace"`
+	Images      bool     `json:"images,omitempty" jsonschema:"agent: generate images. The step always runs on Codex, as a persona allowed to make images; not available with agent_handle"`
 	Show        []string `json:"show,omitempty" jsonschema:"gate: ids of upstream nodes whose output the reviewer sees; empty shows the gate's parents"`
 	RetryFrom   string   `json:"retry_from,omitempty" jsonschema:"gate: id of an upstream enrich or agent node to re-run on Request changes; empty offers only approve or reject"`
 	MaxAttempts int      `json:"max_attempts,omitempty" jsonschema:"gate: how many reviews before Request changes stops being offered, 1 to 5; default 3"`
@@ -268,6 +269,9 @@ func ValidateWorkflow(g WorkflowGraph) []WorkflowIssue {
 			}
 			if c.PersonaID != "" && c.AgentHandle != "" {
 				add(n.ID, "Choose a persona or an agent, not both")
+			}
+			if c.Images && c.AgentHandle != "" {
+				add(n.ID, "Image steps run as a persona: remove the agent handle")
 			}
 		case NodeGate:
 			if c.RetryFrom != "" {

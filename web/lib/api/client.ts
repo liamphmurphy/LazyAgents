@@ -82,6 +82,11 @@ export function chatAttachmentUrl(attachmentId: string) {
   return `/api/v1/chat-attachments/${attachmentId}/content`;
 }
 
+/** URL of an image a workflow step generated. */
+export function workflowImageUrl(runId: string, imageId: string) {
+  return `/api/v1/workflow-runs/${runId}/images/${imageId}/content`;
+}
+
 /** URL of one of the caller's Library items. */
 export function libraryItemUrl(itemId: string, download = false) {
   return `/api/v1/library/${itemId}/content${download ? "?download=true" : ""}`;

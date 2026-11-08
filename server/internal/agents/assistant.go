@@ -151,7 +151,8 @@ const AssistantWorkflowSection = `
 // AssistantSVGSection.
 const AssistantWorkflowBuildSection = `
 - To build or change a workflow when asked: list_workflows or read_workflow, then propose_workflow_edit. It's only a suggestion the person applies in the editor, so link them to the workflows_url it returns. If it's refused, fix what the error names and propose again.
-- Node types: trigger (exactly one, already present), enrich, agent, gate (human approval), and the outputs wiki, library, ticket, chat. Outputs end a branch, wiki needs a gate before it, and the graph can't loop: a gate's retry_from re-runs an earlier step instead. Refer to earlier results with {{input}} and {{node_id.output}}.`
+- Node types: trigger (exactly one, already present), enrich, agent, gate (human approval), and the outputs wiki, library, ticket, chat. Outputs end a branch, wiki needs a gate before it, and the graph can't loop: a gate's retry_from re-runs an earlier step instead. Refer to earlier results with {{input}} and {{node_id.output}}.
+- An agent node with images: true generates images: it always runs on Codex and needs a persona allowed to make images (not agent_handle). Later agent steps see those images directly, gates show them, and the chat and library outputs deliver them; wiki and ticket outputs leave them out.`
 
 // AssistantInstructionsFor is AssistantInstructions with the sections a
 // persona's capabilities add. workBranch is the coding chat's branch, empty

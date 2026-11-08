@@ -99,3 +99,34 @@ SELECT * FROM workflow_steps WHERE agent_run_id = $1 FOR UPDATE;
 -- name: CreateWorkflowLibraryItem :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id)
 VALUES ($1, $2, 'document', $3, $4, 'text/markdown; charset=utf-8', $5, $6, $7) RETURNING *;
+
+-- name: CreateWorkflowStepImage :one
+INSERT INTO workflow_step_images (step_id, run_id, filename, content_type, size_bytes, blob_key)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+
+-- name: ListWorkflowRunImages :many
+-- Every attempt's images, oldest first; callers pick the attempts they want.
+SELECT i.*, s.node_id, s.attempt FROM workflow_step_images i JOIN workflow_steps s ON s.id = i.step_id
+WHERE i.run_id = $1 ORDER BY s.attempt, i.created_at, i.id;
+
+-- name: GetWorkflowRunImage :one
+SELECT * FROM workflow_step_images WHERE id = $1 AND run_id = $2;
+
+-- name: CountWorkflowStepImages :one
+SELECT count(*) FROM workflow_step_images WHERE step_id = $1;
+
+-- name: AddWorkflowStepImageCall :one
+-- Counts one native image tool call by a running step, for the per-step limit.
+UPDATE workflow_steps SET image_calls = image_calls + 1 WHERE agent_run_id = $1 AND state = 'running' RETURNING image_calls;
+
+-- name: KeepWorkflowImagesForSweep :exec
+-- A chat's deletion cascades to its runs' image rows. Objects nothing else
+-- holds become detached attachments first, so the stale-attachment sweep
+-- removes them instead of leaving them behind.
+INSERT INTO chat_attachments (workspace_id, user_id, filename, content_type, size_bytes, blob_key, source)
+SELECT DISTINCT ON (i.blob_key) r.workspace_id, r.user_id, i.filename, i.content_type, i.size_bytes, i.blob_key, 'generated'
+FROM workflow_step_images i JOIN workflow_runs r ON r.id = i.run_id
+WHERE r.chat_id = $1
+  AND NOT EXISTS (SELECT 1 FROM chat_attachments a WHERE a.blob_key = i.blob_key)
+  AND NOT EXISTS (SELECT 1 FROM library_items l WHERE l.blob_key = i.blob_key)
+ORDER BY i.blob_key;

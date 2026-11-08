@@ -23,6 +23,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/config"
 	"github.com/liamphmurphy/vesper/server/internal/db"
 	"github.com/liamphmurphy/vesper/server/internal/httpapi"
@@ -269,6 +270,9 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	}
 	host, _ := os.Hostname()
 	blobs := blob.New(cfg.S3)
+	secretStore := &secrets.Service{Q: store.New(pool), Box: box}
+	workflows := runs.NewWorkflowEngine(pool, &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, &tracker.Service{Pool: pool})
+	workflows.Catalog = chatmodels.Catalog{RequireKey: rc.Backend == "docker", OpenCodeIsolated: rc.OpenCodeIsolated, Secrets: secretStore}
 	r := &runner.Runner{
 		Cfg: runner.Config{
 			ModelPrices: rc.ModelPrices,
@@ -276,9 +280,9 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 			Grace: 30 * time.Second, LogBucket: "run-logs", AttachmentBucket: cfg.S3.ArtifactBucket, Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
 			ChatIdleTTL: rc.ChatIdleTTL, MaxHold: rc.MaxHold, MaxHoldAttempts: rc.MaxHoldAttempts,
 		},
-		Pool: pool, Backend: backend, Secrets: &secrets.Service{Q: store.New(pool), Box: box},
+		Pool: pool, Backend: backend, Secrets: secretStore,
 		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
-		Workflows: runs.NewWorkflowEngine(pool, &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, &tracker.Service{Pool: pool}),
+		Workflows: workflows,
 	}
 	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
 	return r.Run(ctx)
