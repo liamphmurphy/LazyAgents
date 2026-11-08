@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useChat, useChats, useCreateChat, useDeleteChat, useStartChat, useUpdateChat } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
-import { chatTitle } from "@/lib/chat-ui";
+import { chatTitle, newestChat } from "@/lib/chat-ui";
 import { codesInRepos } from "@/lib/persona-ui";
 import { shortAgo } from "@/lib/format";
 import { cx } from "@/lib/cx";
@@ -296,6 +296,24 @@ function HistorySidebar({ project, id, newChat }: { project: string; id?: string
   const archived = useChats(view === "archived" ? project : "", true, filter.query);
   const chats = view === "archived" ? archived : active;
   const list = chats.data?.chats;
+  // Picking a persona opens its newest conversation, unless the open one is already with it.
+  // Set by a pick; the effect below runs once that persona's list arrives (a new query, so new data).
+  const following = useRef(false);
+  const pickPersona = (v: typeof filter.value) => {
+    if (v === filter.value) return;
+    following.current = v !== "all";
+    filter.set(v);
+  };
+  useEffect(() => {
+    if (!following.current || !active.data) return;
+    following.current = false;
+    const open = active.data.chats.some((c) => c.id === id);
+    const target = newestChat(active.data.chats);
+    if (open || !target) return;
+    const q = new URLSearchParams(search.toString());
+    q.set("project", project);
+    router.push(`/chat/${target.id}?${q.toString()}`);
+  }, [active.data, id, project, router, search]);
   const create = useCreateChat();
   // An empty filter on a persona other than the default offers to start a conversation with it.
   const picked = filter.value !== "default" && !all ? filter.personas.find((p) => p.id === filter.value) : undefined;
@@ -308,7 +326,7 @@ function HistorySidebar({ project, id, newChat }: { project: string; id?: string
       aria-label="Chat history"
       className="flex w-72 flex-none flex-col gap-3 border-r border-border-subtle p-3 max-md:max-h-64 max-md:w-full max-md:border-b max-md:border-r-0"
     >
-      <PersonaFilter filter={filter} />
+      <PersonaFilter filter={{ ...filter, set: pickPersona }} />
       {newChat}
       <Segmented
         label="Show conversations"
@@ -396,10 +414,7 @@ export function ChatScreen({ id }: { id?: string }) {
   const attaching = search.has("attach");
   // Resume the newest conversation with any persona, whatever the sidebar shows.
   const chats = useChats(project, false, "all");
-  const newest = chats.data?.chats.reduce<(typeof chats.data.chats)[number] | undefined>((a, c) => {
-    const t = (x: typeof c) => Date.parse(x.last_message_at ?? x.updated_at);
-    return !a || t(c) > t(a) ? c : a;
-  }, undefined);
+  const newest = newestChat(chats.data?.chats);
   useEffect(() => {
     if (id || attaching || !newest) return;
     const q = new URLSearchParams(search.toString());

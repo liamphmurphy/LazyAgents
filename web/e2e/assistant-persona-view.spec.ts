@@ -78,6 +78,42 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   expect(mock.unhandled).toEqual([]);
 });
 
+test("picking a persona in the sidebar opens its newest conversation", async ({ page }) => {
+  const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
+  await page.goto("/chat?project=WEB");
+  await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
+  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
+  const atlasChat = new URL(page.url()).pathname;
+
+  // A persona with no conversations leaves the open one alone and offers to start one.
+  await filter(page).click();
+  await page.getByRole("menuitemradio", { name: /Nova/ }).click();
+  await expect(history(page).getByText("No conversations with Nova yet.")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe(atlasChat);
+  await history(page).getByRole("button", { name: "Start one with Nova →" }).click();
+  await expect(page).not.toHaveURL(new RegExp(atlasChat));
+  await composer(page).fill("hi nova");
+  await composer(page).press("Enter");
+  await expect(history(page).getByRole("link", { name: /hi nova/ })).toBeVisible();
+  const novaChat = new URL(page.url()).pathname;
+
+  // Switching personas follows to each one's newest conversation.
+  await filter(page).click();
+  await page.getByRole("menuitemradio", { name: /Atlas/ }).click();
+  await expect(page).toHaveURL(new RegExp(atlasChat));
+  await filter(page).click();
+  await page.getByRole("menuitemradio", { name: /Nova/ }).click();
+  await expect(page).toHaveURL(new RegExp(novaChat));
+
+  // All personas keeps the open conversation.
+  await filter(page).click();
+  await page.getByRole("menuitemradio", { name: "All personas" }).click();
+  await expect(history(page).getByRole("link", { name: /hello atlas/ })).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe(novaChat);
+  expect(mock.unhandled).toEqual([]);
+});
+
 test("without personas the built-in Assistant is the default and there's no switcher", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
