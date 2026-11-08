@@ -24,9 +24,7 @@ import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop
 import { ChipList } from "./context-chips";
 import { RestoreChat } from "./restore";
 import { CanvasButton, CanvasPanel } from "./canvas-panel";
-import { MemoryPanel, useMemoryPanel } from "./memory-panel";
 import { PersonaAvatar, PersonaFilter, PersonaName, PersonaSwitcher, RepoSelect, personaLook, useOpenPersonaManager, usePersonaFilter } from "./persona";
-import { PersonaPanel, usePersonaPanel } from "./persona-panel";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -451,8 +449,6 @@ export function ChatScreen({ id }: { id?: string }) {
   const project = id
     ? (current.data?.project ?? search.get("project") ?? "")
     : scope.status === "ready" ? (scope.project?.key ?? "") : "";
-  const memory = useMemoryPanel();
-  const personaPanel = usePersonaPanel();
   const canvas = useCanvasPanel();
   const turnRunning = current.data?.state === "running";
   const create = useCreateChat();
@@ -523,7 +519,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {id && canvas.open ? <CanvasPanel chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : personaPanel.open ? <PersonaPanel /> : memory.open && <MemoryPanel />}
+          {id && canvas.open ? <CanvasPanel chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : null}
         </div>
       )}
     </div>

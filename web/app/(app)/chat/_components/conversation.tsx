@@ -47,7 +47,6 @@ import { MemoryNotices } from "./memory-notices";
 import { AttachButton, AttachmentChips, DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
-import { useMemoryPanel } from "./memory-panel";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
 import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
@@ -289,7 +288,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const [commandActive, setCommandActive] = useState(0);
   const [commandDismissed, setCommandDismissed] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
-  const memory = useMemoryPanel();
 
   const c = chat.data;
   const loaded = !!c;
@@ -525,7 +523,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const whileIdle = (what: string, run: () => void): string | void => (running ? `Wait for the reply to finish before changing the ${what}.` : run());
   const plainCommands: Record<string, CommandRun> = {
     new: onNew,
-    memory: () => (memory.open ? memory.close() : memory.show()),
+    memory: () => router.push("/memory"),
     stop: () => {
       if (!running) return "There’s no reply to stop.";
       if (!stopping) cancel.mutate();

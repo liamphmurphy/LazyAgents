@@ -10,7 +10,7 @@ export const CHAT_COMMANDS: ChatCommand[] = [
   { name: "workflow", args: "workflow", hint: "Run one of your published workflows" },
   { name: "new", hint: "Start a new conversation" },
   { name: "repo", args: "repository", hint: "Start a new chat in another repository" },
-  { name: "memory", hint: "Open or close your memory" },
+  { name: "memory", hint: "Open your memory" },
   { name: "stop", hint: "Stop the current reply" },
 ];
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/lib/api/client";
@@ -7,14 +8,13 @@ import { memoryKeys, useChatRunEvents, useDeleteMemory, useMemory, useUpdateMemo
 import { memoryNotices, type MemoryNotice } from "@/lib/memory-ui";
 import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icon";
-import { useMemoryPanel } from "./memory-panel";
 
 type Done = "undone" | "forgotten" | "restored";
 
 const linkBtn = "text-xs text-accent hover:underline disabled:opacity-50";
 
 function Notice({ n }: { n: MemoryNotice }) {
-  const panel = useMemoryPanel();
+  const router = useRouter();
   const [done, setDone] = useState<Done | null>(null);
   const del = useDeleteMemory();
   const update = useUpdateMemory();
@@ -49,7 +49,7 @@ function Notice({ n }: { n: MemoryNotice }) {
       <span className={cx("min-w-0 flex-1 text-xs", muted ? "text-fg-secondary" : "text-fg")}>{text}</span>
       {actionable && (
         <span className="flex items-center gap-3">
-          <button type="button" className={linkBtn} onClick={() => panel.show(n.id)}>
+          <button type="button" className={linkBtn} onClick={() => router.push(`/memory?id=${encodeURIComponent(n.id)}`)}>
             View
           </button>
           {n.kind === "saved" && (

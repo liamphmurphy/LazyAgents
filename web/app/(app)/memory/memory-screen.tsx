@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import {
   exportMemories,
@@ -17,37 +17,15 @@ import {
 import { usePersonaLookup } from "@/lib/api/persona-memory-hooks";
 import { IMPORT_PROMPT, MEMORY_TYPES, PERSONA_MEMORY_TYPES, memoriesMarkdown, parseMemoryImport, parseTags, typeLabel } from "@/lib/memory-ui";
 import { cx } from "@/lib/cx";
+import { Content, TopBar } from "@/components/shell/topbar";
 import { Button, IconButton } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
+import { PersonaAvatar } from "../chat/_components/persona";
 
 type Memory = Schemas["Memory"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
-
-/** The memory manager lives in the URL (?memory, or ?memory=<id> to open one entry) so "View" can deep-link it. */
-export function useMemoryPanel() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
-  const raw = search.get("memory");
-  const go = (value: string | null) => {
-    const q = new URLSearchParams(search.toString());
-    if (value === null) q.delete("memory");
-    else {
-      q.set("memory", value);
-      q.delete("personas"); // one right-hand panel at a time
-      q.delete("canvas");
-    }
-    router.replace(`${pathname}?${q.toString()}`, { scroll: false });
-  };
-  return {
-    open: raw !== null,
-    focus: raw && raw !== "1" ? raw : undefined,
-    show: (id?: string) => go(id ?? "1"),
-    close: () => go(null),
-  };
-}
 
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
@@ -177,11 +155,11 @@ function Editor({ m, onDone, onDeleted }: { m: Memory; onDone: () => void; onDel
 
 function Row({ m, editing, onEdit, onDone }: { m: Memory; editing: boolean; onEdit: () => void; onDone: () => void }) {
   const del = useDeleteMemory();
-  if (editing) return <li><Editor m={m} onDone={onDone} onDeleted={onDone} /></li>;
+  if (editing) return <li className="col-span-full"><Editor m={m} onDone={onDone} onDeleted={onDone} /></li>;
   return (
-    <li className="group flex gap-2 rounded-lg border border-border p-3 hover:bg-hover" data-testid="memory-row">
+    <li className="group flex min-w-0 gap-2 rounded-lg border border-border bg-surface p-3 hover:bg-hover" data-testid="memory-row">
       <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
-        <span className="text-[13px] text-fg">{m.title}</span>
+        <span className="text-[13px] font-medium text-fg">{m.title}</span>
         {m.summary && <span className="text-xs text-fg-secondary">{m.summary}</span>}
         <Tags tags={m.tags} />
         <Meta m={m} />
@@ -217,29 +195,35 @@ function Page({
   last: boolean;
 }) {
   const list = useMemories(q, type, offset, whose);
-  if (list.isError) return <Banner tone="blocked" title="Couldn’t load memories">{errorText(list.error)}</Banner>;
+  if (list.isError)
+    return (
+      <div className="col-span-full">
+        <Banner tone="blocked" title="Couldn’t load memories">{errorText(list.error)}</Banner>
+      </div>
+    );
   if (!list.data)
     return (
-      <div aria-busy="true" className="flex flex-col gap-2">
-        <Skeleton className="h-16" />
-        <Skeleton className="h-16" />
+      <div aria-busy="true" className="contents">
+        <Skeleton className="h-28" />
+        <Skeleton className="h-28" />
       </div>
     );
   const rows = list.data.memories.filter((m) => m.id !== hide);
   return (
     <>
       {offset === 0 && rows.length === 0 && (
-        <p className="px-1 py-6 text-center text-[13px] text-fg-secondary">
+        <p className="col-span-full px-1 py-6 text-center text-[13px] text-fg-secondary">
           {q || type || whose ? "No memories match." : "Nothing remembered yet. The assistant saves useful things as you talk and tells you when it does."}
         </p>
       )}
-      <ul className="flex flex-col gap-2">
+      {/* Every page's cards share the one grid. */}
+      <ul className="contents">
         {rows.map((m) => (
           <Row key={m.id} m={m} editing={editing === m.id} onEdit={() => setEditing(m.id)} onDone={() => setEditing(undefined)} />
         ))}
       </ul>
       {last && list.data.has_more && !q && (
-        <Button variant="outline" className="self-center" onClick={onMore}>
+        <Button variant="outline" className="col-span-full justify-self-center" onClick={onMore}>
           Load more
         </Button>
       )}
@@ -428,9 +412,13 @@ function Focused({ id, onDone }: { id: string; onDone: () => void }) {
   return <Editor key={m.data.id} m={m.data} onDone={onDone} onDeleted={onDone} />;
 }
 
-/** The memory manager (mockup frame 2): browse, search, filter, edit, delete and export every entry. */
-export function MemoryPanel() {
-  const panel = useMemoryPanel();
+const railItem = (on: boolean) =>
+  cx("flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-left text-[13px]", on ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover");
+
+/** The memory manager: a rail for whose memory it is, then search, filter, edit, delete and export every entry as cards. */
+export function MemoryScreen() {
+  const router = useRouter();
+  const focus = useSearchParams().get("id") ?? undefined;
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [type, setType] = useState<MemoryType | undefined>(undefined);
@@ -449,116 +437,96 @@ export function MemoryPanel() {
     }, 250);
     return () => clearTimeout(t);
   }, [text]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !editing && (importing ? setImporting(false) : panel.close());
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
   const total = count.data?.total;
+  const pickWhose = (v: string) => {
+    setWhose(v);
+    setPages(1);
+  };
+  const rail = (value: string, name: string, lead: ReactNode) => (
+    <button key={value} type="button" aria-pressed={whose === value} className={railItem(whose === value)} onClick={() => pickWhose(value)}>
+      {lead}
+      <span className="truncate">{name}</span>
+    </button>
+  );
   return (
-    <aside
-      aria-label="Memory"
-      className="flex w-[440px] flex-none flex-col border-l border-border-strong bg-surface-sunken max-lg:w-[380px] max-md:absolute max-md:inset-0 max-md:z-20 max-md:w-full"
-    >
-      <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2.5">
-        <h2 className="type-heading">Memory</h2>
-        {total !== undefined && <span className="text-xs text-fg-tertiary">{total} entries</span>}
-        <span className="flex-1" />
-        <button
-          type="button"
-          aria-pressed={importing}
-          onClick={() => setImporting((v) => !v)}
-          className={cx(
-            "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-[12.5px] text-fg",
-            importing ? "border-accent bg-selected" : "border-btn-secondary-border bg-btn-secondary hover:bg-hover",
-          )}
-        >
-          <Icon name="upload" size={14} />
-          Import
-        </button>
-        <ExportMenu />
-        <IconButton icon="x" label="Close memory" onClick={panel.close} />
-      </div>
-      {importing ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
-          <ImportView onClose={() => setImporting(false)} />
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-col gap-2 px-4 pt-3">
-            <div className="flex gap-2">
-              <TextInput
-                type="search"
-                aria-label="Search memories"
-                placeholder="Search memories"
-                value={text}
-                className="min-w-0 flex-1"
-                onChange={(e) => setText(e.target.value)}
-              />
-              <select
-                aria-label="Whose memory"
-                value={whose}
-                onChange={(e) => {
-                  setWhose(e.target.value);
-                  setPages(1);
-                }}
-                className="h-[30px] w-40 flex-none rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
-              >
-                <option value="">Everything</option>
-                <option value="person">About you</option>
-                {personas.size > 0 && <option value="persona">Personas’ own</option>}
-                {[...personas.values()].map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}’s own
-                  </option>
+    <section aria-label="Memory">
+      <TopBar
+        crumbs={[{ label: "Assistant", href: "/chat" }, { label: "Memory" }]}
+        actions={
+          <>
+            {total !== undefined && <span className="text-xs text-fg-tertiary">{total} entries</span>}
+            <button
+              type="button"
+              aria-pressed={importing}
+              onClick={() => setImporting((v) => !v)}
+              className={cx(
+                "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-[12.5px] text-fg",
+                importing ? "border-accent bg-selected" : "border-btn-secondary-border bg-btn-secondary hover:bg-hover",
+              )}
+            >
+              <Icon name="upload" size={14} />
+              Import
+            </button>
+            <ExportMenu />
+          </>
+        }
+      />
+      <Content>
+        {importing ? (
+          <div className="mx-auto max-w-2xl">
+            <ImportView onClose={() => setImporting(false)} />
+          </div>
+        ) : (
+          <div className="flex gap-8 max-md:flex-col max-md:gap-4">
+            <div role="group" aria-label="Whose memory" className="flex w-48 flex-none flex-col gap-px max-md:w-full max-md:flex-row max-md:flex-wrap">
+              {rail("", "Everything", <Icon name="bookmark" size={14} />)}
+              {rail("person", "About you", <Icon name="users" size={14} />)}
+              {personas.size > 0 && rail("persona", "Personas’ own", <Icon name="agents" size={14} />)}
+              {[...personas.values()].map((p) => rail(p.id, `${p.name}’s own`, <PersonaAvatar persona={p} size={16} />))}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
+              <TextInput type="search" aria-label="Search memories" placeholder="Search memories" value={text} onChange={(e) => setText(e.target.value)} />
+              <div role="group" aria-label="Filter by type" className="flex flex-wrap gap-1">
+                {[undefined, ...PERSONA_MEMORY_TYPES].map((t) => (
+                  <button
+                    key={t ?? "all"}
+                    type="button"
+                    aria-pressed={type === t}
+                    onClick={() => {
+                      setType(t);
+                      setPages(1);
+                    }}
+                    className={cx("rounded-md px-2.5 py-1 text-xs", type === t ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
+                  >
+                    {t ? typeLabel(t) : "All"}
+                  </button>
                 ))}
-              </select>
-            </div>
-            <div role="group" aria-label="Filter by type" className="flex flex-wrap gap-1">
-              {[undefined, ...PERSONA_MEMORY_TYPES].map((t) => (
-                <button
-                  key={t ?? "all"}
-                  type="button"
-                  aria-pressed={type === t}
-                  onClick={() => {
-                    setType(t);
-                    setPages(1);
-                  }}
-                  className={cx(
-                    "rounded-md px-2.5 py-1 text-xs",
-                    type === t ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
-                  )}
-                >
-                  {t ? typeLabel(t) : "All"}
-                </button>
-              ))}
+              </div>
+              {focus && <Focused key={focus} id={focus} onDone={() => router.replace("/memory", { scroll: false })} />}
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+                {Array.from({ length: pages }, (_, i) => (
+                  <Page
+                    key={i}
+                    q={q}
+                    type={type}
+                    whose={whose}
+                    offset={i * 50}
+                    hide={focus}
+                    editing={editing}
+                    setEditing={setEditing}
+                    last={i === pages - 1}
+                    onMore={() => setPages((n) => n + 1)}
+                  />
+                ))}
+              </div>
+              <div className="mt-4 flex flex-col items-start gap-2 border-t border-border-subtle pt-3">
+                <DeleteAll total={total} />
+                <p className="text-[11.5px] text-fg-tertiary">Private to you. Never shared with the team wiki. Secrets and tokens are never saved.</p>
+              </div>
             </div>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-3">
-            {panel.focus && <Focused key={panel.focus} id={panel.focus} onDone={() => panel.show()} />}
-            {Array.from({ length: pages }, (_, i) => (
-              <Page
-                key={i}
-                q={q}
-                type={type}
-                whose={whose}
-                offset={i * 50}
-                hide={panel.focus}
-                editing={editing}
-                setEditing={setEditing}
-                last={i === pages - 1}
-                onMore={() => setPages((n) => n + 1)}
-              />
-            ))}
-          </div>
-        </>
-      )}
-      <div className="flex flex-col gap-2 border-t border-border-subtle px-4 py-3">
-        <DeleteAll total={total} />
-        <p className="text-[11.5px] text-fg-tertiary">
-          Private to you. Never shared with the team wiki. Secrets and tokens are never saved.
-        </p>
-      </div>
-    </aside>
+        )}
+      </Content>
+    </section>
   );
 }

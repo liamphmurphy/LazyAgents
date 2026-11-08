@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-/** The canvas pane beside a chat, in the URL like Memory and Personas. */
+/** The canvas pane beside a chat, in the URL. */
 export function useCanvasPanel() {
   const router = useRouter();
   const pathname = usePathname();
@@ -11,12 +11,7 @@ export function useCanvasPanel() {
   const go = (value: string | null) => {
     const q = new URLSearchParams(search.toString());
     if (value === null) q.delete("canvas");
-    else {
-      q.set("canvas", value);
-      // One right-hand panel at a time.
-      q.delete("memory");
-      q.delete("personas");
-    }
+    else q.set("canvas", value);
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
   return {

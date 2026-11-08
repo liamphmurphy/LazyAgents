@@ -132,17 +132,6 @@ test("an SVG canvas draws sanitized elements that keep their ids", async ({ page
   await expect(pane).toContainText("after 60 days.");
 });
 
-test("one right-hand panel at a time", async ({ page }) => {
-  await open(page);
-  await page.getByTestId("canvas-card").click();
-  await expect(page.getByTestId("canvas-panel")).toBeVisible();
-  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true }).click();
-  await expect(page.getByTestId("canvas-panel")).toHaveCount(0);
-  await page.getByTestId("canvas-card").click();
-  await expect(page.getByTestId("canvas-panel")).toBeVisible();
-  await expect(page).not.toHaveURL(/memory=/);
-});
-
 test("a selection across formatting becomes a draft on the right source range, sent as a batch", async ({ page }) => {
   const calls = await open(page);
   const pane = await openDoc(page);
