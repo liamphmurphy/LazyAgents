@@ -20,7 +20,10 @@ type HandoffMessage struct {
 	Seq            int64
 	Role           string
 	Harness, Model string
-	Body           string
+	// Persona names who wrote an assistant message in a chat with several
+	// personas; empty otherwise.
+	Persona string
+	Body    string
 }
 
 const handoffClip = "\n[…message clipped]"
@@ -35,6 +38,9 @@ func handoffHeader(omitted int) string {
 
 func handoffEntry(m HandoffMessage, body string) string {
 	who := m.Role
+	if m.Persona != "" {
+		who += " " + m.Persona
+	}
 	if m.Harness != "" {
 		who += " (" + m.Harness
 		if m.Model != "" {
@@ -47,12 +53,20 @@ func handoffEntry(m HandoffMessage, body string) string {
 
 const handoffFooter = "---\nNew message from the user (answer this one):\n"
 
+// relayFooter ends the handoff of a turn one persona handed to another: there
+// is no new message from the user, only the hand-over note.
+const relayFooter = "---\n"
+
 // RenderHandoff builds the prompt for the first turn of a follow-up segment.
 // history is newest first (as queried); total is the full count of prior
 // messages. Header and history together stay within budget characters; the
 // newest messages win and the header reports how many were omitted. The new
 // message follows the footer, outside the budget.
 func RenderHandoff(history []HandoffMessage, total int, budget int, body string) string {
+	return renderHandoff(history, total, budget, handoffFooter, body)
+}
+
+func renderHandoff(history []HandoffMessage, total int, budget int, footer, body string) string {
 	if budget <= 0 {
 		budget = DefaultHandoffChars
 	}
@@ -85,7 +99,7 @@ func RenderHandoff(history []HandoffMessage, total int, budget int, body string)
 	for i := len(kept) - 1; i >= 0; i-- {
 		b.WriteString(kept[i])
 	}
-	b.WriteString(handoffFooter)
+	b.WriteString(footer)
 	b.WriteString(body)
 	return b.String()
 }

@@ -49,8 +49,8 @@ func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, e
 		return script, nil
 	}
 	name := "Assistant"
-	if chat.PersonaID != nil {
-		p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *chat.PersonaID, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	if id := chatSpeaker(chat); id != nil {
+		p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *id, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return "", err
 		}
@@ -75,6 +75,15 @@ func chatGitRepo(ctx context.Context, q *store.Queries, c runCtx) (string, error
 		return "", nil
 	}
 	return *chat.RepoUrl, nil
+}
+
+// chatSpeaker is the persona answering the chat's turn: its speaker, else its
+// host; nil is the built-in Assistant.
+func chatSpeaker(chat store.ChatSession) *uuid.UUID {
+	if chat.SpeakerPersonaID != nil {
+		return chat.SpeakerPersonaID
+	}
+	return chat.PersonaID
 }
 
 func idleChat(ctx context.Context, q *store.Queries, chat store.ChatSession, run store.Run, state string) error {
@@ -205,6 +214,8 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			return nil
 		}
 		state, followup := "idle", false
+		replied, reply := false, ""
+		speaker := chatSpeaker(chat)
 		if run.State == "running" {
 			role, body := "assistant", res.Final
 			if waitErr != nil || code != 0 || res.IsError || res.UsageLimited {
@@ -223,15 +234,16 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			// The opening line the chat showed while the turn worked stays in
 			// the conversation, as its own reply ahead of the answer.
 			if opening := strings.TrimSpace(res.Opening); role == "assistant" && opening != "" && opening != strings.TrimSpace(body) {
-				if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: opening, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
+				if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: opening, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]"), PersonaID: speaker}); err != nil {
 					return err
 				}
 			}
-			msg, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: body, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: citations, Usage: usage})
+			msg, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: role, BodyMd: body, Harness: &run.Harness, Model: &run.Model, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: citations, Usage: usage, PersonaID: personaFor(role, speaker)})
 			if err != nil {
 				return err
 			}
 			if role == "assistant" {
+				replied, reply = true, body
 				if len(codeChanges) > 2 { // more than "[]"
 					if err := q.SetChatMessageCodeChanges(ctx, store.SetChatMessageCodeChangesParams{ID: msg.ID, CodeChanges: codeChanges}); err != nil {
 						return err
@@ -264,7 +276,7 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 					// Every generated image is kept in the person's Library too,
 					// sharing the attachment's object.
 					if _, err := q.CreateLibraryItem(ctx, store.CreateLibraryItemParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, Kind: "image", Title: runs.LibraryImageTitle(chat.Title),
-						Filename: im.name, ContentType: im.ct, SizeBytes: im.size, BlobKey: im.key, ChatID: &chat.ID, MessageID: &msg.ID, PersonaID: chat.PersonaID}); err != nil {
+						Filename: im.name, ContentType: im.ct, SizeBytes: im.size, BlobKey: im.key, ChatID: &chat.ID, MessageID: &msg.ID, PersonaID: speaker}); err != nil {
 						return err
 					}
 				}
@@ -306,7 +318,16 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			ended["image_followup"] = true
 		}
 		payload, _ := json.Marshal(ended)
-		return q.AddRunEvent(ctx, store.AddRunEventParams{RunID: run.ID, Type: "lifecycle", Payload: payload})
+		if err = q.AddRunEvent(ctx, store.AddRunEventParams{RunID: run.ID, Type: "lifecycle", Payload: payload}); err != nil {
+			return err
+		}
+		if followup {
+			// The same persona reacts to its images first; that turn's reply
+			// is what hands the conversation on.
+			return nil
+		}
+		// A reply that mentions other personas hands the conversation on.
+		return runs.RelayChat(ctx, q, chat.ID, reply, replied)
 	})
 	if err != nil {
 		r.Log.Error("finish chat turn", "run", c.run.ID, "err", err)
@@ -325,6 +346,15 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			r.Log.Warn("clear chat outbox", "run", c.run.ID, "err", err)
 		}
 	}
+}
+
+// personaFor is the persona an appended message is from: the speaker for an
+// assistant reply, none for a system notice.
+func personaFor(role string, speaker *uuid.UUID) *uuid.UUID {
+	if role == "assistant" {
+		return speaker
+	}
+	return nil
 }
 
 // failChat handles setup/invocation failures before a harness result exists.

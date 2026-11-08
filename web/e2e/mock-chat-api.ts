@@ -60,8 +60,12 @@ const USAGE = { input_tokens: 48200, output_tokens: 1300, cached_input_tokens: 4
 export type Posted = { chat: string; body: Record<string, unknown> };
 export type MockPersona = {
   id: string; name: string; tone: string; color: string; avatar_url?: string; custom_instructions: string;
-  capabilities: { code: boolean; images: boolean }; repos: string[];
+  capabilities: { code: boolean; images: boolean; personas?: boolean }; repos: string[];
   is_default: boolean; chat_count: number; last_used_at?: string; revision: number; created_at: string; updated_at: string;
+};
+export type MockProposal = {
+  id: string; chat_id: string; name: string; tone: string; color: string; custom_instructions: string; reason: string;
+  state: "pending" | "approved" | "declined"; proposed_by?: { id: string; name: string; color: string }; created_at: string;
 };
 export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[] };
 
@@ -122,6 +126,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const wikiPages: Array<{ path: string; body_md: string; project_key?: string }> = [];
   // Assistant personas (ADR: Assistant personas): private to the caller, at most one default.
   const personas: MockPersona[] = [...(opts.personas ?? [])];
+  // Personas the chat's personas proposed (several personas in one chat).
+  const proposals: MockProposal[] = [];
+  const decisions: Array<{ id: string; decision: string }> = [];
   const defaultPersona = () => personas.find((p) => p.is_default);
   const personaRequests: string[] = [];
   // The persona_id each GET /chats asked for ("" when omitted, i.e. the default).
@@ -429,6 +436,18 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return json(ref(c), 201);
     }
 
+    const pp = /^\/chats\/([^/]+)\/persona-proposals(?:\/([^/]+))?$/.exec(path);
+    if (pp && method === "GET") return json({ proposals: proposals.filter((x) => x.chat_id === pp[1]) });
+    if (pp && pp[2] && method === "POST") {
+      const p = proposals.find((x) => x.id === pp[2]);
+      if (!p) return fail(err(404, "not_found", "Proposal not found"));
+      if (p.state !== "pending") return fail(err(409, "conflict", `already ${p.state}`));
+      const decision = String(body().decision);
+      decisions.push({ id: p.id, decision });
+      p.state = decision === "approve" ? "approved" : "declined";
+      return json(p);
+    }
+
     const m = /^\/chats\/([^/]+)(?:\/(messages|cancel))?$/.exec(path);
     if (m) {
       const c = chats.find((x) => x.id === m[1]);
@@ -624,6 +643,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests };
+    return { proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests };
   })();
 }

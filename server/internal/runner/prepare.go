@@ -638,7 +638,11 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 		if err != nil {
 			return nil, "Could not load the conversation's persona.", fmt.Errorf("chat persona: %w", err)
 		}
-		return harness.ChatAgentsMD(c.spec, paths, c.project.Key, idx, persona), "", nil
+		group, err := chatGroup(ctx, q, c.run)
+		if err != nil {
+			return nil, "Could not load the conversation's personas.", fmt.Errorf("chat group: %w", err)
+		}
+		return harness.ChatAgentsMDWithGroup(c.spec, paths, c.project.Key, idx, persona, group), "", nil
 	case "planning":
 		return []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n")), "", nil
 	}
@@ -648,19 +652,30 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 	return harness.AgentsMD("", c.spec, paths, c.ticket.Key), "", nil
 }
 
-// chatPersona loads the chat's persona and its own memory fresh each turn, so
-// edits show on the next turn and a new segment (harness switch, idle cleanup)
-// keeps the same voice. It must belong to the chat's creator; nil is the
-// built-in Assistant.
+// chatGroup is the turn's "Other personas" section (runs.GroupNote).
+func chatGroup(ctx context.Context, q *store.Queries, run store.Run) (string, error) {
+	chat, err := q.ChatSessionForRun(ctx, &run.ID)
+	if err != nil {
+		return "", err
+	}
+	return runs.GroupNote(ctx, q, chat)
+}
+
+// chatPersona loads the persona answering this turn (the chat's speaker, else
+// its host) and that persona's own memory fresh each turn, so edits show on
+// the next turn, a new segment (harness switch, idle cleanup) keeps the same
+// voice, and each persona in a shared chat answers in its own. It must belong to the chat's creator; nil
+// is the built-in Assistant.
 func chatPersona(ctx context.Context, q *store.Queries, run store.Run) (*harness.Persona, error) {
 	chat, err := q.ChatSessionForRun(ctx, &run.ID)
 	if err != nil {
 		return nil, err
 	}
-	if chat.PersonaID == nil {
+	id := chatSpeaker(chat)
+	if id == nil {
 		return nil, nil
 	}
-	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *chat.PersonaID, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *id, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

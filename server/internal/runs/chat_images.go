@@ -34,10 +34,10 @@ const (
 )
 
 // ChatReferences are the reference images that apply in chat, by role
-// (ReferencePersona, ReferencePerson): the person's own and the chat
+// (ReferencePersona, ReferencePerson): the person's own and the speaking
 // persona's, read fresh so a change in the Library applies at once.
 func ChatReferences(ctx context.Context, q *store.Queries, chat store.ChatSession) (map[string]store.LibraryItem, error) {
-	items, err := q.LibraryReferences(ctx, store.LibraryReferencesParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, PersonaID: chat.PersonaID})
+	items, err := q.LibraryReferences(ctx, store.LibraryReferencesParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, PersonaID: ChatSpeakerID(chat)})
 	if err != nil {
 		return nil, err
 	}

@@ -92,20 +92,22 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	return r
 }
 
-// chatCaps loads a chat's capabilities from its persona, which must belong to
-// the chat's creator (a deleted persona gives none).
+// chatCaps loads a chat's capabilities from the persona answering it (its
+// speaker, else its host), which must belong to the chat's creator (a deleted
+// persona gives none).
 func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (ChatCaps, error) {
-	if chat.PersonaID == nil {
+	id := ChatSpeakerID(chat)
+	if id == nil {
 		return ChatCaps{}, nil
 	}
-	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *chat.PersonaID, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *id, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ChatCaps{}, nil
 	}
 	if err != nil {
 		return ChatCaps{}, err
 	}
-	// A repository the persona no longer lists revokes coding for this chat.
+	// A repository the persona doesn't list (any more) revokes coding for this chat.
 	code := p.CanCode && chat.RepoUrl != nil && slices.Contains(p.Repos, *chat.RepoUrl)
 	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranch: deref(chat.WorkBranch), Images: p.CanGenerateImages}, nil
 }
@@ -376,147 +378,16 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			}
 		}
 	}
-	if chat.PersonaID != nil {
-		// Recency orders the persona list and picks the successor when the default is deleted.
-		if err = q.TouchPersonaUsed(ctx, *chat.PersonaID); err != nil {
-			return chat, msg, err
-		}
-	}
-	var run store.Run
-	prompt := body
-	fresh := chat.CurrentRunID == nil
-	if !fresh {
-		run, err = q.LockRun(ctx, *chat.CurrentRunID)
-		if err != nil {
-			return chat, msg, err
-		}
-		// Only an idle/waiting segment may switch; a busy one conflicts here.
-		if run.State != "waiting" {
-			return chat, msg, apperr.Conflict("the chat run is not ready for a message")
-		}
-		caps, err := chatCaps(ctx, q, chat)
-		if err != nil {
-			return chat, msg, err
-		}
-		// The segment's frozen spec was built from the persona's capabilities
-		// then; if they have changed since (or the instructions behind them),
-		// a fresh segment gets the current ones. Turning one off takes effect
-		// on the next message.
-		changed := false
-		if chat.Harness == run.Harness {
-			_, base, err := assistantSpec(ctx, q, chat.WorkspaceID, p.Key)
-			if err != nil {
-				return chat, msg, err
-			}
-			base.Harness, base.Model = run.Harness, run.Model
-			have, err := Spec(run)
-			if err != nil {
-				return chat, msg, err
-			}
-			changed = !sameCapabilities(ChatSpec(base, caps), have)
-		}
-		switch {
-		case changed:
-			outcome := "Chat capabilities changed."
-			if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
-				return chat, msg, err
-			}
-			if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_segment_ended", "reason": "capabilities_changed", "harness": chat.Harness}); err != nil {
-				return chat, msg, err
-			}
-			fresh = true
-		case chat.Harness != run.Harness:
-			// Every harness switch starts a fresh session, even back to an earlier
-			// harness: the native session is stale. The runner sweep removes the
-			// ended segment's workspace.
-			outcome := "Chat switched to " + chat.Harness + "."
-			if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
-				return chat, msg, err
-			}
-			if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_segment_ended", "reason": "harness_switch", "harness": chat.Harness}); err != nil {
-				return chat, msg, err
-			}
-			fresh = true
-		case chat.Model != run.Model:
-			// Same harness: keep the CLI session and workspace, change the model.
-			if err = q.SetRunModel(ctx, store.SetRunModelParams{ID: run.ID, Model: chat.Model}); err != nil {
-				return chat, msg, err
-			}
-			run.Model = chat.Model
-		}
-		if !fresh {
-			// Same harness: the next turn's invocation picks up the new effort.
-			have, err := Spec(run)
-			if err != nil {
-				return chat, msg, err
-			}
-			if have.HarnessOptions["effort"] != chat.Effort {
-				if err = q.SetRunEffort(ctx, store.SetRunEffortParams{ID: run.ID, Effort: chat.Effort}); err != nil {
-					return chat, msg, err
-				}
-			}
-		}
-	}
-	if fresh {
-		// Chats started before the Personal Assistant existed move to it at their next segment.
-		a, spec, err := assistantSpec(ctx, q, chat.WorkspaceID, p.Key)
-		if err != nil {
-			return chat, msg, err
-		}
-		if chat.AgentID != a.ID {
-			if err = q.SetChatAgent(ctx, store.SetChatAgentParams{ID: chat.ID, AgentID: a.ID}); err != nil {
-				return chat, msg, err
-			}
-			chat.AgentID = a.ID
-		}
-		caps, err := chatCaps(ctx, q, chat)
-		if err != nil {
-			return chat, msg, err
-		}
-		spec.Harness, spec.Model = chat.Harness, chat.Model
-		spec = ChatSpec(spec, caps)
-		if chat.Effort != "" {
-			spec.HarnessOptions["effort"] = chat.Effort
-		}
-		raw, err := json.Marshal(spec)
-		if err != nil {
-			return chat, msg, err
-		}
-		run, err = q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: chat.WorkspaceID, AgentID: a.ID, Mode: "managed", State: "queued", ResolvedSpec: raw, DefinitionVersionID: a.CurrentDefinitionVersionID, Harness: spec.Harness, Model: spec.Model, Purpose: "chat"})
-		if err != nil {
-			return chat, msg, err
-		}
-		if err = q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &chat.CreatedBy}); err != nil {
-			return chat, msg, err
-		}
-		// A segment that follows earlier messages gets them as its first prompt.
-		total, err := q.CountChatHistory(ctx, chat.ID)
-		if err != nil {
-			return chat, msg, err
-		}
-		if total == 0 {
-			prompt += firstTurnNote
-		}
-		if total > 0 {
-			rows, err := q.ListRecentChatMessages(ctx, store.ListRecentChatMessagesParams{SessionID: chat.ID, RowLimit: handoffRows, MaxChars: handoffRowChars})
-			if err != nil {
-				return chat, msg, err
-			}
-			hist := make([]HandoffMessage, len(rows))
-			for i, r := range rows {
-				hist[i] = HandoffMessage{Seq: r.Seq, Role: r.Role, Harness: deref(r.Harness), Model: deref(r.Model), Body: r.BodyMd}
-			}
-			prompt = RenderHandoff(hist, int(total), handoffChars, body)
-		}
-	}
-	state := "running"
-	if run.WorkspaceVolume == nil {
-		state = "queued"
-	}
-	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: state}); err != nil {
+	// A mention picks who answers (and queues the rest); otherwise whoever
+	// spoke last carries on.
+	speaker, queue, err := routeHumanMessage(ctx, q, chat, body)
+	if err != nil {
 		return chat, msg, err
 	}
-	turn, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "comment", InputMessage: prompt})
+	if chat, err = q.SetChatSpeaker(ctx, store.SetChatSpeakerParams{ID: chat.ID, SpeakerPersonaID: speaker, QueuedPersonaIds: queue, RelayTurns: 0}); err != nil {
+		return chat, msg, err
+	}
+	chat, run, turn, err := startChatTurn(ctx, q, chat, p.Key, body, false, handoffChars)
 	if err != nil {
 		return chat, msg, err
 	}
@@ -536,11 +407,171 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			return chat, msg, apperr.Invalid("attachment_ids", "upload the files again: an attachment is unknown or already sent")
 		}
 	}
+	return chat, msg, nil
+}
+
+// startChatTurn queues a turn for the chat's current speaker: on the current
+// segment when it is idle and its capabilities still match the speaker's, or
+// on a fresh segment that gets the conversation so far as a handoff. body is
+// the new message (the person's, or a relay's hand-over note). relay marks a turn one persona handed to
+// another, which has no new message from the person. The caller holds the
+// chat lock.
+func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession, project, body string, relay bool, handoffChars int) (store.ChatSession, store.Run, store.RunTurn, error) {
+	var run store.Run
+	var turn store.RunTurn
+	if id := ChatSpeakerID(chat); id != nil {
+		// Recency orders the persona list and picks the successor when the default is deleted.
+		if err := q.TouchPersonaUsed(ctx, *id); err != nil {
+			return chat, run, turn, err
+		}
+	}
+	prompt := body
+	fresh := chat.CurrentRunID == nil
+	if !fresh {
+		var err error
+		run, err = q.LockRun(ctx, *chat.CurrentRunID)
+		if err != nil {
+			return chat, run, turn, err
+		}
+		// Only an idle/waiting segment may switch; a busy one conflicts here.
+		if run.State != "waiting" {
+			return chat, run, turn, apperr.Conflict("the chat run is not ready for a message")
+		}
+		caps, err := chatCaps(ctx, q, chat)
+		if err != nil {
+			return chat, run, turn, err
+		}
+		// The segment's frozen spec was built from the speaker's capabilities
+		// then; if they have changed since (an edit, or another persona with
+		// other capabilities answering), a fresh segment gets the current ones.
+		// Turning one off takes effect on the next message.
+		changed := false
+		if chat.Harness == run.Harness {
+			_, base, err := assistantSpec(ctx, q, chat.WorkspaceID, project)
+			if err != nil {
+				return chat, run, turn, err
+			}
+			base.Harness, base.Model = run.Harness, run.Model
+			have, err := Spec(run)
+			if err != nil {
+				return chat, run, turn, err
+			}
+			changed = !sameCapabilities(ChatSpec(base, caps), have)
+		}
+		switch {
+		case changed:
+			outcome := "Chat capabilities changed."
+			if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
+				return chat, run, turn, err
+			}
+			if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_segment_ended", "reason": "capabilities_changed", "harness": chat.Harness}); err != nil {
+				return chat, run, turn, err
+			}
+			fresh = true
+		case chat.Harness != run.Harness:
+			// Every harness switch starts a fresh session, even back to an earlier
+			// harness: the native session is stale. The runner sweep removes the
+			// ended segment's workspace.
+			outcome := "Chat switched to " + chat.Harness + "."
+			if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
+				return chat, run, turn, err
+			}
+			if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_segment_ended", "reason": "harness_switch", "harness": chat.Harness}); err != nil {
+				return chat, run, turn, err
+			}
+			fresh = true
+		case chat.Model != run.Model:
+			// Same harness: keep the CLI session and workspace, change the model.
+			if err = q.SetRunModel(ctx, store.SetRunModelParams{ID: run.ID, Model: chat.Model}); err != nil {
+				return chat, run, turn, err
+			}
+			run.Model = chat.Model
+		}
+		if !fresh {
+			// Same harness: the next turn's invocation picks up the new effort.
+			have, err := Spec(run)
+			if err != nil {
+				return chat, run, turn, err
+			}
+			if have.HarnessOptions["effort"] != chat.Effort {
+				if err = q.SetRunEffort(ctx, store.SetRunEffortParams{ID: run.ID, Effort: chat.Effort}); err != nil {
+					return chat, run, turn, err
+				}
+			}
+		}
+	}
+	if fresh {
+		// Chats started before the Personal Assistant existed move to it at their next segment.
+		a, spec, err := assistantSpec(ctx, q, chat.WorkspaceID, project)
+		if err != nil {
+			return chat, run, turn, err
+		}
+		if chat.AgentID != a.ID {
+			if err = q.SetChatAgent(ctx, store.SetChatAgentParams{ID: chat.ID, AgentID: a.ID}); err != nil {
+				return chat, run, turn, err
+			}
+			chat.AgentID = a.ID
+		}
+		caps, err := chatCaps(ctx, q, chat)
+		if err != nil {
+			return chat, run, turn, err
+		}
+		spec.Harness, spec.Model = chat.Harness, chat.Model
+		spec = ChatSpec(spec, caps)
+		if chat.Effort != "" {
+			spec.HarnessOptions["effort"] = chat.Effort
+		}
+		raw, err := json.Marshal(spec)
+		if err != nil {
+			return chat, run, turn, err
+		}
+		run, err = q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: chat.WorkspaceID, AgentID: a.ID, Mode: "managed", State: "queued", ResolvedSpec: raw, DefinitionVersionID: a.CurrentDefinitionVersionID, Harness: spec.Harness, Model: spec.Model, Purpose: "chat"})
+		if err != nil {
+			return chat, run, turn, err
+		}
+		if err = q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &chat.CreatedBy}); err != nil {
+			return chat, run, turn, err
+		}
+		// A segment that follows earlier messages gets them as its first prompt.
+		total, err := q.CountChatHistory(ctx, chat.ID)
+		if err != nil {
+			return chat, run, turn, err
+		}
+		if total == 0 && !relay {
+			prompt += firstTurnNote
+		}
+		if total > 0 {
+			rows, err := q.ListRecentChatMessages(ctx, store.ListRecentChatMessagesParams{SessionID: chat.ID, RowLimit: handoffRows, MaxChars: handoffRowChars})
+			if err != nil {
+				return chat, run, turn, err
+			}
+			hist := make([]HandoffMessage, len(rows))
+			for i, r := range rows {
+				hist[i] = HandoffMessage{Seq: r.Seq, Role: r.Role, Harness: deref(r.Harness), Model: deref(r.Model), Persona: r.PersonaName, Body: r.BodyMd}
+			}
+			footer := handoffFooter
+			if relay {
+				footer = relayFooter
+			}
+			prompt = renderHandoff(hist, int(total), handoffChars, footer, prompt)
+		}
+	}
+	state := "running"
+	if run.WorkspaceVolume == nil {
+		state = "queued"
+	}
+	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: state}); err != nil {
+		return chat, run, turn, err
+	}
+	turn, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "comment", InputMessage: prompt})
+	if err != nil {
+		return chat, run, turn, err
+	}
 	chat, err = q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: chat.ID, CurrentRunID: &run.ID, State: "running"})
 	if err != nil {
-		return chat, msg, err
+		return chat, run, turn, err
 	}
-	return chat, msg, event(ctx, q, run.ID, "lifecycle", map[string]any{"state": state, "purpose": "chat", "chat_id": chat.ID})
+	return chat, run, turn, event(ctx, q, run.ID, "lifecycle", map[string]any{"state": state, "purpose": "chat", "chat_id": chat.ID})
 }
 
 // CancelChat stops only the current turn. While its process exits, new posts

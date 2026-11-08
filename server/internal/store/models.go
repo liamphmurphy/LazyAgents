@@ -214,28 +214,38 @@ type ChatMessage struct {
 	Usage       []byte
 	CreatedAt   time.Time
 	CodeChanges json.RawMessage
+	PersonaID   *uuid.UUID
+}
+
+type ChatParticipant struct {
+	ChatID    uuid.UUID
+	PersonaID uuid.UUID
+	JoinedAt  time.Time
 }
 
 type ChatSession struct {
-	ID            uuid.UUID
-	WorkspaceID   uuid.UUID
-	ProjectID     uuid.UUID
-	Title         string
-	CreatedBy     uuid.UUID
-	AgentID       uuid.UUID
-	Harness       string
-	Model         string
-	CurrentRunID  *uuid.UUID
-	State         string
-	Archived      bool
-	Revision      int32
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	LastMessageAt *time.Time
-	PersonaID     *uuid.UUID
-	RepoUrl       *string
-	WorkBranch    *string
-	Effort        string
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	ProjectID        uuid.UUID
+	Title            string
+	CreatedBy        uuid.UUID
+	AgentID          uuid.UUID
+	Harness          string
+	Model            string
+	CurrentRunID     *uuid.UUID
+	State            string
+	Archived         bool
+	Revision         int32
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	LastMessageAt    *time.Time
+	PersonaID        *uuid.UUID
+	RepoUrl          *string
+	WorkBranch       *string
+	Effort           string
+	SpeakerPersonaID *uuid.UUID
+	QueuedPersonaIds []uuid.UUID
+	RelayTurns       int32
 }
 
 type Comment struct {
@@ -387,6 +397,23 @@ type Persona struct {
 	CanCode            bool
 	CanGenerateImages  bool
 	Repos              []string
+	CanCreatePersonas  bool
+}
+
+type PersonaProposal struct {
+	ID                 uuid.UUID
+	ChatID             uuid.UUID
+	RunID              *uuid.UUID
+	ProposedBy         *uuid.UUID
+	Name               string
+	Tone               string
+	Color              string
+	CustomInstructions string
+	Reason             string
+	State              string
+	PersonaID          *uuid.UUID
+	CreatedAt          time.Time
+	DecidedAt          *time.Time
 }
 
 type PlanStep struct {

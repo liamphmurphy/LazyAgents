@@ -2321,6 +2321,61 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chats/{id}/persona-proposals:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listPersonaProposals
+      summary: Personas the chat's personas proposed, oldest first
+      description: Pending proposals wait for the person's decision; decided ones stay for the record. 404 unknown chat.
+      tags: [chats]
+      responses:
+        "200":
+          description: Proposals, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposals]
+                properties:
+                  proposals: { type: array, items: { $ref: "#/components/schemas/PersonaProposal" } }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/persona-proposals/{proposal_id}:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: proposal_id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: decidePersonaProposal
+      summary: Approve or decline a proposed persona
+      description: |
+        Approving creates the persona with the proposed name, tone, colour and
+        instructions and every capability off, adds it to the chat, and (when
+        the chat is idle) gives it a turn to introduce itself. Both add a system
+        message. 404 unknown chat or proposal; 409 already decided; 422 when
+        the persona can't be created (name taken, persona limit).
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, decline] }
+      responses:
+        "200":
+          description: The decided proposal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonaProposal" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /chat-models:
     get:
       operationId: listChatModels
@@ -4369,6 +4424,11 @@ components:
         error: { type: string, description: Why the last turn failed, when state is failed }
         current_run_id: { type: string, format: uuid, description: The run serving the current harness segment; its events show live activity }
         persona: { $ref: "#/components/schemas/PersonaSummary" }
+        participants:
+          type: array
+          items: { $ref: "#/components/schemas/PersonaSummary" }
+          description: "Every persona in the chat: the host first, then the ones mentioned in (by @name or an approved proposal), in the order they joined"
+        speaker: { $ref: "#/components/schemas/PersonaSummary" }
         repo_url: { type: string, description: "The git repository a coding persona works in for this chat; fixed for the chat's life. Absent when the chat has no repository." }
         work_branch: { type: string, description: "The branch this chat commits and pushes to (vesper/<persona>-<chat id prefix>); set with repo_url" }
         archived: { type: boolean }
@@ -4486,6 +4546,7 @@ components:
           description: "Files a coding persona changed during the turn that produced an assistant message (git diff from the turn's starting commit to the working tree, commits included, plus new untracked files). Secrets the run used are redacted. Absent when nothing changed."
           items: { $ref: "#/components/schemas/ChatCodeChange" }
         author: { $ref: "#/components/schemas/UserRef" }
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
         input_tokens: { type: integer, format: int64 }
         output_tokens: { type: integer, format: int64 }
         cached_input_tokens: { type: integer, format: int64, description: Input served from cache where the provider reported cache usage }
@@ -4543,6 +4604,7 @@ components:
       properties:
         code: { type: boolean, description: "Clone the chat's repo, edit and run code, commit and push its own work branch, open PRs" }
         images: { type: boolean, description: "Generate images with Codex image generation; works with any chat model (non-Codex chats hand the image to a one-off Codex step)" }
+        personas: { type: boolean, description: "Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona)." }
     PersonaSummary:
       type: object
       description: What a chat needs to render its persona. Absent on a chat means the built-in Assistant.
@@ -4553,6 +4615,23 @@ components:
         color: { type: string, pattern: "^#[0-9a-f]{6}$" }
         avatar_url: { type: string, description: "GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar" }
         capabilities: { $ref: "#/components/schemas/PersonaCapabilities" }
+    PersonaProposal:
+      type: object
+      description: A persona one of the chat's personas asked to create; nothing exists until the person approves it.
+      required: [id, chat_id, name, tone, color, custom_instructions, reason, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        proposed_by: { $ref: "#/components/schemas/PersonaSummary" }
+        name: { type: string }
+        tone: { $ref: "#/components/schemas/PersonaTone" }
+        color: { type: string, pattern: "^#[0-9a-f]{6}$" }
+        custom_instructions: { type: string }
+        reason: { type: string, description: Why the proposing persona thinks it helps }
+        state: { type: string, enum: [pending, approved, declined] }
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time }
     Persona:
       type: object
       description: |

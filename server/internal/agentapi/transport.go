@@ -149,7 +149,7 @@ var subagentTools = []string{"get_ticket", "read_artifact", "create_artifact", "
 // leadHidden are the tools a managed ticket run never needs: usage is reported
 // by the runner, the ticket is already assigned, and personal memory belongs
 // to chats with a person.
-var leadHidden = []string{"report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript"}
+var leadHidden = []string{"report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona"}
 
 // profileFor must stay consistent with the checks in define().
 func profileFor(run store.Run) string {

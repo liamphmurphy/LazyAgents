@@ -48,18 +48,20 @@ type NewInput struct {
 	IsDefault    bool
 	// Capabilities and Repos are the structured settings that widen what the
 	// persona's chats may do (runs.ChatSpec); nil takes the defaults (off, none).
-	Code, Images *bool
-	Repos        *[]string
+	// Personas is whether it may propose new personas (each one approved by
+	// the person).
+	Code, Images, Personas *bool
+	Repos                  *[]string
 }
 
 // Patch edits a persona at Revision; nil fields are unchanged.
 type Patch struct {
-	Revision     int32
-	Name         *string
-	Tone         *string
-	Color        *string
-	Instructions *string
-	Code, Images *bool
+	Revision               int32
+	Name                   *string
+	Tone                   *string
+	Color                  *string
+	Instructions           *string
+	Code, Images, Personas *bool
 	// Repos replaces the whole list; existing chats keep the repo they chose.
 	Repos *[]string
 }
@@ -101,7 +103,7 @@ func checkInstructions(s string) error {
 func (s *Service) tx(ctx context.Context, o Owner, fn func(q *store.Queries) error) error {
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		if err := q.LockPersonaOwner(ctx, store.LockPersonaOwnerParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID}); err != nil {
+		if err := LockOwner(ctx, q, o); err != nil {
 			return err
 		}
 		return fn(q)
@@ -161,6 +163,18 @@ func (s *Service) Default(ctx context.Context, o Owner) (*store.Persona, error) 
 // Create adds a persona. With IsDefault it replaces the current default.
 func (s *Service) Create(ctx context.Context, o Owner, in NewInput) (store.Persona, error) {
 	var out store.Persona
+	err := s.tx(ctx, o, func(q *store.Queries) error {
+		var err error
+		out, err = CreateLocked(ctx, q, o, in)
+		return err
+	})
+	return out, err
+}
+
+// CreateLocked is Create inside the caller's transaction, which must already
+// hold the owner's persona lock (LockPersonaOwner).
+func CreateLocked(ctx context.Context, q *store.Queries, o Owner, in NewInput) (store.Persona, error) {
+	var out store.Persona
 	name, err := normName(in.Name)
 	if err != nil {
 		return out, err
@@ -189,29 +203,64 @@ func (s *Service) Create(ctx context.Context, o Owner, in NewInput) (store.Perso
 			return out, err
 		}
 	}
-	err = s.tx(ctx, o, func(q *store.Queries) error {
-		n, err := q.CountPersonas(ctx, store.CountPersonasParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID})
-		if err != nil {
-			return err
+	n, err := q.CountPersonas(ctx, store.CountPersonasParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID})
+	if err != nil {
+		return out, err
+	}
+	if n >= MaxPerPerson {
+		return out, apperr.Invalid("personas", "you can have at most %d personas", MaxPerPerson)
+	}
+	if err := checkNameFree(ctx, q, o, name, nil); err != nil {
+		return out, err
+	}
+	if in.IsDefault {
+		if err := q.ClearDefaultPersona(ctx, store.ClearDefaultPersonaParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, KeepID: uuid.Nil}); err != nil {
+			return out, err
 		}
-		if n >= MaxPerPerson {
-			return apperr.Invalid("personas", "you can have at most %d personas", MaxPerPerson)
-		}
-		if err := checkNameFree(ctx, q, o, name, nil); err != nil {
-			return err
-		}
-		if in.IsDefault {
-			if err := q.ClearDefaultPersona(ctx, store.ClearDefaultPersonaParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, KeepID: uuid.Nil}); err != nil {
-				return err
-			}
-		}
-		out, err = q.CreatePersona(ctx, store.CreatePersonaParams{
-			WorkspaceID: o.WorkspaceID, UserID: o.UserID, Name: name, Tone: tone, Color: color, CustomInstructions: instr, IsDefault: in.IsDefault,
-			CanCode: in.Code != nil && *in.Code, CanGenerateImages: in.Images != nil && *in.Images, Repos: repos,
-		})
-		return nameTaken(err)
+	}
+	out, err = q.CreatePersona(ctx, store.CreatePersonaParams{
+		WorkspaceID: o.WorkspaceID, UserID: o.UserID, Name: name, Tone: tone, Color: color, CustomInstructions: instr, IsDefault: in.IsDefault,
+		CanCode: in.Code != nil && *in.Code, CanGenerateImages: in.Images != nil && *in.Images, Repos: repos,
+		CanCreatePersonas: in.Personas != nil && *in.Personas,
 	})
-	return out, err
+	return out, nameTaken(err)
+}
+
+// Draft is a persona another persona proposes: only the voice, never
+// capabilities. CheckDraft normalizes it the way Create would.
+type Draft struct {
+	Name, Tone, Color, Instructions string
+}
+
+// CheckDraft validates and normalizes a proposed persona; empty tone and
+// colour take the defaults.
+func CheckDraft(d Draft) (Draft, error) {
+	name, err := normName(d.Name)
+	if err != nil {
+		return d, err
+	}
+	d.Name = name
+	if d.Tone == "" {
+		d.Tone = DefaultTone
+	}
+	if err := checkTone(d.Tone); err != nil {
+		return d, err
+	}
+	if d.Color == "" {
+		d.Color = DefaultColor
+	}
+	if d.Color, err = normColor(d.Color); err != nil {
+		return d, err
+	}
+	d.Instructions = strings.TrimSpace(d.Instructions)
+	return d, checkInstructions(d.Instructions)
+}
+
+// LockOwner takes the owner's persona lock in the caller's transaction, for
+// CreateLocked. Take it before any chat row lock: Delete holds it while it
+// locks the persona's chats.
+func LockOwner(ctx context.Context, q *store.Queries, o Owner) error {
+	return q.LockPersonaOwner(ctx, store.LockPersonaOwnerParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID})
 }
 
 // Update edits a persona, checking the revision (stale is a 409). A change to
@@ -266,7 +315,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		out, err = q.UpdatePersona(ctx, store.UpdatePersonaParams{
 			ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Revision: p.Revision,
 			Name: p.Name, Tone: p.Tone, Color: p.Color, CustomInstructions: p.Instructions,
-			CanCode: p.Code, CanGenerateImages: p.Images, Repos: repos,
+			CanCode: p.Code, CanGenerateImages: p.Images, CanCreatePersonas: p.Personas, Repos: repos,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.Conflict("the persona changed since you loaded it")
@@ -274,7 +323,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		if err != nil {
 			return nameTaken(err)
 		}
-		if out.Name != cur.Name || out.Color != cur.Color || out.CanCode != cur.CanCode || out.CanGenerateImages != cur.CanGenerateImages {
+		if out.Name != cur.Name || out.Color != cur.Color || out.CanCode != cur.CanCode || out.CanGenerateImages != cur.CanGenerateImages || out.CanCreatePersonas != cur.CanCreatePersonas {
 			return NotifyChats(ctx, q, id)
 		}
 		return nil
@@ -315,7 +364,7 @@ func (s *Service) Delete(ctx context.Context, o Owner, id uuid.UUID, revision *i
 		if revision != nil && *revision != cur.Revision {
 			return apperr.Conflict("the persona changed since you loaded it")
 		}
-		if err := q.LockPersonaChats(ctx, &id); err != nil {
+		if err := q.LockPersonaChats(ctx, id); err != nil {
 			return err
 		}
 		if out, err = q.DeletePersona(ctx, store.DeletePersonaParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID}); err != nil {
@@ -374,7 +423,7 @@ const notifyBatch = 50
 // colour, avatar). Run it inside the writing transaction: NOTIFY is delivered
 // on commit.
 func NotifyChats(ctx context.Context, q *store.Queries, persona uuid.UUID) error {
-	ids, err := q.PersonaChatIDs(ctx, &persona)
+	ids, err := q.PersonaChatIDs(ctx, persona)
 	if err != nil {
 		return err
 	}

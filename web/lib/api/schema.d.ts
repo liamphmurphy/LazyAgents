@@ -1781,6 +1781,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/persona-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Personas the chat's personas proposed, oldest first
+         * @description Pending proposals wait for the person's decision; decided ones stay for the record. 404 unknown chat.
+         */
+        get: operations["listPersonaProposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/persona-proposals/{proposal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve or decline a proposed persona
+         * @description Approving creates the persona with the proposed name, tone, colour and
+         *     instructions and every capability off, adds it to the chat, and (when
+         *     the chat is idle) gives it a turn to introduce itself. Both add a system
+         *     message. 404 unknown chat or proposal; 409 already decided; 422 when
+         *     the persona can't be created (name taken, persona limit).
+         */
+        post: operations["decidePersonaProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chat-models": {
         parameters: {
             query?: never;
@@ -3806,6 +3855,9 @@ export interface components {
              */
             current_run_id?: string;
             persona?: components["schemas"]["PersonaSummary"];
+            /** @description Every persona in the chat: the host first, then the ones mentioned in (by @name or an approved proposal), in the order they joined */
+            participants?: components["schemas"]["PersonaSummary"][];
+            speaker?: components["schemas"]["PersonaSummary"];
             /** @description The git repository a coding persona works in for this chat; fixed for the chat's life. Absent when the chat has no repository. */
             repo_url?: string;
             /** @description The branch this chat commits and pushes to (vesper/<persona>-<chat id prefix>); set with repo_url */
@@ -3952,6 +4004,7 @@ export interface components {
             /** @description Files a coding persona changed during the turn that produced an assistant message (git diff from the turn's starting commit to the working tree, commits included, plus new untracked files). Secrets the run used are redacted. Absent when nothing changed. */
             code_changes?: components["schemas"]["ChatCodeChange"][];
             author?: components["schemas"]["UserRef"];
+            persona?: components["schemas"]["PersonaSummary"];
             /** Format: int64 */
             input_tokens?: number;
             /** Format: int64 */
@@ -4028,6 +4081,8 @@ export interface components {
             code: boolean;
             /** @description Generate images with Codex image generation; works with any chat model (non-Codex chats hand the image to a one-off Codex step) */
             images: boolean;
+            /** @description Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona). */
+            personas?: boolean;
         };
         /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */
         PersonaSummary: {
@@ -4038,6 +4093,27 @@ export interface components {
             /** @description GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar */
             avatar_url?: string;
             capabilities?: components["schemas"]["PersonaCapabilities"];
+        };
+        /** @description A persona one of the chat's personas asked to create; nothing exists until the person approves it. */
+        PersonaProposal: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chat_id: string;
+            proposed_by?: components["schemas"]["PersonaSummary"];
+            name: string;
+            tone: components["schemas"]["PersonaTone"];
+            color: string;
+            custom_instructions: string;
+            /** @description Why the proposing persona thinks it helps */
+            reason: string;
+            /** @enum {string} */
+            state: "pending" | "approved" | "declined";
+            persona?: components["schemas"]["PersonaSummary"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            decided_at?: string;
         };
         /**
          * @description A named variant of the caller's Personal Assistant, private to them.
@@ -7202,6 +7278,66 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listPersonaProposals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proposals, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        proposals: components["schemas"]["PersonaProposal"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    decidePersonaProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "approve" | "decline";
+                };
+            };
+        };
+        responses: {
+            /** @description The decided proposal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaProposal"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
