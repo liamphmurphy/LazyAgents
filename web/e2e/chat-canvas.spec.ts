@@ -279,6 +279,77 @@ test("edit saves a version, changes show a diff, older versions restore, and it 
   await expect.poll(() => calls.promoted).toBe(1);
 });
 
+test("fullscreen opens a board: zoomed out, and it pans and zooms", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  const calls = await open(page, [], SVG);
+  await page.getByTestId("canvas-panel").getByRole("button", { name: "Fullscreen" }).click();
+  const board = page.getByTestId("canvas-board");
+  const svg = board.getByTestId("canvas-svg");
+  await expect(svg).toBeVisible();
+  await expect(board.getByTestId("canvas-zoom")).toHaveText("85%");
+  const boxOf = async () => (await svg.boundingBox())!;
+  const area = (await board.boundingBox())!;
+  const start = await boxOf();
+  expect(start.x).toBeGreaterThan(area.x);
+  expect(start.y).toBeGreaterThan(area.y);
+  expect(start.x + start.width).toBeLessThan(area.x + area.width);
+  expect(start.y + start.height).toBeLessThan(area.y + area.height);
+
+  // Dragging on the drawing pans it, and isn't taken for a click.
+  const cx = start.x + start.width / 2;
+  const cy = start.y + start.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 120, cy + 60, { steps: 4 });
+  await page.mouse.up();
+  const moved = await boxOf();
+  expect(moved.x).toBeCloseTo(start.x + 120, 0);
+  expect(moved.y).toBeCloseTo(start.y + 60, 0);
+  await expect(page.getByTestId("canvas-composer")).toHaveCount(0);
+
+  await board.getByRole("button", { name: "Zoom in" }).click();
+  await expect(board.getByTestId("canvas-zoom")).toHaveText("106%");
+  await page.mouse.move(area.x + 300, area.y + 300);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(async () => parseInt((await board.getByTestId("canvas-zoom").textContent())!)).toBeLessThan(106);
+  await board.getByRole("button", { name: "Fit" }).click();
+  await expect.poll(async () => (await boxOf()).height).toBeGreaterThan(start.height);
+
+  // A plain click still comments on the element, and pins land on it at this scale.
+  await svg.locator('rect[data-vid="abc"]').click();
+  const composer = page.getByTestId("canvas-composer");
+  await composer.getByRole("textbox", { name: "Comment" }).fill("Confirm first");
+  await composer.getByRole("button", { name: "Add to batch" }).click();
+  await expect(board.getByTestId("canvas-pin")).toHaveCount(1);
+  expect(calls.added[0]).toMatchObject({ vid: "abc" });
+});
+
+test("on the board a document keeps text selection and pans from its margins", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await open(page);
+  await page.getByTestId("canvas-panel").getByRole("button", { name: "Fullscreen" }).click();
+  const board = page.getByTestId("canvas-board");
+  const doc = board.getByTestId("canvas-board-content");
+  await expect(board).toContainText("days.");
+  const area = (await board.boundingBox())!;
+  const before = (await doc.boundingBox())!;
+
+  await page.mouse.move(area.x + 20, area.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 80, area.y + 340, { steps: 3 });
+  await page.mouse.up();
+  const after = (await doc.boundingBox())!;
+  expect(after.x).toBeCloseTo(before.x + 60, 0);
+
+  await page.mouse.move(area.x + 300, area.y + 300);
+  await page.mouse.wheel(0, 40);
+  await expect.poll(async () => (await doc.boundingBox())!.y).toBeCloseTo(after.y - 40, 0);
+  await expect(board.getByTestId("canvas-zoom")).toHaveText("85%");
+
+  await select(page, "Archive", "Archive");
+  await expect(page.getByTestId("canvas-toolbar")).toBeVisible();
+});
+
 test("a failing canvas request doesn't hold up the composer", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   await page.route(/\/api\/v1\/chats\/[^/]+\/canvases$/, (route) => route.fulfill({ status: 500, contentType: "application/json", body: '{"code":"internal","message":"boom"}' }));
