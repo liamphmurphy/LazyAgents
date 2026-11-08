@@ -5,6 +5,7 @@ import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
 import { activityOf, chatStatus, interimLine, toolCalls, type Activity, type ToolCall } from "@/lib/chat-ui";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
+import { ActivityScene, sceneLabel, useHeldScene } from "./activity-scene";
 import { PersonaAvatar, PersonaName, type PersonaLook } from "./persona";
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
@@ -86,21 +87,29 @@ export function TurnToolCalls({ runId, since, until }: { runId?: string; since?:
 }
 
 /**
- * The chat tab's line while a turn runs: "<Persona> is reading the code…", from the
- * newest tool call at a high level only. The exact calls stay in the Activity tab.
+ * The chat tab's card while a turn runs: "<Persona> is reading the code…" beside a small
+ * scene for that kind of work, from the newest tool call at a high level only. The exact
+ * calls stay in the Activity tab. Its height is fixed so scene changes never move the chat.
  */
 export function ChatStatus({ runId, since, persona, stopping }: { runId?: string; since?: string; persona: PersonaLook; stopping?: boolean }) {
   const q = useChatRunEvents(runId);
   const status = useMemo(() => chatStatus(toolCalls(q.data, since)), [q.data, since]);
+  const scene = useHeldScene(status.kind);
   return (
-    <span role="status" aria-live="polite" className="flex min-w-0 items-center gap-2 text-[13px] text-fg-secondary">
-      <span className="flex-none animate-pulse">
-        <PersonaAvatar persona={persona} size={18} />
+    <div data-testid="chat-status-card" className="@container flex h-[72px] w-full max-w-[min(720px,100%)] items-center gap-3 rounded-xl border border-border bg-surface px-3.5">
+      <span className="flex-none motion-safe:animate-pulse">
+        <PersonaAvatar persona={persona} size={28} />
       </span>
-      <span className="min-w-0 truncate" data-testid="chat-status">
-        {stopping ? "Stopping…" : `${persona.name} is ${status}…`}
-      </span>
-    </span>
+      <div className="min-w-0 flex-1">
+        <p role="status" aria-live="polite" className="truncate text-[13.5px] text-fg" data-testid="chat-status">
+          {stopping ? "Stopping…" : `${persona.name} is ${status.phrase}…`}
+        </p>
+        <p aria-hidden className="truncate text-xs text-fg-tertiary @max-[300px]:hidden">
+          {sceneLabel(scene.current)}
+        </p>
+      </div>
+      <ActivityScene current={scene.current} previous={scene.previous} />
+    </div>
   );
 }
 
