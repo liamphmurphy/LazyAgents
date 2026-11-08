@@ -1277,7 +1277,7 @@ WHERE r.workspace_id = $1
   AND r.state = ANY($3::text[])
   AND ($4::uuid IS NULL OR r.agent_id = $4)
   AND ($5::text IS NULL OR r.purpose = $5)
-  AND (NOT $6::bool OR r.purpose NOT IN ('chat', 'research'))
+  AND (NOT $6::bool OR r.purpose NOT IN ('chat', 'research', 'workflow'))
   AND ($7::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = $7)
 ORDER BY r.started_at DESC, r.id DESC
 LIMIT 51 OFFSET $8::int

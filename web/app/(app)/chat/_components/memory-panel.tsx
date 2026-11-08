@@ -49,29 +49,6 @@ export function useMemoryPanel() {
   };
 }
 
-/** Header entry point: "Memory" with the entry count; toggles the panel. */
-export function MemoryButton() {
-  const panel = useMemoryPanel();
-  const count = useMemories();
-  const total = count.data?.total;
-  return (
-    <button
-      type="button"
-      aria-pressed={panel.open}
-      aria-label={total === undefined ? "Memory" : `Memory, ${total} entries`}
-      onClick={() => (panel.open ? panel.close() : panel.show())}
-      className={cx(
-        "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-[13px] transition-colors",
-        panel.open ? "border-accent bg-selected text-fg" : "border-btn-secondary-border bg-btn-secondary text-fg hover:bg-hover",
-      )}
-    >
-      <Icon name="bookmark" size={14} className={panel.open ? "text-accent" : undefined} />
-      Memory
-      {total !== undefined && <span className="text-xs text-fg-tertiary">{total}</span>}
-    </button>
-  );
-}
-
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
 /** Where an entry came from: its conversation (linked while it exists), or the raw source. */

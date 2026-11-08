@@ -42,6 +42,7 @@ export const KIND: Record<string, { label: string; tone: "human" | "blocked" | "
   dispatch: { label: "Dispatch", tone: "info" },
   mention: { label: "Mention", tone: "info" },
   suggestion: { label: "Wiki edit", tone: "info" },
+  workflow_gate: { label: "Workflow", tone: "human" },
 };
 
 export type View = "open" | "done";

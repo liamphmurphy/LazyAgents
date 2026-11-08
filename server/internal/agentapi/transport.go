@@ -36,7 +36,7 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 			if err != nil {
 				return nil, err
 			}
-			if c.Agent.Kind == agents.KindAssistant && run.Purpose != "chat" && run.Purpose != runs.PurposeResearch {
+			if c.Agent.Kind == agents.KindAssistant && run.Purpose != "chat" && run.Purpose != runs.PurposeResearch && run.Purpose != runs.PurposeWorkflow {
 				return nil, apperr.Conflict("the Personal Assistant only works inside chats")
 			}
 			switch {
@@ -53,6 +53,13 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 				}
 				if run.State != "running" {
 					return nil, apperr.Conflict("research run is %s", run.State)
+				}
+			case run.Purpose == runs.PurposeWorkflow:
+				if !slices.Contains(workflowToolsFor(run), name) {
+					return nil, apperr.Conflict("%s isn't available to workflow steps", name)
+				}
+				if run.State != "running" {
+					return nil, apperr.Conflict("workflow step is %s", run.State)
 				}
 			case run.TicketID == nil:
 				if !slices.Contains(planningTools, name) {
@@ -142,9 +149,12 @@ const (
 	profileChat     = "chat"
 	profilePlanning = "planning"
 	profileResearch = "research"
-	profileSubagent = "subagent"
-	profileLead     = "lead"
-	profileFull     = "full"
+	profileWorkflow = "workflow"
+	// A workflow step that reads the web gets no workspace tools.
+	profileWorkflowWeb = "workflow-web"
+	profileSubagent    = "subagent"
+	profileLead        = "lead"
+	profileFull        = "full"
 )
 
 // researchTools is the whole MCP surface of a researcher: the web comes from
@@ -161,7 +171,7 @@ var subagentTools = []string{"get_ticket", "read_artifact", "create_artifact", "
 // leadHidden are the tools a managed ticket run never needs: usage is reported
 // by the runner, the ticket is already assigned, and personal memory belongs
 // to chats with a person.
-var leadHidden = []string{"submit_findings", "submit_research_report", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"}
+var leadHidden = []string{"submit_workflow_output", "list_workflows", "read_workflow", "propose_workflow_edit", "submit_findings", "submit_research_report", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"}
 
 // profileFor must stay consistent with the checks in define().
 func profileFor(run store.Run) string {
@@ -170,6 +180,11 @@ func profileFor(run store.Run) string {
 		return profileChat
 	case run.Purpose == runs.PurposeResearch:
 		return profileResearch
+	case run.Purpose == runs.PurposeWorkflow:
+		if workflowStepHasWeb(run) {
+			return profileWorkflowWeb
+		}
+		return profileWorkflow
 	case run.TicketID == nil:
 		return profilePlanning
 	case run.ParentRunID != nil:
@@ -189,6 +204,10 @@ func profileTools(profile string) []Tool {
 			ok = slices.Contains(planningTools, t.Name)
 		case profileResearch:
 			ok = slices.Contains(researchTools, t.Name)
+		case profileWorkflow:
+			ok = slices.Contains(workflowTools, t.Name)
+		case profileWorkflowWeb:
+			ok = slices.Contains(workflowWebTools, t.Name)
 		case profileSubagent:
 			ok = slices.Contains(subagentTools, t.Name)
 		case profileLead:
@@ -204,9 +223,11 @@ func profileTools(profile string) []Tool {
 }
 
 var profileInstructions = map[string]string{
-	profileResearch: `You are a researcher working for Vesper. Your question and AGENTS.md are your instructions; report through submit_findings.`,
-	profileChat:     `You are answering a person in a Vesper chat. Your instructions are in AGENTS.md. Use the Vesper tools to look up project context and manage tickets when asked.`,
-	profilePlanning: `This is a Vesper planning run. Follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.`,
+	profileResearch:    `You are a researcher working for Vesper. Your question and AGENTS.md are your instructions; report through submit_findings.`,
+	profileWorkflow:    `You are one step of a Vesper workflow. Your task and AGENTS.md are your instructions; report through submit_workflow_output.`,
+	profileWorkflowWeb: `You are one step of a Vesper workflow. Your task and AGENTS.md are your instructions; report through submit_workflow_output.`,
+	profileChat:        `You are answering a person in a Vesper chat. Your instructions are in AGENTS.md. Use the Vesper tools to look up project context and manage tickets when asked.`,
+	profilePlanning:    `This is a Vesper planning run. Follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.`,
 	profileSubagent: `You are a sub agent: a main agent delegated one task to you through Vesper. Your task brief and AGENTS.md are your instructions; don't call claim_ticket.
 Call get_ticket only if the brief lacks context you need. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval.
 When you need a person, call request_approval or await_human and end your turn. Finish with complete_run and a short summary.`,

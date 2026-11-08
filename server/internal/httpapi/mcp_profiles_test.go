@@ -79,7 +79,7 @@ func TestMCPProfiles(t *testing.T) {
 	}
 	subTools := []string{"get_ticket", "read_artifact", "create_artifact", "comment", "request_approval", "wait_for_approval", "run_gated", "await_human", "search_knowledge", "find_pattern", "propose_pattern", "list_proposed_patterns", "read_page", "write_note", "get_backlinks", "complete_run"}
 	chatTools := []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-		"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"}
+		"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit"}
 	planTools := []string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}
 
 	connect := func(tok string) *mcp.ClientSession {
@@ -118,9 +118,20 @@ func TestMCPProfiles(t *testing.T) {
 	sub := connect(mkRun(&ticket.ID, &lead.ID, "ticket"))
 	leadSess := connect(leadTok)
 	check("subagent", sub, subTools)
-	check("lead", leadSess, without("submit_findings", "submit_research_report", "list_saved_links", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"))
+	check("lead", leadSess, without("submit_workflow_output", "list_workflows", "read_workflow", "propose_workflow_edit", "submit_findings", "submit_research_report", "list_saved_links", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"))
 	check("chat", connect(mkRun(nil, nil, "chat")), chatTools)
 	check("planning", connect(mkRun(nil, nil, "planning")), planTools)
+	check("workflow step", connect(mkRun(nil, nil, "workflow")), []string{"submit_workflow_output", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks"})
+	// A step that reads the web gets nothing from the workspace.
+	webRun, err := q.CreateRun(ctx, store.CreateRunParams{WorkspaceID: ws, AgentID: atlas.ID, Mode: "managed", State: "running", ResolvedSpec: json.RawMessage(`{"harness_options":{"web_search":"true"}}`), Harness: "claude", Model: "test", Purpose: "workflow"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	webTok, _, err := agents.IssueToken(ctx, q, atlas.ID, "run", "profiles", &webRun.ID, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("web workflow step", connect(webTok), []string{"submit_workflow_output"})
 	check("unmanaged", connect(unmanaged), all)
 
 	subIns, leadIns := sub.InitializeResult().Instructions, leadSess.InitializeResult().Instructions

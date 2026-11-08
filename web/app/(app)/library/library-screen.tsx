@@ -108,6 +108,17 @@ function ReferenceBadge({ item }: { item: LibraryItem }) {
 function ItemTile({ item }: { item: LibraryItem }) {
   const del = useDeleteLibraryItem();
   const url = libraryItemUrl(item.id);
+  if (item.kind === "document") {
+    return (
+      <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-surface p-3" data-testid="library-item">
+        <p className="truncate text-[13px] font-medium text-fg" title={item.title}>{item.title}</p>
+        <div className="flex items-center gap-3 text-[12.5px]">
+          <a className="text-accent hover:underline" href={url} target="_blank" rel="noreferrer">Open</a>
+          <button type="button" className="text-fg-secondary hover:text-fg" disabled={del.isPending} onClick={() => del.mutate(item.id)}>Remove</button>
+        </div>
+      </li>
+    );
+  }
   const diagram = item.kind === "diagram";
   const noun = diagram ? "diagram" : "image";
   return (
@@ -241,7 +252,9 @@ function Items({ kind }: { kind: LibraryItemKind }) {
   if (items.length === 0) {
     return (
       <EmptyState icon="library" title="Nothing here yet">
-        {kind === "diagram"
+        {kind === "document"
+          ? "Workflows with an Add to library step save their results here."
+          : kind === "diagram"
           ? "When a persona draws an SVG diagram in a chat, choose Save to Library on it to keep it here."
           : "When a persona that can generate images makes one in a chat, it\u2019s added here. You can also upload your own, like a photo of yourself to use as your reference."}
       </EmptyState>
@@ -282,8 +295,8 @@ export function LibraryScreen() {
             </div>
             <UploadButton />
           </div>
-          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "diagrams", label: "Diagrams" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
-          {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={tab === "diagrams" ? "diagram" : "image"} />}
+          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
+          {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={tab === "diagrams" ? "diagram" : tab === "documents" ? "document" : "image"} />}
         </div>
       </Content>
     </>

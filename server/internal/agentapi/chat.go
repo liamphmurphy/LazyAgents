@@ -17,7 +17,7 @@ import (
 // chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"}
+	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit"}
 
 // chatScope is the project a chat run may read from.
 type chatScope struct {
@@ -39,6 +39,9 @@ func chatScopeFor(ctx context.Context, d Deps, c agents.Caller) (*chatScope, err
 	run, err := d.Q.GetRun(ctx, store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID})
 	if err != nil {
 		return nil, err
+	}
+	if run.Purpose == runs.PurposeWorkflow {
+		return workflowScope(ctx, d, run)
 	}
 	if run.Purpose != "chat" {
 		return nil, nil

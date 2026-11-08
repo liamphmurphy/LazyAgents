@@ -1,0 +1,82 @@
+"use client";
+
+import "@xyflow/react/dist/style.css";
+
+import { Background, ReactFlow, ReactFlowProvider } from "@xyflow/react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useState } from "react";
+import { useStopWorkflowRun, useWorkflowRun, type WorkflowRun } from "@/lib/api/workflow-hooks";
+import { Content, TopBar } from "@/components/shell/topbar";
+import { Button } from "@/components/ui/button";
+import { Banner, Skeleton } from "@/components/ui/primitives";
+import { Markdown } from "@/components/domain/markdown";
+import { RunStatePill, WorkflowGatePanel } from "@/components/domain/workflow-cards";
+import { runActive, type Graph } from "@/lib/workflows";
+import { FLOW_STYLE, NODE_TYPES, toFlowEdges, toFlowNodes, type StepStatus } from "./flow";
+
+function RunView({ run }: { run: WorkflowRun }) {
+  const stop = useStopWorkflowRun(run.id);
+  const [selected, setSelected] = useState<string | null>(null);
+  const graph = run.graph as Graph;
+  const status = (id: string) => run.steps.find((s) => s.node_id === id)?.state as StepStatus;
+  const step = run.steps.find((s) => s.node_id === selected);
+  const node = graph.nodes.find((n) => n.id === selected);
+  return (
+    <>
+      <TopBar
+        crumbs={[{ label: "Workflows", href: "/workflows" }, { label: run.name }]}
+        actions={
+          <>
+            <span className="font-mono text-xs text-fg-tertiary">v{run.version}</span>
+            <RunStatePill state={run.state} />
+            {runActive(run.state) && <Button disabled={stop.isPending} onClick={() => stop.mutate()}>Stop</Button>}
+            <Link className="text-[13px] text-accent hover:underline" href={`/chat/${run.chat_id}`}>Open chat</Link>
+          </>
+        }
+      />
+      <Content wide>
+        <div className="flex flex-col gap-4">
+          <p className="whitespace-pre-wrap text-[13px] text-fg-2">{run.input}</p>
+          {run.error && <Banner tone="blocked" title={run.error} />}
+          <div className="h-[320px] rounded-xl border border-border">
+            <ReactFlow
+              nodes={toFlowNodes(graph, (n) => ({ status: status(n.id) }), selected)}
+              edges={toFlowEdges(graph)}
+              nodeTypes={NODE_TYPES}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              onNodeClick={(_, n) => setSelected(n.id)}
+              onPaneClick={() => setSelected(null)}
+              style={FLOW_STYLE}
+              fitView
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background gap={20} size={1} />
+            </ReactFlow>
+          </div>
+          <WorkflowGatePanel run={run} />
+          {node && (
+            <section className="rounded-xl border border-border bg-surface p-3.5" data-testid="workflow-step-detail">
+              <div className="mb-2 flex items-baseline gap-2">
+                <h2 className="type-heading">{node.title}</h2>
+                {step && <span className="font-mono text-xs text-fg-tertiary">attempt {step.attempt} · {step.state}</span>}
+                {step?.agent_run_id && <Link className="text-[12.5px] text-accent hover:underline" href={`/runs/${step.agent_run_id}`}>Open run</Link>}
+              </div>
+              {step?.note && <p className="mb-2 text-[12.5px] text-fg-secondary">{step.note}</p>}
+              {step?.output ? <div className="text-[13px]"><Markdown>{step.output}</Markdown></div> : <p className="text-[13px] text-fg-tertiary">No output yet.</p>}
+            </section>
+          )}
+        </div>
+      </Content>
+    </>
+  );
+}
+
+export function WorkflowRunScreen() {
+  const { id } = useParams<{ id: string }>();
+  const run = useWorkflowRun(id);
+  if (run.error) return <div className="p-6"><Banner tone="blocked" title={run.error.message} /></div>;
+  if (!run.data) return <Skeleton className="m-6 h-96" />;
+  return <ReactFlowProvider><RunView run={run.data} /></ReactFlowProvider>;
+}

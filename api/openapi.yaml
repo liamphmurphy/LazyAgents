@@ -1242,7 +1242,7 @@ paths:
           schema: { type: string, enum: [live, all, queued, starting, running, waiting, waiting_for_quota, paused, blocked, completed, failed, cancelled], default: live }
         - { name: agent, in: query, description: Agent handle, schema: { type: string } }
         - { name: project, in: query, description: Project key, schema: { type: string } }
-        - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat, research] } }
+        - { name: purpose, in: query, schema: { type: string, enum: [ticket, planning, chat, research, workflow] } }
         - { name: ticket, in: query, description: "Ticket key: every run on that ticket, delegated runs included", schema: { type: string } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
       responses:
@@ -2120,6 +2120,173 @@ paths:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
+
+  /workflows:
+    get:
+      operationId: listWorkflows
+      summary: The signed-in person's workflows, most recently edited first
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workflows" }
+    post:
+      operationId: createWorkflow
+      summary: Start a workflow draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewWorkflow" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workflow" }
+
+  /workflows/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getWorkflow
+      summary: One workflow with its draft and any pending suggestion
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workflow" }
+    patch:
+      operationId: updateWorkflow
+      summary: Save the draft; publishing is what validates it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkflowPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workflow" }
+    delete:
+      operationId: deleteWorkflow
+      summary: Delete a workflow; runs already started keep going
+      responses:
+        "204": { description: Deleted }
+
+  /workflows/{id}/publish:
+    post:
+      operationId: publishWorkflow
+      summary: Validate the draft and make it what new runs use
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workflow" }
+
+  /workflows/{id}/proposals/{proposalId}/{action}:
+    post:
+      operationId: resolveWorkflowProposal
+      summary: Apply or discard a persona's suggested edit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [apply, discard] } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workflow" }
+
+  /workflow-runs:
+    get:
+      operationId: listWorkflowRuns
+      summary: The signed-in person's workflow runs, newest first
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRuns" }
+
+  /workflow-runs/{id}:
+    get:
+      operationId: getWorkflowRun
+      summary: One workflow run and its steps
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
+
+  /workflow-runs/{id}/gate:
+    post:
+      operationId: decideWorkflowGate
+      summary: Approve a gate, request changes or reject it
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkflowGateDecision" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
+
+  /workflow-runs/{id}/stop:
+    post:
+      operationId: stopWorkflowRun
+      summary: Stop a workflow run
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
+
+  /chats/{id}/workflows:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listChatWorkflowRuns
+      summary: The chat's workflow runs, oldest first
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRuns" }
+    post:
+      operationId: startChatWorkflow
+      summary: Confirm and start a published workflow from a chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkflowRunStart" }
+      responses:
+        "201":
+          description: Started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowRun" }
 
   /library:
     get:
@@ -4187,7 +4354,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticket_key: { type: string, description: Empty for standalone planning runs }
-        purpose: { type: string, enum: [ticket, planning, chat, research], description: "What the run works on: a ticket, a plan or a chat" }
+        purpose: { type: string, enum: [ticket, planning, chat, research, workflow], description: "What the run works on: a ticket, a plan or a chat" }
         planning_id: { type: string, format: uuid }
         chat_id: { type: string, format: uuid, description: The chat session of a chat run }
         project_key: { type: string, description: "Project of the ticket, plan or chat" }
@@ -4435,7 +4602,7 @@ components:
       required: [run_id, purpose, agent, reads, last_read_at]
       properties:
         run_id: { type: string, format: uuid }
-        purpose: { type: string, enum: [ticket, planning, chat, research] }
+        purpose: { type: string, enum: [ticket, planning, chat, research, workflow] }
         agent: { $ref: "#/components/schemas/AgentRef" }
         ticket_key: { type: string }
         ticket_title: { type: string }
@@ -4659,7 +4826,7 @@ components:
         kind:
           type: string
           description: "question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes"
-          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion]
+          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion, workflow_gate]
         title: { type: string }
         summary: { type: string }
         href: { type: string }
@@ -5112,6 +5279,133 @@ components:
       required: [hits]
       properties:
         hits: { type: array, items: { $ref: "#/components/schemas/ChatSearchHit" } }
+    WorkflowNode:
+      type: object
+      required: [id, type, title, config]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [trigger, enrich, agent, gate, wiki, library, ticket, chat] }
+        title: { type: string }
+        x: { type: number, format: double }
+        "y": { type: number, format: double }
+        config:
+          type: object
+          properties:
+            prompt: { type: string }
+            persona_id: { type: string }
+            agent_handle: { type: string }
+            web: { type: boolean }
+            show: { type: array, items: { type: string } }
+            retry_from: { type: string }
+            max_attempts: { type: integer }
+            path: { type: string }
+            mode: { type: string }
+            title: { type: string }
+    WorkflowEdge:
+      type: object
+      required: [from, to]
+      properties:
+        from: { type: string }
+        to: { type: string }
+    WorkflowGraph:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes: { type: array, items: { $ref: "#/components/schemas/WorkflowNode" } }
+        edges: { type: array, items: { $ref: "#/components/schemas/WorkflowEdge" } }
+    WorkflowIssue:
+      type: object
+      required: [message]
+      properties:
+        node: { type: string }
+        message: { type: string }
+    WorkflowProposal:
+      type: object
+      required: [id, summary, graph, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        summary: { type: string }
+        graph: { $ref: "#/components/schemas/WorkflowGraph" }
+        created_at: { type: string, format: date-time }
+    Workflow:
+      type: object
+      required: [id, name, description, draft, issues, published_version, unpublished_changes, proposals, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        draft: { $ref: "#/components/schemas/WorkflowGraph" }
+        issues: { type: array, items: { $ref: "#/components/schemas/WorkflowIssue" }, description: "What stops the draft being published" }
+        published_version: { type: integer, description: "0 until first published" }
+        unpublished_changes: { type: boolean }
+        proposals: { type: array, items: { $ref: "#/components/schemas/WorkflowProposal" } }
+        updated_at: { type: string, format: date-time }
+    Workflows:
+      type: object
+      required: [workflows]
+      properties:
+        workflows: { type: array, items: { $ref: "#/components/schemas/Workflow" } }
+    NewWorkflow:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+    WorkflowPatch:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        graph: { $ref: "#/components/schemas/WorkflowGraph" }
+    WorkflowStep:
+      type: object
+      required: [node_id, attempt, state, output, decision, note, created_at]
+      properties:
+        node_id: { type: string }
+        attempt: { type: integer }
+        state: { type: string, enum: [running, waiting, done, failed, stale] }
+        output: { type: string }
+        agent_run_id: { type: string, format: uuid }
+        decision: { type: string }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    WorkflowRun:
+      type: object
+      required: [id, chat_id, name, version, graph, input, state, error, steps, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        workflow_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        name: { type: string }
+        version: { type: integer }
+        graph: { $ref: "#/components/schemas/WorkflowGraph" }
+        input: { type: string }
+        state: { type: string, enum: [running, waiting, done, failed, stopped] }
+        error: { type: string }
+        steps: { type: array, items: { $ref: "#/components/schemas/WorkflowStep" }, description: "The newest attempt of each node that has started" }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    WorkflowRuns:
+      type: object
+      required: [runs]
+      properties:
+        runs: { type: array, items: { $ref: "#/components/schemas/WorkflowRun" } }
+    WorkflowRunStart:
+      type: object
+      required: [workflow_id, input]
+      properties:
+        workflow_id: { type: string, format: uuid }
+        input: { type: string }
+        message_id: { type: string, format: uuid, description: "The reply that proposed this run; omit for /workflow" }
+    WorkflowGateDecision:
+      type: object
+      required: [node_id, decision]
+      properties:
+        node_id: { type: string }
+        decision: { type: string, description: "approve, changes or reject" }
+        note: { type: string }
     ResearchStart:
       type: object
       required: [message_id, title, questions, max_sources, max_minutes]
@@ -5207,7 +5501,7 @@ components:
         created_at: { type: string, format: date-time }
     LibraryItemKind:
       type: string
-      enum: [image, diagram, link]
+      enum: [image, diagram, link, document]
     LibraryItem:
       type: object
       required: [id, kind, title, filename, content_type, size_bytes, created_at]

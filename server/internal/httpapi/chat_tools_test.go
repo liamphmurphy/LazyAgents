@@ -121,9 +121,10 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_runs":        map[string]any{},
 		"list_saved_links": map[string]any{},
 		"canvas_list":      map[string]any{},
+		"list_workflows":   map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
-	needArgs := []string{"submit_research_report", "get_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply"}
+	needArgs := []string{"submit_research_report", "get_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]

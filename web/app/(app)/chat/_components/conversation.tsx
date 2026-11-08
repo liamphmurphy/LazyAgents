@@ -18,9 +18,12 @@ import {
   useSendChatMessage,
 } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
+import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
+import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflow-cards";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
+import { CHAT_COMMANDS, commandMenu, literalBody, parseCommand } from "@/lib/chat-commands";
 import { codesInRepos, insertMention, mentionQuery, mentionSuggestions, repoShortName } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
@@ -44,6 +47,7 @@ import { MemoryNotices } from "./memory-notices";
 import { AttachButton, AttachmentChips, DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
+import { useMemoryPanel } from "./memory-panel";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
 import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
@@ -236,7 +240,7 @@ function dropDraft(id: string) {
   }
 }
 
-export function Conversation({ id, actions }: { id: string; actions?: ReactNode }) {
+export function Conversation({ id, onNew, actions }: { id: string; onNew: () => void; actions?: ReactNode }) {
   const chat = useChat(id);
   const urlSearch = useSearchParams();
   const target = urlSearch.get("message");
@@ -279,6 +283,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // The @mention being typed in the composer, and which suggestion is highlighted.
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [mentionActive, setMentionActive] = useState(0);
+  const workflows = useWorkflows();
+  const [startingWorkflow, setStartingWorkflow] = useState<Workflow | null>(null);
+  // The / command menu: which row is highlighted, whether Esc closed it, and why the last command didn't run.
+  const [commandActive, setCommandActive] = useState(0);
+  const [commandDismissed, setCommandDismissed] = useState(false);
+  const [commandError, setCommandError] = useState<string | null>(null);
+  const memory = useMemoryPanel();
 
   const c = chat.data;
   const loaded = !!c;
@@ -426,13 +437,18 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
   function switchPersona(personaId: string, repo?: string) {
     if (!c || (personaId === c.persona?.id && !repo) || create.isPending || send.isPending || send.isSuccess) return;
+    replaceChat(personaId, repo, text);
+  }
+  // Moves to a new chat, carrying the draft over. The old one is only dropped if it is still empty.
+  function replaceChat(personaId: string, repo: string | undefined, draft: string) {
+    if (!c) return;
     const old = c;
     create.mutate(
       { project: old.project, persona_id: personaId, harness: old.harness, model: old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
       {
         onSuccess: async (next) => {
-          if (text.trim()) putDraft(next.id, text);
-          router.replace(`/chat/${next.id}?project=${encodeURIComponent(old.project)}`);
+          if (draft.trim()) putDraft(next.id, draft);
+          router[old.message_count === 0 ? "replace" : "push"](`/chat/${next.id}?project=${encodeURIComponent(old.project)}`);
           // Only drop the old chat if it is still empty (a message may have come from another tab).
           // If the check or the delete fails, the empty chat just stays in the list.
           const latest = await unwrap(api.GET("/chats/{id}", { params: { path: { id: old.id } } })).catch(() => undefined);
@@ -469,7 +485,8 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const group = participants.length > 1;
   // Who answers next (or is answering now): the last speaker, else the host.
   const speaker = personaLook(c.speaker ?? c.persona);
-  const suggestions = mention ? mentionSuggestions(personas.data?.personas ?? [], mention.query) : [];
+  const menu = commandDismissed ? null : commandMenu(text);
+  const suggestions = mention && !menu ? mentionSuggestions(personas.data?.personas ?? [], mention.query) : [];
   const syncMention = (value: string) => {
     const el = area.current;
     const next = el ? mentionQuery(value, el.selectionStart) : null;
@@ -497,6 +514,78 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   const pick = (s: Selection) => {
     if (current && needsSwitchConfirm(current, s, picked, c.message_count)) setConfirming(s);
     else setPicked(s);
+  };
+
+  // ---- / commands: what each does, and the composer's handling of them ----
+  type CommandRun = () => string | void; // a returned string is why it couldn't run
+  const startInstead = (personaId: string, repo?: string): string | void => {
+    if (create.isPending || send.isPending) return "Wait for the current message to finish sending.";
+    replaceChat(personaId, repo, "");
+  };
+  const whileIdle = (what: string, run: () => void): string | void => (running ? `Wait for the reply to finish before changing the ${what}.` : run());
+  const plainCommands: Record<string, CommandRun> = {
+    new: onNew,
+    memory: () => (memory.open ? memory.close() : memory.show()),
+    stop: () => {
+      if (!running) return "There’s no reply to stop.";
+      if (!stopping) cancel.mutate();
+    },
+  };
+  const published = (workflows.data?.workflows ?? []).filter((w) => w.published_version > 0);
+  const commandOptions = (name: string): { name: string; run: CommandRun }[] => {
+    switch (name) {
+      case "workflow":
+        return published.map((w) => ({ name: w.name, run: () => setStartingWorkflow(w) }));
+      case "model":
+        return (groups ?? [])
+          .filter((g) => g.available)
+          .flatMap((g) => g.models.map((m) => ({ name: `${g.label} ${m.label}`, run: () => whileIdle("model", () => pick({ harness: g.harness, model: m.id })) })));
+      case "effort":
+        return [undefined, ...offered.efforts].map((e) => ({ name: effortLabel(e).toLowerCase(), run: () => whileIdle("effort", () => setPickedEffort(e ?? "default")) }));
+      case "persona":
+        return (personas.data?.personas ?? []).map((p) => ({ name: p.name, run: () => (p.id === c.persona?.id ? `You’re already talking to ${p.name}.` : startInstead(p.id)) }));
+      case "repo":
+        return codesInRepos(full) && c.persona
+          ? full!.repos.map((r) => ({ name: repoShortName(r), run: () => (r === c.repo_url ? "This chat is already in that repository." : startInstead(c.persona!.id, r)) }))
+          : [];
+      default:
+        return [];
+    }
+  };
+  const runCommand = (run: CommandRun) => {
+    const problem = run();
+    setCommandError(problem || null);
+    if (!problem) setText("");
+  };
+  const commandItems: { name: string; label: string; hint?: string; choose: () => void }[] = !menu
+    ? []
+    : menu.stage === "arg"
+      ? mentionSuggestions(commandOptions(menu.name), menu.query, 8).map((o) => ({ name: o.name, label: o.name, choose: () => runCommand(o.run) }))
+      : mentionSuggestions(CHAT_COMMANDS, menu.query, CHAT_COMMANDS.length).map((cmd) => ({
+          name: cmd.name,
+          label: `/${cmd.name}`,
+          hint: cmd.hint,
+          choose: () => {
+            setCommandActive(0);
+            if (cmd.args) setText(`/${cmd.name} `);
+            else runCommand(plainCommands[cmd.name]);
+          },
+        }));
+  // A finished command, typed in full or with the menu closed.
+  const runTyped = ({ name, arg }: { name: string; arg: string }) => {
+    const command = CHAT_COMMANDS.find((x) => x.name === name);
+    if (!command) return setCommandError(`Unknown command /${name}. Start with // to send it as a message.`);
+    if (!command.args) return arg ? setCommandError(`/${name} doesn’t take anything after it.`) : runCommand(plainCommands[name]);
+    if (name === "workflow" && published.length === 0) return setCommandError("You have no published workflows yet. Build one under Workflows.");
+    if (!arg) return setCommandError(`Say which ${command.args}: /${name} <${command.args}>`);
+    const match = mentionSuggestions(commandOptions(name), arg)[0];
+    if (!match) return setCommandError(`No ${command.args} matches “${arg}”.`);
+    runCommand(match.run);
+  };
+  const submitComposer = () => {
+    const command = parseCommand(text);
+    if (command) runTyped(command);
+    else submit(literalBody(text));
   };
   return (
     <Tooltip.Provider delayDuration={200}>
@@ -553,7 +642,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
           {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>
-        {/* Mounted while hidden so memory notices still refresh the header count. */}
+        {/* Mounted while hidden so memory notices still refresh. */}
         <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
           <div className="mx-auto mb-4 flex max-w-[860px] items-center gap-2">
             <ChatCostChip chatId={c.id} project={c.project} />
@@ -680,23 +769,58 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 : errorText(actionError)}
             </p>
           )}
+          {commandError && (
+            <p role="alert" data-testid="command-error" className="text-[12.5px] text-pill-blocked-fg">
+              {commandError}
+            </p>
+          )}
           {c.archived ? (
             <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
               <p className="flex-1 text-[13px] text-fg-secondary">This chat is archived. Restore it to continue.</p>
               <RestoreChat chat={c} variant="primary" onRestored={restored} />
             </div>
           ) : (
+            <>
+            <ChatWorkflowTray chatId={c.id} />
+            {startingWorkflow && (
+              <div className="mb-2">
+                <WorkflowStartCard workflow={startingWorkflow} chatId={c.id} onDone={() => setStartingWorkflow(null)} onDismiss={() => setStartingWorkflow(null)} />
+              </div>
+            )}
             <form
               data-dock-avoid=""
               onSubmit={(e) => {
                 e.preventDefault();
-                submit(text);
+                submitComposer();
               }}
               className="flex flex-col gap-2"
             >
               <AttachmentChips attachments={files} />
               <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
               <div className="relative">
+                {commandItems.length > 0 && (
+                  <ul
+                    role="listbox"
+                    aria-label="Commands"
+                    data-testid="command-suggestions"
+                    className="absolute bottom-full left-2 z-10 mb-1 flex min-w-[280px] flex-col rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
+                  >
+                    {commandItems.map((item, i) => (
+                      <li key={item.name} role="option" aria-selected={i === commandActive}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onMouseEnter={() => setCommandActive(i)}
+                          onClick={item.choose}
+                          className={cx("flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[13px]", i === commandActive && "bg-selected")}
+                        >
+                          <span className="flex-none">{item.label}</span>
+                          {item.hint && <span className="ml-auto truncate text-xs text-fg-tertiary">{item.hint}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {suggestions.length > 0 && (
                   <ul
                     role="listbox"
@@ -732,8 +856,17 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                   onChange={(v) => {
                     setText(v);
                     syncMention(v);
+                    setCommandActive(0);
+                    setCommandDismissed(false);
+                    setCommandError(null);
                   }}
-                  onBlur={() => setTimeout(() => document.activeElement !== area.current && setMention(null), 120)}
+                  onBlur={() =>
+                    setTimeout(() => {
+                      if (document.activeElement === area.current) return;
+                      setMention(null);
+                      setCommandDismissed(true);
+                    }, 120)
+                  }
                   onPick={attach}
                   accept={acceptTarget}
                   disabled={locked}
@@ -742,9 +875,26 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                       ? "Sending…"
                       : running
                         ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to interrupt.`
-                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}…  @ for a persona, [[ for context`
+                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}…  / for commands, @ for a persona, [[ for context`
                   }
                   onKeyDown={(e) => {
+                    if (commandItems.length > 0) {
+                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setCommandActive((a) => (a + (e.key === "ArrowDown" ? 1 : commandItems.length - 1)) % commandItems.length);
+                        return;
+                      }
+                      if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        commandItems[Math.min(commandActive, commandItems.length - 1)].choose();
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setCommandDismissed(true);
+                        return;
+                      }
+                    }
                     if (suggestions.length > 0) {
                       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                         e.preventDefault();
@@ -764,7 +914,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                     }
                     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                       e.preventDefault();
-                      submit(text);
+                      submitComposer();
                     }
                   }}
                 />
@@ -801,6 +951,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
                 </Button>
               </div>
             </form>
+            </>
           )}
         </div>
         {current && (

@@ -136,7 +136,7 @@ test("one right-hand panel at a time", async ({ page }) => {
   await open(page);
   await page.getByTestId("canvas-card").click();
   await expect(page.getByTestId("canvas-panel")).toBeVisible();
-  await page.getByRole("button", { name: /^Memory/ }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true }).click();
   await expect(page.getByTestId("canvas-panel")).toHaveCount(0);
   await page.getByTestId("canvas-card").click();
   await expect(page.getByTestId("canvas-panel")).toBeVisible();
