@@ -737,6 +737,30 @@ func TestCodexImageGenerationFlag(t *testing.T) {
 	}
 }
 
+// Input images are one comma-separated --image value placed before the other
+// flags (it takes several values), on a new thread and on resume; none, no flag.
+func TestCodexInputImages(t *testing.T) {
+	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	imgs := []string{".lazyagents/references/persona.png", ".lazyagents/references/person.jpg"}
+	for _, session := range []string{"", "th1"} {
+		inv, err := (Codex{}).Invocation(w, Turn{Spec: spec(), Prompt: "draw", SessionID: session, Images: imgs})
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := slices.Index(inv.Argv, "--image")
+		if i < 0 || inv.Argv[i+1] != strings.Join(imgs, ",") || inv.Argv[i+2] != "--json" || inv.Argv[len(inv.Argv)-1] != "draw" {
+			t.Fatalf("session %q: argv %v", session, inv.Argv)
+		}
+		if session != "" && slices.Index(inv.Argv, "resume") > i {
+			t.Fatalf("--image must follow resume: %v", inv.Argv)
+		}
+	}
+	inv, _ := (Codex{}).Invocation(w, Turn{Spec: spec(), Prompt: "draw"})
+	if slices.Contains(inv.Argv, "--image") {
+		t.Fatalf("no images, but --image: %v", inv.Argv)
+	}
+}
+
 // Claude Code never receives the option as a flag or setting.
 func TestClaudeIgnoresImageGeneration(t *testing.T) {
 	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}

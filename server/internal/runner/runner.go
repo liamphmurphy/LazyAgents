@@ -917,8 +917,18 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		ctxFiles = append(ctxFiles, attFiles...)
 		prompt += attPrompt
 	}
+	// Reference images aren't context files: they stay out of the AGENTS.md list.
+	var refFiles map[string][]byte
+	if c.run.Purpose == "chat" {
+		var refPrompt string
+		refFiles, refPrompt = r.chatTurnReferences(ctx, q, c)
+		prompt += refPrompt
+	}
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}
+	for k, v := range refFiles {
+		files[k] = v
+	}
 	for i, f := range ctxFiles {
 		paths[i] = f.Path
 		files[f.Path] = f.Body

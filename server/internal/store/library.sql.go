@@ -12,9 +12,34 @@ import (
 	"github.com/google/uuid"
 )
 
+const clearLibraryReferenceRole = `-- name: ClearLibraryReferenceRole :exec
+UPDATE library_items SET reference = NULL, reference_persona_id = NULL
+WHERE workspace_id = $1 AND user_id = $2 AND reference = $3::text
+  AND ($3::text = 'self' OR reference_persona_id = $4::uuid)
+`
+
+type ClearLibraryReferenceRoleParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Role        string
+	PersonaID   *uuid.UUID
+}
+
+// Unsets the caller's current reference for a role: 'self', or 'persona' for
+// one persona.
+func (q *Queries) ClearLibraryReferenceRole(ctx context.Context, arg ClearLibraryReferenceRoleParams) error {
+	_, err := q.db.Exec(ctx, clearLibraryReferenceRole,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Role,
+		arg.PersonaID,
+	)
+	return err
+}
+
 const createLibraryItem = `-- name: CreateLibraryItem :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id
 `
 
 type CreateLibraryItemParams struct {
@@ -60,6 +85,8 @@ func (q *Queries) CreateLibraryItem(ctx context.Context, arg CreateLibraryItemPa
 		&i.MessageID,
 		&i.PersonaID,
 		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
 	)
 	return i, err
 }
@@ -96,7 +123,7 @@ func (q *Queries) DeleteLibraryItem(ctx context.Context, arg DeleteLibraryItemPa
 }
 
 const getLibraryItem = `-- name: GetLibraryItem :one
-SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `
 
 type GetLibraryItemParams struct {
@@ -122,15 +149,69 @@ func (q *Queries) GetLibraryItem(ctx context.Context, arg GetLibraryItemParams) 
 		&i.MessageID,
 		&i.PersonaID,
 		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
 	)
 	return i, err
 }
 
+const libraryReferences = `-- name: LibraryReferences :many
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id FROM library_items
+WHERE workspace_id = $1 AND user_id = $2
+  AND (reference = 'self' OR (reference = 'persona' AND reference_persona_id = $3::uuid))
+ORDER BY reference
+`
+
+type LibraryReferencesParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	PersonaID   *uuid.UUID
+}
+
+// A person's reference images that apply in a chat with the given persona
+// (NULL: the built-in Assistant): theirs, and that persona's.
+func (q *Queries) LibraryReferences(ctx context.Context, arg LibraryReferencesParams) ([]LibraryItem, error) {
+	rows, err := q.db.Query(ctx, libraryReferences, arg.WorkspaceID, arg.UserID, arg.PersonaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LibraryItem{}
+	for rows.Next() {
+		var i LibraryItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.Kind,
+			&i.Title,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.BlobKey,
+			&i.ChatID,
+			&i.MessageID,
+			&i.PersonaID,
+			&i.CreatedAt,
+			&i.Reference,
+			&i.ReferencePersonaID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLibraryItems = `-- name: ListLibraryItems :many
-SELECT l.id, l.workspace_id, l.user_id, l.kind, l.title, l.filename, l.content_type, l.size_bytes, l.blob_key, l.chat_id, l.message_id, l.persona_id, l.created_at, c.title AS chat_title, p.name AS persona_name, pr.key AS project_key
+SELECT l.id, l.workspace_id, l.user_id, l.kind, l.title, l.filename, l.content_type, l.size_bytes, l.blob_key, l.chat_id, l.message_id, l.persona_id, l.created_at, l.reference, l.reference_persona_id, c.title AS chat_title, p.name AS persona_name, pr.key AS project_key, rp.name AS reference_persona_name
 FROM library_items l
 LEFT JOIN chat_sessions c ON c.id = l.chat_id
 LEFT JOIN personas p ON p.id = l.persona_id
+LEFT JOIN personas rp ON rp.id = l.reference_persona_id
 LEFT JOIN projects pr ON pr.id = c.project_id
 WHERE l.workspace_id = $1 AND l.user_id = $2
   AND ($3::text IS NULL OR l.kind = $3)
@@ -147,22 +228,25 @@ type ListLibraryItemsParams struct {
 }
 
 type ListLibraryItemsRow struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	UserID      uuid.UUID
-	Kind        string
-	Title       string
-	Filename    string
-	ContentType string
-	SizeBytes   int64
-	BlobKey     string
-	ChatID      *uuid.UUID
-	MessageID   *uuid.UUID
-	PersonaID   *uuid.UUID
-	CreatedAt   time.Time
-	ChatTitle   *string
-	PersonaName *string
-	ProjectKey  *string
+	ID                   uuid.UUID
+	WorkspaceID          uuid.UUID
+	UserID               uuid.UUID
+	Kind                 string
+	Title                string
+	Filename             string
+	ContentType          string
+	SizeBytes            int64
+	BlobKey              string
+	ChatID               *uuid.UUID
+	MessageID            *uuid.UUID
+	PersonaID            *uuid.UUID
+	CreatedAt            time.Time
+	Reference            *string
+	ReferencePersonaID   *uuid.UUID
+	ChatTitle            *string
+	PersonaName          *string
+	ProjectKey           *string
+	ReferencePersonaName *string
 }
 
 // The caller's own items, newest first, with where each came from (the chat's
@@ -196,9 +280,12 @@ func (q *Queries) ListLibraryItems(ctx context.Context, arg ListLibraryItemsPara
 			&i.MessageID,
 			&i.PersonaID,
 			&i.CreatedAt,
+			&i.Reference,
+			&i.ReferencePersonaID,
 			&i.ChatTitle,
 			&i.PersonaName,
 			&i.ProjectKey,
+			&i.ReferencePersonaName,
 		); err != nil {
 			return nil, err
 		}
@@ -208,4 +295,64 @@ func (q *Queries) ListLibraryItems(ctx context.Context, arg ListLibraryItemsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockLibraryReferences = `-- name: LockLibraryReferences :exec
+SELECT pg_advisory_xact_lock(hashtextextended('library-references:' || $1::uuid::text || ':' || $2::uuid::text, 0))
+`
+
+type LockLibraryReferencesParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+// Serializes one person's reference changes, so replacing one never trips
+// the one-per-role unique indexes.
+func (q *Queries) LockLibraryReferences(ctx context.Context, arg LockLibraryReferencesParams) error {
+	_, err := q.db.Exec(ctx, lockLibraryReferences, arg.WorkspaceID, arg.UserID)
+	return err
+}
+
+const setLibraryReference = `-- name: SetLibraryReference :one
+UPDATE library_items SET reference = $1::text, reference_persona_id = $2::uuid
+WHERE id = $3 AND workspace_id = $4 AND user_id = $5
+RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id
+`
+
+type SetLibraryReferenceParams struct {
+	Role        *string
+	PersonaID   *uuid.UUID
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+// Marks (or, with a NULL role, unmarks) one of the caller's items.
+func (q *Queries) SetLibraryReference(ctx context.Context, arg SetLibraryReferenceParams) (LibraryItem, error) {
+	row := q.db.QueryRow(ctx, setLibraryReference,
+		arg.Role,
+		arg.PersonaID,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+	)
+	var i LibraryItem
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Kind,
+		&i.Title,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.ChatID,
+		&i.MessageID,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
+	)
+	return i, err
 }

@@ -12,7 +12,7 @@ import (
 )
 
 const chatImageJobsForTurn = `-- name: ChatImageJobsForTurn :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 ORDER BY id
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, reference_roles FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 ORDER BY id
 `
 
 type ChatImageJobsForTurnParams struct {
@@ -42,6 +42,7 @@ func (q *Queries) ChatImageJobsForTurn(ctx context.Context, arg ChatImageJobsFor
 			&i.Error,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.ReferenceRoles,
 		); err != nil {
 			return nil, err
 		}
@@ -70,17 +71,18 @@ func (q *Queries) CountChatImageJobsForTurn(ctx context.Context, arg CountChatIm
 }
 
 const createChatImageJob = `-- name: CreateChatImageJob :one
-INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at
+INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model, reference_roles)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, reference_roles
 `
 
 type CreateChatImageJobParams struct {
-	WorkspaceID uuid.UUID
-	RunID       uuid.UUID
-	TurnID      uuid.UUID
-	ChatID      uuid.UUID
-	Prompt      string
-	Model       string
+	WorkspaceID    uuid.UUID
+	RunID          uuid.UUID
+	TurnID         uuid.UUID
+	ChatID         uuid.UUID
+	Prompt         string
+	Model          string
+	ReferenceRoles []string
 }
 
 func (q *Queries) CreateChatImageJob(ctx context.Context, arg CreateChatImageJobParams) (ChatImageJob, error) {
@@ -91,6 +93,7 @@ func (q *Queries) CreateChatImageJob(ctx context.Context, arg CreateChatImageJob
 		arg.ChatID,
 		arg.Prompt,
 		arg.Model,
+		arg.ReferenceRoles,
 	)
 	var i ChatImageJob
 	err := row.Scan(
@@ -106,6 +109,7 @@ func (q *Queries) CreateChatImageJob(ctx context.Context, arg CreateChatImageJob
 		&i.Error,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.ReferenceRoles,
 	)
 	return i, err
 }
@@ -138,7 +142,7 @@ func (q *Queries) FinishChatImageJob(ctx context.Context, arg FinishChatImageJob
 }
 
 const queuedChatImageJobs = `-- name: QueuedChatImageJobs :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 AND state = 'queued' ORDER BY id
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, reference_roles FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 AND state = 'queued' ORDER BY id
 `
 
 type QueuedChatImageJobsParams struct {
@@ -168,6 +172,7 @@ func (q *Queries) QueuedChatImageJobs(ctx context.Context, arg QueuedChatImageJo
 			&i.Error,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.ReferenceRoles,
 		); err != nil {
 			return nil, err
 		}
@@ -180,7 +185,7 @@ func (q *Queries) QueuedChatImageJobs(ctx context.Context, arg QueuedChatImageJo
 }
 
 const runningChatImageJobs = `-- name: RunningChatImageJobs :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at FROM chat_image_jobs WHERE run_id = $1 AND state = 'running'
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, reference_roles FROM chat_image_jobs WHERE run_id = $1 AND state = 'running'
 `
 
 // This run's image jobs that are making an image now.
@@ -206,6 +211,7 @@ func (q *Queries) RunningChatImageJobs(ctx context.Context, runID uuid.UUID) ([]
 			&i.Error,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.ReferenceRoles,
 		); err != nil {
 			return nil, err
 		}
