@@ -108,7 +108,7 @@ export function ChatStatus({ runId, since, persona, stopping }: { runId?: string
           {sceneLabel(scene.current)}
         </p>
       </div>
-      <ActivityScene current={scene.current} previous={scene.previous} />
+      <ActivityScene current={scene.current} previous={scene.previous} stopping={stopping} />
     </div>
   );
 }

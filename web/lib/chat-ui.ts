@@ -200,7 +200,29 @@ export function newestChat<T extends { last_message_at?: string | null; updated_
 // ---- the chat tab's status line: what the persona is doing, at a glance ----
 
 /** The kind of work under way, which picks the status card's animated scene. */
-export type ChatStatusKind = "thinking" | "wiki" | "reading-code" | "writing-code" | "tests" | "github" | "web" | "image" | "memory";
+export type ChatStatusKind =
+  | "thinking"
+  | "wiki"
+  | "tickets"
+  | "reading-code"
+  | "writing-code"
+  | "tests"
+  | "build"
+  | "install"
+  | "terminal"
+  | "github"
+  | "commit"
+  | "push"
+  | "pull-request"
+  | "repo-history"
+  | "web"
+  | "video"
+  | "image"
+  | "canvas"
+  | "canvas-comment"
+  | "runs"
+  | "workflow"
+  | "memory";
 export type ChatStatusInfo = { kind: ChatStatusKind; phrase: string };
 
 const status = (kind: ChatStatusKind, phrase: string): ChatStatusInfo => ({ kind, phrase });
@@ -218,22 +240,22 @@ const GIT_OTHER = new RegExp(`${GIT}(add|am|apply|blame|branch|checkout|cherry-p
 function shellStatus(command: string): ChatStatusInfo {
   const c = command.toLowerCase();
   if (/\.lazyagents\/outbox/.test(c)) return status("image", "saving the image");
-  if (GIT_PUSH.test(c)) return status("github", "pushing its branch");
-  if (GIT_COMMIT.test(c)) return status("github", "committing changes");
-  if (/\bgh\s+pr\b/.test(c)) return status("github", "preparing a pull request");
+  if (GIT_PUSH.test(c)) return status("push", "pushing its branch");
+  if (GIT_COMMIT.test(c)) return status("commit", "committing changes");
+  if (/\bgh\s+pr\b/.test(c)) return status("pull-request", "preparing a pull request");
   if (/\bgh\s+\S/.test(c)) return status("github", "working on GitHub");
   if (/\b(go\s+test|npm\s+(run\s+)?test|pnpm\s+(run\s+)?test|yarn\s+test|pytest|jest|vitest|cargo\s+test|make\s+test|rspec|playwright\s+test|mvn\s+test|gradle\w*\s+test)\b/.test(c)) return status("tests", "running tests");
-  if (/\b(npm\s+(ci|install|i)|pnpm\s+install|yarn(\s+install)?\s*$|go\s+mod\s+(download|tidy)|pip\s+install|bundle\s+install|cargo\s+fetch)\b/.test(c)) return status("thinking", "installing dependencies");
-  if (/\b(go\s+(build|vet)|npm\s+run\s+(build|lint|typecheck)|tsc\b|cargo\s+(build|check|clippy)|make\b|eslint|gofmt)\b/.test(c)) return status("tests", "checking the build");
-  if (GIT_OTHER.test(c)) return status("github", "looking over the repository");
+  if (/\b(npm\s+(ci|install|i)|pnpm\s+install|yarn(\s+install)?\s*$|go\s+mod\s+(download|tidy)|pip\s+install|bundle\s+install|cargo\s+fetch)\b/.test(c)) return status("install", "installing dependencies");
+  if (/\b(go\s+(build|vet)|npm\s+run\s+(build|lint|typecheck)|tsc\b|cargo\s+(build|check|clippy)|make\b|eslint|gofmt)\b/.test(c)) return status("build", "checking the build");
+  if (GIT_OTHER.test(c)) return status("repo-history", "looking over the repository");
   if (/^\s*(cat|less|head|tail|ls|tree|find|rg|grep|sed\s+-n|wc|awk)\b|\|\s*(rg|grep|head|tail)\b/.test(c)) return status("reading-code", "reading the code");
-  return status("thinking", "working in the terminal");
+  return status("terminal", "working in the terminal");
 }
 
 /** An MCP GitHub tool, from any server name: "github.create_pull_request", "plugin_github_github.get_issue". */
 function githubToolStatus(tool: string): ChatStatusInfo | undefined {
   if (!/(^|[._-])github[._-]/i.test(tool)) return undefined;
-  if (/(create|update|merge)\w*pull_?request/i.test(tool)) return status("github", "preparing a pull request");
+  if (/(create|update|merge)\w*pull_?request/i.test(tool)) return status("pull-request", "preparing a pull request");
   return status("github", "working on GitHub");
 }
 
@@ -254,13 +276,13 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("wiki", "looking through the wiki");
     case "get_ticket":
     case "list_epics":
-      return status("wiki", "checking tickets");
+      return status("tickets", "checking tickets");
     case "create_ticket":
     case "create_epic":
-      return status("wiki", "drafting a ticket");
+      return status("tickets", "drafting a ticket");
     case "list_runs":
     case "get_run":
-      return status("thinking", "checking on runs");
+      return status("runs", "checking on runs");
     case "search_memory":
     case "read_memory":
       return status("memory", "recalling what it knows about you");
@@ -275,6 +297,23 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "web_search":
     case "WebFetch":
       return status("web", "searching the web");
+    case "get_video_transcript":
+      return status("video", "watching a video");
+    case "canvas_list":
+    case "canvas_read":
+      return status("canvas", "looking at a canvas");
+    case "canvas_create":
+      return status("canvas", "drafting a canvas");
+    case "canvas_patch":
+      return status("canvas", "revising a canvas");
+    case "canvas_comment":
+    case "canvas_reply":
+      return status("canvas-comment", "commenting on a canvas");
+    case "list_workflows":
+    case "read_workflow":
+      return status("workflow", "looking over a workflow");
+    case "propose_workflow_edit":
+      return status("workflow", "sketching a workflow");
     case "image_generation":
     case "image_gen":
     case "generate_image":
