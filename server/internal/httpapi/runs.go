@@ -64,6 +64,14 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		if err == nil {
 			out.PlanningId, out.WorkTitle, projectID = &p.ID, &p.Goal, p.ProjectID
 		}
+	case r.Purpose == runs.PurposeResearch:
+		if j, err := s.Q.ResearchJobForRun(ctx, r.ID); err == nil {
+			if c, err := s.Q.GetChatSession(ctx, store.GetChatSessionParams{ID: j.ChatID, WorkspaceID: j.WorkspaceID}); err == nil {
+				out.ChatId, out.WorkTitle, projectID = &c.ID, &j.Title, c.ProjectID
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return out, err
+		}
 	case r.Purpose == "chat":
 		// A chat run without its session (deleted chat) still renders.
 		if c, err := s.Q.ChatSessionOfRun(ctx, &r.ID); err == nil {
@@ -222,6 +230,15 @@ func (s *Server) readableRun(ctx context.Context, id uuid.UUID) (store.Run, erro
 	}
 	if err != nil {
 		return r, err
+	}
+	if r.Purpose == runs.PurposeResearch {
+		owns, err := s.Q.OwnsResearchRun(ctx, store.OwnsResearchRunParams{RunID: r.ID, UserID: u.ID})
+		if err != nil {
+			return r, err
+		}
+		if !owns {
+			return r, apperr.ErrNotFound
+		}
 	}
 	if r.Purpose == "chat" {
 		owns, err := s.Q.OwnsChatRun(ctx, store.OwnsChatRunParams{WorkspaceID: ws, Viewer: u.ID, RunID: r.ID})

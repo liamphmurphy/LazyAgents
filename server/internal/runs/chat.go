@@ -168,6 +168,8 @@ type ChatMessageInput struct {
 	// AttachmentIDs are the poster's own unattached uploads (chat_attachments);
 	// they're bound to the new message and delivered to its turn.
 	AttachmentIDs []uuid.UUID
+	// Research asks for a plan to approve instead of an answer.
+	Research bool
 }
 
 // ChatCatalog is the harness/model catalog chats validate against.
@@ -417,6 +419,9 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		if chat, err = q.SetChatInterrupt(ctx, store.SetChatInterruptParams{ID: chat.ID}); err != nil {
 			return chat, msg, err
 		}
+	}
+	if in.Research {
+		prompt = researchPlanNote + prompt
 	}
 	// A mention picks who answers (and queues the rest); otherwise whoever
 	// spoke last carries on. The message may also set how long personas keep
@@ -779,6 +784,9 @@ func (s *Service) DeleteChat(ctx context.Context, ws, user, id uuid.UUID) error 
 	return s.tx(ctx, func(q *store.Queries) error {
 		chat, err := lockChat(ctx, q, ws, user, id)
 		if err != nil {
+			return err
+		}
+		if err := stopResearchForChat(ctx, q, chat.ID); err != nil {
 			return err
 		}
 		if chat.CurrentRunID != nil {

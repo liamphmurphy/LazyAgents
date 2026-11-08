@@ -18,7 +18,9 @@ import { AppFence } from "./app-fence";
 import { CITE_SCHEME } from "@/lib/chat-sources";
 import { isChoicesFence } from "@/lib/chat-choices";
 import { youtubeMoment } from "@/lib/chat-recommend";
+import { isResearchPlanFence } from "@/lib/chat-research";
 import { ChoicesFence } from "./choices-fence";
+import { ResearchFence } from "./research-fence";
 import { CiteMarker, MomentLink } from "./cite-marker";
 import { CodeFence } from "./code-fence";
 import { MermaidFence, isMermaidFence } from "./mermaid-fence";
@@ -98,6 +100,7 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
           if (isSvgFence(info)) return <SvgFence code={code.children} info={info} />;
           if (isMermaidFence(info)) return <MermaidFence code={code.children} info={info} />;
           if (isChoicesFence(info)) return <ChoicesFence code={code.children} info={info} />;
+          if (isResearchPlanFence(info)) return <ResearchFence code={code.children} info={info} />;
           // ```recommend fences show as preview cards.
           if (isRecommendFence(info)) return <RecommendFence code={code.children} info={info} />;
           return <CodeFence code={code.children} info={info} />;

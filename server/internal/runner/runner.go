@@ -248,6 +248,16 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 			return c, err
 		}
 		c.ticket = store.Ticket{WorkspaceID: chat.WorkspaceID, ProjectID: chat.ProjectID, Key: "CHAT-" + chat.ID.String()[:8], Title: chat.Title}
+	} else if c.run.Purpose == runs.PurposeResearch {
+		job, err := q.ResearchJobForRun(ctx, c.run.ID)
+		if err != nil {
+			return c, err
+		}
+		chat, err := q.GetChatSession(ctx, store.GetChatSessionParams{ID: job.ChatID, WorkspaceID: job.WorkspaceID})
+		if err != nil {
+			return c, err
+		}
+		c.ticket = store.Ticket{WorkspaceID: job.WorkspaceID, ProjectID: chat.ProjectID, Key: "RES-" + job.ID.String()[:8], Title: job.Title}
 	} else {
 		plan, err := q.PlanningSessionForRun(ctx, c.run.ID)
 		if err != nil {
@@ -333,8 +343,17 @@ func (r *Runner) end(ctx context.Context, c runCtx, state, outcome, verb string)
 	}
 	// Only a successful run's workspace goes: a failed or cancelled one keeps
 	// its checkout (unpushed commits included) for a retry or a person.
-	if c.run.ParentRunID == nil && state == "completed" {
+	if c.run.ParentRunID == nil && (state == "completed" || c.run.Purpose == runs.PurposeResearch) {
 		r.cleanup(context.Background(), c.run.ID) // a delegated run has no workspace of its own
+	}
+	if c.run.Purpose == runs.PurposeResearch {
+		r.advanceResearch(context.Background())
+	}
+}
+
+func (r *Runner) advanceResearch(ctx context.Context) {
+	if err := runs.AdvanceResearchJobs(ctx, r.Pool); err != nil && ctx.Err() == nil {
+		r.Log.Warn("advance research", "err", err)
 	}
 }
 
@@ -358,6 +377,7 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepChatAttachments(ctx)
 	defer r.sweepLinkPreviews(ctx)
+	defer r.advanceResearch(ctx)
 	r.expireIdleChats(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx)
 	if err != nil {
@@ -1349,6 +1369,11 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 			msg = fmt.Sprintf("the harness exited with code %d", code)
 		}
 		r.end(ctx, c, "failed", "Harness error: "+msg, runs.VerbRunFailed)
+		return
+	}
+	// A researcher reports through its tool, so a clean exit is the end of it.
+	if c.run.Purpose == runs.PurposeResearch {
+		r.end(ctx, c, "completed", "Research finished.", runs.VerbRunCompleted)
 		return
 	}
 	if c.run.IdleTurns < 1 {

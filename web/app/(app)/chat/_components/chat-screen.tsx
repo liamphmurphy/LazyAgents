@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchToggle } from "./reply-tools";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -53,6 +54,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
   const repo = codesInRepos(fullPersona) ? (repoPicked && repos.includes(repoPicked) ? repoPicked : repos[0]) : undefined;
   const managePersonas = useOpenPersonaManager();
   const [text, setText] = useState("");
+  const [research, setResearch] = useState(false);
   // A "Start chat" link with no chat yet (?attach=…) lands here; its chips go with the first message.
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
   const files = useAttachments();
@@ -66,7 +68,7 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
     if (!body || locked || files.pending) return;
     const context_refs = toContextRefs(chips);
     start.mutate(
-      { project, persona_id: personaId, ...(repo ? { repo_url: repo } : {}), message: { body, ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
+      { project, persona_id: personaId, ...(repo ? { repo_url: repo } : {}), message: { body, ...(research ? { research: true } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
       { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) },
     );
   }
@@ -137,9 +139,10 @@ function Welcome({ project, disabled }: { project: string; disabled: boolean }) 
           <PersonaSwitcher value={personaId} onChange={setPicked} disabled={locked} />
           {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
           <AttachButton onFiles={files.add} disabled={locked} />
+          <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
           <span className="flex-1" />
           <Button type="submit" variant="primary" disabled={locked || files.pending || !text.trim()}>
-            {start.isPending ? "Starting…" : "Send"}
+            {start.isPending ? "Starting…" : research ? "Plan it" : "Send"}
           </Button>
         </div>
       </form>

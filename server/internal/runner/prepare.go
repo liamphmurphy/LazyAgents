@@ -670,6 +670,8 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 			spec.Instructions += agents.AssistantSVGSection
 		}
 		return harness.ChatAgentsMDWithGroup(spec, paths, c.project.Key, idx, persona, group), "", nil
+	case runs.PurposeResearch:
+		return []byte(c.spec.Instructions), "", nil
 	case "planning":
 		return []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n")), "", nil
 	}
