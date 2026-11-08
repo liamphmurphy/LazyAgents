@@ -398,7 +398,7 @@ export function chatStatus(calls: { tool: string; input: unknown }[]): ChatStatu
 // ---- the chat tab's step rail: the turn's plan, or its work so far ----
 
 export type ChatStepState = "planned" | "active" | "done";
-export type ChatStep = { key: string; title: string; state: ChatStepState; added?: true };
+export type ChatStep = { key: string; title: string; state: ChatStepState; added?: true; detail?: string };
 
 type PlanItem = { id: string; title: string; state: ChatStepState };
 
@@ -441,6 +441,147 @@ function planVersions(calls: ToolCall[]): PlanItem[][] {
 /** Calls that keep the turn running but aren't work to show: its plan, tool loading, the chat's title. */
 const BOOKKEEPING = new Set(["TodoWrite", "todowrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill", "set_chat_title", "whoami"]);
 
+const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
+
+/**
+ * What a step is doing right now, safe for the chat tab: a file's name but not its path,
+ * search terms, page names and sites. A shell command stays its kind of work ("Running tests"),
+ * since commands are long and can carry secrets. Memory stays general because it's private.
+ * Tools that take only an id use `names`, what earlier calls in the turn said it's called.
+ */
+export function stepDetail(call: { tool: string; input: unknown }, names: Map<string, string> = new Map()): string {
+  const o = (call.input && typeof call.input === "object" ? call.input : {}) as Record<string, unknown>;
+  const { kind, phrase } = chatStatusOf(call);
+  const general = phrase[0].toUpperCase() + phrase.slice(1);
+  const file = basename(str(o.file_path ?? o.notebook_path ?? o.path));
+  const quoted = `“${clip(str(o.pattern))}”`;
+  const named = (verb: string, name: unknown, fallback?: unknown) => (name ? `${verb} “${clip(str(name))}”` : fallback ? `${verb}: ${clip(str(fallback))}` : general);
+  const known = (id: unknown) => names.get(str(id));
+  switch (bareTool(call.tool)) {
+    case "Read":
+    case "read_file":
+      return file && kind !== "image" ? `Reading ${file}` : general;
+    case "Edit":
+    case "MultiEdit":
+    case "NotebookEdit":
+      return file ? `Editing ${file}` : general;
+    case "Write":
+      return file ? `Writing ${file}` : general;
+    case "Grep":
+      return o.pattern ? `Searching ${quoted}` : general;
+    case "Glob":
+      return o.pattern ? `Finding ${quoted}` : general;
+    case "LS":
+    case "list_dir":
+      return file ? `Listing ${file}` : general;
+    case "apply_patch": {
+      // Codex reports each change as "<kind> <path>".
+      const files = Array.isArray(o.files) ? o.files.map((f) => basename(str(f).split(" ").slice(1).join(" "))) : [];
+      return files.length ? `Editing ${files[0]}${files.length > 1 ? ` and ${files.length - 1} more` : ""}` : general;
+    }
+    case "canvas_create":
+      return named("Drafting", o.title);
+    case "canvas_read":
+      return named("Looking at", known(o.canvas_id));
+    case "canvas_patch":
+      return named("Revising", known(o.canvas_id), o.note);
+    case "canvas_comment":
+    case "canvas_reply":
+      return named("Commenting on", known(o.canvas_id));
+    case "read_workflow":
+      return named("Looking over", known(o.workflow_id));
+    case "propose_workflow_edit":
+      return named("Sketching", o.name || known(o.workflow_id), o.summary);
+    case "create_ticket":
+      return named("Drafting", o.title);
+    case "create_epic":
+      return named("Drafting", o.name);
+    case "generate_image":
+    case "image_generation":
+    case "image_gen":
+      return named("Creating", o.prompt);
+    case "propose_persona":
+      return named("Sketching", o.name);
+    case "get_run":
+      return known(o.id) ? `Checking ${known(o.id)}` : general;
+    case "list_runs":
+      return o.ticket || o.agent ? `Checking runs of ${clip(str(o.ticket || o.agent))}` : general;
+    case "get_video_transcript":
+      return typeof o.from_seconds === "number" && o.from_seconds > 0 ? `Watching from ${Math.floor(o.from_seconds / 60)}:${String(Math.floor(o.from_seconds % 60)).padStart(2, "0")}` : general;
+  }
+  if (kind === "github" || kind === "pull-request") {
+    const number = o.pull_number ?? o.pullNumber ?? o.issue_number ?? o.number;
+    if (o.title) return named("Working on", o.title);
+    if (o.repo) return `Working on ${clip(`${o.owner ? `${str(o.owner)}/` : ""}${str(o.repo)}${number ? `#${str(number)}` : ""}`)}`;
+    return general;
+  }
+  const a = activityOf(call);
+  return a.verb === "Using" || a.verb === "Running a command" ? general : [a.verb, a.label, a.text].filter(Boolean).join(" ");
+}
+
+/** A tool result as JSON: plain, or the MCP envelope Codex passes through. Undefined when it was clipped or isn't JSON. */
+function resultJSON(output?: string): Record<string, unknown> | undefined {
+  try {
+    const v = JSON.parse(output ?? "");
+    const text = v?.content?.[0]?.text;
+    return typeof text === "string" ? JSON.parse(text) : v;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The names the turn has seen for canvases, workflows and runs, by id. */
+function knownNames(calls: ToolCall[]): Map<string, string> {
+  const names = new Map<string, string>();
+  const note = (id: unknown, name: unknown) => {
+    if (id && name) names.set(str(id), str(name));
+  };
+  for (const call of calls) {
+    const out = resultJSON(call.output);
+    if (!out) continue;
+    const input = (call.input ?? {}) as Record<string, unknown>;
+    switch (bareTool(call.tool)) {
+      case "canvas_create":
+        note(out.canvas_id, input.title);
+        break;
+      case "canvas_read":
+        note(out.canvas_id, out.title);
+        break;
+      case "canvas_list":
+        for (const c of records(out.canvases)) note(c.canvas_id, c.title);
+        break;
+      case "list_workflows":
+        for (const w of records(out.workflows)) note(w.id, w.name);
+        break;
+      case "read_workflow":
+        note(out.id, out.name);
+        break;
+      case "propose_workflow_edit":
+        note(out.workflow_id, input.name);
+        break;
+      case "list_runs":
+        for (const r of records(out.runs)) note(r.id, r.ticket);
+        break;
+      case "get_run": {
+        const run = out.run as Record<string, unknown> | undefined;
+        note(run?.id, run?.ticket);
+        break;
+      }
+    }
+  }
+  return names;
+}
+
+/** Puts what's happening now on the step under way, unless it would only repeat the title. */
+function withDetail(steps: ChatStep[], calls: ToolCall[]): ChatStep[] {
+  const newest = calls.filter((c) => !BOOKKEEPING.has(bareTool(c.tool))).pop();
+  const active = steps.find((s) => s.state === "active");
+  if (!newest || !active || newest.tool === REPLY_BLOCK) return steps;
+  const detail = stepDetail(newest, knownNames(calls));
+  if (detail !== active.title) active.detail = detail;
+  return steps;
+}
+
 /**
  * The turn's steps. The newest plan when the assistant wrote one, marking steps added after
  * work began. Otherwise its consecutive tool calls with the same description as one step, newest active, in the same
@@ -466,7 +607,7 @@ export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: bool
       const { phrase } = chatStatusOf(call);
       steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: call === newest ? "active" : "done" });
     }
-    return { steps, planned: true };
+    return { steps: withDetail(steps, calls), planned: true };
   }
   const steps: ChatStep[] = [];
   let last: string | undefined;
@@ -478,7 +619,7 @@ export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: bool
     steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: "done" });
   }
   if (steps.length) steps[steps.length - 1].state = "active";
-  return { steps, planned: false };
+  return { steps: withDetail(steps, calls), planned: false };
 }
 
 /** Keeps the rail short on long turns: all but the newest two of more than three finished steps fold away, and at most four upcoming steps show. */

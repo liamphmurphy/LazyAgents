@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
+import { activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -273,4 +273,68 @@ test("a command wrapped in a login shell is judged by the command inside", () =>
   assert.equal(shell("/bin/zsh -lc 'sed -n 1,5p main.go'"), "reading-code");
   assert.equal(shell("/bin/bash -lc \"git status\""), "repo-history");
   assert.equal(shell("/bin/zsh -lc pwd"), "terminal");
+});
+
+test("stepDetail names files and searches but never paths or commands", () => {
+  const cases = [
+    [{ tool: "Read", input: { file_path: "/Users/me/secret/project/app.tsx" } }, "Reading app.tsx"],
+    [{ tool: "Edit", input: { file_path: "/a/b.go" } }, "Editing b.go"],
+    [{ tool: "Write", input: { file_path: "/a/new.md" } }, "Writing new.md"],
+    [{ tool: "Grep", input: { pattern: "foldSteps" } }, "Searching “foldSteps”"],
+    [{ tool: "Glob", input: { pattern: "**/*.go" } }, "Finding “**/*.go”"],
+    [{ tool: "apply_patch", input: { files: ["update /r/a.go", "add /r/b.go", "delete /r/c.go"] } }, "Editing a.go and 2 more"],
+    [{ tool: "mcp__lazyagents__read_page", input: { ref: "Eng/Plan" } }, "Reading Plan"],
+    [{ tool: "WebFetch", input: { url: "https://www.example.com/private?token=x" } }, "Reading example.com"],
+    [{ tool: "WebSearch", input: { query: "tts pricing" } }, "Searching the web for “tts pricing”"],
+    [{ tool: "Bash", input: { command: "API_KEY=x go test ./..." } }, "Running tests"],
+    [{ tool: "shell", input: { command: "curl -H 'Authorization: x' host" } }, "Working in the terminal"],
+    [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/a.png" } }, "Looking at the image"],
+    [{ tool: "Read", input: {} }, "Reading the code"],
+    [{ tool: "mcp__other__mystery", input: { a: "b" } }, "Working on it"],
+  ];
+  for (const [call, want] of cases) assert.equal(stepDetail(call), want, call.tool);
+});
+
+test("only the active step carries a detail, skipping bookkeeping and repeats", () => {
+  const read = (file_path) => ({ tool: "Read", input: { file_path } });
+  const todo = { tool: "TodoWrite", input: { todos: [{ content: "One", status: "completed" }, { content: "Two", status: "in_progress" }, { content: "Three", status: "pending" }] } };
+  assert.deepEqual(stepsOf([todo, read("/a/one.ts"), read("/a/two.ts"), { tool: "ToolSearch" }]).steps.map((s) => s.detail), [undefined, "Reading two.ts", undefined]);
+  assert.deepEqual(stepsOf([{ tool: "Edit" }, read("/a/x.ts")]).steps.map((s) => s.detail), [undefined, "Reading x.ts"]);
+  assert.equal(stepsOf([{ tool: "Bash", input: { command: "go test ./..." } }]).steps[0].detail, undefined);
+  assert.equal(stepsOf([todo]).steps[1].detail, undefined);
+  const events = [{ seq: 1, type: "tool_call", at: "2026-11-06T10:01:00Z", payload: { id: "a", tool: "Read", input: { file_path: "/a/x.ts" } } }, { seq: 2, type: "lifecycle", at: "2026-11-06T10:01:01Z", payload: { state: "reply_block", kind: "app" } }];
+  assert.deepEqual(chatSteps(chatCalls(events)).steps.map((s) => s.detail), [undefined, undefined]);
+});
+
+test("stepDetail names canvases, workflows, tickets, images, personas, runs and GitHub work", () => {
+  const cases = [
+    [{ tool: "mcp__lazyagents__canvas_create", input: { title: "Rail mockups", body: "secret" } }, "Drafting “Rail mockups”"],
+    [{ tool: "mcp__lazyagents__canvas_patch", input: { canvas_id: "c9", note: "tighten the intro" } }, "Revising: tighten the intro"],
+    [{ tool: "mcp__lazyagents__propose_workflow_edit", input: { name: "Map maker" } }, "Sketching “Map maker”"],
+    [{ tool: "mcp__lazyagents__propose_workflow_edit", input: { workflow_id: "w9", summary: "Adds a gate" } }, "Sketching: Adds a gate"],
+    [{ tool: "mcp__lazyagents__create_ticket", input: { title: "Fix login" } }, "Drafting “Fix login”"],
+    [{ tool: "mcp__lazyagents__create_epic", input: { name: "Billing" } }, "Drafting “Billing”"],
+    [{ tool: "mcp__lazyagents__generate_image", input: { prompt: "a cat on a bike" } }, "Creating “a cat on a bike”"],
+    [{ tool: "mcp__lazyagents__propose_persona", input: { name: "Nora", instructions: "secret" } }, "Sketching “Nora”"],
+    [{ tool: "mcp__lazyagents__list_runs", input: { ticket: "PAY-214" } }, "Checking runs of PAY-214"],
+    [{ tool: "mcp__lazyagents__get_video_transcript", input: { url: "https://youtu.be/x", from_seconds: 272 } }, "Watching from 4:32"],
+    [{ tool: "mcp__github__create_pull_request", input: { owner: "o", repo: "r", title: "Add rail", body: "secret" } }, "Working on “Add rail”"],
+    [{ tool: "mcp__github__get_issue", input: { owner: "o", repo: "r", issue_number: 12 } }, "Working on o/r#12"],
+    [{ tool: "mcp__lazyagents__save_memory", input: { body: "private" } }, "Making a note"],
+    [{ tool: "mcp__lazyagents__canvas_read", input: { canvas_id: "unknown" } }, "Looking at a canvas"],
+  ];
+  for (const [call, want] of cases) assert.equal(stepDetail(call), want, call.tool);
+});
+
+test("tools that take an id use the name an earlier call in the turn gave it", () => {
+  const detail = (calls) => stepsOf(calls).steps.at(-1).detail;
+  const created = { tool: "mcp__lazyagents__canvas_create", input: { title: "Rail" }, output: JSON.stringify({ canvas_id: "c1", version: 1 }) };
+  assert.equal(detail([created, { tool: "mcp__lazyagents__canvas_patch", input: { canvas_id: "c1", note: "n" } }]), "Revising “Rail”");
+  const listed = { tool: "list_workflows", input: {}, output: JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ workflows: [{ id: "w1", name: "Maps" }] }) }] }) };
+  assert.equal(detail([listed, { tool: "read_workflow", input: { workflow_id: "w1" } }]), "Looking over “Maps”");
+  const runs = { tool: "list_runs", input: {}, output: JSON.stringify({ runs: [{ id: "r1", ticket: "PAY-1" }] }) };
+  assert.equal(detail([runs, { tool: "get_run", input: { id: "r1" } }]), "Checking PAY-1");
+  const clipped = { tool: "canvas_read", input: { canvas_id: "c2" }, output: '{"body":"long and cut' };
+  // No name to show, so the detail would only repeat the step's title.
+  assert.equal(detail([clipped, { tool: "canvas_comment", input: { canvas_id: "c2" } }]), undefined);
 });

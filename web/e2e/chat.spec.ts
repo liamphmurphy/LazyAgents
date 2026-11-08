@@ -607,6 +607,8 @@ test("a running turn shows its newest tool call as a live line with a linked pag
   await expect(page.getByTestId("chat-status")).toHaveText(/ is looking through the wiki…$/);
   await expect(page.locator('[data-scene="wiki"]')).toBeAttached();
   await expect(page.getByTestId("chat-status")).not.toContainText("Plan");
+  // Only the rail's active step names what it's on, by its safe label.
+  await expect(page.getByTestId("chat-step-detail")).toHaveText("Reading Plan");
   await expect(live).toBeHidden();
   await page.getByRole("tab", { name: "Activity" }).click();
   await expect(live).toHaveText("Reading Plan…");
