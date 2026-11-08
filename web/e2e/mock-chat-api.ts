@@ -234,6 +234,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "gfm:" replies with GitHub-flavored markdown.
+    if (prompt.startsWith("gfm:")) {
+      add(c, "assistant", "| Option | Cost |\n|---|--:|\n| OpenAI tts-1 | $0.015 |\n| Cartesia | $0.011 |\n\n- [x] Shipped\n- [ ] Pending\n\n~~old~~\n\n> Quoted", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     // "svg:" replies with an SVG image; "badsvg:" with one the browser can't draw.
     if (prompt.startsWith("svg:") || prompt.startsWith("badsvg:")) {
       const svg = prompt.startsWith("svg:") ? `<svg viewBox="0 0 40 20" width="40" height="20"><script>document.title="ran"</script><rect width="40" height="20" fill="#36c"/></svg>` : "<svg><rect></svg>";
