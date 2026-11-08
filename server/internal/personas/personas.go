@@ -49,19 +49,19 @@ type NewInput struct {
 	// Capabilities and Repos are the structured settings that widen what the
 	// persona's chats may do (runs.ChatSpec); nil takes the defaults (off, none).
 	// Personas is whether it may propose new personas (each one approved by
-	// the person).
-	Code, Images, Personas *bool
-	Repos                  *[]string
+	// the person); SVG whether its replies may show SVG images.
+	Code, Images, Personas, SVG *bool
+	Repos                       *[]string
 }
 
 // Patch edits a persona at Revision; nil fields are unchanged.
 type Patch struct {
-	Revision               int32
-	Name                   *string
-	Tone                   *string
-	Color                  *string
-	Instructions           *string
-	Code, Images, Personas *bool
+	Revision                    int32
+	Name                        *string
+	Tone                        *string
+	Color                       *string
+	Instructions                *string
+	Code, Images, Personas, SVG *bool
 	// Repos replaces the whole list; existing chats keep the repo they chose.
 	Repos *[]string
 }
@@ -221,7 +221,7 @@ func CreateLocked(ctx context.Context, q *store.Queries, o Owner, in NewInput) (
 	out, err = q.CreatePersona(ctx, store.CreatePersonaParams{
 		WorkspaceID: o.WorkspaceID, UserID: o.UserID, Name: name, Tone: tone, Color: color, CustomInstructions: instr, IsDefault: in.IsDefault,
 		CanCode: in.Code != nil && *in.Code, CanGenerateImages: in.Images != nil && *in.Images, Repos: repos,
-		CanCreatePersonas: in.Personas != nil && *in.Personas,
+		CanCreatePersonas: in.Personas != nil && *in.Personas, CanCreateSvgs: in.SVG != nil && *in.SVG,
 	})
 	return out, nameTaken(err)
 }
@@ -315,7 +315,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		out, err = q.UpdatePersona(ctx, store.UpdatePersonaParams{
 			ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Revision: p.Revision,
 			Name: p.Name, Tone: p.Tone, Color: p.Color, CustomInstructions: p.Instructions,
-			CanCode: p.Code, CanGenerateImages: p.Images, CanCreatePersonas: p.Personas, Repos: repos,
+			CanCode: p.Code, CanGenerateImages: p.Images, CanCreatePersonas: p.Personas, CanCreateSvgs: p.SVG, Repos: repos,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.Conflict("the persona changed since you loaded it")
@@ -323,7 +323,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		if err != nil {
 			return nameTaken(err)
 		}
-		if out.Name != cur.Name || out.Color != cur.Color || out.CanCode != cur.CanCode || out.CanGenerateImages != cur.CanGenerateImages || out.CanCreatePersonas != cur.CanCreatePersonas {
+		if out.Name != cur.Name || out.Color != cur.Color || out.CanCode != cur.CanCode || out.CanGenerateImages != cur.CanGenerateImages || out.CanCreatePersonas != cur.CanCreatePersonas || out.CanCreateSvgs != cur.CanCreateSvgs {
 			return NotifyChats(ctx, q, id)
 		}
 		return nil

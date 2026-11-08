@@ -37,7 +37,7 @@ func toPersonaSummary(p store.Persona) *api.PersonaSummary {
 }
 
 func toPersonaCapabilities(p store.Persona) *api.PersonaCapabilities {
-	return &api.PersonaCapabilities{Code: p.CanCode, Images: p.CanGenerateImages, Personas: &p.CanCreatePersonas}
+	return &api.PersonaCapabilities{Code: p.CanCode, Images: p.CanGenerateImages, Personas: &p.CanCreatePersonas, Svg: &p.CanCreateSvgs}
 }
 
 // reposOrEmpty keeps the contract's required repos array from being null.
@@ -49,11 +49,11 @@ func reposOrEmpty(r []string) []string {
 }
 
 // capabilityArgs splits the contract's capabilities object; absent means unchanged.
-func capabilityArgs(c *api.PersonaCapabilities) (code, images, personas *bool) {
+func capabilityArgs(c *api.PersonaCapabilities) (code, images, personas, svg *bool) {
 	if c == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
-	return &c.Code, &c.Images, c.Personas
+	return &c.Code, &c.Images, c.Personas, c.Svg
 }
 
 // toPersonas renders personas with their chat counts in one query.
@@ -124,10 +124,10 @@ func (s *Server) CreatePersona(ctx context.Context, req api.CreatePersonaRequest
 		return nil, apperr.Invalid("body", "required")
 	}
 	b := req.Body
-	code, images, makers := capabilityArgs(b.Capabilities)
+	code, images, makers, svg := capabilityArgs(b.Capabilities)
 	p, err := s.personas().Create(ctx, personaOwner(ctx), personas.NewInput{
 		Name: b.Name, Tone: toneArg(b.Tone), Color: b.Color, Instructions: b.CustomInstructions, IsDefault: deref(b.IsDefault),
-		Code: code, Images: images, Personas: makers, Repos: b.Repos,
+		Code: code, Images: images, Personas: makers, SVG: svg, Repos: b.Repos,
 	})
 	if err != nil {
 		return nil, err
@@ -153,10 +153,10 @@ func (s *Server) UpdatePersona(ctx context.Context, req api.UpdatePersonaRequest
 	if b.Revision < 1 || b.Revision > 2147483647 {
 		return nil, apperr.Invalid("revision", "invalid revision")
 	}
-	code, images, makers := capabilityArgs(b.Capabilities)
+	code, images, makers, svg := capabilityArgs(b.Capabilities)
 	p, err := s.personas().Update(ctx, personaOwner(ctx), req.Id, personas.Patch{
 		Revision: int32(b.Revision), Name: b.Name, Tone: toneArg(b.Tone), Color: b.Color, Instructions: b.CustomInstructions,
-		Code: code, Images: images, Personas: makers, Repos: b.Repos,
+		Code: code, Images: images, Personas: makers, SVG: svg, Repos: b.Repos,
 	})
 	if err != nil {
 		return nil, err

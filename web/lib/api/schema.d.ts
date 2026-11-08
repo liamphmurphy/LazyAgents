@@ -1747,8 +1747,17 @@ export interface paths {
          *     later as an assistant message; watch for `chat.updated`.
          *     `harness`/`model`/`effort` switch the chat from this message on (same harness:
          *     same session, new model or effort; other harness: new session with a
-         *     transcript handoff, see the ADR). 404 unknown chat; 409 while a turn
-         *     is running or the chat is archived; 422 empty body, unknown
+         *     transcript handoff, see the ADR).
+         *     A message sent while a turn is running interrupts it: the turn is
+         *     stopped and the next one answers this message together with the
+         *     previous one and what the stopped reply had written and which tools it
+         *     called, in the same session. If the stopped turn hadn't started, the
+         *     new turn replaces it at once. Otherwise the message is stored without a
+         *     turn (`run_turn_id` empty), the chat stays `running`, and its turn
+         *     starts once the stopped process has exited; Stop
+         *     (`/chats/{id}/cancel`) in that window leaves it unanswered.
+         *     404 unknown chat; 409 when the chat is archived, or while an earlier
+         *     interruption is still waiting for its turn; 422 empty body, unknown
          *     harness/model, an effort the model doesn't offer, a context ref outside the chat's project, or an
          *     attachment id that isn't the caller's unattached upload.
          */
@@ -4083,6 +4092,8 @@ export interface components {
             images: boolean;
             /** @description Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona). */
             personas?: boolean;
+            /** @description Show SVG images in chat replies; a reply from a persona without it keeps its SVG as plain code. Absent in a request means unchanged (false for a new persona). */
+            svg?: boolean;
         };
         /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */
         PersonaSummary: {

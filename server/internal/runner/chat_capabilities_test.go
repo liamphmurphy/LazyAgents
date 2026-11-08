@@ -332,3 +332,29 @@ func TestImageHarvestQuota(t *testing.T) {
 		}
 	}
 }
+
+// A reply keeps its svg-image fence only while its speaker has the capability.
+func TestChatSVGFenceFollowsCapability(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	ps := &personas.Service{Pool: e.pool}
+	o := personas.Owner{WorkspaceID: e.ws, UserID: e.me.ID}
+	p := e.persona("Drafter", false, false)
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "Svg", PersonaID: &p.ID, Message: &runs.ChatMessageInput{Body: "one"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.until("first reply", func() bool { return e.chat(chat.ID).State == "idle" })
+	const reply = "```svg-image\n<svg/>\n```"
+	q := store.New(e.pool)
+	if got, err := runs.GateSVGFences(e.ctx, q, e.chat(chat.ID), reply); err != nil || got != "```svg\n<svg/>\n```" {
+		t.Fatalf("without the capability: %q, %v", got, err)
+	}
+	on := true
+	if _, err = ps.Update(e.ctx, o, p.ID, personas.Patch{Revision: p.Revision, SVG: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := runs.GateSVGFences(e.ctx, q, e.chat(chat.ID), reply); err != nil || got != reply {
+		t.Fatalf("with the capability: %q, %v", got, err)
+	}
+}
