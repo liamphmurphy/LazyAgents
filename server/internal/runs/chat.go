@@ -150,6 +150,9 @@ type ChatInput struct {
 	// RepoURL is one of the persona's repos; empty takes the first when the
 	// persona can code. Fixed for the chat's life.
 	RepoURL string
+	// Hidden keeps the chat out of chat lists, search and the dock, for a chat
+	// that lives behind another screen. Fixed for the chat's life.
+	Hidden  bool
 	Message *ChatMessageInput
 }
 
@@ -242,7 +245,7 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID})
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID, Hidden: in.Hidden})
 		if err != nil {
 			return err
 		}

@@ -4603,6 +4603,8 @@ export interface components {
             persona_id?: string;
             /** @description One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise. */
             repo_url?: string;
+            /** @description Leave the chat out of chat lists, search and the dock; it stays reachable by id. For a chat that lives behind another screen, like the workflow editor. Fixed for the chat's life. */
+            hidden?: boolean;
             message?: components["schemas"]["NewChatMessage"];
         };
         ChatPatch: {
@@ -5084,6 +5086,8 @@ export interface components {
             personas?: boolean;
             /** @description Show SVG images in chat replies; a reply from a persona without it keeps its SVG as plain code. Absent in a request means unchanged (false for a new persona). */
             svg?: boolean;
+            /** @description Propose new workflows and edits to them from a chat; each is applied only when the person accepts it. Absent in a request means unchanged (false for a new persona). */
+            workflows?: boolean;
         };
         /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */
         PersonaSummary: {

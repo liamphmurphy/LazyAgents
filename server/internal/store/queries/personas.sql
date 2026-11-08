@@ -43,8 +43,8 @@ SELECT EXISTS (
 )::bool;
 
 -- name: CreatePersona :one
-INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default, can_code, can_generate_images, repos, can_create_personas, can_create_svgs)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *;
+INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default, can_code, can_generate_images, repos, can_create_personas, can_create_svgs, can_create_workflows)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *;
 
 -- name: UpdatePersona :one
 -- Returns no row when the persona isn't the caller's or the revision is stale.
@@ -57,6 +57,7 @@ UPDATE personas SET
   can_generate_images = COALESCE(sqlc.narg(can_generate_images)::boolean, can_generate_images),
   can_create_personas = COALESCE(sqlc.narg(can_create_personas)::boolean, can_create_personas),
   can_create_svgs = COALESCE(sqlc.narg(can_create_svgs)::boolean, can_create_svgs),
+  can_create_workflows = COALESCE(sqlc.narg(can_create_workflows)::boolean, can_create_workflows),
   repos = COALESCE(sqlc.narg(repos)::text[], repos),
   revision = revision + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND revision = sqlc.arg(revision)
@@ -90,9 +91,9 @@ WHERE id = (
 );
 
 -- name: PersonaChatCounts :many
--- Chats (archived included) per persona.
+-- Chats (archived included, hidden ones not) per persona.
 SELECT persona_id::uuid AS persona_id, count(*)::int AS n FROM chat_sessions
-WHERE persona_id = ANY(sqlc.arg(ids)::uuid[]) GROUP BY persona_id;
+WHERE persona_id = ANY(sqlc.arg(ids)::uuid[]) AND NOT hidden GROUP BY persona_id;
 
 -- name: PersonaChatIDs :many
 -- Chats that show the persona: as host or as a participant.

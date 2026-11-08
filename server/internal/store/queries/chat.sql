@@ -2,9 +2,9 @@
 -- Without a persona_id the chat gets its creator's default persona (none
 -- when they have no default). Callers check that a given persona_id is the
 -- creator's own.
-INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id)
+INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id, hidden)
 VALUES (sqlc.arg(workspace_id), sqlc.arg(project_id), sqlc.arg(title), sqlc.arg(created_by), sqlc.arg(agent_id), sqlc.arg(harness), sqlc.arg(model), sqlc.arg(effort),
-  COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)))
+  COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)), sqlc.arg(hidden))
 RETURNING *;
 
 -- name: SetChatRepo :one
@@ -14,7 +14,7 @@ UPDATE chat_sessions SET repo_url = $2, work_branch = $3 WHERE id = $1 RETURNING
 
 -- name: ListChatSessions :many
 SELECT * FROM chat_sessions
-WHERE workspace_id = $1 AND project_id = $2 AND created_by = $3 AND NOT archived
+WHERE workspace_id = $1 AND project_id = $2 AND created_by = $3 AND NOT archived AND NOT hidden
 ORDER BY COALESCE(last_message_at, created_at) DESC, id DESC
 LIMIT $4;
 
@@ -137,7 +137,7 @@ SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('u
 -- name: ListChatsForUser :many
 -- One page of a person's chats: archived or not, optionally one project.
 SELECT c.* FROM chat_sessions c JOIN projects p ON p.id = c.project_id
-WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = sqlc.arg(archived)
+WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = sqlc.arg(archived) AND NOT c.hidden
   AND (sqlc.narg(project_key)::text IS NULL OR p.key = sqlc.narg(project_key)::text)
   -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
   AND CASE sqlc.arg(persona_filter)::text
@@ -360,7 +360,7 @@ FROM chat_sessions c
 CROSS JOIN LATERAL (SELECT count(*)::int AS unread FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' AND m.seq > c.last_read_seq) u
 CROSS JOIN LATERAL (SELECT EXISTS(SELECT 1 FROM persona_proposals pp WHERE pp.chat_id = c.id AND pp.state = 'pending') AS waiting_approval) p
 LEFT JOIN LATERAL (SELECT m.persona_id, m.body_md, m.seq FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' ORDER BY m.seq DESC LIMIT 1) l ON true
-WHERE c.workspace_id = $1 AND c.created_by = $2 AND NOT c.archived
+WHERE c.workspace_id = $1 AND c.created_by = $2 AND NOT c.archived AND NOT c.hidden
   AND (c.state = 'running' OR u.unread > 0 OR p.waiting_approval)
 ORDER BY last_activity_at DESC;
 
@@ -383,7 +383,7 @@ hits AS (
   FROM chat_messages m
   JOIN chat_sessions c ON c.id = m.session_id
   CROSS JOIN q
-  WHERE c.workspace_id = sqlc.arg(workspace_id) AND c.created_by = sqlc.arg(user_id)
+  WHERE c.workspace_id = sqlc.arg(workspace_id) AND c.created_by = sqlc.arg(user_id) AND NOT c.hidden
     AND m.role IN ('user', 'assistant')
     AND to_tsvector('english', left(m.body_md, 200000)) @@ q.tsq
   ORDER BY rank DESC, m.created_at DESC

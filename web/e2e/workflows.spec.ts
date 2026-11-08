@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { installChatApi } from "./mock-chat-api";
+import { installChatApi, persona } from "./mock-chat-api";
 
 // Workflows: build one on the canvas, review a persona's suggestion, start from /workflow, approve a gate.
 
@@ -59,6 +59,32 @@ test("the canvas shows the draft and adding a node saves it", async ({ page }) =
   await expect(page.getByTestId("workflow-inspector")).toBeVisible();
   await expect.poll(() => state.posts.some((p) => JSON.stringify(p.body).includes("chat_1")), { timeout: 5000 }).toBe(true);
   await page.screenshot({ path: "/tmp/workflow-editor.png" });
+});
+
+test("the build chat offers only personas that can create workflows and starts hidden as the one picked", async ({ page }) => {
+  const atlas = persona(1, { name: "Atlas", is_default: true, capabilities: { code: false, images: false, workflows: true } });
+  const nova = persona(2, { name: "Nova", capabilities: { code: false, images: false, workflows: true } });
+  await installChatApi(page, { replyDelayMs: 10, personas: [atlas, nova, persona(3, { name: "Plain" })] });
+  await serveWorkflows(page, { wf: workflow(), posts: [], runs: [] });
+  await page.goto(`/workflows/${WF}`);
+  const picker = page.getByRole("radiogroup", { name: "Build as persona" });
+  await expect(picker.getByRole("radio")).toHaveCount(2);
+  await expect(picker.getByRole("radio", { name: "Atlas" })).toBeChecked();
+  await picker.getByRole("radio", { name: "Nova" }).click();
+  await expect(picker.getByRole("radio", { name: "Nova" })).toBeChecked();
+  const posted = page.waitForRequest((r) => r.method() === "POST" && /\/api\/v1\/chats$/.test(r.url()));
+  await page.getByRole("textbox", { name: "Describe a change" }).fill("Add a fact check");
+  await page.getByRole("button", { name: "Send" }).click();
+  expect((await posted).postDataJSON()).toMatchObject({ persona_id: nova.id, hidden: true });
+});
+
+test("the build chat points to Personas when none can create workflows", async ({ page }) => {
+  await installChatApi(page, { replyDelayMs: 10, personas: [persona(1, { name: "Plain", is_default: true })] });
+  await serveWorkflows(page, { wf: workflow(), posts: [], runs: [] });
+  await page.goto(`/workflows/${WF}`);
+  await expect(page.getByTestId("workflow-build-chat")).toContainText("No persona can create workflows yet");
+  await page.getByRole("textbox", { name: "Describe a change" }).fill("Add a fact check");
+  await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
 });
 
 test("a persona's suggestion previews on the canvas until applied", async ({ page }) => {
