@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
+import { Tabs } from "@/components/ui/controls";
+import { useState } from "react";
+import { Fridge } from "./fridge";
 
 /** Where an item came from: its persona and chat, while they still exist. */
 function Source({ item }: { item: LibraryItem }) {
@@ -100,6 +103,7 @@ const grid = "grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4";
 export function LibraryScreen() {
   const lib = useLibrary("image");
   const items = lib.data?.pages.flatMap((p) => p.items) ?? [];
+  const [tab, setTab] = useState("images");
   return (
     <>
       <TopBar crumbs={[{ label: "Library" }]} />
@@ -111,7 +115,10 @@ export function LibraryScreen() {
               Keepsakes from your Assistant chats, private to you. Images your personas generate are saved here automatically and stay after their chat is deleted.
             </p>
           </div>
-          {lib.isError ? (
+          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "fridge", label: "Fridge" }]} />
+          {tab === "fridge" ? (
+            <Fridge />
+          ) : lib.isError ? (
             <Banner tone="blocked" title="Couldn't load your Library" actions={<Button onClick={() => lib.refetch()}>Retry</Button>}>
               {lib.error.message}
             </Banner>
