@@ -356,7 +356,7 @@ func (q *Queries) CacheUsageForRuns(ctx context.Context, runIds []uuid.UUID) ([]
 }
 
 const chatSessionOfRun = `-- name: ChatSessionOfRun :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort FROM chat_sessions
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns FROM chat_sessions
 WHERE current_run_id = $1 OR id IN (SELECT session_id FROM chat_messages WHERE run_id = $1)
 LIMIT 1
 `
@@ -385,6 +385,9 @@ func (q *Queries) ChatSessionOfRun(ctx context.Context, runID *uuid.UUID) (ChatS
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }

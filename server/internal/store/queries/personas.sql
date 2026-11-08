@@ -22,9 +22,13 @@ SELECT * FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3;
 SELECT id FROM personas WHERE id = $1 AND workspace_id = $2 AND user_id = $3 FOR KEY SHARE;
 
 -- name: LockPersonaChats :exec
--- Before a delete: lock the persona's chats first, in the same order a message
--- post takes them (chat, then persona), so the two never deadlock.
-SELECT id FROM chat_sessions WHERE persona_id = $1 ORDER BY id FOR UPDATE;
+-- Before a delete: lock the chats the persona hosts, speaks in or joined
+-- first, in the same order a message post takes them (chat, then persona), so
+-- the two never deadlock.
+SELECT c.id FROM chat_sessions c
+WHERE c.persona_id = sqlc.arg(persona_id)::uuid OR c.speaker_persona_id = sqlc.arg(persona_id)::uuid
+   OR c.id IN (SELECT cp.chat_id FROM chat_participants cp WHERE cp.persona_id = sqlc.arg(persona_id)::uuid)
+ORDER BY c.id FOR UPDATE OF c;
 
 -- name: DefaultPersona :one
 SELECT * FROM personas WHERE workspace_id = $1 AND user_id = $2 AND is_default;
@@ -39,8 +43,8 @@ SELECT EXISTS (
 )::bool;
 
 -- name: CreatePersona :one
-INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default, can_code, can_generate_images, repos)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *;
+INSERT INTO personas (workspace_id, user_id, name, tone, color, custom_instructions, is_default, can_code, can_generate_images, repos, can_create_personas)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *;
 
 -- name: UpdatePersona :one
 -- Returns no row when the persona isn't the caller's or the revision is stale.
@@ -51,6 +55,7 @@ UPDATE personas SET
   custom_instructions = COALESCE(sqlc.narg(custom_instructions)::text, custom_instructions),
   can_code = COALESCE(sqlc.narg(can_code)::boolean, can_code),
   can_generate_images = COALESCE(sqlc.narg(can_generate_images)::boolean, can_generate_images),
+  can_create_personas = COALESCE(sqlc.narg(can_create_personas)::boolean, can_create_personas),
   repos = COALESCE(sqlc.narg(repos)::text[], repos),
   revision = revision + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND revision = sqlc.arg(revision)
@@ -89,7 +94,10 @@ SELECT persona_id::uuid AS persona_id, count(*)::int AS n FROM chat_sessions
 WHERE persona_id = ANY(sqlc.arg(ids)::uuid[]) GROUP BY persona_id;
 
 -- name: PersonaChatIDs :many
-SELECT id FROM chat_sessions WHERE persona_id = $1 ORDER BY id;
+-- Chats that show the persona: as host or as a participant.
+SELECT id FROM chat_sessions WHERE persona_id = sqlc.arg(persona_id)::uuid
+UNION SELECT chat_id FROM chat_participants WHERE persona_id = sqlc.arg(persona_id)::uuid
+ORDER BY 1;
 
 -- name: PersonasByIDs :many
 -- The summaries chat payloads embed; only the caller's own personas.

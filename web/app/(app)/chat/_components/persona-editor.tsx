@@ -442,7 +442,7 @@ function RepoList({ repos, setRepos, serverError }: { repos: string[]; setRepos:
 
 // ---- editor ----
 
-type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; repos: string[] };
+type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; personas: boolean; repos: string[] };
 
 const draftOf = (p?: Persona): Draft => ({
   name: p?.name ?? "",
@@ -451,6 +451,7 @@ const draftOf = (p?: Persona): Draft => ({
   makeDefault: p?.is_default ?? false,
   code: p?.capabilities.code ?? false,
   images: p?.capabilities.images ?? false,
+  personas: p?.capabilities.personas ?? false,
   repos: p?.repos ?? [],
 });
 
@@ -516,7 +517,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           color: color.color,
           custom_instructions: draft.instructions,
           is_default: draft.makeDefault,
-          capabilities: { code: draft.code, images: draft.images },
+          capabilities: { code: draft.code, images: draft.images, personas: draft.personas },
           repos: draft.repos,
         });
       } else {
@@ -526,8 +527,13 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
         if (color.color !== p.color.toLowerCase()) patch.color = color.color;
         if (draft.instructions !== p.custom_instructions) patch.custom_instructions = draft.instructions;
         // Repos persist while code is off; a change to either sends both (the list replaces the old one).
-        if (draft.code !== p.capabilities.code || draft.images !== p.capabilities.images || !sameList(draft.repos, p.repos)) {
-          patch.capabilities = { code: draft.code, images: draft.images };
+        if (
+          draft.code !== p.capabilities.code ||
+          draft.images !== p.capabilities.images ||
+          draft.personas !== (p.capabilities.personas ?? false) ||
+          !sameList(draft.repos, p.repos)
+        ) {
+          patch.capabilities = { code: draft.code, images: draft.images, personas: draft.personas };
           patch.repos = draft.repos;
         }
         if (Object.keys(patch).length > 1) p = await update.mutateAsync({ id: p.id, patch });
@@ -675,6 +681,13 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     onChange={(v) => set({ images: v })}
                     title="Generate images"
                     hint="Creates images with Codex; works with any model in the chat. Images appear in the conversation."
+                  />
+                  <Toggle
+                    id="persona-personas"
+                    checked={draft.personas}
+                    onChange={(v) => set({ personas: v })}
+                    title="Create personas"
+                    hint="Can propose new personas in a chat. Each one is created only after you approve it, with no abilities turned on."
                   />
                 </fieldset>
               </div>

@@ -48,14 +48,27 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 	}
 	ids := make([]uuid.UUID, len(chats))
 	var failed, personaIDs []uuid.UUID
+	addPersona := func(id *uuid.UUID) {
+		if id != nil && !slices.Contains(personaIDs, *id) {
+			personaIDs = append(personaIDs, *id)
+		}
+	}
 	for i, c := range chats {
 		ids[i] = c.ID
 		if c.State == "failed" {
 			failed = append(failed, c.ID)
 		}
-		if c.PersonaID != nil && !slices.Contains(personaIDs, *c.PersonaID) {
-			personaIDs = append(personaIDs, *c.PersonaID)
-		}
+		addPersona(c.PersonaID)
+		addPersona(c.SpeakerPersonaID)
+	}
+	joined, err := s.Q.ChatParticipants(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	guests := map[uuid.UUID][]uuid.UUID{}
+	for _, j := range joined {
+		guests[j.ChatID] = append(guests[j.ChatID], j.PersonaID)
+		addPersona(&j.PersonaID)
 	}
 	personaRows := map[uuid.UUID]store.Persona{}
 	if len(personaIDs) > 0 {
@@ -107,6 +120,24 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 				item.Persona = toPersonaSummary(p)
 			}
 		}
+		// The host first, then the personas mentioned in; deleted ones drop out.
+		parts := []api.PersonaSummary{}
+		if item.Persona != nil {
+			parts = append(parts, *item.Persona)
+		}
+		for _, id := range guests[c.ID] {
+			if p, ok := personaRows[id]; ok && (c.PersonaID == nil || *c.PersonaID != id) {
+				parts = append(parts, *toPersonaSummary(p))
+			}
+		}
+		item.Participants = &parts
+		if c.SpeakerPersonaID != nil {
+			if p, ok := personaRows[*c.SpeakerPersonaID]; ok {
+				item.Speaker = toPersonaSummary(p)
+			}
+		} else {
+			item.Speaker = item.Persona
+		}
 		if r, ok := reasons[c.ID]; ok && c.State == "failed" {
 			item.Error = &r
 		}
@@ -145,6 +176,23 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 	if err != nil {
 		return nil, err
 	}
+	var personaIDs []uuid.UUID
+	for _, m := range msgs {
+		if m.PersonaID != nil && !slices.Contains(personaIDs, *m.PersonaID) {
+			personaIDs = append(personaIDs, *m.PersonaID)
+		}
+	}
+	authors := map[uuid.UUID]store.Persona{}
+	if len(personaIDs) > 0 {
+		_, _, ws := me(ctx)
+		rows, err := s.Q.PersonasByIDs(ctx, store.PersonasByIDsParams{Ids: personaIDs, WorkspaceID: ws, UserID: u.ID})
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range rows {
+			authors[p.ID] = p
+		}
+	}
 	out := make([]api.ChatMessage, 0, len(msgs))
 	for _, m := range msgs {
 		item := api.ChatMessage{Id: m.ID, Seq: int(m.Seq), Role: api.ChatMessageRole(m.Role), BodyMd: m.BodyMd, RunId: m.RunID, Model: m.Model, CreatedAt: m.CreatedAt}
@@ -167,6 +215,10 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 		}
 		if m.Role == "user" {
 			item.Author = toUserRef(u)
+		}
+		// Which persona wrote a reply; absent is the chat's host.
+		if p, ok := authors[deref(m.PersonaID)]; ok && m.Role == "assistant" {
+			item.Persona = toPersonaSummary(p)
 		}
 		// A user message always lists its attachments; an assistant message
 		// only when it has generated files.
@@ -452,4 +504,67 @@ func (s *Server) CancelChatTurn(ctx context.Context, req api.CancelChatTurnReque
 	}
 	out, err := s.toChat(ctx, c)
 	return api.CancelChatTurn200JSONResponse(out), err
+}
+
+func (s *Server) toProposals(ctx context.Context, rows []store.PersonaProposal) ([]api.PersonaProposal, error) {
+	u, _, ws := me(ctx)
+	var ids []uuid.UUID
+	for _, r := range rows {
+		for _, id := range []*uuid.UUID{r.ProposedBy, r.PersonaID} {
+			if id != nil && !slices.Contains(ids, *id) {
+				ids = append(ids, *id)
+			}
+		}
+	}
+	byID := map[uuid.UUID]store.Persona{}
+	if len(ids) > 0 {
+		ps, err := s.Q.PersonasByIDs(ctx, store.PersonasByIDsParams{Ids: ids, WorkspaceID: ws, UserID: u.ID})
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range ps {
+			byID[p.ID] = p
+		}
+	}
+	out := make([]api.PersonaProposal, 0, len(rows))
+	for _, r := range rows {
+		item := api.PersonaProposal{
+			Id: r.ID, ChatId: r.ChatID, Name: r.Name, Tone: api.PersonaTone(r.Tone), Color: r.Color, CustomInstructions: r.CustomInstructions,
+			Reason: r.Reason, State: api.PersonaProposalState(r.State), CreatedAt: r.CreatedAt, DecidedAt: r.DecidedAt,
+		}
+		if p, ok := byID[deref(r.ProposedBy)]; ok {
+			item.ProposedBy = toPersonaSummary(p)
+		}
+		if p, ok := byID[deref(r.PersonaID)]; ok {
+			item.Persona = toPersonaSummary(p)
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (s *Server) ListPersonaProposals(ctx context.Context, req api.ListPersonaProposalsRequestObject) (api.ListPersonaProposalsResponseObject, error) {
+	u, _, ws := me(ctx)
+	rows, err := s.Runs.ListPersonaProposals(ctx, ws, u.ID, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.toProposals(ctx, rows)
+	return api.ListPersonaProposals200JSONResponse{Proposals: out}, err
+}
+
+func (s *Server) DecidePersonaProposal(ctx context.Context, req api.DecidePersonaProposalRequestObject) (api.DecidePersonaProposalResponseObject, error) {
+	u, _, ws := me(ctx)
+	if req.Body == nil || !req.Body.Decision.Valid() {
+		return nil, apperr.Invalid("decision", "must be approve or decline")
+	}
+	p, err := s.Runs.DecidePersonaProposal(ctx, ws, u.ID, req.Id, req.ProposalId, req.Body.Decision == api.Approve)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.toProposals(ctx, []store.PersonaProposal{p})
+	if err != nil {
+		return nil, err
+	}
+	return api.DecidePersonaProposal200JSONResponse(out[0]), nil
 }

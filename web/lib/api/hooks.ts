@@ -986,6 +986,7 @@ export const chatKeys = {
   list: (project: string, archived = false, persona = "") => ["chats", "list", project, archived, persona] as const,
   detail: (id: string) => ["chats", "detail", id] as const,
   messages: (id: string) => ["chats", "messages", id] as const,
+  proposals: (id: string) => ["chats", "proposals", id] as const,
   models: ["chats", "models"] as const,
 };
 
@@ -1015,6 +1016,25 @@ export function useChatMessages(id?: string) {
     enabled: !!id,
     queryKey: chatKeys.messages(id ?? ""),
     queryFn: () => unwrap(api.GET("/chats/{id}/messages", { params: { path: { id: id! }, query: { limit: 200 } } })),
+  });
+}
+
+/** Personas the chat's personas proposed; pending ones wait for the person's approval. */
+export function usePersonaProposals(id?: string) {
+  return useQuery({
+    enabled: !!id,
+    queryKey: chatKeys.proposals(id ?? ""),
+    queryFn: () => unwrap(api.GET("/chats/{id}/persona-proposals", { params: { path: { id: id! } } })),
+  });
+}
+
+/** Approving creates the persona (and may start its introduction), so personas and the chat refetch. */
+export function useDecidePersonaProposal(chatId: string) {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: (v: { id: string; decision: "approve" | "decline" }) =>
+      unwrap(api.POST("/chats/{id}/persona-proposals/{proposal_id}", { params: { path: { id: chatId, proposal_id: v.id } }, body: { decision: v.decision } })),
+    onSettled: done,
   });
 }
 

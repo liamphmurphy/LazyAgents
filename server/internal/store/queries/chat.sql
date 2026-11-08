@@ -36,9 +36,9 @@ WHERE id = $1 AND workspace_id = $2 AND revision = $3 RETURNING *;
 WITH next AS (
   SELECT COALESCE(MAX(m.seq), 0) + 1 AS seq FROM chat_messages m WHERE m.session_id = sqlc.arg(session_id)
 ), ins AS (
-  INSERT INTO chat_messages (session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage)
+  INSERT INTO chat_messages (session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, persona_id)
   SELECT sqlc.arg(session_id), next.seq, sqlc.arg(role), sqlc.arg(body_md), sqlc.narg(harness), sqlc.narg(model), sqlc.narg(run_id), sqlc.narg(run_turn_id),
-         sqlc.arg(context_refs), sqlc.arg(citations), sqlc.narg(usage)
+         sqlc.arg(context_refs), sqlc.arg(citations), sqlc.narg(usage), sqlc.narg(persona_id)
   FROM next RETURNING *
 ), touch AS (
   UPDATE chat_sessions SET last_message_at = (SELECT created_at FROM ins), updated_at = now()
@@ -124,9 +124,12 @@ WHERE id = $1 RETURNING *;
 
 -- name: ListRecentChatMessages :many
 -- Newest rows first, bounded by limit; bodies are clipped so the read stays small.
-SELECT seq, role, harness, model, left(body_md, sqlc.arg(max_chars)::int)::text AS body_md
-FROM chat_messages WHERE session_id = sqlc.arg(session_id) AND role IN ('user', 'assistant')
-ORDER BY seq DESC LIMIT sqlc.arg(row_limit);
+-- persona_name is who wrote an assistant message when the chat has several
+-- personas ('' for the host or a deleted persona).
+SELECT m.seq, m.role, m.harness, m.model, left(m.body_md, sqlc.arg(max_chars)::int)::text AS body_md, COALESCE(p.name, '')::text AS persona_name
+FROM chat_messages m LEFT JOIN personas p ON p.id = m.persona_id
+WHERE m.session_id = sqlc.arg(session_id) AND m.role IN ('user', 'assistant')
+ORDER BY m.seq DESC LIMIT sqlc.arg(row_limit);
 
 -- name: CountChatHistory :one
 SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('user', 'assistant');
@@ -277,3 +280,38 @@ SELECT EXISTS (
 SELECT type, payload FROM run_events
 WHERE run_id = $1 AND type IN ('tool_call', 'tool_result') AND payload->>'tool' = 'WebSearch'
 ORDER BY seq;
+
+-- name: SetChatSpeaker :one
+-- Who answers the next turn, who is queued after them, and the relay count.
+-- Not a revision bump: it changes together with the turn's state.
+UPDATE chat_sessions SET speaker_persona_id = sqlc.narg(speaker_persona_id), queued_persona_ids = sqlc.arg(queued_persona_ids)::uuid[], relay_turns = sqlc.arg(relay_turns)
+WHERE id = sqlc.arg(id) RETURNING *;
+
+-- name: AddChatParticipant :exec
+INSERT INTO chat_participants (chat_id, persona_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;
+
+-- name: ChatParticipants :many
+-- Personas brought into these chats besides their hosts, in the order they joined.
+SELECT chat_id, persona_id FROM chat_participants WHERE chat_id = ANY(sqlc.arg(chat_ids)::uuid[]) ORDER BY joined_at, persona_id;
+
+-- name: CreatePersonaProposal :one
+INSERT INTO persona_proposals (chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;
+
+-- name: CountPendingPersonaProposals :one
+SELECT count(*)::int FROM persona_proposals WHERE chat_id = $1 AND state = 'pending';
+
+-- name: ListPersonaProposals :many
+SELECT * FROM persona_proposals WHERE chat_id = $1 ORDER BY created_at, id;
+
+-- name: LockPersonaProposal :one
+SELECT * FROM persona_proposals WHERE id = $1 AND chat_id = $2 FOR UPDATE;
+
+-- name: DecidePersonaProposal :one
+UPDATE persona_proposals SET state = sqlc.arg(state), persona_id = sqlc.narg(persona_id), decided_at = now()
+WHERE id = sqlc.arg(id) RETURNING *;
+
+-- name: BumpChatRevision :one
+-- A change only the chat's payload shows (participants, proposals): clients
+-- refetch on chat.updated.
+UPDATE chat_sessions SET revision = revision + 1, updated_at = now() WHERE id = $1 RETURNING *;

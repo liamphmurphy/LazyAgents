@@ -195,6 +195,13 @@ func personaSection(p *Persona) string {
 // sections. memoryIndex is the person's always-loaded memory index (Markdown).
 // persona is the chat's persona, nil for the built-in Assistant (no section).
 func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memoryIndex string, persona *Persona) []byte {
+	return ChatAgentsMDWithGroup(spec, contextFiles, project, memoryIndex, persona, "")
+}
+
+// ChatAgentsMDWithGroup is ChatAgentsMD for a chat several personas can share:
+// group (Markdown lines, empty for none) says who is answering this turn, who
+// else is in the conversation and how to bring a persona in.
+func ChatAgentsMDWithGroup(spec agentdef.Resolved, contextFiles []string, project, memoryIndex string, persona *Persona, group string) []byte {
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n# Vesper chat: project " + project + "\n\n")
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
@@ -223,6 +230,9 @@ func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memory
 	}
 	if persona != nil {
 		b.WriteString(personaSection(persona))
+	}
+	if g := strings.TrimSpace(group); g != "" {
+		b.WriteString("## Other personas\n\n" + g + "\n\n")
 	}
 	if len(contextFiles) > 0 {
 		b.WriteString("## Context\n\n")

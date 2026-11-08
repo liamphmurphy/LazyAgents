@@ -10,13 +10,14 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image"}
+	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "propose_persona"}
 
 // chatScope is the project a chat run may read from.
 type chatScope struct {
@@ -181,4 +182,29 @@ func generateImage(ctx context.Context, d Deps, c agents.Caller, in GenerateImag
 		return nil, err
 	}
 	return map[string]any{"queued": true, "tell_the_person": "Queued. The image is generated with Codex right after your reply and appears under it. Tell the person you're making it; don't describe it as finished."}, nil
+}
+
+type ProposePersonaIn struct {
+	Name         string `json:"name" jsonschema:"The new persona's name, 1–60 characters, unique among the person's personas; others mention it as @Name"`
+	Tone         string `json:"tone,omitempty" jsonschema:"One of neutral, friendly, concise, formal, playful (default neutral)"`
+	Color        string `json:"color,omitempty" jsonschema:"Its colour in the chat as #rrggbb (default #64748b)"`
+	Instructions string `json:"instructions,omitempty" jsonschema:"Its style and focus, at most 2000 characters, written to it in the second person"`
+	Reason       string `json:"reason,omitempty" jsonschema:"One sentence for the person on why it helps, at most 500 characters"`
+}
+
+// proposePersona asks the person to approve a new persona (see
+// runs.Service.ProposePersona); only a persona allowed to create personas may.
+func proposePersona(ctx context.Context, d Deps, c agents.Caller, in ProposePersonaIn) (any, error) {
+	s, err := chatScopeFor(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil {
+		return nil, apperr.Conflict("propose_persona only works in a chat with a person")
+	}
+	p, err := d.Runs.ProposePersona(ctx, c.Agent.WorkspaceID, *c.RunID, runs.PersonaProposalInput{Name: in.Name, Tone: in.Tone, Color: in.Color, Instructions: in.Instructions, Reason: in.Reason})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"proposal_id": p.ID, "name": p.Name, "state": p.State, "tell_the_person": "Proposed. The person sees Approve and Decline in the chat; " + p.Name + " is only created if they approve. Don't describe it as created yet."}, nil
 }

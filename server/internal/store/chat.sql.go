@@ -13,19 +13,33 @@ import (
 	"github.com/google/uuid"
 )
 
+const addChatParticipant = `-- name: AddChatParticipant :exec
+INSERT INTO chat_participants (chat_id, persona_id) VALUES ($1, $2) ON CONFLICT DO NOTHING
+`
+
+type AddChatParticipantParams struct {
+	ChatID    uuid.UUID
+	PersonaID uuid.UUID
+}
+
+func (q *Queries) AddChatParticipant(ctx context.Context, arg AddChatParticipantParams) error {
+	_, err := q.db.Exec(ctx, addChatParticipant, arg.ChatID, arg.PersonaID)
+	return err
+}
+
 const appendChatMessage = `-- name: AppendChatMessage :one
 WITH next AS (
   SELECT COALESCE(MAX(m.seq), 0) + 1 AS seq FROM chat_messages m WHERE m.session_id = $1
 ), ins AS (
-  INSERT INTO chat_messages (session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage)
+  INSERT INTO chat_messages (session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, persona_id)
   SELECT $1, next.seq, $2, $3, $4, $5, $6, $7,
-         $8, $9, $10
-  FROM next RETURNING id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes
+         $8, $9, $10, $11
+  FROM next RETURNING id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes, persona_id
 ), touch AS (
   UPDATE chat_sessions SET last_message_at = (SELECT created_at FROM ins), updated_at = now()
   WHERE id = $1
 )
-SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes FROM ins
+SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes, persona_id FROM ins
 `
 
 type AppendChatMessageParams struct {
@@ -39,6 +53,7 @@ type AppendChatMessageParams struct {
 	ContextRefs json.RawMessage
 	Citations   json.RawMessage
 	Usage       []byte
+	PersonaID   *uuid.UUID
 }
 
 type AppendChatMessageRow struct {
@@ -56,6 +71,7 @@ type AppendChatMessageRow struct {
 	Usage       []byte
 	CreatedAt   time.Time
 	CodeChanges json.RawMessage
+	PersonaID   *uuid.UUID
 }
 
 // seq is allocated in the statement; concurrent appenders to one session collide on
@@ -72,6 +88,7 @@ func (q *Queries) AppendChatMessage(ctx context.Context, arg AppendChatMessagePa
 		arg.ContextRefs,
 		arg.Citations,
 		arg.Usage,
+		arg.PersonaID,
 	)
 	var i AppendChatMessageRow
 	err := row.Scan(
@@ -89,13 +106,14 @@ func (q *Queries) AppendChatMessage(ctx context.Context, arg AppendChatMessagePa
 		&i.Usage,
 		&i.CreatedAt,
 		&i.CodeChanges,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
 const archiveChatSession = `-- name: ArchiveChatSession :one
 UPDATE chat_sessions SET archived = true, revision = revision + 1, updated_at = now()
-WHERE id = $1 AND workspace_id = $2 AND revision = $3 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort
+WHERE id = $1 AND workspace_id = $2 AND revision = $3 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
 `
 
 type ArchiveChatSessionParams struct {
@@ -127,6 +145,9 @@ func (q *Queries) ArchiveChatSession(ctx context.Context, arg ArchiveChatSession
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
@@ -208,6 +229,42 @@ func (q *Queries) AttachChatAttachments(ctx context.Context, arg AttachChatAttac
 		return nil, err
 	}
 	return items, nil
+}
+
+const bumpChatRevision = `-- name: BumpChatRevision :one
+UPDATE chat_sessions SET revision = revision + 1, updated_at = now() WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
+`
+
+// A change only the chat's payload shows (participants, proposals): clients
+// refetch on chat.updated.
+func (q *Queries) BumpChatRevision(ctx context.Context, id uuid.UUID) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, bumpChatRevision, id)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+		&i.PersonaID,
+		&i.RepoUrl,
+		&i.WorkBranch,
+		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
+	)
+	return i, err
 }
 
 const chatAttachmentBytes = `-- name: ChatAttachmentBytes :one
@@ -313,7 +370,7 @@ func (q *Queries) ChatMessageCounts(ctx context.Context, ids []uuid.UUID) ([]Cha
 }
 
 const chatMessageForTurn = `-- name: ChatMessageForTurn :one
-SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes FROM chat_messages WHERE run_turn_id = $1 AND role = 'user'
+SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes, persona_id FROM chat_messages WHERE run_turn_id = $1 AND role = 'user'
 `
 
 func (q *Queries) ChatMessageForTurn(ctx context.Context, runTurnID *uuid.UUID) (ChatMessage, error) {
@@ -334,12 +391,43 @@ func (q *Queries) ChatMessageForTurn(ctx context.Context, runTurnID *uuid.UUID) 
 		&i.Usage,
 		&i.CreatedAt,
 		&i.CodeChanges,
+		&i.PersonaID,
 	)
 	return i, err
 }
 
+const chatParticipants = `-- name: ChatParticipants :many
+SELECT chat_id, persona_id FROM chat_participants WHERE chat_id = ANY($1::uuid[]) ORDER BY joined_at, persona_id
+`
+
+type ChatParticipantsRow struct {
+	ChatID    uuid.UUID
+	PersonaID uuid.UUID
+}
+
+// Personas brought into these chats besides their hosts, in the order they joined.
+func (q *Queries) ChatParticipants(ctx context.Context, chatIds []uuid.UUID) ([]ChatParticipantsRow, error) {
+	rows, err := q.db.Query(ctx, chatParticipants, chatIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatParticipantsRow{}
+	for rows.Next() {
+		var i ChatParticipantsRow
+		if err := rows.Scan(&i.ChatID, &i.PersonaID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const chatSessionForRun = `-- name: ChatSessionForRun :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort FROM chat_sessions WHERE current_run_id = $1
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns FROM chat_sessions WHERE current_run_id = $1
 `
 
 func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID) (ChatSession, error) {
@@ -365,6 +453,9 @@ func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
@@ -461,6 +552,17 @@ func (q *Queries) CountChatHistory(ctx context.Context, sessionID uuid.UUID) (in
 	return column_1, err
 }
 
+const countPendingPersonaProposals = `-- name: CountPendingPersonaProposals :one
+SELECT count(*)::int FROM persona_proposals WHERE chat_id = $1 AND state = 'pending'
+`
+
+func (q *Queries) CountPendingPersonaProposals(ctx context.Context, chatID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countPendingPersonaProposals, chatID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createAssistantAgent = `-- name: CreateAssistantAgent :one
 INSERT INTO agents (workspace_id, name, handle, color_index, role, specialty, model, status, kind)
 VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle', 'assistant')
@@ -553,7 +655,7 @@ const createChatSession = `-- name: CreateChatSession :one
 INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
   COALESCE($9::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = $1 AND p.user_id = $4 AND p.is_default)))
-RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort
+RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
 `
 
 type CreateChatSessionParams struct {
@@ -604,6 +706,9 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
@@ -646,6 +751,84 @@ func (q *Queries) CreateGeneratedChatAttachment(ctx context.Context, arg CreateG
 		&i.BlobKey,
 		&i.CreatedAt,
 		&i.Source,
+	)
+	return i, err
+}
+
+const createPersonaProposal = `-- name: CreatePersonaProposal :one
+INSERT INTO persona_proposals (chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at
+`
+
+type CreatePersonaProposalParams struct {
+	ChatID             uuid.UUID
+	RunID              *uuid.UUID
+	ProposedBy         *uuid.UUID
+	Name               string
+	Tone               string
+	Color              string
+	CustomInstructions string
+	Reason             string
+}
+
+func (q *Queries) CreatePersonaProposal(ctx context.Context, arg CreatePersonaProposalParams) (PersonaProposal, error) {
+	row := q.db.QueryRow(ctx, createPersonaProposal,
+		arg.ChatID,
+		arg.RunID,
+		arg.ProposedBy,
+		arg.Name,
+		arg.Tone,
+		arg.Color,
+		arg.CustomInstructions,
+		arg.Reason,
+	)
+	var i PersonaProposal
+	err := row.Scan(
+		&i.ID,
+		&i.ChatID,
+		&i.RunID,
+		&i.ProposedBy,
+		&i.Name,
+		&i.Tone,
+		&i.Color,
+		&i.CustomInstructions,
+		&i.Reason,
+		&i.State,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.DecidedAt,
+	)
+	return i, err
+}
+
+const decidePersonaProposal = `-- name: DecidePersonaProposal :one
+UPDATE persona_proposals SET state = $1, persona_id = $2, decided_at = now()
+WHERE id = $3 RETURNING id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at
+`
+
+type DecidePersonaProposalParams struct {
+	State     string
+	PersonaID *uuid.UUID
+	ID        uuid.UUID
+}
+
+func (q *Queries) DecidePersonaProposal(ctx context.Context, arg DecidePersonaProposalParams) (PersonaProposal, error) {
+	row := q.db.QueryRow(ctx, decidePersonaProposal, arg.State, arg.PersonaID, arg.ID)
+	var i PersonaProposal
+	err := row.Scan(
+		&i.ID,
+		&i.ChatID,
+		&i.RunID,
+		&i.ProposedBy,
+		&i.Name,
+		&i.Tone,
+		&i.Color,
+		&i.CustomInstructions,
+		&i.Reason,
+		&i.State,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.DecidedAt,
 	)
 	return i, err
 }
@@ -781,7 +964,7 @@ func (q *Queries) GetChatAttachment(ctx context.Context, arg GetChatAttachmentPa
 }
 
 const getChatSession = `-- name: GetChatSession :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort FROM chat_sessions WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns FROM chat_sessions WHERE id = $1 AND workspace_id = $2
 `
 
 type GetChatSessionParams struct {
@@ -812,6 +995,9 @@ func (q *Queries) GetChatSession(ctx context.Context, arg GetChatSessionParams) 
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
@@ -888,7 +1074,7 @@ func (q *Queries) ListChatAttachmentsForMessages(ctx context.Context, messageIds
 }
 
 const listChatMessages = `-- name: ListChatMessages :many
-SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes FROM chat_messages WHERE session_id = $1 AND seq > $2 ORDER BY seq LIMIT $3
+SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes, persona_id FROM chat_messages WHERE session_id = $1 AND seq > $2 ORDER BY seq LIMIT $3
 `
 
 type ListChatMessagesParams struct {
@@ -921,6 +1107,7 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 			&i.Usage,
 			&i.CreatedAt,
 			&i.CodeChanges,
+			&i.PersonaID,
 		); err != nil {
 			return nil, err
 		}
@@ -933,7 +1120,7 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 }
 
 const listChatSessions = `-- name: ListChatSessions :many
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort FROM chat_sessions
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns FROM chat_sessions
 WHERE workspace_id = $1 AND project_id = $2 AND created_by = $3 AND NOT archived
 ORDER BY COALESCE(last_message_at, created_at) DESC, id DESC
 LIMIT $4
@@ -980,6 +1167,9 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 			&i.RepoUrl,
 			&i.WorkBranch,
 			&i.Effort,
+			&i.SpeakerPersonaID,
+			&i.QueuedPersonaIds,
+			&i.RelayTurns,
 		); err != nil {
 			return nil, err
 		}
@@ -992,7 +1182,7 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 }
 
 const listChatsForUser = `-- name: ListChatsForUser :many
-SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.work_branch, c.effort FROM chat_sessions c JOIN projects p ON p.id = c.project_id
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.work_branch, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns FROM chat_sessions c JOIN projects p ON p.id = c.project_id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = $3
   AND ($4::text IS NULL OR p.key = $4::text)
   -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
@@ -1054,6 +1244,47 @@ func (q *Queries) ListChatsForUser(ctx context.Context, arg ListChatsForUserPara
 			&i.RepoUrl,
 			&i.WorkBranch,
 			&i.Effort,
+			&i.SpeakerPersonaID,
+			&i.QueuedPersonaIds,
+			&i.RelayTurns,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPersonaProposals = `-- name: ListPersonaProposals :many
+SELECT id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at FROM persona_proposals WHERE chat_id = $1 ORDER BY created_at, id
+`
+
+func (q *Queries) ListPersonaProposals(ctx context.Context, chatID uuid.UUID) ([]PersonaProposal, error) {
+	rows, err := q.db.Query(ctx, listPersonaProposals, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PersonaProposal{}
+	for rows.Next() {
+		var i PersonaProposal
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChatID,
+			&i.RunID,
+			&i.ProposedBy,
+			&i.Name,
+			&i.Tone,
+			&i.Color,
+			&i.CustomInstructions,
+			&i.Reason,
+			&i.State,
+			&i.PersonaID,
+			&i.CreatedAt,
+			&i.DecidedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1066,9 +1297,10 @@ func (q *Queries) ListChatsForUser(ctx context.Context, arg ListChatsForUserPara
 }
 
 const listRecentChatMessages = `-- name: ListRecentChatMessages :many
-SELECT seq, role, harness, model, left(body_md, $1::int)::text AS body_md
-FROM chat_messages WHERE session_id = $2 AND role IN ('user', 'assistant')
-ORDER BY seq DESC LIMIT $3
+SELECT m.seq, m.role, m.harness, m.model, left(m.body_md, $1::int)::text AS body_md, COALESCE(p.name, '')::text AS persona_name
+FROM chat_messages m LEFT JOIN personas p ON p.id = m.persona_id
+WHERE m.session_id = $2 AND m.role IN ('user', 'assistant')
+ORDER BY m.seq DESC LIMIT $3
 `
 
 type ListRecentChatMessagesParams struct {
@@ -1078,14 +1310,17 @@ type ListRecentChatMessagesParams struct {
 }
 
 type ListRecentChatMessagesRow struct {
-	Seq     int64
-	Role    string
-	Harness *string
-	Model   *string
-	BodyMd  string
+	Seq         int64
+	Role        string
+	Harness     *string
+	Model       *string
+	BodyMd      string
+	PersonaName string
 }
 
 // Newest rows first, bounded by limit; bodies are clipped so the read stays small.
+// persona_name is who wrote an assistant message when the chat has several
+// personas (” for the host or a deleted persona).
 func (q *Queries) ListRecentChatMessages(ctx context.Context, arg ListRecentChatMessagesParams) ([]ListRecentChatMessagesRow, error) {
 	rows, err := q.db.Query(ctx, listRecentChatMessages, arg.MaxChars, arg.SessionID, arg.RowLimit)
 	if err != nil {
@@ -1101,6 +1336,7 @@ func (q *Queries) ListRecentChatMessages(ctx context.Context, arg ListRecentChat
 			&i.Harness,
 			&i.Model,
 			&i.BodyMd,
+			&i.PersonaName,
 		); err != nil {
 			return nil, err
 		}
@@ -1113,7 +1349,7 @@ func (q *Queries) ListRecentChatMessages(ctx context.Context, arg ListRecentChat
 }
 
 const lockChatSession = `-- name: LockChatSession :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
 `
 
 type LockChatSessionParams struct {
@@ -1144,12 +1380,15 @@ func (q *Queries) LockChatSession(ctx context.Context, arg LockChatSessionParams
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
 
 const lockChatSessionByID = `-- name: LockChatSessionByID :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort FROM chat_sessions WHERE id = $1 FOR UPDATE
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns FROM chat_sessions WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSession, error) {
@@ -1175,6 +1414,39 @@ func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSe
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
+	)
+	return i, err
+}
+
+const lockPersonaProposal = `-- name: LockPersonaProposal :one
+SELECT id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at FROM persona_proposals WHERE id = $1 AND chat_id = $2 FOR UPDATE
+`
+
+type LockPersonaProposalParams struct {
+	ID     uuid.UUID
+	ChatID uuid.UUID
+}
+
+func (q *Queries) LockPersonaProposal(ctx context.Context, arg LockPersonaProposalParams) (PersonaProposal, error) {
+	row := q.db.QueryRow(ctx, lockPersonaProposal, arg.ID, arg.ChatID)
+	var i PersonaProposal
+	err := row.Scan(
+		&i.ID,
+		&i.ChatID,
+		&i.RunID,
+		&i.ProposedBy,
+		&i.Name,
+		&i.Tone,
+		&i.Color,
+		&i.CustomInstructions,
+		&i.Reason,
+		&i.State,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.DecidedAt,
 	)
 	return i, err
 }
@@ -1203,7 +1475,7 @@ func (q *Queries) OwnsChatRun(ctx context.Context, arg OwnsChatRunParams) (bool,
 }
 
 const pageChatMessages = `-- name: PageChatMessages :many
-SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes FROM chat_messages
+SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes, persona_id FROM chat_messages
 WHERE session_id = $1
   AND ($2::bigint IS NULL OR seq > $2::bigint)
   AND ($3::bigint IS NULL OR seq < $3::bigint)
@@ -1251,6 +1523,7 @@ func (q *Queries) PageChatMessages(ctx context.Context, arg PageChatMessagesPara
 			&i.Usage,
 			&i.CreatedAt,
 			&i.CodeChanges,
+			&i.PersonaID,
 		); err != nil {
 			return nil, err
 		}
@@ -1292,7 +1565,7 @@ func (q *Queries) RecoverChatCancellations(ctx context.Context, runnerID *string
 
 const renameChatSession = `-- name: RenameChatSession :one
 UPDATE chat_sessions SET title = $3, revision = revision + 1, updated_at = now()
-WHERE id = $1 AND workspace_id = $2 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort
+WHERE id = $1 AND workspace_id = $2 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
 `
 
 type RenameChatSessionParams struct {
@@ -1331,6 +1604,9 @@ func (q *Queries) RenameChatSession(ctx context.Context, arg RenameChatSessionPa
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
@@ -1396,7 +1672,7 @@ func (q *Queries) SetChatMessageCodeChanges(ctx context.Context, arg SetChatMess
 }
 
 const setChatRepo = `-- name: SetChatRepo :one
-UPDATE chat_sessions SET repo_url = $2, work_branch = $3 WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort
+UPDATE chat_sessions SET repo_url = $2, work_branch = $3 WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
 `
 
 type SetChatRepoParams struct {
@@ -1430,6 +1706,9 @@ func (q *Queries) SetChatRepo(ctx context.Context, arg SetChatRepoParams) (ChatS
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
@@ -1437,7 +1716,7 @@ func (q *Queries) SetChatRepo(ctx context.Context, arg SetChatRepoParams) (ChatS
 const setChatRunState = `-- name: SetChatRunState :one
 UPDATE chat_sessions SET current_run_id = $2, state = $3,
  revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
 `
 
 type SetChatRunStateParams struct {
@@ -1469,13 +1748,16 @@ func (q *Queries) SetChatRunState(ctx context.Context, arg SetChatRunStateParams
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
 
 const setChatSelection = `-- name: SetChatSelection :one
 UPDATE chat_sessions SET harness = $2, model = $3, effort = $4, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
 `
 
 type SetChatSelectionParams struct {
@@ -1515,13 +1797,65 @@ func (q *Queries) SetChatSelection(ctx context.Context, arg SetChatSelectionPara
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
+	)
+	return i, err
+}
+
+const setChatSpeaker = `-- name: SetChatSpeaker :one
+UPDATE chat_sessions SET speaker_persona_id = $1, queued_persona_ids = $2::uuid[], relay_turns = $3
+WHERE id = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
+`
+
+type SetChatSpeakerParams struct {
+	SpeakerPersonaID *uuid.UUID
+	QueuedPersonaIds []uuid.UUID
+	RelayTurns       int32
+	ID               uuid.UUID
+}
+
+// Who answers the next turn, who is queued after them, and the relay count.
+// Not a revision bump: it changes together with the turn's state.
+func (q *Queries) SetChatSpeaker(ctx context.Context, arg SetChatSpeakerParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, setChatSpeaker,
+		arg.SpeakerPersonaID,
+		arg.QueuedPersonaIds,
+		arg.RelayTurns,
+		arg.ID,
+	)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+		&i.PersonaID,
+		&i.RepoUrl,
+		&i.WorkBranch,
+		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
 
 const setChatTitle = `-- name: SetChatTitle :one
 UPDATE chat_sessions SET title = $2, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
 `
 
 type SetChatTitleParams struct {
@@ -1552,13 +1886,16 @@ func (q *Queries) SetChatTitle(ctx context.Context, arg SetChatTitleParams) (Cha
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }
 
 const updateChatTitleArchived = `-- name: UpdateChatTitleArchived :one
 UPDATE chat_sessions SET title = $2, archived = $3, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns
 `
 
 type UpdateChatTitleArchivedParams struct {
@@ -1590,6 +1927,9 @@ func (q *Queries) UpdateChatTitleArchived(ctx context.Context, arg UpdateChatTit
 		&i.RepoUrl,
 		&i.WorkBranch,
 		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
 	)
 	return i, err
 }

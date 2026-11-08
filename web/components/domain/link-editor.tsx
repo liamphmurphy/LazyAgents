@@ -83,6 +83,7 @@ export function LinkEditor({
   onPick,
   accept,
   inputRef,
+  onBlur,
   ...rest
 }: {
   value: string;
@@ -181,7 +182,10 @@ export function LinkEditor({
           if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) sync(value, e.currentTarget.selectionStart);
         }}
         onClick={(e) => sync(value, e.currentTarget.selectionStart)}
-        onBlur={() => setTimeout(() => setOpen(null), 120)}
+        onBlur={(e) => {
+          setTimeout(() => setOpen(null), 120);
+          onBlur?.(e);
+        }}
         className={className}
         {...rest}
       />
