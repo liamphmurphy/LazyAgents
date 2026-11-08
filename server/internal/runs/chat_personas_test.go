@@ -33,3 +33,27 @@ func TestPersonaMentions(t *testing.T) {
 		}
 	}
 }
+
+func TestRelayLimitIn(t *testing.T) {
+	cases := []struct {
+		body string
+		want int
+	}{
+		{"@Ada and @Bea, discuss", 0},
+		{"@Ada @Bea talk up to 25 messages about this", 25},
+		{"Go for another ten rounds", 10},
+		{"keep it to 2 replies please", 2},
+		{"no more than 6 more turns", 6},
+		{"chat 12 messages", 12},
+		{"talk up to 500 messages", MaxRelayLimit},
+		{"argue it out, no limit", MaxRelayLimit},
+		{"I read 25 messages today", 0},
+		{"fix these 3 replies", 0},
+		{"talk up to 0 messages", 0},
+	}
+	for _, c := range cases {
+		if got := RelayLimitIn(c.body); got != c.want {
+			t.Errorf("%q: got %d, want %d", c.body, got, c.want)
+		}
+	}
+}

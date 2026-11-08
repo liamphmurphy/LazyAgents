@@ -92,6 +92,57 @@ func TestMentionsBringPersonasIntoChat(t *testing.T) {
 	}
 }
 
+// Personas hand the conversation on MaxRelayTurns times per message from the
+// person, unless that message asks for more ("talk up to 6 messages").
+func TestRelayLimitFollowsThePerson(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	if err := e.setOverride(agentdef.Override{Harness: agentdef.HarnessClaudeCode, Model: "opus-5.5"}); err != nil {
+		t.Fatal(err)
+	}
+	var mentions []string
+	for _, n := range []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7"} {
+		e.persona(n, false, false)
+		mentions = append(mentions, "@"+n)
+	}
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "Crowd"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Each message's first mention answers; the other six are hand-offs.
+	post := func(body string) (replies int, paused bool) {
+		t.Helper()
+		before := len(e.chatMessages(chat.ID))
+		if _, err := e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: body}); err != nil {
+			t.Fatal(err)
+		}
+		e.until("relays for "+body, func() bool {
+			c := e.chat(chat.ID)
+			return c.State == "idle" && len(c.QueuedPersonaIds) == 0
+		})
+		for _, m := range e.chatMessages(chat.ID)[before:] {
+			if m.Role == "assistant" {
+				replies++
+			}
+			paused = paused || (m.Role == "system" && strings.Contains(m.BodyMd, "Paused the hand-off"))
+		}
+		return replies, paused
+	}
+	all := strings.Join(mentions, " ")
+	if n, paused := post(all + " weigh in"); n != 1+runs.MaxRelayTurns || !paused {
+		t.Fatalf("default: %d replies, paused %v; want %d and a pause", n, paused, 1+runs.MaxRelayTurns)
+	}
+	if n, paused := post(all + " talk up to 6 messages"); n != 7 || paused {
+		t.Fatalf("raised limit: %d replies, paused %v; want 7 without a pause", n, paused)
+	}
+	if c := e.chat(chat.ID); c.RelayLimit != 6 {
+		t.Fatalf("relay limit %d, want 6", c.RelayLimit)
+	}
+	if n, _ := post(all + " again"); n != 1+runs.MaxRelayTurns {
+		t.Fatalf("next message: %d replies, want the default %d", n, 1+runs.MaxRelayTurns)
+	}
+}
+
 // A persona allowed to create personas proposes one; nothing exists until the
 // person approves, and the new persona then joins and introduces itself.
 func TestPersonaProposalNeedsApproval(t *testing.T) {
