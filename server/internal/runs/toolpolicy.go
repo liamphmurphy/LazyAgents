@@ -97,13 +97,41 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 		}
 		return ToolDecision{Decision: "allow"}, nil
 	}
-	if run.Purpose == "chat" && spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" && imageOutboxTool(run, in) {
-		return ToolDecision{Decision: "allow"}, nil
+	// A chat's image allowances apply when its frozen spec generates images
+	// itself (Codex), or while a Codex image step for it is running (a chat on
+	// another harness asked for an image: its spec lacks the option, and the
+	// step may only read, make the image and copy it out).
+	imageSession := spec.HarnessOptions[agentdef.OptionImageGeneration] == "true"
+	var stepSessions []string
+	stepRunning := false
+	if run.Purpose == "chat" && !imageSession {
+		jobs, err := q.RunningChatImageJobs(ctx, run.ID)
+		if err != nil {
+			return ToolDecision{}, err
+		}
+		for _, j := range jobs {
+			stepRunning = true
+			if j.CodexSessionID != nil && *j.CodexSessionID != "" {
+				stepSessions = append(stepSessions, *j.CodexSessionID)
+			}
+		}
+	}
+	if run.Purpose == "chat" && (imageSession || stepRunning) {
+		sessions := stepSessions
+		if imageSession && run.HarnessSessionID != nil {
+			sessions = append(sessions, *run.HarnessSessionID)
+		}
+		if imageOutboxTool(in, sessions) {
+			return ToolDecision{Decision: "allow"}, nil
+		}
 	}
 	scopes := ToolScopes(in.Tool, in.Input)
-	if spec.HarnessOptions["readonly"] == "true" && len(scopes) > 0 {
+	if (spec.HarnessOptions["readonly"] == "true" || stepRunning) && len(scopes) > 0 {
 		if len(scopes) == 1 && scopes[0] == "repo:read" {
 			return ToolDecision{Decision: "allow"}, nil
+		}
+		if run.Purpose == "chat" {
+			return deny("This chat can't use that tool: it only reads project context (the persona's abilities don't include it)")
 		}
 		return deny("Planning runs may only read context")
 	}
@@ -185,22 +213,47 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	return ToolDecision{Decision: "allow"}, nil
 }
 
+// imageToolName reports Codex's image tool however a hook names it: the plain
+// tool is image_gen or image_generation, and the JavaScript orchestrator calls
+// it as tools.image_gen__imagegen, which arrives as image_genimagegen. Names
+// are compared with case and punctuation removed; anything else (an MCP tool
+// that merely mentions images) is not it.
+func imageToolName(tool string) bool {
+	n := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r + 'a' - 'A'
+		}
+		return -1
+	}, tool)
+	switch n {
+	case "imagegen", "imagegeneration", "imagegenimagegen":
+		return true
+	}
+	return false
+}
+
 // imageOutboxTool recognizes what an image-generating chat needs without any
 // scope: Codex's own image tool, and copying a generated image from this
 // thread's own generated_images directory (<home>/.codex/generated_images/
 // <thread id>/<file>) into the workspace outbox (the runner shows what it finds
 // there under the reply). Nothing else qualifies: one literal cp (or mkdir -p
 // of the outbox), no redirects, and no shell metacharacters that expand later.
-// It fails closed until the runner has recorded the thread id.
-func imageOutboxTool(run store.Run, in ToolCheck) bool {
-	switch in.Tool {
-	case "image_generation", "image_gen":
+// It fails closed until the runner has recorded the thread id (sessions are
+// the thread ids whose directories may be copied from).
+func imageOutboxTool(in ToolCheck, sessions []string) bool {
+	if imageToolName(in.Tool) {
 		return true
+	}
+	switch in.Tool {
 	case "Bash", "shell", "exec_command", "shell_command":
 	default:
 		return false
 	}
-	if run.HarnessSessionID == nil || *run.HarnessSessionID == "" {
+	sessions = slices.DeleteFunc(slices.Clone(sessions), func(s string) bool { return s == "" })
+	if len(sessions) == 0 {
 		return false
 	}
 	command, _ := in.Input["command"].(string)
@@ -240,7 +293,7 @@ func imageOutboxTool(run store.Run, in ToolCheck) bool {
 		segs := strings.Split(src, "/")
 		n := len(segs)
 		if !strings.HasPrefix(src, "/") || !clean(src[1:]) || n < 5 ||
-			segs[n-4] != ".codex" || segs[n-3] != "generated_images" || segs[n-2] != *run.HarnessSessionID ||
+			segs[n-4] != ".codex" || segs[n-3] != "generated_images" || !slices.Contains(sessions, segs[n-2]) ||
 			segs[n-1] == "" || strings.HasPrefix(segs[n-1], ".") {
 			return false
 		}

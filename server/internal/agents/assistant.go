@@ -71,15 +71,17 @@ const assistantImagesCodex = `
 - When the person asks for an image, use your image generation tool. Then copy each final image into .lazyagents/outbox/ in the workspace (png, jpeg, webp or gif; at most 8 per turn). They are shown to the person under your reply.
 - Don't paste file paths or image data into your reply; describe what you made instead. Copying images into the outbox is the only shell use you need for this.`
 
-const assistantImagesUnavailable = `
+const assistantImagesViaCodex = `
 
 ## Images
-You can't generate images in this chat: image generation needs a Codex model. If the person asks for an image, say so and tell them they can switch the model in the chat.`
+- To make an image, call generate_image with a detailed prompt. It is created with Codex right after your reply and shown under it, so say that you're making it; never describe it as finished or claim to have seen it.
+- Don't paste file paths or image data into your reply.`
 
 // AssistantInstructionsFor is AssistantInstructions with the sections a
 // persona's capabilities add. workBranch is the coding chat's branch, empty
 // when the chat can't code; images is whether the persona may generate
-// images, and codex whether the chat's harness can.
+// images, and codex whether the chat's harness can make them itself (any other
+// harness asks Codex through generate_image).
 func AssistantInstructionsFor(workBranch string, images, codex bool) string {
 	out := AssistantInstructions
 	if workBranch != "" {
@@ -89,7 +91,7 @@ func AssistantInstructionsFor(workBranch string, images, codex bool) string {
 	case images && codex:
 		out += assistantImagesCodex
 	case images:
-		out += assistantImagesUnavailable
+		out += assistantImagesViaCodex
 	}
 	return out
 }

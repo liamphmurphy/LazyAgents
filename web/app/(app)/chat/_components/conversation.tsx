@@ -20,7 +20,7 @@ import { usePersonas } from "@/lib/api/persona-hooks";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm } from "@/lib/chat-ui";
-import { codesInRepos, imageHint, repoShortName } from "@/lib/persona-ui";
+import { codesInRepos, repoShortName } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -32,7 +32,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { ModelPicker, modelLabel, sameSelection, type Selection } from "./model-picker";
-import { RunActivity, TurnToolCalls } from "./activity";
+import { ChatStatus, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { AttachButton, AttachmentChips, DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { WebSearchPill } from "./web-search";
@@ -333,7 +333,6 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
   // A chat without a persona, or whose persona was deleted, is the built-in Assistant.
   const persona = personaLook(c.persona);
   const full = personas.data?.personas.find((p) => p.id === c.persona?.id);
-  const hint = imageHint((c.persona?.capabilities ?? full?.capabilities)?.images, c.harness);
   // Restoring a chat opened from the Archived list shows it under Active again.
   const restored = () => {
     if (!search.has("view")) return;
@@ -365,11 +364,6 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               <Icon name="branch" size={13} className="flex-none" />
               <span className="truncate text-fg">{repoShortName(c.repo_url)}</span>
               {c.work_branch && <span className="truncate font-mono text-[11.5px]">{c.work_branch}</span>}
-            </span>
-          )}
-          {hint && (
-            <span data-testid="image-hint" className="flex-none text-[11.5px] text-fg-tertiary max-lg:hidden">
-              {hint}
             </span>
           )}
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
@@ -433,7 +427,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               )}
               {running && (
                 <li className="flex flex-col gap-2" data-testid="thinking">
-                  <span role="status" className="text-[13px] text-fg-secondary">{stopping ? "Stopping…" : "Thinking…"}</span>
+                  <ChatStatus runId={c.current_run_id} since={lastUser?.created_at} persona={persona} stopping={stopping} />
                 </li>
               )}
               <li ref={end} aria-hidden />

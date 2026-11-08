@@ -3,8 +3,9 @@
 import { useMemo } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
-import { activityOf, toolCalls, type Activity, type ToolCall } from "@/lib/chat-ui";
+import { activityOf, chatStatus, toolCalls, type Activity, type ToolCall } from "@/lib/chat-ui";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
+import { PersonaAvatar, type PersonaLook } from "./persona";
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 
@@ -82,4 +83,23 @@ export function TurnToolCalls({ runId, since, until }: { runId?: string; since?:
   const calls = useMemo(() => toolCalls(q.data, since, until), [q.data, since, until]);
   if (calls.length === 0) return null;
   return <CallList calls={calls} />;
+}
+
+/**
+ * The chat tab's line while a turn runs: "<Persona> is reading the code…", from the
+ * newest tool call at a high level only. The exact calls stay in the Activity tab.
+ */
+export function ChatStatus({ runId, since, persona, stopping }: { runId?: string; since?: string; persona: PersonaLook; stopping?: boolean }) {
+  const q = useChatRunEvents(runId);
+  const status = useMemo(() => chatStatus(toolCalls(q.data, since)), [q.data, since]);
+  return (
+    <span role="status" aria-live="polite" className="flex min-w-0 items-center gap-2 text-[13px] text-fg-secondary">
+      <span className="flex-none animate-pulse">
+        <PersonaAvatar persona={persona} size={18} />
+      </span>
+      <span className="min-w-0 truncate" data-testid="chat-status">
+        {stopping ? "Stopping…" : `${persona.name} is ${status}…`}
+      </span>
+    </span>
+  );
 }

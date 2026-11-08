@@ -14,6 +14,12 @@
 //	chat-read           chat turn; a prompt "read <artifact id> [section]" reads it through MCP
 //	idle                end the turn without saying what's next
 //	crash               exit 3 with an error result
+//	chat-image          chat turn on Claude; a prompt "image: <text>" calls generate_image
+//	                    with <text>. The Codex step it queues (a codex invocation whose
+//	                    prompt starts "Generate exactly one image") does what
+//	                    FAKE_IMAGE_STEP says: ok (default; writes exec-<uuid>.png into
+//	                    .lazyagents/outbox), empty (succeeds, writes nothing), fail
+//	                    (exits 1), hang (waits until killed)
 //	slow                wait for SIGINT (pause), then end the turn
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
 //	                    writes child.txt in the shared checkout and completes
@@ -316,7 +322,8 @@ func main() {
 	}
 	if path := os.Getenv("FAKE_HARNESS_LOG"); path != "" {
 		wd, _ := os.Getwd()
-		line, _ := json.Marshal(map[string]any{"cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE"), "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
+		_, request, _ := strings.Cut(prompt, "Request: ") // an image step's job prompt
+		line, _ := json.Marshal(map[string]any{"request": request, "cwd": wd, "resume": resume, "prompt": firstLine(prompt), "mode": os.Getenv("FAKE_HARNESS_MODE"), "model": model, "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
 		if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			_, _ = f.Write(append(line, '\n'))
 			f.Close()
@@ -353,6 +360,22 @@ func main() {
 		return
 	}
 
+	if os.Getenv("FAKE_HARNESS_MODE") == "chat-image" && codex && strings.HasPrefix(prompt, "Generate exactly one image") {
+		switch os.Getenv("FAKE_IMAGE_STEP") {
+		case "fail":
+			result(true, "image step failed")
+			os.Exit(1)
+		case "hang":
+			time.Sleep(time.Hour) // until killed
+		case "empty":
+		default:
+			_ = os.MkdirAll(".lazyagents/outbox", 0o755)
+			_ = os.WriteFile(".lazyagents/outbox/exec-"+newUUID()+".png", []byte("\x89PNG\r\n\x1a\nfake image"), 0o644)
+		}
+		text("Image step done.")
+		result(false, "Image step done.")
+		return
+	}
 	var cfg struct {
 		MCPServers map[string]struct {
 			URL     string            `json:"url"`
@@ -445,6 +468,17 @@ func main() {
 		return out
 	}
 	ticket := os.Getenv("LAZYAGENTS_TICKET")
+	// chat-image: "image: <text>" asks for an image through MCP; any other prompt just answers.
+	if os.Getenv("FAKE_HARNESS_MODE") == "chat-image" {
+		reply := "Chat reply: " + prompt
+		if want, ok := strings.CutPrefix(prompt, "image: "); ok {
+			out := call("generate_image", map[string]any{"prompt": want})
+			reply = fmt.Sprintf("Chat reply (session=%s): making it (%v)", session, out["queued"])
+		}
+		text(reply)
+		result(false, reply)
+		return
+	}
 	// chat-read: a prompt of "read <artifact id> [section]" reads it through MCP; any other prompt reads nothing.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-read" {
 		if f := strings.Fields(prompt); len(f) >= 2 && f[0] == "read" {

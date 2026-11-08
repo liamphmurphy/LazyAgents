@@ -46,7 +46,7 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
   await expect(composer(page)).toHaveValue("hello\nworld");
   await composer(page).press("Enter");
   await expect(composer(page)).toBeDisabled();
-  await expect(page.getByText("Thinking…")).toBeVisible();
+  await expect(page.getByTestId("chat-status")).toHaveText(/ is thinking…$/);
   const first = page.getByTestId("assistant-message").first();
   await expect(first).toContainText("Echo: hello");
   // The chat reads as a plain conversation: the model tag lives in the Activity tab.
@@ -498,8 +498,10 @@ test("a running turn shows its newest tool call as a live line with a linked pag
   await newChat(page);
   await send(page, "slow: dig in");
   const live = page.getByTestId("live-activity");
-  // The chat only says it's thinking; tool calls show in the Activity tab.
-  await expect(page.getByText("Thinking…")).toBeVisible();
+  // The chat says what the persona is doing at a high level, never the exact call;
+  // tool calls and their inputs show in the Activity tab.
+  await expect(page.getByTestId("chat-status")).toHaveText(/ is looking through the wiki…$/);
+  await expect(page.getByTestId("chat-status")).not.toContainText("Plan");
   await expect(live).toBeHidden();
   await page.getByRole("tab", { name: "Activity" }).click();
   await expect(live).toHaveText("Reading Plan…");

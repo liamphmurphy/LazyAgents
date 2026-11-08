@@ -44,10 +44,41 @@ func TestImageOutboxTool(t *testing.T) {
 		{"rm", run, ToolCheck{Tool: "Bash", Input: map[string]any{"command": "rm -rf .lazyagents/outbox"}}, false},
 		{"Write tool", run, ToolCheck{Tool: "Write"}, false},
 		{"nil session tool", store.Run{}, ToolCheck{Tool: "image_generation"}, true},
+		// Codex names its files exec-<uuid>.png when the JavaScript orchestrator makes them.
+		{"exec uuid file", run, cp("/Users/u/.codex/generated_images/"+sid+"/exec-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.png", ".lazyagents/outbox/exec-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.png"), true},
 	}
 	for _, c := range cases {
-		if got := imageOutboxTool(c.run, c.in); got != c.want {
+		var sessions []string
+		if c.run.HarnessSessionID != nil {
+			sessions = []string{*c.run.HarnessSessionID}
+		}
+		if got := imageOutboxTool(c.in, sessions); got != c.want {
 			t.Errorf("%s: got %v want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestImageToolNames(t *testing.T) {
+	for name, want := range map[string]bool{
+		"image_gen": true, "image_generation": true, "imagegen": true, "ImageGen": true,
+		"image_gen__imagegen": true, "image_gen.imagegen": true, "image_genimagegen": true, "tools.image_gen__imagegen": false,
+		"mcp__x__image_gen": false, "image_gen_extra": false, "myimagegen": false, "": false, "mcp__lazyagents__generate_image": false,
+		"Bash": false,
+	} {
+		if got := imageToolName(name); got != want {
+			t.Errorf("%q: got %v want %v", name, got, want)
+		}
+		if got := imageOutboxTool(ToolCheck{Tool: name}, nil); got != want {
+			t.Errorf("outbox %q: got %v want %v", name, got, want)
+		}
+	}
+}
+
+func TestImageOutboxSessions(t *testing.T) {
+	src := func(sid string) ToolCheck {
+		return ToolCheck{Tool: "shell", Input: map[string]any{"command": "cp /h/.codex/generated_images/" + sid + "/exec-1.png .lazyagents/outbox/a.png"}}
+	}
+	if !imageOutboxTool(src("a"), []string{"x", "a"}) || imageOutboxTool(src("b"), []string{"x", "a"}) || imageOutboxTool(src("a"), nil) || imageOutboxTool(src(""), []string{""}) {
+		t.Fatal("session membership is wrong")
 	}
 }

@@ -249,7 +249,7 @@ test("a coding persona's new chat shows its repo and work branch in the header",
   await expect(chip).toContainText("acme/api");
   await expect(chip).toContainText("vesper/dev-");
   await expect(chip).toHaveAttribute("title", repos[1]);
-  await expect(page.getByTestId("image-hint").first()).toContainText("Image generation needs a Codex model.");
+  await expect(page.getByTestId("image-hint")).toHaveCount(0);
   expect(mock.created[0]).toMatchObject({ persona_id: mock.personas[0].id, repo_url: repos[1] });
   expect(mock.unhandled).toEqual([]);
 });

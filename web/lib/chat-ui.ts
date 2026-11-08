@@ -122,3 +122,92 @@ export function replyCost(cost: number | undefined): string | undefined {
 export function chatTitle(c: { title: string }): string {
   return c.title.trim() || "New conversation";
 }
+
+// ---- the chat tab's status line: what the persona is doing, at a glance ----
+
+/**
+ * A shell command as a kind of work, never the command itself: the chat tab says
+ * "running tests", the Activity tab keeps the exact command.
+ */
+function shellStatus(command: string): string {
+  const c = command.toLowerCase();
+  if (/\.lazyagents\/outbox/.test(c)) return "saving the image";
+  if (/\bgit\s+push\b/.test(c)) return "pushing its branch";
+  if (/\bgit\s+commit\b/.test(c)) return "committing changes";
+  if (/\bgh\s+pr\b/.test(c)) return "preparing a pull request";
+  if (/\b(go\s+test|npm\s+(run\s+)?test|pnpm\s+(run\s+)?test|yarn\s+test|pytest|jest|vitest|cargo\s+test|make\s+test|rspec|playwright\s+test|mvn\s+test|gradle\w*\s+test)\b/.test(c)) return "running tests";
+  if (/\b(npm\s+(ci|install|i)|pnpm\s+install|yarn(\s+install)?\s*$|go\s+mod\s+(download|tidy)|pip\s+install|bundle\s+install|cargo\s+fetch)\b/.test(c)) return "installing dependencies";
+  if (/\b(go\s+(build|vet)|npm\s+run\s+(build|lint|typecheck)|tsc\b|cargo\s+(build|check|clippy)|make\b|eslint|gofmt)\b/.test(c)) return "checking the build";
+  if (/\bgit\s+(clone|fetch|pull|checkout|switch|status|diff|log|show|branch|rebase|merge)\b/.test(c)) return "looking over the repository";
+  if (/^\s*(cat|less|head|tail|ls|tree|find|rg|grep|sed\s+-n|wc|awk)\b|\|\s*(rg|grep|head|tail)\b/.test(c)) return "reading the code";
+  return "working in the terminal";
+}
+
+/**
+ * One tool call as a short, high-level phrase for the chat tab ("reading the code",
+ * "looking through the wiki"): no queries, paths, refs or commands, which stay in
+ * the Activity tab. Completes "<Persona> is …".
+ */
+export function chatStatusOf(call: { tool: string; input: unknown }): string {
+  const o = (call.input && typeof call.input === "object" ? call.input : {}) as Record<string, unknown>;
+  switch (bareTool(call.tool)) {
+    case "read_page":
+    case "read_artifact":
+    case "get_backlinks":
+    case "search_knowledge":
+    case "find_pattern":
+      return "looking through the wiki";
+    case "get_ticket":
+    case "list_epics":
+      return "checking tickets";
+    case "create_ticket":
+    case "create_epic":
+      return "drafting a ticket";
+    case "list_runs":
+    case "get_run":
+      return "checking on runs";
+    case "search_memory":
+    case "read_memory":
+      return "recalling what it knows about you";
+    case "save_memory":
+    case "update_memory":
+      return "making a note";
+    case "forget_memory":
+      return "forgetting that";
+    case "set_chat_title":
+      return "naming the conversation";
+    case "WebSearch":
+    case "web_search":
+    case "WebFetch":
+      return "searching the web";
+    case "image_generation":
+    case "image_gen":
+    case "generate_image":
+      return "creating an image";
+    case "Read":
+    case "Glob":
+    case "Grep":
+    case "LS":
+      return "reading the code";
+    case "Edit":
+    case "MultiEdit":
+    case "Write":
+    case "NotebookEdit":
+    case "apply_patch":
+      return "writing code";
+    case "TodoWrite":
+      return "planning its next steps";
+    case "shell":
+    case "Bash":
+    case "exec_command":
+    case "shell_command":
+      return shellStatus(typeof o.command === "string" ? o.command : typeof o.cmd === "string" ? o.cmd : "");
+    default:
+      return "working on it";
+  }
+}
+
+/** The chat tab's status for a running turn: the newest call's phrase, or "thinking" before any tool runs. */
+export function chatStatus(calls: { tool: string; input: unknown }[]): string {
+  return calls.length ? chatStatusOf(calls[calls.length - 1]) : "thinking";
+}

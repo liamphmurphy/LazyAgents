@@ -9,7 +9,6 @@ import {
   avatarUploadError,
   checkRepoUrl,
   codesInRepos,
-  imageHint,
   isImageType,
   repoShortName,
   checkAvatarFile,
@@ -200,7 +199,4 @@ test("image and ability helpers", () => {
   assert.equal(codesInRepos({ capabilities: { code: true }, repos: ["x"] }), true);
   assert.equal(codesInRepos({ capabilities: { code: true }, repos: [] }), false);
   assert.equal(codesInRepos(undefined), false);
-  assert.equal(imageHint(true, "claude"), "Image generation needs a Codex model.");
-  assert.equal(imageHint(true, "codex"), null);
-  assert.equal(imageHint(false, "claude"), null);
 });

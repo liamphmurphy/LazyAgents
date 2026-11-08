@@ -323,8 +323,3 @@ export const codesInRepos = (p?: Abilities) => !!p?.capabilities?.code && !!p.re
 
 /** True when the lists hold the same entries in the same order. */
 export const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
-
-/** Image generation runs on Codex only: the hint to show when a chat's harness can't. */
-export function imageHint(imagesOn: boolean | undefined, harness?: string): string | null {
-  return imagesOn && harness !== "codex" ? "Image generation needs a Codex model." : null;
-}
