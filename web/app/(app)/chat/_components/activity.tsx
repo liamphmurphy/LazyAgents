@@ -107,7 +107,7 @@ export function ChatStatus({ runId, since, persona, stopping }: { runId?: string
 /**
  * The running turn's opening line ("Good question, let me check the runs."), shown as a
  * reply bubble while the assistant works. The prompt asks for one only on turns that
- * need real work; the final reply replaces it when the turn ends.
+ * need real work; when the turn ends the server saves it as its own message ahead of the reply.
  */
 export function InterimReply({ runId, since, persona }: { runId?: string; since?: string; persona: PersonaLook }) {
   const q = useChatRunEvents(runId);

@@ -470,3 +470,39 @@ func (e *env) assistant() store.Agent {
 	}
 	return a
 }
+
+// A turn's opening line (text before its first tool call) is kept as its own
+// reply ahead of the answer; the answer keeps the turn's citations.
+func TestChatOpeningLinePersists(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat-read")
+	t.Setenv("FAKE_HARNESS_OPENING", "Let me read that for you.")
+	var art uuid.UUID
+	if err := e.pool.QueryRow(e.ctx, `SELECT id FROM artifacts WHERE type = 'prd' AND project_id = (SELECT id FROM projects WHERE key = 'PAY') LIMIT 1`).Scan(&art); err != nil {
+		t.Fatal(err)
+	}
+	chat := e.startChat("read " + art.String())
+	e.until("reply", func() bool { return e.chat(chat.ID).State == "idle" })
+	// A turn without a tool call has no opening line.
+	if _, err := e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	e.until("second reply", func() bool {
+		m, _ := e.q.ListChatMessages(e.ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 20})
+		return len(m) == 5 && e.chat(chat.ID).State == "idle"
+	})
+	msgs, err := e.q.ListChatMessages(e.ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 20})
+	if err != nil || len(msgs) != 5 {
+		t.Fatalf("messages %+v %v", msgs, err)
+	}
+	opening, answer := msgs[1], msgs[2]
+	if opening.Role != "assistant" || opening.BodyMd != "Let me read that for you." || string(opening.Citations) != "[]" || opening.RunTurnID == nil || answer.RunTurnID == nil || *opening.RunTurnID != *answer.RunTurnID {
+		t.Fatalf("opening %+v", opening)
+	}
+	if answer.Role != "assistant" || !strings.HasPrefix(answer.BodyMd, "Chat reply: read") || !strings.Contains(string(answer.Citations), art.String()) {
+		t.Fatalf("answer %+v", answer)
+	}
+	if msgs[3].Role != "user" || msgs[4].Role != "assistant" || !strings.HasPrefix(msgs[4].BodyMd, "Chat reply: hello") {
+		t.Fatalf("second turn %+v", msgs[3:])
+	}
+}

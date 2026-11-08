@@ -1092,6 +1092,7 @@ func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p har
 			raw.WriteByte('\n')
 		}
 	}
+	var opening openingLine // written by the stdout reader, read after readers.Wait
 	done := make(chan struct{})
 	var readers sync.WaitGroup
 	readers.Add(2)
@@ -1112,7 +1113,9 @@ func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p har
 			line := sc.Bytes()
 			appendRaw("", line)
 			for _, e := range p.Line(line) {
-				r.event(context.Background(), c.run.ID, e.Type, redactPayload(e.Payload, env))
+				payload := redactPayload(e.Payload, env)
+				opening.see(e.Type, payload)
+				r.event(context.Background(), c.run.ID, e.Type, payload)
 			}
 			if s := p.Result().SessionID; s != "" && s != session {
 				session = s
@@ -1180,7 +1183,9 @@ func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p har
 	if o, ok := p.(harness.ExitObserver); ok {
 		o.Exited(code) // after the stream: the verdict needs both
 	}
-	return p.Result(), raw.Bytes(), code, err
+	res := p.Result()
+	res.Opening = opening.line
+	return res, raw.Bytes(), code, err
 }
 
 func redactPayload(p map[string]any, env map[string]string) map[string]any {

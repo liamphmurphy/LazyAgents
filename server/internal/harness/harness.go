@@ -72,6 +72,7 @@ type Result struct {
 	IsError      bool
 	Error        string
 	Final        string // the last assistant text
+	Opening      string // the first assistant text, when a tool call followed it (runner-set)
 }
 
 // Parser reads one turn's stream, line by line.
