@@ -56,3 +56,11 @@ func TestWebToolsNeedWebRead(t *testing.T) {
 		}
 	}
 }
+
+// ToolSearch only loads deferred tool definitions (Claude Code defers
+// WebFetch); it needs no scope, and loaded tools are checked when called.
+func TestToolSearchNeedsNoScope(t *testing.T) {
+	if got := runs.ToolScopes("ToolSearch", map[string]any{"query": "select:WebFetch"}); got != nil {
+		t.Fatalf("ToolSearch scopes = %v", got)
+	}
+}
