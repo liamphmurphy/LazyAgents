@@ -57,17 +57,23 @@ const USAGE = { input_tokens: 48200, output_tokens: 1300, cached_input_tokens: 4
 export type Posted = { chat: string; body: Record<string, unknown> };
 export type MockPersona = {
   id: string; name: string; tone: string; color: string; avatar_url?: string; custom_instructions: string;
-  capabilities: { code: boolean; images: boolean }; repos: string[];
+  capabilities: { code: boolean; images: boolean; web: boolean }; repos: string[];
   is_default: boolean; chat_count: number; last_used_at?: string; revision: number; created_at: string; updated_at: string;
 };
 export type MockOptions = { codexAvailable?: boolean; opencodeAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[] };
+
+/** Create defaults: web on, or off when code is on and web is omitted. */
+function newCapabilities(c: Partial<MockPersona["capabilities"]> = {}): MockPersona["capabilities"] {
+  const code = !!c.code;
+  return { code, images: !!c.images, web: c.web ?? !code };
+}
 
 /** A persona fixture for the persona specs. */
 export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona {
   const t = `2026-11-0${Math.min(i, 9)}T09:00:00.000Z`;
   return {
     id: `77777777-7777-4777-8777-${String(i).padStart(12, "0")}`,
-    name: `Persona ${i}`, tone: "neutral", color: "#8b8fff", custom_instructions: "", capabilities: { code: false, images: false }, repos: [], is_default: false,
+    name: `Persona ${i}`, tone: "neutral", color: "#8b8fff", custom_instructions: "", capabilities: { code: false, images: false, web: true }, repos: [], is_default: false,
     chat_count: 0, revision: 1, created_at: t, updated_at: t, ...over,
   };
 }
@@ -508,7 +514,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const p: MockPersona = {
         id: uuid(), name: String(b.name).trim(), tone: (b.tone as string) ?? "neutral", color: String(b.color ?? "#64748b").toLowerCase(),
         custom_instructions: (b.custom_instructions as string) ?? "", is_default: !!b.is_default,
-        capabilities: (b.capabilities as MockPersona["capabilities"] | undefined) ?? { code: false, images: false }, repos: (b.repos as string[] | undefined) ?? [], chat_count: 0, revision: 1, created_at: t, updated_at: t,
+        capabilities: newCapabilities(b.capabilities as Partial<MockPersona["capabilities"]> | undefined), repos: (b.repos as string[] | undefined) ?? [], chat_count: 0, revision: 1, created_at: t, updated_at: t,
       };
       personas.push(p);
       return json(p, 201);
@@ -530,7 +536,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         for (const k of ["name", "tone", "custom_instructions"] as const) if (typeof b[k] === "string") p[k] = (b[k] as string).trim() || p[k];
         if (typeof b.custom_instructions === "string") p.custom_instructions = b.custom_instructions;
         if (typeof b.color === "string") p.color = b.color.toLowerCase();
-        if (b.capabilities) p.capabilities = b.capabilities as MockPersona["capabilities"];
+        // web omitted keeps its value, as on the server.
+        if (b.capabilities) p.capabilities = { ...p.capabilities, ...(b.capabilities as Partial<MockPersona["capabilities"]>) };
         if (Array.isArray(b.repos)) p.repos = b.repos as string[];
         bump();
         return json(p);

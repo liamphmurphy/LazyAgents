@@ -34,6 +34,7 @@ import {
   repoShortName,
   sameList,
   unusedPreset,
+  webAfterCodeChange,
   wheelPoint,
   wheelPosition,
   type AvatarError,
@@ -442,7 +443,7 @@ function RepoList({ repos, setRepos, serverError }: { repos: string[]; setRepos:
 
 // ---- editor ----
 
-type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; repos: string[] };
+type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; web: boolean; webTouched: boolean; repos: string[] };
 
 const draftOf = (p?: Persona): Draft => ({
   name: p?.name ?? "",
@@ -451,6 +452,8 @@ const draftOf = (p?: Persona): Draft => ({
   makeDefault: p?.is_default ?? false,
   code: p?.capabilities.code ?? false,
   images: p?.capabilities.images ?? false,
+  web: p?.capabilities.web ?? true,
+  webTouched: false,
   repos: p?.repos ?? [],
 });
 
@@ -516,7 +519,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           color: color.color,
           custom_instructions: draft.instructions,
           is_default: draft.makeDefault,
-          capabilities: { code: draft.code, images: draft.images },
+          capabilities: { code: draft.code, images: draft.images, web: draft.web },
           repos: draft.repos,
         });
       } else {
@@ -526,8 +529,8 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
         if (color.color !== p.color.toLowerCase()) patch.color = color.color;
         if (draft.instructions !== p.custom_instructions) patch.custom_instructions = draft.instructions;
         // Repos persist while code is off; a change to either sends both (the list replaces the old one).
-        if (draft.code !== p.capabilities.code || draft.images !== p.capabilities.images || !sameList(draft.repos, p.repos)) {
-          patch.capabilities = { code: draft.code, images: draft.images };
+        if (draft.code !== p.capabilities.code || draft.images !== p.capabilities.images || draft.web !== (p.capabilities.web ?? true) || !sameList(draft.repos, p.repos)) {
+          patch.capabilities = { code: draft.code, images: draft.images, web: draft.web };
           patch.repos = draft.repos;
         }
         if (Object.keys(patch).length > 1) p = await update.mutateAsync({ id: p.id, patch });
@@ -663,7 +666,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                   <Toggle
                     id="persona-code"
                     checked={draft.code}
-                    onChange={(v) => set({ code: v })}
+                    onChange={(v) => set({ code: v, web: webAfterCodeChange({ creating: !saved, webTouched: draft.webTouched, web: draft.web }, v) })}
                     title="Write code"
                     hint="Clones a repository into its workspace, edits and runs code, and commits and pushes to its own branch for each chat."
                   />
@@ -676,6 +679,21 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     title="Generate images"
                     hint="Creates images with Codex; works with any model in the chat. Images appear in the conversation."
                   />
+                  <Toggle
+                    id="persona-web"
+                    checked={draft.web}
+                    onChange={(v) => set({ web: v, webTouched: true })}
+                    title="Web access"
+                    hint="Searches the web and opens pages you link or that a search found."
+                  />
+                  {draft.code && draft.web && (
+                    <div role="status" className="flex items-start gap-2 rounded-lg border border-pill-human-fg/40 bg-pill-human-bg px-3 py-2">
+                      <span aria-hidden className="text-pill-human-fg">⚠</span>
+                      <span className="text-xs text-pill-human-fg">
+                        This persona can push code with your git credentials. Web pages could try to trick it into leaking them — only turn this on for personas and repos you trust.
+                      </span>
+                    </div>
+                  )}
                 </fieldset>
               </div>
 

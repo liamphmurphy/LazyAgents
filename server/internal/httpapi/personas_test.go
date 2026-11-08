@@ -375,6 +375,38 @@ func TestPersonaCapabilitiesAndRepos(t *testing.T) {
 	}
 }
 
+// capabilities.web is always present; omitted on create it is on, or off with
+// code; omitted on update it is unchanged.
+func TestPersonaWebDefaultsAndPatch(t *testing.T) {
+	e := newChatEnv(t)
+	web := func(p map[string]any) any { return p["capabilities"].(map[string]any)["web"] }
+	plain := e.want("POST", "/personas", map[string]any{"name": "Plain"}, http.StatusCreated)
+	coder := e.want("POST", "/personas", map[string]any{"name": "Coder", "capabilities": map[string]any{"code": true}}, http.StatusCreated)
+	both := e.want("POST", "/personas", map[string]any{"name": "Both", "capabilities": map[string]any{"code": true, "web": true}}, http.StatusCreated)
+	off := e.want("POST", "/personas", map[string]any{"name": "Off", "capabilities": map[string]any{"web": false}}, http.StatusCreated)
+	if web(plain) != true || web(coder) != false || web(both) != true || web(off) != false {
+		t.Fatalf("create defaults: plain %v coder %v both %v off %v", web(plain), web(coder), web(both), web(off))
+	}
+	id := coder["id"].(string)
+	// Capabilities sent without web, and patches without capabilities, keep it.
+	upd := e.want("PATCH", "/personas/"+id, map[string]any{"revision": 1, "capabilities": map[string]any{"code": false, "images": true}}, 200)
+	if web(upd) != false {
+		t.Fatalf("a patch without web changed it: %v", upd)
+	}
+	upd = e.want("PATCH", "/personas/"+id, map[string]any{"revision": 2, "name": "Renamed"}, 200)
+	if web(upd) != false {
+		t.Fatalf("a rename changed web: %v", upd)
+	}
+	upd = e.want("PATCH", "/personas/"+id, map[string]any{"revision": 3, "capabilities": map[string]any{"code": false, "images": true, "web": true}}, 200)
+	if web(upd) != true || web(e.want("GET", "/personas/"+id, nil, 200)) != true {
+		t.Fatalf("enabling web: %v", upd)
+	}
+	chat := e.newChat(map[string]any{"persona_id": id})
+	if chat["persona"].(map[string]any)["capabilities"].(map[string]any)["web"] != true {
+		t.Fatalf("chat persona summary lacks web: %v", chat["persona"])
+	}
+}
+
 func TestChatRepoSelection(t *testing.T) {
 	e := newChatEnv(t)
 	mk := func(name string, code bool, repos ...string) string {

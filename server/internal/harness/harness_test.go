@@ -779,6 +779,31 @@ func TestCodingChatHasNoWeb(t *testing.T) {
 	}
 }
 
+// A coding chat whose persona opted into web gets the same tools as any chat
+// (Claude still routes WebFetch through the policy hook).
+func TestCodingChatWithWeb(t *testing.T) {
+	w := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
+	s := spec("repo:read", "allowed", "repo:write", "allowed", "tests:run", "allowed", "web:read", "denied")
+	s.HarnessOptions = map[string]string{"sandbox": "workspace-write", agentdef.OptionWebSearch: "true"}
+	claude, err := (ClaudeCode{}).Invocation(w, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allow := strings.Split(flag(claude.Argv, "--allowedTools"), ",")
+	for _, tool := range []string{"WebSearch", "WebFetch"} {
+		if !slices.Contains(allow, tool) {
+			t.Errorf("claude %s not allowed: %v", tool, allow)
+		}
+	}
+	codex, err := (Codex{}).Invocation(w, Turn{Spec: s, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(codex.Argv, `web_search="cached"`) {
+		t.Errorf("codex web search: %v", codex.Argv)
+	}
+}
+
 // An image-only Codex chat may write only the outbox; with repo:write the
 // repo-write profile applies instead.
 func TestCodexImageOutboxProfile(t *testing.T) {

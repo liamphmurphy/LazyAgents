@@ -3811,6 +3811,15 @@ export interface components {
             code: boolean;
             /** @description Generate images with Codex image generation; works with any chat model (non-Codex chats hand the image to a one-off Codex step) */
             images: boolean;
+            /**
+             * @description Search the web and open pages the person linked or a search returned
+             *     (Claude WebSearch/WebFetch through Vesper's fetch gate; Codex cached
+             *     search). Always present in responses. When omitted on create it
+             *     defaults to true, or false when `code` is true; when omitted on
+             *     update it is unchanged. Enabling it for a coding persona exposes a
+             *     chat that holds git credentials to web content.
+             */
+            web?: boolean;
         };
         /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */
         PersonaSummary: {

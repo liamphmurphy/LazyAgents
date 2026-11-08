@@ -10,6 +10,7 @@ import {
   checkRepoUrl,
   codesInRepos,
   isImageType,
+  webAfterCodeChange,
   repoShortName,
   checkAvatarFile,
   colorPicker,
@@ -199,4 +200,12 @@ test("image and ability helpers", () => {
   assert.equal(codesInRepos({ capabilities: { code: true }, repos: ["x"] }), true);
   assert.equal(codesInRepos({ capabilities: { code: true }, repos: [] }), false);
   assert.equal(codesInRepos(undefined), false);
+});
+
+test("web access follows code's default only while creating and untouched", () => {
+  const fresh = { creating: true, webTouched: false, web: true };
+  assert.equal(webAfterCodeChange(fresh, true), false);
+  assert.equal(webAfterCodeChange({ ...fresh, web: false }, false), true);
+  assert.equal(webAfterCodeChange({ ...fresh, webTouched: true }, true), true);
+  assert.equal(webAfterCodeChange({ creating: false, webTouched: false, web: true }, true), true);
 });

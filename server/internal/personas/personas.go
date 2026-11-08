@@ -48,18 +48,19 @@ type NewInput struct {
 	IsDefault    bool
 	// Capabilities and Repos are the structured settings that widen what the
 	// persona's chats may do (runs.ChatSpec); nil takes the defaults (off, none).
-	Code, Images *bool
-	Repos        *[]string
+	// Web defaults to on, or off when Code is set; Code and Images to off.
+	Code, Images, Web *bool
+	Repos             *[]string
 }
 
 // Patch edits a persona at Revision; nil fields are unchanged.
 type Patch struct {
-	Revision     int32
-	Name         *string
-	Tone         *string
-	Color        *string
-	Instructions *string
-	Code, Images *bool
+	Revision          int32
+	Name              *string
+	Tone              *string
+	Color             *string
+	Instructions      *string
+	Code, Images, Web *bool
 	// Repos replaces the whole list; existing chats keep the repo they chose.
 	Repos *[]string
 }
@@ -189,6 +190,11 @@ func (s *Service) Create(ctx context.Context, o Owner, in NewInput) (store.Perso
 			return out, err
 		}
 	}
+	code := in.Code != nil && *in.Code
+	web := !code // a coding chat holds git credentials, so web is opt-in there
+	if in.Web != nil {
+		web = *in.Web
+	}
 	err = s.tx(ctx, o, func(q *store.Queries) error {
 		n, err := q.CountPersonas(ctx, store.CountPersonasParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID})
 		if err != nil {
@@ -207,7 +213,7 @@ func (s *Service) Create(ctx context.Context, o Owner, in NewInput) (store.Perso
 		}
 		out, err = q.CreatePersona(ctx, store.CreatePersonaParams{
 			WorkspaceID: o.WorkspaceID, UserID: o.UserID, Name: name, Tone: tone, Color: color, CustomInstructions: instr, IsDefault: in.IsDefault,
-			CanCode: in.Code != nil && *in.Code, CanGenerateImages: in.Images != nil && *in.Images, Repos: repos,
+			CanCode: code, CanGenerateImages: in.Images != nil && *in.Images, Repos: repos, CanUseWeb: web,
 		})
 		return nameTaken(err)
 	})
@@ -266,7 +272,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		out, err = q.UpdatePersona(ctx, store.UpdatePersonaParams{
 			ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Revision: p.Revision,
 			Name: p.Name, Tone: p.Tone, Color: p.Color, CustomInstructions: p.Instructions,
-			CanCode: p.Code, CanGenerateImages: p.Images, Repos: repos,
+			CanCode: p.Code, CanGenerateImages: p.Images, Repos: repos, CanUseWeb: p.Web,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.Conflict("the persona changed since you loaded it")
@@ -274,7 +280,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		if err != nil {
 			return nameTaken(err)
 		}
-		if out.Name != cur.Name || out.Color != cur.Color || out.CanCode != cur.CanCode || out.CanGenerateImages != cur.CanGenerateImages {
+		if out.Name != cur.Name || out.Color != cur.Color || out.CanCode != cur.CanCode || out.CanGenerateImages != cur.CanGenerateImages || out.CanUseWeb != cur.CanUseWeb {
 			return NotifyChats(ctx, q, id)
 		}
 		return nil

@@ -29,6 +29,8 @@ type ChatCaps struct {
 	Code                bool
 	RepoURL, WorkBranch string
 	Images              bool
+	// Web is the persona's can_use_web (on for the built-in Assistant).
+	Web bool
 }
 
 // Coding reports whether the chat may work in its repository.
@@ -60,13 +62,15 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
 	// web_search turns on the harness's own web search and page fetch tools
-	// (Claude Code WebSearch/WebFetch, Codex live web search); see
-	// agentdef.OptionWebSearch.
-	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true", agentdef.OptionWebSearch: "true"}
+	// (Claude Code WebSearch/WebFetch behind the fetch gate, Codex cached web
+	// search); see agentdef.OptionWebSearch. A coding chat gets it only when its
+	// persona opts in: it holds git credentials and a shell.
+	r.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true"}
 	if coding {
-		// A coding chat has no web access at all: its shell and git credentials
-		// plus a fetchable URL would be a way to carry repository data out.
 		r.HarnessOptions = map[string]string{"sandbox": "workspace-write"}
+	}
+	if caps.Web {
+		r.HarnessOptions[agentdef.OptionWebSearch] = "true"
 	}
 	// Codex generates images with its own tool and copies them into the
 	// workspace outbox (the Codex harness grants write to only that directory
@@ -76,7 +80,8 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 		r.HarnessOptions[agentdef.OptionImageGeneration] = "true"
 	}
 	if r.Harness == agentdef.HarnessOpenCode {
-		// OpenCode honors only readonly and rejects any other option.
+		// OpenCode honors only readonly and rejects any other option; it has no
+		// web tools here, so caps.Web does nothing for it.
 		r.HarnessOptions = map[string]string{"readonly": "true"}
 		if coding {
 			r.HarnessOptions = map[string]string{}
@@ -89,7 +94,7 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	if coding {
 		branch = caps.WorkBranch
 	}
-	r.Instructions = agents.AssistantInstructionsFor(branch, caps.Images, r.Harness == agentdef.HarnessCodex)
+	r.Instructions = agents.AssistantInstructionsFor(branch, caps.Images, r.Harness == agentdef.HarnessCodex, caps.Web)
 	return r
 }
 
@@ -97,18 +102,18 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 // the chat's creator (a deleted persona gives none).
 func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (ChatCaps, error) {
 	if chat.PersonaID == nil {
-		return ChatCaps{}, nil
+		return ChatCaps{Web: true}, nil
 	}
 	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *chat.PersonaID, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ChatCaps{}, nil
+		return ChatCaps{Web: true}, nil
 	}
 	if err != nil {
 		return ChatCaps{}, err
 	}
 	// A repository the persona no longer lists revokes coding for this chat.
 	code := p.CanCode && chat.RepoUrl != nil && slices.Contains(p.Repos, *chat.RepoUrl)
-	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranch: deref(chat.WorkBranch), Images: p.CanGenerateImages}, nil
+	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranch: deref(chat.WorkBranch), Images: p.CanGenerateImages, Web: p.CanUseWeb}, nil
 }
 
 // sameCapabilities reports whether two chat specs grant the same persona

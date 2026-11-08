@@ -199,7 +199,12 @@ test("abilities: Write code reveals repositories; they validate, save with the c
   await panel(page).getByRole("button", { name: "Edit Nova" }).click();
 
   await expect(editor(page).getByLabel("Repositories")).toHaveCount(0);
+  // Editing never flips web access: it stays on, so turning code on shows the warning.
+  const web = editor(page).getByRole("switch", { name: "Web access" });
+  await expect(web).toBeChecked();
   await editor(page).getByRole("switch", { name: "Write code" }).check();
+  await expect(web).toBeChecked();
+  await expect(editor(page)).toContainText("This persona can push code with your git credentials");
   await expect(editor(page)).toContainText("Add at least one repository to work in.");
 
   const input = editor(page).getByLabel("Repositories", { exact: true }).and(page.locator("input"));
@@ -221,7 +226,7 @@ test("abilities: Write code reveals repositories; they validate, save with the c
   await editor(page).getByRole("button", { name: "Save persona" }).click();
   await expect(editor(page)).toHaveCount(0);
   const nova = mock.personas.find((p) => p.name === "Nova")!;
-  expect(nova.capabilities).toEqual({ code: true, images: true });
+  expect(nova.capabilities).toEqual({ code: true, images: true, web: true });
   expect(nova.repos).toEqual(["https://github.com/acme/app"]);
   await expect(rows(page).filter({ hasText: "Nova" }).getByTestId("capability-badges")).toBeVisible();
 
@@ -231,14 +236,39 @@ test("abilities: Write code reveals repositories; they validate, save with the c
   await editor(page).getByRole("button", { name: "Save persona" }).click();
   await expect(editor(page)).toHaveCount(0);
   expect(nova.capabilities.code).toBe(false);
+  expect(nova.capabilities.web).toBe(true); // editing never flips web on its own
   expect(nova.repos).toEqual(["https://github.com/acme/app"]);
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("web access: a new persona has it on, Write code flips it off until touched, and save sends it", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await openPanel(page);
+  await panel(page).getByRole("button", { name: "New persona" }).first().click();
+  await editor(page).getByLabel("Name").fill("Scout");
+  const web = editor(page).getByRole("switch", { name: "Web access" });
+  const warning = editor(page).getByText("This persona can push code with your git credentials");
+  await expect(editor(page)).toContainText("Searches the web and opens pages you link or that a search found.");
+  await expect(web).toBeChecked();
+  await editor(page).getByRole("switch", { name: "Write code" }).check();
+  await expect(web).not.toBeChecked();
+  await expect(warning).toHaveCount(0);
+  await web.check();
+  await expect(warning).toBeVisible();
+  // Once touched, code no longer changes it.
+  await editor(page).getByRole("switch", { name: "Write code" }).uncheck();
+  await expect(web).toBeChecked();
+  await expect(warning).toHaveCount(0);
+  await editor(page).getByRole("button", { name: "Save persona" }).click();
+  await expect(editor(page)).toHaveCount(0);
+  expect(mock.personas[0].capabilities).toEqual({ code: false, images: false, web: true });
   expect(mock.unhandled).toEqual([]);
 });
 
 test("a coding persona's new chat shows its repo and work branch in the header", async ({ page }) => {
   const repos = ["https://github.com/acme/app.git", "git@github.com:acme/api.git"];
   const mock = await installChatApi(page, {
-    personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: true }, repos })],
+    personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: true, web: false }, repos })],
   });
   await page.goto("/chat?project=WEB");
   await page.getByLabel("Repository for this conversation").selectOption(repos[1]);

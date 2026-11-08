@@ -323,3 +323,12 @@ export const codesInRepos = (p?: Abilities) => !!p?.capabilities?.code && !!p.re
 
 /** True when the lists hold the same entries in the same order. */
 export const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+/**
+ * Web access after Write code is switched to `code`. A new persona that hasn't
+ * had Web access touched follows the server's default (on, or off with code);
+ * an existing persona, or one the person has set by hand, is never changed.
+ */
+export function webAfterCodeChange(s: { creating: boolean; webTouched: boolean; web: boolean }, code: boolean): boolean {
+  return s.creating && !s.webTouched ? !code : s.web;
+}
