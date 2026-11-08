@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -347,5 +348,28 @@ func TestSVGCanvasCommentsAndPromotion(t *testing.T) {
 	art := e.want("POST", base+"/promote", nil, 200)["artifact_id"].(string)
 	if got := e.want("GET", "/artifacts/"+art, nil, 200); got["type"] != "mockup" {
 		t.Fatalf("artifact = %v", got)
+	}
+}
+
+// Over MCP, as a harness calls it: the schema and the decoder must agree on a UUID.
+func TestCanvasToolsTakeStringIDsOverMCP(t *testing.T) {
+	e := newChatEnv(t)
+	_, token, id := e.makeCanvas("Archive after 30 days.")
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-agent", Version: "1"}, nil)
+	sess, err := client.Connect(t.Context(), &mcp.StreamableClientTransport{
+		Endpoint: e.srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearer{token, http.DefaultTransport}}, DisableStandaloneSSE: true,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+	for name, args := range map[string]map[string]any{
+		"canvas_read":    {"canvas_id": id},
+		"canvas_comment": {"canvas_id": id, "quote": "30 days", "body": "Longer?", "suggestion": "60 days"},
+	} {
+		res, err := sess.CallTool(t.Context(), &mcp.CallToolParams{Name: name, Arguments: args})
+		if err != nil || res.IsError {
+			t.Fatalf("%s: %v %+v", name, err, res)
+		}
 	}
 }
