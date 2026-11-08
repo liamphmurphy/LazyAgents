@@ -22,7 +22,7 @@ func TestRecommendedReadsOnlyRealFences(t *testing.T) {
 		"```go", "https://code.example", "```",
 		"```recommend", "https://unclosed.example",
 	}, "\n")
-	want := []string{"https://a.example/x", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+	want := []Recommendation{{URL: "https://a.example/x", Note: "Why."}, {URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}}
 	if got := Recommended(md); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v", got)
 	}

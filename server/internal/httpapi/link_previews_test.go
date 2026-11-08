@@ -122,3 +122,74 @@ func TestLinkPreviewsOnlyReadAssistantFencesInYourChats(t *testing.T) {
 		t.Fatalf("fetched %d times", n)
 	}
 }
+
+// A saved link keeps its own image, is listed under its kind, and shows as
+// saved on the card until it's removed.
+func TestLibraryLinksSaveListAndRemove(t *testing.T) {
+	e, s3 := newAvatarEnv(t)
+	usePreviews(t)
+	id := e.previewMessage(t, "assistant", recommendReply)
+	save := map[string]any{"message_id": id, "url": "https://a.example/x"}
+	first := e.want("POST", "/library/links", save, http.StatusCreated)
+	again := e.want("POST", "/library/links", save, http.StatusCreated)
+	if first["id"] != again["id"] || first["kind"] != "link" || first["title"] != "Routes" || first["note"] != "Worth it." {
+		t.Fatalf("saved %v then %v", first, again)
+	}
+
+	item := e.want("GET", "/library?kind=link", nil, 200)["items"].([]any)[0].(map[string]any)
+	if item["url"] != "https://a.example/x" || item["chat_id"] == nil {
+		t.Fatalf("item %v", item)
+	}
+	if n := len(e.want("GET", "/library?kind=image", nil, 200)["items"].([]any)); n != 0 {
+		t.Fatalf("%d images", n)
+	}
+	res, err := http.Get(e.srv.URL + "/api/v1/library/" + item["id"].(string) + "/content")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("content %d %v", res.StatusCode, res.Header)
+	}
+
+	isSaved := func() bool {
+		return e.want("GET", "/chat-messages/"+id+"/link-previews", nil, 200)["previews"].([]any)[0].(map[string]any)["saved"].(bool)
+	}
+	if !isSaved() {
+		t.Fatal("not marked saved")
+	}
+	e.want("DELETE", "/library/"+item["id"].(string), nil, http.StatusNoContent)
+	if isSaved() {
+		t.Fatal("still marked saved")
+	}
+	// The card's cached image survives the Library copy going away.
+	if len(s3.keys(avatarBucket+"/"+linkPreviewKey(e.me.WorkspaceID, "https://a.example/x"))) != 1 {
+		t.Fatal("removing the link deleted the preview image")
+	}
+}
+
+func TestLibraryLinkWithoutImageSavesAndRemoves(t *testing.T) {
+	e, _ := newAvatarEnv(t)
+	f := usePreviews(t)
+	f.empty.Store(true)
+	id := e.previewMessage(t, "assistant", "```recommend\nhttps://www.a.example/notes/\nGood.\n```")
+	got := e.want("POST", "/library/links", map[string]any{"message_id": id, "url": "https://www.a.example/notes/"}, http.StatusCreated)
+	if got["title"] != "a.example/notes" || got["size_bytes"] != float64(0) {
+		t.Fatalf("%v", got)
+	}
+	e.want("GET", "/library/"+got["id"].(string)+"/content", nil, http.StatusNotFound)
+	e.want("DELETE", "/library/"+got["id"].(string), nil, http.StatusNoContent)
+}
+
+func TestLibraryLinkMustBeRecommendedByTheReply(t *testing.T) {
+	e, _ := newAvatarEnv(t)
+	f := usePreviews(t)
+	id := e.previewMessage(t, "assistant", recommendReply)
+	e.invalid("POST", "/library/links", map[string]any{"message_id": id, "url": "https://elsewhere.example"}, "url", "doesn't recommend")
+	mine := e.previewMessage(t, "user", recommendReply)
+	e.invalid("POST", "/library/links", map[string]any{"message_id": mine, "url": "https://a.example/x"}, "message_id", "assistant")
+	e.want("POST", "/library/links", map[string]any{"message_id": uuid.NewString(), "url": "https://a.example/x"}, http.StatusNotFound)
+	if n := f.calls.Load(); n != 0 {
+		t.Fatalf("fetched %d times", n)
+	}
+}

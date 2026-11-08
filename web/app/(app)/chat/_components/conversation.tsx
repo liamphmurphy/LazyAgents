@@ -32,6 +32,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
+import { RecommendActions } from "@/components/domain/recommend-fence";
 import { EffortPicker, ModelPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
@@ -294,6 +295,13 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
     );
   }
 
+  // A card's Summarize button: goes to the persona that recommended the link. A mention
+  // is only needed when someone else would answer next.
+  function summarize(messageId: string, body: string) {
+    const by = list?.find((m) => m.id === messageId)?.persona;
+    send.mutate({ body: by && by.id !== (c?.speaker ?? c?.persona)?.id ? `@${by.name} ${body}` : body });
+  }
+
   // Before the first message the persona can still change: a chat keeps its persona for life,
   // so switching starts a fresh chat with the other persona and drops this empty one.
   const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
@@ -462,6 +470,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               />
             )
           ) : (
+            <RecommendActions.Provider value={{ summarize, disabled: running || locked || !!unavailable || c.archived }}>
             <ol aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m) => (
@@ -484,6 +493,7 @@ export function Conversation({ id, actions }: { id: string; actions?: ReactNode 
               )}
               <li ref={end} aria-hidden />
             </ol>
+            </RecommendActions.Provider>
           )}
         </div>
         <div className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5">

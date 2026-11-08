@@ -2194,6 +2194,26 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /library/links:
+    post:
+      operationId: saveLibraryLink
+      summary: Save a page or video a persona recommended to your Library
+      description: The URL must be recommended by the reply. Saving the same link again returns the existing item.
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryLinkSave" }
+      responses:
+        "201":
+          description: The saved link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /library/{itemId}:
     parameters:
       - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -4586,7 +4606,7 @@ components:
           items: { type: string, format: uuid }
     LinkPreview:
       type: object
-      required: [url, kind, title, description, site]
+      required: [url, kind, title, description, site, saved]
       properties:
         url: { type: string }
         kind: { type: string, enum: [site, video] }
@@ -4595,6 +4615,7 @@ components:
         site: { type: string, description: "The site's name, or a video's channel" }
         video_id: { type: string, description: The YouTube id, for videos }
         image_url: { type: string, description: Where Vesper serves the stored image }
+        saved: { type: boolean, description: Whether the caller has this link in their Library }
     LinkPreviews:
       type: object
       required: [previews]
@@ -4612,7 +4633,7 @@ components:
         created_at: { type: string, format: date-time }
     LibraryItemKind:
       type: string
-      enum: [image, diagram]
+      enum: [image, diagram, link]
     LibraryItem:
       type: object
       required: [id, kind, title, filename, content_type, size_bytes, created_at]
@@ -4632,6 +4653,10 @@ components:
         reference: { $ref: "#/components/schemas/LibraryReferenceRole" }
         reference_persona_id: { type: string, format: uuid, description: "With reference persona: the persona this image shows" }
         reference_persona_name: { type: string }
+        url: { type: string, description: "For a link: the page or video" }
+        note: { type: string, description: "For a link: why the persona recommended it" }
+        site: { type: string, description: "For a link: the site's name or a video's channel" }
+        video_id: { type: string, description: "For a video link: the YouTube id" }
         created_at: { type: string, format: date-time }
     LibraryReferenceRole:
       type: string
@@ -4649,6 +4674,12 @@ components:
       properties:
         message_id: { type: string, format: uuid, description: The assistant reply the diagram is in }
         svg: { type: string, description: The SVG document }
+    LibraryLinkSave:
+      type: object
+      required: [message_id, url]
+      properties:
+        message_id: { type: string, format: uuid, description: The assistant reply that recommends the link }
+        url: { type: string, description: "The URL, exactly as in the reply's recommend fence" }
     LibraryList:
       type: object
       required: [items, has_more]

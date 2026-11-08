@@ -44,11 +44,17 @@ const (
 
 var fenceOpen = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})[ \t]*([^`]*)$")
 
-// Recommended returns the URLs of the recommend fences in a reply, in order,
-// without duplicates or anything that can't be previewed. A fence quoted inside
-// another code block doesn't count.
-func Recommended(md string) []string {
-	var out []string
+// Recommendation is one recommend fence: a URL and the persona's reason.
+type Recommendation struct {
+	URL  string
+	Note string
+}
+
+// Recommended returns the recommend fences in a reply, in order, without
+// duplicates or anything that can't be previewed. A fence quoted inside another
+// code block doesn't count.
+func Recommended(md string) []Recommendation {
+	var out []Recommendation
 	seen := map[string]bool{}
 	lines := strings.Split(md, "\n")
 	for i := 0; i < len(lines); i++ {
@@ -65,7 +71,7 @@ func Recommended(md string) []string {
 			u := strings.TrimSpace(lines[i+1])
 			if Valid(u) && !seen[u] && len(out) < MaxPerMessage {
 				seen[u] = true
-				out = append(out, u)
+				out = append(out, Recommendation{URL: u, Note: clean(strings.Join(lines[i+2:end], " "), maxDesc)})
 			}
 		}
 		i = end

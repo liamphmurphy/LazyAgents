@@ -352,6 +352,10 @@ type LibraryItem struct {
 	Reference          *string
 	ReferencePersonaID *uuid.UUID
 	Source             string
+	Url                string
+	Note               string
+	Site               string
+	VideoID            string
 }
 
 type LinkPreview struct {

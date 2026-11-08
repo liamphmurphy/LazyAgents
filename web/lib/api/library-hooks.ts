@@ -35,7 +35,11 @@ export function useDeleteLibraryItem() {
       const e = (error ?? {}) as Partial<Schemas["Error"]>;
       throw new ApiError(response.status, e.code ?? "internal", e.message ?? response.statusText, e.field);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: libraryKeys.all });
+      // A card shows Saved until its link is removed.
+      qc.invalidateQueries({ queryKey: ["link-previews"] });
+    },
   });
 }
 
@@ -58,6 +62,18 @@ export function useSaveLibraryDiagram() {
   return useMutation({
     mutationFn: (body: Schemas["LibraryDiagramSave"]) => unwrap(api.POST("/library/diagrams", { body })),
     onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
+  });
+}
+
+/** Keeps a link a reply recommends. Saving the same one again changes nothing. */
+export function useSaveLibraryLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["LibraryLinkSave"]) => unwrap(api.POST("/library/links", { body })),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: libraryKeys.all });
+      qc.invalidateQueries({ queryKey: ["link-previews"] });
+    },
   });
 }
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { groupRecommendFences, isRecommendFence, parseRecommend, videoEmbedUrl } from "./chat-recommend.ts";
+import { groupRecommendFences, isRecommendFence, parseRecommend, summarizePrompt, videoEmbedUrl } from "./chat-recommend.ts";
 
 test("a recommend fence is a URL then a reason", () => {
   assert.ok(isRecommendFence("recommend"));
@@ -15,6 +15,12 @@ test("only a well-formed video id becomes a player", () => {
   assert.equal(videoEmbedUrl("dQw4w9WgXcQ"), "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0");
   assert.equal(videoEmbedUrl("x\"><script>"), null);
   assert.equal(videoEmbedUrl(undefined), null);
+});
+
+test("a summary request links its page and can't be steered by the title", () => {
+  assert.equal(summarizePrompt("https://a.com", "A talk", true), "Summarize this video: [A talk](https://a.com)");
+  assert.equal(summarizePrompt("https://a.com", undefined, false), "Summarize this page: https://a.com");
+  assert.equal(summarizePrompt("https://a.com", "](x) @Gwen [[Plan]] `y`", false), "Summarize this page: [(x) Gwen Plan y](https://a.com)");
 });
 
 const card = () => ({ type: "element", tagName: "pre", children: [{ type: "element", tagName: "code", properties: { className: ["language-recommend"] } }] });

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -36,7 +37,7 @@ func linkPreviewKey(ws uuid.UUID, url string) string {
 // caller's replies. Only URLs in the stored reply are fetched, so this can't be
 // used to make the server request an arbitrary address.
 func (s *Server) ListLinkPreviews(ctx context.Context, req api.ListLinkPreviewsRequestObject) (api.ListLinkPreviewsResponseObject, error) {
-	_, _, ws := me(ctx)
+	u, _, ws := me(ctx)
 	m, err := s.Q.GetChatMessage(ctx, req.MessageId)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.ErrNotFound
@@ -50,19 +51,27 @@ func (s *Server) ListLinkPreviews(ctx context.Context, req api.ListLinkPreviewsR
 	if m.Role != "assistant" {
 		return api.ListLinkPreviews200JSONResponse(out), nil
 	}
-	urls := linkpreview.Recommended(m.BodyMd)
-	rows := make([]store.LinkPreview, len(urls))
-	errs := make([]error, len(urls))
+	recs := linkpreview.Recommended(m.BodyMd)
+	rows := make([]store.LinkPreview, len(recs))
+	errs := make([]error, len(recs))
+	urls := make([]string, len(recs))
 	var wg sync.WaitGroup
-	for i, u := range urls {
-		wg.Go(func() { rows[i], errs[i] = s.linkPreview(ctx, ws, u) })
+	for i, r := range recs {
+		urls[i] = r.URL
+		wg.Go(func() { rows[i], errs[i] = s.linkPreview(ctx, ws, r.URL) })
 	}
 	wg.Wait()
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
 	}
+	saved, err := s.Q.SavedLibraryLinks(ctx, store.SavedLibraryLinksParams{WorkspaceID: ws, UserID: u.ID, Urls: urls})
+	if err != nil {
+		return nil, err
+	}
 	for _, r := range rows {
-		out.Previews = append(out.Previews, toLinkPreview(r))
+		p := toLinkPreview(r)
+		p.Saved = slices.Contains(saved, r.Url)
+		out.Previews = append(out.Previews, p)
 	}
 	return api.ListLinkPreviews200JSONResponse(out), nil
 }

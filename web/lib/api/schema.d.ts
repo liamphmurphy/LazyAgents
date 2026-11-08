@@ -1693,6 +1693,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a page or video a persona recommended to your Library
+         * @description The URL must be recommended by the reply. Saving the same link again returns the existing item.
+         */
+        post: operations["saveLibraryLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library/{itemId}": {
         parameters: {
             query?: never;
@@ -4044,6 +4064,8 @@ export interface components {
             video_id?: string;
             /** @description Where Vesper serves the stored image */
             image_url?: string;
+            /** @description Whether the caller has this link in their Library */
+            saved: boolean;
         };
         LinkPreviews: {
             previews: components["schemas"]["LinkPreview"][];
@@ -4064,7 +4086,7 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        LibraryItemKind: "image" | "diagram";
+        LibraryItemKind: "image" | "diagram" | "link";
         LibraryItem: {
             /** Format: uuid */
             id: string;
@@ -4101,6 +4123,14 @@ export interface components {
              */
             reference_persona_id?: string;
             reference_persona_name?: string;
+            /** @description For a link: the page or video */
+            url?: string;
+            /** @description For a link: why the persona recommended it */
+            note?: string;
+            /** @description For a link: the site's name or a video's channel */
+            site?: string;
+            /** @description For a video link: the YouTube id */
+            video_id?: string;
             /** Format: date-time */
             created_at: string;
         };
@@ -4125,6 +4155,15 @@ export interface components {
             message_id: string;
             /** @description The SVG document */
             svg: string;
+        };
+        LibraryLinkSave: {
+            /**
+             * Format: uuid
+             * @description The assistant reply that recommends the link
+             */
+            message_id: string;
+            /** @description The URL, exactly as in the reply's recommend fence */
+            url: string;
         };
         LibraryList: {
             items: components["schemas"]["LibraryItem"][];
@@ -7270,6 +7309,32 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveLibraryLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryLinkSave"];
+            };
+        };
+        responses: {
+            /** @description The saved link */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

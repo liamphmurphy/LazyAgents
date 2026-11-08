@@ -24,6 +24,15 @@ export function videoEmbedUrl(id: string | undefined): string | null {
   return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0` : null;
 }
 
+/**
+ * The message a Summarize button sends. A page's title is untrusted and goes in the
+ * chat as your words, so it loses anything that would format it or mention a persona.
+ */
+export function summarizePrompt(url: string, title: string | undefined, video: boolean): string {
+  const name = (title ?? "").replace(/[[\]`@\n]/g, "").trim();
+  return `Summarize this ${video ? "video" : "page"}: ${name ? `[${name}](${url})` : url}`;
+}
+
 type Node = { type: string; tagName?: string; value?: string; properties?: Record<string, unknown>; children?: Node[] };
 
 const isCard = (n: Node) => n.type === "element" && n.tagName === "pre" && n.children?.some((c) => c.tagName === "code" && (c.properties?.className as string[] | undefined)?.includes("language-recommend"));

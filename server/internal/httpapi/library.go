@@ -30,6 +30,9 @@ func toLibraryItem(l store.ListLibraryItemsRow) api.LibraryItem {
 		Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
 		ChatId: l.ChatID, ChatTitle: l.ChatTitle, ProjectKey: l.ProjectKey, PersonaId: l.PersonaID, PersonaName: l.PersonaName, CreatedAt: l.CreatedAt,
 	}
+	if l.Kind == "link" {
+		out.Url, out.Note, out.Site, out.VideoId = &l.Url, &l.Note, &l.Site, &l.VideoID
+	}
 	source := api.LibraryItemSource(l.Source)
 	out.Source = &source
 	// A persona reference whose persona was deleted stands for nobody.
@@ -67,7 +70,7 @@ func (s *Server) ListLibraryItems(ctx context.Context, req api.ListLibraryItemsR
 func (s *Server) GetLibraryItemContent(ctx context.Context, req api.GetLibraryItemContentRequestObject) (api.GetLibraryItemContentResponseObject, error) {
 	u, _, ws := me(ctx)
 	l, err := s.Q.GetLibraryItem(ctx, store.GetLibraryItemParams{ID: req.ItemId, WorkspaceID: ws, UserID: u.ID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && l.BlobKey == "") {
 		return nil, apperr.ErrNotFound
 	} else if err != nil {
 		return nil, err
@@ -93,7 +96,8 @@ func (s *Server) DeleteLibraryItem(ctx context.Context, req api.DeleteLibraryIte
 	} else if err != nil {
 		return nil, err
 	}
-	if d.Orphaned {
+	// A link saved without an image has no object.
+	if d.Orphaned && d.BlobKey != "" {
 		_ = s.Blobs.Delete(context.WithoutCancel(ctx), s.ArtifactBucket, d.BlobKey)
 	}
 	return api.DeleteLibraryItem204Response{}, nil

@@ -662,10 +662,11 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     }
 
     if (/^\/chat-messages\/[^/]+\/link-previews$/.test(path)) return json({ previews: [
-      { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", kind: "video", title: "Why small rooms sound better", description: "", site: "Room Acoustics Lab", video_id: "dQw4w9WgXcQ", image_url: "/api/v1/link-previews/thumb/image" },
-      { url: "https://trailatlas.example/routes", kind: "site", title: "A field guide to quiet bike routes", description: "Routes", site: "", image_url: "/api/v1/link-previews/site/image" },
-      { url: "https://notes.example/grinders", kind: "site", title: "", description: "", site: "" },
+      { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", kind: "video", title: "Why small rooms sound better", description: "", site: "Room Acoustics Lab",  saved: false, video_id: "dQw4w9WgXcQ", image_url: "/api/v1/link-previews/thumb/image" },
+      { url: "https://trailatlas.example/routes", kind: "site", title: "A field guide to quiet bike routes", description: "Routes", site: "", saved: false, image_url: "/api/v1/link-previews/site/image" },
+      { url: "https://notes.example/grinders", kind: "site", title: "", description: "", site: "", saved: false },
     ] });
+    if (path === "/library/links" && method === "POST") return json({ id: "11111111-aaaa-4aaa-8aaa-111111111111", kind: "link", title: "T", filename: "link", content_type: "image/png", size_bytes: 9, created_at: now() }, 201);
     if (/^\/link-previews\/[^/]+\/image$/.test(path)) {
       const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
       return route.fulfill({ status: 200, contentType: "image/png", body: png });

@@ -25,6 +25,7 @@ import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { Tabs } from "@/components/ui/controls";
 import { Fridge } from "./fridge";
+import { Links } from "./links";
 
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
 function Source({ item }: { item: LibraryItem }) {
@@ -276,13 +277,13 @@ export function LibraryScreen() {
               <h1 className="type-display">Library</h1>
               <p className="text-sm text-fg-secondary">
                 Keepsakes from your Assistant chats, private to you. Images your personas generate are saved here automatically and stay after their chat is deleted.
-                Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams are kept when you choose Save to Library on them.
+                Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
               </p>
             </div>
             <UploadButton />
           </div>
-          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "diagrams", label: "Diagrams" }, { key: "fridge", label: "Fridge" }]} />
-          {tab === "fridge" ? <Fridge /> : <Items kind={tab === "diagrams" ? "diagram" : "image"} />}
+          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "diagrams", label: "Diagrams" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
+          {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={tab === "diagrams" ? "diagram" : "image"} />}
         </div>
       </Content>
     </>
