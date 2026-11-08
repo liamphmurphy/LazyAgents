@@ -407,11 +407,14 @@ export function ChatScreen({ id }: { id?: string }) {
     router.replace(`/chat/${newest.id}?${q.toString()}`);
   }, [id, attaching, newest, project, router, search]);
 
+  // The sidebar's persona picker (shared through storage) decides who a new conversation is with.
+  const filter = usePersonaFilter();
   function newConversation() {
-    // An empty current conversation with the default persona is already new.
-    if (id && current.data?.message_count === 0 && current.data.persona?.id === personas.data?.default_persona_id) return;
-    // New conversations use the default persona; the composer can switch it before the first message.
-    const persona_id = personas.data?.default_persona_id;
+    // New conversations use the persona picked in the sidebar, or the default when it shows
+    // the default or all personas; the composer can switch it before the first message.
+    const persona_id = filter.value !== "default" && filter.value !== "all" ? filter.value : personas.data?.default_persona_id;
+    // An empty current conversation with that persona is already new.
+    if (id && current.data?.message_count === 0 && current.data.persona?.id === persona_id) return;
     create.mutate({ project, ...(persona_id ? { persona_id } : {}) }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
   }
   const actions = (
@@ -420,7 +423,7 @@ export function ChatScreen({ id }: { id?: string }) {
       <MemoryButton />
     </>
   );
-  // Sits under the sidebar's persona picker.
+  // Sits under the sidebar's persona picker and follows it.
   const newChat = (
     <Button variant="secondary" icon="plus" className="w-full justify-center" disabled={!project || noHarness || create.isPending} onClick={newConversation}>
       New conversation
