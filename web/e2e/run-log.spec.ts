@@ -41,7 +41,7 @@ test("parent timeline includes historical and live delegated logs with independe
       events: (isParent ? parentEvents : childEvents).filter((e) => e.seq > after),
     } });
   });
-  await page.goto(`/runs/${parentId}`);
+  await page.goto(`/runs/${parentId}?view=details`);
   await expect(page.getByRole("link", { name: "Environment", exact: true })).toHaveAttribute("href", `/settings/runner?run_id=${parentId}`);
   const timeline = page.getByRole("region", { name: "Events" });
   await expect(timeline.getByText("Delegated review findings", { exact: true })).toBeVisible();
@@ -78,7 +78,7 @@ test("opencode run shows its harness and model; usage without cost source is unk
       events: [event(1, "usage", { input_tokens: 10, output_tokens: 5, cost_usd: 0 }, 1)],
     } }),
   );
-  await page.goto(`/runs/${parentId}`);
+  await page.goto(`/runs/${parentId}?view=details`);
   await expect(page.getByText("opencode", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("anthropic/claude-sonnet-4-5").first()).toBeVisible();
   const timeline = page.getByRole("region", { name: "Events" });
@@ -94,7 +94,7 @@ test("run usage separates cached, uncached and unreported input", async ({ page 
     run: usage, child_runs: [], turns: [], approvals: [],
     events: [event(1, "usage", { input_tokens: 1000, output_tokens: 100, cached_tokens: 900, cache_reported_input_tokens: 950 }, 1)],
   } }));
-  await page.goto(`/runs/${parentId}`);
+  await page.goto(`/runs/${parentId}?view=details`);
   const breakdown = page.getByLabel("Token breakdown");
   await expect(breakdown).toContainText("Cached input 900");
   await expect(breakdown).toContainText("Uncached input 50");

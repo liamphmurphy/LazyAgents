@@ -122,7 +122,7 @@ test("avatar: client checks and the server's 415 show inline; initials stay on t
   // A real PNG uploads, shows in the preview, and the list shows it.
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
   await file.setInputFiles({ name: "me.png", mimeType: "image/png", buffer: png });
-  await expect(editor(page).getByLabel("Message preview").locator("img")).toHaveAttribute("src", /^blob:/);
+  await expect(editor(page).getByLabel("Message preview").locator("img").first()).toHaveAttribute("src", /^blob:/);
   await editor(page).getByRole("button", { name: "Save persona" }).click();
   await expect(editor(page)).toHaveCount(0);
   expect(mock.personas.find((p) => p.name === "Sage")!.avatar_url).toMatch(/\/avatar\?v=/);

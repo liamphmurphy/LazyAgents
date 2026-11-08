@@ -71,7 +71,7 @@ test("epic Map tab offers the same map, accessible list, and editor", async ({ p
   await page.goto("/epics/epic-1");
   await page.getByRole("navigation", { name: "Epic views" }).getByRole("button", { name: "Map", exact: true }).click();
   const m = map(page);
-  await expect(m.getByRole("button", { name: /WEB-6 Canceled/ })).toBeVisible();
+  await expect(m.getByRole("button", { name: /WEB-6 Canceled/ }).first()).toBeVisible();
   await m.getByRole("button", { name: "List", exact: true }).click();
   await m.getByRole("button", { name: "WEB-1 Build ticket modal", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Edit WEB-1" })).toBeVisible();

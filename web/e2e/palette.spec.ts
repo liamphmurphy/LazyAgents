@@ -114,8 +114,12 @@ test("actions: new ticket, start planning, new chat and switch project", async (
   await expect(page).toHaveURL(/\/plans\?project=WEB&goal=deploy$/);
 
   await page.goto("/tickets/WEB-1");
+  const visited: string[] = [];
+  page.on("framenavigated", (f) => visited.push(f.url()));
   await run("> chat", /New chat with WEB-1 attached/);
-  await expect(page).toHaveURL(/\/chat\/chat-new\?project=WEB&attach=ticket%3AWEB-1/);
+  // The chat seeds its chips from ?attach=, then drops it from the URL.
+  await expect(page).toHaveURL(/\/chat\/chat-new\?project=WEB$/);
+  expect(visited.some((u) => /\/chat\/chat-new\?project=WEB&attach=ticket%3AWEB-1/.test(u))).toBe(true);
   expect(chats).toEqual([{ project: "WEB" }]);
 
   await page.goto("/board?project=WEB");

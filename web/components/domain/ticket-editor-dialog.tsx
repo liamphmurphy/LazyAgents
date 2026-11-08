@@ -47,7 +47,8 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
           aria-describedby="ticket-editor-desc"
           onCloseAutoFocus={(e) => {
             e.preventDefault();
-            if (opener?.isConnected) opener.focus();
+            // On a direct link nothing opened it: focus is still on the body.
+            if (opener?.isConnected && opener !== document.body) opener.focus();
             else document.querySelector<HTMLElement>(`[data-ticket-key="${CSS.escape(ticketKey)}"]`)?.focus();
           }}
           className="fixed left-1/2 top-[6vh] z-50 flex max-h-[88vh] w-[min(720px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"

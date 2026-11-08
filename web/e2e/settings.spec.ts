@@ -51,10 +51,12 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
   return { api, puts, projectPuts, models: () => modelFetches };
 }
 
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
+
 test("provider secrets show status and unlocks, are write-only, and saving refreshes the model picker", async ({ page }) => {
   const mock = await installSettingsApi(page);
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: "New chat" }).first().click();
+  await page.getByRole("button", { name: "New conversation" }).first().click();
   await page.getByRole("button", { name: /Model for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Escape");
@@ -95,8 +97,8 @@ test("provider secrets show status and unlocks, are write-only, and saving refre
 
   // The chat model cache was invalidated, so back in chat Codex is selectable
   // without a reload (the cache is otherwise fresh for a minute).
-  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /Chat/ }).click();
-  await page.getByRole("button", { name: "New chat" }).first().click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /Assistant/ }).click();
+  await page.getByRole("button", { name: "New conversation" }).first().click();
   await page.getByRole("button", { name: /Model for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).not.toHaveAttribute("aria-disabled", "true");
   expect(mock.models()).toBeGreaterThan(before);

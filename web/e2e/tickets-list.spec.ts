@@ -109,6 +109,7 @@ test("keyboard selection and bulk status report per-ticket failures", async ({ p
 });
 
 test("saved views are created, edited, renamed and deleted from the sidebar", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
   const api = await installBoardApi(page);
   await page.goto("/tickets?project=WEB&view=active&group=epic");
   const views = page.getByRole("group", { name: "Saved views" });
