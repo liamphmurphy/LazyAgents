@@ -260,6 +260,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "recommend:" replies with a video, a site and a page with no preview.
+    if (prompt.startsWith("recommend:")) {
+      const fence = (u: string, why: string) => `\`\`\`recommend\n${u}\n${why}\n\`\`\``;
+      add(c, "assistant", `Two things:\n\n${fence("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "Short and useful.")}\n\n${fence("https://trailatlas.example/routes", "Start with the river loop.")}\n\nAnd:\n\n${fence("https://notes.example/grinders", "Best comparison.")}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     // "svg:" replies with an SVG image; "badsvg:" with one the browser can't draw.
     if (prompt.startsWith("svg:") || prompt.startsWith("badsvg:")) {
       const svg = prompt.startsWith("svg:") ? `<svg viewBox="0 0 40 20" width="40" height="20"><script>document.title="ran"</script><rect width="40" height="20" fill="#36c"/></svg>` : "<svg><rect></svg>";
@@ -652,6 +659,16 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
         return route.fulfill({ status: 200, contentType: "image/png", body: png });
       }
+    }
+
+    if (/^\/chat-messages\/[^/]+\/link-previews$/.test(path)) return json({ previews: [
+      { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", kind: "video", title: "Why small rooms sound better", description: "", site: "Room Acoustics Lab", video_id: "dQw4w9WgXcQ", image_url: "/api/v1/link-previews/thumb/image" },
+      { url: "https://trailatlas.example/routes", kind: "site", title: "A field guide to quiet bike routes", description: "Routes", site: "", image_url: "/api/v1/link-previews/site/image" },
+      { url: "https://notes.example/grinders", kind: "site", title: "", description: "", site: "" },
+    ] });
+    if (/^\/link-previews\/[^/]+\/image$/.test(path)) {
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+      return route.fulfill({ status: 200, contentType: "image/png", body: png });
     }
 
     const run = /^\/runs\/([^/]+)$/.exec(path);

@@ -665,6 +665,7 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 			return nil, "Could not load the conversation's persona.", fmt.Errorf("chat svg capability: %w", err)
 		}
 		spec := c.spec
+		spec.Instructions += agents.AssistantRecommendSection
 		if svg {
 			spec.Instructions += agents.AssistantSVGSection
 		}

@@ -2088,6 +2088,39 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chat-messages/{messageId}/link-previews:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listLinkPreviews
+      summary: Preview cards for the pages and videos an assistant reply recommends
+      description: Reads the reply's recommend fences, fetching each page once. 404 unless the chat is the caller's.
+      tags: [chats]
+      responses:
+        "200":
+          description: One preview per recommended URL, in reply order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkPreviews" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /link-previews/{id}/image:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getLinkPreviewImage
+      summary: A recommended page's stored preview image
+      tags: [chats]
+      responses:
+        "200":
+          description: The image
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /library:
     get:
       operationId: listLibraryItems
@@ -4551,6 +4584,22 @@ components:
           maxItems: 5
           description: "Uploads from POST /chat-attachments that you made and haven't attached yet; the assistant gets the files with this message"
           items: { type: string, format: uuid }
+    LinkPreview:
+      type: object
+      required: [url, kind, title, description, site]
+      properties:
+        url: { type: string }
+        kind: { type: string, enum: [site, video] }
+        title: { type: string, description: "Empty when the page couldn't be read" }
+        description: { type: string }
+        site: { type: string, description: "The site's name, or a video's channel" }
+        video_id: { type: string, description: The YouTube id, for videos }
+        image_url: { type: string, description: Where Vesper serves the stored image }
+    LinkPreviews:
+      type: object
+      required: [previews]
+      properties:
+        previews: { type: array, items: { $ref: "#/components/schemas/LinkPreview" } }
     ChatAttachment:
       type: object
       required: [id, filename, content_type, size_bytes, created_at]

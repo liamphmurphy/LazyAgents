@@ -1598,6 +1598,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chat-messages/{messageId}/link-previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Preview cards for the pages and videos an assistant reply recommends
+         * @description Reads the reply's recommend fences, fetching each page once. 404 unless the chat is the caller's.
+         */
+        get: operations["listLinkPreviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/link-previews/{id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** A recommended page's stored preview image */
+        get: operations["getLinkPreviewImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library": {
         parameters: {
             query?: never;
@@ -3989,6 +4030,23 @@ export interface components {
             context_refs?: components["schemas"]["ChatContextRef"][];
             /** @description Uploads from POST /chat-attachments that you made and haven't attached yet; the assistant gets the files with this message */
             attachment_ids?: string[];
+        };
+        LinkPreview: {
+            url: string;
+            /** @enum {string} */
+            kind: "site" | "video";
+            /** @description Empty when the page couldn't be read */
+            title: string;
+            description: string;
+            /** @description The site's name, or a video's channel */
+            site: string;
+            /** @description The YouTube id */
+            video_id?: string;
+            /** @description Where Vesper serves the stored image */
+            image_url?: string;
+        };
+        LinkPreviews: {
+            previews: components["schemas"]["LinkPreview"][];
         };
         ChatAttachment: {
             /** Format: uuid */
@@ -7073,6 +7131,54 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listLinkPreviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One preview per recommended URL, in reply order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPreviews"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLinkPreviewImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
             200: {
                 headers: {
                     [name: string]: unknown;

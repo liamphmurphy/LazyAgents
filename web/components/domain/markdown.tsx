@@ -10,14 +10,17 @@ import { headingAnchors } from "@/lib/slug";
 import { linkify, parseWikiLinks, WIKILINK_SCHEME } from "@/lib/wikilinks";
 import { isAppFence } from "@/lib/chat-app";
 import { isSvgFence } from "@/lib/chat-svg";
+import { groupRecommendFences, isRecommendFence, RECOMMEND_ROW } from "@/lib/chat-recommend";
 import { AppFence } from "./app-fence";
 import { CodeFence } from "./code-fence";
+import { RecommendFence } from "./recommend-fence";
 import { SvgFence } from "./svg-fence";
 import { LinkTargets, WikiLink } from "./wikilink";
 
 const urlTransform = (url: string) => (url.startsWith(WIKILINK_SCHEME) ? url : defaultUrlTransform(url));
 // Tables, task lists, strikethrough and bare-URL links.
 const remarkPlugins = [remarkGfm];
+const chatRehypePlugins = [groupRecommendFences];
 
 /**
  * Renders user and agent markdown. react-markdown escapes raw HTML by
@@ -49,6 +52,7 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
     };
     return {
       p: ({ children }) => <p>{children}</p>,
+      div: ({ children, className }) => <div className={className === RECOMMEND_ROW ? "flex flex-wrap gap-3 [&>*]:w-[330px]" : className}>{children}</div>,
       // Task lists show their checkboxes in place of bullets.
       ul: ({ children, className }) => <ul className={className?.includes("contains-task-list") ? "ml-1 list-none space-y-1 [&_input]:mr-2 [&_input]:align-middle" : "ml-5 list-disc space-y-1"}>{children}</ul>,
       ol: ({ children }) => <ol className="ml-5 list-decimal space-y-1">{children}</ol>,
@@ -81,6 +85,8 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
           if (isAppFence(info)) return <AppFence code={code.children} info={info} />;
           // ```svg-image fences show as images.
           if (isSvgFence(info)) return <SvgFence code={code.children} info={info} />;
+          // ```recommend fences show as preview cards.
+          if (isRecommendFence(info)) return <RecommendFence code={code.children} info={info} />;
           return <CodeFence code={code.children} info={info} />;
         }
         return (
@@ -104,7 +110,7 @@ export function Markdown({ children, className, anchors, codeBlocks }: { childre
   return (
     <LinkTargets.Provider value={targets}>
     <div className={cx("prose-code flex flex-col gap-2.5 [&_a]:text-accent [&_a]:underline-offset-2 hover:[&_a]:underline", className)}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} urlTransform={urlTransform} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={codeBlocks ? chatRehypePlugins : undefined} urlTransform={urlTransform} components={components}>
         {md}
       </ReactMarkdown>
     </div>
