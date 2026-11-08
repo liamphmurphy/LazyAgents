@@ -107,13 +107,13 @@ test("View opens the Memory panel focused on that entry", async ({ page }) => {
   expect(mock.unhandled).toEqual([]);
 });
 
-test("the header Memory button toggles the panel", async ({ page }) => {
+test("the main menu Memory item toggles the panel", async ({ page }) => {
   const mock = await installChatApi(page);
   await openChat(page);
-  const toggle = page.getByRole("button", { name: /^Memory/ });
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  const toggle = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true });
+  await expect(toggle).not.toHaveAttribute("aria-current", "page");
   await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(toggle).toHaveAttribute("aria-current", "page");
   await expect(panel(page)).toBeVisible();
   await expect(panel(page)).toContainText("Nothing remembered yet");
   await toggle.click();
@@ -129,7 +129,7 @@ test("search and the type filter narrow the list", async ({ page }) => {
     memory(3, { title: "Ships on Fridays", summary: "Release day", type: "work" }),
   );
   await openChat(page);
-  await page.getByRole("button", { name: /^Memory/ }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true }).click();
   await expect(rows(page)).toHaveCount(3);
 
   await panel(page).getByRole("searchbox", { name: "Search memories" }).fill("family");
@@ -158,7 +158,7 @@ test("editing an entry and saving sends a PATCH", async ({ page }) => {
   const mock = await installChatApi(page);
   mock.memories.push(memory(1, { title: "Prefers dark mode", summary: "UI theme", type: "preference" }));
   await openChat(page);
-  await page.getByRole("button", { name: /^Memory/ }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true }).click();
   await expect(rows(page)).toHaveCount(1);
   await rows(page).getByRole("button", { name: "Edit Prefers dark mode" }).click();
 
@@ -189,7 +189,7 @@ test("delete removes one entry, from the row or from its editor", async ({ page 
   const mock = await installChatApi(page);
   mock.memories.push(memory(1, { title: "One" }), memory(2, { title: "Two" }), memory(3, { title: "Three" }));
   await openChat(page);
-  await page.getByRole("button", { name: /^Memory/ }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true }).click();
   await expect(rows(page)).toHaveCount(3);
 
   await panel(page).getByRole("button", { name: "Delete One" }).click();
@@ -207,7 +207,7 @@ test("Delete everything asks first, and Cancel keeps the entries", async ({ page
   const mock = await installChatApi(page);
   mock.memories.push(memory(1), memory(2));
   await openChat(page);
-  await page.getByRole("button", { name: /^Memory/ }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true }).click();
   await expect(rows(page)).toHaveCount(2);
 
   await panel(page).getByRole("button", { name: "Delete everything…" }).click();
@@ -230,7 +230,7 @@ test("the Export menu offers JSON and Markdown downloads", async ({ page }) => {
   const mock = await installChatApi(page);
   mock.memories.push(memory(1, { title: "Prefers dark mode", tags: ["ui"] }));
   await openChat(page);
-  await page.getByRole("button", { name: /^Memory/ }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true }).click();
   await panel(page).getByText("Export", { exact: true }).click();
   const json = panel(page).getByRole("button", { name: "JSON (all entries)" });
   const md = panel(page).getByRole("button", { name: "Markdown (all entries)" });
@@ -249,7 +249,7 @@ test("the Export menu offers JSON and Markdown downloads", async ({ page }) => {
 test("Import previews a pasted reply, saves it, and lists the entries as imported", async ({ page }) => {
   const mock = await installChatApi(page);
   await openChat(page);
-  await page.getByRole("button", { name: /^Memory/ }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Memory", exact: true }).click();
   await panel(page).getByRole("button", { name: "Import", exact: true }).click();
   await expect(panel(page).getByRole("button", { name: "Import", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(panel(page).getByText("I'm moving to a new personal assistant called Vesper")).toBeVisible();

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NAV_GROUPS, currentProject, hasFilters, isActive, projectSection, resolveProject, switchHref, withProject } from "./project-scope.ts";
+import { NAV_GROUPS, assistantPanelHref, currentProject, hasFilters, isActive, projectSection, resolveProject, switchHref, withProject } from "./project-scope.ts";
 
 const web = { key: "WEB", name: "Web app", color: "#6e56cf", archived: false };
 const ops = { key: "OPS", name: "Operations", color: "#3e9bff", archived: false };
@@ -79,4 +79,14 @@ test("cross-project links on optional routes show All projects, bare routes the 
   assert.equal(currentProject("/tickets", q(""), "WEB", projects), web);
   // Required routes always need one project.
   assert.equal(currentProject("/board", q("epic=e1"), "WEB", projects), web);
+});
+
+test("assistantPanelHref toggles on a chat and opens the Assistant from elsewhere", () => {
+  const q = (s) => new URLSearchParams(s);
+  assert.equal(assistantPanelHref("/chat/1", q("project=WEB"), "memory", "WEB"), "/chat/1?project=WEB&memory=1");
+  assert.equal(assistantPanelHref("/chat/1", q("project=WEB&memory=1"), "memory", "WEB"), "/chat/1?project=WEB");
+  assert.equal(assistantPanelHref("/chat/1", q("project=WEB&memory=abc"), "personas", "WEB"), "/chat/1?project=WEB&personas=1");
+  assert.equal(assistantPanelHref("/chat/1", q("project=WEB&canvas=1"), "memory", "WEB"), "/chat/1?project=WEB&memory=1");
+  assert.equal(assistantPanelHref("/board", q("project=WEB&epic=2"), "personas", "WEB"), "/chat?project=WEB&personas=1");
+  assert.equal(assistantPanelHref("/inbox", q(""), "memory", undefined), "/chat?memory=1");
 });

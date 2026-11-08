@@ -7,7 +7,7 @@ import { DropdownMenu } from "radix-ui";
 import { useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { needsAttention } from "@/lib/settings";
-import { NAV_GROUPS, currentProject, isActive, switchHref, withProject, type NavBadge, type ScopedProject } from "@/lib/project-scope";
+import { ASSISTANT_PANELS, NAV_GROUPS, assistantPanelHref, currentProject, isActive, switchHref, withProject, type NavBadge, type ScopedProject } from "@/lib/project-scope";
 import { Icon, Mark } from "@/components/ui/icon";
 import { Kbd } from "@/components/ui/primitives";
 import { floatPanel } from "@/components/domain/pickers";
@@ -211,6 +211,12 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
   const secrets = useSecrets();
   const counts: Record<NavBadge, number> = { inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
   const [expanded, setExpanded] = useExpanded();
+  const onChat = isActive(pathname, "/chat");
+  const panelOpen = (panel: string) => onChat && search.has(panel);
+  // A sub-item that's showing takes the highlight from its parent.
+  const navActive = (href: string) =>
+    isActive(pathname, href) && !(href === "/tickets" && search.get("sv")) && !(href === "/chat" && ASSISTANT_PANELS.some((p) => panelOpen(p.panel)));
+  const panelHref = (panel: (typeof ASSISTANT_PANELS)[number]["panel"]) => assistantPanelHref(pathname, new URLSearchParams(search.toString()), panel, current?.key);
   const newTicketHref = current ? `/tickets/new?project=${encodeURIComponent(current.key)}` : "/tickets/new";
   if (!expanded) {
     return (
@@ -241,10 +247,18 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
           {NAV_GROUPS.map((g) => (
             <div key={g.label} role="group" aria-label={g.label} className="flex flex-col gap-px">
               {g.items.map((n) => (
-                <NavLink key={n.href} label={railLabel(n.label, n.badge, counts)} href={withProject(n.href, current?.key)} active={isActive(pathname, n.href) && !(n.href === "/tickets" && search.get("sv"))}>
-                  <Icon name={n.icon} />
-                  {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
-                </NavLink>
+                <Fragment key={n.href}>
+                  <NavLink label={railLabel(n.label, n.badge, counts)} href={withProject(n.href, current?.key)} active={navActive(n.href)}>
+                    <Icon name={n.icon} />
+                    {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
+                  </NavLink>
+                  {n.href === "/chat" &&
+                    ASSISTANT_PANELS.map((p) => (
+                      <NavLink key={p.panel} label={p.label} href={panelHref(p.panel)} active={panelOpen(p.panel)}>
+                        <Icon name={p.icon} size={13} />
+                      </NavLink>
+                    ))}
+                </Fragment>
               ))}
             </div>
           ))}
@@ -296,12 +310,22 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
             <span id={`nav-${g.label}`} className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</span>
             {g.items.map((n) => (
               <Fragment key={n.href}>
-                <NavLink href={withProject(n.href, current?.key)} active={isActive(pathname, n.href) && !(n.href === "/tickets" && search.get("sv"))}>
+                <NavLink href={withProject(n.href, current?.key)} active={navActive(n.href)}>
                   <Icon name={n.icon} />
                   <span className="flex-1">{n.label}</span>
                   <Badge kind={n.badge} counts={counts} />
                 </NavLink>
                 {n.href === "/tickets" && <SidebarSavedViews project={current?.key} />}
+                {n.href === "/chat" && (
+                  <div className="flex flex-col gap-px pl-5">
+                    {ASSISTANT_PANELS.map((p) => (
+                      <NavLink key={p.panel} href={panelHref(p.panel)} active={panelOpen(p.panel)}>
+                        <Icon name={p.icon} size={13} />
+                        <span className="flex-1">{p.label}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
               </Fragment>
             ))}
           </div>
