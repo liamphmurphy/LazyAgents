@@ -140,10 +140,12 @@ func SetupScriptWithCheckpoint(repoURL, baseBranch, epicBranch, checkpoint, bran
 	}
 	b.WriteString("  git config user.name " + shellQuote(authorName) + "\n")
 	b.WriteString("  git config user.email " + shellQuote(authorEmail) + "\n")
-	b.WriteString(`  if [ -n "${GH_TOKEN:-}" ]; then git config credential.helper "$helper"; fi` + "\n")
-	b.WriteString(`  git config core.sshCommand "$GIT_SSH_COMMAND"` + "\n")
 	b.WriteString("  git checkout --quiet -B " + shellQuote(branch) + "\n")
 	b.WriteString("fi\n")
+	// Every turn, not just the first: a token or key added after the workspace
+	// was created must still reach git (gh reads GH_TOKEN on its own).
+	b.WriteString(`if [ -n "${GH_TOKEN:-}" ]; then git config credential.helper "$helper"; fi` + "\n")
+	b.WriteString(`git config core.sshCommand "$GIT_SSH_COMMAND"` + "\n")
 	b.WriteString(keepOurFilesOutOfGit)
 	b.WriteString(dependencySetupScript())
 	for _, c := range setup {
@@ -153,6 +155,11 @@ func SetupScriptWithCheckpoint(repoURL, baseBranch, epicBranch, checkpoint, bran
 	b.WriteString("echo '→ workspace ready on branch " + strings.ReplaceAll(branch, "'", "") + "'\n")
 	return b.String()
 }
+
+// chatGitAuth points a chat's git at its credentials. The token helper is
+// scoped to github.com so it never answers for another host (a submodule, a
+// second remote the agent adds); an empty $token leaves it unset.
+const chatGitAuth = `if [ -n "$token" ]; then git config credential.https://github.com.helper "$helper"; fi; git config core.sshCommand "$GIT_SSH_COMMAND"` + "\n"
 
 // ChatRepoSetupScript prepares a coding chat's workspace: the persona's repo
 // cloned into the workspace root on the chat's own work branch. A branch an
@@ -181,10 +188,8 @@ func ChatRepoSetupScript(repoURL, workBranch, authorName, authorEmail string) st
 	b.WriteString("  if git rev-parse -q --verify HEAD >/dev/null 2>&1; then git reset -q --hard; fi\n")
 	b.WriteString("  git config user.name " + shellQuote(authorName) + "\n")
 	b.WriteString("  git config user.email " + shellQuote(authorEmail) + "\n")
-	// Scoped to github.com so the token never answers for another host
-	// (a submodule, a second remote the agent adds).
-	b.WriteString(`  if [ -n "$token" ]; then git config credential.https://github.com.helper "$helper"; fi` + "\n")
-	b.WriteString(`  git config core.sshCommand "$GIT_SSH_COMMAND"` + "\n")
+	// The clone's own fetch below needs the credentials too.
+	b.WriteString("  " + chatGitAuth)
 	b.WriteString("  if git fetch --quiet origin " + shellQuote("+refs/heads/"+workBranch+":refs/remotes/origin/"+workBranch) + " 2>/dev/null; then\n")
 	b.WriteString("    echo '→ resuming pushed work on branch " + strings.ReplaceAll(workBranch, "'", "") + "'\n")
 	b.WriteString("    git checkout --quiet -B " + wb + " " + shellQuote("origin/"+workBranch) + "\n")
@@ -192,6 +197,9 @@ func ChatRepoSetupScript(repoURL, workBranch, authorName, authorEmail string) st
 	b.WriteString("    git checkout --quiet -B " + wb + "\n")
 	b.WriteString("  fi\n")
 	b.WriteString("fi\n")
+	// Again every turn, so a token or key added after the workspace was
+	// created reaches git too.
+	b.WriteString(chatGitAuth)
 	// Defense in depth, not a hard boundary: the agent can still bypass a hook
 	// (--no-verify, another remote). The token's own reach is the real limit.
 	hook := []string{

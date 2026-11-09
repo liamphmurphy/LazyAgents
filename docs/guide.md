@@ -267,6 +267,12 @@ sign-in is off for your ChatGPT account, enable it or run
 machine afterwards if the CLI complains. Listing models with a plan login uses
 the `claude` and `codex` CLIs on the API host.
 
+Both also offer your GitHub CLI token (`gh auth token`) as the `git:pat`
+secret, which agents need to push to `https://` repositories and to open pull
+requests with `gh`. A `git:ssh` key alone doesn't cover that. `make
+github-login` stores or replaces just that token. A token added later takes
+effect on the next turn, including in chats that already have a workspace.
+
 Switching backends keeps your chats. A chat whose session is on the other
 backend continues in a new session with its recent messages (the last 40, up to
 24,000 characters in total), and says so in the chat. Its old workspace stays
