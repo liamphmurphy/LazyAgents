@@ -26,7 +26,7 @@ export function harnessWorking(h: HarnessActivity | undefined): boolean {
 
 export type Glyph = "both" | "claude" | "codex" | "idle";
 
-/** The orb's centre: Claude's spark, Codex's comets, both, or an idle dot. */
+/** The orb's centre: Claude's robot, Codex's comets, both, or an idle dot. */
 export function orbGlyph(harnesses: HarnessActivity[]): Glyph {
   const a = harnessWorking(harnesses.find((h) => h.harness === CLAUDE));
   const b = harnessWorking(harnesses.find((h) => h.harness === CODEX));

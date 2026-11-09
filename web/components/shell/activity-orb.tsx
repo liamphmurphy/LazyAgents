@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { PersonaAvatar } from "@/app/(app)/chat/_components/persona";
 import type { Schemas } from "@/lib/api/client";
 import { useMarkChatRead, usePersonaDock } from "@/lib/api/hooks";
@@ -14,7 +14,7 @@ type Chat = Schemas["PersonaDockChat"];
 type Persona = Entry["persona"];
 
 /*
- * The one floating element: harness activity (Claude's spark, Codex's comets),
+ * The one floating element: harness activity (Claude's robot, Codex's comets),
  * the two session-usage rings, and a badge for personas that need the person
  * or replied. Clicking it sprouts a panel out to the left; a persona that
  * finishes sends a chip out of it. The motion is a straight port of the
@@ -56,7 +56,7 @@ function useOrbBottom(): number {
   return bottom;
 }
 
-// ---- Glyphs: the mockup's ring(), spark(), orbit() and idle(), in a 44×44 box.
+// ---- Glyphs: the mockup's ring(), robot(), orbit() and idle(), in a 44×44 box.
 
 function Ring({ r, pct, red }: { r: number; pct: number | null; red: boolean }) {
   const c = 2 * Math.PI * r;
@@ -71,15 +71,22 @@ function Ring({ r, pct, red }: { r: number; pct: number | null; red: boolean }) 
   );
 }
 
-function Spark({ len }: { len: number }) {
+/** Claude's pixel robot on an 11×8 grid, `u` units per cell, centred in the 44×44 box. Eyes are cut-outs in the orb surface. */
+function Robot({ u }: { u: number }) {
+  const ox = 22 - 5.5 * u, oy = 22.5 - 4 * u;
+  const cell = (x: number, y: number, w: number, h: number, className?: string) => (
+    <rect key={`${x}-${y}`} className={className} x={ox + x * u} y={oy + y * u} width={w * u} height={h * u} />
+  );
   return (
-    <g className="orb-spin">
-      <g className="orb-breathe" stroke="var(--orb-claude)" strokeWidth="2.3" strokeLinecap="round">
-        {[0, 1, 2, 3, 4, 5].map((i) => {
-          const a = (i * Math.PI) / 3;
-          return <line key={i} x1="22" y1="22" x2={22 + len * Math.cos(a)} y2={22 + len * Math.sin(a)} />;
-        })}
+    <g className="orb-robot" fill="var(--orb-claude)" style={{ "--u": u } as CSSProperties}>
+      <g className="orb-robot-body">
+        {cell(1, 0, 9, 6)}
+        {cell(0, 2, 1, 2)}
+        {cell(10, 2, 1, 2)}
+        {cell(3, 1, 1, 2, "orb-robot-eye")}
+        {cell(7, 1, 1, 2, "orb-robot-eye")}
       </g>
+      {[2, 4, 6, 8].map((x, i) => cell(x, 6, 1, 2, i % 2 ? "orb-robot-leg b" : "orb-robot-leg a"))}
     </g>
   );
 }
@@ -103,8 +110,8 @@ const Idle = () => <circle cx="22" cy="22" r="2.5" fill="var(--orb-idle)" />;
 
 function Centre({ harnesses }: { harnesses: HarnessActivity[] }) {
   const g = orbGlyph(harnesses);
-  if (g === "both") return <><Spark len={4.2} /><Orbit r={9.5} /></>;
-  if (g === "claude") return <Spark len={7} />;
+  if (g === "both") return <><Robot u={1.25} /><Orbit r={11.8} /></>;
+  if (g === "claude") return <Robot u={2} />;
   if (g === "codex") return <Orbit r={7.5} />;
   return <Idle />;
 }
@@ -112,7 +119,7 @@ function Centre({ harnesses }: { harnesses: HarnessActivity[] }) {
 function Mini({ harness }: { harness: string }) {
   return (
     <svg width="20" height="20" viewBox="0 0 44 44" aria-hidden>
-      {harness === CODEX ? <Orbit r={10} /> : <Spark len={10} />}
+      {harness === CODEX ? <Orbit r={10} /> : <Robot u={3.4} />}
     </svg>
   );
 }
