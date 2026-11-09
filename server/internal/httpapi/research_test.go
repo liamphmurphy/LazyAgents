@@ -72,8 +72,8 @@ func TestResearchStartsOneReadOnlyRunPerQuestionAndRejectsBadPlans(t *testing.T)
 	e.invalid("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"max_sources": 500}), "max_sources", "between")
 	e.invalid("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"max_minutes": 1}), "max_minutes", "between")
 	e.invalid("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"max_cost_usd": -1}), "max_cost_usd", "omitted")
-	e.want("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"report_length": "epic"}), http.StatusBadRequest)
-	e.want("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"report_tone": "limerick"}), http.StatusBadRequest)
+	e.invalid("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"report_length": "epic"}), "report_length", "in_depth")
+	e.invalid("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"report_tone": "limerick"}), "report_tone", "news")
 
 	job := e.want("POST", "/chats/"+chat+"/research", planBody(msg, nil), http.StatusCreated)
 	if job["state"] != "running" || len(job["tasks"].([]any)) != 2 || job["max_cost_usd"] != nil || job["report_length"] != "standard" || job["report_tone"] != "report" {

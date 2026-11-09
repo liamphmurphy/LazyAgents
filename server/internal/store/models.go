@@ -516,6 +516,7 @@ type LearningCourse struct {
 	CurrentLesson string
 	CreatedAt     time.Time
 	ReadyAt       *time.Time
+	Part          int32
 }
 
 type LearningLesson struct {
@@ -539,6 +540,7 @@ type LearningRun struct {
 	Role     string
 	Round    int32
 	UnitSeq  int32
+	Part     int32
 }
 
 type LearningSource struct {

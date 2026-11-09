@@ -2903,6 +2903,24 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /learn/courses/{id}/next-part:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: startCourseNextPart
+      summary: Start outlining a module's next part
+      description: For a ready module built in parts. Its outline comes back for approval like the first part's.
+      tags: [learn]
+      responses:
+        "200":
+          description: The module
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /learn/courses/{id}/stop:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -6308,18 +6326,21 @@ components:
         topic: { type: string, minLength: 1, maxLength: 200 }
         goal: { type: string, maxLength: 1000 }
         level: { type: string, enum: [new, some, experienced] }
-        minutes_budget: { type: integer, minimum: 15, maximum: 1200 }
+        minutes_budget: { type: integer, minimum: 15, maximum: 1200, description: Over 480 minutes the module is built in parts }
         persona_id: { type: string, format: uuid, description: The tutor; omit for the default persona }
         harness: { type: string }
         model: { type: string }
         effort: { $ref: "#/components/schemas/ChatEffort" }
     CourseSummary:
       type: object
-      required: [id, topic, state, error, created_at, units, lessons, complete, solid, flagged, build_note]
+      required: [id, topic, state, error, created_at, units, lessons, complete, solid, flagged, build_note, part, parts, studyable]
       properties:
         id: { type: string, format: uuid }
         topic: { type: string }
         state: { $ref: "#/components/schemas/CourseState" }
+        part: { type: integer, description: "The part being built, or the last one built once ready; from 0" }
+        parts: { type: integer, description: How many parts the module has; 1 unless it's built in parts }
+        studyable: { type: boolean, description: "Whether some of it can be studied now: a ready module, or the parts before the one being built" }
         error: { type: string }
         created_at: { type: string, format: date-time }
         ready_at: { type: string, format: date-time }
@@ -6345,6 +6366,7 @@ components:
       type: object
       required: [title, question, lessons]
       properties:
+        part: { type: integer, description: The part it belongs to; absent is the first }
         title: { type: string }
         question: { type: string }
         lessons: { type: array, items: { $ref: "#/components/schemas/CourseOutlineLesson" } }
@@ -6353,7 +6375,15 @@ components:
       required: [summary, units]
       properties:
         summary: { type: string }
-        units: { type: array, items: { $ref: "#/components/schemas/CourseOutlineUnit" } }
+        parts: { type: array, items: { $ref: "#/components/schemas/CourseOutlinePart" }, description: "Every part of a module built in parts; absent otherwise" }
+        units: { type: array, items: { $ref: "#/components/schemas/CourseOutlineUnit" }, description: "Units of the parts outlined so far, in order" }
+    CourseOutlinePart:
+      type: object
+      required: [title, summary, minutes]
+      properties:
+        title: { type: string }
+        summary: { type: string }
+        minutes: { type: integer }
     CourseOutlineEdit:
       type: object
       required: [units, known]

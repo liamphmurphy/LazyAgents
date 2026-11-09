@@ -84,7 +84,7 @@ func (s *Server) courseNote(ctx context.Context, c store.LearningCourse, v cours
 		}
 		total, done := 0, 0
 		for _, r := range rows {
-			if r.Role == role && r.Round == c.Round {
+			if r.Role == role && r.Round == c.Round && r.Part == c.Part {
 				total++
 				if slices.Contains(runs.Terminal, r.RunState) {
 					done++
@@ -101,19 +101,26 @@ func (s *Server) courseNote(ctx context.Context, c store.LearningCourse, v cours
 }
 
 func (s *Server) toCourseSummary(ctx context.Context, c store.LearningCourse, v courseView) (api.CourseSummary, error) {
-	out := api.CourseSummary{Id: c.ID, Topic: c.Topic, State: api.CourseState(c.State), Error: c.Error, CreatedAt: c.CreatedAt, ReadyAt: c.ReadyAt}
+	out := api.CourseSummary{Id: c.ID, Topic: c.Topic, State: api.CourseState(c.State), Error: c.Error, CreatedAt: c.CreatedAt, ReadyAt: c.ReadyAt, Part: int(c.Part), Parts: 1}
 	var err error
 	if out.BuildNote, err = s.courseNote(ctx, c, v); err != nil {
 		return out, err
 	}
+	study := 0
 	if len(c.Outline) > 0 {
 		var o runs.CourseOutline
 		if err := json.Unmarshal(c.Outline, &o); err != nil {
 			return out, err
 		}
-		out.Units = len(o.Units)
+		out.Parts = max(1, len(o.Parts))
+		study = runs.StudyableUnits(c, o)
+		// The outline's figures are for the part being built or last built.
 		total, minutes := 0, 0
 		for _, u := range o.Units {
+			if u.Part != int(c.Part) {
+				continue
+			}
+			out.Units++
 			for _, l := range u.Lessons {
 				if !l.Known {
 					total++
@@ -123,11 +130,15 @@ func (s *Server) toCourseSummary(ctx context.Context, c store.LearningCourse, v 
 		}
 		out.Lessons, out.Minutes = total, &minutes
 	}
-	if c.State != "ready" {
+	out.Studyable = study > 0
+	if !out.Studyable {
 		return out, nil
 	}
 	out.Lessons = 0
 	for _, l := range v.lessons {
+		if int(l.UnitSeq) >= study {
+			continue
+		}
 		if l.Status == "flagged" {
 			out.Flagged++
 		}
@@ -203,11 +214,15 @@ func (s *Server) toCourse(ctx context.Context, c store.LearningCourse) (api.Cour
 	for _, l := range v.lessons {
 		statusOf[l.Key] = l.Status
 	}
-	// Answers and bodies only leave the server once the module is finished.
-	if c.State != "ready" {
+	// Answers and bodies only leave the server once their part is finished.
+	study := runs.StudyableUnits(c, outline)
+	if study == 0 {
 		return out, nil
 	}
 	for _, l := range v.lessons {
+		if int(l.UnitSeq) >= study {
+			continue
+		}
 		lesson := api.CourseLesson{Key: l.Key, Title: l.Title, Objectives: l.Objectives, Prereqs: l.Prereqs, Minutes: int(l.Minutes), Status: api.CourseLessonStatus(l.Status), Issues: l.Issues, Progress: api.CourseLessonProgress(v.progress[l.Key]), ShakyPrereqs: []string{}, Checks: []api.CourseCheck{}, Body: []api.CourseBlock{}}
 		if int(l.UnitSeq) < len(outline.Units) {
 			lesson.UnitTitle = outline.Units[l.UnitSeq].Title
@@ -324,6 +339,16 @@ func (s *Server) ApproveCourse(ctx context.Context, req api.ApproveCourseRequest
 	}
 	out, err := s.toCourse(ctx, c)
 	return api.ApproveCourse200JSONResponse(out), err
+}
+
+func (s *Server) StartCourseNextPart(ctx context.Context, req api.StartCourseNextPartRequestObject) (api.StartCourseNextPartResponseObject, error) {
+	u, _, ws := me(ctx)
+	c, err := s.Runs.StartNextPart(ctx, ws, u.ID, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.toCourse(ctx, c)
+	return api.StartCourseNextPart200JSONResponse(out), err
 }
 
 func (s *Server) StopCourse(ctx context.Context, req api.StopCourseRequestObject) (api.StopCourseResponseObject, error) {

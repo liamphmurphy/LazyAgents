@@ -50,7 +50,10 @@ func advanceLearningCourse(ctx context.Context, q *store.Queries, id uuid.UUID) 
 		if live {
 			return nil
 		}
-		if len(c.Outline) == 0 {
+		if !hasPartOutline(c) {
+			if c.Part > 0 {
+				return failCourse(ctx, q, c, "Its outline couldn't be drafted. Try again.")
+			}
 			return failCourse(ctx, q, c, "The outline couldn't be drafted. Delete this module and try again.")
 		}
 		_, err := q.SetLearningCourseState(ctx, store.SetLearningCourseStateParams{ID: c.ID, State: "outline_ready", Error: "", Round: 0})
@@ -80,9 +83,24 @@ func advanceLearningCourse(ctx context.Context, q *store.Queries, id uuid.UUID) 
 	return nil
 }
 
+// failCourse ends a build that can't go on. A later part is dropped instead,
+// so what was built stays to study.
 func failCourse(ctx context.Context, q *store.Queries, c store.LearningCourse, msg string) error {
+	if c.Part > 0 {
+		_, err := dropPart(ctx, q, c, strings.TrimSpace(fmt.Sprintf("Part %d couldn't be built. %s", c.Part+1, msg)))
+		return err
+	}
 	_, err := q.SetLearningCourseState(ctx, store.SetLearningCourseStateParams{ID: c.ID, State: "failed", Error: msg, Round: c.Round})
 	return err
+}
+
+// hasPartOutline reports whether scoping produced units for the part being built.
+func hasPartOutline(c store.LearningCourse) bool {
+	if len(c.Outline) == 0 {
+		return false
+	}
+	o, err := parseOutline(c)
+	return err == nil && o.firstUnit(int(c.Part)) < len(o.Units)
 }
 
 func advanceCourseResearch(ctx context.Context, q *store.Queries, c store.LearningCourse) error {
@@ -98,6 +116,10 @@ func advanceCourseResearch(ctx context.Context, q *store.Queries, c store.Learni
 	case "failed":
 		return failCourse(ctx, q, c, "Research found nothing to build on. "+job.Error)
 	case "stopped":
+		if c.Part > 0 {
+			_, err := dropPart(ctx, q, c, "")
+			return err
+		}
 		_, err := q.SetLearningCourseState(ctx, store.SetLearningCourseStateParams{ID: c.ID, State: "stopped", Error: "", Round: c.Round})
 		return err
 	default:
@@ -121,9 +143,17 @@ func advanceCourseResearch(ctx context.Context, q *store.Queries, c store.Learni
 }
 
 // numberCourseSources gives each page the researchers cited one number, which
-// lessons then cite.
+// lessons then cite. A later part's pages carry on from the earlier parts'.
 func numberCourseSources(ctx context.Context, q *store.Queries, course uuid.UUID, tasks []store.ListResearchTasksRow) error {
 	seen, n := map[string]bool{}, int32(0)
+	have, err := q.ListLearningSources(ctx, course)
+	if err != nil {
+		return err
+	}
+	for _, s := range have {
+		seen[s.Url] = true
+		n = max(n, s.N)
+	}
 	for _, t := range tasks {
 		var found []ResearchFinding
 		if err := json.Unmarshal(t.Findings, &found); err != nil {
@@ -203,8 +233,16 @@ func advanceCourseRound(ctx context.Context, q *store.Queries, c store.LearningC
 // finishCourse keeps what exists: a lesson that didn't make it is flagged, not
 // hidden, unless nothing at all was written.
 func finishCourse(ctx context.Context, q *store.Queries, c store.LearningCourse, lessons []store.LearningLesson, why string) error {
+	o, err := parseOutline(c)
+	if err != nil {
+		return err
+	}
+	from := int32(o.firstUnit(int(c.Part)))
 	usable := 0
 	for _, l := range lessons {
+		if l.UnitSeq < from {
+			continue // an earlier part's
+		}
 		issues := l.Issues
 		switch l.Status {
 		case "verified":
@@ -235,7 +273,7 @@ func finishCourse(ctx context.Context, q *store.Queries, c store.LearningCourse,
 	if usable == 0 {
 		return failCourse(ctx, q, c, strings.TrimSpace("No lesson could be written. "+why))
 	}
-	_, err := q.SetLearningCourseState(ctx, store.SetLearningCourseStateParams{ID: c.ID, State: "ready", Error: "", Round: c.Round})
+	_, err = q.SetLearningCourseState(ctx, store.SetLearningCourseStateParams{ID: c.ID, State: "ready", Error: "", Round: c.Round})
 	return err
 }
 
@@ -256,7 +294,7 @@ func loadCourseBuild(ctx context.Context, q *store.Queries, c store.LearningCour
 	if b.outline, err = parseOutline(c); err != nil {
 		return b, err
 	}
-	b.active = b.outline.activeUnits()
+	b.active = b.outline.activeUnits(int(c.Part))
 	if c.ResearchJobID != nil {
 		if b.tasks, err = q.ListResearchTasks(ctx, *c.ResearchJobID); err != nil {
 			return b, err

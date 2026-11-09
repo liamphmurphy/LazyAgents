@@ -113,7 +113,7 @@ type CreateLearningModuleIn struct {
 	Topic         string `json:"topic" jsonschema:"What to learn, at most 200 characters"`
 	Goal          string `json:"goal,omitempty" jsonschema:"What the person wants to be able to do afterwards, at most 1000 characters"`
 	Level         string `json:"level" jsonschema:"Where they start: new, some or experienced"`
-	MinutesBudget int    `json:"minutes_budget,omitempty" jsonschema:"How long they want to spend studying in total, 15–1200 minutes (default 60)"`
+	MinutesBudget int    `json:"minutes_budget,omitempty" jsonschema:"How long they want to spend studying in total, 15–1200 minutes (default 60). Over 480 it's built in parts, each outlined as they near it"`
 }
 
 func createLearningModule(ctx context.Context, d Deps, c agents.Caller, in CreateLearningModuleIn) (any, error) {

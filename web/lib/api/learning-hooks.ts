@@ -67,6 +67,14 @@ export function useApproveCourse(id: string) {
   });
 }
 
+export function useNextPart(id: string) {
+  const done = useCourseInvalidate();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/learn/courses/{id}/next-part", { params: { path: { id } } })),
+    onSettled: done,
+  });
+}
+
 export function useStopCourse(id: string) {
   const done = useCourseInvalidate();
   return useMutation({

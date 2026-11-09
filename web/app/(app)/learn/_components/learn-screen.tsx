@@ -48,10 +48,11 @@ function ModuleCard({ c }: { c: CourseSummary }) {
   return (
     <Link href={`/learn/${c.id}`} className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 hover:border-border-hover">
       <span className="truncate text-[14px] font-semibold text-fg">{c.topic}</span>
-      <span className="font-mono text-xs text-fg-tertiary">{c.complete} of {c.lessons} complete · {c.solid} solid</span>
+      <span className="font-mono text-xs text-fg-tertiary">{c.parts > 1 && `Part ${c.state === "ready" ? c.part + 1 : c.part} of ${c.parts} · `}{c.complete} of {c.lessons} complete · {c.solid} solid</span>
       <ProgressBar value={c.complete} total={c.lessons} />
       <span className="flex items-center justify-between gap-2 text-[13px]">
-        <span className={cx("truncate font-medium", c.next_lesson ? "text-accent" : "text-fg-secondary")}>{c.next_lesson ? `Continue: ${c.next_lesson}` : "Finished"}</span>
+        <span className={cx("truncate font-medium", c.next_lesson ? "text-accent" : "text-fg-secondary")}>{c.next_lesson ? `Continue: ${c.next_lesson}` : c.parts > c.part + 1 || c.state !== "ready" ? "Built parts done" : "Finished"}</span>
+        {c.state !== "ready" && <StatePill state={c.state} />}
         {c.flagged > 0 && <span className="flex-none text-xs text-pill-human-fg">{c.flagged} flagged</span>}
       </span>
     </Link>
@@ -63,8 +64,9 @@ const GRID = "grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1f
 export function LearnScreen() {
   const courses = useCourses();
   const all = courses.data ?? [];
-  const building = all.filter((c) => c.state !== "ready");
-  const ready = all.filter((c) => c.state === "ready");
+  // A module built in parts stays with the person's modules while its next part is built.
+  const building = all.filter((c) => !c.studyable);
+  const ready = all.filter((c) => c.studyable);
   return (
     <>
       <TopBar crumbs={[{ label: "Learn" }]} actions={<NewModuleGuide />} />

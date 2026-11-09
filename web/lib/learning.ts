@@ -64,6 +64,28 @@ export function pickLesson<L extends { key: string; status: string; progress: st
   return open.find((l) => l.key === requested) ?? open.find((l) => l.progress === "new" && l.checks.length > 0) ?? open[0];
 }
 
+/** Above this a module is built in parts (the server's learningPartMinutes). */
+export const PART_MINUTES = 480;
+
+/** The time slider's stops: half hours up to 3h, then whole hours to 20h. */
+export const TIME_STEPS: readonly number[] = [30, 60, 90, 120, 150, 180, ...Array.from({ length: 17 }, (_, i) => 240 + i * 60)];
+
+export function timeLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = minutes / 60;
+  return `${h % 1 ? h.toFixed(1) : h} ${h === 1 ? "hour" : "hours"}`;
+}
+
+/** About how many parts a module of this length is planned as (the server's guidance). */
+export const partsEstimate = (minutes: number) => (minutes > PART_MINUTES ? Math.min(Math.max(Math.floor((minutes + 120) / 240), 2), 6) : 1);
+
+export function timeDetail(minutes: number): string {
+  if (minutes <= 90) return "A focused pass over what matters most.";
+  if (minutes <= 240) return "Room for the main ideas and some practice.";
+  if (minutes <= PART_MINUTES) return "A thorough module to work through over time.";
+  return `Built in about ${partsEstimate(minutes)} parts. The first is built now; each next one is outlined as you near it, from how you're doing.`;
+}
+
 export const CONFIDENCE = [
   { value: "1", label: "Guessing" },
   { value: "2", label: "Fairly" },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildStepIndex, courseBuilding, estimatedRuns, moveLesson, pickLesson } from "./learning.ts";
+import { TIME_STEPS, buildStepIndex, courseBuilding, estimatedRuns, moveLesson, partsEstimate, pickLesson, timeDetail, timeLabel } from "./learning.ts";
 
 const units = [{ title: "A", lessons: ["a", "b"] }, { title: "B", lessons: ["c"] }];
 
@@ -42,4 +42,17 @@ test("build helpers", () => {
   assert.equal(buildStepIndex("failed"), -1);
   assert.ok(courseBuilding("authoring"));
   assert.ok(!courseBuilding("outline_ready"));
+});
+
+test("the time slider runs from half an hour to 20 hours", () => {
+  assert.equal(TIME_STEPS[0], 30);
+  assert.equal(TIME_STEPS.at(-1), 1200);
+  assert.ok(TIME_STEPS.includes(180) && TIME_STEPS.includes(480));
+  assert.deepEqual([timeLabel(30), timeLabel(60), timeLabel(90), timeLabel(1200)], ["30 min", "1 hour", "1.5 hours", "20 hours"]);
+});
+
+test("a module over 8 hours is built in parts", () => {
+  assert.deepEqual([partsEstimate(480), partsEstimate(540), partsEstimate(720), partsEstimate(1200)], [1, 2, 3, 5]);
+  assert.match(timeDetail(1200), /about 5 parts/);
+  assert.doesNotMatch(timeDetail(480), /parts/);
 });

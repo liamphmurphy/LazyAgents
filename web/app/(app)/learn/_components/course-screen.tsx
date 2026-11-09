@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCourse, useDeleteCourse, useStopCourse } from "@/lib/api/learning-hooks";
 import { COURSE_STATE_LABELS, courseBuilding, type BuildState } from "@/lib/learning";
 import { Content, TopBar } from "@/components/shell/topbar";
@@ -11,6 +12,7 @@ import { StudyView } from "./study-view";
 
 export function CourseScreen({ id }: { id: string }) {
   const router = useRouter();
+  const search = useSearchParams();
   const course = useCourse(id);
   const stop = useStopCourse(id);
   const del = useDeleteCourse();
@@ -19,14 +21,21 @@ export function CourseScreen({ id }: { id: string }) {
   };
   const c = course.data;
   const state = c?.summary.state as BuildState | undefined;
-  const actions = c && (
+  // A later part's outline is reviewed here; otherwise what's built is studied.
+  const laterPart = !!c && c.summary.part > 0;
+  const actions = c && (laterPart ? (
+    <>
+      <Link href={`/learn/${id}`} className="inline-flex h-7 items-center rounded-md px-2.5 text-xs text-fg-secondary hover:bg-hover">Back to studying</Link>
+      <Button variant="outline" disabled={stop.isPending} onClick={() => stop.mutate(undefined, { onSuccess: () => router.push(`/learn/${id}`) })}>Discard this part</Button>
+    </>
+  ) : (
     <>
       {courseBuilding(c.summary.state) && <Button disabled={stop.isPending} onClick={() => stop.mutate()}>Stop</Button>}
       <Button variant="outline" disabled={del.isPending} onClick={discard}>Delete</Button>
     </>
-  );
+  ));
   const crumbs = [{ label: "Learn", href: "/learn" }, { label: c?.summary.topic ?? "Module" }];
-  if (c && state === "ready") return <StudyView course={c} onDelete={discard} />;
+  if (c && c.summary.studyable && !(search.get("review") === "1" && state === "outline_ready")) return <StudyView course={c} onDelete={discard} />;
   return (
     <>
       <TopBar crumbs={crumbs} actions={actions} />

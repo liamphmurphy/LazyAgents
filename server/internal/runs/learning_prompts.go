@@ -47,14 +47,26 @@ func learningScopePrompt(c store.LearningCourse) string {
 	if goal == "" {
 		goal = "(none given)"
 	}
+	if c.MinutesBudget > learningPartMinutes {
+		parts := min(max(int(c.MinutesBudget+120)/240, learningMinParts), learningMaxParts)
+		return fmt.Sprintf("Design a learning module.\nTopic: %s\nThe learner's goal: %s\nLevel: %s\nTime available: about %d minutes.\nThat's too much to build at once, so it's built in parts: each is outlined when the learner gets near it, from how they're doing. In parts, plan the whole module as about %d parts (%d to %d) in teaching order, each a coherent stage of 2 to 5 hours, with a title, what it covers and its minutes; together they fill the time. Then give units and lessons for the first part only: at most %d units and %d lessons, sized to its minutes. Call submit_outline, then stop.",
+			c.Topic, goal, learningLevels[c.Level], c.MinutesBudget, parts, learningMinParts, learningMaxParts, learningMaxUnits, learningMaxLessons)
+	}
 	return fmt.Sprintf("Design a learning module.\nTopic: %s\nThe learner's goal: %s\nLevel: %s\nTime available: about %d minutes.\nAt most %d units and %d lessons. Call submit_outline, then stop.",
 		c.Topic, goal, learningLevels[c.Level], c.MinutesBudget, learningMaxUnits, learningMaxLessons)
 }
 
-func learningOutlineText(o CourseOutline) string {
+func learningOutlineText(o CourseOutline, part int) string {
 	var b strings.Builder
+	if len(o.Parts) > 0 && part < len(o.Parts) {
+		fmt.Fprintf(&b, "This is part %d of %d: %s. %s\n", part+1, len(o.Parts), o.Parts[part].Title, o.Parts[part].Summary)
+	}
 	for i, u := range o.Units {
-		fmt.Fprintf(&b, "Unit %d: %s\n", i+1, u.Title)
+		earlier := ""
+		if u.Part < part {
+			earlier = " (an earlier part: already taught)"
+		}
+		fmt.Fprintf(&b, "Unit %d: %s%s\n", i+1, u.Title, earlier)
 		for _, l := range u.Lessons {
 			known := ""
 			if l.Known {
@@ -72,7 +84,7 @@ func learningOutlineText(o CourseOutline) string {
 
 func learningAuthorPrompt(c store.LearningCourse, b courseBuild, unit int32) string {
 	var p strings.Builder
-	fmt.Fprintf(&p, "Module: %s\nLearner: %s. Goal: %s\n\nThe whole module:\n%s\nWrite these lessons, each with one submit_lesson call:\n", c.Topic, learningLevels[c.Level], c.Goal, learningOutlineText(b.outline))
+	fmt.Fprintf(&p, "Module: %s\nLearner: %s. Goal: %s\n\nThe whole module:\n%s\nWrite these lessons, each with one submit_lesson call:\n", c.Topic, learningLevels[c.Level], c.Goal, learningOutlineText(b.outline, int(c.Part)))
 	for _, l := range b.lessons {
 		if l.UnitSeq != unit || l.Status != "pending" {
 			continue
@@ -88,7 +100,7 @@ func learningAuthorPrompt(c store.LearningCourse, b courseBuild, unit int32) str
 
 func learningReviewPrompt(c store.LearningCourse, b courseBuild, checks []store.LearningCheck, unit int32) string {
 	var p strings.Builder
-	fmt.Fprintf(&p, "Module: %s\n\nThe whole module, in teaching order:\n%s\nReview these lessons:\n", c.Topic, learningOutlineText(b.outline))
+	fmt.Fprintf(&p, "Module: %s\n\nThe whole module, in teaching order:\n%s\nReview these lessons:\n", c.Topic, learningOutlineText(b.outline, int(c.Part)))
 	for _, l := range b.lessons {
 		if l.UnitSeq != unit || l.Status != "written" {
 			continue

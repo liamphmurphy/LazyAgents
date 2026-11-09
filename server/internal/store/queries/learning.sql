@@ -32,7 +32,10 @@ WHERE id = $1 RETURNING *;
 UPDATE learning_courses SET current_lesson = $2 WHERE id = $1;
 
 -- name: CreateLearningRun :exec
-INSERT INTO learning_runs (run_id, course_id, role, round, unit_seq) VALUES ($1, $2, $3, $4, $5);
+INSERT INTO learning_runs (run_id, course_id, role, round, unit_seq, part) VALUES ($1, $2, $3, $4, $5, $6);
+
+-- name: SetLearningCoursePart :one
+UPDATE learning_courses SET part = $2 WHERE id = $1 RETURNING *;
 
 -- name: GetLearningRun :one
 SELECT * FROM learning_runs WHERE run_id = $1;
@@ -47,14 +50,24 @@ SELECT c.* FROM learning_courses c JOIN learning_runs l ON l.course_id = c.id WH
 SELECT EXISTS (SELECT 1 FROM learning_courses c JOIN learning_runs l ON l.course_id = c.id WHERE l.run_id = $1 AND c.user_id = $2)::boolean;
 
 -- name: LearningCourseSpend :one
--- What the course's own runs and its researchers have cost so far.
+-- What the part being built has cost so far: its own runs and its researchers.
 SELECT coalesce(sum(r.cost_usd_micros), 0)::bigint FROM runs r WHERE r.id IN (
-  SELECT l.run_id FROM learning_runs l WHERE l.course_id = $1
+  SELECT l.run_id FROM learning_runs l JOIN learning_courses c ON c.id = l.course_id WHERE l.course_id = $1 AND l.part = c.part
   UNION SELECT t.run_id FROM research_tasks t JOIN learning_courses c ON c.research_job_id = t.job_id WHERE c.id = $1);
 
 -- name: CreateLearningLesson :exec
 INSERT INTO learning_lessons (course_id, seq, unit_seq, key, title, objectives, prereqs, minutes, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
+-- name: NextLearningLessonSeq :one
+SELECT coalesce(max(seq) + 1, 0)::int FROM learning_lessons WHERE course_id = $1;
+
+-- name: DeleteLearningLessonsFrom :exec
+-- Drops a part that didn't get built: its units are the outline's last.
+DELETE FROM learning_lessons WHERE course_id = $1 AND unit_seq >= $2;
+
+-- name: LearningCheckUnit :one
+SELECT l.unit_seq FROM learning_checks k JOIN learning_lessons l ON l.id = k.lesson_id WHERE k.id = $1 AND l.course_id = $2;
 
 -- name: ListLearningLessons :many
 SELECT * FROM learning_lessons WHERE course_id = $1 ORDER BY seq;
