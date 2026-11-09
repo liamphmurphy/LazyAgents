@@ -265,6 +265,8 @@
 }
 
 .scene-link { stroke-dasharray: 1; animation: scene-link 4s ease-in-out infinite both; }
+.scene-plug { animation: scene-plug 2.4s ease-in-out infinite; }
+@keyframes scene-plug { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(14px); } }
 .scene-node { animation: scene-node 2.4s ease-in-out infinite; }
 @keyframes scene-link {
   0% { stroke-dashoffset: 1; }

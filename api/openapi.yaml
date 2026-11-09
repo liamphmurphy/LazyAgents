@@ -3130,6 +3130,221 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /connectors:
+    get:
+      operationId: listConnectors
+      summary: The person's MCP connectors
+      tags: [connectors]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectorList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createConnector
+      summary: Add a connector; OAuth connectors return a sign-in URL
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewConnector" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectorCreated" }
+        default: { $ref: "#/components/responses/Error" }
+  /connectors/probe:
+    post:
+      operationId: probeConnector
+      summary: Check an MCP server before adding it; nothing is stored
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectorProbeRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectorProbe" }
+        default: { $ref: "#/components/responses/Error" }
+  /connectors/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateConnector
+      summary: Rename, set persona access and set tool permissions (revision-checked)
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectorPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connector" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteConnector
+      tags: [connectors]
+      responses:
+        "204": { description: Removed }
+        default: { $ref: "#/components/responses/Error" }
+  /connectors/{id}/test:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: testConnector
+      summary: Reconnect, refresh the tool list and report health
+      tags: [connectors]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connector" }
+        default: { $ref: "#/components/responses/Error" }
+  /connectors/{id}/authorize:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: authorizeConnector
+      summary: Start OAuth sign-in again
+      tags: [connectors]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectorCreated" }
+        default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/connector-approvals:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listConnectorApprovals
+      summary: Connector tools waiting for the person in this chat
+      tags: [connectors]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectorApprovalList" }
+        default: { $ref: "#/components/responses/Error" }
+  /connector-approvals/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: decideConnectorApproval
+      summary: Allow once, always allow (sets the tool to Allow) or deny
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectorApprovalDecision" }
+      responses:
+        "204": { description: Decided }
+        default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/connector-proposals:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listConnectorProposals
+      summary: Connectors a persona proposed in this chat, waiting for the person
+      tags: [connectors]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectorProposalList" }
+        default: { $ref: "#/components/responses/Error" }
+  /connector-proposals/{id}/decline:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: declineConnectorProposal
+      tags: [connectors]
+      responses:
+        "204": { description: Declined }
+        default: { $ref: "#/components/responses/Error" }
+  /scheduled-tasks:
+    get:
+      operationId: listScheduledTasks
+      tags: [scheduled]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledTaskList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createScheduledTask
+      tags: [scheduled]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduledTaskInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledTask" }
+        default: { $ref: "#/components/responses/Error" }
+  /scheduled-tasks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: updateScheduledTask
+      summary: Replace a task's settings (revision-checked)
+      tags: [scheduled]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduledTaskInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledTask" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteScheduledTask
+      tags: [scheduled]
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+  /scheduled-tasks/{id}/run:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: runScheduledTask
+      summary: Run a task now; 409 while it is already running
+      tags: [scheduled]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledTask" }
+        default: { $ref: "#/components/responses/Error" }
   /chats/{id}/cancel:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -5062,7 +5277,7 @@ components:
         kind:
           type: string
           description: "question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes"
-          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion, workflow_gate]
+          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion, workflow_gate, scheduled, connector_approval]
         title: { type: string }
         summary: { type: string }
         href: { type: string }
@@ -6063,6 +6278,174 @@ components:
       type: string
       enum: [neutral, friendly, concise, formal, playful]
       description: How the assistant writes; each maps to one fixed prompt sentence on the server
+    ConnectorTool:
+      type: object
+      required: [name, description, write, policy]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        write: { type: boolean, description: "False only when the server marks the tool read-only" }
+        policy: { type: string, enum: [allow, ask, off] }
+    Connector:
+      type: object
+      required: [id, name, slug, url, auth_kind, status, last_error, tools, persona_ids, revision, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        url: { type: string }
+        auth_kind: { type: string, enum: [oauth, token, none] }
+        status: { type: string, enum: [connected, needs_sign_in, offline] }
+        last_error: { type: string }
+        last_checked_at: { type: string, format: date-time }
+        tools: { type: array, items: { $ref: "#/components/schemas/ConnectorTool" } }
+        persona_ids: { type: array, items: { type: string, format: uuid } }
+        revision: { type: integer }
+        created_at: { type: string, format: date-time }
+    ConnectorList:
+      type: object
+      required: [connectors]
+      properties:
+        connectors: { type: array, items: { $ref: "#/components/schemas/Connector" } }
+    ConnectorCreated:
+      type: object
+      required: [connector]
+      properties:
+        connector: { $ref: "#/components/schemas/Connector" }
+        authorize_url: { type: string, description: "Open this to finish OAuth sign-in" }
+    NewConnector:
+      type: object
+      required: [name, url, auth_kind]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        url: { type: string }
+        auth_kind: { type: string, enum: [oauth, token, none] }
+        token: { type: string, description: "Stored encrypted and never returned" }
+        proposal_id: { type: string, format: uuid, description: "The persona proposal this completes; that persona gets access" }
+    ConnectorProbeRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+        token: { type: string }
+    ConnectorProbe:
+      type: object
+      required: [reachable, needs_auth, tools]
+      properties:
+        reachable: { type: boolean }
+        needs_auth: { type: boolean }
+        tools: { type: integer }
+        error: { type: string }
+    ConnectorPatch:
+      type: object
+      required: [revision]
+      properties:
+        revision: { type: integer }
+        name: { type: string, minLength: 1, maxLength: 60 }
+        persona_ids: { type: array, items: { type: string, format: uuid } }
+        token: { type: string, description: "Replace an API token connector's token; stored encrypted" }
+        policies: { type: object, additionalProperties: { type: string, enum: [allow, ask, off] }, description: "Tool name to permission; tools not named are unchanged" }
+    ConnectorApproval:
+      type: object
+      required: [id, connector_id, connector_name, tool, arguments, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        connector_id: { type: string, format: uuid }
+        connector_name: { type: string }
+        tool: { type: string }
+        arguments: { type: object, additionalProperties: true }
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
+        created_at: { type: string, format: date-time }
+    ConnectorApprovalList:
+      type: object
+      required: [approvals]
+      properties:
+        approvals: { type: array, items: { $ref: "#/components/schemas/ConnectorApproval" } }
+    ConnectorApprovalDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [allow, always, deny] }
+    ConnectorProposal:
+      type: object
+      required: [id, name, url, auth_kind, reason, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        url: { type: string }
+        auth_kind: { type: string, enum: [oauth, token, none] }
+        reason: { type: string }
+        proposed_by: { $ref: "#/components/schemas/PersonaSummary" }
+        created_at: { type: string, format: date-time }
+    ConnectorProposalList:
+      type: object
+      required: [proposals]
+      properties:
+        proposals: { type: array, items: { $ref: "#/components/schemas/ConnectorProposal" } }
+    ScheduledTaskInput:
+      type: object
+      required: [name, kind, frequency, at_time, timezone, enabled]
+      properties:
+        revision: { type: integer, description: Required when updating }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        kind: { type: string, enum: [prompt, workflow] }
+        instructions: { type: string, maxLength: 20000 }
+        workflow_id: { type: string, format: uuid }
+        persona_id: { type: string, format: uuid }
+        project: { type: string, description: "Project key to attach; omit for none" }
+        connector_ids: { type: array, items: { type: string, format: uuid } }
+        frequency: { type: string, enum: [daily, weekly, monthly, cron] }
+        weekdays: { type: array, items: { type: integer, minimum: 0, maximum: 6 }, description: "0 is Sunday; weekly only" }
+        month_day: { type: integer, minimum: 1, maximum: 31, description: "Runs on the last day of shorter months" }
+        at_time: { type: string, pattern: "^[0-2][0-9]:[0-5][0-9]$" }
+        timezone: { type: string, description: IANA name }
+        cron: { type: string, description: "Five fields, in timezone; cron only" }
+        enabled: { type: boolean }
+        max_minutes: { type: integer, minimum: 1, maximum: 240 }
+        max_cost_micros: { type: integer, format: int64, minimum: 1 }
+    ScheduledRun:
+      type: object
+      required: [id, trigger, state, summary, error, cost_micros, started_at]
+      properties:
+        id: { type: string, format: uuid }
+        trigger: { type: string, enum: [schedule, manual, catchup] }
+        state: { type: string, enum: [running, waiting, done, failed] }
+        summary: { type: string }
+        error: { type: string }
+        cost_micros: { type: integer, format: int64 }
+        href: { type: string }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    ScheduledTask:
+      type: object
+      required: [id, name, kind, instructions, connector_ids, frequency, weekdays, month_day, at_time, timezone, cron, enabled, max_minutes, max_cost_micros, revision, runs, upcoming]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [prompt, workflow] }
+        instructions: { type: string }
+        workflow_id: { type: string, format: uuid }
+        persona_id: { type: string, format: uuid }
+        project: { type: string }
+        connector_ids: { type: array, items: { type: string, format: uuid } }
+        frequency: { type: string, enum: [daily, weekly, monthly, cron] }
+        weekdays: { type: array, items: { type: integer } }
+        month_day: { type: integer }
+        at_time: { type: string }
+        timezone: { type: string }
+        cron: { type: string }
+        enabled: { type: boolean }
+        max_minutes: { type: integer }
+        max_cost_micros: { type: integer, format: int64 }
+        next_run_at: { type: string, format: date-time }
+        upcoming: { type: array, items: { type: string, format: date-time }, description: "The next two run times" }
+        revision: { type: integer }
+        runs: { type: array, items: { $ref: "#/components/schemas/ScheduledRun" }, description: "Newest first, at most 10" }
+    ScheduledTaskList:
+      type: object
+      required: [tasks]
+      properties:
+        tasks: { type: array, items: { $ref: "#/components/schemas/ScheduledTask" } }
     PersonaCapabilities:
       type: object
       description: |
@@ -6073,6 +6456,7 @@ components:
         code: { type: boolean, description: "Clone the chat's repo, edit and run code, commit and push its own work branch, open PRs" }
         images: { type: boolean, description: "Generate images with Codex image generation; works with any chat model (non-Codex chats hand the image to a one-off Codex step)" }
         personas: { type: boolean, description: "Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona)." }
+        connectors: { type: boolean, description: "Propose new MCP connectors from a chat; each is added only when the person approves it and signs in. Absent in a request means unchanged (false for a new persona)." }
         svg: { type: boolean, description: "Show SVG images in chat replies; a reply from a persona without it keeps its SVG as plain code. Absent in a request means unchanged (false for a new persona)." }
         workflows: { type: boolean, description: "Propose new workflows and edits to them from a chat; each is applied only when the person accepts it. Absent in a request means unchanged (false for a new persona)." }
     PersonaSummary:

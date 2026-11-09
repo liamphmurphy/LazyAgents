@@ -81,6 +81,16 @@ WITH items AS (
  WHERE ar.workspace_id=$3 AND ar.type='mockup' AND v.review_state IS NOT NULL
  UNION ALL
  -- Workflow gates are private to the person who started the run.
+ -- A scheduled task's result, and a connector tool waiting for a yes or no; both private.
+ SELECT 'scheduled:'||r.id,'scheduled',st.name,CASE WHEN r.state='failed' THEN 'Failed: '||r.error ELSE left(r.summary,240) END,
+ CASE WHEN r.workflow_run_id IS NOT NULL THEN '/workflows/runs/'||r.workflow_run_id ELSE '/chat/'||r.chat_id END,coalesce(p.key,''),'',r.finished_at,false,NULL,NULL,NULL
+ FROM scheduled_task_runs r JOIN scheduled_tasks st ON st.id=r.task_id LEFT JOIN projects p ON p.id=st.project_id
+ WHERE st.workspace_id=$3 AND st.user_id=$1 AND r.state IN ('done','failed') AND r.finished_at IS NOT NULL
+ UNION ALL
+ SELECT 'connector_approval:'||a.id,'connector_approval',cn.name,'Wants to use '||a.tool,'/chat/'||a.chat_id,'','',a.created_at,a.state<>'pending',NULL,NULL,NULL
+ FROM connector_approvals a JOIN connectors cn ON cn.id=a.connector_id
+ WHERE a.workspace_id=$3 AND a.user_id=$1 AND a.state='pending'
+ UNION ALL
  SELECT 'workflow_gate:'||s.id,'workflow_gate',wr.name,'A workflow step is waiting for your approval','/workflows/runs/'||wr.id,coalesce(p.key,''),'',s.created_at,s.state<>'waiting',NULL,NULL,NULL
  FROM workflow_steps s JOIN workflow_runs wr ON wr.id=s.run_id LEFT JOIN projects p ON p.id=wr.project_id
  WHERE wr.workspace_id=$3 AND wr.user_id=$1 AND (s.state='waiting' OR s.decision<>'')

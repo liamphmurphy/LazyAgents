@@ -79,7 +79,7 @@ func TestMCPProfiles(t *testing.T) {
 	}
 	subTools := []string{"get_ticket", "read_artifact", "create_artifact", "comment", "request_approval", "wait_for_approval", "run_gated", "await_human", "search_knowledge", "find_pattern", "propose_pattern", "list_proposed_patterns", "read_page", "write_note", "get_backlinks", "complete_run"}
 	chatTools := []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-		"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit"}
+		"propose_connector", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit"}
 	planTools := []string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}
 
 	connect := func(tok string) *mcp.ClientSession {

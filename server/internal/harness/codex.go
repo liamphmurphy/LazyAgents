@@ -64,6 +64,12 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		)
 	}
 	for _, m := range spec.MCPServers {
+		if m.Connector {
+			// Vesper enforces each tool's permission; a call can wait on a person.
+			cfg = append(cfg, "mcp_servers."+m.Name+".url="+tomlString(ws.MCPURL+"/connectors/"+m.Name), "mcp_servers."+m.Name+".bearer_token_env_var="+tomlString(ws.TokenEnv),
+				"mcp_servers."+m.Name+".default_tools_approval_mode="+tomlString("approve"), "mcp_servers."+m.Name+".tool_timeout_sec=2400")
+			continue
+		}
 		cfg = append(cfg, "mcp_servers."+m.Name+".url="+tomlString(m.URL), "mcp_servers."+m.Name+".default_tools_approval_mode="+tomlString("approve"))
 	}
 	// Legacy workspace-write protects .git even when the workspace is writable.

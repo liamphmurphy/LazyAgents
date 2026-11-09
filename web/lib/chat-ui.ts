@@ -106,6 +106,13 @@ export function bareTool(tool: string): string {
   return /^lazyagents[._]/.test(tool) ? tool.slice("lazyagents.".length) : tool;
 }
 
+/** A tool from one of the person's MCP connectors: harnesses name it mcp__slug__tool or slug.tool. */
+export function connectorCall(tool: string): { name: string; tool: string } | null {
+  const m = /^mcp__([a-z][a-z0-9-]*)__(.+)$/.exec(tool) ?? /^([a-z][a-z0-9-]*)\.([^.]+)$/.exec(tool);
+  if (!m || m[1] === "lazyagents") return null;
+  return { name: m[1].split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "), tool: m[2] };
+}
+
 /** What the live line says: a verb, then a [[ref]] to link or plain text. */
 export type Activity = { verb: string; ref?: string; label?: string; text?: string };
 
@@ -162,8 +169,11 @@ export function activityOf(call: { tool: string; input: unknown }): Activity {
     case "shell":
     case "Bash":
       return { verb: "Running a command" };
-    default:
+    default: {
+      const connector = connectorCall(call.tool);
+      if (connector) return { verb: `Using ${connector.name}:`, text: connector.tool };
       return { verb: "Using", text: bareTool(call.tool) || "a tool" };
+    }
   }
 }
 
@@ -204,6 +214,7 @@ export function newestChat<T extends { last_message_at?: string | null; updated_
 /** The kind of work under way, which picks the status card's animated scene. */
 export type ChatStatusKind =
   | "thinking"
+  | "connector"
   | "wiki"
   | "tickets"
   | "reading-code"
@@ -387,8 +398,11 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "exec_command":
     case "shell_command":
       return shellStatus(typeof o.command === "string" ? o.command : typeof o.cmd === "string" ? o.cmd : "");
-    default:
+    default: {
+      const connector = connectorCall(call.tool);
+      if (connector) return status("connector", `using ${connector.name}`);
       return githubToolStatus(tool) ?? status("thinking", "working on it");
+    }
   }
 }
 

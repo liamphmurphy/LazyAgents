@@ -12,6 +12,9 @@ RETURNING *;
 UPDATE chat_sessions SET project_id = sqlc.narg(project_id), revision = revision + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND revision = sqlc.arg(revision) RETURNING *;
 
+-- name: SetChatConnectors :one
+UPDATE chat_sessions SET connector_ids = $2 WHERE id = $1 RETURNING *;
+
 -- name: SetChatRepo :one
 -- A coding chat's repository and work branch, set once right after creation
 -- (the branch carries the chat id) and never changed.

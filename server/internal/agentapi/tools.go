@@ -19,6 +19,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/connectors"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
@@ -26,10 +27,11 @@ import (
 )
 
 type Deps struct {
-	Q       *store.Queries
-	Runs    *runs.Service
-	Tracker *tracker.Service
-	Wiki    *wiki.Service
+	Connectors *connectors.Service
+	Q          *store.Queries
+	Runs       *runs.Service
+	Tracker    *tracker.Service
+	Wiki       *wiki.Service
 }
 
 // Tool is one Agent API operation, independent of transport.
@@ -992,6 +994,7 @@ var Tools = []Tool{
 	define("submit_review", "Submit your verdict on lessons you reviewed. Only when reviewing a module.", submitReview),
 	define("submit_research_report", "Save the finished research report. Only when Vesper asks you to write one up.", submitResearchReport),
 	define("get_video_transcript", "Read the timestamped captions of a YouTube video the person shared, to watch along with them: react to what's actually said. Pass from_seconds/to_seconds for the part they're at.", videoTranscript),
+	proposeConnector,
 	define("propose_persona", "Propose a new persona for the person (another voice of their assistant). Only when the person asks for one and your instructions allow it. Nothing is created until the person approves it in the chat; it starts with no coding or image permissions. Tell the person you proposed it.", proposePersona),
 	define("list_runs", "List agent runs in the current chat project, newest first: live runs by default, or finished/all. Filter by ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One agent run in the current chat project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),

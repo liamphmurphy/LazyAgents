@@ -16,6 +16,7 @@ import { PersonaEditor } from "../chat/_components/persona-editor";
 import { ExportMenu, ImportView, MemorySection } from "./memory-section";
 import { DefaultBadge, DeleteDialog, PersonaProfile } from "./persona-profile";
 import { ProfileSection } from "./profile-section";
+import { ConnectorsSection, PersonaConnectors } from "./connectors-section";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -101,6 +102,9 @@ export function CustomizationScreen() {
             <RailButton on={whose === "person"} onClick={() => pick("person")} lead={<HumanAvatar name={me?.name ?? "You"} initials={me?.initials} src={me?.avatar_url} size={20} label={false} />}>
               You
             </RailButton>
+            <RailButton on={who === "connectors"} onClick={() => pick("connectors")} lead={<Icon name="plug" size={16} />}>
+              Connectors
+            </RailButton>
             <span className="px-2 pb-1 pt-3 text-xs font-medium text-fg-tertiary">Personas</span>
             {list.isError ? (
               <Banner tone="blocked" title="Couldn’t load personas" actions={<Button variant="outline" onClick={() => list.refetch()}>Retry</Button>}>
@@ -130,7 +134,9 @@ export function CustomizationScreen() {
             )}
           </nav>
           <div className="flex min-w-0 flex-1 flex-col gap-5">
-            {importing ? (
+            {who === "connectors" && !importing ? (
+              <ConnectorsSection personas={personas} />
+            ) : importing ? (
               <div className="mx-auto w-full max-w-2xl">
                 <ImportView onClose={() => setImporting(false)} />
               </div>
@@ -155,6 +161,7 @@ export function CustomizationScreen() {
                 ) : (
                   <PlainHeader lead={<span className="grid size-[72px] place-items-center rounded-full bg-selected text-fg-secondary"><Icon name="bookmark" size={28} /></span>} title="Everything" detail="Every memory: about you, and each persona’s own." />
                 )}
+                {selected && <PersonaConnectors personaId={selected.id} />}
                 <div className="border-t border-border-subtle pt-4">
                   <MemorySection key={whose} whose={whose} focus={focus} heading={selected ? `${selected.name}’s memory` : whose === "person" ? "About you" : "All memories"} />
                 </div>

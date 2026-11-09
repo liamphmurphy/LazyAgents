@@ -117,6 +117,10 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const prompts = new Map<string, string>();
   const runEvents = new Map<string, Array<{ seq: number; type: string; at: string; payload: Record<string, unknown> }>>();
   const unhandled: string[] = [];
+  const connectors: { id: string; name: string; slug: string; url: string; auth_kind: unknown; status: string; last_error: string; revision: number; created_at: string; persona_ids: string[]; tools: { name: string; description: string; write: boolean; policy: string }[] }[] = [];
+  const connectorApprovals: Record<string, unknown>[] = [];
+  const connectorDecisions: string[] = [];
+  const scheduledTasks: Record<string, unknown>[] = [];
   const posted: Posted[] = [];
   const suggestions = opts.suggestions ?? [];
   const created: Array<Record<string, unknown>> = [];
@@ -387,6 +391,37 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     if (/^\/chats\/[^/]+\/research$/.test(path) && method === "GET") return json({ jobs: [] });
     if (path === "/persona-dock") return json({ personas: [] });
     if (path === "/workflows" && method === "GET") return json({ workflows: [] });
+    if (path === "/connectors" && method === "GET") return json({ connectors });
+    if (path === "/connectors/probe" && method === "POST") return json({ reachable: true, needs_auth: false, tools: 2 });
+    if (path === "/connectors" && method === "POST") {
+      const b = body();
+      const c = { id: uuid(), name: String(b.name), slug: String(b.name).toLowerCase(), url: String(b.url), auth_kind: b.auth_kind, status: "connected", last_error: "", revision: 1, created_at: now(), persona_ids: [] as string[],
+        tools: [{ name: "read_thing", description: "", write: false, policy: "allow" }, { name: "write_thing", description: "", write: true, policy: "ask" }] };
+      connectors.push(c);
+      return json({ connector: c });
+    }
+    if (/^\/connectors\/[^/]+$/.test(path) && method === "PATCH") {
+      const c = connectors.find((x) => path.endsWith(x.id))!;
+      const b = body();
+      if (b.persona_ids) c.persona_ids = b.persona_ids as string[];
+      for (const [name, policy] of Object.entries((b.policies ?? {}) as Record<string, string>)) c.tools.find((t) => t.name === name)!.policy = policy;
+      c.revision++;
+      return json(c);
+    }
+    if (/^\/chats\/[^/]+\/connector-approvals$/.test(path) && method === "GET") return json({ approvals: connectorApprovals });
+    if (/^\/connector-approvals\/[^/]+$/.test(path) && method === "POST") {
+      connectorDecisions.push(body().decision as string);
+      connectorApprovals.length = 0;
+      return route.fulfill({ status: 204 });
+    }
+    if (/^\/chats\/[^/]+\/connector-proposals$/.test(path) && method === "GET") return json({ proposals: [] });
+    if (path === "/scheduled-tasks" && method === "GET") return json({ tasks: scheduledTasks });
+    if (path === "/scheduled-tasks" && method === "POST") {
+      const b = body();
+      const t = { ...b, id: uuid(), revision: 1, runs: [], upcoming: [], next_run_at: "2026-11-09T16:00:00Z" };
+      scheduledTasks.push(t);
+      return json(t);
+    }
     if (/^\/chats\/[^/]+\/workflows$/.test(path) && method === "GET") return json({ runs: [] });
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, live: 0, queued: 0 });
     // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
@@ -776,6 +811,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests };
+    return { connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests };
   })();
 }

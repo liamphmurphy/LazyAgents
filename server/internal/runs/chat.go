@@ -29,6 +29,8 @@ type ChatCaps struct {
 	Code                bool
 	RepoURL, WorkBranch string
 	Images              bool
+	// Connectors are the slugs of the MCP connectors the persona may use here.
+	Connectors []string
 }
 
 // Coding reports whether the chat may work in its repository.
@@ -59,6 +61,9 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	}
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
+	for _, slug := range caps.Connectors {
+		r.MCPServers = append(r.MCPServers, agentdef.MCPServer{Name: slug, URL: "vesper", Connector: true})
+	}
 	// web_search turns on the harness's own web search and page fetch tools
 	// (Claude Code WebSearch/WebFetch, Codex cached web search) for every chat,
 	// coding or not; WebFetch stays on the CheckTool allowlist. See
@@ -102,7 +107,15 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 	}
 	// A repository the persona doesn't list (any more) revokes coding for this chat.
 	code := p.CanCode && chat.RepoUrl != nil && slices.Contains(p.Repos, *chat.RepoUrl)
-	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranch: deref(chat.WorkBranch), Images: p.CanGenerateImages}, nil
+	rows, err := q.ConnectorsForPersona(ctx, store.ConnectorsForPersonaParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, PersonaID: p.ID, AllowedIds: chat.ConnectorIds})
+	if err != nil {
+		return ChatCaps{}, err
+	}
+	slugs := make([]string, len(rows))
+	for i, c := range rows {
+		slugs[i] = c.Slug
+	}
+	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranch: deref(chat.WorkBranch), Images: p.CanGenerateImages, Connectors: slugs}, nil
 }
 
 // sameCapabilities reports whether two chat specs grant the same persona
@@ -121,7 +134,14 @@ func sameCapabilities(a, b agentdef.Resolved) bool {
 		for _, k := range []string{"sandbox", "readonly", agentdef.OptionImageGeneration, agentdef.OptionWebSearch} {
 			opts[k] = r.HarnessOptions[k]
 		}
-		raw, _ := json.Marshal(map[string]any{"modes": modes, "options": opts})
+		connectors := []string{}
+		for _, m := range r.MCPServers {
+			if m.Connector {
+				connectors = append(connectors, m.Name)
+			}
+		}
+		slices.Sort(connectors)
+		raw, _ := json.Marshal(map[string]any{"modes": modes, "options": opts, "connectors": connectors})
 		return string(raw)
 	}
 	return key(a) == key(b)
@@ -147,8 +167,10 @@ type ChatInput struct {
 	// that lives behind another screen. Fixed for the chat's life.
 	Hidden bool
 	// NoRepo keeps a coding persona's chat out of its repositories.
-	NoRepo  bool
-	Message *ChatMessageInput
+	NoRepo bool
+	// ConnectorIDs, when set, narrows the persona's connectors for this chat.
+	ConnectorIDs []uuid.UUID
+	Message      *ChatMessageInput
 }
 
 // ChatMessageInput is a single human prompt. A non-empty Harness/Model is
@@ -256,6 +278,11 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: projectID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID, Hidden: in.Hidden})
 		if err != nil {
 			return err
+		}
+		if in.ConnectorIDs != nil {
+			if out, err = q.SetChatConnectors(ctx, store.SetChatConnectorsParams{ID: out.ID, ConnectorIds: in.ConnectorIDs}); err != nil {
+				return err
+			}
 		}
 		if repo != "" {
 			// The branch carries the chat id, so it is set once the chat exists.

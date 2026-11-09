@@ -288,6 +288,7 @@ type ChatSession struct {
 	InterruptMessageID *uuid.UUID
 	LastReadSeq        int64
 	Hidden             bool
+	ConnectorIds       []uuid.UUID
 }
 
 type ChatSuggestion struct {
@@ -308,6 +309,61 @@ type Comment struct {
 	BodyMd          string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+type Connector struct {
+	ID             uuid.UUID
+	WorkspaceID    uuid.UUID
+	UserID         uuid.UUID
+	Name           string
+	Slug           string
+	Url            string
+	AuthKind       string
+	Status         string
+	LastError      string
+	LastCheckedAt  *time.Time
+	Tools          json.RawMessage
+	CredNonce      []byte
+	CredCiphertext []byte
+	Oauth          json.RawMessage
+	OauthState     *string
+	Revision       int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type ConnectorApproval struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	ConnectorID uuid.UUID
+	PersonaID   *uuid.UUID
+	ChatID      uuid.UUID
+	Tool        string
+	Arguments   json.RawMessage
+	State       string
+	CreatedAt   time.Time
+	DecidedAt   *time.Time
+}
+
+type ConnectorPersona struct {
+	ConnectorID uuid.UUID
+	PersonaID   uuid.UUID
+}
+
+type ConnectorProposal struct {
+	ID          uuid.UUID
+	ChatID      uuid.UUID
+	RunID       uuid.UUID
+	ProposedBy  *uuid.UUID
+	Name        string
+	Url         string
+	AuthKind    string
+	Reason      string
+	State       string
+	ConnectorID *uuid.UUID
+	CreatedAt   time.Time
+	DecidedAt   *time.Time
 }
 
 type Criterion struct {
@@ -526,26 +582,27 @@ type MetricSnapshot struct {
 }
 
 type Persona struct {
-	ID                 uuid.UUID
-	WorkspaceID        uuid.UUID
-	UserID             uuid.UUID
-	Name               string
-	Tone               string
-	Color              string
-	AvatarKey          *string
-	AvatarContentType  *string
-	CustomInstructions string
-	IsDefault          bool
-	LastUsedAt         *time.Time
-	Revision           int32
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	CanCode            bool
-	CanGenerateImages  bool
-	Repos              []string
-	CanCreatePersonas  bool
-	CanCreateSvgs      bool
-	CanCreateWorkflows bool
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	UserID              uuid.UUID
+	Name                string
+	Tone                string
+	Color               string
+	AvatarKey           *string
+	AvatarContentType   *string
+	CustomInstructions  string
+	IsDefault           bool
+	LastUsedAt          *time.Time
+	Revision            int32
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CanCode             bool
+	CanGenerateImages   bool
+	Repos               []string
+	CanCreatePersonas   bool
+	CanCreateSvgs       bool
+	CanCreateWorkflows  bool
+	CanCreateConnectors bool
 }
 
 type PersonaProposal struct {
@@ -730,6 +787,46 @@ type SavedView struct {
 	Query       string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type ScheduledTask struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	UserID        uuid.UUID
+	Name          string
+	Kind          string
+	Instructions  string
+	WorkflowID    *uuid.UUID
+	PersonaID     *uuid.UUID
+	ProjectID     *uuid.UUID
+	ConnectorIds  []uuid.UUID
+	Frequency     string
+	Weekdays      []int32
+	MonthDay      int32
+	AtTime        string
+	Timezone      string
+	Cron          string
+	Enabled       bool
+	MaxMinutes    int32
+	MaxCostMicros int64
+	NextRunAt     *time.Time
+	Revision      int32
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type ScheduledTaskRun struct {
+	ID            uuid.UUID
+	TaskID        uuid.UUID
+	ChatID        *uuid.UUID
+	WorkflowRunID *uuid.UUID
+	Trigger       string
+	State         string
+	Summary       string
+	Error         string
+	CostMicros    int64
+	StartedAt     time.Time
+	FinishedAt    *time.Time
 }
 
 type Secret struct {

@@ -6,6 +6,8 @@ import { useEffect, useState, type ReactNode, type TransitionEvent } from "react
 import { usePulse } from "@/components/ui/motion";
 import { DropdownMenu } from "radix-ui";
 import { useSecrets } from "@/lib/api/hooks";
+import { useScheduledTasks } from "@/lib/api/connector-hooks";
+import { tasksNeedingYou } from "@/lib/schedule-ui";
 import { cx } from "@/lib/cx";
 import { needsAttention } from "@/lib/settings";
 import { currentProject, isActive, modeHref, navGroupsFor, switchHref, withProject, type NavBadge, type NavMode, type ScopedProject } from "@/lib/project-scope";
@@ -226,7 +228,10 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
   const active = projects.filter((p) => !p.archived);
   const current = currentProject(pathname, search, remembered, projects);
   const secrets = useSecrets();
-  const counts: Record<NavBadge, number> = { inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
+  const { mode, lastWork } = useNavMode(pathname);
+  // The item only exists in Chat mode, so Work doesn't poll for its badge.
+  const scheduled = useScheduledTasks(mode === "chat");
+  const counts: Record<NavBadge, number> = { scheduled: tasksNeedingYou(scheduled.data?.tasks), inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
   const [expanded, setExpanded] = useExpanded();
   // Only a toggle animates, not restoring the remembered state after mount.
   const [toggled, setToggled] = useState(false);
@@ -235,7 +240,6 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
   const navActive = (href: string) => isActive(pathname, href) && !(href === "/tickets" && search.get("sv"));
   const newTicketHref = current ? `/tickets/new?project=${encodeURIComponent(current.key)}` : "/tickets/new";
   const router = useRouter();
-  const { mode, lastWork } = useNavMode(pathname);
   const switchMode = (m: NavMode) => {
     if (m !== mode) router.push(modeHref(m, current?.key, lastWork));
   };

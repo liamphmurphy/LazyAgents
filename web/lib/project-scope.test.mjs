@@ -11,7 +11,7 @@ test("nav is three groups with unique hrefs", () => {
   assert.deepEqual(NAV_GROUPS.map((g) => g.label), ["Personal", "Project", "Workspace"]);
   const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
   assert.equal(new Set(hrefs).size, hrefs.length);
-  assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Library", "Workflows", "Learn", "Customization"]);
+  assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Library", "Workflows", "Scheduled", "Learn", "Customization"]);
   assert.deepEqual(NAV_GROUPS[1].items.map((i) => i.label), ["Board", "Tickets", "Epics", "Plans", "Artifacts"]);
 });
 
@@ -93,7 +93,7 @@ test("each page belongs to a mode, and pinned pages keep the last one", () => {
 
 test("Work pins Inbox and Dashboard above Project and Workspace; Chat has Personal without Dashboard", () => {
   const labels = (m) => navGroupsFor(m).map((g) => [g.label, g.items.map((i) => i.label)]);
-  assert.deepEqual(labels("chat"), [["Personal", ["Inbox", "Library", "Workflows", "Learn", "Customization"]]]);
+  assert.deepEqual(labels("chat"), [["Personal", ["Inbox", "Library", "Workflows", "Scheduled", "Learn", "Customization"]]]);
   assert.deepEqual(labels("work")[0], ["Personal", ["Inbox", "Dashboard"]]);
   assert.deepEqual(labels("work").slice(1).map(([l]) => l), ["Project", "Workspace"]);
 });

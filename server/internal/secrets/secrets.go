@@ -75,6 +75,16 @@ func (b *Box) open(ws uuid.UUID, project *uuid.UUID, name string, nonce, ct []by
 	return pt, nil
 }
 
+// Seal encrypts data bound to scope, for tables that hold their own ciphertext.
+func (b *Box) Seal(ws uuid.UUID, scope string, plaintext []byte) (nonce, ct []byte, err error) {
+	return b.seal(ws, nil, scope, plaintext)
+}
+
+// Open decrypts what Seal produced for the same workspace and scope.
+func (b *Box) Open(ws uuid.UUID, scope string, nonce, ct []byte) ([]byte, error) {
+	return b.open(ws, nil, scope, nonce, ct)
+}
+
 var nameRe = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9-]*$`)
 
 // DefaultGrants maps well-known secret names to the scope they back. A
