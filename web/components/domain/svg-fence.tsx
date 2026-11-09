@@ -8,6 +8,7 @@ import { useVizPalette } from "@/lib/viz-theme";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { CodeFence } from "./code-fence";
+import { usePrintMode } from "./print-mode";
 import { VisualFrame } from "./visual-frame";
 
 /** The assistant reply a fence is in; without one there's no "Save to Library". */
@@ -50,7 +51,9 @@ export function DiagramVisual({ source, captions = [], alt, label = "SVG image",
   const count = stepCount(source, captions);
   const stepped = count > 1;
   const urls = useMemo(() => (stepped ? Array.from({ length: count }, (_, i) => svgDataUrl(stepFrame(doc, i + 1))) : [svgDataUrl(doc)]), [doc, count, stepped]);
-  const [step, setStep] = useState(0);
+  // On paper a step-through shows its last frame, which holds everything, with every caption.
+  const printing = usePrintMode();
+  const [step, setStep] = useState(printing ? count - 1 : 0);
   const at = Math.min(step, urls.length - 1);
   const [view, setView] = useState<"image" | "code">("image");
   // By URL, so an edited source gets another try.
@@ -69,7 +72,11 @@ export function DiagramVisual({ source, captions = [], alt, label = "SVG image",
       ))}
     </div>
   );
-  const nav = stepped && (
+  const nav = stepped && printing ? (
+    <ol className="list-decimal border-t border-border-row py-2 pl-8 pr-3 text-[13px] text-fg-2">
+      {captions.map((c, i) => <li key={i}>{c}</li>)}
+    </ol>
+  ) : stepped && (
     <div className="flex items-center gap-2 border-t border-border-row px-3 py-2">
       <Button variant="ghost" aria-label="Previous step" disabled={at === 0} onClick={() => setStep(at - 1)}>←</Button>
       <p aria-live="polite" className="min-w-0 flex-1 text-[13px] text-fg-2">

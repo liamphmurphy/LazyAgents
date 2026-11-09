@@ -14,6 +14,7 @@ import { AgentAvatar } from "@/components/domain/avatars";
 import { artifactTitle } from "@/components/domain/artifacts";
 import { NewVersionDialog } from "@/components/domain/artifact-dialogs";
 import { DocTypeTag } from "@/components/domain/labels";
+import { printHref } from "@/components/domain/print-mode";
 import { ReviewChip } from "@/components/domain/mockup";
 
 /** Outline sections shown: H2s when the doc has a single H1 title, else top level. */
@@ -175,6 +176,11 @@ export function ArtifactPreview({ id, onClose }: { id: string; onClose: () => vo
         <Button variant="outline" className="justify-center" onClick={() => setVersioning(true)}>
           New version
         </Button>
+        {c.kind === "markdown" && a.type !== "mockup" && (
+          <ButtonLink variant="outline" icon="printer" className="justify-center" href={printHref(a.id)} target="_blank">
+            Export PDF
+          </ButtonLink>
+        )}
         {(a.type === "prd" || a.type === "spec") && a.project && <ButtonLink variant="secondary" href={`/plans?artifact=${a.id}&project=${a.project.key}`}>
           Generate tickets
         </ButtonLink>}

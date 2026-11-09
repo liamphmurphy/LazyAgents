@@ -45,13 +45,13 @@ export function VisualFrame<V extends string>({ testId, icon, label, views, view
 }) {
   const [zoomed, setZoomed] = useState(false);
   return (
-    <figure className="m-0 overflow-hidden rounded-lg border border-border bg-surface-sunken" data-testid={testId}>
+    <figure className="m-0 overflow-hidden break-inside-avoid rounded-lg border border-border bg-surface-sunken" data-testid={testId}>
       <div className="flex items-center justify-between gap-2 border-b border-border-row px-3 py-1 text-xs text-fg-tertiary">
         <span className="flex items-center gap-1.5">
           <Icon name={icon} size={12} />
           <span>{label}</span>
         </span>
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1 print:hidden">
           {views && (
             <span role="tablist" aria-label={`${label} view`} className="flex items-center gap-0.5">
               {views.map((v) => (

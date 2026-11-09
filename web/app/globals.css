@@ -704,3 +704,21 @@
 @media (prefers-reduced-motion: reduce) {
   .orb-root .orb-btn, .orb-root .orb-spin, .orb-root .orb-breathe, .orb-root .orb-orbit { animation: none !important; }
 }
+
+/*
+ * Export PDF (app/print/artifacts): the browser's print engine lays the page out.
+ * Keep backgrounds (code, charts), keep headings with what follows, and don't split visuals.
+ */
+@media print {
+  @page { margin: 16mm 14mm; }
+  html, body { background: white; }
+  .print-doc { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .print-doc :is(h1, h2, h3, h4, h5, h6) { break-after: avoid; break-inside: avoid; }
+  .print-doc :is(figure, img, svg, table, blockquote) { break-inside: avoid; }
+  .print-doc tr { break-inside: avoid; }
+  /* Long lines wrap instead of being cut off at the page edge. */
+  .print-doc pre { overflow: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .print-doc :is(div, figure)[class*="overflow-"] { overflow: visible; }
+  .print-doc img { max-height: 240mm; }
+  .print-doc a { color: inherit; text-decoration: underline; }
+}

@@ -33,6 +33,7 @@ const paths = {
   pause: <path d="M5.5 3.5v9M10.5 3.5v9" />,
   download: <path d="M8 3v8M4.5 7.5 8 11l3.5-3.5M3 13.5h10" />,
   upload: <path d="M8 11V3M4.5 6.5 8 3l3.5 3.5M3 13h10" />,
+  printer: <><path d="M4.5 6V2.5h7V6" /><rect x="2.5" y="6" width="11" height="5" rx="1.2" /><path d="M4.5 9.5h7v4h-7z" /></>,
   at: <><circle cx="8" cy="8" r="2.5" /><path d="M10.5 8v1a1.8 1.8 0 0 0 3.5 0V8a6 6 0 1 0-2.4 4.8" /></>,
   server: <><rect x="2.5" y="2.5" width="11" height="4.5" rx="1.2" /><rect x="2.5" y="9" width="11" height="4.5" rx="1.2" /><path d="M5 4.8h.01M5 11.2h.01" /></>,
   users: <><circle cx="6" cy="5.5" r="2.3" /><path d="M2 13c.5-2.2 2-3.4 4-3.4s3.5 1.2 4 3.4" /><path d="M10.5 3.4a2.2 2.2 0 0 1 0 4.2M12 9.8c1 .5 1.7 1.6 2 3.2" /></>,

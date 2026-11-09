@@ -1,11 +1,10 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { contentUrl, type Artifact } from "@/lib/api/client";
-import { useArtifact, useUpdateArtifact } from "@/lib/api/hooks";
+import { useArtifact, useArtifactVersionBody, useUpdateArtifact } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { fileKind, formatBytes } from "@/lib/files";
 import { absoluteTime, timelineTime } from "@/lib/format";
@@ -18,27 +17,13 @@ import { BacklinksPanel } from "@/components/domain/backlinks";
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { DocTypeTag } from "@/components/domain/labels";
 import { Markdown } from "@/components/domain/markdown";
+import { printHref } from "@/components/domain/print-mode";
 import { ReviewChip } from "@/components/domain/mockup";
 import { MockupEditor } from "./mockup-editor";
 import { MockupReviewBanner, MockupViewer } from "./mockup-parts";
 import { wikiHref } from "@/lib/wikilinks";
 import { StartChatButton } from "@/components/domain/start-chat";
 import { TopBar } from "@/components/shell/topbar";
-
-/** Body of an older version, fetched as raw text. */
-function useVersionBody(a: Artifact | undefined, versionId: string | null) {
-  const v = a?.versions.find((x) => x.id === versionId);
-  return useQuery({
-    queryKey: ["artifacts", "content", a?.id, versionId],
-    enabled: !!a && !!v && (v.content.kind === "markdown" || v.content.kind === "svg") && v.id !== a.current_version.id,
-    queryFn: async () => {
-      const res = await fetch(contentUrl(a!.id, v!.id));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.text();
-    },
-    staleTime: Infinity, // versions are immutable
-  });
-}
 
 function FileView({ a, versionId }: { a: Artifact; versionId: string }) {
   const v = a.versions.find((x) => x.id === versionId) ?? a.current_version;
@@ -95,7 +80,7 @@ export function ArtifactScreen({ id }: { id: string }) {
   const [versionId, setVersionId] = useState<string | null>(search.get("version"));
   const [versioning, setVersioning] = useState(false);
   const viewing = a?.versions.find((v) => v.id === versionId) ?? a?.current_version;
-  const old = useVersionBody(a, versionId);
+  const old = useArtifactVersionBody(a, versionId);
   const isOld = !!a && !!viewing && viewing.id !== a.current_version.id;
   const router = useRouter();
   const isMockup = a?.type === "mockup";
@@ -164,6 +149,11 @@ export function ArtifactScreen({ id }: { id: string }) {
               <ButtonLink href={contentUrl(a.id, (viewing ?? a.current_version).id, true)} variant="outline" icon="download">
                 Download
               </ButtonLink>
+              {!isMockup && (viewing ?? a.current_version).content.kind === "markdown" && (
+                <ButtonLink href={printHref(a.id, isOld ? viewing?.id : null)} target="_blank" variant="outline" icon="printer">
+                  Export PDF
+                </ButtonLink>
+              )}
               <Button variant={isMockup ? "outline" : "secondary"} icon={isMockup ? "upload" : "history"} onClick={() => setVersioning(true)}>
                 New version
               </Button>
@@ -205,7 +195,7 @@ export function ArtifactScreen({ id }: { id: string }) {
                 ) : body == null ? (
                   <Skeleton className="h-3 w-1/2" />
                 ) : (
-                  <Markdown anchors className="type-reading text-fg-2">{body}</Markdown>
+                  <Markdown anchors visualBlocks className="type-reading text-fg-2">{body}</Markdown>
                 )}
               </div>
             </div>

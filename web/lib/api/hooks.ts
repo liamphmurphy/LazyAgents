@@ -344,6 +344,21 @@ export function useArtifact(id: string | undefined) {
   });
 }
 
+/** Body of an older text version, fetched raw; undefined id or the current version skip it. */
+export function useArtifactVersionBody(a: Artifact | undefined, versionId: string | null) {
+  const v = a?.versions.find((x) => x.id === versionId);
+  return useQuery({
+    queryKey: ["artifacts", "content", a?.id, versionId],
+    enabled: !!a && !!v && (v.content.kind === "markdown" || v.content.kind === "svg") && v.id !== a.current_version.id,
+    queryFn: async () => {
+      const res = await fetch(contentUrl(a!.id, v!.id));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.text();
+    },
+    staleTime: Infinity, // versions are immutable
+  });
+}
+
 /** Create from FormData (project_key, type, title?, body_md | file, …). */
 export function useCreateArtifact() {
   const qc = useQueryClient();

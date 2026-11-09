@@ -194,7 +194,8 @@ export function chartLayout(spec: ChartSpec, width: number, tall = false): Chart
   }
 
   const height = tall ? 440 : narrow ? 220 : 280;
-  const left = Math.max(...tickLabels.map(textWidth)) + 10;
+  // The estimate runs narrow for wide digits (6, 8): leave room so the first glyph isn't clipped.
+  const left = Math.max(...tickLabels.map(textWidth)) + 14;
   const top = 12;
   const bottom = height - 24;
 
