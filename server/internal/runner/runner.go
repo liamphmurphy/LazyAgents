@@ -339,6 +339,11 @@ func (r *Runner) addTiming(runID uuid.UUID, setup, harness, checks time.Duration
 
 func (r *Runner) event(ctx context.Context, runID uuid.UUID, typ string, payload map[string]any) {
 	b, _ := json.Marshal(payload)
+	r.eventJSON(ctx, runID, typ, b)
+}
+
+// eventJSON records an event whose payload is already encoded.
+func (r *Runner) eventJSON(ctx context.Context, runID uuid.UUID, typ string, b []byte) {
 	if err := r.q().AddRunEvent(ctx, store.AddRunEventParams{RunID: runID, Type: typ, Payload: b}); err != nil && ctx.Err() == nil {
 		r.Log.Warn("run event", "run", runID, "err", err)
 	}
@@ -1302,9 +1307,9 @@ func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p har
 			line := sc.Bytes()
 			appendRaw("", line)
 			for _, e := range p.Line(line) {
-				payload := redactPayload(e.Payload, env)
+				payload, b := redactPayload(e.Payload, env)
 				opening.see(e.Type, payload)
-				r.event(context.Background(), c.run.ID, e.Type, payload)
+				r.eventJSON(context.Background(), c.run.ID, e.Type, b)
 			}
 			if s := p.Result().SessionID; s != "" && s != session {
 				session = s
@@ -1374,15 +1379,28 @@ func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p har
 	return res, raw.Bytes(), code, err
 }
 
-func redactPayload(p map[string]any, env map[string]string) map[string]any {
+// redactPayload returns an event payload with secrets scrubbed, and its JSON.
+// Payloads rarely hold a secret, so the encoding is checked first and reused:
+// each streamed event is marshalled once, not twice.
+func redactPayload(p map[string]any, env map[string]string) (map[string]any, []byte) {
 	b, _ := json.Marshal(p)
-	s := redact(string(b), env)
-	if s == string(b) {
-		return p
+	if !containsSecret(b, env) {
+		return p, b
 	}
 	var out map[string]any
-	_ = json.Unmarshal([]byte(s), &out)
-	return out
+	_ = json.Unmarshal([]byte(redact(string(b), env)), &out)
+	b, _ = json.Marshal(out)
+	return out, b
+}
+
+// containsSecret reports whether redact would change b.
+func containsSecret(b []byte, env map[string]string) bool {
+	for _, v := range env {
+		if len(v) >= 6 && bytes.Contains(b, []byte(v)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Runner) saveLog(runID uuid.UUID, seq int32, raw []byte) *string {
