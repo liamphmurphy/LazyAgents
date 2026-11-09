@@ -22,6 +22,7 @@ import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "@/app/(app)/chat/_components/attachments";
 import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
 import { modelLabel, type Selection } from "@/app/(app)/chat/_components/model-picker";
+import { ResearchToggle } from "@/app/(app)/chat/_components/reply-tools";
 import { ColorPicker, ConnectorSelect, PersonaSelect, ProjectSelect, SpaceTile, useConnectorNames, usePersonaName, useProjectName } from "./space-parts";
 import { SourceIcon, SourcesDialog } from "./sources-dialog";
 
@@ -301,6 +302,9 @@ function Composer({ space, disabled }: { space: Space; disabled: boolean }) {
   const [text, setText] = useState("");
   const [persona, setPersona] = useState<string>();
   const [model, setModel] = useState<Selection>();
+  // On for the first message: the persona proposes a research plan, and its
+  // report joins this space's sources.
+  const [research, setResearch] = useState(false);
   const files = useAttachments();
   const picker = useRef<HTMLInputElement>(null);
   const start = useMutation({
@@ -308,7 +312,7 @@ function Composer({ space, disabled }: { space: Space; disabled: boolean }) {
       const chat = await unwrap(
         api.POST("/chats", { body: { space_id: space.id, ...(persona ? { persona_id: persona } : {}), ...(model ? { harness: model.harness, model: model.model } : {}) } }),
       );
-      await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id: chat.id } }, body: { body, ...(files.ids.length ? { attachment_ids: files.ids } : {}) } }));
+      await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id: chat.id } }, body: { body, ...(research ? { research: true } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } }));
       return chat;
     },
     onSettled: () => void Promise.all([qc.invalidateQueries({ queryKey: ["chats"] }), qc.invalidateQueries({ queryKey: ["spaces"] })]),
@@ -332,7 +336,7 @@ function Composer({ space, disabled }: { space: Space; disabled: boolean }) {
           rows={1}
           value={text}
           disabled={locked}
-          placeholder={`New chat in ${space.name}`}
+          placeholder={research ? `What should ${space.name} research?` : `New chat in ${space.name}`}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -359,10 +363,11 @@ function Composer({ space, disabled }: { space: Space; disabled: boolean }) {
           </button>
           <PersonaChip value={shown} onChange={setPersona} disabled={locked} />
           <ModelChip value={model} onChange={setModel} disabled={locked} />
+          <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
           <span className="flex-1" />
           <button
             type="submit"
-            aria-label="Start chat"
+            aria-label={research ? "Plan research" : "Start chat"}
             disabled={locked || files.pending || !text.trim()}
             className="grid size-[28px] place-items-center rounded-full bg-accent text-on-accent hover:brightness-110 disabled:opacity-60"
           >
@@ -375,7 +380,7 @@ function Composer({ space, disabled }: { space: Space; disabled: boolean }) {
       {start.isError ? (
         <p role="alert" className="px-[4px] text-[12px] text-pill-blocked-fg">{errorText(start.error)}</p>
       ) : (
-        <p className="px-[4px] text-[12px] text-fg-tertiary">{spaceUses(space)}</p>
+        <p className="px-[4px] text-[12px] text-fg-tertiary">{research ? `The persona proposes a research plan to approve; its report joins ${space.name}’s sources.` : spaceUses(space)}</p>
       )}
     </div>
   );

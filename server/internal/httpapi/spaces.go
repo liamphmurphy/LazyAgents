@@ -30,9 +30,6 @@ var spacePages interface {
 	PageText(ctx context.Context, url string) (title, text string, err error)
 } = linkpreview.New()
 
-// maxSpaceStorageBytes bounds the files one space keeps.
-const maxSpaceStorageBytes = 100 << 20
-
 func spaceSourceKey(ws, user uuid.UUID) string {
 	return "chat-spaces/" + ws.String() + "/" + user.String() + "/" + uuid.NewString()
 }
@@ -202,7 +199,7 @@ func toSources(rows []store.ChatSpaceSource) []api.ChatSpaceSource {
 	for i, r := range rows {
 		ct := r.ContentType
 		out[i] = api.ChatSpaceSource{Id: r.ID, Kind: api.ChatSpaceSourceKind(r.Kind), Title: r.Title, Url: r.Url, Filename: r.Filename, ContentType: &ct,
-			SizeBytes: r.SizeBytes, Tokens: int(r.Tokens), Delivery: api.ChatSpaceSourceDelivery(d[r.ID]), CreatedAt: r.CreatedAt}
+			SizeBytes: r.SizeBytes, Tokens: int(r.Tokens), Delivery: api.ChatSpaceSourceDelivery(d[r.ID]), CreatedAt: r.CreatedAt, ChatId: r.ChatID}
 	}
 	return out
 }
@@ -246,7 +243,7 @@ func (s *Server) checkSourceRoom(ctx context.Context, space uuid.UUID, size int6
 	for _, r := range rows {
 		total += r.SizeBytes
 	}
-	if total+size > maxSpaceStorageBytes {
+	if total+size > runs.MaxSpaceStorageBytes {
 		return apperr.Invalid("file", "a space holds up to 100 MB of sources; remove one first")
 	}
 	return nil

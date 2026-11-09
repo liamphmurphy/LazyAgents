@@ -4336,8 +4336,9 @@ components:
         space_memory: { type: boolean }
     ChatSpaceSourceKind:
       type: string
-      enum: [file, text, website, library, link, canvas]
-      x-enum-varnames: [SpaceSourceFile, SpaceSourceText, SpaceSourceWebsite, SpaceSourceLibrary, SpaceSourceLink, SpaceSourceCanvas]
+      enum: [file, text, website, library, link, canvas, research]
+      x-enum-varnames: [SpaceSourceFile, SpaceSourceText, SpaceSourceWebsite, SpaceSourceLibrary, SpaceSourceLink, SpaceSourceCanvas, SpaceSourceResearch]
+      description: "research: a deep research report written in one of the space's chats, added when it was saved"
     ChatSpaceSource:
       type: object
       required: [id, kind, title, size_bytes, tokens, delivery, created_at]
@@ -4347,6 +4348,7 @@ components:
         title: { type: string }
         url: { type: string, description: "For a web page or saved link: where it was read from" }
         filename: { type: string }
+        chat_id: { type: string, format: uuid, description: "For a research report: the chat it was written in, while that chat exists" }
         content_type: { type: string }
         size_bytes: { type: integer, format: int64 }
         tokens: { type: integer, description: "Estimated from its text; 0 for a file that isn't text" }

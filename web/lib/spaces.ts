@@ -39,7 +39,7 @@ export function formatBytes(n: number): string {
   return `${(Math.round((n / (1024 * 1024)) * 10) / 10).toString()} MB`;
 }
 
-export type SourceKind = "file" | "text" | "website" | "library" | "link" | "canvas";
+export type SourceKind = "file" | "text" | "website" | "library" | "link" | "canvas" | "research";
 
 export const SOURCE_KIND_LABEL: Record<SourceKind, string> = {
   file: "File",
@@ -48,6 +48,7 @@ export const SOURCE_KIND_LABEL: Record<SourceKind, string> = {
   library: "Library",
   link: "Saved link",
   canvas: "Canvas",
+  research: "Research",
 };
 
 /** A URL without its scheme, www. or trailing slash: examine.com/creatine. */

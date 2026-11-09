@@ -83,3 +83,30 @@ func TestSpaceSection(t *testing.T) {
 		t.Fatalf("empty parts rendered:\n%s", got)
 	}
 }
+
+// A report as a source keeps its bottom line, body and the pages its [n]
+// citations point to.
+func TestResearchSourceText(t *testing.T) {
+	r := ResearchReport{BottomLine: "Use Kokoro.", BodyMD: "Fast [1].\n", Sources: []ResearchNumberedSource{{N: 1, Title: "Repo [main]", URL: "https://github.com/hexgrad/kokoro"}, {N: 2, URL: "https://example.com/a"}}}
+	got := ResearchSourceText("Local TTS", r)
+	for _, want := range []string{"# Local TTS\n", "**Bottom line:** Use Kokoro.", "Fast [1].", "## Sources", `1. [Repo \[main\]](https://github.com/hexgrad/kokoro)`, "2. [https://example.com/a](https://example.com/a)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+// The space section says where research reports come from only when it has one.
+func TestSpaceSectionNotesResearchSources(t *testing.T) {
+	sp := &store.ChatSpace{Name: "Voice"}
+	plain := SpaceFiles([]store.ChatSpaceSource{source("notes", 10)})
+	if s := SpaceSection(sp, plain); strings.Contains(s, "deep research") {
+		t.Fatalf("research note without a report:\n%s", s)
+	}
+	rep := source("Local TTS", 10)
+	rep.Kind = "research"
+	s := SpaceSection(sp, SpaceFiles([]store.ChatSpaceSource{rep}))
+	if !strings.Contains(s, "deep research") || !strings.Contains(s, `research report "Local TTS"`) {
+		t.Fatalf("section:\n%s", s)
+	}
+}

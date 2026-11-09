@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Dialog, DropdownMenu } from "radix-ui";
 import { useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { useLibrary } from "@/lib/api/library-hooks";
@@ -19,6 +20,7 @@ export const SOURCE_ICON: Record<SourceKind, IconName> = {
   library: "library",
   link: "link",
   canvas: "board",
+  research: "search",
 };
 
 /** A source's kind icon on a small tile. */
@@ -86,6 +88,13 @@ function SourceRow({ s, spaceId }: { s: SpaceSource; spaceId: string }) {
                 <a href={s.url} target="_blank" rel="noreferrer noopener">
                   <Icon name="link" size={13} /> Open page
                 </a>
+              </DropdownMenu.Item>
+            )}
+            {s.chat_id && (
+              <DropdownMenu.Item asChild className="flex h-[32px] cursor-default items-center gap-[8px] rounded-md px-[8px] outline-none data-[highlighted]:bg-hover">
+                <Link href={`/chat/${s.chat_id}`}>
+                  <Icon name="msg" size={13} /> Open research chat
+                </Link>
               </DropdownMenu.Item>
             )}
             <DropdownMenu.Item
@@ -398,6 +407,7 @@ export function SourcesDialog({ spaceId, spaceName, open, onOpenChange }: { spac
                 <div className="h-full rounded-[3px] bg-accent" style={{ width: `${Math.min(100, (used / budget) * 100)}%` }} />
               </div>
               <p className="mt-[12px] text-[11.5px] text-fg-tertiary">Large sources, or anything past the budget, are searched when needed instead of sent every turn.</p>
+              <p className="mt-[6px] text-[11.5px] text-fg-tertiary">Deep research reports written in this space’s chats are added here when they’re saved. Start one with Research in the space’s composer.</p>
             </div>
           </div>
           <div className="mt-[20px] flex justify-end">
