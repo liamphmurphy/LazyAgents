@@ -291,6 +291,7 @@ type ChatSession struct {
 	SpaceID            *uuid.UUID
 	WorkBranches       []string
 	CommitEmail        *string
+	SecretIds          []uuid.UUID
 }
 
 type ChatSpace struct {
@@ -995,6 +996,79 @@ type User struct {
 	AvatarKey         *string
 	AvatarContentType *string
 	ExtraEmails       []string
+}
+
+type UserSecret struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	UserID       uuid.UUID
+	Name         string
+	Handle       string
+	Placement    string
+	PlacementKey string
+	AllowedHosts []string
+	ReadPolicy   string
+	WritePolicy  string
+	Nonce        []byte
+	Ciphertext   []byte
+	ExpiresAt    *time.Time
+	LastUsedAt   *time.Time
+	Revision     int32
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type UserSecretApproval struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	SecretID    uuid.UUID
+	PersonaID   *uuid.UUID
+	ChatID      uuid.UUID
+	Method      string
+	Url         string
+	Headers     json.RawMessage
+	BodyPreview string
+	State       string
+	CreatedAt   time.Time
+	DecidedAt   *time.Time
+}
+
+type UserSecretCall struct {
+	ID         uuid.UUID
+	SecretID   uuid.UUID
+	ChatID     *uuid.UUID
+	PersonaID  *uuid.UUID
+	Method     string
+	Host       string
+	Path       string
+	Decision   string
+	Status     *int32
+	Error      string
+	Redactions int32
+	DurationMs int32
+	CreatedAt  time.Time
+}
+
+type UserSecretPersona struct {
+	SecretID  uuid.UUID
+	PersonaID uuid.UUID
+}
+
+type UserSecretProposal struct {
+	ID           uuid.UUID
+	ChatID       uuid.UUID
+	RunID        uuid.UUID
+	ProposedBy   *uuid.UUID
+	Name         string
+	Host         string
+	Placement    string
+	PlacementKey string
+	Reason       string
+	State        string
+	SecretID     *uuid.UUID
+	CreatedAt    time.Time
+	DecidedAt    *time.Time
 }
 
 type Workflow struct {
