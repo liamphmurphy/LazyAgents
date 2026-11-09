@@ -42,14 +42,14 @@ export function MermaidFence({ code, info }: { code: string; info?: string }) {
   if (code.length > MAX_SOURCE || (current && !current.svg)) return <CodeFence code={code} info={info} />;
   if (!current) return <div data-testid="mermaid-loading" aria-label="Drawing diagram" className="h-48 w-full animate-pulse rounded-lg border border-border bg-surface-sunken" />;
   return (
-    <div data-testid="mermaid" className="flex max-w-full flex-col gap-1">
+    <div data-testid="mermaid" className="flex max-w-full break-inside-avoid flex-col gap-1">
       {showCode ? (
         <CodeFence code={code} info={info} />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={svgDataUrl(current.svg!)} alt="Diagram" className="max-h-[480px] w-auto max-w-full self-start rounded-lg border border-border bg-surface object-contain p-2" />
       )}
-      <button type="button" onClick={() => setShowCode((v) => !v)} className="self-start text-xs text-fg-tertiary hover:text-fg">{showCode ? "Show diagram" : "Show code"}</button>
+      <button type="button" onClick={() => setShowCode((v) => !v)} className="self-start text-xs text-fg-tertiary hover:text-fg print:hidden">{showCode ? "Show diagram" : "Show code"}</button>
     </div>
   );
 }
