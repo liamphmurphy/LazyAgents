@@ -1214,6 +1214,18 @@ export function useUpdateChat() {
   });
 }
 
+/** Picks which of your addresses a coding chat commits as; it applies from the next turn, so it works mid-reply. */
+export function useSetChatCommitEmail() {
+  const qc = useQueryClient();
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: (v: { id: string; email: string }) =>
+      unwrap(api.PUT("/chats/{id}/commit-email", { params: { path: { id: v.id } }, body: { email: v.email } })),
+    onSuccess: (chat) => qc.setQueryData(chatKeys.detail(chat.id), chat),
+    onSettled: done,
+  });
+}
+
 /** Deletes a chat and its messages. Its detail queries are dropped first so the open view doesn't refetch a 404. */
 export function useDeleteChat() {
   const qc = useQueryClient();
@@ -1374,9 +1386,16 @@ export function exportMemories() {
 export function useStartChat() {
   const done = useChatInvalidate();
   return useMutation({
-    mutationFn: async (v: { project?: string; persona_id?: string; repo_url?: string; message: Schemas["NewChatMessage"] }) => {
+    mutationFn: async (v: { project?: string; persona_id?: string; repo_url?: string; commit_email?: string; message: Schemas["NewChatMessage"] }) => {
       const chat = await unwrap(
-        api.POST("/chats", { body: { project: v.project, ...(v.persona_id ? { persona_id: v.persona_id } : {}), ...(v.repo_url ? { repo_url: v.repo_url } : {}) } }),
+        api.POST("/chats", {
+          body: {
+            project: v.project,
+            ...(v.persona_id ? { persona_id: v.persona_id } : {}),
+            ...(v.repo_url ? { repo_url: v.repo_url } : {}),
+            ...(v.commit_email ? { commit_email: v.commit_email } : {}),
+          },
+        }),
       );
       await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id: chat.id } }, body: v.message }));
       return chat;

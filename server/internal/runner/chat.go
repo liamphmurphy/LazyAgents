@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/personas"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -47,13 +48,41 @@ func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, e
 	if chat.RepoUrl == nil {
 		return script, nil
 	}
-	// Commits are the person's work, made in their chat: authoring them as the
-	// chat's creator lets the forge attribute them to that person's account.
+	name, email, err := chatCommitAuthor(ctx, q, chat)
+	if err != nil {
+		return "", err
+	}
+	return ChatRepoSetupScript(*chat.RepoUrl, chat.WorkBranches, name, email), nil
+}
+
+// chatCommitAuthor is who a coding chat's commits are authored as. Commits are
+// the person's work, made in their chat: authoring them as the chat's creator,
+// with the address they picked for it, lets the forge attribute them to that
+// person's account.
+func chatCommitAuthor(ctx context.Context, q *store.Queries, chat store.ChatSession) (name, email string, err error) {
 	author, err := q.GetUser(ctx, store.GetUserParams{ID: chat.CreatedBy, WorkspaceID: chat.WorkspaceID})
 	if err != nil {
-		return "", fmt.Errorf("chat commit author: %w", err)
+		return "", "", fmt.Errorf("chat commit author: %w", err)
 	}
-	return ChatRepoSetupScript(*chat.RepoUrl, chat.WorkBranches, author.Name, author.Email), nil
+	return author.Name, auth.CommitEmail(author, chat.CommitEmail), nil
+}
+
+// chatCommitEnv sets the commit author for one coding chat turn. git prefers
+// these over the user.email the segment's setup configured, so an address
+// picked mid-segment applies from the next turn rather than the next segment.
+func chatCommitEnv(ctx context.Context, q *store.Queries, c runCtx) (map[string]string, error) {
+	chat, err := q.ChatSessionForRun(ctx, &c.run.ID)
+	if err != nil {
+		return nil, err
+	}
+	name, email, err := chatCommitAuthor(ctx, q, chat)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{
+		"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email,
+		"GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email,
+	}, nil
 }
 
 // chatGitRepo is the repository URL a coding chat's git credentials may be

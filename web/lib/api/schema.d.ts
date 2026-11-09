@@ -265,9 +265,10 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Edit your display name and role title
+         * Edit your display name, role title and email addresses
          * @description Only the caller's own profile. Initials are recomputed from the new
-         *     name. 422 for an empty name or anything over the limits.
+         *     name. 422 for an empty name, anything over the limits, or an invalid
+         *     or repeated email; 409 when the primary email belongs to someone else.
          */
         patch: operations["updateProfile"];
         trace?: never;
@@ -3021,6 +3022,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/commit-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pick which of your email addresses a coding chat commits as
+         * @description Applies from the chat's next turn, so it can be picked while a turn is
+         *     running and needs no revision. 422 when the chat has no repository or
+         *     the address isn't one of the caller's.
+         */
+        put: operations["setChatCommitEmail"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/persona-dock": {
         parameters: {
             query?: never;
@@ -3232,12 +3257,16 @@ export interface components {
             avatar_color?: string;
             /** @description GET /users/{userId}/avatar with a cache-busting ?v=<updated_at unix>; absent without a picture */
             avatar_url?: string;
+            /** @description All of the person's addresses, primary (email) first. Only on your own profile (GET /me and bootstrap me). */
+            emails?: string[];
         };
         ProfilePatch: {
             /** @description Display name; trimmed */
             name?: string;
             /** @description Empty string clears it */
             role_title?: string;
+            /** @description Every address, replacing the list; the first is the primary. Trimmed; repeats (ignoring case) are refused. */
+            emails?: string[];
         };
         Project: {
             /** Format: uuid */
@@ -5404,6 +5433,8 @@ export interface components {
             repo_url?: string;
             /** @description The branches the coding persona pushed in this chat, oldest first (feat/..., fix/..., chore/...). It makes them as changes are asked for, so a new chat has none. Absent when the chat has no repository. */
             work_branches?: string[];
+            /** @description The address picked for this chat's commits. Absent until one is picked, or once it is no longer one of the creator's emails; commits then use their primary email. */
+            commit_email?: string;
             archived: boolean;
             revision: number;
             message_count: number;
@@ -5432,6 +5463,8 @@ export interface components {
             persona_id?: string;
             /** @description One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise. */
             repo_url?: string;
+            /** @description One of the caller's emails for the chat's commits. Only with a repository; 422 otherwise. */
+            commit_email?: string;
             /** @description Leave the chat out of chat lists, search and the dock; it stays reachable by id. For a chat that lives behind another screen, like the workflow editor. Fixed for the chat's life. */
             hidden?: boolean;
             /**
@@ -11661,6 +11694,38 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setChatCommitEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description One of the caller's emails (compared case-insensitively) */
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated chat */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSession"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

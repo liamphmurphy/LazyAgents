@@ -23,7 +23,8 @@ SELECT * FROM users WHERE workspace_id = $1 ORDER BY name;
 SELECT * FROM users ORDER BY created_at, id LIMIT 1;
 
 -- name: UpdateUserProfile :one
-UPDATE users SET name = $3, initials = $4, role_title = $5, updated_at = now()
+-- email is the primary address; extra_emails the others, in the person's order.
+UPDATE users SET name = $3, initials = $4, role_title = $5, email = $6, extra_emails = $7, updated_at = now()
 WHERE id = $1 AND workspace_id = $2
 RETURNING *;
 

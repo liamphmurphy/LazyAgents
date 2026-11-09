@@ -35,7 +35,7 @@ type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
   id: string; project?: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
-  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branches?: string[];
+  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branches?: string[]; commit_email?: string;
   effort?: Effort;
 };
 type Message = {
@@ -73,7 +73,7 @@ export type MockProposal = {
   id: string; chat_id: string; name: string; tone: string; color: string; custom_instructions: string; reason: string;
   state: "pending" | "approved" | "declined"; proposed_by?: { id: string; name: string; color: string }; created_at: string;
 };
-export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }> };
+export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }>; emails?: string[] };
 
 /** A persona fixture for the persona specs. */
 export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona {
@@ -338,10 +338,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   };
 
   // Your profile (Settings → Profile): shared by /bootstrap and /me so edits show in the sidebar.
-  const me: Record<string, unknown> & { id: string; name: string } = {
-    id: "00000000-0000-4000-8000-0000000000aa", name: "Liam", email: "liam@example.com", initials: "L", role_title: "Owner",
+  const emails = opts.emails ?? ["liam@example.com"];
+  const me: Record<string, unknown> & { id: string; name: string; emails: string[] } = {
+    id: "00000000-0000-4000-8000-0000000000aa", name: "Liam", email: emails[0], emails, initials: "L", role_title: "Owner",
   };
+  const ownEmail = (e: unknown) => me.emails.find((x) => x.toLowerCase() === String(e).trim().toLowerCase());
   const profileRequests: string[] = [];
+  const commitEmailRequests: string[] = [];
   const initialsOf = (name: string) => name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   async function handle(route: Route) {
@@ -366,11 +369,14 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     }
     if (path === "/me" && method === "GET") return json(me);
     if (path === "/me" && method === "PATCH") {
-      const b = body() as { name?: string; role_title?: string };
+      const b = body() as { name?: string; role_title?: string; emails?: string[] };
       profileRequests.push(`PATCH ${JSON.stringify(b)}`);
       if (b.name !== undefined && !b.name.trim()) return fail(err(422, "invalid", "Name is required.", "name"));
+      if (b.emails !== undefined && !b.emails.length) return fail(err(422, "invalid", "add at least one email", "emails"));
+      if (b.emails?.some((e) => e.endsWith("@taken.example"))) return fail(err(409, "conflict", `${b.emails[0]} is already another person's primary email`, "emails"));
       if (b.name !== undefined) Object.assign(me, { name: b.name.trim(), initials: initialsOf(b.name) });
       if (b.role_title !== undefined) me.role_title = b.role_title.trim();
+      if (b.emails !== undefined) Object.assign(me, { email: b.emails[0], emails: b.emails });
       return json(me);
     }
     if (path === "/me/avatar" && method === "PUT") {
@@ -552,9 +558,26 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const repo = (b.repo_url as string | undefined) ?? owner?.repos[0];
       if (b.repo_url !== undefined && !(owner?.capabilities.code && owner.repos.includes(String(b.repo_url)))) return fail(err(422, "invalid", "not one of the persona's repos", "repo_url"));
       if (owner?.capabilities.code && repo) Object.assign(c, { repo_url: repo, work_branches: [] });
+      if (b.commit_email !== undefined) {
+        if (!c.repo_url) return fail(err(422, "invalid", "only a chat with a repository makes commits", "commit_email"));
+        if (!ownEmail(b.commit_email)) return fail(err(422, "invalid", `add ${b.commit_email} to your profile first`, "commit_email"));
+        c.commit_email = ownEmail(b.commit_email);
+      }
       chats.unshift(c);
       messages.set(c.id, []);
       return json(ref(c), 201);
+    }
+
+    const ce = /^\/chats\/([^/]+)\/commit-email$/.exec(path);
+    if (ce && method === "PUT") {
+      const c = chats.find((x) => x.id === ce[1]);
+      if (!c) return fail(err(404, "not_found", "Chat not found"));
+      const email = body().email;
+      commitEmailRequests.push(String(email));
+      if (!c.repo_url) return fail(err(422, "invalid", "only a chat with a repository makes commits", "commit_email"));
+      if (!ownEmail(email)) return fail(err(422, "invalid", `add ${email} to your profile first`, "commit_email"));
+      c.commit_email = ownEmail(email);
+      return json(ref(c));
     }
 
     const pp = /^\/chats\/([^/]+)\/persona-proposals(?:\/([^/]+))?$/.exec(path);
@@ -831,6 +854,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests };
+    return { connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
   })();
 }

@@ -12,16 +12,18 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/personas"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// A person's profile: display name, role title and picture, editable only by
-// that person. Pictures follow the persona avatar rules and live in the blob
+// A person's profile: display name, role title, email addresses and picture,
+// editable only by that person. Pictures follow the persona avatar rules and live in the blob
 // bucket under users/<workspace>/<user>/avatar/<uuid>.
 
 const maxProfileField = 80
@@ -69,15 +71,24 @@ func profileField(field, v string, required bool) (string, error) {
 
 func (s *Server) GetProfile(ctx context.Context, _ api.GetProfileRequestObject) (api.GetProfileResponseObject, error) {
 	u, _, _ := me(ctx)
-	return api.GetProfile200JSONResponse(toUser(u)), nil
+	return api.GetProfile200JSONResponse(toMe(u)), nil
+}
+
+// toMe is the caller's own profile: the public fields plus every address,
+// which teammates don't see.
+func toMe(u store.User) api.User {
+	out := toUser(u)
+	emails := auth.Emails(u)
+	out.Emails = &emails
+	return out
 }
 
 func (s *Server) UpdateProfile(ctx context.Context, req api.UpdateProfileRequestObject) (api.UpdateProfileResponseObject, error) {
 	u, _, ws := me(ctx)
-	if req.Body == nil || (req.Body.Name == nil && req.Body.RoleTitle == nil) {
-		return nil, apperr.Invalid("body", "send name or role_title")
+	if req.Body == nil || (req.Body.Name == nil && req.Body.RoleTitle == nil && req.Body.Emails == nil) {
+		return nil, apperr.Invalid("body", "send name, role_title or emails")
 	}
-	name, role := u.Name, u.RoleTitle
+	name, role, emails := u.Name, u.RoleTitle, auth.Emails(u)
 	var err error
 	if req.Body.Name != nil {
 		if name, err = profileField("name", *req.Body.Name, true); err != nil {
@@ -89,13 +100,23 @@ func (s *Server) UpdateProfile(ctx context.Context, req api.UpdateProfileRequest
 			return nil, err
 		}
 	}
+	if req.Body.Emails != nil {
+		if emails, err = auth.NormalizeEmails(*req.Body.Emails); err != nil {
+			return nil, err
+		}
+	}
 	out, err := s.Q.UpdateUserProfile(ctx, store.UpdateUserProfileParams{
 		ID: u.ID, WorkspaceID: ws, Name: name, Initials: initialsOf(name), RoleTitle: role,
+		Email: emails[0], ExtraEmails: emails[1:],
 	})
+	var pe *pgconn.PgError
+	if errors.As(err, &pe) && pe.Code == "23505" && pe.ConstraintName == "users_email_key" {
+		return nil, apperr.ConflictField("emails", "%s is already another person's primary email", emails[0])
+	}
 	if err != nil {
 		return nil, err
 	}
-	return api.UpdateProfile200JSONResponse(toUser(out)), nil
+	return api.UpdateProfile200JSONResponse(toMe(out)), nil
 }
 
 // setAvatar points the caller's row at key (or clears it) and returns the key
@@ -154,7 +175,7 @@ func (s *Server) UploadProfileAvatar(ctx context.Context, req api.UploadProfileA
 		return nil, err
 	}
 	s.deleteAvatarBlob(ctx, old)
-	return api.UploadProfileAvatar200JSONResponse(toUser(out)), nil
+	return api.UploadProfileAvatar200JSONResponse(toMe(out)), nil
 }
 
 func (s *Server) DeleteProfileAvatar(ctx context.Context, _ api.DeleteProfileAvatarRequestObject) (api.DeleteProfileAvatarResponseObject, error) {
@@ -164,7 +185,7 @@ func (s *Server) DeleteProfileAvatar(ctx context.Context, _ api.DeleteProfileAva
 		return nil, err
 	}
 	s.deleteAvatarBlob(ctx, old)
-	return api.DeleteProfileAvatar200JSONResponse(toUser(out)), nil
+	return api.DeleteProfileAvatar200JSONResponse(toMe(out)), nil
 }
 
 func (s *Server) GetUserAvatar(ctx context.Context, req api.GetUserAvatarRequestObject) (api.GetUserAvatarResponseObject, error) {

@@ -290,6 +290,7 @@ type ChatSession struct {
 	ConnectorIds       []uuid.UUID
 	SpaceID            *uuid.UUID
 	WorkBranches       []string
+	CommitEmail        *string
 }
 
 type ChatSpace struct {
@@ -977,6 +978,7 @@ type User struct {
 	UpdatedAt         time.Time
 	AvatarKey         *string
 	AvatarContentType *string
+	ExtraEmails       []string
 }
 
 type Workflow struct {
