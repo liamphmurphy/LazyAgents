@@ -265,9 +265,10 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Edit your display name and role title
+         * Edit your display name, role title and email addresses
          * @description Only the caller's own profile. Initials are recomputed from the new
-         *     name. 422 for an empty name or anything over the limits.
+         *     name. 422 for an empty name, anything over the limits, or an invalid
+         *     or repeated email; 409 when the primary email belongs to someone else.
          */
         patch: operations["updateProfile"];
         trace?: never;
@@ -3232,12 +3233,16 @@ export interface components {
             avatar_color?: string;
             /** @description GET /users/{userId}/avatar with a cache-busting ?v=<updated_at unix>; absent without a picture */
             avatar_url?: string;
+            /** @description All of the person's addresses, primary (email) first. Only on your own profile (GET /me and bootstrap me). */
+            emails?: string[];
         };
         ProfilePatch: {
             /** @description Display name; trimmed */
             name?: string;
             /** @description Empty string clears it */
             role_title?: string;
+            /** @description Every address, replacing the list; the first is the primary. Trimmed; repeats (ignoring case) are refused. */
+            emails?: string[];
         };
         Project: {
             /** Format: uuid */

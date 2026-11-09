@@ -977,6 +977,7 @@ type User struct {
 	UpdatedAt         time.Time
 	AvatarKey         *string
 	AvatarContentType *string
+	ExtraEmails       []string
 }
 
 type Workflow struct {

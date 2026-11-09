@@ -73,7 +73,7 @@ export type MockProposal = {
   id: string; chat_id: string; name: string; tone: string; color: string; custom_instructions: string; reason: string;
   state: "pending" | "approved" | "declined"; proposed_by?: { id: string; name: string; color: string }; created_at: string;
 };
-export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }> };
+export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }>; emails?: string[] };
 
 /** A persona fixture for the persona specs. */
 export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona {
@@ -338,8 +338,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   };
 
   // Your profile (Settings → Profile): shared by /bootstrap and /me so edits show in the sidebar.
-  const me: Record<string, unknown> & { id: string; name: string } = {
-    id: "00000000-0000-4000-8000-0000000000aa", name: "Liam", email: "liam@example.com", initials: "L", role_title: "Owner",
+  const emails = opts.emails ?? ["liam@example.com"];
+  const me: Record<string, unknown> & { id: string; name: string; emails: string[] } = {
+    id: "00000000-0000-4000-8000-0000000000aa", name: "Liam", email: emails[0], emails, initials: "L", role_title: "Owner",
   };
   const profileRequests: string[] = [];
   const initialsOf = (name: string) => name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -366,11 +367,14 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     }
     if (path === "/me" && method === "GET") return json(me);
     if (path === "/me" && method === "PATCH") {
-      const b = body() as { name?: string; role_title?: string };
+      const b = body() as { name?: string; role_title?: string; emails?: string[] };
       profileRequests.push(`PATCH ${JSON.stringify(b)}`);
       if (b.name !== undefined && !b.name.trim()) return fail(err(422, "invalid", "Name is required.", "name"));
+      if (b.emails !== undefined && !b.emails.length) return fail(err(422, "invalid", "add at least one email", "emails"));
+      if (b.emails?.some((e) => e.endsWith("@taken.example"))) return fail(err(409, "conflict", `${b.emails[0]} is already another person's primary email`, "emails"));
       if (b.name !== undefined) Object.assign(me, { name: b.name.trim(), initials: initialsOf(b.name) });
       if (b.role_title !== undefined) me.role_title = b.role_title.trim();
+      if (b.emails !== undefined) Object.assign(me, { email: b.emails[0], emails: b.emails });
       return json(me);
     }
     if (path === "/me/avatar" && method === "PUT") {

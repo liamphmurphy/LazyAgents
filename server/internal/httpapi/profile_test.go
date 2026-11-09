@@ -45,9 +45,51 @@ func TestProfileUpdateAndValidation(t *testing.T) {
 	e.invalid("PATCH", "/me", map[string]any{"name": "a\x07b"}, "name", "control")
 	e.invalid("PATCH", "/me", map[string]any{"role_title": long}, "role_title", "at most")
 	e.invalid("PATCH", "/me", map[string]any{"role_title": "x\ny"}, "role_title", "control")
-	e.invalid("PATCH", "/me", map[string]any{}, "body", "name or role_title")
+	e.invalid("PATCH", "/me", map[string]any{}, "body", "name, role_title or emails")
 	// 80 multibyte runes is fine.
 	e.want("PATCH", "/me", map[string]any{"name": strings.Repeat("é", 80)}, 200)
+}
+
+// The profile's addresses: editable, several of them, the first the primary,
+// and only shown to their owner.
+func TestProfileEmails(t *testing.T) {
+	e := newChatEnv(t)
+	got := e.want("GET", "/me", nil, 200)
+	if fmt.Sprint(got["emails"]) != "["+e.me.Email+"]" {
+		t.Fatalf("emails before any edit = %v", got["emails"])
+	}
+	got = e.want("PATCH", "/me", map[string]any{"emails": []string{" ada@example.com ", "Ada@Work.example"}}, 200)
+	if got["email"] != "ada@example.com" || fmt.Sprint(got["emails"]) != "[ada@example.com Ada@Work.example]" {
+		t.Fatalf("patch emails = %v", got)
+	}
+	// Other fields leave the addresses alone; reordering changes the primary.
+	if got = e.want("PATCH", "/me", map[string]any{"name": "Ada"}, 200); fmt.Sprint(got["emails"]) != "[ada@example.com Ada@Work.example]" {
+		t.Fatalf("a name patch changed emails: %v", got["emails"])
+	}
+	got = e.want("PATCH", "/me", map[string]any{"emails": []string{"Ada@Work.example", "ada@example.com"}}, 200)
+	if got["email"] != "Ada@Work.example" {
+		t.Fatalf("reordered primary = %v", got["email"])
+	}
+	boot := e.want("GET", "/bootstrap", nil, 200)
+	if fmt.Sprint(boot["me"].(map[string]any)["emails"]) != "[Ada@Work.example ada@example.com]" {
+		t.Fatalf("bootstrap me %v", boot["me"])
+	}
+	// Teammates see the primary only.
+	for _, u := range boot["users"].([]any) {
+		if _, ok := u.(map[string]any)["emails"]; ok {
+			t.Fatalf("a teammate's addresses leaked: %v", u)
+		}
+	}
+
+	e.invalid("PATCH", "/me", map[string]any{"emails": []string{}}, "emails", "")
+	e.invalid("PATCH", "/me", map[string]any{"emails": []string{"nope"}}, "emails", "isn't an email")
+	e.invalid("PATCH", "/me", map[string]any{"emails": []string{"Ada <ada@example.com>"}}, "emails", "isn't an email")
+	e.invalid("PATCH", "/me", map[string]any{"emails": []string{"ada@example.com", "ADA@example.com"}}, "emails", "twice")
+	// Another person's primary can't become yours.
+	out := e.want("PATCH", "/me", map[string]any{"emails": []string{"DEV@northwind.dev"}}, http.StatusConflict)
+	if out["field"] != "emails" {
+		t.Fatalf("conflict = %v", out)
+	}
 }
 
 func TestProfileAvatar(t *testing.T) {
