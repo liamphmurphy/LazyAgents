@@ -54,3 +54,9 @@ UPDATE secrets SET last_used_at = now() WHERE id = $1;
 -- name: SecretExists :one
 -- Metadata only: whether any secret of this name is stored; never reads the value.
 SELECT EXISTS (SELECT 1 FROM secrets WHERE workspace_id = $1 AND name = $2)::bool;
+
+-- name: SecretVersion :one
+-- Metadata only: an opaque version of the workspace-level secret's stored value.
+-- The AES-GCM nonce is fresh on every write and untouched by reads, unlike
+-- updated_at, which last_used_at bumps on every reveal. Not secret.
+SELECT encode(nonce, 'hex') FROM secrets WHERE workspace_id = $1 AND name = $2 AND project_id IS NULL;

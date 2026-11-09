@@ -39,8 +39,10 @@ type Docker struct {
 	// startup Cleanup kills the other's running turns. "" means "default".
 	Stack string
 	// MemoryMB and PidsLimit cap each container; 0 leaves that limit off.
-	MemoryMB  int64
-	PidsLimit int64
+	// ModelsTimeout bounds one model listing; 0 means listModelsTimeout.
+	ModelsTimeout time.Duration
+	MemoryMB      int64
+	PidsLimit     int64
 	// SaveCodexAuth stores a ChatGPT login a turn refreshed. scope is what
 	// SecretEnv put in CodexAuthScopeEnv.
 	SaveCodexAuth func(ctx context.Context, scope, auth string) error
@@ -477,20 +479,30 @@ func (p *dockerProc) keepRefreshedCodexAuth() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	res, err := p.d.do(ctx, "GET", "/containers/"+p.id+"/archive?path="+url.QueryEscape(path.Join(homePath, codexAuthPath)), nil, "", nil)
-	if err != nil {
+	next, ok := p.d.refreshedCodexAuth(ctx, p.id, p.codexAuth)
+	if !ok {
 		return
+	}
+	if err := p.d.SaveCodexAuth(ctx, p.codexScope, next); err != nil {
+		slog.Warn("save refreshed codex login", "err", err)
+	}
+}
+
+// refreshedCodexAuth reads ~/.codex/auth.json back out of a container and
+// returns it only when it is a newer login than current.
+func (d *Docker) refreshedCodexAuth(ctx context.Context, id, current string) (string, bool) {
+	res, err := d.do(ctx, "GET", "/containers/"+id+"/archive?path="+url.QueryEscape(path.Join(homePath, codexAuthPath)), nil, "", nil)
+	if err != nil {
+		return "", false
 	}
 	defer res.Body.Close()
 	tr := tar.NewReader(res.Body)
 	if _, err := tr.Next(); err != nil {
-		return
+		return "", false
 	}
 	next, err := io.ReadAll(io.LimitReader(tr, maxCodexAuth+1))
-	if err != nil || len(next) > maxCodexAuth || !chatmodels.CodexAuthRefreshed(p.codexAuth, string(next)) {
-		return
+	if err != nil || len(next) > maxCodexAuth || !chatmodels.CodexAuthRefreshed(current, string(next)) {
+		return "", false
 	}
-	if err := p.d.SaveCodexAuth(ctx, p.codexScope, string(next)); err != nil {
-		slog.Warn("save refreshed codex login", "err", err)
-	}
+	return string(next), true
 }

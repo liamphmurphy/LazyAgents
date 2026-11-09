@@ -18,22 +18,20 @@ import (
 // and binary overrides as the local runner. It never sends a user prompt or
 // starts model inference, and never reads or exports login credentials.
 func DiscoverLocal(ctx context.Context, name, _ string) ([]Model, error) {
-	bin, args := "", []string{}
+	argv, err := DiscoveryArgv(name)
+	if err != nil {
+		return nil, err
+	}
+	bin, args := argv[0], argv[1:]
 	switch name {
 	case agentdef.HarnessClaudeCode:
-		bin = os.Getenv("RUNNER_CLAUDE_BIN")
-		if bin == "" {
-			bin = "claude"
+		if v := os.Getenv("RUNNER_CLAUDE_BIN"); v != "" {
+			bin = v
 		}
-		args = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--no-session-persistence", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`}
 	case agentdef.HarnessCodex:
-		bin = os.Getenv("RUNNER_CODEX_BIN")
-		if bin == "" {
-			bin = "codex"
+		if v := os.Getenv("RUNNER_CODEX_BIN"); v != "" {
+			bin = v
 		}
-		args = []string{"app-server"}
-	default:
-		return nil, fmt.Errorf("unsupported harness")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -55,10 +53,23 @@ func DiscoverLocal(ctx context.Context, name, _ string) ([]Model, error) {
 		return nil, fmt.Errorf("local harness could not start")
 	}
 	defer func() { stdin.Close(); cmd.Process.Kill(); cmd.Wait() }()
-	return localModels(name, stdin, stdout)
+	return ListOverStdio(name, stdin, stdout)
 }
 
-func localModels(name string, input io.Writer, output io.Reader) ([]Model, error) {
+// DiscoveryArgv is the command that speaks the harness control protocol
+// ListOverStdio drives, with the CLI found on PATH.
+func DiscoveryArgv(name string) ([]string, error) {
+	switch name {
+	case agentdef.HarnessClaudeCode:
+		return []string{"claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--no-session-persistence", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`}, nil
+	case agentdef.HarnessCodex:
+		return []string{"codex", "app-server"}, nil
+	}
+	return nil, fmt.Errorf("unsupported harness")
+}
+
+// ListOverStdio asks a running DiscoveryArgv process for its models.
+func ListOverStdio(name string, input io.Writer, output io.Reader) ([]Model, error) {
 	send := json.NewEncoder(input)
 	if name == agentdef.HarnessClaudeCode {
 		if err := send.Encode(map[string]any{"type": "control_request", "request_id": "models", "request": map[string]any{"subtype": "initialize"}}); err != nil {

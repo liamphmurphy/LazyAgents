@@ -441,6 +441,22 @@ type EpicCriterion struct {
 	UpdatedAt     time.Time
 }
 
+type HarnessModelListing struct {
+	WorkspaceID   uuid.UUID
+	Harness       string
+	LoginVersion  string
+	Status        string
+	Error         string
+	Models        json.RawMessage
+	ModelsVersion *string
+	ListedAt      *time.Time
+	RunnerID      *string
+	ClaimID       *uuid.UUID
+	RequestedAt   time.Time
+	ClaimedAt     *time.Time
+	FinishedAt    *time.Time
+}
+
 type InboxRead struct {
 	UserID uuid.UUID
 	ItemID string

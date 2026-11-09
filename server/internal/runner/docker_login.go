@@ -63,18 +63,18 @@ func (d *Docker) StartLogin(ctx context.Context, spec LoginSpec) (LoginProcess, 
 	return p, nil
 }
 
-// attachLogin attaches before start so no output is lost. With a terminal it
-// upgrades the connection so the runner can type into it.
-func (d *Docker) attachLogin(id string, tty bool) (io.ReadWriteCloser, error) {
+// attachLogin attaches before start so no output is lost. With stdin it
+// upgrades the connection so the runner can write to the container.
+func (d *Docker) attachLogin(id string, stdin bool) (io.ReadWriteCloser, error) {
 	q := "stream=1&stdout=1&stderr=1"
-	if tty {
+	if stdin {
 		q += "&stdin=1"
 	}
 	req, err := http.NewRequest("POST", dockerAPI+"/containers/"+id+"/attach?"+q, nil)
 	if err != nil {
 		return nil, err
 	}
-	if tty {
+	if stdin {
 		req.Header.Set("Connection", "Upgrade")
 		req.Header.Set("Upgrade", "tcp")
 	}
@@ -82,7 +82,7 @@ func (d *Docker) attachLogin(id string, tty bool) (io.ReadWriteCloser, error) {
 	if err != nil {
 		return nil, fmt.Errorf("docker attach: %w", err)
 	}
-	if tty {
+	if stdin {
 		rw, ok := res.Body.(io.ReadWriteCloser)
 		if res.StatusCode != http.StatusSwitchingProtocols || !ok {
 			res.Body.Close()

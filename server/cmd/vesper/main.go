@@ -164,7 +164,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Artifacts:      arts,
 		Agents:         &agents.Service{Pool: pool},
 		Secrets:        secretsSvc,
-		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc, RequireHarnessKey: cfg.Runner.Backend == "docker", Transcripts: transcript.Shared},
+		Runs:           &runs.Service{Pool: pool, Secrets: secretsSvc, Artifacts: arts, Tracker: trackerSvc, RequireHarnessKey: cfg.Runner.Backend == "docker", PlanModels: planModels(cfg.Runner.Backend, pool), Transcripts: transcript.Shared},
 		Wiki:           &wiki.Service{Pool: pool, Artifacts: arts, Tracker: trackerSvc},
 		PublicURL:      cfg.PublicURL,
 		Blobs:          blobs,
@@ -292,7 +292,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		}
 	}
 	workflows := runs.NewWorkflowEngine(pool, &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, &tracker.Service{Pool: pool})
-	workflows.Catalog = chatmodels.Catalog{RequireKey: rc.Backend == "docker", Secrets: secretStore}
+	workflows.Catalog = chatmodels.Catalog{RequireKey: rc.Backend == "docker", Secrets: secretStore, PlanModels: planModels(rc.Backend, pool)}
 	r := &runner.Runner{
 		Cfg: runner.Config{
 			ModelPrices: rc.ModelPrices,
@@ -303,7 +303,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		Pool: pool, Backend: backend, Secrets: secretStore,
 		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
 		Workflows: workflows,
-		Scheduled: &runs.Service{Pool: pool, Secrets: secretStore, Tracker: &tracker.Service{Pool: pool}, Artifacts: &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, RequireHarnessKey: rc.Backend == "docker"},
+		Scheduled: &runs.Service{Pool: pool, Secrets: secretStore, Tracker: &tracker.Service{Pool: pool}, Artifacts: &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, RequireHarnessKey: rc.Backend == "docker", PlanModels: planModels(rc.Backend, pool)},
 		StoreSecret: func(ctx context.Context, ws, by uuid.UUID, name, value string) error {
 			_, err := secretStore.Set(ctx, ws, by, secrets.SetInput{Name: name, Value: value})
 			return err
@@ -311,4 +311,13 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	}
 	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
 	return r.Run(ctx)
+}
+
+// planModels lists plan-login models through a runner in Docker mode, where
+// the API image has no harness CLI; nil elsewhere (the local CLI is used).
+func planModels(backend string, pool *pgxpool.Pool) func(context.Context, uuid.UUID, string, bool) ([]chatmodels.Model, error) {
+	if backend != "docker" {
+		return nil
+	}
+	return (&chatmodels.QueuedListings{Pool: pool}).Models
 }

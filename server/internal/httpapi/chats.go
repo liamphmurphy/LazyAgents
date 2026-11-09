@@ -281,7 +281,7 @@ func jsonOrEmpty(raw json.RawMessage) json.RawMessage {
 
 func (s *Server) ListChatModels(ctx context.Context, _ api.ListChatModelsRequestObject) (api.ListChatModelsResponseObject, error) {
 	_, _, ws := me(ctx)
-	list, err := s.Runs.ChatCatalog().List(ctx, s.Q, ws)
+	list, err := s.Runs.ChatCatalog().ListWaiting(ctx, s.Q, ws)
 	if err != nil {
 		return nil, err
 	}
