@@ -300,6 +300,15 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "viz:" replies with a themed diagram, a step-through and a chart; "badchart:" with a chart it can't draw.
+    if (prompt.startsWith("viz:") || prompt.startsWith("badchart:")) {
+      const box = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120"><title>Client and server</title><rect x="24" y="36" width="104" height="48" rx="8" fill="var(--viz-panel)" stroke="var(--viz-line)" stroke-width="1.5"/><text x="76" y="65" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="var(--viz-ink)">Client</text><g data-step="2"><rect x="192" y="36" width="104" height="48" rx="8" fill="var(--viz-1-soft)" stroke="var(--viz-1)" stroke-width="1.5"/><text x="244" y="65" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="var(--viz-ink)">Server</text></g></svg>`;
+      const chart = JSON.stringify({ type: "bar", title: "Requests by region", x: { label: "Region" }, y: { label: "Requests", unit: "K" }, categories: ["us", "eu", "ap"], series: [{ name: "2025", values: [120, 90, 40] }, { name: "2026", values: [160, 110, 75] }] });
+      const body = prompt.startsWith("viz:") ? `Here.\n\n\`\`\`svg-image\n${box.replace(' data-step="2"', "")}\n\`\`\`\n\n\`\`\`svg-steps\n${box}\n1. The client starts alone\n2. The server appears\n\`\`\`\n\n\`\`\`chart\n${chart}\n\`\`\`` : "Oops.\n\n```chart\n{\"type\":\"pie\"}\n```";
+      add(c, "assistant", body, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE, ...(citations ? { citations } : {}) });
     void emit(c);
   }

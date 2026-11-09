@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import {
   api,
   ApiError,
@@ -677,6 +677,11 @@ function runListOptions(f: RunListFilters, offset: number) {
   };
 }
 
+/** The first page of live runs, for surfaces that only glance at them. */
+export function useLiveRuns(enabled: boolean) {
+  return useQuery({ ...runListOptions({ state: "live" } as RunListFilters, 0), enabled });
+}
+
 /** Top-level runs, newest first, one query per loaded page. Under ["runs"] so SSE invalidation refreshes them. */
 export function useRunPages(f: RunListFilters, pages: number) {
   return useQueries({ queries: Array.from({ length: pages }, (_, i) => runListOptions(f, i * RUNS_PAGE)) });
@@ -907,7 +912,7 @@ export function useReadInbox() {
  },onSuccess:()=>{void qc.invalidateQueries({queryKey:["inbox"]});void qc.invalidateQueries({queryKey:keys.bootstrap});}});
 }
 export function useSearch(q:string,project?:string) {
- return useQuery({queryKey:["search",q,project??""],queryFn:()=>unwrap(api.GET("/search",{params:{query:{q,project}}})).then(d=>d.hits),enabled:q.trim().length>0});
+ return useQuery({queryKey:["search",q,project??""],queryFn:()=>unwrap(api.GET("/search",{params:{query:{q,project}}})).then(d=>d.hits),enabled:q.trim().length>0,placeholderData:keepPreviousData});
 }
 
 // ------------------------------------------------------------- overviews
@@ -1133,7 +1138,8 @@ export function useCreateChat() {
   const done = useChatInvalidate();
   return useMutation({
     mutationFn: (body: Schemas["NewChat"]) => unwrap(api.POST("/chats", { body })),
-    onSettled: done,
+    // Not awaited: callers open the new chat from mutate's onSuccess, which would wait for every chat query to refetch.
+    onSettled: () => void done(),
   });
 }
 
@@ -1158,6 +1164,19 @@ export function useDeleteChat() {
     onSuccess: (_, id) => {
       qc.removeQueries({ queryKey: chatKeys.detail(id) });
       qc.removeQueries({ queryKey: chatKeys.messages(id) });
+    },
+    onSettled: done,
+  });
+}
+
+/** Creates a chat and sends its first message, for asking from outside the chat screen. */
+export function useAskChat() {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: async (v: { project: string; body: string }) => {
+      const chat = await unwrap(api.POST("/chats", { body: { project: v.project } }));
+      await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id: chat.id } }, body: { body: v.body } }));
+      return chat;
     },
     onSettled: done,
   });

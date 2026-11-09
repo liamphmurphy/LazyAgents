@@ -7,6 +7,7 @@ import { useAttemptCheck, useGradeAttempt, useTutor, type Course, type CourseChe
 import { CONFIDENCE, pickLesson } from "@/lib/learning";
 import { cx } from "@/lib/cx";
 import { Markdown } from "@/components/domain/markdown";
+import { LessonVisual } from "@/components/domain/visuals";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/controls";
 import { Banner, TextArea } from "@/components/ui/primitives";
@@ -20,14 +21,16 @@ function Body({ lesson }: { lesson: CourseLesson }) {
       {lesson.body.map((b, i) => {
         if (b.kind === "heading") return <h2 key={i} className="type-heading mt-2">{b.text}</h2>;
         if (b.kind === "code") return <pre key={i} className="overflow-x-auto rounded-md border border-border bg-surface-sunken p-3 font-mono text-xs"><code>{b.text}</code></pre>;
+        const visual = b.kind === "diagram" || b.kind === "chart" ? <LessonVisual kind={b.kind} text={b.text} alt={b.alt} steps={b.steps} caption={b.caption || b.sources?.length ? <Markdown>{(b.caption ?? "") + cites(b.sources)}</Markdown> : undefined} /> : null;
         if (b.provenance === "model_knowledge") {
           return (
-            <div key={i} className="border-l border-dashed border-fg-tertiary pl-3">
+            <div key={i} className="flex flex-col gap-1 border-l border-dashed border-fg-tertiary pl-3">
               <div className="text-[10px] font-semibold tracking-[.06em] text-fg-tertiary">MODEL KNOWLEDGE · NOT SOURCED</div>
-              <Markdown>{b.text}</Markdown>
+              {visual ?? <Markdown>{b.text}</Markdown>}
             </div>
           );
         }
+        if (visual) return <div key={i}>{visual}</div>;
         return <Markdown key={i}>{b.text + cites(b.sources)}</Markdown>;
       })}
     </div>
@@ -134,7 +137,7 @@ function TutorPanel({ course, lesson }: { course: Course; lesson: string }) {
         {list.map((m) => m.role === "user" ? (
           <div key={m.id} className="ml-10 rounded-lg bg-surface-raised px-3 py-2 text-[13px] text-fg">{m.body_md}</div>
         ) : (
-          <div key={m.id} className="text-[13px] text-fg-2"><Markdown>{m.body_md}</Markdown></div>
+          <div key={m.id} className="text-[13px] text-fg-2"><Markdown visualBlocks>{m.body_md}</Markdown></div>
         ))}
         {running && <p role="status" className="text-xs text-fg-tertiary">Thinking…</p>}
         <div ref={end} />

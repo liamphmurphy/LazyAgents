@@ -283,7 +283,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
     );
   }
   return (
-    <aside aria-label="Main menu" className={cx("flex flex-[1_1_232px] flex-col gap-5 border-r border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3", chatting && "min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh")}>
+    <aside aria-label="Main menu" className={cx("flex min-w-0 flex-[1_1_232px] flex-col gap-5 border-r min-[800px]:w-[232px] min-[800px]:flex-none border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3", chatting && "min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh")}>
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-[9px] px-1.5 py-[5px]">

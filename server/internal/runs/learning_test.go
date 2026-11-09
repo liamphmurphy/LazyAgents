@@ -100,6 +100,29 @@ func validLesson() LessonSubmission {
 		Checks: []LessonCheckInput{{Objective: "o", Kind: "mcq", Prompt: "p", Options: []string{"x", "y", "z"}, Answer: "x", Explanation: "e"}}}
 }
 
+func diagramBlock() LessonBlock {
+	return LessonBlock{Kind: "diagram", Text: `<svg viewBox="0 0 9 9"><rect fill="var(--viz-panel)"/></svg>`, Alt: "A box", Provenance: "model_knowledge"}
+}
+
+func TestLessonVisualsDontEatTextBudget(t *testing.T) {
+	l := validLesson()
+	l.Blocks[0].Text = strings.Repeat("x", learningBodyRunes)
+	l.Blocks = append(l.Blocks, diagramBlock())
+	if err := l.validate([]string{"o"}, map[int]bool{1: true}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTutorLessonTextDropsMarkup(t *testing.T) {
+	got := tutorLessonText([]byte(`[{"kind":"text","text":"keep"},{"kind":"diagram","text":"<svg>huge</svg>","alt":"A box"}]`))
+	if !strings.Contains(got, "keep") || !strings.Contains(got, "A box") || strings.Contains(got, "huge") {
+		t.Fatal(got)
+	}
+	if got := tutorLessonText([]byte(`not json`)); got != "not json" {
+		t.Fatal(got)
+	}
+}
+
 func TestLessonValidate(t *testing.T) {
 	sources := map[int]bool{1: true}
 	for name, tc := range map[string]struct {
@@ -116,6 +139,45 @@ func TestLessonValidate(t *testing.T) {
 		"wrong objective":   {func(l *LessonSubmission) { l.Checks[0].Objective = "other" }, "word for word"},
 		"short no rubric":   {func(l *LessonSubmission) { l.Checks[0].Kind, l.Checks[0].Rubric = "short", "" }, "rubric"},
 		"no checks":         {func(l *LessonSubmission) { l.Checks = nil }, "checks"},
+		"diagram":           {func(l *LessonSubmission) { l.Blocks = append(l.Blocks, diagramBlock()) }, ""},
+		"step-through": {func(l *LessonSubmission) {
+			b := diagramBlock()
+			b.Text, b.Steps = `<svg viewBox="0 0 9 9"><g data-step="2"/></svg>`, []string{"one", "two"}
+			l.Blocks = append(l.Blocks, b)
+		}, ""},
+		"chart": {func(l *LessonSubmission) {
+			b := diagramBlock()
+			b.Kind, b.Text = "chart", `{"type":"bar","categories":["a"],"series":[{"name":"s","values":[1]}]}`
+			l.Blocks = append(l.Blocks, b)
+		}, ""},
+		"diagram no alt":        {func(l *LessonSubmission) { b := diagramBlock(); b.Alt = " "; l.Blocks = append(l.Blocks, b) }, "alt text"},
+		"diagram no provenance": {func(l *LessonSubmission) { b := diagramBlock(); b.Provenance = ""; l.Blocks = append(l.Blocks, b) }, "diagram block 1 needs a provenance"},
+		"diagram bad source": {func(l *LessonSubmission) {
+			b := diagramBlock()
+			b.Provenance, b.Sources = "sourced", []int{9}
+			l.Blocks = append(l.Blocks, b)
+		}, "no source 9"},
+		"diagram bad svg": {func(l *LessonSubmission) {
+			b := diagramBlock()
+			b.Text = `<svg viewBox="0 0 1 1">`
+			l.Blocks = append(l.Blocks, b)
+		}, "diagram block 1: the SVG"},
+		"one step": {func(l *LessonSubmission) {
+			b := diagramBlock()
+			b.Steps = []string{"only"}
+			l.Blocks = append(l.Blocks, b)
+		}, "2 to 12 steps"},
+		"empty step": {func(l *LessonSubmission) {
+			b := diagramBlock()
+			b.Text, b.Steps = `<svg viewBox="0 0 9 9"><g data-step="2"/></svg>`, []string{"one", " "}
+			l.Blocks = append(l.Blocks, b)
+		}, "needs a caption"},
+		"too many visuals": {func(l *LessonSubmission) {
+			for range learningMaxVisuals + 1 {
+				l.Blocks = append(l.Blocks, diagramBlock())
+			}
+		}, "at most 6"},
+		"unknown kind": {func(l *LessonSubmission) { l.Blocks[0].Kind = "video" }, "diagram or chart"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			l := validLesson()

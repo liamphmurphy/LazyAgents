@@ -30,7 +30,7 @@ import { Links } from "./links";
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
 function Source({ item }: { item: LibraryItem }) {
   if (item.source === "upload") return <span className="min-w-0 truncate text-xs text-fg-tertiary">Uploaded by you</span>;
-  const chat = item.chat_id && item.project_key ? `/chat/${item.chat_id}?project=${encodeURIComponent(item.project_key)}` : undefined;
+  const chat = item.chat_id ? `/chat/${item.chat_id}` : undefined;
   return (
     <span className="min-w-0 truncate text-xs text-fg-tertiary">
       {item.persona_name ?? "Assistant"}

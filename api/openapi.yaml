@@ -275,7 +275,7 @@ paths:
   /search:
     get:
       operationId: search
-      summary: Search tickets, artifacts, wiki pages, epics, agents and the local user's chats
+      summary: Search tickets, artifacts, wiki pages, epics, agents, runs and the local user's chats, messages, workflows, personas, memories and Library
       parameters:
         - { name: q, in: query, required: true, schema: { type: string, maxLength: 500 } }
         - { name: project, in: query, schema: { type: string } }
@@ -4740,7 +4740,7 @@ components:
       required: [kind, title]
       description: What a [[link]] points at, with enough to render it
       properties:
-        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, chat, unresolved], description: "chat only appears in GET /search hits (the asking user's own chats)" }
+        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, chat, run, workflow, persona, memory, library, unresolved], description: "chat, run, workflow, persona, memory and library only appear in GET /search hits" }
         id: { type: string, format: uuid }
         anchor: { type: string }
         title: { type: string }
@@ -5750,11 +5750,14 @@ components:
       type: object
       required: [kind, text]
       properties:
-        kind: { type: string, enum: [heading, text, code] }
-        text: { type: string }
+        kind: { type: string, enum: [heading, text, code, diagram, chart] }
+        text: { type: string, description: "A diagram's SVG source or a chart's JSON spec, for those kinds" }
         lang: { type: string }
         provenance: { type: string, enum: [sourced, model_knowledge] }
         sources: { type: array, items: { type: integer } }
+        alt: { type: string, description: What a diagram or chart shows }
+        caption: { type: string, description: "A diagram's or chart's caption, in Markdown" }
+        steps: { type: array, items: { type: string }, description: A step-through diagram's captions }
     CourseReveal:
       type: object
       required: [answer, rubric, explanation]

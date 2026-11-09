@@ -94,6 +94,14 @@ const assistantImagesViaCodex = `
 - Don't paste file paths or image data into your reply.
 - The person can pick reference images in their Library: one of you and one of themselves. When they are set, the message says so. Whenever an image shows you, pass references ["persona"]; whenever it shows the person, ["person"] (or both), so you both look the same from picture to picture. Without a reference, describe the look in the prompt instead.`
 
+// DiagramStyleGuide, StepThroughGuide and ChartSpecGuide are shared by chat
+// replies and Learn's lesson author, which draw through the same renderers.
+const DiagramStyleGuide = `Color only with var(--viz-NAME) in fill and stroke, never a fixed color, so it follows light and dark themes. Names: panel (box fill), ink (main text), muted (secondary text), line (connectors and borders), surface (the page, for knocking out behind a label), 1 to 8 (accent hues, used in order, at most three), and 1-soft to 8-soft (a pale fill to pair with that hue's stroke). Don't draw a background rectangle. Include a <title> saying what it shows and a viewBox about 680 wide with 24 of margin. Use font-family="system-ui, sans-serif", font-size 13 for labels and 11 for notes. Align boxes to a grid, with rx="8", stroke-width 1.5, and even gaps of at least 32. Make each box wider than its text (about 7.5 per character plus 24) and center the text with text-anchor="middle". Start and end connectors on box edges, route them around boxes, not through them, and put arrowheads in a <marker> filled with var(--viz-line). Keep labels clear of lines. Use presentation attributes, not <style>.`
+
+const StepThroughGuide = `mark elements with data-step: data-step="2" shows from step 2 on, data-step="2-3" only during those steps, and an element with no data-step always shows. Build up from a simple first frame, changing one idea per step, in 2 to 12 steps, and keep everything in place so only what's new appears.`
+
+const ChartSpecGuide = `The spec is {"type":"bar"|"line"|"scatter","title":"…","subtitle":"…","x":{"label":"…"},"y":{"label":"…","unit":"%"},"categories":["…"],"series":[{"name":"…","values":[1,null]}]}. Bar and line need one value per category (null for a gap), up to 8 series. Scatter uses {"name":"…","points":[[x,y]]} instead, up to 3 series, with no categories. Only chart numbers you actually have, never invented ones. Compare one measure per chart, with one unit.`
+
 // AssistantRecommendSection is added to every chat turn's instructions, not
 // frozen in the segment's spec, so chats already under way can use it.
 const AssistantRecommendSection = `
@@ -111,6 +119,7 @@ const AssistantRichRepliesSection = `
 - Citations: when your reply relies on sources, number its closing list and mark each claim with the matching number, like [1] or [2]. Write the list as "Sources:" then one numbered line each, either "1. [Title](https://...)" or "2. [[Wiki page]]". Use only numbers that are in the list. The chat turns them into links to the source cards.
 - Math: write formulas between double dollar signs, $$like this$$, or on their own lines. A single dollar sign is just currency.
 - Diagrams: for a flowchart, sequence or similar diagram, write Mermaid in a fenced code block tagged mermaid. The chat draws it.
+- Charts: to show real numbers, write JSON in a fenced code block tagged chart. The chat draws it, with a table of the data. ` + ChartSpecGuide + `
 - Moments in a video: when you've read a video's captions, link the moments you mention with the video's URL and its time in seconds, like [4:32](https://www.youtube.com/watch?v=VIDEO_ID&t=272). In the chat these jump its player there.
 - Asking the person to pick: when you offer two to six clear options and need one, write a fenced code block tagged choices. Put the question on the first line, then one "- Option | short detail" line each (the detail is optional). The person answers by clicking one.
 - Saved links: list_saved_links shows the pages and videos this person saved. Bring one up when it's genuinely relevant, not as a routine nudge.`
@@ -124,7 +133,9 @@ const AssistantSVGSection = `
 - You can draw vector images: application design mockups, wireframes, diagrams, icons, logos and illustrations. Write the SVG in a fenced code block tagged svg-image. The chat shows it as an image under your reply, and the person can switch to its code, download it or save it to their Library.
 - Write one complete <svg> element with xmlns="http://www.w3.org/2000/svg", a viewBox, and width and height.
 - It is displayed as a static image: scripts, links and hover or click behaviour don't work, and it can't load anything external, including web fonts and remote images. Use system-ui or generic font families, and embed any raster image as a data: URI.
-- It sits on a white background; draw your own background if you want another.
+- For a diagram you're explaining something with, prefer this to Mermaid. ` + DiagramStyleGuide + `
+- For a process that builds up, write a step-through instead: a fenced code block tagged svg-steps holding the SVG, then one numbered caption per step on the lines after </svg>. In the SVG, ` + StepThroughGuide + `
+- It sits on the chat's background when it uses the palette, and on white when it doesn't.
 - Use an ordinary code block tagged svg when the person wants code to read or copy, and an interactive app when they need to click or tweak something.
 - For a mockup the person will want to iterate on, use a canvas instead: canvas_create with kind svg. Style it with presentation attributes, not <style> or foreignObject, which a canvas can't show. canvas_read gives each element's data-vid; canvas_patch addresses elements by it.`
 

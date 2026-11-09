@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -240,6 +241,22 @@ func TestAttentionAndCrossTabApproval(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("global search missed agent")
+	}
+	// Partial and misspelled names match, and ticket runs are searchable.
+	for query, kind := range map[string]api.LinkTargetKind{"Atl": api.LinkTargetKindAgent, "Atlsa": api.LinkTargetKindAgent, "PAY-214": api.LinkTargetKindRun} {
+		r, err := http.Get(ts.URL + "/api/v1/search?q=" + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got api.Search200JSONResponse
+		err = json.NewDecoder(r.Body).Decode(&got)
+		r.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.ContainsFunc(got.Hits, func(h api.SearchHit) bool { return h.Target.Kind == kind && h.Score > 0 }) {
+			t.Fatalf("search %q missed a scored %s: %+v", query, kind, got.Hits)
+		}
 	}
 	searchResp2, err := http.Get(ts.URL + "/api/v1/search?q=PAY-214&project=BIL")
 	if err != nil {

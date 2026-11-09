@@ -17,19 +17,24 @@ import (
 )
 
 const (
-	learningMaxBlocks, learningBodyRunes = 60, 40000
-	learningMaxChecks                    = 6
+	learningMaxBlocks, learningBodyRunes         = 60, 40000
+	learningMaxChecks                            = 6
+	learningMaxVisuals                           = 6
+	learningMaxAltRunes, learningMaxCaptionRunes = 300, 500
 	// learningRevealAfter is how many wrong tries it takes to show the answer.
 	learningRevealAfter = 2
 )
 
 // LessonBlock is one piece of a lesson body.
 type LessonBlock struct {
-	Kind       string `json:"kind" jsonschema:"heading, text (Markdown) or code"`
-	Text       string `json:"text"`
-	Lang       string `json:"lang,omitempty" jsonschema:"For code: its language"`
-	Provenance string `json:"provenance,omitempty" jsonschema:"For text: sourced or model_knowledge"`
-	Sources    []int  `json:"sources,omitempty" jsonschema:"For sourced text: the source numbers that support it"`
+	Kind       string   `json:"kind" jsonschema:"heading, text (Markdown), code, diagram (SVG) or chart (JSON spec)"`
+	Text       string   `json:"text" jsonschema:"The content: for a diagram its SVG, for a chart its JSON spec"`
+	Lang       string   `json:"lang,omitempty" jsonschema:"For code: its language"`
+	Provenance string   `json:"provenance,omitempty" jsonschema:"For text, diagrams and charts: sourced or model_knowledge"`
+	Sources    []int    `json:"sources,omitempty" jsonschema:"For sourced blocks: the source numbers that support it"`
+	Alt        string   `json:"alt,omitempty" jsonschema:"For diagrams and charts: what it shows, for someone who can't see it"`
+	Caption    string   `json:"caption,omitempty" jsonschema:"For diagrams and charts: one line on what to notice (Markdown)"`
+	Steps      []string `json:"steps,omitempty" jsonschema:"For a step-through diagram: one caption per step, 2 to 12"`
 }
 
 // LessonCheckInput is one knowledge check.
@@ -65,31 +70,48 @@ func (in *LessonSubmission) validate(objectives []string, sources map[int]bool) 
 		}
 		return nil
 	}
+	checkProvenance := func(i int, b *LessonBlock) error {
+		switch b.Provenance {
+		case "sourced":
+			if len(b.Sources) == 0 {
+				return apperr.Invalid("blocks", "sourced block %d cites no sources: cite them, or mark it model_knowledge", i)
+			}
+			return citedKnown("blocks", b.Sources)
+		case "model_knowledge":
+			b.Sources = nil
+			return nil
+		}
+		return apperr.Invalid("blocks", "%s block %d needs a provenance of sourced or model_knowledge", b.Kind, i)
+	}
+	visuals := 0
 	for i := range in.Blocks {
 		b := &in.Blocks[i]
 		if strings.TrimSpace(b.Text) == "" {
 			return apperr.Invalid("blocks", "block %d is empty", i)
 		}
-		runes += utf8.RuneCountInString(b.Text)
 		switch b.Kind {
 		case "heading", "code":
 			b.Provenance, b.Sources = "", nil
+			b.Alt, b.Caption, b.Steps = "", "", nil
+			runes += utf8.RuneCountInString(b.Text)
 		case "text":
-			switch b.Provenance {
-			case "sourced":
-				if len(b.Sources) == 0 {
-					return apperr.Invalid("blocks", "sourced block %d cites no sources: cite them, or mark it model_knowledge", i)
-				}
-				if err := citedKnown("blocks", b.Sources); err != nil {
-					return err
-				}
-			case "model_knowledge":
-				b.Sources = nil
-			default:
-				return apperr.Invalid("blocks", "text block %d needs a provenance of sourced or model_knowledge", i)
+			if err := checkProvenance(i, b); err != nil {
+				return err
+			}
+			b.Alt, b.Caption, b.Steps = "", "", nil
+			runes += utf8.RuneCountInString(b.Text)
+		case "diagram", "chart":
+			if visuals++; visuals > learningMaxVisuals {
+				return apperr.Invalid("blocks", "at most %d diagrams and charts in a lesson", learningMaxVisuals)
+			}
+			if err := checkProvenance(i, b); err != nil {
+				return err
+			}
+			if err := checkVisualBlock(i, b); err != nil {
+				return err
 			}
 		default:
-			return apperr.Invalid("blocks", "block %d: kind must be heading, text or code", i)
+			return apperr.Invalid("blocks", "block %d: kind must be heading, text, code, diagram or chart", i)
 		}
 	}
 	if runes > learningBodyRunes {
@@ -143,6 +165,37 @@ func (in *LessonSubmission) validate(objectives []string, sources map[int]bool) 
 		if !covered[o] {
 			return apperr.Invalid("checks", "no check tests the objective %q", o)
 		}
+	}
+	return nil
+}
+
+// checkVisualBlock validates a diagram or chart. It has its own size limit, so
+// a lesson's visuals don't eat into its text.
+func checkVisualBlock(i int, b *LessonBlock) error {
+	b.Text, b.Alt, b.Caption = strings.TrimSpace(b.Text), strings.TrimSpace(b.Alt), strings.TrimSpace(b.Caption)
+	if b.Alt == "" {
+		return apperr.Invalid("blocks", "%s block %d needs alt text saying what it shows", b.Kind, i)
+	}
+	if utf8.RuneCountInString(b.Alt) > learningMaxAltRunes || utf8.RuneCountInString(b.Caption) > learningMaxCaptionRunes {
+		return apperr.Invalid("blocks", "%s block %d: alt is at most %d characters and caption %d", b.Kind, i, learningMaxAltRunes, learningMaxCaptionRunes)
+	}
+	var err error
+	if b.Kind == "chart" {
+		b.Steps = nil
+		err = CheckLessonChart(b.Text)
+	} else {
+		if n := len(b.Steps); n == 1 || n > visualMaxSteps {
+			return apperr.Invalid("blocks", "diagram block %d: a step-through has 2 to %d steps", i, visualMaxSteps)
+		}
+		for j := range b.Steps {
+			if b.Steps[j] = strings.TrimSpace(b.Steps[j]); b.Steps[j] == "" || utf8.RuneCountInString(b.Steps[j]) > learningMaxAltRunes {
+				return apperr.Invalid("blocks", "diagram block %d: step %d needs a caption of at most %d characters", i, j+1, learningMaxAltRunes)
+			}
+		}
+		err = CheckLessonDiagram(b.Text, len(b.Steps))
+	}
+	if err != nil {
+		return apperr.Invalid("blocks", "%s block %d: %s", b.Kind, i, err)
 	}
 	return nil
 }
