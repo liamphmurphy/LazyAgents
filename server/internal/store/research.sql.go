@@ -42,8 +42,8 @@ func (q *Queries) ActiveResearchJobs(ctx context.Context) ([]ActiveResearchJobsR
 }
 
 const createResearchJob = `-- name: CreateResearchJob :one
-INSERT INTO research_jobs (workspace_id, chat_id, user_id, message_id, title, max_sources, max_minutes, max_cost_micros, kind)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind
+INSERT INTO research_jobs (workspace_id, chat_id, user_id, message_id, title, max_sources, max_minutes, max_cost_micros, kind, report_length, report_tone)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone
 `
 
 type CreateResearchJobParams struct {
@@ -56,6 +56,8 @@ type CreateResearchJobParams struct {
 	MaxMinutes    int32
 	MaxCostMicros *int64
 	Kind          string
+	ReportLength  string
+	ReportTone    string
 }
 
 func (q *Queries) CreateResearchJob(ctx context.Context, arg CreateResearchJobParams) (ResearchJob, error) {
@@ -69,6 +71,8 @@ func (q *Queries) CreateResearchJob(ctx context.Context, arg CreateResearchJobPa
 		arg.MaxMinutes,
 		arg.MaxCostMicros,
 		arg.Kind,
+		arg.ReportLength,
+		arg.ReportTone,
 	)
 	var i ResearchJob
 	err := row.Scan(
@@ -89,6 +93,8 @@ func (q *Queries) CreateResearchJob(ctx context.Context, arg CreateResearchJobPa
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Kind,
+		&i.ReportLength,
+		&i.ReportTone,
 	)
 	return i, err
 }
@@ -127,7 +133,7 @@ func (q *Queries) CreateResearchTask(ctx context.Context, arg CreateResearchTask
 }
 
 const getResearchJob = `-- name: GetResearchJob :one
-SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind FROM research_jobs WHERE id = $1 AND chat_id = $2
+SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone FROM research_jobs WHERE id = $1 AND chat_id = $2
 `
 
 type GetResearchJobParams struct {
@@ -156,12 +162,14 @@ func (q *Queries) GetResearchJob(ctx context.Context, arg GetResearchJobParams) 
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Kind,
+		&i.ReportLength,
+		&i.ReportTone,
 	)
 	return i, err
 }
 
 const listResearchJobs = `-- name: ListResearchJobs :many
-SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind FROM research_jobs WHERE chat_id = $1 AND kind = 'chat' ORDER BY created_at
+SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone FROM research_jobs WHERE chat_id = $1 AND kind = 'chat' ORDER BY created_at
 `
 
 func (q *Queries) ListResearchJobs(ctx context.Context, chatID uuid.UUID) ([]ResearchJob, error) {
@@ -191,6 +199,8 @@ func (q *Queries) ListResearchJobs(ctx context.Context, chatID uuid.UUID) ([]Res
 			&i.CreatedAt,
 			&i.FinishedAt,
 			&i.Kind,
+			&i.ReportLength,
+			&i.ReportTone,
 		); err != nil {
 			return nil, err
 		}
@@ -258,7 +268,7 @@ func (q *Queries) ListResearchTasks(ctx context.Context, jobID uuid.UUID) ([]Lis
 }
 
 const liveResearchJobsForChat = `-- name: LiveResearchJobsForChat :many
-SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind FROM research_jobs WHERE chat_id = $1 AND state IN ('running', 'finishing', 'ready', 'writing')
+SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone FROM research_jobs WHERE chat_id = $1 AND state IN ('running', 'finishing', 'ready', 'writing')
 `
 
 func (q *Queries) LiveResearchJobsForChat(ctx context.Context, chatID uuid.UUID) ([]ResearchJob, error) {
@@ -288,6 +298,8 @@ func (q *Queries) LiveResearchJobsForChat(ctx context.Context, chatID uuid.UUID)
 			&i.CreatedAt,
 			&i.FinishedAt,
 			&i.Kind,
+			&i.ReportLength,
+			&i.ReportTone,
 		); err != nil {
 			return nil, err
 		}
@@ -300,7 +312,7 @@ func (q *Queries) LiveResearchJobsForChat(ctx context.Context, chatID uuid.UUID)
 }
 
 const lockResearchJob = `-- name: LockResearchJob :one
-SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind FROM research_jobs WHERE id = $1 FOR UPDATE
+SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone FROM research_jobs WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockResearchJob(ctx context.Context, id uuid.UUID) (ResearchJob, error) {
@@ -324,6 +336,8 @@ func (q *Queries) LockResearchJob(ctx context.Context, id uuid.UUID) (ResearchJo
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Kind,
+		&i.ReportLength,
+		&i.ReportTone,
 	)
 	return i, err
 }
@@ -358,7 +372,7 @@ func (q *Queries) ResearchJobFetches(ctx context.Context, jobID uuid.UUID) (int3
 }
 
 const researchJobForMessage = `-- name: ResearchJobForMessage :one
-SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind FROM research_jobs WHERE message_id = $1
+SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone FROM research_jobs WHERE message_id = $1
 `
 
 func (q *Queries) ResearchJobForMessage(ctx context.Context, messageID *uuid.UUID) (ResearchJob, error) {
@@ -382,12 +396,14 @@ func (q *Queries) ResearchJobForMessage(ctx context.Context, messageID *uuid.UUI
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Kind,
+		&i.ReportLength,
+		&i.ReportTone,
 	)
 	return i, err
 }
 
 const researchJobForRun = `-- name: ResearchJobForRun :one
-SELECT j.id, j.workspace_id, j.chat_id, j.user_id, j.message_id, j.title, j.state, j.max_sources, j.max_minutes, j.max_cost_micros, j.stop_reason, j.error, j.report_artifact_id, j.report, j.created_at, j.finished_at, j.kind FROM research_jobs j JOIN research_tasks t ON t.job_id = j.id WHERE t.run_id = $1
+SELECT j.id, j.workspace_id, j.chat_id, j.user_id, j.message_id, j.title, j.state, j.max_sources, j.max_minutes, j.max_cost_micros, j.stop_reason, j.error, j.report_artifact_id, j.report, j.created_at, j.finished_at, j.kind, j.report_length, j.report_tone FROM research_jobs j JOIN research_tasks t ON t.job_id = j.id WHERE t.run_id = $1
 `
 
 func (q *Queries) ResearchJobForRun(ctx context.Context, runID uuid.UUID) (ResearchJob, error) {
@@ -411,6 +427,8 @@ func (q *Queries) ResearchJobForRun(ctx context.Context, runID uuid.UUID) (Resea
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Kind,
+		&i.ReportLength,
+		&i.ReportTone,
 	)
 	return i, err
 }
@@ -435,7 +453,7 @@ func (q *Queries) ResearchTaskForRun(ctx context.Context, runID uuid.UUID) (Rese
 }
 
 const setResearchJobReport = `-- name: SetResearchJobReport :one
-UPDATE research_jobs SET state = 'done', report = $2, report_artifact_id = $3, finished_at = now() WHERE id = $1 RETURNING id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind
+UPDATE research_jobs SET state = 'done', report = $2, report_artifact_id = $3, finished_at = now() WHERE id = $1 RETURNING id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone
 `
 
 type SetResearchJobReportParams struct {
@@ -465,6 +483,8 @@ func (q *Queries) SetResearchJobReport(ctx context.Context, arg SetResearchJobRe
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Kind,
+		&i.ReportLength,
+		&i.ReportTone,
 	)
 	return i, err
 }
@@ -472,7 +492,7 @@ func (q *Queries) SetResearchJobReport(ctx context.Context, arg SetResearchJobRe
 const setResearchJobState = `-- name: SetResearchJobState :one
 UPDATE research_jobs SET state = $2, stop_reason = $3, error = $4,
   finished_at = CASE WHEN $2 IN ('done', 'stopped', 'failed') THEN now() ELSE finished_at END
-WHERE id = $1 RETURNING id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind
+WHERE id = $1 RETURNING id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone
 `
 
 type SetResearchJobStateParams struct {
@@ -508,6 +528,8 @@ func (q *Queries) SetResearchJobState(ctx context.Context, arg SetResearchJobSta
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Kind,
+		&i.ReportLength,
+		&i.ReportTone,
 	)
 	return i, err
 }
@@ -527,7 +549,7 @@ func (q *Queries) SetResearchTaskFindings(ctx context.Context, arg SetResearchTa
 }
 
 const writingResearchJobForChat = `-- name: WritingResearchJobForChat :one
-SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind FROM research_jobs WHERE chat_id = $1 AND state = 'writing' ORDER BY created_at DESC LIMIT 1 FOR UPDATE
+SELECT id, workspace_id, chat_id, user_id, message_id, title, state, max_sources, max_minutes, max_cost_micros, stop_reason, error, report_artifact_id, report, created_at, finished_at, kind, report_length, report_tone FROM research_jobs WHERE chat_id = $1 AND state = 'writing' ORDER BY created_at DESC LIMIT 1 FOR UPDATE
 `
 
 func (q *Queries) WritingResearchJobForChat(ctx context.Context, chatID uuid.UUID) (ResearchJob, error) {
@@ -551,6 +573,8 @@ func (q *Queries) WritingResearchJobForChat(ctx context.Context, chatID uuid.UUI
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Kind,
+		&i.ReportLength,
+		&i.ReportTone,
 	)
 	return i, err
 }

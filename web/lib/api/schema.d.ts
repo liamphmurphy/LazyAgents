@@ -5797,7 +5797,19 @@ export interface components {
             max_minutes: number;
             /** @description Omit for no spend limit */
             max_cost_usd?: number;
+            report_length?: components["schemas"]["ResearchReportLength"];
+            report_tone?: components["schemas"]["ResearchReportTone"];
         };
+        /**
+         * @description How long the write-up should be. Omit for standard.
+         * @enum {string}
+         */
+        ResearchReportLength: "brief" | "standard" | "detailed" | "in_depth";
+        /**
+         * @description How the write-up should read. Omit for report.
+         * @enum {string}
+         */
+        ResearchReportTone: "report" | "explainer" | "essay" | "academic" | "news";
         ResearchTask: {
             label: string;
             question: string;
@@ -5835,6 +5847,8 @@ export interface components {
             state: "running" | "finishing" | "ready" | "writing" | "done" | "stopped" | "failed";
             max_sources: number;
             max_minutes: number;
+            report_length: components["schemas"]["ResearchReportLength"];
+            report_tone: components["schemas"]["ResearchReportTone"];
             /** @description Absent means no spend limit */
             max_cost_usd?: number;
             sources_read: number;

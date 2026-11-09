@@ -1,6 +1,6 @@
 -- name: CreateResearchJob :one
-INSERT INTO research_jobs (workspace_id, chat_id, user_id, message_id, title, max_sources, max_minutes, max_cost_micros, kind)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;
+INSERT INTO research_jobs (workspace_id, chat_id, user_id, message_id, title, max_sources, max_minutes, max_cost_micros, kind, report_length, report_tone)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *;
 
 -- name: CreateResearchTask :one
 INSERT INTO research_tasks (job_id, run_id, seq, label, question) VALUES ($1, $2, $3, $4, $5) RETURNING *;

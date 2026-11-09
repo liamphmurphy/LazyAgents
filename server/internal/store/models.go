@@ -734,6 +734,8 @@ type ResearchJob struct {
 	CreatedAt        time.Time
 	FinishedAt       *time.Time
 	Kind             string
+	ReportLength     string
+	ReportTone       string
 }
 
 type ResearchTask struct {

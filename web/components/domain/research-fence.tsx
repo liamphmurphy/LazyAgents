@@ -5,7 +5,7 @@ import { useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { Schemas } from "@/lib/api/client";
 import { useChatResearch, useControlResearch, useCreateWikiPage, useStartResearch } from "@/lib/api/hooks";
 import {
-  MAX_QUESTIONS, MINUTE_RANGE, SOURCE_RANGE, SPEND_OPTIONS, minutesLabel, parseResearchPlan, planReady, reportSections, researchActive, researchProgress, spendLabel,
+  LENGTH_OPTIONS, MAX_QUESTIONS, MINUTE_RANGE, SOURCE_RANGE, SPEND_OPTIONS, TONE_OPTIONS, lengthOf, minutesLabel, parseResearchPlan, planReady, reportSections, researchActive, researchProgress, spendLabel, toneOf,
   type ResearchPlan, type Spend,
 } from "@/lib/chat-research";
 import { cx } from "@/lib/cx";
@@ -25,6 +25,42 @@ const CARD = "flex w-full max-w-[680px] flex-col gap-3 rounded-xl border border-
 const LABEL = "text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary";
 const INPUT = "w-full rounded-md border border-border-strong bg-surface px-2 py-1 text-[13px] text-fg focus:border-accent focus:outline-none";
 const SPEND_KEY = "vesper.research-spend";
+const LENGTH_KEY = "vesper.research-length";
+const TONE_KEY = "vesper.research-tone";
+
+function readPref(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* Not remembered. */
+  }
+}
+
+/** A row of buttons picking one of a few options, with the picked one's hint below. */
+function Segmented<T extends string>({ label, options, value, onChange }: { label: string; options: readonly { value: T; label: string; hint: string }[]; value: T; onChange: (v: T) => void }) {
+  const picked = options.find((o) => o.value === value);
+  return (
+    <div className="flex flex-col gap-1">
+      <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1 rounded-lg bg-surface-sunken p-1">
+        <span className="px-1.5 text-xs text-fg-tertiary">{label}</span>
+        {options.map((o) => (
+          <button key={o.value} type="button" title={o.hint} aria-pressed={value === o.value} onClick={() => onChange(o.value)} className={cx("flex-1 whitespace-nowrap rounded-md px-2 py-1 text-[12.5px]", value === o.value ? "border border-accent bg-surface font-semibold text-accent" : "border border-transparent text-fg-secondary hover:text-fg")}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {picked && <p className="px-1 text-xs text-fg-tertiary">{picked.hint}</p>}
+    </div>
+  );
+}
 
 function readSpend(): Spend {
   try {
@@ -56,6 +92,9 @@ function PlanCard({ initial, messageId, chatId }: { initial: ResearchPlan; messa
   const [sources, setSources] = useState(60);
   const [minutes, setMinutes] = useState(30);
   const [spend, setSpendState] = useState<Spend>(readSpend);
+  // The persona's preset wins; otherwise what the person picked last time.
+  const [length, setLength] = useState(() => initial.length ?? lengthOf(readPref(LENGTH_KEY)) ?? "standard");
+  const [tone, setTone] = useState(() => initial.tone ?? toneOf(readPref(TONE_KEY)) ?? "report");
   const start = useStartResearch(chatId);
   const actions = useContext(RecommendActions);
   const setSpend = (s: Spend) => {
@@ -115,13 +154,15 @@ function PlanCard({ initial, messageId, chatId }: { initial: ResearchPlan; messa
           </button>
         ))}
       </div>
+      <Segmented label="Length" options={LENGTH_OPTIONS} value={length} onChange={(v) => { setLength(v); writePref(LENGTH_KEY, v); }} />
+      <Segmented label="Tone" options={TONE_OPTIONS} value={tone} onChange={(v) => { setTone(v); writePref(TONE_KEY, v); }} />
       {spend === "unlimited" && <p className="text-xs text-fg-secondary">Time and source limits still apply, and research pauses if a provider&apos;s usage limit is reached.</p>}
       {start.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{start.error.message || "Couldn’t start the research."}</p>}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="primary"
           disabled={!ready || start.isPending}
-          onClick={() => start.mutate({ message_id: messageId!, title: plan.title, questions: plan.questions, max_sources: sources, max_minutes: minutes, ...(spend === "unlimited" ? {} : { max_cost_usd: spend }) })}
+          onClick={() => start.mutate({ message_id: messageId!, title: plan.title, questions: plan.questions, max_sources: sources, max_minutes: minutes, report_length: length, report_tone: tone, ...(spend === "unlimited" ? {} : { max_cost_usd: spend }) })}
         >
           {start.isPending ? "Starting…" : "Start research"}
         </Button>
@@ -221,7 +262,8 @@ function ReportCard({ job, report, project }: { job: Job; report: Report; projec
   const sections = useMemo(() => reportSections(report.body_md, headingAnchors(report.body_md)), [report.body_md]);
   const href = `/artifacts/${job.artifact_id}`;
   const took = job.finished_at ? minutesLabel(Date.parse(job.finished_at) - Date.parse(job.created_at)) : "";
-  const stats = [`${job.tasks.length} ${job.tasks.length === 1 ? "researcher" : "researchers"}`, `${job.sources_read} sources`, took, job.max_cost_usd !== undefined ? `$${job.spent_usd.toFixed(2)}` : ""].filter(Boolean).join(" · ");
+  const style = [LENGTH_OPTIONS.find((o) => o.value === job.report_length)?.label, TONE_OPTIONS.find((o) => o.value === job.report_tone)?.label].filter(Boolean).join(" ");
+  const stats = [style, `${job.tasks.length} ${job.tasks.length === 1 ? "researcher" : "researchers"}`, `${job.sources_read} sources`, took, job.max_cost_usd !== undefined ? `$${job.spent_usd.toFixed(2)}` : ""].filter(Boolean).join(" · ");
   return (
     <div data-testid="research-report" className={cx(CARD, "gap-3.5")}>
       <div className="flex flex-wrap items-center gap-2">

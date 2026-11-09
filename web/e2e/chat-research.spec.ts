@@ -36,7 +36,7 @@ async function serve(page: Page, get: (message: string) => object, posts: unknow
   });
 }
 
-const base = (message: string) => ({ id: "11111111-1111-4111-8111-111111111111", message_id: message, title: "Local TTS", max_sources: 60, max_minutes: 30, sources_read: 8, spent_usd: 1.25, created_at: now() });
+const base = (message: string) => ({ id: "11111111-1111-4111-8111-111111111111", message_id: message, title: "Local TTS", max_sources: 60, max_minutes: 30, report_length: "standard", report_tone: "report", sources_read: 8, spent_usd: 1.25, created_at: now() });
 
 test("Research sends one message asking for a plan, then resets", async ({ page }) => {
   const mock = await open(page);
@@ -47,7 +47,7 @@ test("Research sends one message asking for a plan, then resets", async ({ page 
 
 test("an edited plan with no spend limit starts research, then shows progress", async ({ page }) => {
   await open(page);
-  const posts: { max_cost_usd?: number; questions?: unknown[]; max_sources?: number }[] = [];
+  const posts: { max_cost_usd?: number; questions?: unknown[]; max_sources?: number; report_length?: string; report_tone?: string }[] = [];
   await serve(page, (m) => ({ ...base(m), state: "running", tasks: [task("Quality", "done"), task("Latency", "running", { reading: "https://github.com/hexgrad/kokoro" }), task("Licensing", "queued", { sources_read: 0, findings: 0 })] }), posts as unknown[]);
 
   const plan = page.getByTestId("research-plan");
@@ -60,6 +60,8 @@ test("an edited plan with no spend limit starts research, then shows progress", 
   await plan.getByRole("spinbutton", { name: "Sources, up to" }).fill("80");
   await plan.getByRole("button", { name: "Unlimited" }).click();
   await expect(plan).toContainText("Time and source limits still apply");
+  await plan.getByRole("group", { name: "Length" }).getByRole("button", { name: "Detailed" }).click();
+  await plan.getByRole("group", { name: "Tone" }).getByRole("button", { name: "Essay" }).click();
   await plan.getByRole("button", { name: "Start research" }).click();
 
   const progress = page.getByTestId("research-progress");
@@ -70,6 +72,8 @@ test("an edited plan with no spend limit starts research, then shows progress", 
   expect(posts[0].max_cost_usd).toBeUndefined();
   expect(posts[0].questions).toHaveLength(3);
   expect(posts[0].max_sources).toBe(80);
+  expect(posts[0].report_length).toBe("detailed");
+  expect(posts[0].report_tone).toBe("essay");
 
   await progress.getByRole("button", { name: "Finish with this" }).click();
   await expect.poll(() => posts.at(-1)).toBe("finish");

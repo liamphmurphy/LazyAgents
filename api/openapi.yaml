@@ -6471,6 +6471,16 @@ components:
         max_sources: { type: integer, minimum: 5, maximum: 200 }
         max_minutes: { type: integer, minimum: 5, maximum: 120 }
         max_cost_usd: { type: number, description: Omit for no spend limit }
+        report_length: { $ref: "#/components/schemas/ResearchReportLength" }
+        report_tone: { $ref: "#/components/schemas/ResearchReportTone" }
+    ResearchReportLength:
+      type: string
+      enum: [brief, standard, detailed, in_depth]
+      description: How long the write-up should be. Omit for standard.
+    ResearchReportTone:
+      type: string
+      enum: [report, explainer, essay, academic, news]
+      description: How the write-up should read. Omit for report.
     ResearchTask:
       type: object
       required: [label, question, state, sources_read, findings]
@@ -6514,7 +6524,7 @@ components:
         body_md: { type: string }
     ResearchJob:
       type: object
-      required: [id, title, state, max_sources, max_minutes, sources_read, spent_usd, tasks, created_at]
+      required: [id, title, state, max_sources, max_minutes, report_length, report_tone, sources_read, spent_usd, tasks, created_at]
       properties:
         id: { type: string, format: uuid }
         message_id: { type: string, format: uuid }
@@ -6522,6 +6532,8 @@ components:
         state: { type: string, enum: [running, finishing, ready, writing, done, stopped, failed] }
         max_sources: { type: integer }
         max_minutes: { type: integer }
+        report_length: { $ref: "#/components/schemas/ResearchReportLength" }
+        report_tone: { $ref: "#/components/schemas/ResearchReportTone" }
         max_cost_usd: { type: number, description: Absent means no spend limit }
         sources_read: { type: integer }
         spent_usd: { type: number }
