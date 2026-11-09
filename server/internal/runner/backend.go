@@ -44,6 +44,9 @@ type Backend interface {
 	WorkspaceDir(runID string) string
 	// EnsureWorkspace creates the run's workspace if it doesn't exist.
 	EnsureWorkspace(ctx context.Context, runID string) error
+	// HasWorkspace reports whether this backend holds the run's workspace. A
+	// run started on the other backend has one there, not here.
+	HasWorkspace(ctx context.Context, runID string) (bool, error)
 	RemoveWorkspace(ctx context.Context, runID string) error
 	Start(ctx context.Context, runID string, spec ExecSpec) (Process, error)
 	// ReadOutbox and RemoveOutbox serve an image-generating chat's outbox
@@ -85,6 +88,14 @@ func (l *Local) WorkspaceDir(runID string) string {
 
 func (l *Local) EnsureWorkspace(_ context.Context, runID string) error {
 	return os.MkdirAll(l.WorkspaceDir(runID), 0o755)
+}
+
+func (l *Local) HasWorkspace(_ context.Context, runID string) (bool, error) {
+	_, err := os.Stat(l.WorkspaceDir(runID))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (l *Local) RemoveWorkspace(_ context.Context, runID string) error {

@@ -177,6 +177,11 @@ LIMIT sqlc.arg(row_limit);
 -- name: ChatMessageForTurn :one
 SELECT * FROM chat_messages WHERE run_turn_id = $1 AND role = 'user';
 
+-- name: ChatSessionForEndedRun :one
+-- A segment no longer current is found through the messages it answered.
+SELECT c.* FROM chat_sessions c
+WHERE c.id = (SELECT m.session_id FROM chat_messages m WHERE m.run_id = $1 LIMIT 1);
+
 -- name: UpdateChatTitleArchived :one
 UPDATE chat_sessions SET title = $2, archived = $3, revision = revision + 1, updated_at = now()
 WHERE id = $1 RETURNING *;

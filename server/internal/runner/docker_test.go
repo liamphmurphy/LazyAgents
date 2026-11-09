@@ -67,6 +67,32 @@ func TestDockerBackend(t *testing.T) {
 	}
 }
 
+// HasWorkspace is how a runner tells its own runs from the other backend's.
+func TestDockerHasWorkspace(t *testing.T) {
+	if os.Getenv("RUNNER_DOCKER_TEST") == "" {
+		t.Skip("set RUNNER_DOCKER_TEST=1 (needs Docker)")
+	}
+	ctx := context.Background()
+	d := &runner.Docker{Socket: dockerSocket()}
+	id := "has-workspace-test"
+	if has, err := d.HasWorkspace(ctx, id); err != nil || has {
+		t.Fatalf("before: %v %v", has, err)
+	}
+	if err := d.EnsureWorkspace(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	defer d.RemoveWorkspace(ctx, id)
+	if has, err := d.HasWorkspace(ctx, id); err != nil || !has {
+		t.Fatalf("after ensure: %v %v", has, err)
+	}
+	if err := d.RemoveWorkspace(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if has, err := d.HasWorkspace(ctx, id); err != nil || has {
+		t.Fatalf("after remove: %v %v", has, err)
+	}
+}
+
 func dockerSocket() string {
 	if h := os.Getenv("DOCKER_HOST"); strings.HasPrefix(h, "unix://") {
 		return strings.TrimPrefix(h, "unix://")

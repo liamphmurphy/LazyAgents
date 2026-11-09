@@ -144,6 +144,18 @@ func (d *Docker) EnsureWorkspace(ctx context.Context, runID string) error {
 	return nil
 }
 
+func (d *Docker) HasWorkspace(ctx context.Context, runID string) (bool, error) {
+	res, err := d.do(ctx, "GET", "/volumes/"+volumeName(runID), nil, "", nil)
+	if isStatus(err, 404) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	res.Body.Close()
+	return true, nil
+}
+
 func (d *Docker) RemoveWorkspace(ctx context.Context, runID string) error {
 	for _, name := range []string{volumeName(runID), homeVolumeName(runID)} {
 		_, err := d.do(ctx, "DELETE", "/volumes/"+name+"?force=1", nil, "", nil)

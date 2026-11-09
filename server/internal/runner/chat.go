@@ -369,6 +369,35 @@ func personaFor(role string, speaker *uuid.UUID) *uuid.UUID {
 
 // failChat handles setup/invocation failures before a harness result exists.
 // The segment stays usable; pending/running records cannot block its next turn.
+// restartChatSegment answers a turn whose segment can't continue here (its
+// session or workspace is gone, or on the other backend) from a new segment
+// that gets the conversation so far. It reports false when the turn isn't
+// answering a message, so the caller's normal failure handling applies.
+func (r *Runner) restartChatSegment(ctx context.Context, c runCtx, turn store.RunTurn, code int, logKey *string) bool {
+	restarted := false
+	err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		chat, err := lockRunChat(ctx, q, c.run)
+		if err != nil {
+			return err
+		}
+		run, err := q.LockRun(ctx, c.run.ID)
+		if err != nil || run.State != "running" {
+			return err
+		}
+		if restarted, err = runs.RestartChatSegment(ctx, q, chat, run, turn); err != nil || !restarted {
+			return err
+		}
+		exit := int32(code)
+		return q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, ExitCode: &exit, LogKey: logKey, Usage: []byte("{}")})
+	})
+	if err != nil {
+		r.Log.Error("restart chat segment", "run", c.run.ID, "err", err)
+		return false
+	}
+	return restarted
+}
+
 func (r *Runner) failChat(ctx context.Context, c runCtx, outcome string) {
 	err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)

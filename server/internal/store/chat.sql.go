@@ -438,6 +438,47 @@ func (q *Queries) ChatParticipants(ctx context.Context, chatIds []uuid.UUID) ([]
 	return items, nil
 }
 
+const chatSessionForEndedRun = `-- name: ChatSessionForEndedRun :one
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.work_branch, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden, c.connector_ids FROM chat_sessions c
+WHERE c.id = (SELECT m.session_id FROM chat_messages m WHERE m.run_id = $1 LIMIT 1)
+`
+
+// A segment no longer current is found through the messages it answered.
+func (q *Queries) ChatSessionForEndedRun(ctx context.Context, runID *uuid.UUID) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, chatSessionForEndedRun, runID)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+		&i.PersonaID,
+		&i.RepoUrl,
+		&i.WorkBranch,
+		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
+		&i.RelayLimit,
+		&i.InterruptMessageID,
+		&i.LastReadSeq,
+		&i.Hidden,
+		&i.ConnectorIds,
+	)
+	return i, err
+}
+
 const chatSessionForRun = `-- name: ChatSessionForRun :one
 SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, work_branch, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids FROM chat_sessions WHERE current_run_id = $1
 `

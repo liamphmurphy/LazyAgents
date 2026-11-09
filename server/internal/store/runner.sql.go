@@ -188,6 +188,7 @@ SELECT id FROM runs r
 WHERE r.workspace_volume IS NOT NULL
   AND (r.state = 'completed' OR (r.purpose = 'chat' AND r.state IN ('failed', 'cancelled')))
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
+  AND r.id <> ALL($1::uuid[]) -- workspaces on another backend
 ORDER BY r.checkpoint_error IS NOT NULL -- a stuck checkpoint must not starve the rest
 LIMIT 20
 `
@@ -195,8 +196,8 @@ LIMIT 20
 // Workspaces of runs that completed while no turn was running; the runner
 // removes them. Failed and cancelled runs keep theirs (unpushed work), except
 // chat runs: their scratch workspace never holds work worth keeping.
-func (q *Queries) EndedRunsWithWorkspace(ctx context.Context) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, endedRunsWithWorkspace)
+func (q *Queries) EndedRunsWithWorkspace(ctx context.Context, skip []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, endedRunsWithWorkspace, skip)
 	if err != nil {
 		return nil, err
 	}
