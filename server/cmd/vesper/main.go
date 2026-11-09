@@ -20,6 +20,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/google/uuid"
+
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
@@ -294,6 +296,10 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
 		Workflows: workflows,
 		Scheduled: &runs.Service{Pool: pool, Secrets: secretStore, Tracker: &tracker.Service{Pool: pool}, Artifacts: &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, RequireHarnessKey: rc.Backend == "docker"},
+		StoreSecret: func(ctx context.Context, ws, by uuid.UUID, name, value string) error {
+			_, err := secretStore.Set(ctx, ws, by, secrets.SetInput{Name: name, Value: value})
+			return err
+		},
 	}
 	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
 	return r.Run(ctx)

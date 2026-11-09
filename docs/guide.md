@@ -273,6 +273,18 @@ requests with `gh`. A `git:ssh` key alone doesn't cover that. `make
 github-login` stores or replaces just that token. A token added later takes
 effect on the next turn, including in chats that already have a workspace.
 
+You can also sign in from **Settings → Connections & secrets** instead of the
+terminal. While a Docker runner is online, Anthropic, OpenAI and the GitHub
+token show a **Sign in** button until they're set. The runner starts the
+provider's own CLI (`claude setup-token`, `codex login --device-auth` or
+`gh auth login --web`) in a throwaway container from the agent image, with no
+volumes. Settings shows the link to open and, for Codex and GitHub, the
+one-time code to enter there. Claude's page shows a code that you paste back
+into Settings. The runner stores the result as the usual secret, so the login
+never passes through the browser. A sign-in gives up after 15 minutes, and
+starting another for the same provider replaces it. To replace a key that's
+already set, use **Replace** or the `make` targets above.
+
 Switching backends keeps your chats. A chat whose session is on the other
 backend continues in a new session with its recent messages (the last 40, up to
 24,000 characters in total), and says so in the chat. Its old workspace stays

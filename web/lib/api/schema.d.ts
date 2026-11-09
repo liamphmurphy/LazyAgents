@@ -807,6 +807,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sign-ins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a Claude, Codex or GitHub sign-in. The Docker runner runs the provider's CLI in a throwaway container and stores the login as harness:anthropic, harness:openai or git:pat. Replaces a sign-in already in progress for that provider. 409 without a Docker runner or SECRETS_KEY. */
+        post: operations["startSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-ins/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** A sign-in's progress */
+        get: operations["getSignIn"];
+        put?: never;
+        post?: never;
+        /** Cancel a sign-in in progress */
+        delete: operations["cancelSignIn"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-ins/{id}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hand Claude's sign-in code to the waiting CLI (Claude only, once its link is shown) */
+        post: operations["submitSignInCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/approvals/{id}/{decision}": {
         parameters: {
             query?: never;
@@ -3970,12 +4026,35 @@ export interface components {
             secrets: components["schemas"]["SecretInfo"][];
             /** @description SECRETS_KEY is set */
             key_configured: boolean;
+            /** @description A Docker runner is online, so Claude, Codex and GitHub can be signed in from Settings */
+            sign_in_available: boolean;
             /** @description Well-known secret names and the scope each backs */
             known: {
                 name: string;
                 grants_scope?: string;
                 description: string;
             }[];
+        };
+        /** @enum {string} */
+        SignInProvider: "claude" | "codex" | "github";
+        SignIn: {
+            /** Format: uuid */
+            id: string;
+            provider: components["schemas"]["SignInProvider"];
+            /**
+             * @description pending: waiting for the runner. running: the CLI is up, url is set once it printed one. verifying: the pasted code is being checked.
+             * @enum {string}
+             */
+            status: "pending" | "running" | "verifying" | "done" | "failed" | "cancelled";
+            /** @description The provider's sign-in page; empty until the CLI printed it */
+            url: string;
+            /** @description The one-time code to enter on that page (Codex and GitHub) */
+            user_code: string;
+            /** @description Claude is waiting for the code its sign-in page shows */
+            needs_code: boolean;
+            error: string;
+            /** Format: date-time */
+            expires_at: string;
         };
         PlanStep: {
             position: number;
@@ -7437,6 +7516,106 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    startSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    provider: components["schemas"]["SignInProvider"];
+                };
+            };
+        };
+        responses: {
+            /** @description Started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignIn"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sign-in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignIn"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    submitSignInCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Handed over */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignIn"];
+                };
             };
             default: components["responses"]["Error"];
         };

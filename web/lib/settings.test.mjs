@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONNECTIONS, connectionState, missingConnections, needsAttention, otherSecrets, savedMessage } from "./settings.ts";
+import { CONNECTIONS, connectionState, missingConnections, needsAttention, otherSecrets, savedMessage, signInView } from "./settings.ts";
 
 const at = "2026-11-01T00:00:00Z";
 const ws = (name) => ({ id: name, name, updated_at: at });
@@ -40,4 +40,27 @@ test("sidebar attention: missing key or missing harness secret", () => {
   assert.equal(needsAttention({ key_configured: true, secrets: both }), false);
   assert.equal(needsAttention({ key_configured: false, secrets: both }), true);
   assert.equal(needsAttention({ key_configured: true, secrets: both.slice(1) }), true);
+});
+
+test("Claude, Codex and the GitHub token can be signed in; the SSH key can't", () => {
+  assert.deepEqual(
+    CONNECTIONS.map((c) => [c.name, c.signIn ?? null]),
+    [["harness:anthropic", "claude"], ["harness:openai", "codex"], ["git:ssh", null], ["git:pat", "github"]],
+  );
+});
+
+test("signInView follows the sign-in through its steps", () => {
+  const s = (o) => ({ status: "running", url: "", user_code: "", needs_code: false, error: "", ...o });
+  assert.deepEqual(signInView(s({ status: "pending" })), { step: "starting" });
+  assert.deepEqual(signInView(s({})), { step: "starting" });
+  assert.deepEqual(signInView(s({ url: "https://github.com/login/device", user_code: "AB12-CD34" })), {
+    step: "open", url: "https://github.com/login/device", code: "AB12-CD34", pasteBack: false,
+  });
+  assert.deepEqual(signInView(s({ url: "https://claude.com/x", needs_code: true })), { step: "open", url: "https://claude.com/x", code: "", pasteBack: true });
+  // Claude after the code is pasted, before the runner picked it up.
+  assert.deepEqual(signInView(s({ url: "https://claude.com/x" })), { step: "verifying" });
+  assert.deepEqual(signInView(s({ status: "verifying", url: "https://claude.com/x" })), { step: "verifying" });
+  assert.deepEqual(signInView(s({ status: "done" })), { step: "done" });
+  assert.deepEqual(signInView(s({ status: "failed", error: "timed out" })), { step: "failed", message: "timed out" });
+  assert.equal(signInView(s({ status: "cancelled" })).step, "failed");
 });

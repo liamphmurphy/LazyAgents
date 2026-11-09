@@ -1074,6 +1074,85 @@ paths:
           description: Deleted
         default: { $ref: "#/components/responses/Error" }
 
+  /sign-ins:
+    post:
+      operationId: startSignIn
+      summary: >-
+        Start a Claude, Codex or GitHub sign-in. The Docker runner runs the
+        provider's CLI in a throwaway container and stores the login as
+        harness:anthropic, harness:openai or git:pat. Replaces a sign-in
+        already in progress for that provider. 409 without a Docker runner or SECRETS_KEY.
+      tags: [secrets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider: { $ref: "#/components/schemas/SignInProvider" }
+      responses:
+        "201":
+          description: Started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignIn" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /sign-ins/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getSignIn
+      summary: A sign-in's progress
+      tags: [secrets]
+      responses:
+        "200":
+          description: Sign-in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignIn" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: cancelSignIn
+      summary: Cancel a sign-in in progress
+      tags: [secrets]
+      responses:
+        "204":
+          description: Cancelled
+        default: { $ref: "#/components/responses/Error" }
+
+  /sign-ins/{id}/code:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: submitSignInCode
+      summary: Hand Claude's sign-in code to the waiting CLI (Claude only, once its link is shown)
+      tags: [secrets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        "200":
+          description: Handed over
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignIn" }
+        default: { $ref: "#/components/responses/Error" }
+
   /approvals/{id}/{decision}:
     parameters:
       - name: id
@@ -4707,10 +4786,11 @@ components:
         last_used_at: { type: string, format: date-time }
     SecretList:
       type: object
-      required: [secrets, key_configured, known]
+      required: [secrets, key_configured, sign_in_available, known]
       properties:
         secrets: { type: array, items: { $ref: "#/components/schemas/SecretInfo" } }
         key_configured: { type: boolean, description: SECRETS_KEY is set }
+        sign_in_available: { type: boolean, description: "A Docker runner is online, so Claude, Codex and GitHub can be signed in from Settings" }
         known:
           type: array
           description: Well-known secret names and the scope each backs
@@ -4721,6 +4801,26 @@ components:
               name: { type: string }
               grants_scope: { type: string }
               description: { type: string }
+
+    SignInProvider:
+      type: string
+      enum: [claude, codex, github]
+
+    SignIn:
+      type: object
+      required: [id, provider, status, url, user_code, needs_code, error, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { $ref: "#/components/schemas/SignInProvider" }
+        status:
+          type: string
+          enum: [pending, running, verifying, done, failed, cancelled]
+          description: "pending: waiting for the runner. running: the CLI is up, url is set once it printed one. verifying: the pasted code is being checked."
+        url: { type: string, description: The provider's sign-in page; empty until the CLI printed it }
+        user_code: { type: string, description: The one-time code to enter on that page (Codex and GitHub) }
+        needs_code: { type: boolean, description: Claude is waiting for the code its sign-in page shows }
+        error: { type: string }
+        expires_at: { type: string, format: date-time }
 
     PlanStep:
       type: object

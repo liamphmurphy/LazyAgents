@@ -542,6 +542,47 @@ export function useDeleteSecret() {
   });
 }
 
+/** A provider sign-in from Settings. Polls while the runner is driving it. */
+export function useSignIn(id: string | null) {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ["sign-ins", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const s = await unwrap(api.GET("/sign-ins/{id}", { params: { path: { id: id! } } }));
+      if (s.status === "done") await invalidateSecretDependents(qc);
+      return s;
+    },
+    refetchInterval: (q) => (q.state.data && ["done", "failed", "cancelled"].includes(q.state.data.status) ? false : 1500),
+    retry: 1,
+  });
+}
+
+export function useStartSignIn() {
+  return useMutation({
+    mutationFn: (provider: "claude" | "codex" | "github") => unwrap(api.POST("/sign-ins", { body: { provider } })),
+  });
+}
+
+export function useSubmitSignInCode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, code }: { id: string; code: string }) => unwrap(api.POST("/sign-ins/{id}/code", { params: { path: { id } }, body: { code } })),
+    onSuccess: (s) => qc.setQueryData(["sign-ins", s.id], s),
+    // The variables hold the code: don't keep them in the mutation cache.
+    gcTime: 0,
+  });
+}
+
+export function useCancelSignIn() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const r = await api.DELETE("/sign-ins/{id}", { params: { path: { id } } });
+      if (!r.response.ok) throw new Error("Couldn't cancel the sign-in");
+    },
+  });
+}
+
 // --------------------------------------------------------- runs, approvals
 
 function useTicketRefresh(key: string) {

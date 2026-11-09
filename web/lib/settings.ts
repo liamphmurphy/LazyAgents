@@ -23,7 +23,11 @@ export type Connection = {
   without: string;
   /** Runs need it (harness keys). Optional ones don't raise a warning. */
   required: boolean;
+  /** The provider's own sign-in can fill it in (Docker runner only). */
+  signIn?: SignInProvider;
 };
+
+export type SignInProvider = "claude" | "codex" | "github";
 
 export const CONNECTIONS: Connection[] = [
   {
@@ -33,6 +37,7 @@ export const CONNECTIONS: Connection[] = [
     unlocks: ["Claude Code"],
     without: "Claude Code runs fail at start.",
     required: true,
+    signIn: "claude",
   },
   {
     name: "harness:openai",
@@ -41,6 +46,7 @@ export const CONNECTIONS: Connection[] = [
     unlocks: ["Codex"],
     without: "Codex runs fail at start.",
     required: true,
+    signIn: "codex",
   },
   {
     name: "git:ssh",
@@ -57,6 +63,7 @@ export const CONNECTIONS: Connection[] = [
     unlocks: ["gh pull requests"],
     without: "Optional with SSH. Without it agents push but can’t open PRs.",
     required: false,
+    signIn: "github",
   },
 ];
 
@@ -97,3 +104,35 @@ export function savedMessage(name: string): string {
 export function needsAttention(list: { key_configured: boolean; secrets: SecretMeta[] } | undefined): boolean {
   return !!list && (!list.key_configured || missingConnections(list.secrets).length > 0);
 }
+
+/** Where a sign-in is, as Settings shows it. */
+export type SignInView =
+  | { step: "starting" }
+  | { step: "open"; url: string; code: string; pasteBack: boolean }
+  | { step: "verifying" }
+  | { step: "done" }
+  | { step: "failed"; message: string };
+
+export function signInView(s: { status: string; url: string; user_code: string; needs_code: boolean; error: string }): SignInView {
+  switch (s.status) {
+    case "done":
+      return { step: "done" };
+    case "failed":
+      return { step: "failed", message: s.error || "The sign-in didn’t finish." };
+    case "cancelled":
+      return { step: "failed", message: "The sign-in was cancelled." };
+    case "verifying":
+      return { step: "verifying" };
+  }
+  if (!s.url) return { step: "starting" };
+  // Claude: once the code is pasted, the CLI is checking it.
+  if (s.status === "running" && !s.user_code && !s.needs_code) return { step: "verifying" };
+  return { step: "open", url: s.url, code: s.user_code, pasteBack: s.needs_code };
+}
+
+/** What the person does on the provider's page. */
+export const SIGN_IN_STEPS: Record<SignInProvider, string> = {
+  claude: "Sign in to Claude, then paste the code it shows below.",
+  codex: "Sign in to ChatGPT and enter this code.",
+  github: "Sign in to GitHub and enter this code. Vesper stores the token as git:pat.",
+};
