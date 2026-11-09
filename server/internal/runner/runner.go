@@ -737,6 +737,14 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			return
 		}
 	}
+	// Recovering earlier work can take minutes; a run cancelled meanwhile must
+	// not get a workspace nobody records, so it would never be removed.
+	if cur, err := r.q().LockRunNoWait(ctx, run.ID); err != nil || cur.State != "starting" {
+		if err != nil {
+			log.Error("recheck run before setup", "err", err)
+		}
+		return
+	}
 	if err := r.Backend.EnsureWorkspace(ctx, run.ID.String()); err != nil {
 		fail("Couldn't create the workspace: " + err.Error())
 		return
