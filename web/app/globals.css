@@ -397,6 +397,71 @@
 }
 
 /*
+ * The step rail's glyphs (step-glyph.tsx). Only the active step animates; a finished one
+ * holds its still frame and settles in once, a failed one shakes once.
+ */
+.step-glyph { color: var(--text-tertiary); }
+.step-glyph.active { color: var(--accent); }
+.step-glyph.done { color: var(--state-done); animation: glyph-settle 350ms ease-out; }
+.step-glyph.failed { color: var(--state-blocked); }
+.glyph-s { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.glyph-knock { fill: var(--surface); }
+.glyph-a { transform-box: fill-box; transform-origin: center; }
+.step-glyph:not(.active) .glyph-a,
+.step-glyph.stopped .glyph-a { animation: none; }
+.step-glyph:not(.active) .glyph-live { display: none; }
+.step-glyph.failed .glyph-shake { animation: glyph-shake 400ms ease-in-out 2; }
+
+.glyph-bob { animation: glyph-bob 1.2s ease-in-out infinite; }
+.glyph-scan { animation: glyph-scan 2s ease-in-out infinite; }
+.glyph-sweep { animation: glyph-sweep 2.2s ease-in-out infinite; }
+.glyph-draw { stroke-dasharray: 1; animation: glyph-draw 1.8s ease-out infinite; }
+.glyph-caret { animation: glyph-caret 1.8s ease-out infinite; }
+.glyph-blink { animation: glyph-blink 1s step-end infinite; }
+.glyph-fill { animation: glyph-fill 2.4s ease-out infinite; }
+.glyph-spin { animation: glyph-spin 3s linear infinite; }
+.glyph-drop { animation: glyph-drop 1.4s ease-in infinite; }
+.glyph-rise { animation: glyph-rise 1.4s ease-out infinite; }
+.glyph-globe { animation: glyph-globe 2.4s ease-in-out infinite; }
+.glyph-scroll { animation: glyph-scroll 1.4s linear infinite; }
+.glyph-flip { transform-origin: left center; animation: glyph-flip 2.2s ease-in-out infinite; }
+.glyph-ring { animation: glyph-ring 1.6s ease-out infinite; }
+.glyph-hop { animation: glyph-hop 2.4s ease-in-out infinite; }
+.glyph-tile { animation: glyph-tile 1.6s ease-in-out infinite; }
+.glyph-grow { transform-origin: left center; animation: glyph-grow 2s ease-in-out infinite alternate; }
+.glyph-plug { animation: glyph-plug 1.8s ease-in-out infinite; }
+.glyph-eye { animation: glyph-eye 3s ease-in-out infinite; }
+.glyph-pin { animation: glyph-pin 1.8s ease-out infinite; }
+
+@keyframes glyph-bob { 0%, 60%, 100% { transform: none; } 30% { transform: translateY(-2.5px); } }
+@keyframes glyph-scan { 50% { transform: translateY(6px); } }
+@keyframes glyph-sweep { 0%, 100% { transform: translate(-3px, -2.5px); } 50% { transform: translate(3px, 2.5px); } }
+@keyframes glyph-draw { 0% { stroke-dashoffset: 1; } 70%, 100% { stroke-dashoffset: 0; } }
+@keyframes glyph-caret { 0% { transform: translateX(-6.5px); } 70%, 100% { transform: none; } }
+@keyframes glyph-blink { 50% { opacity: 0; } }
+@keyframes glyph-fill { 0% { transform: scale(0); } 15%, 80% { transform: none; } 95%, 100% { transform: scale(0); } }
+@keyframes glyph-spin { to { transform: rotate(360deg); } }
+@keyframes glyph-drop { 0% { transform: translateY(-4px); opacity: 0; } 30% { opacity: 1; } 70% { transform: none; opacity: 1; } 100% { transform: translateY(1px); opacity: 0; } }
+@keyframes glyph-rise { 0% { transform: translateY(4px); opacity: 0; } 30% { opacity: 1; } 70% { transform: none; opacity: 1; } 100% { transform: translateY(-1px); opacity: 0; } }
+@keyframes glyph-globe { 50% { transform: scaleX(0.12); } }
+@keyframes glyph-scroll { to { transform: translateY(-6px); } }
+@keyframes glyph-flip { 0%, 30% { transform: none; } 70%, 100% { transform: scaleX(-1); } }
+@keyframes glyph-ring { from { transform: none; opacity: 0.6; } to { transform: scale(2.4); opacity: 0; } }
+@keyframes glyph-hop { 0%, 25%, 100% { transform: none; } 50%, 75% { transform: translateX(7px); } }
+@keyframes glyph-tile { 0%, 100% { opacity: 0.25; } 35%, 65% { opacity: 1; } }
+@keyframes glyph-grow { from { transform: scaleX(0.15); } to { transform: none; } }
+@keyframes glyph-plug { 0%, 20%, 100% { transform: none; } 50%, 80% { transform: translateX(2px); } }
+@keyframes glyph-eye { 0%, 42%, 52%, 100% { transform: none; } 47% { transform: scaleY(0.1); } }
+@keyframes glyph-pin { 0% { transform: translateY(-5px); opacity: 0; } 40% { transform: none; opacity: 1; } 55% { transform: translateY(-1px); } 70%, 100% { transform: none; } }
+@keyframes glyph-settle { 0% { transform: scale(0.6); } 60% { transform: scale(1.15); } 100% { transform: none; } }
+@keyframes glyph-shake { 20%, 60% { transform: translateX(-1.5px); } 40%, 80% { transform: translateX(1.5px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .step-glyph,
+  .step-glyph * { animation: none !important; }
+}
+
+/*
  * Motion tokens and shared overlay animations (DESIGN.md §6). Exits are shorter than entrances,
  * and only transform and opacity move, apart from the sidebar and Collapse heights.
  */
