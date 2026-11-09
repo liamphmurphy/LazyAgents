@@ -66,7 +66,7 @@ func (s *Server) harnessActivity(ctx context.Context, ws uuid.UUID) ([]api.Harne
 		if readings, err = s.Usage.Readings(ctx, ws); err != nil {
 			return nil, err
 		}
-		s.Usage.Refresh(ws, readings)
+		s.Usage.Refresh(ctx, ws, readings)
 	}
 	return buildHarnessActivity(running, limits, readings), nil
 }

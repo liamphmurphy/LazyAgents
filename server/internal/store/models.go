@@ -457,6 +457,19 @@ type HarnessModelListing struct {
 	FinishedAt    *time.Time
 }
 
+type HarnessUsageCheck struct {
+	WorkspaceID  uuid.UUID
+	Harness      string
+	LoginVersion string
+	Status       string
+	RunnerID     *string
+	ClaimID      *uuid.UUID
+	RequestedAt  time.Time
+	ClaimedAt    *time.Time
+	FinishedAt   *time.Time
+	RetryAfter   time.Time
+}
+
 type InboxRead struct {
 	UserID uuid.UUID
 	ItemID string

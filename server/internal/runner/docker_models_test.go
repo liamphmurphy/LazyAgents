@@ -45,6 +45,8 @@ type modelsEngine struct {
 	authBack string
 	// failStart makes /start fail; hang makes the harness never answer.
 	failStart, hang bool
+	// signedOut makes usage checks answer as a CLI with no plan login.
+	signedOut bool
 }
 
 func (f *modelsEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -99,8 +101,8 @@ func (f *modelsEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// speak plays the harness: Claude answers its one request, Codex walks
-// initialize then model/list.
+// speak plays the harness: Claude answers its model and usage requests,
+// Codex walks initialize then model/list or account/rateLimits/read.
 func (f *modelsEngine) speak(conn net.Conn, in *bufio.Reader) {
 	defer conn.Close()
 	_, _ = io.WriteString(conn, "HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
@@ -121,12 +123,23 @@ func (f *modelsEngine) speak(conn net.Conn, in *bufio.Reader) {
 		}
 		say(2, "stderr noise that must be ignored")
 		var msg struct {
-			ID     int    `json:"id"`
-			Method string `json:"method"`
-			Type   string `json:"type"`
+			ID      int    `json:"id"`
+			Method  string `json:"method"`
+			Type    string `json:"type"`
+			Request struct {
+				Subtype string `json:"subtype"`
+			} `json:"request"`
 		}
 		_ = json.Unmarshal([]byte(line), &msg)
 		switch {
+		case msg.Request.Subtype == "get_usage" && f.signedOut:
+			say(1, `{"type":"control_response","response":{"subtype":"success","request_id":"usage","response":{"subscription_type":null,"rate_limits_available":false,"rate_limits":null}}}`)
+		case msg.Request.Subtype == "get_usage":
+			say(1, `{"type":"control_response","response":{"subtype":"success","request_id":"usage","response":{"subscription_type":"max","rate_limits_available":true,"rate_limits":{"five_hour":{"utilization":38,"resets_at":"2099-01-01T00:00:00Z"},"seven_day":{"utilization":61,"resets_at":"2099-01-05T00:00:00Z"}}}}}`)
+		case msg.Type == "control_request" && msg.Request.Subtype == "initialize" && strings.Contains(line, `"request_id":"initialize"`):
+			say(1, `{"type":"control_response","response":{"subtype":"success","request_id":"initialize","response":{}}}`)
+		case msg.Method == "account/rateLimits/read":
+			say(1, fmt.Sprintf(`{"id":%d,"result":{"rateLimits":{"limitId":"codex","planType":"plus","primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":4070908800},"secondary":{"usedPercent":70,"windowDurationMins":10080,"resetsAt":4071513600}}}}`, msg.ID))
 		case msg.Type == "control_request":
 			say(1, `{"type":"control_response","response":{"subtype":"success","request_id":"models","response":{"models":[{"value":"default","displayName":"Recommended"},{"value":"opus","displayName":"Opus"}]}}}`)
 		case msg.Method == "initialize":

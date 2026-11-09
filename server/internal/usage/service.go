@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -21,6 +22,9 @@ var Harnesses = []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex}
 const (
 	// Fresh is how long a reading stands before a check asks again.
 	Fresh = 2 * time.Minute
+	// QueuedFresh is Fresh for checks a runner answers: each one starts a
+	// container, so they ask less often.
+	QueuedFresh = 5 * time.Minute
 	// failedRetry waits out a check that didn't answer.
 	failedRetry = 10 * time.Minute
 	// settledRetry waits out what only the person can fix: a CLI that's
@@ -31,11 +35,13 @@ const (
 // Service saves readings and keeps them fresh.
 type Service struct {
 	Q *store.Queries
-	// Probe checks a harness through its CLI. Nil turns active checks off,
-	// as on the Docker backend, where the CLIs and their logins live in run
-	// containers; readings then come only from runs (Record).
+	// Probe checks a harness through its CLI, as on the local backend.
 	Probe func(ctx context.Context, harness string) (Snapshot, error)
-	Log   *slog.Logger
+	// Queued asks a runner instead (harness_usage_checks), as on the Docker
+	// backend, where the CLIs and their logins live in run containers. With
+	// neither, readings come only from runs (Record).
+	Queued bool
+	Log    *slog.Logger
 	// Now is for tests.
 	Now func() time.Time
 
@@ -106,13 +112,20 @@ func (s *Service) Readings(ctx context.Context, ws uuid.UUID) (map[string]Snapsh
 	return out, nil
 }
 
-// Refresh starts a check of each harness whose reading is due, in the
-// background, and returns at once. Checks never overlap for a harness, and
-// one that failed waits before trying again.
-func (s *Service) Refresh(ws uuid.UUID, readings map[string]Snapshot) {
-	if s.Probe == nil {
-		return
+// Refresh starts a check of each harness whose reading is due and returns
+// at once; results show on a later poll. Local checks run in the background,
+// never overlap for a harness, and wait after a failure; queued checks are
+// left to a runner, which keeps the same back-off in the queue.
+func (s *Service) Refresh(ctx context.Context, ws uuid.UUID, readings map[string]Snapshot) {
+	switch {
+	case s.Probe != nil:
+		s.refreshLocal(ws, readings)
+	case s.Queued:
+		s.refreshQueued(ctx, ws, readings)
 	}
+}
+
+func (s *Service) refreshLocal(ws uuid.UUID, readings map[string]Snapshot) {
 	now := s.now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -132,14 +145,71 @@ func (s *Service) Refresh(ws uuid.UUID, readings map[string]Snapshot) {
 	}
 }
 
+// refreshQueued asks a runner to check each harness whose reading is stale.
+// Best effort: the orb still shows the last reading if this fails.
+func (s *Service) refreshQueued(ctx context.Context, ws uuid.UUID, readings map[string]Snapshot) {
+	now := s.now()
+	for _, h := range Harnesses {
+		if r, ok := readings[h]; ok && now.Sub(r.ObservedAt) < QueuedFresh {
+			continue
+		}
+		version, err := s.Q.SecretVersion(ctx, store.SecretVersionParams{WorkspaceID: ws, Name: chatmodels.KeySecret[h]})
+		if errors.Is(err, pgx.ErrNoRows) {
+			// No login, so no limits: say so rather than "not read yet".
+			snap := Snapshot{Harness: h, ObservedAt: now, Windows: []Window{}}
+			if err := s.Save(ctx, ws, snap); err != nil {
+				s.log().Warn("save harness usage", "harness", h, "err", err)
+			}
+			continue
+		}
+		if err == nil {
+			err = s.Q.RequestUsageCheck(ctx, store.RequestUsageCheckParams{WorkspaceID: ws, Harness: h, LoginVersion: version})
+		}
+		if err != nil && ctx.Err() == nil {
+			s.log().Warn("queue harness usage check", "harness", h, "err", err)
+		}
+	}
+}
+
+// Checking reports the harnesses with a check in flight, for the orb.
+func (s *Service) Checking(ctx context.Context, ws uuid.UUID) (map[string]bool, error) {
+	out := map[string]bool{}
+	if s.Queued {
+		hs, err := s.Q.UsageChecksInFlight(ctx, ws)
+		if err != nil {
+			return nil, err
+		}
+		for _, h := range hs {
+			out[h] = true
+		}
+		return out, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, h := range Harnesses {
+		out[h] = s.busy[ws.String()+"/"+h]
+	}
+	return out, nil
+}
+
 func (s *Service) check(ws uuid.UUID, harness, key string) {
 	ctx, cancel := context.WithTimeout(context.Background(), ProbeTimeout+5*time.Second)
 	defer cancel()
 	snap, err := s.Probe(ctx, harness)
+	wait := s.Settle(ctx, ws, harness, snap, err)
+	s.mu.Lock()
+	s.busy[key] = false
+	s.next[key] = s.now().Add(wait)
+	s.mu.Unlock()
+}
+
+// Settle saves what a check found and returns how long to wait before the
+// next one. A signed-out CLI is saved too, so the orb can say limits don't
+// apply rather than nothing; a failed or outdated check keeps the last reading.
+func (s *Service) Settle(ctx context.Context, ws uuid.UUID, harness string, snap Snapshot, err error) time.Duration {
 	wait := Fresh
 	switch {
 	case errors.Is(err, ErrSignedOut):
-		// Saved so the orb can say limits don't apply, rather than nothing.
 		wait = settledRetry
 		snap.Harness, snap.Available, snap.ObservedAt = harness, false, s.now()
 		if snap.Windows == nil {
@@ -158,8 +228,5 @@ func (s *Service) check(ws uuid.UUID, harness, key string) {
 			s.log().Warn("save harness usage", "harness", harness, "err", serr)
 		}
 	}
-	s.mu.Lock()
-	s.busy[key] = false
-	s.next[key] = s.now().Add(wait)
-	s.mu.Unlock()
+	return wait
 }
