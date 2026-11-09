@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -67,5 +69,33 @@ func TestRunScriptTimesOut(t *testing.T) {
 	}
 	if d := time.Since(start); d > 10*time.Second {
 		t.Fatalf("runScript took %s", d)
+	}
+}
+
+// Cleanup only removes this install's containers: the dev stack and the full
+// compose stack share a Docker daemon, and each one's startup cleanup used to
+// kill the other's running turns.
+func TestDockerCleanupIsScopedToTheStack(t *testing.T) {
+	f, d := startFakeEngine(t)
+	d.Stack = "lazyagents-dev"
+	if err := d.Cleanup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var filters map[string][]string
+	if err := json.Unmarshal([]byte(f.listFilters), &filters); err != nil {
+		t.Fatalf("filters %q: %v", f.listFilters, err)
+	}
+	if !slices.Contains(filters["label"], "dev.lazyagents.stack=lazyagents-dev") {
+		t.Fatalf("cleanup lists containers of every stack: %v", filters)
+	}
+	if f.count("DELETE /containers/c1") != 1 {
+		t.Fatal("this stack's leftover container was not removed")
+	}
+	// What this runner starts carries the label that cleanup selects on.
+	if _, err := d.Start(context.Background(), "run-1", ExecSpec{Name: "t", Argv: []string{"true"}}); err != nil {
+		t.Fatal(err)
+	}
+	if labels, _ := f.created["Labels"].(map[string]any); labels["dev.lazyagents.stack"] != "lazyagents-dev" || labels[labelKey] != "run-1" {
+		t.Fatalf("container labels %v", f.created["Labels"])
 	}
 }

@@ -34,6 +34,10 @@ type Docker struct {
 	Socket  string // /var/run/docker.sock
 	Image   string // vesper/agent-base:latest
 	Network string // where api:8000 resolves; "" = default bridge
+	// Stack labels this install's containers. Installs sharing a Docker daemon
+	// (the dev stack and the full compose stack) must differ, or each runner's
+	// startup Cleanup kills the other's running turns. "" means "default".
+	Stack string
 	// MemoryMB and PidsLimit cap each container; 0 leaves that limit off.
 	MemoryMB  int64
 	PidsLimit int64
@@ -49,9 +53,22 @@ const (
 	homePath      = "/home/node"
 	codexAuthPath = ".codex/auth.json"
 	labelKey      = "dev.lazyagents.run"
+	stackLabelKey = "dev.lazyagents.stack"
 )
 
 func (d *Docker) Name() string { return "docker" }
+
+func (d *Docker) stack() string {
+	if d.Stack == "" {
+		return "default"
+	}
+	return d.Stack
+}
+
+// labels marks a container or volume as this install's, for the run.
+func (d *Docker) labels(runID string) map[string]string {
+	return map[string]string{labelKey: runID, stackLabelKey: d.stack()}
+}
 
 func (d *Docker) http() *http.Client {
 	if d.client == nil {
@@ -135,7 +152,7 @@ func (d *Docker) Ping(ctx context.Context) error {
 func (d *Docker) EnsureWorkspace(ctx context.Context, runID string) error {
 	for _, name := range []string{volumeName(runID), homeVolumeName(runID)} {
 		_, err := d.do(ctx, "POST", "/volumes/create", jsonBody(map[string]any{
-			"Name": name, "Labels": map[string]string{labelKey: runID},
+			"Name": name, "Labels": d.labels(runID),
 		}), "application/json", nil)
 		if err != nil {
 			return err
@@ -166,10 +183,11 @@ func (d *Docker) RemoveWorkspace(ctx context.Context, runID string) error {
 	return nil
 }
 
-// Cleanup removes turn containers left by a runner that died; their turns
-// are re-run (the harness resumes its session).
+// Cleanup removes turn containers left by a runner of this install that died;
+// their turns are re-run (the harness resumes its session). Another install's
+// containers on the same daemon are running turns of its own: they're left alone.
 func (d *Docker) Cleanup(ctx context.Context) error {
-	filters, _ := json.Marshal(map[string][]string{"label": {labelKey}})
+	filters, _ := json.Marshal(map[string][]string{"label": {labelKey, stackLabelKey + "=" + d.stack()}})
 	var list []struct{ ID string }
 	if _, err := d.do(ctx, "GET", "/containers/json?all=1&filters="+url.QueryEscape(string(filters)), nil, "", &list); err != nil {
 		return err
@@ -284,7 +302,7 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	}
 	body := map[string]any{
 		"Image": d.Image, "Cmd": spec.Argv, "Env": env, "WorkingDir": dir,
-		"Labels":     map[string]string{labelKey: runID},
+		"Labels":     d.labels(runID),
 		"HostConfig": d.hostConfig(mounts),
 	}
 	var created struct{ ID string }

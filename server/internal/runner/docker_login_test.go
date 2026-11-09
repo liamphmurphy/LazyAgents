@@ -33,6 +33,8 @@ type fakeEngine struct {
 	dropWaits int
 	waitCode  int
 	oom       bool
+	// listFilters is the filters query of the last container list.
+	listFilters string
 }
 
 func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -84,6 +86,11 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case p == "/containers/c1/wait":
 		<-f.exited
 		_, _ = fmt.Fprintf(w, `{"StatusCode":%d}`, f.waitCode)
+	case p == "/containers/json":
+		f.mu.Lock()
+		f.listFilters = r.URL.Query().Get("filters")
+		f.mu.Unlock()
+		_, _ = io.WriteString(w, `[{"Id":"c1"}]`)
 	case p == "/containers/c1/json":
 		_, _ = fmt.Fprintf(w, `{"State":{"OOMKilled":%t}}`, f.oom)
 	case p == "/containers/c1/archive":
