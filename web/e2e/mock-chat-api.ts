@@ -694,6 +694,11 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       }
     }
 
+    // The chat sidebar lists spaces on every page; these specs have none.
+    if (path === "/chat-spaces" && method === "GET") {
+      return json({ spaces: [] });
+    }
+
     if (path === "/personas" && method === "GET") {
       return json({ personas, ...(personas.find((x) => x.is_default) ? { default_persona_id: personas.find((x) => x.is_default)!.id } : {}) });
     }
