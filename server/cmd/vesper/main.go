@@ -281,6 +281,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		Pool: pool, Backend: backend, Secrets: secretStore,
 		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
 		Workflows: workflows,
+		Scheduled: &runs.Service{Pool: pool, Secrets: secretStore, Tracker: &tracker.Service{Pool: pool}, Artifacts: &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, RequireHarnessKey: rc.Backend == "docker"},
 	}
 	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
 	return r.Run(ctx)

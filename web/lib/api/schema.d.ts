@@ -2493,6 +2493,227 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/connectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The person's MCP connectors */
+        get: operations["listConnectors"];
+        put?: never;
+        /** Add a connector; OAuth connectors return a sign-in URL */
+        post: operations["createConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check an MCP server before adding it; nothing is stored */
+        post: operations["probeConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteConnector"];
+        options?: never;
+        head?: never;
+        /** Rename, set persona access and set tool permissions (revision-checked) */
+        patch: operations["updateConnector"];
+        trace?: never;
+    };
+    "/connectors/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reconnect, refresh the tool list and report health */
+        post: operations["testConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors/{id}/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start OAuth sign-in again */
+        post: operations["authorizeConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/connector-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** Connector tools waiting for the person in this chat */
+        get: operations["listConnectorApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connector-approvals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Allow once, always allow (sets the tool to Allow) or deny */
+        post: operations["decideConnectorApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/connector-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** Connectors a persona proposed in this chat, waiting for the person */
+        get: operations["listConnectorProposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connector-proposals/{id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["declineConnectorProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scheduled-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listScheduledTasks"];
+        put?: never;
+        post: operations["createScheduledTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scheduled-tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a task's settings (revision-checked) */
+        put: operations["updateScheduledTask"];
+        post?: never;
+        delete: operations["deleteScheduledTask"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scheduled-tasks/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a task now; 409 while it is already running */
+        post: operations["runScheduledTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -4366,7 +4587,7 @@ export interface components {
              * @description question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes
              * @enum {string}
              */
-            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion" | "workflow_gate";
+            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion" | "workflow_gate" | "scheduled" | "connector_approval";
             title: string;
             summary: string;
             href: string;
@@ -5477,6 +5698,193 @@ export interface components {
          * @enum {string}
          */
         PersonaTone: "neutral" | "friendly" | "concise" | "formal" | "playful";
+        ConnectorTool: {
+            name: string;
+            description: string;
+            /** @description False only when the server marks the tool read-only */
+            write: boolean;
+            /** @enum {string} */
+            policy: "allow" | "ask" | "off";
+        };
+        Connector: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            url: string;
+            /** @enum {string} */
+            auth_kind: "oauth" | "token" | "none";
+            /** @enum {string} */
+            status: "connected" | "needs_sign_in" | "offline";
+            last_error: string;
+            /** Format: date-time */
+            last_checked_at?: string;
+            tools: components["schemas"]["ConnectorTool"][];
+            persona_ids: string[];
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ConnectorList: {
+            connectors: components["schemas"]["Connector"][];
+        };
+        ConnectorCreated: {
+            connector: components["schemas"]["Connector"];
+            /** @description Open this to finish OAuth sign-in */
+            authorize_url?: string;
+        };
+        NewConnector: {
+            name: string;
+            url: string;
+            /** @enum {string} */
+            auth_kind: "oauth" | "token" | "none";
+            /** @description Stored encrypted and never returned */
+            token?: string;
+            /**
+             * Format: uuid
+             * @description The persona proposal this completes; that persona gets access
+             */
+            proposal_id?: string;
+        };
+        ConnectorProbeRequest: {
+            url: string;
+            token?: string;
+        };
+        ConnectorProbe: {
+            reachable: boolean;
+            needs_auth: boolean;
+            tools: number;
+            error?: string;
+        };
+        ConnectorPatch: {
+            revision: number;
+            name?: string;
+            persona_ids?: string[];
+            /** @description Replace an API token connector's token; stored encrypted */
+            token?: string;
+            /** @description Tool name to permission; tools not named are unchanged */
+            policies?: {
+                [key: string]: "allow" | "ask" | "off";
+            };
+        };
+        ConnectorApproval: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            connector_id: string;
+            connector_name: string;
+            tool: string;
+            arguments: {
+                [key: string]: unknown;
+            };
+            persona?: components["schemas"]["PersonaSummary"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ConnectorApprovalList: {
+            approvals: components["schemas"]["ConnectorApproval"][];
+        };
+        ConnectorApprovalDecision: {
+            /** @enum {string} */
+            decision: "allow" | "always" | "deny";
+        };
+        ConnectorProposal: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            url: string;
+            /** @enum {string} */
+            auth_kind: "oauth" | "token" | "none";
+            reason: string;
+            proposed_by?: components["schemas"]["PersonaSummary"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ConnectorProposalList: {
+            proposals: components["schemas"]["ConnectorProposal"][];
+        };
+        ScheduledTaskInput: {
+            /** @description Required when updating */
+            revision?: number;
+            name: string;
+            /** @enum {string} */
+            kind: "prompt" | "workflow";
+            instructions?: string;
+            /** Format: uuid */
+            workflow_id?: string;
+            /** Format: uuid */
+            persona_id?: string;
+            /** @description Project key to attach; omit for none */
+            project?: string;
+            connector_ids?: string[];
+            /** @enum {string} */
+            frequency: "daily" | "weekly" | "monthly" | "cron";
+            /** @description 0 is Sunday; weekly only */
+            weekdays?: number[];
+            /** @description Runs on the last day of shorter months */
+            month_day?: number;
+            at_time: string;
+            /** @description IANA name */
+            timezone: string;
+            /** @description Five fields, in timezone; cron only */
+            cron?: string;
+            enabled: boolean;
+            max_minutes?: number;
+            /** Format: int64 */
+            max_cost_micros?: number;
+        };
+        ScheduledRun: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            trigger: "schedule" | "manual" | "catchup";
+            /** @enum {string} */
+            state: "running" | "waiting" | "done" | "failed";
+            summary: string;
+            error: string;
+            /** Format: int64 */
+            cost_micros: number;
+            href?: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        ScheduledTask: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            kind: "prompt" | "workflow";
+            instructions: string;
+            /** Format: uuid */
+            workflow_id?: string;
+            /** Format: uuid */
+            persona_id?: string;
+            project?: string;
+            connector_ids: string[];
+            /** @enum {string} */
+            frequency: "daily" | "weekly" | "monthly" | "cron";
+            weekdays: number[];
+            month_day: number;
+            at_time: string;
+            timezone: string;
+            cron: string;
+            enabled: boolean;
+            max_minutes: number;
+            /** Format: int64 */
+            max_cost_micros: number;
+            /** Format: date-time */
+            next_run_at?: string;
+            /** @description The next two run times */
+            upcoming: string[];
+            revision: number;
+            /** @description Newest first, at most 10 */
+            runs: components["schemas"]["ScheduledRun"][];
+        };
+        ScheduledTaskList: {
+            tasks: components["schemas"]["ScheduledTask"][];
+        };
         /**
          * @description What a persona may do beyond answering. These are enforced in code
          *     (chat scopes, sandbox and harness options), never by prompt text.
@@ -5488,6 +5896,8 @@ export interface components {
             images: boolean;
             /** @description Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona). */
             personas?: boolean;
+            /** @description Propose new MCP connectors from a chat; each is added only when the person approves it and signs in. Absent in a request means unchanged (false for a new persona). */
+            connectors?: boolean;
             /** @description Show SVG images in chat replies; a reply from a persona without it keeps its SVG as plain code. Absent in a request means unchanged (false for a new persona). */
             svg?: boolean;
             /** @description Propose new workflows and edits to them from a chat; each is applied only when the person accepts it. Absent in a request means unchanged (false for a new persona). */
@@ -9894,6 +10304,380 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listConnectors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewConnector"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCreated"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    probeConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorProbe"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    authorizeConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCreated"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listConnectorApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorApprovalList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    decideConnectorApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listConnectorProposals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorProposalList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    declineConnectorProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declined */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listScheduledTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTaskList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createScheduledTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledTaskInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTask"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateScheduledTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledTaskInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTask"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteScheduledTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    runScheduledTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTask"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

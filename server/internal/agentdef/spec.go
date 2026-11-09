@@ -59,6 +59,9 @@ type MCPServer struct {
 	Name        string `json:"name"`
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
+	// Connector marks a person's connector: the harness reaches it through
+	// Vesper at <MCP URL>/connectors/<Name> with the run's own token.
+	Connector bool `json:"connector,omitempty"`
 }
 
 // Fallback is the next harness/model to try when provider usage is exhausted.

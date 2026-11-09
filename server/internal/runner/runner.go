@@ -86,6 +86,8 @@ type Runner struct {
 	Attachments AttachmentStore
 	// Workflows moves workflow runs on when a step ends; nil leaves that to the API.
 	Workflows *runs.WorkflowEngine
+	// Scheduled starts and settles scheduled tasks; nil leaves them idle.
+	Scheduled *runs.Service
 	Log       *slog.Logger
 
 	mu     sync.Mutex
@@ -118,7 +120,11 @@ func (r *Runner) Run(ctx context.Context) error {
 	defer sweep.Stop()
 	poll := time.NewTicker(r.Cfg.Poll)
 	defer poll.Stop()
+	schedule := time.NewTicker(15 * time.Second)
+	defer schedule.Stop()
 	r.heartbeat(ctx)
+	// Before waiting on the ticker: anything missed while Vesper was off runs once now.
+	r.tickScheduled(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -131,6 +137,8 @@ func (r *Runner) Run(ctx context.Context) error {
 			r.Sweep(ctx)
 		case <-poll.C:
 			r.Tick(ctx)
+		case <-schedule.C:
+			r.tickScheduled(ctx)
 		}
 	}
 }
@@ -148,6 +156,19 @@ func (r *Runner) Recover(ctx context.Context) error {
 		return err
 	}
 	return q.RecoverChatCancellations(ctx, &r.Cfg.ID)
+}
+
+// tickScheduled starts tasks that are due and records runs that have ended.
+func (r *Runner) tickScheduled(ctx context.Context) {
+	if r.Scheduled == nil {
+		return
+	}
+	if err := r.Scheduled.RunDueScheduled(ctx); err != nil && ctx.Err() == nil {
+		r.Log.Error("start scheduled tasks", "err", err)
+	}
+	if err := r.Scheduled.SettleScheduled(ctx); err != nil && ctx.Err() == nil {
+		r.Log.Error("settle scheduled tasks", "err", err)
+	}
 }
 
 func (r *Runner) heartbeat(ctx context.Context) {

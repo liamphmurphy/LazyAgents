@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
+import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -39,7 +39,7 @@ test("the live line names the page, ticket or query being used", () => {
   assert.deepEqual(activityOf({ tool: "search_knowledge", input: { q: "harness switch" } }), { verb: "Searching", text: "“harness switch”" });
   assert.deepEqual(activityOf({ tool: "read_page", input: {} }), { verb: "Reading a page" });
   assert.deepEqual(activityOf({ tool: "shell", input: { command: "ls" } }), { verb: "Running a command" });
-  assert.deepEqual(activityOf({ tool: "mcp__github__get_issue", input: null }), { verb: "Using", text: "github.get_issue" });
+  assert.deepEqual(activityOf({ tool: "mcp__github__get_issue", input: null }), { verb: "Using Github:", text: "get_issue" });
 });
 
 test("link labels drop folders and keep the section", () => {
@@ -101,7 +101,7 @@ test("the chat status is high level and never leaks the call's details", () => {
     [{ tool: "canvas_reply", input: { body: "secret" } }, "commenting on a canvas"],
     [{ tool: "propose_workflow_edit", input: { graph: "secret" } }, "sketching a workflow"],
     [{ tool: "get_video_transcript", input: { url: "https://example.com/private" } }, "watching a video"],
-    [{ tool: "some.other_tool", input: { secret: "x" } }, "working on it"],
+    [{ tool: "some.other_tool", input: { secret: "x" } }, "using Some"],
   ];
   for (const [call, want] of cases) assert.equal(chatStatusOf(call).phrase, want, call.tool);
   assert.deepEqual(chatStatus([]), { kind: "thinking", phrase: "thinking" });
@@ -129,7 +129,7 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "canvas_comment", input: {} }, "canvas-comment"],
     [{ tool: "read_workflow", input: {} }, "workflow"],
     [{ tool: "save_memory", input: {} }, "memory"],
-    [{ tool: "some.other_tool", input: {} }, "thinking"],
+    [{ tool: "some.other_tool", input: {} }, "connector"],
     [{ tool: "", input: undefined }, "thinking"],
     [bash("python3 scripts/migrate.py"), "terminal"],
   ];
@@ -139,9 +139,9 @@ test("each tool call maps to the kind of scene it shows", () => {
 test("GitHub work is detected from MCP tools, gh and repository commands, without leaking details", () => {
   const bash = (command) => ({ tool: "Bash", input: { command } });
   const cases = [
-    [{ tool: "mcp__github__create_pull_request", input: { title: "secret" } }, "pull-request", "preparing a pull request"],
-    [{ tool: "github.update_pull_request", input: {} }, "pull-request", "preparing a pull request"],
-    [{ tool: "mcp__github__list_issues", input: { repo: "secret" } }, "github", "working on GitHub"],
+    [{ tool: "mcp__github__create_pull_request", input: { title: "secret" } }, "connector", "using Github"],
+    [{ tool: "github.update_pull_request", input: {} }, "connector", "using Github"],
+    [{ tool: "mcp__github__list_issues", input: { repo: "secret" } }, "connector", "using Github"],
     [{ tool: "mcp__plugin_github_github__get_issue", input: {} }, "github", "working on GitHub"],
     [bash("gh issue view 12"), "github", "working on GitHub"],
     [bash("gh run watch"), "github", "working on GitHub"],
@@ -233,7 +233,7 @@ test("every harness's tools and each chat tool land on a described step", () => 
   assert.deepEqual(phrases("read", "lazyagents_get_ticket", "edit", "websearch"), ["Reading the code", "Checking tickets", "Writing code", "Searching the web"]);
   assert.deepEqual(phrases("mcp__lazyagents__list_saved_links", "mcp__lazyagents__propose_persona", "mcp__lazyagents__submit_research_report"), ["Checking your saved links", "Sketching a new persona", "Writing up its research"]);
   assert.deepEqual(phrases("mcp__lazyagents__canvas_create", "mcp__lazyagents__canvas_patch", "mcp__lazyagents__canvas_patch"), ["Drafting a canvas", "Revising a canvas"]);
-  assert.deepEqual(phrases("mcp__other__mystery"), ["Working on it"]);
+  assert.deepEqual(phrases("mcp__other__mystery"), ["Using Other"]);
   assert.deepEqual(phrases("mcp__lazyagents__whoami", "ToolSearch", "Skill", "mcp__lazyagents__set_chat_title"), []);
 });
 
@@ -290,7 +290,7 @@ test("stepDetail names files and searches but never paths or commands", () => {
     [{ tool: "shell", input: { command: "curl -H 'Authorization: x' host" } }, "Working in the terminal"],
     [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/a.png" } }, "Looking at the image"],
     [{ tool: "Read", input: {} }, "Reading the code"],
-    [{ tool: "mcp__other__mystery", input: { a: "b" } }, "Working on it"],
+    [{ tool: "mcp__other__mystery", input: { a: "b" } }, "Using Other: mystery"],
   ];
   for (const [call, want] of cases) assert.equal(stepDetail(call), want, call.tool);
 });
@@ -318,8 +318,8 @@ test("stepDetail names canvases, workflows, tickets, images, personas, runs and 
     [{ tool: "mcp__lazyagents__propose_persona", input: { name: "Nora", instructions: "secret" } }, "Sketching “Nora”"],
     [{ tool: "mcp__lazyagents__list_runs", input: { ticket: "PAY-214" } }, "Checking runs of PAY-214"],
     [{ tool: "mcp__lazyagents__get_video_transcript", input: { url: "https://youtu.be/x", from_seconds: 272 } }, "Watching from 4:32"],
-    [{ tool: "mcp__github__create_pull_request", input: { owner: "o", repo: "r", title: "Add rail", body: "secret" } }, "Working on “Add rail”"],
-    [{ tool: "mcp__github__get_issue", input: { owner: "o", repo: "r", issue_number: 12 } }, "Working on o/r#12"],
+    [{ tool: "mcp__github__create_pull_request", input: { owner: "o", repo: "r", title: "Add rail", body: "secret" } }, "Using Github: create_pull_request"],
+    [{ tool: "mcp__github__get_issue", input: { owner: "o", repo: "r", issue_number: 12 } }, "Using Github: get_issue"],
     [{ tool: "mcp__lazyagents__save_memory", input: { body: "private" } }, "Making a note"],
     [{ tool: "mcp__lazyagents__canvas_read", input: { canvas_id: "unknown" } }, "Looking at a canvas"],
   ];
@@ -337,4 +337,10 @@ test("tools that take an id use the name an earlier call in the turn gave it", (
   const clipped = { tool: "canvas_read", input: { canvas_id: "c2" }, output: '{"body":"long and cut' };
   // No name to show, so the detail would only repeat the step's title.
   assert.equal(detail([clipped, { tool: "canvas_comment", input: { canvas_id: "c2" } }]), undefined);
+});
+
+test("a connector's tools get their own scene and read by the connector's name", () => {
+  assert.deepEqual(connectorCall("mcp__google-calendar__list_events"), { name: "Google Calendar", tool: "list_events" });
+  assert.equal(connectorCall("mcp__lazyagents__whoami"), null);
+  assert.equal(chatStatusOf({ tool: "google-calendar.list_events", input: {} }).kind, "connector");
 });

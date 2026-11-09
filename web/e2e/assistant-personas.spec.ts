@@ -230,7 +230,7 @@ test("abilities: Write code reveals repositories; they validate, save with the c
   await editor(page).getByRole("button", { name: "Save persona" }).click();
   await expect(editor(page)).toHaveCount(0);
   const nova = mock.personas.find((p) => p.name === "Nova")!;
-  expect(nova.capabilities).toEqual({ code: true, images: true, personas: false, svg: false, workflows: false });
+  expect(nova.capabilities).toEqual({ code: true, images: true, personas: false, svg: false, workflows: false, connectors: false });
   expect(nova.repos).toEqual(["https://github.com/acme/app"]);
   const granted = panel(page).getByTestId("persona-permissions");
   await expect(granted).toContainText("Write code");

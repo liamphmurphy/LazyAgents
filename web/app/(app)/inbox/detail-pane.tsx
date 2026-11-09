@@ -457,6 +457,8 @@ function MockupPane({ item, register, onSent, onLeave }: PaneProps) {
 
 const OPEN_LABEL: Record<string, string> = {
   workflow_gate: "Review ↗",
+  scheduled: "Open result ↗",
+  connector_approval: "Review ↗",
   planning: "Review drafts ↗",
   suggestion: "Review wiki edit ↗",
   review: "Open ticket ↗",

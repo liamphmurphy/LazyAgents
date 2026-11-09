@@ -53,6 +53,7 @@ import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
 import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
 import { PersonaProposals } from "./persona-proposals";
+import { ConnectorRequests } from "./connector-requests";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
@@ -724,6 +725,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null} />
               ))}
               <PersonaProposals chatId={c.id} disabled={c.archived} />
+              <ConnectorRequests chatId={c.id} disabled={c.archived} />
               {pending && selection && (
                 <Divider testId="pending-switch">
                   {`Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}

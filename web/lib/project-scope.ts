@@ -10,7 +10,7 @@ export type ScopedProject = { key: string; name: string; color: string; archived
 /** required: the page needs one project (chooser otherwise). optional: no project means all projects. */
 export type ProjectMode = "required" | "optional";
 
-export type NavBadge = "inbox" | "runs" | "wiki" | "settings";
+export type NavBadge = "inbox" | "runs" | "wiki" | "settings" | "scheduled";
 export type NavItem = { href: string; label: string; icon: IconName; badge?: NavBadge };
 export type NavGroup = { label: "Personal" | "Project" | "Workspace"; items: NavItem[] };
 
@@ -23,6 +23,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/", label: "Dashboard", icon: "dashboard" },
       { href: "/library", label: "Library", icon: "library" },
       { href: "/workflows", label: "Workflows", icon: "graph" },
+      { href: "/scheduled", label: "Scheduled", icon: "clock", badge: "scheduled" },
       { href: "/learn", label: "Learn", icon: "learn" },
       { href: "/customization", label: "Customization", icon: "sliders" },
     ],
@@ -56,7 +57,7 @@ const PINNED_ROUTES = ["/inbox"];
 /** Personal items Work keeps, above Project and Workspace. */
 const WORK_PERSONAL = [...PINNED_ROUTES, "/"];
 /** Everything else outside this list is Work. */
-const CHAT_ROUTES = ["/chat", "/customization", "/library", "/workflows", "/learn"];
+const CHAT_ROUTES = ["/chat", "/customization", "/library", "/workflows", "/scheduled", "/learn"];
 
 /** The mode a page belongs to; undefined for the pinned pages. */
 export function routeMode(pathname: string): NavMode | undefined {

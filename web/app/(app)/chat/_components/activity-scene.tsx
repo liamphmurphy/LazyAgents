@@ -42,6 +42,7 @@ export function useHeldScene(kind: ChatStatusKind) {
 
 const LABELS: Record<ChatStatusKind, string> = {
   thinking: "Thinking",
+  connector: "Using a connector",
   wiki: "Reading the wiki",
   tickets: "Working on tickets",
   "reading-code": "Reading code",
@@ -297,6 +298,18 @@ const SCENES: Record<ChatStatusKind, ReactNode> = {
       ].map(({ x, y, wait }) => (
         <rect key={`${x}-${y}`} className="scene-accent scene-light" x={x} y={y} width="18" height="12" rx="3" style={delay(wait)} />
       ))}
+    </>
+  ),
+  connector: (
+    <>
+      <rect className="scene-accent scene-box scene-plug" x="24" y="19" width="26" height="18" rx="4" />
+      <path className="scene-line-accent scene-plug" d="M8 28H24M50 23H60M50 33H60" />
+      <rect className="scene-warm" x="82" y="17" width="26" height="22" rx="4" fillOpacity="0.85" />
+      <path className="scene-line-accent" d="M108 28H124" />
+      <path className="scene-line-accent scene-link" d="M64 23H82M64 33H82" pathLength={1} strokeOpacity="0.5" />
+      <circle className="scene-warm scene-box scene-node" cx="73" cy="10" r="2.5" />
+      <circle className="scene-accent scene-box scene-node" cx="66" cy="47" r="2" style={delay(0.5)} />
+      <circle className="scene-warm scene-box scene-node" cx="80" cy="47" r="2" style={delay(1)} />
     </>
   ),
   memory: (

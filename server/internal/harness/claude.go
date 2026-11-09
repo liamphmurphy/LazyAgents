@@ -41,6 +41,10 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		lazyagentsServer: {Type: "http", URL: ws.MCPURL, Headers: map[string]string{"Authorization": "Bearer " + ws.Token}},
 	}
 	for _, m := range spec.MCPServers {
+		if m.Connector {
+			servers[m.Name] = mcpEntry{Type: "http", URL: ws.MCPURL + "/connectors/" + m.Name, Headers: map[string]string{"Authorization": "Bearer " + ws.Token}}
+			continue
+		}
 		servers[m.Name] = mcpEntry{Type: "http", URL: m.URL}
 	}
 	noTools := spec.HarnessOptions[agentdef.OptionNoTools] == "true"
@@ -78,6 +82,11 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	var deny []string
 	if readonly {
 		allow = []string{"mcp__" + lazyagentsServer, "Read", "Glob", "Grep", "ToolSearch"}
+		for _, m := range spec.MCPServers {
+			if m.Connector {
+				allow = append(allow, "mcp__"+m.Name)
+			}
+		}
 		// The web tools are handled below: a denied tool beats an allowed one.
 		deny = append(deny, "Edit", "Write", "NotebookEdit", "Bash", "Agent")
 	}
