@@ -238,6 +238,27 @@ func outputTail(out string) string {
 	return t
 }
 
+// pasteSubmitDelay separates a pasted code from the Enter that submits it.
+// Claude's Ink prompt reads the terminal raw and treats a chunk of input as a
+// paste, Enter included: code+"\r" in one write lands as text in the box and
+// is never submitted. Locally 20ms is enough; the margin covers the Docker
+// attach stream.
+var pasteSubmitDelay = 300 * time.Millisecond
+
+// typeCode types a code into the CLI's terminal, then presses Enter on its own.
+func typeCode(ctx context.Context, w io.Writer, code string) error {
+	if _, err := io.WriteString(w, code); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(pasteSubmitDelay):
+	}
+	_, err := io.WriteString(w, "\r")
+	return err
+}
+
 func signInURLAllowed(provider, link string) bool {
 	u, err := url.Parse(link)
 	if err != nil || u.Scheme != "https" || u.User != nil {
@@ -357,7 +378,10 @@ func (r *Runner) runSignIn(parent context.Context, ls LoginStarter, s store.Sign
 			if prompted && prov.pastes && p.Input() != nil {
 				code, err := q.TakeSignInCode(ctx, s.ID)
 				if err == nil {
-					if _, err := io.WriteString(p.Input(), code+"\r"); err != nil {
+					if err := typeCode(ctx, p.Input(), code); err != nil {
+						if ctx.Err() != nil {
+							continue // the ctx.Done case reports it
+						}
 						_ = p.Kill()
 						finish("failed", "Couldn't hand the code to the CLI: "+err.Error())
 						return
