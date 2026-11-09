@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Sets up and starts Vesper with hardened agent containers. See `make start`.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+IMAGE=${RUNNER_IMAGE:-vesper/agent-base:latest}
+API_PORT=${API_PORT:-8000}
+API=http://localhost:$API_PORT/api/v1
+
+need() {
+  for tool in "$@"; do
+    command -v "$tool" >/dev/null || { echo "vesper: $tool is required" >&2; exit 1; }
+  done
+}
+
+setup() {
+  need docker openssl python3 curl
+  docker info >/dev/null 2>&1 || { echo "vesper: Docker isn't running" >&2; exit 1; }
+  [ -f .env ] || cp .env.example .env
+  # Never replace a key: secrets encrypted with it would become unreadable.
+  if [ -z "${SECRETS_KEY:-}" ] && ! grep -q '^SECRETS_KEY=.' .env; then
+    key=$(openssl rand -base64 32)
+    python3 -c 'import sys
+s = open(".env").read().replace("\nSECRETS_KEY=\n", "\nSECRETS_KEY=" + sys.argv[1] + "\n", 1)
+open(".env", "w").write(s if sys.argv[1] in s else s + "\nSECRETS_KEY=" + sys.argv[1] + "\n")' "$key"
+    echo "vesper: generated SECRETS_KEY in .env. Keep it: stored secrets need it."
+  fi
+  docker build -q -t "$IMAGE" deploy/agent-base >/dev/null
+  echo "vesper: agent image $IMAGE is ready"
+}
+
+has_secret() { curl -fsS "$API/secrets" | grep -q "\"name\":\"$1\""; }
+
+# Reads the value on stdin so it never appears in a process list.
+store_secret() {
+  python3 -c 'import json, sys; print(json.dumps({"name": sys.argv[1], "value": sys.stdin.read().strip()}))' "$1" |
+    curl -fsS -o /dev/null -X PUT -H 'Content-Type: application/json' --data-binary @- "$API/secrets"
+  echo "vesper: stored $1"
+}
+
+require_api() {
+  curl -fsS -o /dev/null "$API/health" || { echo "vesper: the API isn't running on :$API_PORT (start it with make dev)" >&2; exit 1; }
+}
+
+# Prints the login token from a captured terminal session.
+extract_claude_token() {
+  python3 -c 'import re, sys
+text = open(sys.argv[1], errors="replace").read()
+text = re.sub(r"\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[=>]", "", text)
+found = re.findall(r"sk-ant-oat[0-9]*-[A-Za-z0-9_-]+", text)
+print(found[-1] if found else "")' "$1"
+}
+
+login_claude() {
+  need docker python3 curl
+  require_api
+  echo "vesper: open the URL below, sign in, and paste the code back here."
+  capture=$(mktemp)
+  # A wide terminal keeps the URL and the token on one line each.
+  docker run -it --rm "$IMAGE" sh -c 'stty cols 2000; exec claude setup-token' | tee "$capture" || true
+  token=$(extract_claude_token "$capture")
+  rm -f "$capture"
+  if [ -z "$token" ]; then
+    read -rsp "vesper: paste the sk-ant-oat token: " token; echo
+    case $token in sk-ant-oat*) ;; *) echo "vesper: that isn't a Claude plan token" >&2; return 1 ;; esac
+  fi
+  printf %s "$token" | store_secret harness:anthropic
+}
+
+valid_codex_auth() {
+  python3 -c 'import json, sys
+a = json.load(open(sys.argv[1]))
+sys.exit(0 if a.get("auth_mode") == "chatgpt" and a.get("tokens", {}).get("refresh_token") else 1)' "$1" 2>/dev/null
+}
+
+login_codex() {
+  need docker python3 curl tar
+  require_api
+  auth=$(mktemp)
+  if [ -n "${CODEX_AUTH_FILE:-}" ]; then
+    cp "${CODEX_AUTH_FILE/#\~/$HOME}" "$auth"
+  else
+    echo "vesper: open the URL below and enter the code to sign in to ChatGPT."
+    name=vesper-codex-login-$$
+    docker run -it --name "$name" "$IMAGE" sh -c "stty cols 2000; exec codex login --device-auth -c 'cli_auth_credentials_store=\"file\"'" || true
+    docker cp "$name:/home/node/.codex/auth.json" - 2>/dev/null | tar -xO > "$auth" || true
+    docker rm -f "$name" >/dev/null 2>&1 || true
+  fi
+  if ! valid_codex_auth "$auth"; then
+    rm -f "$auth"
+    echo "vesper: no ChatGPT login was captured. If device sign-in is off for your account, enable it in ChatGPT's security settings, or run: CODEX_AUTH_FILE=~/.codex/auth.json make codex-login" >&2
+    return 1
+  fi
+  store_secret harness:openai < "$auth"
+  rm -f "$auth"
+}
+
+offer_github_token() {
+  has_secret git:pat || has_secret git:ssh && return 0
+  command -v gh >/dev/null && gh auth token >/dev/null 2>&1 || {
+    echo "vesper: agents can't clone private repos until you add git:pat in Settings → Connections & secrets."
+    return 0
+  }
+  read -rp "vesper: give agents your GitHub CLI token as git:pat so they can clone and push? [y/N] " answer
+  case $answer in [yY]*) gh auth token | store_secret git:pat ;; esac
+}
+
+start() {
+  setup
+  make --no-print-directory dev-infra stop-dev
+  trap 'kill 0' EXIT
+  make --no-print-directory api &
+  echo "vesper: waiting for the API on :$API_PORT"
+  for _ in $(seq 1 120); do
+    curl -fsS -o /dev/null "$API/health" 2>/dev/null && break
+    sleep 1
+  done
+  require_api
+  # A failed sign-in leaves that harness unavailable; the rest still starts.
+  has_secret harness:anthropic || login_claude || echo "vesper: skipped Claude. Retry with make claude-login."
+  has_secret harness:openai || login_codex || echo "vesper: skipped Codex. Retry with make codex-login."
+  offer_github_token
+  make --no-print-directory web &
+  make --no-print-directory runner &
+  echo "vesper: running at http://localhost:${WEB_PORT:-3000}. Ctrl-C stops it all."
+  wait
+}
+
+case ${1:-} in
+  setup) setup ;;
+  start) start ;;
+  login-claude) login_claude ;;
+  login-codex) login_codex ;;
+  *) echo "usage: $0 setup|start|login-claude|login-codex" >&2; exit 2 ;;
+esac

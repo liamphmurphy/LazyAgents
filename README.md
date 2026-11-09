@@ -144,6 +144,11 @@ workspace so you can explore before connecting an agent, and a setup checklist
 walks you through what is still missing. To start with an empty workspace, set
 `SEED=false` and `LOCAL_USER_NAME` in `.env` before first boot.
 
+Developing Vesper or running it from a checkout? `make start` does everything in
+one command: it creates `.env`, builds the hardened agent image, signs in to your
+Claude and Codex plans, and runs the app at
+**[localhost:3000](http://localhost:3000)**.
+
 Ready to run agents? Set `SECRETS_KEY` in `.env`, then follow the
 **[setup guide](docs/guide.md#running-agents)** to add provider keys
 (`harness:anthropic` for Claude Code, `harness:openai` for Codex) and connect a

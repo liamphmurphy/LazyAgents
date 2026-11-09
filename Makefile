@@ -2,10 +2,10 @@
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 
-.PHONY: help up down stop-dev dev dev-infra api web web-deps runner gen gen-check test lint build reset
+.PHONY: help up down start setup login claude-login codex-login stop-dev dev dev-infra api web web-deps runner local-dev local-runner gen gen-check test lint build reset
 
 help: ## List targets
-	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
 
 up: ## Full stack in Docker → http://localhost:8080
 	docker compose up --build
@@ -18,12 +18,32 @@ dev-infra: ## Start postgres + seaweedfs only
 
 API_PORT ?= 8000
 WEB_PORT ?= 3000
-# Host development uses CLI logins; override both API and runner for Docker.
-RUNNER_BACKEND ?= local
+# Agents run in hardened containers. `make local-dev` and `make local-runner` are the no-isolation fallback.
+RUNNER_BACKEND ?= docker
+# Turn containers reach the API on the host through this network and name.
+RUNNER_NETWORK ?= bridge
+RUNNER_MCP_URL ?= http://host.docker.internal:$(API_PORT)/mcp
+# A key in the environment wins over .env (`make setup` creates that one).
+SECRETS_KEY ?= $(shell sed -n 's/^SECRETS_KEY=//p' .env 2>/dev/null)
+export SECRETS_KEY
 # Processes the host runner runs at once; delegated runs and resumed turns share these slots.
 RUNNER_MAX_CONCURRENT ?= 4
 # Runs inherit this, so agents' DB tests use the dev Postgres (each test makes its own database) instead of starting one.
 TEST_DATABASE_URL ?= postgres://lazyagents:lazyagents@127.0.0.1:5432/postgres?sslmode=disable
+
+start: ## One command for everything: set up, sign in if needed, run the app and hardened runner → http://localhost:3000
+	@API_PORT=$(API_PORT) scripts/vesper-setup.sh start
+
+setup: ## Create .env with a SECRETS_KEY and build the agent image
+	@scripts/vesper-setup.sh setup
+
+login: claude-login codex-login ## Sign Vesper in to both Claude and Codex plans (needs the API running)
+
+claude-login: ## Store a Claude plan login for agent containers (needs the API running)
+	@API_PORT=$(API_PORT) scripts/vesper-setup.sh login-claude
+
+codex-login: ## Store a Codex plan login; CODEX_AUTH_FILE=~/.codex/auth.json copies an existing one (needs the API running)
+	@API_PORT=$(API_PORT) scripts/vesper-setup.sh login-codex
 
 stop-dev: ## Kill whatever is listening on the API and web dev ports (left over from an earlier run)
 	@for port in $(API_PORT) $(WEB_PORT); do \
@@ -45,8 +65,14 @@ api: ## Run the API (hot reload if air is installed: go install github.com/air-v
 	cd server && export RUNNER_BACKEND=$(RUNNER_BACKEND) PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000}; \
 	  if command -v air >/dev/null; then air; else go run ./cmd/vesper serve; fi
 
-runner: ## Run dispatched tickets (default local: host claude/codex logins, no isolation)
-	cd server && RUNNER_BACKEND=$(RUNNER_BACKEND) RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/vesper runner
+runner: ## Run dispatched tickets in hardened containers
+	cd server && $(if $(filter docker,$(RUNNER_BACKEND)),RUNNER_NETWORK=$(RUNNER_NETWORK) RUNNER_MCP_URL=$(RUNNER_MCP_URL)) RUNNER_BACKEND=$(RUNNER_BACKEND) RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/vesper runner
+
+local-dev: ## Legacy: `make dev` for the no-isolation local runner
+	@$(MAKE) --no-print-directory RUNNER_BACKEND=local dev
+
+local-runner: ## Legacy: run agents directly on this machine with its claude/codex logins, no isolation
+	@$(MAKE) --no-print-directory RUNNER_BACKEND=local runner
 
 WEB_DEPS := web/node_modules/.package-lock.json
 

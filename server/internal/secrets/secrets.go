@@ -139,6 +139,37 @@ func (s *Service) Set(ctx context.Context, ws uuid.UUID, by uuid.UUID, in SetInp
 	})
 }
 
+// Replace rewrites the value of the secret Reveal would return, keeping its
+// scope. update gets the current value and reports whether to store a new one.
+func (s *Service) Replace(ctx context.Context, ws uuid.UUID, project *uuid.UUID, name string, update func(current string) (string, bool)) error {
+	if s.Box == nil {
+		return ErrNoKey
+	}
+	row, err := s.Q.FindSecret(ctx, store.FindSecretParams{WorkspaceID: ws, Name: name, ProjectID: project})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return apperr.ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	pt, err := s.Box.open(ws, row.ProjectID, row.Name, row.Nonce, row.Ciphertext)
+	if err != nil {
+		return err
+	}
+	next, ok := update(string(pt))
+	if !ok {
+		return nil
+	}
+	nonce, ct, err := s.Box.seal(ws, row.ProjectID, row.Name, []byte(next))
+	if err != nil {
+		return err
+	}
+	_, err = s.Q.UpsertSecret(ctx, store.UpsertSecretParams{
+		ID: row.ID, WorkspaceID: ws, ProjectID: row.ProjectID, Name: row.Name, GrantsScope: row.GrantsScope,
+		Nonce: nonce, Ciphertext: ct, CreatedByUserID: row.CreatedByUserID,
+	})
+	return err
+}
+
 // Reveal decrypts a secret for server-side use (broker, runner). A project's
 // own secret wins over the workspace one. Never expose the result via the API.
 func (s *Service) Reveal(ctx context.Context, ws uuid.UUID, project *uuid.UUID, name string) (string, error) {

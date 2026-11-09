@@ -1091,7 +1091,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		cacheDir = backend.DependencyCacheDir()
 	}
 	inv, err := h.Invocation(harness.Workspace{
-		DependencyCacheDir: cacheDir, Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
+		DependencyCacheDir: cacheDir, Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv, ContainerSandbox: r.Backend.Name() == "docker",
 	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session, Images: inputPaths, InlineImages: inputImages})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
@@ -1112,10 +1112,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	// Only secrets and the token are scrubbed from events, not every env
 	// value (the ticket key is in env too).
-	sensitive := make(map[string]string, len(env))
-	for k, v := range env {
-		sensitive[k] = v
-	}
+	sensitive := sensitiveEnv(env)
 	env["LAZYAGENTS_RUN_ID"] = c.run.ID.String()
 	env["LAZYAGENTS_TICKET"] = c.ticket.Key
 	argv := append(append([]string{}, TurnWrapper...), inv.Argv...)

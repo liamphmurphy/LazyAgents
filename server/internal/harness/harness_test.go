@@ -931,3 +931,15 @@ func TestCodexImageOutboxProfile(t *testing.T) {
 		t.Errorf("coding + images uses the repo-write profile: %v", inv.Argv)
 	}
 }
+
+func TestCodexContainerSandboxReplacesBwrapProfiles(t *testing.T) {
+	for _, s := range []agentdef.Resolved{spec("repo:write", "allowed"), spec()} {
+		box := ws
+		box.ContainerSandbox = true
+		inv, _ := Codex{}.Invocation(box, Turn{Spec: s, Prompt: "go"})
+		a := strings.Join(inv.Argv, " ")
+		if !strings.Contains(a, `sandbox_mode="danger-full-access"`) || strings.Contains(a, "default_permissions") {
+			t.Fatalf("argv %s", a)
+		}
+	}
+}

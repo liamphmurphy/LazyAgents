@@ -188,7 +188,7 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	refs := r.loadChatReferences(ctx, q, c.run, job.ReferenceRoles)
 	h := harness.Codex{Prices: r.Cfg.ModelPrices}
 	inv, err := h.Invocation(harness.Workspace{
-		DependencyCacheDir: cacheDir, Dir: r.Backend.WorkspaceDir(wsID(c.run)), MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv,
+		DependencyCacheDir: cacheDir, Dir: r.Backend.WorkspaceDir(wsID(c.run)), MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv, ContainerSandbox: r.Backend.Name() == "docker",
 	}, harness.Turn{Spec: spec, Prompt: imageStepPrompt + imageStepReferencePrompt(refs) + "Request: " + job.Prompt, Images: refs.images()})
 	if err != nil {
 		r.Log.Warn("image step invocation", "run", c.run.ID, "err", err)
@@ -208,10 +208,7 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	for k, v := range inv.Env {
 		env[k] = v
 	}
-	sensitive := make(map[string]string, len(env))
-	for k, v := range env {
-		sensitive[k] = v
-	}
+	sensitive := sensitiveEnv(env)
 	env["LAZYAGENTS_RUN_ID"] = c.run.ID.String()
 	env["LAZYAGENTS_TICKET"] = c.ticket.Key
 

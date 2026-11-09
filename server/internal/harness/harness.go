@@ -23,6 +23,9 @@ type Workspace struct {
 	MCPURL             string // the Vesper MCP endpoint, reachable from the turn
 	Token              string // the run's agent token (vsp_…)
 	TokenEnv           string // env var that carries it, e.g. LAZYAGENTS_TOKEN
+	// ContainerSandbox means the container is the isolation boundary: Docker
+	// blocks the namespaces Codex's own sandbox (bwrap) needs.
+	ContainerSandbox bool
 }
 
 // Turn is one headless invocation.

@@ -20,6 +20,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
@@ -247,7 +248,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	var backend runner.Backend
 	switch rc.Backend {
 	case "docker":
-		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network}
+		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network, MemoryMB: rc.MemoryMB, PidsLimit: rc.PidsLimit}
 		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := d.Ping(pctx)
 		cancel()
@@ -269,6 +270,17 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	host, _ := os.Hostname()
 	blobs := blob.New(cfg.S3)
 	secretStore := &secrets.Service{Q: store.New(pool), Box: box}
+	if d, ok := backend.(*runner.Docker); ok {
+		d.SaveCodexAuth = func(ctx context.Context, scope, auth string) error {
+			ws, project, err := runner.ParseCodexAuthScope(scope)
+			if err != nil {
+				return err
+			}
+			return secretStore.Replace(ctx, ws, project, chatmodels.KeySecret[agentdef.HarnessCodex], func(current string) (string, bool) {
+				return auth, chatmodels.CodexAuthRefreshed(current, auth)
+			})
+		}
+	}
 	workflows := runs.NewWorkflowEngine(pool, &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, &tracker.Service{Pool: pool})
 	workflows.Catalog = chatmodels.Catalog{RequireKey: rc.Backend == "docker", Secrets: secretStore}
 	r := &runner.Runner{
