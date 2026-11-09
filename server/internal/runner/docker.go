@@ -392,14 +392,47 @@ func (p *dockerProc) remove() {
 	_, _ = p.d.do(context.Background(), "DELETE", "/containers/"+p.id+"?force=1", nil, "", nil)
 }
 
+// waitRetries is how many times Wait re-attaches to a container after the
+// long-poll fails at the transport (the socket dropped, e.g. across a Docker
+// VM sleep). Removing the container then would kill a turn that is still fine.
+const waitRetries = 3
+
+var waitBackoff = time.Second
+
 func (p *dockerProc) Wait() (int, error) {
 	defer p.remove()
 	var res struct{ StatusCode int }
-	if _, err := p.d.do(context.Background(), "POST", "/containers/"+p.id+"/wait", nil, "", &res); err != nil {
+	var err error
+	for attempt := 0; ; attempt++ {
+		_, err = p.d.do(context.Background(), "POST", "/containers/"+p.id+"/wait", nil, "", &res)
+		var de *dockerError
+		if err == nil || errors.As(err, &de) || attempt >= waitRetries {
+			break // done, or the engine answered with an error retrying won't change
+		}
+		slog.Warn("docker wait failed; retrying", "container", p.id, "err", err)
+		time.Sleep(waitBackoff << attempt)
+	}
+	if err != nil {
 		return -1, err
 	}
+	// Even a failed turn may have rotated the Codex login: keep it first.
 	p.keepRefreshedCodexAuth()
+	if res.StatusCode != 0 && p.oomKilled() {
+		return res.StatusCode, fmt.Errorf("the container ran out of memory (exit %d); raise RUNNER_MEMORY_MB or reduce what the run builds at once", res.StatusCode)
+	}
 	return res.StatusCode, nil
+}
+
+// oomKilled reports whether the kernel killed the container for its memory
+// limit, which otherwise looks like any other SIGKILL (exit 137).
+func (p *dockerProc) oomKilled() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var info struct{ State struct{ OOMKilled bool } }
+	if _, err := p.d.do(ctx, "GET", "/containers/"+p.id+"/json", nil, "", &info); err != nil {
+		return false
+	}
+	return info.State.OOMKilled
 }
 
 // keepRefreshedCodexAuth reads the only file that ever comes back out of a

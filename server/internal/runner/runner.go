@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -99,6 +100,8 @@ type Runner struct {
 	mu     sync.Mutex
 	active int
 	wg     sync.WaitGroup
+	// sweeping keeps Run to one Sweep in flight (Sweep alone owns otherBackend).
+	sweeping atomic.Bool
 	// wtLocks serialises worktree creation, merges and removal per workspace
 	// within this runner process. Git locks and the run state machine cover
 	// cross-process operations.
@@ -140,7 +143,16 @@ func (r *Runner) Run(ctx context.Context) error {
 		case <-beat.C:
 			r.heartbeat(ctx)
 		case <-sweep.C:
-			r.Sweep(ctx)
+			// Off this loop: a sweep runs checkpoint pushes, and while one is
+			// slow nothing would be claimed and no heartbeat sent. One at a time.
+			if r.sweeping.CompareAndSwap(false, true) {
+				r.wg.Add(1)
+				go func() {
+					defer r.wg.Done()
+					defer r.sweeping.Store(false)
+					r.Sweep(ctx)
+				}()
+			}
 		case <-poll.C:
 			r.Tick(ctx)
 		case <-schedule.C:
