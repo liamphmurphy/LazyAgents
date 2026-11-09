@@ -290,6 +290,7 @@ type ChatSession struct {
 	ConnectorIds       []uuid.UUID
 	SpaceID            *uuid.UUID
 	WorkBranches       []string
+	CommitEmail        *string
 }
 
 type ChatSpace struct {

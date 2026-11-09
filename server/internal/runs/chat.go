@@ -13,6 +13,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/links"
 	"github.com/liamphmurphy/vesper/server/internal/personas"
@@ -167,6 +168,9 @@ type ChatInput struct {
 	Hidden bool
 	// NoRepo keeps a coding persona's chat out of its repositories.
 	NoRepo bool
+	// CommitEmail is one of the creator's addresses for the chat's commits;
+	// empty leaves it unpicked (their primary is used). Only with a repository.
+	CommitEmail string
 	// ConnectorIDs, when set, narrows the persona's connectors for this chat.
 	ConnectorIDs []uuid.UUID
 	// SpaceID puts the chat in one of the creator's spaces, whose defaults
@@ -293,6 +297,11 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 			// No branch yet: the persona makes one when a change is asked for.
 			out, err = q.SetChatRepo(ctx, store.SetChatRepoParams{ID: out.ID, RepoUrl: &repo})
 			if err != nil {
+				return err
+			}
+		}
+		if in.CommitEmail != "" {
+			if out, err = setChatCommitEmail(ctx, q, out, in.CommitEmail); err != nil {
 				return err
 			}
 		}
@@ -854,6 +863,38 @@ func (s *Service) UpdateChat(ctx context.Context, ws, user, id uuid.UUID, in Cha
 		return err
 	})
 	return out, err
+}
+
+// SetChatCommitEmail picks which of the creator's addresses a coding chat's
+// commits are authored as. The runner sets git's identity on every turn, so it
+// applies from the next one; unlike UpdateChat it is allowed while a turn runs
+// and needs no revision.
+func (s *Service) SetChatCommitEmail(ctx context.Context, ws, user, id uuid.UUID, email string) (store.ChatSession, error) {
+	var out store.ChatSession
+	err := s.tx(ctx, func(q *store.Queries) error {
+		chat, err := lockChat(ctx, q, ws, user, id)
+		if err != nil {
+			return err
+		}
+		out, err = setChatCommitEmail(ctx, q, chat, email)
+		return err
+	})
+	return out, err
+}
+
+func setChatCommitEmail(ctx context.Context, q *store.Queries, chat store.ChatSession, email string) (store.ChatSession, error) {
+	if chat.RepoUrl == nil {
+		return chat, apperr.Invalid("commit_email", "only a chat with a repository makes commits")
+	}
+	u, err := q.GetUser(ctx, store.GetUserParams{ID: chat.CreatedBy, WorkspaceID: chat.WorkspaceID})
+	if err != nil {
+		return chat, err
+	}
+	own, ok := auth.OwnEmail(u, email)
+	if !ok {
+		return chat, apperr.Invalid("commit_email", "add %s to your profile first", strings.TrimSpace(email))
+	}
+	return q.SetChatCommitEmail(ctx, store.SetChatCommitEmailParams{ID: chat.ID, WorkspaceID: chat.WorkspaceID, CommitEmail: &own})
 }
 
 // lockAttachableProject is the active project a chat may attach.

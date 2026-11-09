@@ -20,6 +20,11 @@ UPDATE chat_sessions SET connector_ids = $2 WHERE id = $1 RETURNING *;
 -- A coding chat's repository, set once right after creation and never changed.
 UPDATE chat_sessions SET repo_url = $2 WHERE id = $1 RETURNING *;
 
+-- name: SetChatCommitEmail :one
+-- The address a coding chat's commits are authored as. Not a revision change:
+-- it applies from the next turn and can be picked while one runs.
+UPDATE chat_sessions SET commit_email = $3 WHERE id = $1 AND workspace_id = $2 RETURNING *;
+
 -- name: AddChatWorkBranches :exec
 -- Appends the branches a coding chat's persona pushed that it doesn't list
 -- yet, keeping the order they were first seen in, up to @max_branches.

@@ -33,6 +33,18 @@ func OwnEmail(u store.User, addr string) (string, bool) {
 	return "", false
 }
 
+// CommitEmail is the address a coding chat's commits are authored as: the one
+// picked for the chat while it is still one of the creator's, else their
+// primary.
+func CommitEmail(u store.User, picked *string) string {
+	if picked != nil {
+		if e, ok := OwnEmail(u, *picked); ok {
+			return e
+		}
+	}
+	return u.Email
+}
+
 // NormalizeEmails trims a replacement address list and checks each is a bare
 // address (no display name) appearing once, ignoring case.
 func NormalizeEmails(in []string) ([]string, error) {

@@ -35,7 +35,7 @@ type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
   id: string; project?: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
-  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branches?: string[];
+  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branches?: string[]; commit_email?: string;
   effort?: Effort;
 };
 type Message = {
@@ -342,7 +342,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const me: Record<string, unknown> & { id: string; name: string; emails: string[] } = {
     id: "00000000-0000-4000-8000-0000000000aa", name: "Liam", email: emails[0], emails, initials: "L", role_title: "Owner",
   };
+  const ownEmail = (e: unknown) => me.emails.find((x) => x.toLowerCase() === String(e).trim().toLowerCase());
   const profileRequests: string[] = [];
+  const commitEmailRequests: string[] = [];
   const initialsOf = (name: string) => name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   async function handle(route: Route) {
@@ -556,9 +558,26 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const repo = (b.repo_url as string | undefined) ?? owner?.repos[0];
       if (b.repo_url !== undefined && !(owner?.capabilities.code && owner.repos.includes(String(b.repo_url)))) return fail(err(422, "invalid", "not one of the persona's repos", "repo_url"));
       if (owner?.capabilities.code && repo) Object.assign(c, { repo_url: repo, work_branches: [] });
+      if (b.commit_email !== undefined) {
+        if (!c.repo_url) return fail(err(422, "invalid", "only a chat with a repository makes commits", "commit_email"));
+        if (!ownEmail(b.commit_email)) return fail(err(422, "invalid", `add ${b.commit_email} to your profile first`, "commit_email"));
+        c.commit_email = ownEmail(b.commit_email);
+      }
       chats.unshift(c);
       messages.set(c.id, []);
       return json(ref(c), 201);
+    }
+
+    const ce = /^\/chats\/([^/]+)\/commit-email$/.exec(path);
+    if (ce && method === "PUT") {
+      const c = chats.find((x) => x.id === ce[1]);
+      if (!c) return fail(err(404, "not_found", "Chat not found"));
+      const email = body().email;
+      commitEmailRequests.push(String(email));
+      if (!c.repo_url) return fail(err(422, "invalid", "only a chat with a repository makes commits", "commit_email"));
+      if (!ownEmail(email)) return fail(err(422, "invalid", `add ${email} to your profile first`, "commit_email"));
+      c.commit_email = ownEmail(email);
+      return json(ref(c));
     }
 
     const pp = /^\/chats\/([^/]+)\/persona-proposals(?:\/([^/]+))?$/.exec(path);
@@ -835,6 +854,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests };
+    return { connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
   })();
 }

@@ -18,6 +18,7 @@ import {
   useCreateChat,
   useDeleteChat,
   useSendChatMessage,
+  useSetChatCommitEmail,
 } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
@@ -59,6 +60,8 @@ import { HumanAvatar } from "@/components/domain/avatars";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
+import { CommitEmailChip, CommitEmailPicker } from "./commit-email";
+import { needsCommitEmailPick } from "@/lib/commit-email";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
 
@@ -300,6 +303,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const [commandActive, setCommandActive] = useState(0);
   const [commandDismissed, setCommandDismissed] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
+  const setCommitEmail = useSetChatCommitEmail();
+  const [commitPickerOpen, setCommitPickerOpen] = useState(false);
 
   const c = chat.data;
   const loaded = !!c;
@@ -411,7 +416,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   };
 
   function submit(body: string) {
-    if (!body.trim() || locked || unavailable || files.pending) return;
+    if (!body.trim() || locked || unavailable || files.pending || commitPickRequired) return;
     cancel.reset();
     pinned.current = true;
     const context_refs = toContextRefs(chips);
@@ -446,6 +451,11 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // Before the first message the persona can still change: a chat keeps its persona for life,
   // so switching starts a fresh chat with the other persona and drops this empty one.
   const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
+  // With several addresses, a coding chat asks which one its commits use; the
+  // first message waits for the answer, later ones don't.
+  const myEmails = boot.data?.me.emails ?? [];
+  const askCommitEmail = !!c && !c.archived && needsCommitEmailPick(myEmails, c.repo_url, c.commit_email);
+  const commitPickRequired = fresh && askCommitEmail;
   function switchPersona(personaId: string, repo?: string) {
     if (!c || (personaId === c.persona?.id && !repo) || create.isPending || send.isPending || send.isSuccess) return;
     replaceChat(personaId, repo, text);
@@ -488,7 +498,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
       </div>
     );
   }
-  const actionError = send.error ?? edit.error ?? cancel.error ?? create.error;
+  const actionError = send.error ?? edit.error ?? cancel.error ?? create.error ?? setCommitEmail.error;
   // A chat without a persona, or whose persona was deleted, is the built-in Assistant.
   const persona = personaLook(c.persona);
   const full = personas.data?.personas.find((p) => p.id === c.persona?.id);
@@ -658,6 +668,9 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               )}
             </span>
           )}
+          {c.repo_url && c.commit_email && myEmails.length > 1 && (
+            <CommitEmailChip email={c.commit_email} open={commitPickerOpen} onClick={() => setCommitPickerOpen((o) => !o)} />
+          )}
           {/* In a space the project sits with the space's context chips below. */}
           {!c.space && <ChatProjectPicker chat={c} disabled={running} />}
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
@@ -821,6 +834,23 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             </div>
           ) : (
             <>
+            {c.repo_url && (askCommitEmail || commitPickerOpen) && (
+              <div className="mb-2">
+                <CommitEmailPicker
+                  emails={myEmails}
+                  name={boot.data?.me.name ?? ""}
+                  repo={c.repo_url}
+                  value={askCommitEmail ? undefined : c.commit_email}
+                  required={commitPickRequired}
+                  disabled={setCommitEmail.isPending}
+                  onPick={(email) => {
+                    setCommitEmail.reset();
+                    setCommitEmail.mutate({ id: c.id, email }, { onSuccess: () => setCommitPickerOpen(false) });
+                  }}
+                  onClose={() => setCommitPickerOpen(false)}
+                />
+              </div>
+            )}
             <ChatWorkflowTray chatId={c.id} />
             {startingWorkflow && (
               <div className="mb-2">
@@ -984,8 +1014,14 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 <Button
                   type="submit"
                   variant="primary"
-                  disabled={locked || !!unavailable || files.pending || !text.trim()}
-                  title={running ? "Stop the reply and answer this together with your last message" : undefined}
+                  disabled={locked || !!unavailable || files.pending || !text.trim() || commitPickRequired}
+                  title={
+                    commitPickRequired
+                      ? "Pick which email commits use first"
+                      : running
+                        ? "Stop the reply and answer this together with your last message"
+                        : undefined
+                  }
                 >
                   {running ? "Interrupt" : research ? "Plan it" : "Send"}
                 </Button>

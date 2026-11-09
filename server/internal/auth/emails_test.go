@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 func TestNormalizeEmails(t *testing.T) {
@@ -22,6 +24,25 @@ func TestNormalizeEmails(t *testing.T) {
 	} {
 		if _, err := NormalizeEmails(bad); err == nil {
 			t.Errorf("NormalizeEmails(%q) accepted", bad)
+		}
+	}
+}
+
+func TestCommitEmail(t *testing.T) {
+	u := store.User{Email: "ada@example.com", ExtraEmails: []string{"Ada@Work.example"}}
+	pick := func(s string) *string { return &s }
+	for _, c := range []struct {
+		picked *string
+		want   string
+	}{
+		{nil, "ada@example.com"},
+		{pick("ada@work.example"), "Ada@Work.example"},
+		{pick(" ada@example.com "), "ada@example.com"},
+		// No longer one of theirs: back to the primary.
+		{pick("old@example.com"), "ada@example.com"},
+	} {
+		if got := CommitEmail(u, c.picked); got != c.want {
+			t.Errorf("CommitEmail(%v) = %q, want %q", c.picked, got, c.want)
 		}
 	}
 }

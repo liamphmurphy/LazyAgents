@@ -11,6 +11,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -111,6 +112,13 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		}
 		if c.RepoUrl != nil {
 			item.WorkBranches = &c.WorkBranches
+			// Only while it is still one of the creator's addresses (chats are
+			// listed for their creator); otherwise the primary is used again.
+			if c.CommitEmail != nil {
+				if e, ok := auth.OwnEmail(u, *c.CommitEmail); ok {
+					item.CommitEmail = &e
+				}
+			}
 		}
 		if c.Effort != "" {
 			e := api.ChatEffort(c.Effort)
@@ -392,7 +400,7 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 		return nil, apperr.Invalid("body", "required")
 	}
 	b := req.Body
-	in := runs.ChatInput{Project: deref(b.Project), Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl), Hidden: deref(b.Hidden), SpaceID: b.SpaceId}
+	in := runs.ChatInput{Project: deref(b.Project), Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl), Hidden: deref(b.Hidden), SpaceID: b.SpaceId, CommitEmail: deref(b.CommitEmail)}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}
@@ -437,6 +445,19 @@ func (s *Server) UpdateChat(ctx context.Context, req api.UpdateChatRequestObject
 	}
 	out, err := s.toChat(ctx, c)
 	return api.UpdateChat200JSONResponse(out), err
+}
+
+func (s *Server) SetChatCommitEmail(ctx context.Context, req api.SetChatCommitEmailRequestObject) (api.SetChatCommitEmailResponseObject, error) {
+	u, _, ws := me(ctx)
+	if req.Body == nil {
+		return nil, apperr.Invalid("body", "required")
+	}
+	c, err := s.Runs.SetChatCommitEmail(ctx, ws, u.ID, req.Id, req.Body.Email)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.toChat(ctx, c)
+	return api.SetChatCommitEmail200JSONResponse(out), err
 }
 
 // ListChatSuggestions returns the person's conversation starters: none until

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"path"
 	"regexp"
 	"slices"
@@ -1152,6 +1153,16 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	sensitive := sensitiveEnv(env)
 	env["LAZYAGENTS_RUN_ID"] = c.run.ID.String()
 	env["LAZYAGENTS_TICKET"] = c.ticket.Key
+	if chatRepo != "" {
+		// After sensitiveEnv: the person's name and email aren't secrets to
+		// scrub from the transcript.
+		ident, err := chatCommitEnv(ctx, q, c)
+		if err != nil {
+			r.failChat(ctx, c, "Could not load the chat's commit author.")
+			return
+		}
+		maps.Copy(env, ident)
+	}
 	argv := append(append([]string{}, TurnWrapper...), inv.Argv...)
 
 	// A coding chat's turn is reported as what changed since this commit,

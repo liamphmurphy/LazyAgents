@@ -19,6 +19,8 @@ import { ChipList } from "./context-chips";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
 import { PersonaAvatar, PersonaSwitcher, RepoSelect, personaLook, useOpenPersonaManager } from "./persona";
+import { CommitEmailPicker } from "./commit-email";
+import { needsCommitEmailPick } from "@/lib/commit-email";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -45,6 +47,10 @@ function Welcome({ disabled }: { disabled: boolean }) {
   const [repoPicked, setRepoPicked] = useState<string>();
   const repos = fullPersona?.repos ?? [];
   const repo = codesInRepos(fullPersona) ? (repoPicked && repos.includes(repoPicked) ? repoPicked : repos[0]) : undefined;
+  // With several addresses, a coding chat's first message waits for which one its commits use.
+  const emails = boot.data?.me.emails ?? [];
+  const [commitEmail, setCommitEmail] = useState<string>();
+  const askCommitEmail = needsCommitEmailPick(emails, repo, commitEmail);
   const managePersonas = useOpenPersonaManager();
   const [text, setText] = useState("");
   const [research, setResearch] = useState(false);
@@ -58,10 +64,10 @@ function Welcome({ disabled }: { disabled: boolean }) {
 
   function submit() {
     const body = text.trim();
-    if (!body || locked || files.pending) return;
+    if (!body || locked || files.pending || askCommitEmail) return;
     const context_refs = toContextRefs(chips);
     start.mutate(
-      { persona_id: personaId, ...(repo ? { repo_url: repo } : {}), message: { body, ...(research ? { research: true } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
+      { persona_id: personaId, ...(repo ? { repo_url: repo, ...(commitEmail ? { commit_email: commitEmail } : {}) } : {}), message: { body, ...(research ? { research: true } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
       { onSuccess: (c) => router.push(`/chat/${c.id}`) },
     );
   }
@@ -112,6 +118,9 @@ function Welcome({ disabled }: { disabled: boolean }) {
             </button>
           </p>
         )}
+        {repo && emails.length > 1 && (
+          <CommitEmailPicker emails={emails} name={boot.data?.me.name ?? ""} repo={repo} value={commitEmail} onPick={setCommitEmail} disabled={locked} required />
+        )}
         <AttachmentChips attachments={files} />
         <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
         <TextArea
@@ -135,7 +144,12 @@ function Welcome({ disabled }: { disabled: boolean }) {
           <AttachButton onFiles={files.add} disabled={locked} />
           <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
           <span className="flex-1" />
-          <Button type="submit" variant="primary" disabled={locked || files.pending || !text.trim()}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={locked || files.pending || !text.trim() || askCommitEmail}
+            title={askCommitEmail ? "Pick which email commits use first" : undefined}
+          >
             {start.isPending ? "Starting…" : research ? "Plan it" : "Send"}
           </Button>
         </div>

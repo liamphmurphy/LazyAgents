@@ -136,6 +136,66 @@ func TestCodingChatRepoSetupPushAndResume(t *testing.T) {
 	}
 }
 
+// A coding chat commits as the address its owner picked for it, from the next
+// turn on (even within a segment), and goes back to their primary once that
+// address leaves their profile.
+func TestCodingChatCommitsAsPickedEmail(t *testing.T) {
+	const commitAuthor = "git commit -q --allow-empty -m turn && git log -1 --format='author=%ae committer=%ce'"
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	if err := e.setOverride(agentdef.Override{Harness: agentdef.HarnessClaudeCode, Model: "opus-5.5"}); err != nil {
+		t.Fatal(err)
+	}
+	bare, seed := filepath.Join(t.TempDir(), "origin.git"), t.TempDir()
+	gitIn(t, seed, "init", "-q", "-b", "main")
+	gitIn(t, seed, "commit", "-q", "--allow-empty", "-m", "init")
+	gitIn(t, filepath.Dir(bare), "clone", "-q", "--bare", seed, bare)
+	setEmails := func(extra ...string) {
+		t.Helper()
+		if _, err := e.pool.Exec(e.ctx, `UPDATE users SET extra_emails=$2 WHERE id=$1`, e.me.ID, append([]string{}, extra...)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setEmails("Ada@Work.example")
+
+	p := e.persona("Pair Programmer", true, false, "https://github.com/acme/app")
+	// Picked when the chat starts, matched ignoring case and stored as saved.
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Title: "Code chat", PersonaID: &p.ID, CommitEmail: "ada@work.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chat.CommitEmail == nil || *chat.CommitEmail != "Ada@Work.example" {
+		t.Fatalf("commit email %v", chat.CommitEmail)
+	}
+	// A persona can't list a local repository, so both are repointed at it.
+	if _, err := e.pool.Exec(e.ctx, `UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(e.ctx, `UPDATE personas SET repos=ARRAY[$2]::text[] WHERE id=$1`, p.ID, bare); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.postSh(chat.ID, commitAuthor); !strings.Contains(got, "author=Ada@Work.example committer=Ada@Work.example") {
+		t.Fatalf("first turn commits as %q", got)
+	}
+	segment := e.chatRun(chat.ID).ID
+	if _, err := e.runs.SetChatCommitEmail(e.ctx, e.ws, e.me.ID, chat.ID, e.me.Email); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.postSh(chat.ID, commitAuthor); !strings.Contains(got, "author="+e.me.Email+" committer="+e.me.Email) {
+		t.Fatalf("after switching to the primary, commits as %q", got)
+	}
+	if e.chatRun(chat.ID).ID != segment {
+		t.Fatal("the switch should apply within the running segment, not by starting a new one")
+	}
+	if _, err := e.runs.SetChatCommitEmail(e.ctx, e.ws, e.me.ID, chat.ID, "Ada@Work.example"); err != nil {
+		t.Fatal(err)
+	}
+	setEmails()
+	if got := e.postSh(chat.ID, commitAuthor); !strings.Contains(got, "author="+e.me.Email) || strings.Contains(got, "Work.example") {
+		t.Fatalf("a removed address still authors commits: %q", got)
+	}
+}
+
 // postSh has the fake harness run a shell command in the workspace and
 // returns its reply (see cmd/fake-harness).
 func (e env) postSh(id uuid.UUID, command string) string {

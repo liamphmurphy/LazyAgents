@@ -585,7 +585,7 @@ func (q *Queries) ListUserCanvases(ctx context.Context, arg ListUserCanvasesPara
 }
 
 const setChatSpace = `-- name: SetChatSpace :one
-UPDATE chat_sessions SET space_id = $1 WHERE id = $2 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches
+UPDATE chat_sessions SET space_id = $1 WHERE id = $2 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email
 `
 
 type SetChatSpaceParams struct {
@@ -625,6 +625,7 @@ func (q *Queries) SetChatSpace(ctx context.Context, arg SetChatSpaceParams) (Cha
 		&i.ConnectorIds,
 		&i.SpaceID,
 		&i.WorkBranches,
+		&i.CommitEmail,
 	)
 	return i, err
 }

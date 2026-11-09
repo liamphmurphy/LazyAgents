@@ -3727,6 +3727,36 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chats/{id}/commit-email:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    put:
+      operationId: setChatCommitEmail
+      summary: Pick which of your email addresses a coding chat commits as
+      description: |
+        Applies from the chat's next turn, so it can be picked while a turn is
+        running and needs no revision. 422 when the chat has no repository or
+        the address isn't one of the caller's.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, description: "One of the caller's emails (compared case-insensitively)" }
+      responses:
+        "200":
+          description: The updated chat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /persona-dock:
     get:
       operationId: getPersonaDock
@@ -6083,6 +6113,7 @@ components:
           type: array
           items: { type: string }
           description: "The branches the coding persona pushed in this chat, oldest first (feat/..., fix/..., chore/...). It makes them as changes are asked for, so a new chat has none. Absent when the chat has no repository."
+        commit_email: { type: string, description: "The address picked for this chat's commits. Absent until one is picked, or once it is no longer one of the creator's emails; commits then use their primary email." }
         archived: { type: boolean }
         revision: { type: integer }
         message_count: { type: integer }
@@ -6101,6 +6132,7 @@ components:
         effort: { $ref: "#/components/schemas/ChatEffort" }
         persona_id: { type: string, format: uuid, description: "One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life." }
         repo_url: { type: string, description: "One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise." }
+        commit_email: { type: string, description: "One of the caller's emails for the chat's commits. Only with a repository; 422 otherwise." }
         hidden: { type: boolean, description: "Leave the chat out of chat lists, search and the dock; it stays reachable by id. For a chat that lives behind another screen, like the workflow editor. Fixed for the chat's life." }
         space_id: { type: string, format: uuid, description: "Start the chat in one of the caller's spaces. Its default persona, project and connectors apply unless persona_id or project is given. 422 for an unknown space." }
         message: { $ref: "#/components/schemas/NewChatMessage" }
