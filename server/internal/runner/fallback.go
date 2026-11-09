@@ -12,6 +12,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/usage"
 )
 
 // chainOf is the run's full preference order, primary first. Runs created
@@ -187,6 +188,25 @@ func (r *Runner) markProviderLimited(ctx context.Context, c runCtx, msg string) 
 	}
 	if err := r.q().MarkProviderLimited(ctx, store.MarkProviderLimitedParams{WorkspaceID: c.run.WorkspaceID, Harness: c.spec.Harness, Until: until, Reason: reason}); err != nil {
 		r.Log.Error("record provider limit", "run", c.run.ID, "harness", c.spec.Harness, "err", err)
+	}
+}
+
+// recordUsage saves the plan windows a turn's rate-limit events reported,
+// the latest event per window winning, so the activity orb shows them even
+// where the API can't check the CLI itself (the Docker backend). Best effort.
+func (r *Runner) recordUsage(ctx context.Context, c runCtx, infos []json.RawMessage) {
+	var windows []usage.Window
+	for _, info := range infos {
+		if ev, ok := usage.FromClaudeEvent(info); ok {
+			windows = append(windows, ev.Window)
+		}
+	}
+	if len(windows) == 0 {
+		return
+	}
+	svc := usage.Service{Q: r.q()}
+	if err := svc.Record(ctx, c.run.WorkspaceID, c.spec.Harness, windows); err != nil {
+		r.Log.Warn("record harness usage", "run", c.run.ID, "harness", c.spec.Harness, "err", err)
 	}
 }
 

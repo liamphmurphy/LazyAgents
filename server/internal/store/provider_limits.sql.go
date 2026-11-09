@@ -12,6 +12,38 @@ import (
 	"github.com/google/uuid"
 )
 
+const activeHarnessRuns = `-- name: ActiveHarnessRuns :many
+SELECT harness, count(*)::int AS runs FROM runs
+WHERE workspace_id = $1 AND state IN ('starting', 'running')
+GROUP BY harness ORDER BY harness
+`
+
+type ActiveHarnessRunsRow struct {
+	Harness string
+	Runs    int32
+}
+
+// Runs working right now in a workspace, by harness, for the activity orb.
+func (q *Queries) ActiveHarnessRuns(ctx context.Context, workspaceID uuid.UUID) ([]ActiveHarnessRunsRow, error) {
+	rows, err := q.db.Query(ctx, activeHarnessRuns, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ActiveHarnessRunsRow{}
+	for rows.Next() {
+		var i ActiveHarnessRunsRow
+		if err := rows.Scan(&i.Harness, &i.Runs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const activeProviderLimits = `-- name: ActiveProviderLimits :many
 SELECT harness, until FROM provider_limits
 WHERE workspace_id = $1 AND until > now()

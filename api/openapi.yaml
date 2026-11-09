@@ -3521,7 +3521,7 @@ paths:
   /persona-dock:
     get:
       operationId: getPersonaDock
-      summary: The caller's personas with live or unread chat activity, most recent first
+      summary: The caller's personas with live or unread chat activity, most recent first, plus harness activity and plan usage
       tags: [chats]
       responses:
         "200":
@@ -6595,9 +6595,32 @@ components:
         chats: { type: array, items: { $ref: "#/components/schemas/PersonaDockChat" } }
     PersonaDock:
       type: object
-      required: [personas]
+      required: [personas, harnesses]
       properties:
         personas: { type: array, items: { $ref: "#/components/schemas/PersonaDockEntry" } }
+        harnesses: { type: array, items: { $ref: "#/components/schemas/HarnessActivity" }, description: "Claude Code then Codex: what each is running and how much of its plan allowance is left" }
+    UsageWindow:
+      type: object
+      description: One plan allowance window, as the harness CLI reports it.
+      required: [id, kind, label, used_percent]
+      properties:
+        id: { type: string, description: "five_hour, seven_day, seven_day_opus, seven_day_sonnet, or codex_<minutes>" }
+        kind: { type: string, enum: [session, weekly, other] }
+        label: { type: string, description: "Session, Weekly, Weekly · Opus…" }
+        used_percent: { type: number, minimum: 0, maximum: 100 }
+        resets_at: { type: string, format: date-time }
+    HarnessActivity:
+      type: object
+      required: [harness, label, running, usage_available, windows]
+      properties:
+        harness: { type: string, description: "claude-code or codex" }
+        label: { type: string }
+        running: { type: integer, description: Runs and chat turns working on this harness now }
+        limited_until: { type: string, format: date-time, description: "Present while the harness is out of allowance; runs fall back to another harness until then" }
+        plan: { type: string, description: "Subscription name when the CLI reports one (max, pro, plus…)" }
+        usage_available: { type: boolean, description: "False when plan limits don't apply or can't be read (API key, signed out, or no reading yet)" }
+        usage_checked_at: { type: string, format: date-time, description: When the windows were read; absent before the first reading }
+        windows: { type: array, items: { $ref: "#/components/schemas/UsageWindow" }, description: "Session first, then weekly; windows that renewed since the reading are left out" }
     PersonaProposal:
       type: object
       description: A persona one of the chat's personas asked to create; nothing exists until the person approves it.

@@ -5,6 +5,7 @@
 package harness
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -86,6 +87,9 @@ type Result struct {
 	Error        string
 	Final        string // the last assistant text
 	Opening      string // the first assistant text, when a tool call followed it (runner-set)
+	// RateLimits are the rate_limit_info objects of Claude's
+	// rate_limit_event lines, oldest first (usage.FromClaudeEvent reads them).
+	RateLimits []json.RawMessage
 }
 
 // Parser reads one turn's stream, line by line.

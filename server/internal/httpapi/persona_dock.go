@@ -110,7 +110,11 @@ func (s *Server) GetPersonaDock(ctx context.Context, _ api.GetPersonaDockRequest
 			personas[p.ID] = p
 		}
 	}
-	return api.GetPersonaDock200JSONResponse{Personas: buildPersonaDock(rows, personas)}, nil
+	harnesses, err := s.harnessActivity(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetPersonaDock200JSONResponse{Personas: buildPersonaDock(rows, personas), Harnesses: harnesses}, nil
 }
 
 func (s *Server) MarkChatRead(ctx context.Context, req api.MarkChatReadRequestObject) (api.MarkChatReadResponseObject, error) {
