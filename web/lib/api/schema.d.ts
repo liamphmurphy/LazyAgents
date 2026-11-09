@@ -5999,6 +5999,8 @@ export interface components {
             id: string;
             title: string;
             state: components["schemas"]["PersonaDockState"];
+            /** @description The harness the chat's current turn runs on (claude-code or codex), after any fallback */
+            harness: string;
             unread: number;
             /** @description Last line of the latest reply */
             last_line: string;

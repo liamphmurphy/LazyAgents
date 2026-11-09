@@ -5,7 +5,7 @@ import { Suspense, useEffect, type ReactNode } from "react";
 import { useBootstrap, useRunnerStatus } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/primitives";
 import { LiveUpdates } from "./live-updates";
-import { PersonaDock } from "./persona-dock";
+import { ActivityOrb } from "./activity-orb";
 import { CommandMenu } from "./command-menu";
 import { isTyping, ShortcutsDialog } from "./shortcuts";
 import { Sidebar } from "./sidebar";
@@ -88,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Suspense>
       <ShortcutsDialog />
       <Suspense fallback={null}>
-        <PersonaDock />
+        <ActivityOrb />
       </Suspense>
       {data ? (
         <Suspense fallback={<SidebarSkeleton />}>

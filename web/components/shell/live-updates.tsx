@@ -10,15 +10,16 @@ const prefixes: Record<string, string[]> = {
   epic: ["projects", "planning", "bootstrap", "tickets", "boards", "epics", "inbox", "search"],
   activity: ["tickets", "inbox", "bootstrap"],
   approval: ["tickets", "runs", "inbox", "bootstrap"],
-  run: ["planning", "runs", "boards", "tickets", "agents", "inbox", "bootstrap", "runner", "search"],
+  // "dock" is the activity orb: which harnesses are running.
+  run: ["planning", "runs", "boards", "tickets", "agents", "inbox", "bootstrap", "runner", "search", "dock"],
   agent: ["agents", "bootstrap", "search"],
   artifact: ["artifacts", "wiki", "knowledge", "inbox", "bootstrap", "search"],
   knowledge: ["knowledge", "wiki"],
   project: ["projects", "planning", "bootstrap", "tickets", "boards", "inbox", "search"],
   inbox: ["inbox", "bootstrap"],
-  chat: ["chats", "canvases"],
+  chat: ["chats", "canvases", "dock"],
   // A persona edit changes the name, color and avatar every chat using it embeds.
-  persona: ["personas", "chats"],
+  persona: ["personas", "chats", "dock"],
 };
 
 /** One stream per shell. Coalesce bursts from harness logs before refetching. */

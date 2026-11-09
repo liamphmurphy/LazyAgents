@@ -82,7 +82,7 @@ func buildPersonaDock(rows []store.PersonaDockChatsRow, personas map[uuid.UUID]s
 		if dockRank[state] > dockRank[e.State] {
 			e.State = state
 		}
-		e.Chats = append(e.Chats, api.PersonaDockChat{Id: openapi_types.UUID(c.ID), Title: c.Title, State: state, Unread: int(c.Unread),
+		e.Chats = append(e.Chats, api.PersonaDockChat{Id: openapi_types.UUID(c.ID), Title: c.Title, State: state, Harness: c.Harness, Unread: int(c.Unread),
 			LastLine: dockLastLine(c.LastBody), LastSeq: c.LastSeq, WaitingApproval: c.WaitingApproval, LastActivityAt: c.LastActivityAt})
 	}
 	return out

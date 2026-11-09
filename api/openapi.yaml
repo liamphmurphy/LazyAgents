@@ -6574,11 +6574,12 @@ components:
       enum: [working, replied, needs_you]
     PersonaDockChat:
       type: object
-      required: [id, title, state, unread, last_line, last_seq, waiting_approval, last_activity_at]
+      required: [id, title, state, harness, unread, last_line, last_seq, waiting_approval, last_activity_at]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
         state: { $ref: "#/components/schemas/PersonaDockState" }
+        harness: { type: string, description: "The harness the chat's current turn runs on (claude-code or codex), after any fallback" }
         unread: { type: integer }
         last_line: { type: string, description: "Last line of the latest reply" }
         last_seq: { type: integer, format: int64, description: "Sequence of the latest reply, for marking the chat read" }

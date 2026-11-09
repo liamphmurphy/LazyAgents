@@ -1777,6 +1777,7 @@ func (q *Queries) PendingChatTurn(ctx context.Context, runID uuid.UUID) (RunTurn
 const personaDockChats = `-- name: PersonaDockChats :many
 SELECT c.id, c.title, c.state, c.persona_id, c.speaker_persona_id,
   coalesce(c.last_message_at, c.created_at)::timestamptz AS last_activity_at,
+  coalesce((SELECT r.harness FROM runs r WHERE r.id = c.current_run_id), c.harness)::text AS harness,
   u.unread, p.waiting_approval, l.persona_id AS last_persona_id, coalesce(l.body_md, '')::text AS last_body, coalesce(l.seq, 0)::bigint AS last_seq
 FROM chat_sessions c
 CROSS JOIN LATERAL (SELECT count(*)::int AS unread FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' AND m.seq > c.last_read_seq) u
@@ -1799,6 +1800,7 @@ type PersonaDockChatsRow struct {
 	PersonaID        *uuid.UUID
 	SpeakerPersonaID *uuid.UUID
 	LastActivityAt   time.Time
+	Harness          string
 	Unread           int32
 	WaitingApproval  bool
 	LastPersonaID    *uuid.UUID
@@ -1823,6 +1825,7 @@ func (q *Queries) PersonaDockChats(ctx context.Context, arg PersonaDockChatsPara
 			&i.PersonaID,
 			&i.SpeakerPersonaID,
 			&i.LastActivityAt,
+			&i.Harness,
 			&i.Unread,
 			&i.WaitingApproval,
 			&i.LastPersonaID,

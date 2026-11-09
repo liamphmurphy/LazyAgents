@@ -1125,10 +1125,13 @@ export function useChatSearch(q: string) {
 }
 
 /** Who is working, replied or needs the person, across their chats. SSE `chat.updated` refreshes it. */
+/** The activity orb's data: personas with chat activity, plus harness activity and plan usage. */
 export function usePersonaDock() {
   return useQuery({
-    queryKey: ["chats", "dock"] as const,
+    queryKey: ["dock"] as const,
     queryFn: () => unwrap(api.GET("/persona-dock")),
+    // Usage readings land in the background with no event to announce them.
+    refetchInterval: 60_000,
   });
 }
 
@@ -1138,7 +1141,7 @@ export function useMarkChatRead() {
     mutationFn: async (v: { id: string; seq: number }) => {
       await api.POST("/chats/{id}/read", { params: { path: { id: v.id } }, body: { seq: v.seq } });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chats", "dock"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["dock"] }),
   });
 }
 

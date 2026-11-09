@@ -119,7 +119,7 @@ export async function installAgentApi(page: Page, opts: AgentApiOptions = {}) {
         counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
       });
     }
-    if (path === "/persona-dock") return json({ personas: [] });
+    if (path === "/persona-dock") return json({ personas: [], harnesses: [] });
     if (path === "/chat-models") return json([]);
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, live: 0, queued: 0 });
     // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
