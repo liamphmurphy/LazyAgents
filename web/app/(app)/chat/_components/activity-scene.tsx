@@ -43,6 +43,7 @@ export function useHeldScene(kind: ChatStatusKind) {
 const LABELS: Record<ChatStatusKind, string> = {
   thinking: "Thinking",
   connector: "Using a connector",
+  secret: "Using a secret",
   wiki: "Reading the wiki",
   tickets: "Working on tickets",
   "reading-code": "Reading code",
@@ -317,6 +318,17 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
       <circle className="scene-warm scene-box scene-node" cx="73" cy="10" r="2.5" />
       <circle className="scene-accent scene-box scene-node" cx="66" cy="47" r="2" style={delay(0.5)} />
       <circle className="scene-warm scene-box scene-node" cx="80" cy="47" r="2" style={delay(1)} />
+    </>
+  ),
+  // A key travels to a lock: Vesper adds the secret on the way out.
+  secret: (
+    <>
+      <circle className="scene-warm scene-box" cx="30" cy="28" r="9" fillOpacity="0.85" />
+      <path className="scene-line-accent scene-plug" d="M39 28H62M54 28V34M60 28V33" />
+      <rect className="scene-accent scene-box" x="86" y="22" width="22" height="18" rx="3" />
+      <path className="scene-line-accent" d="M90 22V17A7 7 0 0 1 104 17V22" />
+      <path className="scene-line-accent scene-link" d="M64 28H84" pathLength={1} strokeOpacity="0.5" />
+      <circle className="scene-warm scene-box scene-node" cx="97" cy="31" r="2" style={delay(0.5)} />
     </>
   ),
   memory: (

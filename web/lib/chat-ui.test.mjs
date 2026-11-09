@@ -354,6 +354,15 @@ test("a connector's tools get their own scene and read by the connector's name",
   assert.equal(chatStatusOf({ tool: "google-calendar.list_events", input: {} }).kind, "connector");
 });
 
+test("a request with a secret shows the key scene and names the handle, not a value", () => {
+  const call = { tool: "mcp__vesper_secrets__http_request", input: { secret: "acme-jwt", url: "https://api.acme.com/v1/orders?since=2026-11-02" } };
+  assert.deepEqual(chatStatusOf(call), { kind: "secret", phrase: "using acme-jwt" });
+  assert.deepEqual(activityOf(call), { verb: "Using acme-jwt:", text: "GET api.acme.com/v1/orders" });
+  assert.equal(chatStatusOf({ tool: "vesper_secrets.list_secrets", input: {} }).kind, "secret");
+  // Not a connector named "vesper_secrets".
+  assert.equal(connectorCall("mcp__vesper_secrets__http_request"), null);
+});
+
 test("each step carries the kind of its newest call, and a planned step gets one once its work starts", () => {
   const todo = (...rows) => ({ tool: "TodoWrite", input: { todos: rows.map(([content, status]) => ({ content, status })) } });
   const bash = (command, failed) => ({ tool: "Bash", input: { command }, ...(failed ? { failed: true } : {}) });
