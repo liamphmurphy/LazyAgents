@@ -335,12 +335,16 @@ func (p *codexParser) item(done bool, it codexItem) []Event {
 			p.res.Usage.ToolCalls++
 			return []Event{{"tool_call", map[string]any{"id": it.ID, "tool": "web_search", "input": map[string]any{"query": it.Query}}}}
 		}
+	case "reasoning":
+		if ev, ok := thinkingEvent(it.Text); ok && done {
+			return []Event{ev}
+		}
 	case "error":
 		if done {
 			return []Event{{"error", map[string]any{"message": it.Message}}}
 		}
 	}
-	return nil // reasoning, todo lists: raw log only
+	return nil // todo lists: raw log only
 }
 
 func (p *codexParser) Result() Result { return p.res }

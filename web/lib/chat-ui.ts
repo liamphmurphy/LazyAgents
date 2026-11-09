@@ -430,7 +430,19 @@ export function chatStatus(calls: { tool: string; input: unknown }[]): ChatStatu
 /** A step's place in the turn. A finished step is "failed" when its last call errored at work where an error means failure. */
 export type ChatStepState = "planned" | "active" | "done" | "failed";
 /** `kind` picks the step's glyph: the kind of its newest call, absent until a planned step's work starts. */
-export type ChatStep = { key: string; title: string; state: ChatStepState; kind?: ChatStatusKind; added?: true; detail?: string };
+export type ChatStep = {
+  key: string;
+  title: string;
+  state: ChatStepState;
+  kind?: ChatStatusKind;
+  added?: true;
+  detail?: string;
+  /** The newest decision the assistant narrated during this step, in its own words. */
+  intent?: string;
+  tag?: IntentTag;
+  /** The step has thinking to read in the Activity tab. */
+  reasoning?: true;
+};
 
 type PlanState = "planned" | "active" | "done";
 type PlanItem = { id: string; title: string; state: PlanState };
@@ -484,7 +496,7 @@ const failedAt = (call: ToolCall, kind: ChatStatusKind) => !!call.failed && FAIL
  * Each plan step's kind and outcome, from the calls made while it was the step under way:
  * the newest call's kind, and whether that call failed.
  */
-function planWork(calls: ToolCall[], versions: PlanVersion[]): Map<string, { kind: ChatStatusKind; failed: boolean }> {
+function planWork(calls: ToolCall[], versions: PlanVersion[], owner: (string | undefined)[] = []): Map<string, { kind: ChatStatusKind; failed: boolean }> {
   const work = new Map<string, { kind: ChatStatusKind; failed: boolean }>();
   let v = -1;
   for (const [i, call] of calls.entries()) {
@@ -494,6 +506,7 @@ function planWork(calls: ToolCall[], versions: PlanVersion[]): Map<string, { kin
     if (!active) continue;
     const { kind } = chatStatusOf(call);
     work.set(active.title, { kind, failed: failedAt(call, kind) });
+    owner[i] = `${active.title}#0`;
   }
   return work;
 }
@@ -653,13 +666,33 @@ function withDetail(steps: ChatStep[], calls: ToolCall[]): ChatStep[] {
  * work began. Otherwise its consecutive tool calls with the same description as one step, newest active, in the same
  * high-level wording as the status line.
  */
-export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: boolean } {
+export function chatSteps(calls: ToolCall[], notes?: TurnNote[]): { steps: ChatStep[]; planned: boolean } {
+  const { steps, planned, owner } = buildSteps(calls);
+  if (notes?.length) {
+    const byKey = new Map(steps.map((st) => [st.key, st]));
+    for (const n of notes) {
+      const st = byKey.get(noteOwner(n, calls, owner) ?? "");
+      if (!st) continue;
+      if (n.kind === "thinking") st.reasoning = true;
+      else {
+        st.intent = n.text;
+        if (n.tag) st.tag = n.tag;
+        else delete st.tag;
+      }
+    }
+  }
+  return { steps, planned };
+}
+
+/** The steps, and for each call the key of the step it was part of (none for bookkeeping, or work before the plan started). */
+function buildSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: boolean; owner: (string | undefined)[] } {
+  const owner: (string | undefined)[] = new Array(calls.length).fill(undefined);
   const versions = planVersions(calls);
   const latest = versions[versions.length - 1]?.items;
   if (latest?.length) {
     const baseline = versions.find((v) => v.items.some((s) => s.state !== "planned"))?.items;
     const original = new Set(baseline?.map((s) => s.title) ?? latest.map((s) => s.title));
-    const work = planWork(calls, versions);
+    const work = planWork(calls, versions, owner);
     const seen = new Map<string, number>();
     const steps = latest.map((s): ChatStep => {
       // By title, not position, so a step added mid-list doesn't remount the ones after it.
@@ -676,29 +709,32 @@ export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: bool
     });
     // A plan doesn't list the rich blocks in the reply, so they follow it.
     const newest = calls[calls.length - 1];
-    for (const call of calls) {
+    for (const [i, call] of calls.entries()) {
       if (call.tool !== REPLY_BLOCK) continue;
       const { kind, phrase } = chatStatusOf(call);
       steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: call === newest ? "active" : "done", kind });
+      owner[i] = String(call.key);
     }
-    return { steps: withDetail(steps, calls), planned: true };
+    return { steps: withDetail(steps, calls), planned: true, owner };
   }
   const steps: ChatStep[] = [];
   let last: string | undefined;
-  for (const call of calls) {
+  for (const [i, call] of calls.entries()) {
     if (BOOKKEEPING.has(bareTool(call.tool))) continue;
     const { kind, phrase } = chatStatusOf(call);
     const failed = failedAt(call, kind);
     if (phrase === last) {
       // The group's newest call decides: a test run that failed, then passed, is done.
       steps[steps.length - 1].state = failed ? "failed" : "done";
+      owner[i] = steps[steps.length - 1].key;
       continue;
     }
     last = phrase;
     steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: failed ? "failed" : "done", kind });
+    owner[i] = String(call.key);
   }
   if (steps.length) steps[steps.length - 1].state = "active";
-  return { steps: withDetail(steps, calls), planned: false };
+  return { steps: withDetail(steps, calls), planned: false, owner };
 }
 
 /**
@@ -711,4 +747,107 @@ export function foldSteps(steps: ChatStep[]): { earlier: number; shown: ChatStep
   const upcoming = steps.filter((s) => s.state === "planned");
   for (const s of upcoming.slice(4)) hidden.add(s);
   return { earlier: done.length > 3 ? done.length - 2 : 0, shown: steps.filter((s) => !hidden.has(s)), later: Math.max(0, upcoming.length - 4) };
+}
+
+// ---- narrated decisions and thinking: on the chat tab's steps, and in full in the Activity tab ----
+
+/** A narrated decision's tag: the assistant dropped its approach for another, or found something that changed the picture. */
+export type IntentTag = "approach" | "surprise";
+
+/** An intent line or a thinking block, and the seq of the tool call it came just before (none when the reply followed it). */
+export type TurnNote = { kind: "intent" | "thinking"; text: string; tag?: IntentTag; before?: number };
+
+const TAGS: [RegExp, IntentTag][] = [
+  [/^(?:new approach|change of plan|changing approach)\s*[:—–-]\s*/i, "approach"],
+  [/^surprise\s*[:—–-]\s*/i, "surprise"],
+];
+
+/** "New approach: …" and "Surprise: …" become a tag on the rest of the line. */
+export function intentOf(text: string): { text: string; tag?: IntentTag } {
+  const t = text.trim();
+  for (const [re, tag] of TAGS) {
+    const m = re.exec(t);
+    if (m && t.length > m[0].length) {
+      const rest = t.slice(m[0].length);
+      return { text: rest[0].toUpperCase() + rest.slice(1), tag };
+    }
+  }
+  return { text: t };
+}
+
+/**
+ * The turn's narrated decisions and thinking, in order. An intent line is assistant text
+ * between tool calls: not the turn's first text (the opening line), and not text no call
+ * follows yet (the reply, or a line that may still become one). Thinking is pinned to the call it
+ * led to, or to the reply when none followed.
+ */
+export function turnNotes(events: RunEventLike[] | undefined, since?: string, until?: string): TurnNote[] {
+  const t = since ? Date.parse(since) : 0;
+  const hi = until ? Date.parse(until) : Infinity;
+  const notes: TurnNote[] = [];
+  let pending: TurnNote[] = [];
+  let seenText = false;
+  for (const e of events ?? []) {
+    const at = Date.parse(e.at);
+    if (at < t || at > hi) continue;
+    const p = e.payload;
+    if (e.type === "message" && p.kind === "thinking") {
+      const text = str(p.text).trim();
+      if (text) pending.push({ kind: "thinking", text });
+    } else if (e.type === "message" && p.role === "assistant" && !p.kind) {
+      const text = str(p.text).trim();
+      if (!text) continue;
+      if (seenText) pending.push({ kind: "intent", ...intentOf(clip(text, 280)) });
+      seenText = true;
+    } else if (e.type === "tool_call") {
+      for (const n of pending) notes.push({ ...n, before: e.seq });
+      pending = [];
+    }
+  }
+  // What no call followed: thinking belongs to the reply; text is the reply itself.
+  for (const n of pending) if (n.kind === "thinking") notes.push(n);
+  return notes;
+}
+
+/** The step a note belongs to: that of the call it came before, or the next call that belongs to one. */
+function noteOwner(n: TurnNote, calls: ToolCall[], owner: (string | undefined)[]): string | undefined {
+  if (n.before === undefined) return undefined;
+  const from = calls.findIndex((c) => c.key === n.before);
+  if (from < 0) return undefined;
+  for (let i = from; i < calls.length; i++) if (owner[i]) return owner[i];
+  return undefined;
+}
+
+/** One step of a turn in the Activity tab: what it said, what it thought, and every call it made. */
+export type TraceStep = { key: string; title: string; state: ChatStepState; kind?: ChatStatusKind; tag?: IntentTag; intents: string[]; thinking: string[]; calls: ToolCall[] };
+
+/**
+ * A turn as steps for the Activity tab, the same steps as the chat tab's rail. Calls outside
+ * any step (the plan's bookkeeping, a look around before it) join the next step, or the last.
+ * Thinking after the final call, before the reply, ends the list as "Writing the reply".
+ */
+export function turnTrace(events: RunEventLike[] | undefined, since?: string, until?: string): TraceStep[] {
+  const calls = toolCalls(events, since, until);
+  const notes = turnNotes(events, since, until);
+  const { steps, owner } = buildSteps(calls);
+  const trace = steps.map((st): TraceStep => ({ key: st.key, title: st.title, state: st.state, ...(st.kind ? { kind: st.kind } : {}), intents: [], thinking: [], calls: [] }));
+  const byKey = new Map(trace.map((st) => [st.key, st]));
+  const prelude: TraceStep = { key: "prelude", title: "Getting started", state: "done", intents: [], thinking: [], calls: [] };
+  const reply: TraceStep = { key: "reply", title: "Writing the reply", state: "done", kind: "thinking", intents: [], thinking: [], calls: [] };
+  const home = (i: number): TraceStep => {
+    for (let j = i; j < calls.length; j++) if (owner[j]) return byKey.get(owner[j]!)!;
+    for (let j = i - 1; j >= 0; j--) if (owner[j]) return byKey.get(owner[j]!)!;
+    return prelude;
+  };
+  for (const [i, call] of calls.entries()) home(i).calls.push(call);
+  for (const n of notes) {
+    const i = n.before === undefined ? -1 : calls.findIndex((c) => c.key === n.before);
+    const st = i < 0 ? reply : home(i);
+    if (n.kind === "thinking") st.thinking.push(n.text);
+    else {
+      st.intents.push(n.text);
+      if (n.tag) st.tag = n.tag;
+    }
+  }
+  return [...(prelude.calls.length || prelude.thinking.length ? [prelude] : []), ...trace, ...(reply.thinking.length ? [reply] : [])];
 }

@@ -32,6 +32,10 @@ func handoffTranscript(ctx context.Context, q *store.Queries, runID uuid.UUID) (
 				if event.Type == "lifecycle" && payload["trigger"] != "approval" {
 					continue
 				}
+				// Thinking is one harness's private scratch work, not the conversation.
+				if event.Type == "message" && payload["kind"] == "thinking" {
+					continue
+				}
 				raw, _ := json.Marshal(map[string]any{"type": event.Type, "payload": payload})
 				recent = append(recent, harnessContext(string(raw), 4000))
 				for len(recent) > 60 || len(strings.Join(recent, "\n")) > 48000 {

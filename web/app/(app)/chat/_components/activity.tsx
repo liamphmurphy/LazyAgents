@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
-import { activityOf, chatCalls, chatStatus, chatSteps, foldSteps, interimLine, toolCalls, type Activity, type ChatStep, type ToolCall } from "@/lib/chat-ui";
+import { activityOf, chatCalls, chatStatus, chatSteps, foldSteps, interimLine, turnNotes, turnTrace, type Activity, type ChatStep, type IntentTag, type ToolCall, type TraceStep } from "@/lib/chat-ui";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
 import { ActivityScene, sceneLabel, useHeldScene } from "./activity-scene";
 import { StepGlyph } from "./step-glyph";
@@ -47,8 +47,8 @@ function LiveLine({ a }: { a: Activity }) {
 
 function CallList({ calls }: { calls: ToolCall[] }) {
   return (
-    <details className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[12.5px]">
-      <summary className="cursor-pointer text-fg-secondary">Tool calls ({calls.length})</summary>
+    <details className="w-full text-[12.5px]">
+      <summary className="cursor-pointer text-fg-tertiary">Tool calls ({calls.length})</summary>
       <ul className="mt-2 flex flex-col gap-1 font-mono text-xs">
         {calls.map((c) => (
           <li key={c.key} className="flex gap-2">
@@ -62,29 +62,89 @@ function CallList({ calls }: { calls: ToolCall[] }) {
   );
 }
 
+const TAG_LABEL: Record<IntentTag, string> = { approach: "changed approach", surprise: "surprise" };
+
+function TagPill({ tag }: { tag: IntentTag }) {
+  return (
+    <span data-testid="intent-tag" className={`flex-none rounded-full px-1.5 text-[10.5px] ${tag === "surprise" ? "bg-[var(--state-review)]/15 text-fg-secondary" : "bg-accent/15 text-fg-secondary"}`}>
+      {TAG_LABEL[tag]}
+    </span>
+  );
+}
+
+/** Where "View reasoning" on a chat step lands in the Activity tab. */
+export const traceStepId = (key: string) => `trace-step-${key.replace(/[^\w-]/g, "_")}`;
+
+/**
+ * A turn as the steps the chat tab showed, each with the decisions the assistant
+ * narrated, its thinking (folded) and every tool call. `focus` opens and scrolls to one step.
+ */
+function TurnTrace({ steps, live, focus }: { steps: TraceStep[]; live?: boolean; focus?: { key: string; at: number } }) {
+  const root = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    if (!focus || !root.current) return;
+    const el = root.current.querySelector<HTMLElement>(`#${traceStepId(focus.key)}`);
+    if (!el) return;
+    el.querySelector("details[data-thinking]")?.setAttribute("open", "");
+    el.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [focus]);
+  if (steps.length === 0) return null;
+  return (
+    <ol ref={root} data-testid="turn-trace" className="flex w-full flex-col gap-2">
+      {steps.map((s) => {
+        // A finished turn's last step was still "active" when it ended.
+        const state = !live && s.state === "active" ? "done" : s.state;
+        return (
+          <li key={s.key} id={live ? traceStepId(s.key) : undefined} data-testid="trace-step" data-step-state={state}
+            className={`flex w-full scroll-mt-4 flex-col gap-1.5 rounded-lg border bg-surface px-3 py-2 ${focus?.key === s.key && live ? "border-accent" : "border-border"}`}>
+            <div className="flex min-w-0 items-center gap-2 text-[13px]">
+              <StepGlyph step={{ state, kind: s.kind }} />
+              <span className={`min-w-0 truncate ${state === "active" ? "font-medium text-fg" : "text-fg-secondary"}`}>{s.title}</span>
+              {s.tag && <TagPill tag={s.tag} />}
+            </div>
+            {s.intents.map((t, j) => (
+              <p key={j} data-testid="trace-intent" className="rounded-md bg-accent/10 px-2.5 py-1.5 text-[12.5px] italic text-fg-secondary">{t}</p>
+            ))}
+            {s.thinking.length > 0 && (
+              <details data-thinking className="text-[12.5px]">
+                <summary className="cursor-pointer text-fg-tertiary">Thinking</summary>
+                <div className="mt-1.5 flex flex-col gap-2 border-l-2 border-border pl-3">
+                  {s.thinking.map((t, j) => (
+                    <p key={j} data-testid="trace-thinking" className="whitespace-pre-wrap leading-relaxed text-fg-secondary">{t}</p>
+                  ))}
+                </div>
+              </details>
+            )}
+            {s.calls.length > 0 && <CallList calls={s.calls} />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /**
  * While a turn runs: the newest tool call as a live line ("Reading [[ADR-012]]…",
- * ADR Decision 5), with every call of the turn under Tool calls. Shown in the Activity tab only.
+ * ADR Decision 5), above the turn's steps with their intent, thinking and calls. Shown in the Activity tab only.
  */
-export function RunActivity({ runId, since }: { runId?: string; since?: string }) {
+export function RunActivity({ runId, since, focus }: { runId?: string; since?: string; focus?: { key: string; at: number } }) {
   const q = useChatRunEvents(runId);
-  const calls = useMemo(() => toolCalls(q.data, since), [q.data, since]);
-  if (calls.length === 0) return null;
-  const latest = calls[calls.length - 1];
+  const steps = useMemo(() => turnTrace(q.data, since), [q.data, since]);
+  const latest = steps.flatMap((s) => s.calls).at(-1);
+  if (!latest && steps.length === 0) return null;
   return (
     <>
-      <LiveLine a={activityOf(latest)} />
-      <CallList calls={calls} />
+      {latest && <LiveLine a={activityOf(latest)} />}
+      <TurnTrace steps={steps} live focus={focus} />
     </>
   );
 }
 
-/** A finished turn's tool calls, in the Activity tab. */
+/** A finished turn's steps, with their intent, thinking and tool calls, in the Activity tab. */
 export function TurnToolCalls({ runId, since, until }: { runId?: string; since?: string; until?: string }) {
   const q = useChatRunEvents(runId, true, false);
-  const calls = useMemo(() => toolCalls(q.data, since, until), [q.data, since, until]);
-  if (calls.length === 0) return null;
-  return <CallList calls={calls} />;
+  const steps = useMemo(() => turnTrace(q.data, since, until), [q.data, since, until]);
+  return <TurnTrace steps={steps} />;
 }
 
 const STEP_BAR: Record<ChatStep["state"], string> = {
@@ -97,7 +157,7 @@ const STEP_BAR: Record<ChatStep["state"], string> = {
 /** Pulses the step under way, until the person presses Stop. */
 const stepPulse = (s: ChatStep, stopping?: boolean) => (s.state === "active" && !stopping ? "motion-safe:animate-pulse" : "");
 
-function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }) {
+function StepRail({ steps, stopping, onOpenStep }: { steps: ChatStep[]; stopping?: boolean; onOpenStep?: (key: string) => void }) {
   const { earlier, shown, later } = foldSteps(steps);
   return (
     <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-[12.5px]">
@@ -115,8 +175,15 @@ function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }
               <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" || s.state === "failed" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
               {s.state === "failed" && <span className="sr-only">(failed)</span>}
               {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
+              {s.tag && <TagPill tag={s.tag} />}
+              {onOpenStep && (s.reasoning || s.intent) && (
+                <button type="button" data-testid="view-reasoning" onClick={() => onOpenStep(s.key)} className="ml-auto flex-none text-[11px] text-fg-tertiary hover:text-fg-secondary">
+                  View reasoning ›
+                </button>
+              )}
             </div>
             {s.detail && <p data-testid="chat-step-detail" className="truncate text-xs text-fg-tertiary">{s.detail}</p>}
+            {s.intent && <p data-testid="chat-step-intent" className="line-clamp-2 text-xs italic text-fg-secondary">{s.intent}</p>}
           </div>
         </li>
       ))}
@@ -128,17 +195,20 @@ function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }
 /**
  * The chat tab's card while a turn runs: "<Persona> is reading the code…" beside a small
  * scene for that kind of work, from the newest tool call at a high level only. The exact
- * calls stay in the Activity tab. Once a turn has two steps, or one with a detail to show, a rail below lists them; the active one says what it's on, by safe label only. It
+ * calls stay in the Activity tab. Once a turn has two steps, or one with a detail to show, a rail below lists them; the active one says what it's on, by safe label only.
+ * A step the assistant narrated a decision on shows that line, tagged when it changed approach or hit a surprise,
+ * and links to its full reasoning in the Activity tab. It
  * collapses to a progress strip, and folds old steps so a long turn stays short.
  */
-export function ChatStatus({ runId, since, persona, stopping }: { runId?: string; since?: string; persona: PersonaLook; stopping?: boolean }) {
+export function ChatStatus({ runId, since, persona, stopping, onOpenStep }: { runId?: string; since?: string; persona: PersonaLook; stopping?: boolean; onOpenStep?: (key: string) => void }) {
   const q = useChatRunEvents(runId);
   const calls = useMemo(() => chatCalls(q.data, since), [q.data, since]);
   const status = useMemo(() => chatStatus(calls), [calls]);
-  const { steps, planned } = useMemo(() => chatSteps(calls), [calls]);
+  const notes = useMemo(() => turnNotes(q.data, since), [q.data, since]);
+  const { steps, planned } = useMemo(() => chatSteps(calls, notes), [calls, notes]);
   const [collapsed, setCollapsed] = useState(false);
   const scene = useHeldScene(status.kind);
-  const hasRail = steps.length > 1 || !!steps[0]?.detail;
+  const hasRail = steps.length > 1 || !!steps[0]?.detail || !!steps[0]?.intent;
   const done = steps.filter((s) => s.state === "done").length;
   return (
     <div data-testid="chat-status-card" className="@container w-full max-w-[min(720px,100%)] rounded-xl border border-border bg-surface">
@@ -165,7 +235,7 @@ export function ChatStatus({ runId, since, persona, stopping }: { runId?: string
               ))}
             </div>
           ) : (
-            <StepRail steps={steps} stopping={stopping} />
+            <StepRail steps={steps} stopping={stopping} onOpenStep={onOpenStep} />
           )}
           <button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((c) => !c)} className="px-3.5 py-1.5 text-xs text-fg-tertiary hover:text-fg-secondary">
             {collapsed ? "Show steps" : "Hide steps"}
