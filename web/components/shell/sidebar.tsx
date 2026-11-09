@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type TransitionEvent } from "react";
+import { usePulse } from "@/components/ui/motion";
 import { DropdownMenu } from "radix-ui";
 import { useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -58,10 +59,11 @@ function NavLink({ href, active, label, children }: { href: string; active: bool
 
 function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, number> }) {
   const n = kind ? counts[kind] : 0;
+  const inbox = usePulse<HTMLSpanElement>(n);
   if (!kind || n <= 0) return null;
   if (kind === "inbox") {
     return (
-      <span className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-accent px-[5px] text-[11px] font-semibold text-on-accent">
+      <span ref={inbox} className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-accent px-[5px] text-[11px] font-semibold text-on-accent">
         {n}
         <span className="sr-only"> unread</span>
       </span>
@@ -226,6 +228,10 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
   const secrets = useSecrets();
   const counts: Record<NavBadge, number> = { inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
   const [expanded, setExpanded] = useExpanded();
+  // Only a toggle animates, not restoring the remembered state after mount.
+  const [toggled, setToggled] = useState(false);
+  const toggle = (next: boolean) => { setToggled(true); setExpanded(next); };
+  const settle = (e: TransitionEvent<HTMLElement>) => { if (e.target === e.currentTarget && e.propertyName === "width") setToggled(false); };
   const navActive = (href: string) => isActive(pathname, href) && !(href === "/tickets" && search.get("sv"));
   const newTicketHref = current ? `/tickets/new?project=${encodeURIComponent(current.key)}` : "/tickets/new";
   const router = useRouter();
@@ -248,12 +254,12 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
   );
   if (!expanded) {
     return (
-      <aside aria-label="Main menu" className={cx("flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3", chatting && "min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh")}>
+      <aside aria-label="Main menu" onTransitionEnd={settle} className={cx("flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3", toggled && "motion-sidebar", chatting && "min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh")}>
         <span title="Vesper" className="grid size-[30px] place-items-center">
           <Mark />
         </span>
         <div className="flex flex-col items-center gap-1">
-          <ToggleButton expanded={false} onToggle={() => setExpanded(true)} />
+          <ToggleButton expanded={false} onToggle={() => toggle(true)} />
           {chatting ? <NewConversationButton id={viewed ?? undefined} rail /> : newTicket}
           <button
             type="button"
@@ -283,7 +289,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
     );
   }
   return (
-    <aside aria-label="Main menu" className={cx("flex min-w-0 flex-[1_1_232px] flex-col gap-5 border-r min-[800px]:w-[232px] min-[800px]:flex-none border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3", chatting && "min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh")}>
+    <aside aria-label="Main menu" data-expanded onTransitionEnd={settle} className={cx("flex min-w-0 flex-[1_1_232px] flex-col gap-5 border-r min-[800px]:w-[232px] min-[800px]:flex-none border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3", toggled && "motion-sidebar", chatting && "min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh")}>
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-[9px] px-1.5 py-[5px]">
@@ -292,7 +298,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
           </span>
           <div className="flex flex-none items-center gap-1.5">
             {!chatting && newTicket}
-            <ToggleButton expanded onToggle={() => setExpanded(false)} />
+            <ToggleButton expanded onToggle={() => toggle(false)} />
           </div>
         </div>
         {!chatting && <ProjectSwitcher projects={active} current={current} />}

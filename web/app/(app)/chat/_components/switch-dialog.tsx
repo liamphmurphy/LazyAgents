@@ -30,13 +30,13 @@ export function HarnessSwitchDialog({
   return (
     <Dialog.Root open={!!to} onOpenChange={(o) => !o && onCancel()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             onClosed();
           }}
-          className="fixed left-1/2 top-[14vh] z-50 flex w-[min(560px,calc(100%-32px))] -translate-x-1/2 flex-col gap-4 rounded-2xl border border-border-float bg-surface-raised p-6 shadow-[var(--shadow-float)] outline-none"
+          className="motion-dialog fixed left-1/2 top-[14vh] z-50 flex w-[min(560px,calc(100%-32px))] -translate-x-1/2 flex-col gap-4 rounded-2xl border border-border-float bg-surface-raised p-6 shadow-[var(--shadow-float)] outline-none"
         >
           {to && (
             <>

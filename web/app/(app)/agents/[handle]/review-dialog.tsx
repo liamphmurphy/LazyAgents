@@ -82,7 +82,7 @@ export function ReviewDialog({
   return (
     <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
           aria-describedby="review-summary"
           onKeyDown={(e) => {
@@ -91,7 +91,7 @@ export function ReviewDialog({
               save();
             }
           }}
-          className="fixed left-1/2 top-[6vh] z-50 flex max-h-[88vh] w-[min(760px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
+          className="motion-dialog fixed left-1/2 top-[6vh] z-50 flex max-h-[88vh] w-[min(760px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
         >
           <div className="flex items-center gap-2 px-[18px] pt-3.5">
             <Dialog.Title className="type-heading">Review changes to {detail.agent.name}</Dialog.Title>

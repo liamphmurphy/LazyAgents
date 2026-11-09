@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { ApiError, type Schemas } from "@/lib/api/client";
 import { useCreateEpicReview, useEpicCriterionMutations, useUpdateEpic } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
+import { usePulse } from "@/components/ui/motion";
 import { cx } from "@/lib/cx";
 import { absoluteTime, ago } from "@/lib/format";
 import { STATUS_LABEL as TICKET_STATUS_LABEL } from "./glyphs";
@@ -30,6 +31,7 @@ export function EpicCompletion({ summary }: { summary: BoardEpic }) {
   const [blocked, setBlocked] = useState<string>();
   const [statusError, setStatusError] = useState<string>();
   const closed = epic.status === "done";
+  const statusRef = usePulse<HTMLSpanElement>(epic.status);
 
   function changeStatus(next: Schemas["EpicStatus"]) {
     setBlocked(undefined);
@@ -47,7 +49,7 @@ export function EpicCompletion({ summary }: { summary: BoardEpic }) {
     <div className="grid gap-5 md:grid-cols-2">
       <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-fg-secondary">Status: <span className="font-medium text-fg">{STATUS_LABEL[epic.status]}</span></span>
+          <span className="text-fg-secondary">Status: <span ref={statusRef} className="inline-block font-medium text-fg">{STATUS_LABEL[epic.status]}</span></span>
           <span className="text-fg-tertiary">{epic.tickets_total} tickets, {epic.tickets_open} open</span>
         </div>
         <Progress label="Points" done={epic.points_done} total={epic.points_total} value={`${epic.points_done} / ${epic.points_total} pts done`} />

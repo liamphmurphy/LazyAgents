@@ -394,11 +394,90 @@
   .scene-layer * { animation: none !important; }
 }
 
+/*
+ * Motion tokens and shared overlay animations (DESIGN.md §6). Exits are shorter than entrances,
+ * and only transform and opacity move, apart from the sidebar and Collapse heights.
+ */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --motion-exit: 140ms;
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.motion-scrim[data-state="open"] { animation: motion-fade-in var(--motion-base) ease-out both; }
+.motion-scrim[data-state="closed"] { animation: motion-fade-out var(--motion-exit) ease-in both; }
+.motion-dialog[data-state="open"] { animation: motion-panel-in var(--motion-slow) var(--motion-ease) both; }
+.motion-dialog[data-state="closed"] { animation: motion-panel-out var(--motion-exit) ease-in both; }
+/*
+ * Menus and the command menu only animate in: while one plays an exit its dismiss layer is still
+ * live, and swallows a quick click on the trigger.
+ */
+.motion-dialog-fast[data-state="open"] { animation: motion-float-in 100ms var(--motion-ease) both; }
+.motion-float { transform-origin: var(--radix-popper-transform-origin); }
+.motion-float[data-state="open"] { animation: motion-float-in var(--motion-fast) var(--motion-ease) both; }
+.motion-pop, .motion-pop-child svg { animation: motion-pop 220ms var(--motion-spring) both; }
+.motion-rise { animation: motion-rise var(--motion-base) var(--motion-ease) both; }
+.motion-page { animation: motion-fade-in var(--motion-fast) ease-out; }
+
+.motion-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--motion-base) var(--motion-ease);
+}
+.motion-collapse[data-open="false"] { grid-template-rows: 0fr; transition-duration: var(--motion-exit); }
+@starting-style {
+  .motion-collapse[data-open="true"] { grid-template-rows: 0fr; }
+}
+/* Native <details>; browsers without these features just snap open. */
+.motion-details { interpolate-size: allow-keywords; }
+.motion-details::details-content {
+  height: 0;
+  overflow: clip;
+  transition: height var(--motion-base) var(--motion-ease), content-visibility var(--motion-base) allow-discrete;
+}
+.motion-details[open]::details-content { height: auto; }
+
+/* On while a user toggle plays, so restoring the expanded menu on load doesn't animate. */
+@media (min-width: 800px) and (prefers-reduced-motion: no-preference) {
+  .motion-sidebar { overflow-x: clip; transition: width var(--motion-base) var(--motion-ease); }
+  .motion-sidebar > * { animation: motion-fade-in var(--motion-base) ease-out both; }
+  .motion-sidebar[data-expanded] > * { min-width: 211px; }
+}
+
+/* Shared elements (<ViewTransition>). Clicks pass through to the live page. */
+::view-transition { pointer-events: none; }
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) { animation-duration: 140ms; }
+
+@keyframes motion-fade-in { from { opacity: 0; } }
+@keyframes motion-fade-out { to { opacity: 0; } }
+@keyframes motion-panel-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
+@keyframes motion-panel-out { to { opacity: 0; transform: translateY(6px) scale(0.985); } }
+@keyframes motion-float-in { from { opacity: 0; transform: scale(0.97); } }
+@keyframes motion-pop { from { opacity: 0; transform: scale(0.4); } }
+@keyframes motion-rise { from { opacity: 0; transform: translateY(6px); } }
+
+/* Short rather than none: Radix and Collapse wait for their animations to end before unmounting. */
+@media (prefers-reduced-motion: reduce) {
+  .motion-scrim,
+  .motion-dialog,
+  .motion-dialog-fast,
+  .motion-float,
+  .motion-pop,
+  .motion-pop-child svg,
+  .motion-rise,
+  .motion-page { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+  .motion-collapse,
+  .motion-details::details-content { transition-duration: 1ms !important; }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
+
 /* The New Learning Module dialog (new-module-guide.tsx). */
-.guide-scrim[data-state="open"] { animation: guide-fade-in 200ms ease-out both; }
-.guide-scrim[data-state="closed"] { animation: guide-fade-out 140ms ease-in both; }
-.guide-panel[data-state="open"] { animation: guide-panel-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both; }
-.guide-panel[data-state="closed"] { animation: guide-panel-out 140ms ease-in both; }
 .guide-stage { --guide-shift: 32px; }
 .guide-stage[data-direction="back"] { --guide-shift: -32px; }
 .guide-step-enter { animation: guide-step-in 340ms cubic-bezier(0.16, 1, 0.3, 1) 110ms both; }
@@ -407,22 +486,13 @@
 .guide-step-enter .guide-stagger > :nth-child(2) { animation-delay: 165ms; }
 .guide-step-enter .guide-stagger > :nth-child(3) { animation-delay: 220ms; }
 .guide-step-enter .guide-stagger > :nth-child(4) { animation-delay: 275ms; }
-.guide-pop { animation: guide-pop 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-@keyframes guide-fade-in { from { opacity: 0; } }
-@keyframes guide-fade-out { to { opacity: 0; } }
-@keyframes guide-panel-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
-@keyframes guide-panel-out { to { opacity: 0; transform: translateY(6px) scale(0.985); } }
 @keyframes guide-step-in { from { opacity: 0; transform: translateX(var(--guide-shift)); } }
 @keyframes guide-step-out { to { opacity: 0; transform: translateX(calc(var(--guide-shift) * -1)); } }
 @keyframes guide-rise { from { opacity: 0; transform: translateY(10px); } }
-@keyframes guide-pop { from { opacity: 0; transform: scale(0.4); } }
 
 /* Short rather than none: the dialog and its steps wait for animationend to clear. */
 @media (prefers-reduced-motion: reduce) {
-  .guide-scrim,
-  .guide-panel,
   .guide-step-enter,
   .guide-step-leave,
-  .guide-stagger > *,
-  .guide-pop { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+  .guide-stagger > * { animation-duration: 1ms !important; animation-delay: 0ms !important; }
 }

@@ -93,7 +93,7 @@ export function Composer() {
   return (
     <Dialog.Root open onOpenChange={(o) => !o && close()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
           aria-describedby={undefined}
           onKeyDown={(e) => {
@@ -102,7 +102,7 @@ export function Composer() {
               submit();
             }
           }}
-          className="fixed left-1/2 top-[8vh] z-50 flex max-h-[84vh] w-[min(720px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
+          className="motion-dialog fixed left-1/2 top-[8vh] z-50 flex max-h-[84vh] w-[min(720px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
         >
           <div className="flex items-center gap-2 px-[18px] pt-3.5">
             <DropdownMenu.Root>

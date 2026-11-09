@@ -438,6 +438,11 @@ Every screen uses these patterns rather than a blank page or a spinner.
 * Dialogs trap focus, close on `esc`, and return focus to whatever opened them. The command menu uses `role="combobox"` with a `listbox` of `option`s.
 * Status must never rely on color alone. Glyph shapes differ (dashed, ring, half, three-quarter, filled) and pills always carry text.
 * Small text never goes dimmer than `--text-tertiary`.
+* Motion explains a change; it isn't decoration:
+  * Use the `--motion-*` tokens in `globals.css` and the shared classes (`motion-scrim`, `motion-dialog`, `motion-float`) or the helpers in `components/ui/motion.tsx`. Every Radix overlay animates.
+  * Frequent actions stay under 150ms, entrances under 320ms, and exits are shorter than entrances. Move only `transform` and `opacity` unless the height or width is the point (`Collapse`, the sidebar).
+  * Nothing replays on first paint or polling. Don't animate run logs, tables, keyboard row movement or streaming text.
+  * Under `prefers-reduced-motion`, animations that something waits on run for 1ms; the rest are off.
 
 ---
 

@@ -38,8 +38,8 @@ export function DeleteDialog({ persona, all, onClose }: { persona: Persona; all:
   return (
     <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
-        <Dialog.Content className="fixed left-1/2 top-[18vh] z-50 flex w-[min(400px,calc(100%-32px))] -translate-x-1/2 flex-col gap-3 rounded-xl border border-border-float bg-surface-raised p-5 shadow-[var(--shadow-float)] outline-none">
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Content className="motion-dialog fixed left-1/2 top-[18vh] z-50 flex w-[min(400px,calc(100%-32px))] -translate-x-1/2 flex-col gap-3 rounded-xl border border-border-float bg-surface-raised p-5 shadow-[var(--shadow-float)] outline-none">
           <Dialog.Title className="type-heading">Delete {persona.name}?</Dialog.Title>
           {persona.is_default ? (
             others.length ? (

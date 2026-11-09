@@ -8,6 +8,7 @@ import { citationSources, type Source } from "@/lib/chat-context";
 import { sourceSplit, usedWebSources, type ListedSource } from "@/lib/chat-sources";
 import { webSearches, type WebSource } from "@/lib/web-search";
 import { Icon } from "@/components/ui/icon";
+import { Collapse } from "@/components/ui/motion";
 import { cx } from "@/lib/cx";
 
 const MAX_TILES = 4;
@@ -210,8 +211,8 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
           </button>
         )}
       </div>
-      <div id={panel} className="flex flex-col gap-3 p-3">
-        {showQueries && (
+      <div id={panel} className="motion-rise flex flex-col gap-3 p-3">
+        <Collapse open={showQueries}>
           <ul aria-label="Searches" className="flex flex-col gap-0.5">
             {queries.map((x) => (
               <li key={x} data-testid="source-query" className="flex items-center gap-2 text-fg">
@@ -220,7 +221,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
               </li>
             ))}
           </ul>
-        )}
+        </Collapse>
         <CardGroup label="In Vesper" cards={vesperCards} focused={focused} />
         <CardGroup label="From the web" cards={webCards} focused={focused} />
         {more.length > 0 && (
@@ -229,7 +230,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
               + {plural(more.length, "more search result")}{total > 0 ? ", not used in this reply" : ""}
               <Icon name="chev" size={12} className={cx("text-fg-tertiary transition-transform", showMore && "rotate-180")} />
             </button>
-            {showMore && (
+            <Collapse open={showMore}>
               <ul className="mt-1.5 flex flex-col gap-0.5">
                 {more.map((s) => (
                   <li key={s.url} data-testid="source-more" className="flex items-baseline gap-3">
@@ -238,7 +239,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
                   </li>
                 ))}
               </ul>
-            )}
+            </Collapse>
           </div>
         )}
       </div>
