@@ -6454,6 +6454,8 @@ export interface components {
              * @description When the windows were read; absent before the first reading
              */
             usage_checked_at?: string;
+            /** @description A usage check is in flight; a newer reading may arrive on a later poll */
+            usage_checking: boolean;
             /** @description Session first, then weekly; windows that renewed since the reading are left out */
             windows: components["schemas"]["UsageWindow"][];
         };
