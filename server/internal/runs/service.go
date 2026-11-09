@@ -62,6 +62,8 @@ type Service struct {
 	RequireHarnessKey bool
 	// ModelDiscovery overrides live provider discovery for embedded backends and tests.
 	ModelDiscovery func(context.Context, string, string) ([]chatmodels.Model, error)
+	// PlanModels lists plan-login models through a runner (chatmodels.Catalog.PlanModels).
+	PlanModels func(context.Context, uuid.UUID, string, bool) ([]chatmodels.Model, error)
 	// Poll is how often waits re-check state (tests shorten it).
 	Poll time.Duration
 	// HandoffChars bounds the prior transcript handed to a chat segment started

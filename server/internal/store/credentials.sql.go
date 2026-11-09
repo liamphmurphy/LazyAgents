@@ -278,6 +278,25 @@ func (q *Queries) SecretExists(ctx context.Context, arg SecretExistsParams) (boo
 	return column_1, err
 }
 
+const secretVersion = `-- name: SecretVersion :one
+SELECT encode(nonce, 'hex') FROM secrets WHERE workspace_id = $1 AND name = $2 AND project_id IS NULL
+`
+
+type SecretVersionParams struct {
+	WorkspaceID uuid.UUID
+	Name        string
+}
+
+// Metadata only: an opaque version of the workspace-level secret's stored value.
+// The AES-GCM nonce is fresh on every write and untouched by reads, unlike
+// updated_at, which last_used_at bumps on every reveal. Not secret.
+func (q *Queries) SecretVersion(ctx context.Context, arg SecretVersionParams) (string, error) {
+	row := q.db.QueryRow(ctx, secretVersion, arg.WorkspaceID, arg.Name)
+	var encode string
+	err := row.Scan(&encode)
+	return encode, err
+}
+
 const touchAgentToken = `-- name: TouchAgentToken :exec
 UPDATE agent_tokens SET last_used_at = now() WHERE id = $1
 `

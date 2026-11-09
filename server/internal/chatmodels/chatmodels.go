@@ -5,7 +5,9 @@ package chatmodels
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"sync"
 
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 
@@ -77,63 +79,111 @@ type Catalog struct {
 	RequireKey bool
 	Secrets    *secrets.Service
 	Discover   func(context.Context, string, string) ([]Model, error)
+	// PlanModels lists the models of a saved plan login where the API has no
+	// CLI (the Docker backend), by asking a runner. Its errors are shown to
+	// the person as the reason the harness is unavailable, so they must be
+	// public-safe. With wait it may block for a runner's answer; without,
+	// it only queues the request. Discover, when set, still takes precedence.
+	PlanModels func(ctx context.Context, ws uuid.UUID, harness string, wait bool) ([]Model, error)
 }
 
 // List returns live harness models in display order. Credentials stay
 // server-side; unavailable providers have an empty list and a public reason.
+// It never waits on a runner, so it is safe inside a transaction: a plan
+// login whose models aren't known yet is reported as still being checked.
 func (c Catalog) List(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]Harness, error) {
-	out := make([]Harness, 0, len(chatHarnesses))
-	for _, name := range chatHarnesses {
-		h := Harness{Harness: name, Label: labels[name], Available: true, Models: []Model{}}
-		if c.RequireKey {
-			ok, err := q.SecretExists(ctx, store.SecretExistsParams{WorkspaceID: ws, Name: KeySecret[name]})
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				h.Available, h.UnavailableReason = false, "no "+KeySecret[name]+" secret"
-			}
+	return c.list(ctx, q, ws, false)
+}
+
+// ListWaiting is List for callers outside any transaction: a plan login with
+// no models yet waits briefly for a runner to list them.
+func (c Catalog) ListWaiting(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]Harness, error) {
+	return c.list(ctx, q, ws, true)
+}
+
+func (c Catalog) list(ctx context.Context, q *store.Queries, ws uuid.UUID, wait bool) ([]Harness, error) {
+	out := make([]Harness, len(chatHarnesses))
+	errs := make([]error, len(chatHarnesses))
+	if wait {
+		// Concurrently, so the worst case is one wait rather than one per harness.
+		var wg sync.WaitGroup
+		for i, name := range chatHarnesses {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				out[i], errs[i] = c.harness(ctx, q, ws, name, true)
+			}()
 		}
-		if h.Available {
-			key := ""
-			if c.RequireKey && c.Secrets != nil {
-				var err error
-				key, err = c.Secrets.Reveal(ctx, ws, nil, KeySecret[name])
-				if err != nil {
-					h.Available = false
-					h.UnavailableReason = "model discovery requires a readable " + KeySecret[name] + " secret"
-				}
-			}
-			if h.Available {
-				// Provider model APIs don't take subscription logins, so those
-				// list models through the CLI, like local mode.
-				viaCLI := !c.RequireKey || subscriptionLogin(name, key)
-				discover := c.Discover
-				if discover == nil {
-					discover = Discover
-					if viaCLI {
-						discover = DiscoverLocal
-					}
-				}
-				discovered, err := discover(ctx, name, key)
-				if err != nil {
-					h.Available = false
-					h.UnavailableReason = "model discovery failed; check provider credentials and connectivity"
-					if viaCLI {
-						h.UnavailableReason = "Could not read models from the local CLI. Check that it is installed and signed in on the API host."
-					}
-				} else if len(discovered) == 0 {
-					h.Available = false
-					h.UnavailableReason = "no chat models available"
-				} else {
-					h.Models = discovered
-				}
-			}
+		wg.Wait()
+	} else {
+		for i, name := range chatHarnesses {
+			out[i], errs[i] = c.harness(ctx, q, ws, name, false)
 		}
-		out = append(out, h)
+	}
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
 	}
 	rememberOffered(ws, out)
 	return out, nil
+}
+
+func (c Catalog) harness(ctx context.Context, q *store.Queries, ws uuid.UUID, name string, wait bool) (Harness, error) {
+	h := Harness{Harness: name, Label: labels[name], Available: true, Models: []Model{}}
+	if c.RequireKey {
+		ok, err := q.SecretExists(ctx, store.SecretExistsParams{WorkspaceID: ws, Name: KeySecret[name]})
+		if err != nil {
+			return h, err
+		}
+		if !ok {
+			h.Available, h.UnavailableReason = false, "no "+KeySecret[name]+" secret"
+		}
+	}
+	if !h.Available {
+		return h, nil
+	}
+	key := ""
+	if c.RequireKey && c.Secrets != nil {
+		var err error
+		key, err = c.Secrets.Reveal(ctx, ws, nil, KeySecret[name])
+		if err != nil {
+			h.Available = false
+			h.UnavailableReason = "model discovery requires a readable " + KeySecret[name] + " secret"
+			return h, nil
+		}
+	}
+	// Provider model APIs don't take subscription logins, so those
+	// list models through the CLI, like local mode.
+	viaCLI := !c.RequireKey || subscriptionLogin(name, key)
+	discover := c.Discover
+	queued := false
+	if discover == nil {
+		discover = Discover
+		if viaCLI {
+			discover = DiscoverLocal
+			if c.RequireKey && c.PlanModels != nil {
+				queued = true
+				discover = func(ctx context.Context, name, _ string) ([]Model, error) {
+					return c.PlanModels(ctx, ws, name, wait)
+				}
+			}
+		}
+	}
+	discovered, err := discover(ctx, name, key)
+	if err != nil {
+		h.Available = false
+		h.UnavailableReason = "model discovery failed; check provider credentials and connectivity"
+		if queued {
+			h.UnavailableReason = err.Error()
+		} else if viaCLI {
+			h.UnavailableReason = "Could not read models from the local CLI. Check that it is installed and signed in on the API host."
+		}
+	} else if len(discovered) == 0 {
+		h.Available = false
+		h.UnavailableReason = "no chat models available"
+	} else {
+		h.Models = discovered
+	}
+	return h, nil
 }
 
 // Selection is a chat's harness, model and reasoning effort ("" is
