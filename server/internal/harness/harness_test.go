@@ -137,6 +137,14 @@ func TestClaudeInvocation(t *testing.T) {
 	if !strings.Contains(string(inv.Files[".lazyagents/mcp.json"]), `"Authorization": "Bearer la_tok"`) {
 		t.Fatalf("mcp config %s", inv.Files[".lazyagents/mcp.json"])
 	}
+	for _, k := range []string{"DISABLE_TELEMETRY", "DISABLE_ERROR_REPORTING", "DISABLE_BUG_COMMAND", "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY", "CLAUDE_CODE_DISABLE_AUTO_MEMORY"} {
+		if inv.Env[k] != "1" {
+			t.Fatalf("env %s = %q", k, inv.Env[k])
+		}
+	}
+	if inv.Env["LAZYAGENTS_TOKEN"] != "la_tok" {
+		t.Fatalf("token env %v", inv.Env)
+	}
 	// No shell scope: no Bash.
 	inv, _ = ClaudeCode{}.Invocation(ws, Turn{Spec: spec(), Prompt: "go"})
 	if strings.Contains(flag(inv.Argv, "--allowedTools"), "Bash") || slices.Contains(inv.Argv, "--resume") {
