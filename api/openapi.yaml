@@ -6068,7 +6068,10 @@ components:
           description: "Every persona in the chat: the host first, then the ones mentioned in (by @name or an approved proposal), in the order they joined"
         speaker: { $ref: "#/components/schemas/PersonaSummary" }
         repo_url: { type: string, description: "The git repository a coding persona works in for this chat; fixed for the chat's life. Absent when the chat has no repository." }
-        work_branch: { type: string, description: "The branch this chat commits and pushes to (vesper/<persona>-<chat id prefix>); set with repo_url" }
+        work_branches:
+          type: array
+          items: { type: string }
+          description: "The branches the coding persona pushed in this chat, oldest first (feat/..., fix/..., chore/...). It makes them as changes are asked for, so a new chat has none. Absent when the chat has no repository."
         archived: { type: boolean }
         revision: { type: integer }
         message_count: { type: integer }

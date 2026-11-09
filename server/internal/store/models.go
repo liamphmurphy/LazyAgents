@@ -279,7 +279,6 @@ type ChatSession struct {
 	LastMessageAt      *time.Time
 	PersonaID          *uuid.UUID
 	RepoUrl            *string
-	WorkBranch         *string
 	Effort             string
 	SpeakerPersonaID   *uuid.UUID
 	QueuedPersonaIds   []uuid.UUID
@@ -290,6 +289,7 @@ type ChatSession struct {
 	Hidden             bool
 	ConnectorIds       []uuid.UUID
 	SpaceID            *uuid.UUID
+	WorkBranches       []string
 }
 
 type ChatSpace struct {

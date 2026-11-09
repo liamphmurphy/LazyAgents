@@ -40,7 +40,7 @@ func TestChatSpecCapabilities(t *testing.T) {
 		return agentdef.Resolved{Harness: h, Model: "m", Scopes: []agentdef.ResolvedScope{
 			{Scope: "repo:*", Mode: agentdef.Allowed}, {Scope: "wiki:write", Mode: agentdef.Allowed}, {Scope: "deploy:staging", Mode: agentdef.Allowed}}}
 	}
-	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/pair-12345678"}
+	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranches: []string{"feat/add-search"}}
 	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex} {
 		for _, tc := range []struct {
 			name   string
@@ -51,10 +51,10 @@ func TestChatSpecCapabilities(t *testing.T) {
 			{"none", ChatCaps{}, false, false},
 			{"code", code, true, false},
 			{"images", ChatCaps{Images: true}, false, h == agentdef.HarnessCodex},
-			{"both", ChatCaps{Code: true, RepoURL: code.RepoURL, WorkBranch: code.WorkBranch, Images: true}, true, h == agentdef.HarnessCodex},
+			{"both", ChatCaps{Code: true, RepoURL: code.RepoURL, Images: true}, true, h == agentdef.HarnessCodex},
 			// Code needs a repository: without one nothing widens.
 			{"code without repo", ChatCaps{Code: true}, false, false},
-			{"repo without code", ChatCaps{RepoURL: code.RepoURL, WorkBranch: code.WorkBranch}, false, false},
+			{"repo without code", ChatCaps{RepoURL: code.RepoURL}, false, false},
 		} {
 			t.Run(h+"/"+tc.name, func(t *testing.T) {
 				got := ChatSpec(base(h), tc.caps)
@@ -98,8 +98,12 @@ func TestChatSpecCapabilities(t *testing.T) {
 					}
 				}
 				ins := got.Instructions
-				if coder := strings.Contains(ins, "## Working in code"); coder != tc.coding || (coder && !strings.Contains(ins, "git push -u origin vesper/pair-12345678")) {
+				if coder := strings.Contains(ins, "## Working in code"); coder != tc.coding || (coder && !strings.Contains(ins, "git checkout -b TYPE/short-description")) {
 					t.Errorf("code instructions present=%v, want %v", coder, tc.coding)
+				}
+				// Branches the chat already pushed are listed for a new segment.
+				if listed := strings.Contains(ins, "Branches you already pushed in this chat, oldest first: feat/add-search."); listed != (tc.coding && len(tc.caps.WorkBranches) > 0) {
+					t.Errorf("pushed branches listed=%v for %v", listed, tc.caps.WorkBranches)
 				}
 				if tc.coding == strings.Contains(ins, "Never claim tickets, run or execute project work, change code") {
 					t.Errorf("the no-code bullet must go exactly when coding")
@@ -133,7 +137,7 @@ func TestSameCapabilities(t *testing.T) {
 	base := agentdef.Resolved{Harness: agentdef.HarnessCodex, Scopes: []agentdef.ResolvedScope{{Scope: "repo:read", Mode: agentdef.Allowed}}}
 	a := ChatSpec(base, ChatCaps{})
 	if !sameCapabilities(a, ChatSpec(base, ChatCaps{})) || sameCapabilities(a, ChatSpec(base, ChatCaps{Images: true})) ||
-		sameCapabilities(a, ChatSpec(base, ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/x-1"})) {
+		sameCapabilities(a, ChatSpec(base, ChatCaps{Code: true, RepoURL: "https://github.com/a/b"})) {
 		t.Fatal("capability comparison is wrong")
 	}
 	// Unrelated edits to the assistant's definition don't count.
@@ -145,7 +149,7 @@ func TestSameCapabilities(t *testing.T) {
 	if !sameCapabilities(a, ChatSpec(edited, ChatCaps{})) {
 		t.Fatal("editing the assistant's instructions, skills or scopes must not change what a chat can do")
 	}
-	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranch: "vesper/x-1"}
+	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b"}
 	if !sameCapabilities(ChatSpec(base, code), ChatSpec(edited, code)) {
 		t.Fatal("coding chat: unrelated edits changed the capabilities")
 	}

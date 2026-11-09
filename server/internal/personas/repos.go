@@ -5,8 +5,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/google/uuid"
-
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/memory"
 )
@@ -169,10 +167,23 @@ func Slug(name string) string {
 	return s
 }
 
-// WorkBranch names the branch a persona's coding chat pushes to. It ends in
-// the random tail of the chat id: ids are UUIDv7, whose leading characters
-// are the creation time and repeat across chats made within about a minute.
-func WorkBranch(personaName string, chatID uuid.UUID) string {
-	hex := strings.ReplaceAll(chatID.String(), "-", "")
-	return "vesper/" + Slug(personaName) + "-" + hex[len(hex)-8:]
+// BranchTypes are the kinds of change a coding chat's branch may be named
+// for, as its first path segment: feat/add-search, fix/login-redirect.
+var BranchTypes = []string{"feat", "fix", "chore", "docs", "refactor", "test", "perf", "build", "ci", "style"}
+
+// MaxWorkBranches is how many branches one coding chat keeps track of.
+const MaxWorkBranches = 50
+
+const maxWorkBranchLen = 80
+
+// WorkBranchPattern matches a branch a coding chat may create: a branch type,
+// a slash and a lower-case kebab-case description. It is a POSIX extended
+// regular expression too, so the workspace's pre-push hook checks the same.
+var WorkBranchPattern = "^(" + strings.Join(BranchTypes, "|") + ")/[a-z0-9]+([-._][a-z0-9]+)*$"
+
+var workBranchRe = regexp.MustCompile(WorkBranchPattern)
+
+// ValidWorkBranch reports whether name is a branch a coding chat may create.
+func ValidWorkBranch(name string) bool {
+	return len(name) <= maxWorkBranchLen && workBranchRe.MatchString(name)
 }

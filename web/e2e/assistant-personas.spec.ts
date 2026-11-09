@@ -261,7 +261,8 @@ test("a coding persona's new chat shows its repo and work branch in the header",
   await expect(page).toHaveURL(/\/chat\/[^/]+/);
   const chip = page.getByTestId("repo-chip").first();
   await expect(chip).toContainText("acme/api");
-  await expect(chip).toContainText("vesper/dev-");
+  // No branch until the persona pushes one for a change.
+  await expect(chip).toHaveText("acme/api");
   await expect(chip).toHaveAttribute("title", repos[1]);
   await expect(page.getByTestId("image-hint")).toHaveCount(0);
   expect(mock.created[0]).toMatchObject({ persona_id: mock.personas[0].id, repo_url: repos[1] });

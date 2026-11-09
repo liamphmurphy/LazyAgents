@@ -2,7 +2,7 @@
 // Kept free of React so `npm run test:unit` covers it.
 
 export type RunEventLike = { seq: number; type: string; at: string; payload: Record<string, unknown> };
-export type ToolCall = { key: number; tool: string; input: unknown; done: boolean; output?: string };
+export type ToolCall = { key: number; tool: string; input: unknown; done: boolean; output?: string; failed?: true };
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 
@@ -26,6 +26,7 @@ export function toolCalls(events: RunEventLike[] | undefined, since?: string, un
       const call = out[open.get(str(p.id))!];
       call.done = true;
       if (p.output) call.output = str(p.output);
+      if (p.is_error) call.failed = true;
     }
   }
   return out;
@@ -218,6 +219,7 @@ export type ChatStatusKind =
   | "wiki"
   | "tickets"
   | "reading-code"
+  | "searching-code"
   | "writing-code"
   | "tests"
   | "build"
@@ -229,13 +231,16 @@ export type ChatStatusKind =
   | "pull-request"
   | "repo-history"
   | "web"
+  | "web-page"
   | "video"
   | "image"
+  | "image-view"
   | "canvas"
   | "canvas-comment"
   | "runs"
   | "workflow"
-  | "memory";
+  | "memory"
+  | "memory-save";
 export type ChatStatusInfo = { kind: ChatStatusKind; phrase: string };
 
 const status = (kind: ChatStatusKind, phrase: string): ChatStatusInfo => ({ kind, phrase });
@@ -262,7 +267,8 @@ function shellStatus(command: string): ChatStatusInfo {
   if (/\b(npm\s+(ci|install|i)|pnpm\s+install|yarn(\s+install)?\s*$|go\s+mod\s+(download|tidy)|pip\s+install|bundle\s+install|cargo\s+fetch)\b/.test(c)) return status("install", "installing dependencies");
   if (/\b(go\s+(build|vet)|npm\s+run\s+(build|lint|typecheck)|tsc\b|cargo\s+(build|check|clippy)|make\b|eslint|gofmt)\b/.test(c)) return status("build", "checking the build");
   if (GIT_OTHER.test(c)) return status("repo-history", "looking over the repository");
-  if (/^\s*(cat|less|head|tail|ls|tree|find|rg|grep|sed\s+-n|wc|awk)\b|\|\s*(rg|grep|head|tail)\b/.test(c)) return status("reading-code", "reading the code");
+  if (/^\s*(find|rg|grep|fd)\b|\|\s*(rg|grep)\b/.test(c)) return status("searching-code", "searching the code");
+  if (/^\s*(cat|less|head|tail|ls|tree|sed\s+-n|wc|awk)\b|\|\s*(head|tail)\b/.test(c)) return status("reading-code", "reading the code");
   return status("terminal", "working in the terminal");
 }
 
@@ -324,7 +330,7 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("memory", "recalling what it knows about you");
     case "save_memory":
     case "update_memory":
-      return status("memory", "making a note");
+      return status("memory-save", "making a note");
     case "forget_memory":
       return status("memory", "forgetting that");
     case "set_chat_title":
@@ -332,9 +338,10 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "WebSearch":
     case "web_search":
     case "websearch":
+      return status("web", "searching the web");
     case "WebFetch":
     case "webfetch":
-      return status("web", "searching the web");
+      return status("web-page", "reading a page");
     case "list_saved_links":
       return status("web", "checking your saved links");
     case "propose_persona":
@@ -372,12 +379,13 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "read":
     case "read_file":
       // The image follow-up opens the generated images it is about to react to.
-      if (typeof o.file_path === "string" && o.file_path.includes(".lazyagents/attachments/generated/")) return status("image", "looking at the image");
+      if (typeof o.file_path === "string" && o.file_path.includes(".lazyagents/attachments/generated/")) return status("image-view", "looking at the image");
       return status("reading-code", "reading the code");
     case "Glob":
     case "glob":
     case "Grep":
     case "grep":
+      return status("searching-code", "searching the code");
     case "LS":
     case "list":
     case "list_dir":
@@ -419,32 +427,39 @@ export function chatStatus(calls: { tool: string; input: unknown }[]): ChatStatu
 
 // ---- the chat tab's step rail: the turn's plan, or its work so far ----
 
-export type ChatStepState = "planned" | "active" | "done";
-export type ChatStep = { key: string; title: string; state: ChatStepState; added?: true; detail?: string };
+/** A step's place in the turn. A finished step is "failed" when its last call errored at work where an error means failure. */
+export type ChatStepState = "planned" | "active" | "done" | "failed";
+/** `kind` picks the step's glyph: the kind of its newest call, absent until a planned step's work starts. */
+export type ChatStep = { key: string; title: string; state: ChatStepState; kind?: ChatStatusKind; added?: true; detail?: string };
 
-type PlanItem = { id: string; title: string; state: ChatStepState };
+type PlanState = "planned" | "active" | "done";
+type PlanItem = { id: string; title: string; state: PlanState };
 
-const planState = (v: unknown): ChatStepState => (v === "completed" ? "done" : v === "in_progress" ? "active" : "planned");
+const planState = (v: unknown): PlanState => (v === "completed" ? "done" : v === "in_progress" ? "active" : "planned");
 const records = (list: unknown) => (Array.isArray(list) ? (list as Record<string, unknown>[]) : []);
 const planItems = (list: unknown): PlanItem[] =>
   records(list)
     .filter((item) => item.content && item.status !== "cancelled")
     .map((item, i) => ({ id: String(i), title: str(item.content), state: planState(item.status) }));
 
-/** Every version of the plan in these calls, oldest first: TodoWrite sends the whole list, TaskCreate and TaskUpdate change one task. */
-function planVersions(calls: ToolCall[]): PlanItem[][] {
-  const versions: PlanItem[][] = [];
+/**
+ * Every version of the plan in these calls, oldest first: TodoWrite sends the whole list, TaskCreate and TaskUpdate change one task.
+ * `call` is the index of the call that wrote each version.
+ */
+type PlanVersion = { items: PlanItem[]; call: number };
+function planVersions(calls: ToolCall[]): PlanVersion[] {
+  const versions: PlanVersion[] = [];
   let tasks: PlanItem[] = [];
-  for (const call of calls) {
+  for (const [at, call] of calls.entries()) {
     const o = (call.input && typeof call.input === "object" ? call.input : {}) as Record<string, unknown>;
     switch (bareTool(call.tool)) {
       case "TodoWrite":
       case "todowrite":
-        versions.push(planItems(o.todos));
+        versions.push({ items: planItems(o.todos), call: at });
         break;
       case "TaskCreate":
         tasks = [...tasks, { id: /#(\d+)/.exec(call.output ?? "")?.[1] ?? String(tasks.length + 1), title: str(o.subject), state: "planned" }];
-        versions.push(tasks);
+        versions.push({ items: tasks, call: at });
         break;
       case "TaskUpdate": {
         const id = str(o.taskId);
@@ -452,12 +467,35 @@ function planVersions(calls: ToolCall[]): PlanItem[][] {
         tasks = o.status === "deleted"
           ? tasks.filter((t) => t.id !== id)
           : tasks.map((t) => (t.id === id ? { ...t, title: o.subject ? str(o.subject) : t.title, state: o.status ? planState(o.status) : t.state } : t));
-        versions.push(tasks);
+        versions.push({ items: tasks, call: at });
         break;
       }
     }
   }
   return versions;
+}
+
+/** Kinds where an errored call means the work failed. Elsewhere an error is routine: a search with no match, an edit retried. */
+const FAILABLE = new Set<ChatStatusKind>(["tests", "build", "install", "commit", "push", "pull-request", "github", "terminal", "connector", "image"]);
+
+const failedAt = (call: ToolCall, kind: ChatStatusKind) => !!call.failed && FAILABLE.has(kind);
+
+/**
+ * Each plan step's kind and outcome, from the calls made while it was the step under way:
+ * the newest call's kind, and whether that call failed.
+ */
+function planWork(calls: ToolCall[], versions: PlanVersion[]): Map<string, { kind: ChatStatusKind; failed: boolean }> {
+  const work = new Map<string, { kind: ChatStatusKind; failed: boolean }>();
+  let v = -1;
+  for (const [i, call] of calls.entries()) {
+    while (v + 1 < versions.length && versions[v + 1].call <= i) v++;
+    if (v < 0 || BOOKKEEPING.has(bareTool(call.tool)) || call.tool === REPLY_BLOCK) continue;
+    const active = versions[v].items.find((s) => s.state === "active");
+    if (!active) continue;
+    const { kind } = chatStatusOf(call);
+    work.set(active.title, { kind, failed: failedAt(call, kind) });
+  }
+  return work;
 }
 
 /** Calls that keep the turn running but aren't work to show: its plan, tool loading, the chat's title. */
@@ -482,7 +520,7 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
   switch (bareTool(call.tool)) {
     case "Read":
     case "read_file":
-      return file && kind !== "image" ? `Reading ${file}` : general;
+      return file && kind !== "image-view" ? `Reading ${file}` : general;
     case "Edit":
     case "MultiEdit":
     case "NotebookEdit":
@@ -617,23 +655,31 @@ function withDetail(steps: ChatStep[], calls: ToolCall[]): ChatStep[] {
  */
 export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: boolean } {
   const versions = planVersions(calls);
-  const latest = versions[versions.length - 1];
+  const latest = versions[versions.length - 1]?.items;
   if (latest?.length) {
-    const baseline = versions.find((v) => v.some((s) => s.state !== "planned"));
+    const baseline = versions.find((v) => v.items.some((s) => s.state !== "planned"))?.items;
     const original = new Set(baseline?.map((s) => s.title) ?? latest.map((s) => s.title));
+    const work = planWork(calls, versions);
     const seen = new Map<string, number>();
     const steps = latest.map((s): ChatStep => {
       // By title, not position, so a step added mid-list doesn't remount the ones after it.
       const n = seen.get(s.title) ?? 0;
       seen.set(s.title, n + 1);
-      return { key: `${s.title}#${n}`, title: s.title, state: s.state, ...(original.has(s.title) ? {} : { added: true as const }) };
+      const w = s.state === "planned" ? undefined : work.get(s.title);
+      return {
+        key: `${s.title}#${n}`,
+        title: s.title,
+        state: s.state === "done" && w?.failed ? "failed" : s.state,
+        ...(w ? { kind: w.kind } : {}),
+        ...(original.has(s.title) ? {} : { added: true as const }),
+      };
     });
     // A plan doesn't list the rich blocks in the reply, so they follow it.
     const newest = calls[calls.length - 1];
     for (const call of calls) {
       if (call.tool !== REPLY_BLOCK) continue;
-      const { phrase } = chatStatusOf(call);
-      steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: call === newest ? "active" : "done" });
+      const { kind, phrase } = chatStatusOf(call);
+      steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: call === newest ? "active" : "done", kind });
     }
     return { steps: withDetail(steps, calls), planned: true };
   }
@@ -641,16 +687,24 @@ export function chatSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: bool
   let last: string | undefined;
   for (const call of calls) {
     if (BOOKKEEPING.has(bareTool(call.tool))) continue;
-    const { phrase } = chatStatusOf(call);
-    if (phrase === last) continue;
+    const { kind, phrase } = chatStatusOf(call);
+    const failed = failedAt(call, kind);
+    if (phrase === last) {
+      // The group's newest call decides: a test run that failed, then passed, is done.
+      steps[steps.length - 1].state = failed ? "failed" : "done";
+      continue;
+    }
     last = phrase;
-    steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: "done" });
+    steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: failed ? "failed" : "done", kind });
   }
   if (steps.length) steps[steps.length - 1].state = "active";
   return { steps: withDetail(steps, calls), planned: false };
 }
 
-/** Keeps the rail short on long turns: all but the newest two of more than three finished steps fold away, and at most four upcoming steps show. */
+/**
+ * Keeps the rail short on long turns: all but the newest two of more than three finished steps fold away, and at most four upcoming steps show.
+ * A failed step never folds, so a failure stays in sight.
+ */
 export function foldSteps(steps: ChatStep[]): { earlier: number; shown: ChatStep[]; later: number } {
   const done = steps.filter((s) => s.state === "done");
   const hidden = new Set(done.length > 3 ? done.slice(0, -2) : []);

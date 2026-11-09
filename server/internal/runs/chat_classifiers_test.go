@@ -16,7 +16,7 @@ import (
 )
 
 func TestClassifyTurn(t *testing.T) {
-	coding := ChatCaps{Code: true, RepoURL: "r", WorkBranch: "b"}
+	coding := ChatCaps{Code: true, RepoURL: "r"}
 	long := strings.Repeat("x", substantialReply)
 	flow := []store.Workflow{{ID: uuid.New(), Name: "test"}, {ID: uuid.New(), Name: "Weekly digest"}}
 	for _, c := range []struct {

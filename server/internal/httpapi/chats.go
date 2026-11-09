@@ -107,7 +107,10 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		item := api.ChatSession{
 			Id: c.ID, Title: c.Title, Harness: api.Harness(c.Harness), Model: c.Model, State: api.ChatState(c.State),
 			CurrentRunId: c.CurrentRunID, Archived: c.Archived, Revision: int(c.Revision), MessageCount: counts[c.ID],
-			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, LastMessageAt: c.LastMessageAt, RepoUrl: c.RepoUrl, WorkBranch: c.WorkBranch,
+			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, LastMessageAt: c.LastMessageAt, RepoUrl: c.RepoUrl,
+		}
+		if c.RepoUrl != nil {
+			item.WorkBranches = &c.WorkBranches
 		}
 		if c.Effort != "" {
 			e := api.ChatEffort(c.Effort)

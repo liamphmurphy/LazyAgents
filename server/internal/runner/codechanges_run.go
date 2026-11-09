@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/liamphmurphy/vesper/server/internal/harness"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
 )
 
 // What a coding chat turn changed is read with git run by the runner in the
@@ -194,4 +196,39 @@ func (r *Runner) chatCodeChanges(ctx context.Context, c runCtx, base string, env
 		r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "code_changes_failed", "detail": redact(err.Error(), env)})
 	}
 	return none
+}
+
+// chatPushedBranches are the branches a coding chat's pre-push hook recorded
+// it creating that the remote now has (a push that failed after the hook ran
+// leaves no remote-tracking ref), oldest first. The record is in a file the
+// agent can edit, so only names a chat may create are kept. nil when there are
+// none or they can't be read, which never fails the turn.
+func (r *Runner) chatPushedBranches(ctx context.Context, c runCtx) []string {
+	if c.run.Purpose != "chat" || !allowedScope(c.spec, "repo:write") {
+		return nil
+	}
+	tctx, cancel := context.WithTimeout(ctx, codeChangesTimeout)
+	defer cancel()
+	id := c.run.ID.String()
+	out, _, code, err := r.gitCmd(tctx, id, nil, 64<<10, "config", "--get-all", ChatBranchConfig)
+	if err != nil || code != 0 { // 1: nothing recorded
+		return nil
+	}
+	remote, _, code, err := r.gitCmd(tctx, id, nil, 1<<20, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/")
+	if err != nil || code != 0 {
+		r.Log.Warn("list pushed branches", "run", c.run.ID, "err", err, "exit", code)
+		return nil
+	}
+	pushed := map[string]bool{}
+	for _, ref := range strings.Split(string(remote), "\n") {
+		pushed[strings.TrimPrefix(strings.TrimSpace(ref), "refs/remotes/origin/")] = true
+	}
+	var names []string
+	for _, name := range strings.Split(string(out), "\n") {
+		name = strings.TrimSpace(name)
+		if personas.ValidWorkBranch(name) && pushed[name] && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
 }

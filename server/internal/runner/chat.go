@@ -30,8 +30,7 @@ func lockRunChat(ctx context.Context, q *store.Queries, run store.Run) (store.Ch
 }
 
 // chatSetupScript is a chat segment's workspace setup: the coding persona's
-// repository on the chat's work branch when the frozen spec grants repo:write
-// and the chat has one, otherwise just the context directory (and the outbox
+// repository when the frozen spec grants repo:write and the chat has one, otherwise just the context directory (and the outbox
 // image-generating chats copy their pictures to).
 func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, error) {
 	script := "mkdir -p .lazyagents/context"
@@ -45,7 +44,7 @@ func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, e
 	if err != nil {
 		return "", err
 	}
-	if chat.RepoUrl == nil || chat.WorkBranch == nil {
+	if chat.RepoUrl == nil {
 		return script, nil
 	}
 	name := "Assistant"
@@ -58,7 +57,7 @@ func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, e
 			name = p.Name
 		}
 	}
-	return ChatRepoSetupScript(*chat.RepoUrl, *chat.WorkBranch, name+" (Vesper)", personas.Slug(name)+"@personas.lazyagents.local"), nil
+	return ChatRepoSetupScript(*chat.RepoUrl, chat.WorkBranches, name+" (Vesper)", personas.Slug(name)+"@personas.lazyagents.local"), nil
 }
 
 // chatGitRepo is the repository URL a coding chat's git credentials may be
@@ -71,7 +70,7 @@ func chatGitRepo(ctx context.Context, q *store.Queries, c runCtx) (string, error
 	if err != nil {
 		return "", err
 	}
-	if chat.RepoUrl == nil || chat.WorkBranch == nil {
+	if chat.RepoUrl == nil {
 		return "", nil
 	}
 	return *chat.RepoUrl, nil
@@ -177,7 +176,15 @@ func (r *Runner) dropImageBlobs(imgs []generatedImage) {
 	}
 }
 
-func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTurn, res harness.Result, code int, waitErr error, logKey *string, codeChanges []byte, jobs chatImages) {
+// chatTurnCode is what a coding chat's turn did in its repository: the
+// changes JSON for its reply, and the branches it has pushed.
+type chatTurnCode struct {
+	changes  []byte
+	branches []string
+}
+
+func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTurn, res harness.Result, code int, waitErr error, logKey *string, work chatTurnCode, jobs chatImages) {
+	codeChanges := work.changes
 	var imgs []generatedImage
 	// A Codex chat copies its pictures to the outbox itself; any other chat's
 	// come from the Codex steps its generate_image requests ran.
@@ -194,6 +201,12 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 		run, err := q.LockRun(ctx, c.run.ID)
 		if err != nil {
 			return err
+		}
+		// Kept whatever came of the turn: a branch it pushed is on the remote.
+		if len(work.branches) > 0 {
+			if err := q.AddChatWorkBranches(ctx, store.AddChatWorkBranchesParams{ID: chat.ID, Branches: work.branches, MaxBranches: personas.MaxWorkBranches}); err != nil {
+				return err
+			}
 		}
 		usage, err := json.Marshal(res.Usage)
 		if err != nil {

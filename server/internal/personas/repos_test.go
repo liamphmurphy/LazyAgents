@@ -80,3 +80,16 @@ func TestNormalizeRepos(t *testing.T) {
 		t.Fatalf("10 repos: %v %v", got, err)
 	}
 }
+
+func TestValidWorkBranch(t *testing.T) {
+	for _, ok := range []string{"feat/add-search", "fix/login-redirect", "chore/bump-go-1.25", "docs/readme", "refactor/chat_caps"} {
+		if !ValidWorkBranch(ok) {
+			t.Errorf("%q rejected", ok)
+		}
+	}
+	for _, bad := range []string{"", "main", "feat", "feat/", "feature/x", "Feat/x", "feat/Add", "feat/a..b", "feat/a/b", "feat/-x", "feat/x-", "feat/x.lock.", "vesper/pair-1234", "feat/" + strings.Repeat("a", 80)} {
+		if ValidWorkBranch(bad) {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

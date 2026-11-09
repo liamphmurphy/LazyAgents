@@ -22,6 +22,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/memory"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -162,12 +163,12 @@ func SetupScriptWithCheckpoint(repoURL, baseBranch, epicBranch, checkpoint, bran
 const chatGitAuth = `if [ -n "$token" ]; then git config credential.https://github.com.helper "$helper"; fi; git config core.sshCommand "$GIT_SSH_COMMAND"` + "\n"
 
 // ChatRepoSetupScript prepares a coding chat's workspace: the persona's repo
-// cloned into the workspace root on the chat's own work branch. A branch an
-// earlier segment already pushed is checked out and resumed (the previous
-// workspace is gone); otherwise it starts from the remote's default branch.
+// cloned into the workspace root on the remote's default branch. The persona
+// makes its own branches as changes are asked for; branches lists the ones the
+// chat already pushed (a plain clone fetches them, so it can check them out).
 // Only github.com over https gets the workspace's git token: the repo URL is
 // the persona owner's choice, and the token must not go to a host they picked.
-func ChatRepoSetupScript(repoURL, workBranch, authorName, authorEmail string) string {
+func ChatRepoSetupScript(repoURL string, branches []string, authorName, authorEmail string) string {
 	var b strings.Builder
 	b.WriteString("set -eu\n")
 	b.WriteString(`helper='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'` + "\n")
@@ -177,7 +178,7 @@ func ChatRepoSetupScript(repoURL, workBranch, authorName, authorEmail string) st
 	if !strings.HasPrefix(repoURL, "https://github.com/") {
 		b.WriteString(`token=""` + "\n")
 	}
-	q, wb := shellQuote(repoURL), shellQuote(workBranch)
+	q := shellQuote(repoURL)
 	b.WriteString("if [ ! -d .git ]; then\n")
 	b.WriteString("  echo '→ cloning " + strings.ReplaceAll(repoURL, "'", "") + "'\n")
 	const dest = ".lazyagents/clone"
@@ -188,26 +189,51 @@ func ChatRepoSetupScript(repoURL, workBranch, authorName, authorEmail string) st
 	b.WriteString("  if git rev-parse -q --verify HEAD >/dev/null 2>&1; then git reset -q --hard; fi\n")
 	b.WriteString("  git config user.name " + shellQuote(authorName) + "\n")
 	b.WriteString("  git config user.email " + shellQuote(authorEmail) + "\n")
-	// The clone's own fetch below needs the credentials too.
-	b.WriteString("  " + chatGitAuth)
-	b.WriteString("  if git fetch --quiet origin " + shellQuote("+refs/heads/"+workBranch+":refs/remotes/origin/"+workBranch) + " 2>/dev/null; then\n")
-	b.WriteString("    echo '→ resuming pushed work on branch " + strings.ReplaceAll(workBranch, "'", "") + "'\n")
-	b.WriteString("    git checkout --quiet -B " + wb + " " + shellQuote("origin/"+workBranch) + "\n")
-	b.WriteString("  else\n")
-	b.WriteString("    git checkout --quiet -B " + wb + "\n")
-	b.WriteString("  fi\n")
 	b.WriteString("fi\n")
-	// Again every turn, so a token or key added after the workspace was
-	// created reaches git too.
+	// Every turn, so a token or key added after the workspace was created
+	// reaches git too.
 	b.WriteString(chatGitAuth)
-	// Defense in depth, not a hard boundary: the agent can still bypass a hook
-	// (--no-verify, another remote). The token's own reach is the real limit.
+	b.WriteString("mkdir -p .git/hooks\n")
+	b.WriteString("printf '%s\\n' " + chatPrePushHook(branches) + " > .git/hooks/pre-push\n")
+	b.WriteString("chmod +x .git/hooks/pre-push\n")
+	b.WriteString(keepOurFilesOutOfGit)
+	b.WriteString("mkdir -p .lazyagents/outbox\n")
+	b.WriteString(dependencySetupScript())
+	b.WriteString(`echo "→ workspace ready on branch $(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo '(none)')"` + "\n")
+	return b.String()
+}
+
+// ChatBranchConfig is the git config key the pre-push hook records each
+// branch it lets the chat create under; the runner reads it after each turn.
+const ChatBranchConfig = "vesper.branch"
+
+// chatPrePushHook is a coding chat's pre-push hook, as shell-quoted lines for
+// printf. It lets the chat push the branches it already made (known) and new
+// ones named personas.WorkBranchPattern, recording those, and refuses the
+// rest: the default branch, someone else's, tags and deletes. Defense in
+// depth, not a hard boundary: the agent can bypass a hook (--no-verify,
+// editing it, another remote), and the token's own reach is the real limit.
+func chatPrePushHook(known []string) string {
+	refs := make([]string, len(known))
+	for i, k := range known {
+		refs[i] = "refs/heads/" + k
+	}
 	hook := []string{
 		"#!/bin/sh",
-		"# Vesper: this chat may push only its own work branch (not a hard boundary).",
-		"want=" + shellQuote("refs/heads/"+workBranch),
+		"# Vesper: this chat may push only branches it made (not a hard boundary).",
+		"known=" + shellQuote(strings.Join(refs, " ")),
+		"pattern=" + shellQuote(personas.WorkBranchPattern),
+		`made=$(git config --get-all ` + ChatBranchConfig + ` 2>/dev/null | sed 's|^|refs/heads/|' | tr '\n' ' ')`,
 		`while read -r local_ref local_sha remote_ref remote_sha; do`,
-		`  if [ "$remote_ref" != "$want" ]; then echo "vesper: this chat may only push $want, not $remote_ref" >&2; exit 1; fi`,
+		`  case "$local_sha" in *[!0]*) ;; *) echo "vesper: this chat may not delete $remote_ref" >&2; exit 1 ;; esac`,
+		`  case " $known $made " in *" $remote_ref "*) continue ;; esac`,
+		`  name=${remote_ref#refs/heads/}`,
+		`  if [ "$name" = "$remote_ref" ] || ! printf '%s\n' "$name" | grep -Eq "$pattern"; then`,
+		`    echo "vesper: name a new branch TYPE/short-description (feat/..., fix/..., chore/...); $remote_ref isn't one" >&2; exit 1`,
+		`  fi`,
+		`  case "$remote_sha" in *[!0]*) echo "vesper: $remote_ref already exists and wasn't made in this chat; pick another name" >&2; exit 1 ;; esac`,
+		`  git config --add ` + ChatBranchConfig + ` "$name"`,
+		`  made="$made $remote_ref"`,
 		"done",
 		"exit 0",
 	}
@@ -215,14 +241,7 @@ func ChatRepoSetupScript(repoURL, workBranch, authorName, authorEmail string) st
 	for i, l := range hook {
 		quoted[i] = shellQuote(l)
 	}
-	b.WriteString("mkdir -p .git/hooks\n")
-	b.WriteString("printf '%s\\n' " + strings.Join(quoted, " ") + " > .git/hooks/pre-push\n")
-	b.WriteString("chmod +x .git/hooks/pre-push\n")
-	b.WriteString(keepOurFilesOutOfGit)
-	b.WriteString("mkdir -p .lazyagents/outbox\n")
-	b.WriteString(dependencySetupScript())
-	b.WriteString("echo '→ workspace ready on branch " + strings.ReplaceAll(workBranch, "'", "") + "'\n")
-	return b.String()
+	return strings.Join(quoted, " ")
 }
 
 // TurnWrapper git-excludes skill files (in the repository's shared exclude

@@ -5377,8 +5377,8 @@ export interface components {
             speaker?: components["schemas"]["PersonaSummary"];
             /** @description The git repository a coding persona works in for this chat; fixed for the chat's life. Absent when the chat has no repository. */
             repo_url?: string;
-            /** @description The branch this chat commits and pushes to (vesper/<persona>-<chat id prefix>); set with repo_url */
-            work_branch?: string;
+            /** @description The branches the coding persona pushed in this chat, oldest first (feat/..., fix/..., chore/...). It makes them as changes are asked for, so a new chat has none. Absent when the chat has no repository. */
+            work_branches?: string[];
             archived: boolean;
             revision: number;
             message_count: number;

@@ -79,10 +79,9 @@ test("the chat status is high level and never leaks the call's details", () => {
     [{ tool: "search_knowledge", input: { q: "payroll" } }, "looking through the wiki"],
     [{ tool: "create_ticket", input: { title: "x" } }, "drafting a ticket"],
     [{ tool: "save_memory", input: { body: "likes tea" } }, "making a note"],
-    [{ tool: "WebFetch", input: { url: "https://example.com/private" } }, "searching the web"],
     [{ tool: "image_gen", input: {} }, "creating an image"],
     [{ tool: "mcp__lazyagents__generate_image", input: { prompt: "a cat" } }, "creating an image"],
-    [{ tool: "Grep", input: { pattern: "TODO" } }, "reading the code"],
+    [{ tool: "Grep", input: { pattern: "TODO" } }, "searching the code"],
     [{ tool: "apply_patch", input: { files: ["modify src/a.ts"] } }, "writing code"],
     [{ tool: "Bash", input: { command: "go test ./internal/..." } }, "running tests"],
     [{ tool: "shell", input: { command: "bash -lc 'npm run test:unit'" } }, "running tests"],
@@ -92,7 +91,9 @@ test("the chat status is high level and never leaks the call's details", () => {
     [{ tool: "Bash", input: { command: "npm ci" } }, "installing dependencies"],
     [{ tool: "Bash", input: { command: "go vet ./..." } }, "checking the build"],
     [{ tool: "Bash", input: { command: "git status" } }, "looking over the repository"],
-    [{ tool: "Bash", input: { command: "rg -n token src" } }, "reading the code"],
+    [{ tool: "Bash", input: { command: "rg -n token src" } }, "searching the code"],
+    [{ tool: "Bash", input: { command: "cat src/main.go" } }, "reading the code"],
+    [{ tool: "WebFetch", input: { url: "https://example.com/private" } }, "reading a page"],
     [{ tool: "exec_command", input: { cmd: "cp /h/.codex/generated_images/t/a.png .lazyagents/outbox/a.png" } }, "saving the image"],
     [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/turn-1/1-fox.png" } }, "looking at the image"],
     [{ tool: "Read", input: { file_path: "src/main.go" } }, "reading the code"],
@@ -116,19 +117,23 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "create_epic", input: {} }, "tickets"],
     [{ tool: "get_run", input: {} }, "runs"],
     [{ tool: "Read", input: { file_path: "src/a.go" } }, "reading-code"],
-    [bash("rg -n token src"), "reading-code"],
+    [bash("rg -n token src"), "searching-code"],
+    [bash("ls src | head"), "reading-code"],
+    [{ tool: "Grep", input: {} }, "searching-code"],
+    [{ tool: "WebSearch", input: {} }, "web"],
     [{ tool: "apply_patch", input: {} }, "writing-code"],
     [bash("go test ./..."), "tests"],
     [bash("npm run lint"), "build"],
     [bash("npm ci"), "install"],
-    [{ tool: "WebFetch", input: {} }, "web"],
+    [{ tool: "WebFetch", input: {} }, "web-page"],
     [{ tool: "generate_image", input: {} }, "image"],
-    [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/t/1.png" } }, "image"],
+    [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/t/1.png" } }, "image-view"],
     [{ tool: "get_video_transcript", input: {} }, "video"],
     [{ tool: "canvas_create", input: {} }, "canvas"],
     [{ tool: "canvas_comment", input: {} }, "canvas-comment"],
     [{ tool: "read_workflow", input: {} }, "workflow"],
-    [{ tool: "save_memory", input: {} }, "memory"],
+    [{ tool: "save_memory", input: {} }, "memory-save"],
+    [{ tool: "search_memory", input: {} }, "memory"],
     [{ tool: "some.other_tool", input: {} }, "connector"],
     [{ tool: "", input: undefined }, "thinking"],
     [bash("python3 scripts/migrate.py"), "terminal"],
@@ -240,7 +245,7 @@ test("every harness's tools and each chat tool land on a described step", () => 
 test("chatSteps groups a planless turn's calls, skipping bookkeeping", () => {
   const { steps, planned } = stepsOf([{ tool: "Read" }, { tool: "ToolSearch" }, { tool: "Grep" }, { tool: "Edit" }, { tool: "Bash", input: { command: "go test ./..." } }]);
   assert.equal(planned, false);
-  assert.deepEqual(steps.map((s) => s.state), ["done", "done", "active"]);
+  assert.deepEqual(steps.map((s) => [s.state, s.kind]), [["done", "reading-code"], ["done", "searching-code"], ["done", "writing-code"], ["active", "tests"]]);
   assert.equal(steps[0].title, chatStatusOf({ tool: "Read", input: {} }).phrase.replace(/^./, (c) => c.toUpperCase()));
   assert.deepEqual(chatSteps([]), { steps: [], planned: false });
 });
@@ -347,4 +352,48 @@ test("a connector's tools get their own scene and read by the connector's name",
   assert.deepEqual(connectorCall("mcp__google-calendar__list_events"), { name: "Google Calendar", tool: "list_events" });
   assert.equal(connectorCall("mcp__lazyagents__whoami"), null);
   assert.equal(chatStatusOf({ tool: "google-calendar.list_events", input: {} }).kind, "connector");
+});
+
+test("each step carries the kind of its newest call, and a planned step gets one once its work starts", () => {
+  const todo = (...rows) => ({ tool: "TodoWrite", input: { todos: rows.map(([content, status]) => ({ content, status })) } });
+  const bash = (command, failed) => ({ tool: "Bash", input: { command }, ...(failed ? { failed: true } : {}) });
+  const { steps } = stepsOf([
+    todo(["Look", "in_progress"], ["Check", "pending"], ["Ship", "pending"]),
+    { tool: "Grep" },
+    { tool: "Read" },
+    todo(["Look", "completed"], ["Check", "in_progress"], ["Ship", "pending"]),
+    bash("go test ./..."),
+  ]);
+  assert.deepEqual(steps.map((s) => [s.title, s.state, s.kind]), [["Look", "done", "reading-code"], ["Check", "active", "tests"], ["Ship", "planned", undefined]]);
+});
+
+test("a finished step fails when its newest call errored at work where that means failure", () => {
+  const bash = (command, failed) => ({ tool: "Bash", input: { command }, ...(failed ? { failed: true } : {}) });
+  // Tests fail, then pass on the rerun: done. The build breaks and the turn moves on: failed.
+  const run = stepsOf([bash("go test ./...", true), bash("go test ./..."), bash("go build ./...", true), { tool: "Edit" }]).steps;
+  assert.deepEqual(run.map((s) => [s.kind, s.state]), [["tests", "done"], ["build", "failed"], ["writing-code", "active"]]);
+  // A search with no match exits non-zero but isn't a failure.
+  assert.equal(stepsOf([bash("rg missing", true), { tool: "Edit" }]).steps[0].state, "done");
+  // A plan step the agent completed after a failing run still shows the failure.
+  const todo = (...rows) => ({ tool: "TodoWrite", input: { todos: rows.map(([content, status]) => ({ content, status })) } });
+  const planned = stepsOf([todo(["Test", "in_progress"], ["Ship", "pending"]), bash("npm test", true), todo(["Test", "completed"], ["Ship", "in_progress"])]).steps;
+  assert.deepEqual(planned.map((s) => [s.title, s.state]), [["Test", "failed"], ["Ship", "active"]]);
+});
+
+test("toolCalls marks a call failed when its result is an error", () => {
+  const at = "2026-11-09T00:00:00Z";
+  const calls = toolCalls([
+    { seq: 1, type: "tool_call", at, payload: { id: "a", tool: "Bash", input: {} } },
+    { seq: 2, type: "tool_result", at, payload: { id: "a", is_error: true, output: "FAIL" } },
+    { seq: 3, type: "tool_call", at, payload: { id: "b", tool: "Bash", input: {} } },
+    { seq: 4, type: "tool_result", at, payload: { id: "b", output: "ok" } },
+  ]);
+  assert.deepEqual(calls.map((c) => c.failed), [true, undefined]);
+});
+
+test("foldSteps never folds a failed step", () => {
+  const steps = [{ key: "f", title: "f", state: "failed" }, ...["a", "b", "c", "d"].map((k) => ({ key: k, title: k, state: "done" })), { key: "x", title: "x", state: "active" }];
+  const f = foldSteps(steps);
+  assert.equal(f.earlier, 2);
+  assert.deepEqual(f.shown.map((s) => s.key), ["f", "c", "d", "x"]);
 });

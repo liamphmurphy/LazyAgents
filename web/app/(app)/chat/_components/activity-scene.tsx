@@ -46,6 +46,7 @@ const LABELS: Record<ChatStatusKind, string> = {
   wiki: "Reading the wiki",
   tickets: "Working on tickets",
   "reading-code": "Reading code",
+  "searching-code": "Searching code",
   "writing-code": "Writing code",
   tests: "Running tests",
   build: "Checking the build",
@@ -57,13 +58,16 @@ const LABELS: Record<ChatStatusKind, string> = {
   "pull-request": "Preparing a pull request",
   "repo-history": "Looking over the repository",
   web: "Searching the web",
+  "web-page": "Reading a page",
   video: "Watching a video",
   image: "Creating an image",
+  "image-view": "Looking at an image",
   canvas: "Working on a canvas",
   "canvas-comment": "Commenting on a canvas",
   runs: "Checking on runs",
   workflow: "Working on a workflow",
   memory: "Memory",
+  "memory-save": "Making a note",
 };
 
 export const sceneLabel = (kind: ChatStatusKind) => LABELS[kind];
@@ -91,7 +95,10 @@ function canvasScene(pin?: boolean) {
   );
 }
 
-const SCENES: Record<ChatStatusKind, ReactNode> = {
+/** Kinds split off a broader one keep its scene: the step rail's glyph is what tells them apart. */
+type SplitKind = "searching-code" | "web-page" | "image-view" | "memory-save";
+
+const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
   thinking: (
     <>
       <circle className="scene-box scene-breathe" cx="66" cy="28" r="22" fill="none" stroke="var(--accent)" strokeOpacity="0.35" strokeWidth="1.5" />
@@ -326,11 +333,20 @@ const SCENES: Record<ChatStatusKind, ReactNode> = {
   ),
 };
 
+const SCENE_OF: Record<SplitKind, Exclude<ChatStatusKind, SplitKind>> = {
+  "searching-code": "reading-code",
+  "web-page": "web",
+  "image-view": "image",
+  "memory-save": "memory",
+};
+
+const sceneOf = (kind: ChatStatusKind) => (kind in SCENE_OF ? SCENE_OF[kind as SplitKind] : (kind as Exclude<ChatStatusKind, SplitKind>));
+
 function SceneLayer({ kind, leaving }: { kind: ChatStatusKind; leaving?: boolean }) {
   return (
     <div data-scene={leaving ? undefined : kind} className={`scene-layer ${leaving ? "scene-out" : "scene-in"}`}>
-      <svg viewBox="0 0 132 56" className={`h-full w-full ${kind === "image" ? "scene-focus" : ""}`}>
-        {SCENES[kind]}
+      <svg viewBox="0 0 132 56" className={`h-full w-full ${sceneOf(kind) === "image" ? "scene-focus" : ""}`}>
+        {SCENES[sceneOf(kind)]}
       </svg>
     </div>
   );
