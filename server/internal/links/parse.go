@@ -23,27 +23,45 @@ type Ref struct {
 
 var (
 	wikilink = regexp.MustCompile(`(!?)\[\[([^\[\]\n]+?)\]\]`)
-	fence    = regexp.MustCompile("^ {0,3}(```|~~~)")
 	codeSpan = regexp.MustCompile("`+[^`\n]*`+")
 )
+
+// fenceMarker is the fence a line opens or closes ("```" or "~~~" after at
+// most three spaces), or "" if it isn't a fence line.
+func fenceMarker(line string) string {
+	for n := 0; n < 3 && strings.HasPrefix(line, " "); n++ {
+		line = line[1:]
+	}
+	if strings.HasPrefix(line, "```") {
+		return "```"
+	}
+	if strings.HasPrefix(line, "~~~") {
+		return "~~~"
+	}
+	return ""
+}
 
 // Parse returns the links in a markdown body in document order, skipping
 // fenced code blocks and inline code spans.
 func Parse(md string) []Ref {
 	var out []Ref
 	inFence := ""
-	for i, line := range strings.Split(md, "\n") {
+	for i := 0; md != ""; i++ {
+		line, rest, _ := strings.Cut(md, "\n")
+		md = rest
 		line = strings.TrimRight(line, "\r")
-		if m := fence.FindStringSubmatch(line); m != nil {
+		if f := fenceMarker(line); f != "" {
 			switch inFence {
 			case "":
-				inFence = m[1]
-			case m[1]:
+				inFence = f
+			case f:
 				inFence = ""
 			}
 			continue
 		}
-		if inFence != "" {
+		// Most lines hold no link; skip the regexps for them. Blanking code
+		// spans only removes brackets, so it can't make a "[[".
+		if inFence != "" || !strings.Contains(line, "[[") {
 			continue
 		}
 		// Blank out code spans so positions still line up with the original.

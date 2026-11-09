@@ -278,23 +278,27 @@ func (p *claudeParser) Line(b []byte) []Event {
 		}
 		return []Event{{"lifecycle", pl}}
 	case "assistant", "user":
+		// Blocks are decoded straight from the message: one pass over what
+		// can be a large tool result instead of two.
 		var msg struct {
-			Content json.RawMessage `json:"content"`
+			Content []claudeBlock `json:"content"`
 		}
 		if json.Unmarshal(l.Message, &msg) != nil {
-			return nil
-		}
-		var blocks []claudeBlock
-		if json.Unmarshal(msg.Content, &blocks) != nil {
+			var raw struct {
+				Content json.RawMessage `json:"content"`
+			}
+			if json.Unmarshal(l.Message, &raw) != nil {
+				return nil
+			}
 			var s string // user messages can be a plain string
-			if json.Unmarshal(msg.Content, &s) == nil && s != "" && l.Type == "assistant" {
+			if json.Unmarshal(raw.Content, &s) == nil && s != "" && l.Type == "assistant" {
 				p.res.Final = s
 				return []Event{{"message", map[string]any{"role": "assistant", "text": s}}}
 			}
 			return nil
 		}
 		var out []Event
-		for _, bl := range blocks {
+		for _, bl := range msg.Content {
 			switch bl.Type {
 			case "text":
 				if l.Type == "assistant" && strings.TrimSpace(bl.Text) != "" {

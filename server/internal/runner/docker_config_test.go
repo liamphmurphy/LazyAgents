@@ -76,3 +76,16 @@ func TestSecretEnvDeliversPlanLogins(t *testing.T) {
 		t.Fatalf("api keys %v %v", keys, err)
 	}
 }
+
+func TestRedactPayloadEncodesOnce(t *testing.T) {
+	env := map[string]string{"TOKEN": "vsp_secretvalue", "SHORT": "1"}
+	clean := map[string]any{"text": "nothing to hide", "n": 1}
+	p, b := redactPayload(clean, env)
+	if string(b) != `{"n":1,"text":"nothing to hide"}` || p["text"] != "nothing to hide" {
+		t.Fatalf("clean payload: %v %s", p, b)
+	}
+	p, b = redactPayload(map[string]any{"text": "token vsp_secretvalue here"}, env)
+	if string(b) != `{"text":"token [redacted] here"}` || p["text"] != "token [redacted] here" {
+		t.Fatalf("secret payload: %v %s", p, b)
+	}
+}

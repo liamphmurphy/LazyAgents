@@ -1,6 +1,9 @@
 package harness
 
-import "strings"
+import (
+	"bytes"
+	"strings"
+)
 
 // richReplyBlocks are the fenced blocks the chat renders as something other
 // than code. They can take a while to write and call no tool.
@@ -10,28 +13,33 @@ var richReplyBlocks = map[string]bool{"app": true, "svg-image": true, "svg-steps
 // what's being written before the finished message arrives. A block is seen once
 // its opening line is complete. Fences inside another code block don't count.
 type replyScanner struct {
-	line    string
+	// line is the unfinished line so far. It never holds a newline, so only
+	// new text is searched, and appending keeps a long line (a minified app
+	// or SVG) linear rather than recopied on every delta.
+	line    []byte
 	inFence bool
 }
 
 func (s *replyScanner) feed(text string) []Event {
 	var out []Event
-	s.line += text
 	for {
-		i := strings.IndexByte(s.line, '\n')
+		i := strings.IndexByte(text, '\n')
 		if i < 0 {
+			s.line = append(s.line, text...)
 			return out
 		}
-		line := strings.TrimSpace(s.line[:i])
-		s.line = s.line[i+1:]
+		s.line = append(s.line, text[:i]...)
+		text = text[i+1:]
+		line := bytes.TrimSpace(s.line)
+		s.line = s.line[:0]
 		if s.inFence {
-			s.inFence = line != "```"
+			s.inFence = string(line) != "```"
 			continue
 		}
-		if kind, ok := strings.CutPrefix(line, "```"); ok {
+		if kind, ok := bytes.CutPrefix(line, []byte("```")); ok {
 			s.inFence = true
-			if richReplyBlocks[kind] {
-				out = append(out, Event{"lifecycle", map[string]any{"state": "reply_block", "kind": kind}})
+			if richReplyBlocks[string(kind)] {
+				out = append(out, Event{"lifecycle", map[string]any{"state": "reply_block", "kind": string(kind)}})
 			}
 		}
 	}

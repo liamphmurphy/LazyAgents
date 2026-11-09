@@ -2,7 +2,9 @@ package harness
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -148,6 +150,48 @@ func TestClaudeResumeCostUsesDeltas(t *testing.T) {
 		p.Line([]byte(`{"type":"result","is_error":false,"total_cost_usd":0.5}`))
 		if got := p.Result().Usage; got.CostUSD != 0.5 {
 			t.Fatalf("baseline wrongly applied after %s: %+v", init, got)
+		}
+	}
+}
+
+// How a reply is split into deltas mustn't change which blocks are seen.
+func TestReplyScannerIgnoresDeltaBoundaries(t *testing.T) {
+	text := "Intro\n  ```chart  \n{}\n```\n```go\n```app\n```\n" + "```app\n<html>" + strings.Repeat("x", 5000) + "\n```\n```recommend\n"
+	kinds := func(chunk int) []any {
+		var s replyScanner
+		var out []any
+		for i := 0; i < len(text); i += chunk {
+			for _, e := range s.feed(text[i:min(len(text), i+chunk)]) {
+				out = append(out, e.Payload["kind"])
+			}
+		}
+		return out
+	}
+	want := kinds(len(text))
+	if fmt.Sprint(want) != "[chart app recommend]" {
+		t.Fatalf("whole reply: %v", want)
+	}
+	for _, chunk := range []int{1, 2, 3, 7, 64} {
+		if got := kinds(chunk); fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("chunk %d: %v, want %v", chunk, got, want)
+		}
+	}
+}
+
+func TestClaudeAssistantPlainStringContent(t *testing.T) {
+	p := (ClaudeCode{}).NewParser("test")
+	ev := p.Line([]byte(`{"type":"assistant","message":{"role":"assistant","content":"Done."}}`))
+	if len(ev) != 1 || ev[0].Type != "message" || ev[0].Payload["text"] != "Done." || p.Result().Final != "Done." {
+		t.Fatalf("string content: %+v", ev)
+	}
+	for _, line := range []string{
+		`{"type":"user","message":{"role":"user","content":"a prompt"}}`,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":5}]}}`,
+		`{"type":"assistant","message":"oops"}`,
+		`{"type":"assistant","message":{"content":null}}`,
+	} {
+		if ev := p.Line([]byte(line)); ev != nil {
+			t.Errorf("%s: %+v", line, ev)
 		}
 	}
 }
