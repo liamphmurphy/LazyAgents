@@ -82,10 +82,14 @@ func TestCodingChatRepoSetupPushAndResume(t *testing.T) {
 	}
 
 	reply := e.postSh(chat.ID, "git rev-parse --abbrev-ref HEAD; git config user.name; git config user.email; test -x .git/hooks/pre-push && echo hook; git check-ignore .lazyagents && echo ignored")
-	for _, want := range []string{"main", "Pair Programmer (Vesper)", "pair-programmer@personas.lazyagents.local", "hook", "ignored"} {
+	// Commits are authored as the person who owns the chat, never the persona.
+	for _, want := range []string{"main", e.me.Name, e.me.Email, "hook", "ignored"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("workspace setup: missing %q in %q", want, reply)
 		}
+	}
+	if strings.Contains(reply, "Pair Programmer") || strings.Contains(reply, "personas.lazyagents.local") {
+		t.Fatalf("workspace setup: commits authored as the persona: %q", reply)
 	}
 	spec, _ := runs.Spec(e.chatRun(chat.ID))
 	if spec.Mode("repo:write") != agentdef.Allowed || spec.Mode("deploy:staging") != agentdef.Denied || spec.HarnessOptions["readonly"] != "" {

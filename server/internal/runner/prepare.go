@@ -187,11 +187,12 @@ func ChatRepoSetupScript(repoURL string, branches []string, authorName, authorEm
 	b.WriteString("  mv " + dest + "/.git .git\n")
 	b.WriteString("  rm -rf " + dest + "\n")
 	b.WriteString("  if git rev-parse -q --verify HEAD >/dev/null 2>&1; then git reset -q --hard; fi\n")
-	b.WriteString("  git config user.name " + shellQuote(authorName) + "\n")
-	b.WriteString("  git config user.email " + shellQuote(authorEmail) + "\n")
 	b.WriteString("fi\n")
 	// Every turn, so a token or key added after the workspace was created
-	// reaches git too.
+	// reaches git too, and a workspace cloned under an earlier author identity
+	// commits as the current one.
+	b.WriteString("git config user.name " + shellQuote(authorName) + "\n")
+	b.WriteString("git config user.email " + shellQuote(authorEmail) + "\n")
 	b.WriteString(chatGitAuth)
 	b.WriteString("mkdir -p .git/hooks\n")
 	b.WriteString("printf '%s\\n' " + chatPrePushHook(branches) + " > .git/hooks/pre-push\n")

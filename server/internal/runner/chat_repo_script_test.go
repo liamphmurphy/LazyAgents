@@ -11,13 +11,13 @@ import (
 )
 
 func TestChatRepoSetupScript(t *testing.T) {
-	s := runner.ChatRepoSetupScript("https://github.com/acme/app.git", []string{"vesper/pair-1a2b3c4d", "feat/add-search"}, "Pair (Vesper)", "pair@personas.lazyagents.local")
+	s := runner.ChatRepoSetupScript("https://github.com/acme/app.git", []string{"vesper/pair-1a2b3c4d", "feat/add-search"}, "Ada Lovelace", "ada@example.com")
 	for _, want := range []string{
 		`clone --quiet --no-checkout -- 'https://github.com/acme/app.git'`,
 		// The hook lets the chat push the branches it made, and new ones it names.
 		`.git/hooks/pre-push`, `known='\''refs/heads/vesper/pair-1a2b3c4d refs/heads/feat/add-search'\''`,
 		`pattern='\''^(feat|fix|chore|docs|refactor|test|perf|build|ci|style)/`, `chmod +x .git/hooks/pre-push`,
-		`git config user.name 'Pair (Vesper)'`, `git config user.email 'pair@personas.lazyagents.local'`,
+		`git config user.name 'Ada Lovelace'`, `git config user.email 'ada@example.com'`,
 		`.lazyagents/' >> .git/info/exclude`, `mkdir -p .lazyagents/outbox`,
 	} {
 		if !strings.Contains(s, want) {
@@ -77,6 +77,24 @@ func TestChatRepoSetupScriptAddsLaterToken(t *testing.T) {
 	}
 	if got := run("tok"); !strings.Contains(got, "$GH_TOKEN") {
 		t.Fatalf("existing workspace didn't get the helper once a token was added: %q", got)
+	}
+}
+
+// A workspace cloned under an earlier author identity commits as the current
+// one: the identity is set on every turn, not only by the first clone.
+func TestChatRepoSetupScriptUpdatesAuthor(t *testing.T) {
+	dir := gitInit(t)
+	for _, c := range [][]string{{"user.name", "Pair (Vesper)"}, {"user.email", "pair@personas.lazyagents.local"}} {
+		if out, err := exec.Command("git", "-C", dir, "config", c[0], c[1]).CombinedOutput(); err != nil {
+			t.Fatalf("git config: %v\n%s", err, out)
+		}
+	}
+	runScript(t, dir, runner.ChatRepoSetupScript("https://github.com/acme/app.git", nil, "Ada Lovelace", "ada@example.com"), "")
+	for key, want := range map[string]string{"user.name": "Ada Lovelace", "user.email": "ada@example.com"} {
+		out, _ := exec.Command("git", "-C", dir, "config", "--get", key).Output()
+		if got := strings.TrimSpace(string(out)); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
 	}
 }
 

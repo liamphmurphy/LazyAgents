@@ -47,17 +47,13 @@ func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, e
 	if chat.RepoUrl == nil {
 		return script, nil
 	}
-	name := "Assistant"
-	if id := chatSpeaker(chat); id != nil {
-		p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *id, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return "", err
-		}
-		if err == nil {
-			name = p.Name
-		}
+	// Commits are the person's work, made in their chat: authoring them as the
+	// chat's creator lets the forge attribute them to that person's account.
+	author, err := q.GetUser(ctx, store.GetUserParams{ID: chat.CreatedBy, WorkspaceID: chat.WorkspaceID})
+	if err != nil {
+		return "", fmt.Errorf("chat commit author: %w", err)
 	}
-	return ChatRepoSetupScript(*chat.RepoUrl, chat.WorkBranches, name+" (Vesper)", personas.Slug(name)+"@personas.lazyagents.local"), nil
+	return ChatRepoSetupScript(*chat.RepoUrl, chat.WorkBranches, author.Name, author.Email), nil
 }
 
 // chatGitRepo is the repository URL a coding chat's git credentials may be
