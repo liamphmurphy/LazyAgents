@@ -1,0 +1,237 @@
+import type { CSSProperties, ReactNode } from "react";
+import type { ChatStatusKind, ChatStep } from "@/lib/chat-ui";
+
+/*
+ * The step rail's 16px glyphs: one small picture per kind of work. Only the step under way
+ * moves (one or two parts, so it never competes with the card's scene); a finished step
+ * holds the still frame in the done colour. Each element's resting style is that still
+ * frame, and `.glyph-live` parts only show while the step is under way. Styles live in globals.css.
+ */
+
+const delay = (seconds: number): CSSProperties => ({ animationDelay: `${seconds}s` });
+
+const dots = (cls: string, xs: number[], cy: number, r: number, step: number) =>
+  xs.map((cx, i) => <circle key={cx} className={`glyph-a ${cls}`} style={delay(i * step)} cx={cx} cy={cy} r={r} fill="currentColor" />);
+
+const GLYPHS: Record<ChatStatusKind, ReactNode> = {
+  thinking: dots("glyph-bob", [3.5, 8, 12.5], 8.5, 1.6, 0.15),
+  "reading-code": (
+    <>
+      <rect className="glyph-s" x="2.5" y="1.5" width="11" height="13" rx="1.5" />
+      <path className="glyph-s" d="M5 5H11M5 8H10M5 11H11" />
+      <rect className="glyph-a glyph-scan glyph-live" x="3.5" y="3.5" width="9" height="3" rx="1" fill="currentColor" opacity=".35" />
+    </>
+  ),
+  "searching-code": (
+    <>
+      <path className="glyph-s" d="M2 3.5h8M2 7h12M2 10.5h7M2 14h10" strokeWidth="1.1" opacity=".5" />
+      <g className="glyph-a glyph-sweep">
+        <circle className="glyph-s glyph-knock" cx="7.5" cy="7" r="3" />
+        <path className="glyph-s" d="M9.7 9.2l2.3 2.3" />
+      </g>
+    </>
+  ),
+  "writing-code": (
+    <>
+      <path className="glyph-s" d="M2.5 4H11M2.5 8H13.5" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M2.5 12H9" />
+      <rect className="glyph-a glyph-caret glyph-live" x="10" y="10" width="1.3" height="4" fill="currentColor" />
+    </>
+  ),
+  tests: [3.5, 8, 12.5].map((cx, i) => (
+    <g key={cx}>
+      <circle className="glyph-s" cx={cx} cy="8" r="2.2" strokeWidth="1.1" />
+      <circle className="glyph-a glyph-fill" style={delay(i * 0.3)} cx={cx} cy="8" r="2.2" fill="currentColor" />
+    </g>
+  )),
+  build: (
+    <>
+      <g className="glyph-a glyph-spin">
+        <circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeDasharray="2.6 2.63" />
+        <circle className="glyph-s" cx="8" cy="8" r="3.4" />
+      </g>
+      <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+    </>
+  ),
+  install: (
+    <>
+      <path className="glyph-s" d="M2.5 10.5v3h11v-3" />
+      <path className="glyph-s glyph-a glyph-drop" d="M8 2v7.5M5 6.8l3 3 3-3" />
+    </>
+  ),
+  terminal: (
+    <>
+      <rect className="glyph-s" x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+      <path className="glyph-s" d="M4.5 6l2 2-2 2" />
+      <rect className="glyph-a glyph-blink" x="8" y="9.6" width="3.6" height="1.4" fill="currentColor" />
+    </>
+  ),
+  github: (
+    <g className="glyph-a glyph-spin">
+      <path className="glyph-s" d="M13.2 6.5A5.5 5.5 0 0 0 3.4 5M3.4 2.4V5h2.6M2.8 9.5a5.5 5.5 0 0 0 9.8 1.5M12.6 13.6V11H10" />
+    </g>
+  ),
+  commit: (
+    <>
+      <path className="glyph-s" d="M1 8h4.3M10.7 8H15" />
+      <circle className="glyph-s" cx="8" cy="8" r="2.6" />
+      <circle className="glyph-a glyph-ring glyph-live" cx="8" cy="8" r="2.6" fill="none" stroke="currentColor" strokeWidth="1" />
+    </>
+  ),
+  push: (
+    <>
+      <path className="glyph-s" d="M2.5 2.5h11" />
+      <path className="glyph-s glyph-a glyph-rise" d="M8 14V6M5 8.7l3-3 3 3" />
+    </>
+  ),
+  "pull-request": (
+    <>
+      <circle className="glyph-s" cx="4" cy="3.5" r="1.6" />
+      <circle className="glyph-s" cx="4" cy="12.5" r="1.6" />
+      <circle className="glyph-s" cx="12" cy="12.5" r="1.6" />
+      <path className="glyph-s" d="M4 5.2v5.6" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M12 10.8V7a3 3 0 0 0-3-3H6.5" />
+    </>
+  ),
+  "repo-history": (
+    <>
+      <path className="glyph-s" d="M4.5 2v12" />
+      {[3, 8, 13].map((y, i) => (
+        <g key={y}>
+          <circle className="glyph-a glyph-tile" style={delay(i * 0.5)} cx="4.5" cy={y} r="1.7" fill="currentColor" />
+          <path className="glyph-s" d={`M8 ${y}h${[6, 4.5, 5.5][i]}`} strokeWidth="1.2" />
+        </g>
+      ))}
+    </>
+  ),
+  web: (
+    <>
+      <circle className="glyph-s" cx="8" cy="8" r="6" />
+      <path className="glyph-s" d="M2 8h12" />
+      <ellipse className="glyph-s glyph-a glyph-globe" cx="8" cy="8" rx="2.8" ry="6" />
+    </>
+  ),
+  "web-page": (
+    <>
+      <rect className="glyph-s" x="1.5" y="2" width="13" height="12" rx="1.5" />
+      <path className="glyph-s" d="M1.5 5h13" />
+      <svg x="3" y="6" width="10" height="7" viewBox="0 0 10 7" overflow="hidden">
+        <path className="glyph-s glyph-a glyph-scroll" d="M0 1.5h8M0 4.5h6M0 7.5h8M0 10.5h5M0 13.5h8" strokeWidth="1.1" />
+      </svg>
+    </>
+  ),
+  wiki: (
+    <>
+      <path className="glyph-s" d="M8 4C6 3 4 3 1.5 3.5V13c2.5-.5 4.5-.5 6.5.5 2-1 4-1 6.5-.5V3.5C12 3 10 3 8 4zM8 4v9.5" />
+      <path className="glyph-a glyph-flip glyph-live" d="M8 4.3c2-.9 3.8-.9 5.6-.5V12.4c-1.8-.4-3.6-.3-5.6.6z" fill="currentColor" opacity=".3" />
+    </>
+  ),
+  tickets: (
+    <>
+      <rect className="glyph-s" x="1.5" y="2" width="5.5" height="12" rx="1" strokeWidth="1.1" />
+      <rect className="glyph-s" x="9" y="2" width="5.5" height="12" rx="1" strokeWidth="1.1" />
+      <rect className="glyph-a glyph-hop" x="2.8" y="4" width="3" height="3" rx=".6" fill="currentColor" />
+    </>
+  ),
+  runs: [
+    [4, 1.7],
+    [8, 2.6],
+    [12, 2.1],
+  ].map(([y, seconds]) => (
+    <g key={y}>
+      <path className="glyph-s" d={`M2 ${y}h12`} opacity=".25" />
+      <path className="glyph-s glyph-a glyph-grow" style={{ animationDuration: `${seconds}s` }} d={`M2 ${y}h12`} />
+    </g>
+  )),
+  workflow: (
+    <>
+      <path className="glyph-s" d="M4.5 8h2.5M9 8h2.5" strokeWidth="1.1" />
+      {dots("glyph-tile", [2.5, 8, 13.5], 8, 2.1, 0.45)}
+    </>
+  ),
+  connector: (
+    <>
+      <rect className="glyph-s" x="9.5" y="4" width="5" height="8" rx="1.2" />
+      <g className="glyph-a glyph-plug">
+        <rect className="glyph-s" x="1.5" y="4.5" width="4.5" height="7" rx="1.2" />
+        <path className="glyph-s" d="M6 6.5h2M6 9.5h2" />
+      </g>
+      <circle className="glyph-a glyph-blink glyph-live" cx="8.7" cy="2.5" r=".9" fill="currentColor" />
+    </>
+  ),
+  video: (
+    <>
+      <rect className="glyph-s" x="1.5" y="2" width="13" height="9" rx="1.5" />
+      <path d="M6.8 4.5v4l3.3-2z" fill="currentColor" />
+      <path className="glyph-s" d="M2 14h12" opacity=".35" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M2 14h12" />
+    </>
+  ),
+  image: [
+    [2, 2, 0],
+    [8.5, 2, 0.4],
+    [2, 8.5, 1.2],
+    [8.5, 8.5, 0.8],
+  ].map(([x, y, wait]) => <rect key={`${x}-${y}`} className="glyph-a glyph-tile" style={delay(wait)} x={x} y={y} width="5.5" height="5.5" rx="1" fill="currentColor" />),
+  "image-view": (
+    <g className="glyph-a glyph-eye">
+      <path className="glyph-s" d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" />
+      <circle cx="8" cy="8" r="2.2" fill="currentColor" />
+    </g>
+  ),
+  canvas: (
+    <>
+      <rect className="glyph-s" x="1.5" y="1.5" width="13" height="13" rx="1.5" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M4 10.5c1.5-4 3-4 4-1.5s2.5 2.5 4-3" />
+    </>
+  ),
+  "canvas-comment": (
+    <>
+      <path className="glyph-s" d="M2 3.5a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5H7l-3 3v-3h-.5A1.5 1.5 0 0 1 2 9.5z" />
+      {dots("glyph-bob", [5.2, 8, 10.8], 6.5, 1, 0.15)}
+    </>
+  ),
+  memory: (
+    <>
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M3 12L8 4l5 7" strokeWidth="1.1" />
+      <circle cx="3" cy="12" r="1.8" fill="currentColor" />
+      <circle cx="8" cy="4" r="2" fill="currentColor" />
+      <circle cx="13" cy="11" r="1.8" fill="currentColor" />
+    </>
+  ),
+  "memory-save": (
+    <>
+      <path className="glyph-s" d="M3.5 3h9v11l-4.5-3-4.5 3z" />
+      <g className="glyph-a glyph-pin glyph-live">
+        <path className="glyph-s" d="M8 1v4" />
+        <path d="M6.5 3.5L8 5.5l1.5-2z" fill="currentColor" />
+      </g>
+    </>
+  ),
+};
+
+const FAILED = (
+  <g className="glyph-a glyph-shake">
+    <circle className="glyph-s" cx="8" cy="8" r="6" />
+    <path className="glyph-s" d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4" />
+  </g>
+);
+
+const CHECK = <path className="glyph-s" d="M4.5 8.3l2.3 2.3 4.7-5" strokeWidth="1.8" />;
+
+/**
+ * A step's marker in the rail: a dashed ring while planned, the kind's glyph once its work
+ * starts (moving while under way, unless the person pressed Stop), and a cross when it failed.
+ * A step with no kind yet keeps the plain dot and check.
+ */
+export function StepGlyph({ step, stopping }: { step: Pick<ChatStep, "kind" | "state">; stopping?: boolean }) {
+  const { kind, state } = step;
+  if (state === "planned") return <span aria-hidden className="size-4 flex-none rounded-full border border-dashed border-border-strong" />;
+  if (state === "active" && !kind) return <span aria-hidden className={`size-4 flex-none rounded-full bg-accent ${stopping ? "" : "motion-safe:animate-pulse"}`} />;
+  const body = state === "failed" ? FAILED : kind ? GLYPHS[kind] : CHECK;
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" data-glyph={state === "failed" ? "failed" : (kind ?? "done")} className={`step-glyph size-4 flex-none overflow-visible ${state}${stopping ? " stopped" : ""}`}>
+      {body}
+    </svg>
+  );
+}

@@ -6,6 +6,7 @@ import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
 import { activityOf, chatCalls, chatStatus, chatSteps, foldSteps, interimLine, toolCalls, type Activity, type ChatStep, type ToolCall } from "@/lib/chat-ui";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
 import { ActivityScene, sceneLabel, useHeldScene } from "./activity-scene";
+import { StepGlyph } from "./step-glyph";
 import { PersonaAvatar, PersonaName, type PersonaLook } from "./persona";
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
@@ -86,16 +87,11 @@ export function TurnToolCalls({ runId, since, until }: { runId?: string; since?:
   return <CallList calls={calls} />;
 }
 
-const STEP_DOT: Record<ChatStep["state"], string> = {
-  planned: "border border-dashed border-border-strong",
-  active: "bg-accent",
-  done: "bg-[var(--state-done)] text-surface",
-};
-
 const STEP_BAR: Record<ChatStep["state"], string> = {
   planned: "bg-border",
   active: "bg-accent",
   done: "bg-[var(--state-done)]",
+  failed: "bg-[var(--state-blocked)]",
 };
 
 /** Pulses the step under way, until the person presses Stop. */
@@ -107,16 +103,17 @@ function StepRail({ steps, stopping }: { steps: ChatStep[]; stopping?: boolean }
     <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-[12.5px]">
       {earlier > 0 && (
         <li className="flex items-center gap-2.5 text-fg-tertiary">
-          <span aria-hidden className={`grid size-4 flex-none place-items-center rounded-full text-[10px] ${STEP_DOT.done}`}>✓</span>
+          <StepGlyph step={{ state: "done" }} />
           {earlier} earlier steps
         </li>
       )}
       {shown.map((s) => (
         <li key={s.key} data-step-state={s.state} className="flex min-w-0 items-start gap-2.5 motion-safe:animate-[scene-in_240ms_ease-out]">
-          <span aria-hidden className={`grid size-4 flex-none place-items-center rounded-full text-[10px] ${STEP_DOT[s.state]} ${stepPulse(s, stopping)}`}>{s.state === "done" ? "✓" : ""}</span>
+          <StepGlyph step={s} stopping={stopping} />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2.5">
-              <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
+              <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" || s.state === "failed" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
+              {s.state === "failed" && <span className="sr-only">(failed)</span>}
               {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
             </div>
             {s.detail && <p data-testid="chat-step-detail" className="truncate text-xs text-fg-tertiary">{s.detail}</p>}
