@@ -31,7 +31,7 @@ export function SpaceTile({ name, color, size = 16, className }: { name: string;
   );
 }
 
-const menuItem = "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-hover";
+const menuItem = "flex h-[32px] cursor-default select-none items-center gap-[10px] rounded-md px-[8px] text-[13px] outline-none data-[highlighted]:bg-hover";
 
 /** The tile as a button that picks the space's color. */
 export function ColorPicker({ name, value, onChange, size = 40, disabled }: { name: string; value: SpaceColor; onChange: (c: SpaceColor) => void; size?: number; disabled?: boolean }) {
@@ -49,13 +49,13 @@ export function ColorPicker({ name, value, onChange, size = 40, disabled }: { na
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "grid grid-cols-4 gap-1 p-2")}>
+        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "grid grid-cols-4 gap-[4px] p-[8px]")}>
           {SPACE_COLORS.map((c) => (
             <DropdownMenu.Item
               key={c.value}
               aria-label={c.label}
               onSelect={() => onChange(c.value)}
-              className={cx("grid size-9 cursor-default place-items-center rounded-md outline-none data-[highlighted]:bg-hover", c.value === value && "bg-selected")}
+              className={cx("grid size-[36px] cursor-default place-items-center rounded-md outline-none data-[highlighted]:bg-hover", c.value === value && "bg-selected")}
             >
               <SpaceTile name={name || "?"} color={c.value} size={24} />
             </DropdownMenu.Item>
@@ -75,17 +75,17 @@ function SelectBox({ label, value, muted, disabled, children }: { label: string;
           type="button"
           disabled={disabled}
           aria-label={`${label}: ${value}`}
-          className="flex h-14 min-w-0 flex-1 flex-col justify-center gap-1 rounded-lg border border-border-strong bg-surface-sunken px-3.5 text-left hover:bg-hover data-[state=open]:border-accent disabled:opacity-50"
+          className="flex h-[56px] min-w-[0px] flex-1 flex-col justify-center gap-[4px] rounded-lg border border-border-strong bg-surface-sunken px-[14px] text-left hover:bg-hover data-[state=open]:border-accent disabled:opacity-50"
         >
           <span className="text-[11px] text-fg-tertiary">{label}</span>
-          <span className="flex w-full items-center gap-2">
-            <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", muted ? "text-fg-secondary" : "text-fg")}>{value}</span>
+          <span className="flex w-full items-center gap-[8px]">
+            <span className={cx("min-w-[0px] flex-1 truncate text-[13.5px]", muted ? "text-fg-secondary" : "text-fg")}>{value}</span>
             <Icon name="chev" size={12} className="flex-none text-fg-secondary" />
           </span>
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "max-h-72 w-[240px] overflow-y-auto")}>
+        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "max-h-[288px] w-[240px] overflow-y-auto")}>
           {children}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -93,7 +93,7 @@ function SelectBox({ label, value, muted, disabled, children }: { label: string;
   );
 }
 
-const Check = ({ on }: { on: boolean }) => <span className="ml-auto w-3.5 text-accent">{on && <Icon name="check" size={14} />}</span>;
+const Check = ({ on }: { on: boolean }) => <span className="ml-auto w-[14px] text-accent">{on && <Icon name="check" size={14} />}</span>;
 
 /** The persona a space's new chats start with; "" is the default persona. */
 export function usePersonaName(id: string) {
@@ -115,10 +115,10 @@ export function PersonaSelect({ value, onChange, disabled }: { value: string; on
           <span className="flex-1">Default persona</span>
           <Check on={!value} />
         </DropdownMenu.RadioItem>
-        {personas.length > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />}
+        {personas.length > 0 && <DropdownMenu.Separator className="my-[4px] h-px bg-border-strong" />}
         {personas.map((p) => (
           <DropdownMenu.RadioItem key={p.id} value={p.id} className={menuItem}>
-            <span aria-hidden className="size-2.5 flex-none rounded-full" style={{ background: p.color }} />
+            <span aria-hidden className="size-[10px] flex-none rounded-full" style={{ background: p.color }} />
             <span className="flex-1 truncate">{p.name}</span>
             <Check on={value === p.id} />
           </DropdownMenu.RadioItem>
@@ -144,10 +144,10 @@ export function ProjectSelect({ value, onChange, disabled }: { value: string; on
           <span className="flex-1 text-fg-secondary">None</span>
           <Check on={!value} />
         </DropdownMenu.RadioItem>
-        {projects.length > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />}
+        {projects.length > 0 && <DropdownMenu.Separator className="my-[4px] h-px bg-border-strong" />}
         {projects.map((p) => (
           <DropdownMenu.RadioItem key={p.key} value={p.key} className={menuItem}>
-            <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: p.color }} />
+            <span aria-hidden className="size-[10px] flex-none rounded-[3px]" style={{ background: p.color }} />
             <span className="flex-1 truncate">{p.name}</span>
             <Check on={value === p.key} />
           </DropdownMenu.RadioItem>
@@ -173,7 +173,7 @@ export function ConnectorSelect({ value, onChange, disabled }: { value: string[]
   return (
     <SelectBox label="Connectors" value={label} muted={label === "None"} disabled={disabled}>
       {rows.length === 0 ? (
-        <p className="px-2 py-1.5 text-xs text-fg-secondary">No connectors yet. Add one under Customization.</p>
+        <p className="px-[8px] py-[6px] text-[12px] text-fg-secondary">No connectors yet. Add one under Customization.</p>
       ) : (
         rows.map((c) => (
           <DropdownMenu.CheckboxItem key={c.id} checked={value.includes(c.id)} onCheckedChange={(on) => toggle(c.id, on === true)} onSelect={(e) => e.preventDefault()} className={menuItem}>
@@ -193,7 +193,7 @@ export function MemoryChoice({ value, onChange, disabled }: { value: boolean; on
     { on: false, title: "Shared memory", detail: "Read and update your general memory, like any other chat." },
   ];
   return (
-    <div role="radiogroup" aria-label="Memory" className="flex flex-col gap-2.5">
+    <div role="radiogroup" aria-label="Memory" className="flex flex-col gap-[10px]">
       {options.map((o) => {
         const picked = value === o.on;
         return (
@@ -205,16 +205,16 @@ export function MemoryChoice({ value, onChange, disabled }: { value: boolean; on
             disabled={disabled}
             onClick={() => onChange(o.on)}
             className={cx(
-              "flex min-h-16 items-center gap-3.5 rounded-[10px] border px-4 py-3 text-left disabled:opacity-50",
+              "flex min-h-[64px] items-center gap-[14px] rounded-[10px] border px-[16px] py-[12px] text-left disabled:opacity-50",
               picked ? "border-accent bg-accent-soft" : "border-border-strong bg-surface-sunken hover:bg-hover",
             )}
           >
-            <span className={cx("grid size-4 flex-none place-items-center rounded-full border-[1.5px]", picked ? "border-accent" : "border-fg-tertiary")}>
-              {picked && <span className="size-2 rounded-full bg-accent" />}
+            <span className={cx("grid size-[16px] flex-none place-items-center rounded-full border-[1.5px]", picked ? "border-accent" : "border-fg-tertiary")}>
+              {picked && <span className="size-[8px] rounded-full bg-accent" />}
             </span>
-            <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex min-w-[0px] flex-col gap-[2px]">
               <span className="text-[13.5px] font-semibold text-fg">{o.title}</span>
-              <span className="text-xs text-fg-secondary">{o.detail}</span>
+              <span className="text-[12px] text-fg-secondary">{o.detail}</span>
             </span>
           </button>
         );

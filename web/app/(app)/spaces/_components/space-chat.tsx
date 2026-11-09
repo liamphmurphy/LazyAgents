@@ -13,8 +13,8 @@ type SpaceRef = Schemas["ChatSpaceRef"];
 /** "Health /" ahead of a space chat's title (mockup 2). */
 export function SpaceBreadcrumb({ space }: { space: SpaceRef }) {
   return (
-    <span className="flex flex-none items-center gap-2 text-[13px]">
-      <Link href={`/spaces/${space.id}`} className="flex items-center gap-2 rounded-md text-fg-secondary hover:text-fg" title={`Open ${space.name}`}>
+    <span className="flex flex-none items-center gap-[8px] text-[13px]">
+      <Link href={`/spaces/${space.id}`} className="flex items-center gap-[8px] rounded-md text-fg-secondary hover:text-fg" title={`Open ${space.name}`}>
         <SpaceTile name={space.name} color={space.color} />
         <span className="max-w-[180px] truncate">{space.name}</span>
       </Link>
@@ -23,15 +23,15 @@ export function SpaceBreadcrumb({ space }: { space: SpaceRef }) {
   );
 }
 
-const chip = "inline-flex h-[26px] flex-none items-center rounded-full border px-3 text-xs";
+const chip = "inline-flex h-[26px] flex-none items-center rounded-full border px-[12px] text-[12px]";
 
 /** What the space gives this chat: its instructions, sources and memory, plus the project (mockup 2). */
 export function SpaceContextChips({ space, chat, disabled }: { space: SpaceRef; chat: { id: string; project?: string; revision: number; archived: boolean }; disabled: boolean }) {
   const [sources, setSources] = useState(false);
   const hex = spaceHex(space.color);
   return (
-    <div className="px-6 pt-4">
-      <div aria-label={`From ${space.name}`} role="group" className="mx-auto flex max-w-[860px] flex-wrap items-center gap-2">
+    <div className="px-6 pt-[16px]">
+      <div aria-label={`From ${space.name}`} role="group" className="mx-auto flex max-w-[860px] flex-wrap items-center gap-[8px]">
         {space.has_instructions && (
           <Link
             href={`/spaces/${space.id}`}

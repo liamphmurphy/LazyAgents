@@ -28,14 +28,14 @@ function NestedChats({ spaceId, chatId, total }: { spaceId: string; chatId?: str
   const open = chatId && !list.some((c) => c.id === chatId) ? chats.data?.chats.find((c) => c.id === chatId) : undefined;
   const rows = open ? [...list.slice(0, NESTED_CHATS - 1), open] : list;
   return (
-    <ul className="relative ml-[17px] flex flex-col gap-px border-l border-border-strong pl-1.5" aria-label="Chats in this space">
+    <ul className="relative ml-[17px] flex flex-col gap-px border-l border-border-strong pl-[6px]" aria-label="Chats in this space">
       {rows.map((c) => (
         <li key={c.id}>
           <Link
             href={`/chat/${c.id}`}
             aria-current={c.id === chatId ? "page" : undefined}
             className={cx(
-              "flex h-[26px] items-center truncate rounded-md px-2 text-[12.5px]",
+              "flex h-[26px] items-center truncate rounded-md px-[8px] text-[12.5px]",
               c.id === chatId ? "bg-accent-soft text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
             )}
           >
@@ -44,7 +44,7 @@ function NestedChats({ spaceId, chatId, total }: { spaceId: string; chatId?: str
         </li>
       ))}
       <li>
-        <Link href={`/spaces/${spaceId}`} className="flex h-[26px] items-center rounded-md px-2 text-xs text-fg-tertiary hover:bg-hover hover:text-fg">
+        <Link href={`/spaces/${spaceId}`} className="flex h-[26px] items-center rounded-md px-[8px] text-[12px] text-fg-tertiary hover:bg-hover hover:text-fg">
           See all {total}
         </Link>
       </li>
@@ -60,23 +60,23 @@ export function SidebarSpaces({ viewed }: { viewed: string | null }) {
   const list = spaces.data?.spaces ?? [];
   return (
     <section aria-label="Spaces" className="flex flex-col gap-px">
-      <div className="flex items-center pb-1 pl-2 pr-1">
-        <span className="flex-1 text-xs font-medium text-fg-tertiary">Spaces</span>
+      <div className="flex items-center pb-[4px] pl-[8px] pr-[4px]">
+        <span className="flex-1 text-[12px] font-medium text-fg-tertiary">Spaces</span>
         <button
           type="button"
           aria-label="New space"
           title="New space"
           onClick={() => setCreating(true)}
-          className="grid size-5 place-items-center rounded text-fg-secondary hover:bg-hover hover:text-fg"
+          className="grid size-[20px] place-items-center rounded text-fg-secondary hover:bg-hover hover:text-fg"
         >
           <Icon name="plus" size={13} strokeWidth={1.8} />
         </button>
       </div>
       {spaces.isError ? (
-        <p role="alert" className="px-2 text-xs text-pill-blocked-fg">Couldn’t load spaces.</p>
+        <p role="alert" className="px-[8px] text-[12px] text-pill-blocked-fg">Couldn’t load spaces.</p>
       ) : spaces.data && list.length === 0 ? (
-        <button type="button" onClick={() => setCreating(true)} className="flex h-[30px] items-center gap-2.5 rounded-md px-2 text-left text-[13px] text-fg-tertiary hover:bg-hover hover:text-fg">
-          <span className="grid size-4 place-items-center rounded border border-dashed border-border-strong">
+        <button type="button" onClick={() => setCreating(true)} className="flex h-[30px] items-center gap-[10px] rounded-md px-[8px] text-left text-[13px] text-fg-tertiary hover:bg-hover hover:text-fg">
+          <span className="grid size-[16px] place-items-center rounded border border-dashed border-border-strong">
             <Icon name="plus" size={10} />
           </span>
           New space
@@ -92,12 +92,12 @@ export function SidebarSpaces({ viewed }: { viewed: string | null }) {
                 aria-current={active ? "page" : undefined}
                 aria-expanded={expanded || undefined}
                 className={cx(
-                  "flex h-[28px] items-center gap-2.5 rounded-md px-2 text-[13px]",
+                  "flex h-[28px] items-center gap-[10px] rounded-md px-[8px] text-[13px]",
                   active ? "bg-accent-soft text-fg" : expanded ? "text-fg hover:bg-hover" : "text-fg-secondary hover:bg-hover hover:text-fg",
                 )}
               >
                 <SpaceTile name={s.name} color={s.color} />
-                <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                <span className="min-w-[0px] flex-1 truncate">{s.name}</span>
                 {expanded ? (
                   <Icon name="chev" size={11} className="flex-none text-fg-tertiary" />
                 ) : (
@@ -121,7 +121,7 @@ export function SpaceRail({ viewed }: { viewed: string | null }) {
   const list = spaces.data?.spaces ?? [];
   if (list.length === 0) return null;
   return (
-    <nav aria-label="Spaces" className="flex w-full flex-col items-center gap-1 border-t border-border-subtle pt-2.5">
+    <nav aria-label="Spaces" className="flex w-full flex-col items-center gap-[4px] border-t border-border-subtle pt-[10px]">
       {list.map((s) => {
         const on = open.page === s.id || (!open.page && open.chatSpace === s.id);
         return (
