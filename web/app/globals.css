@@ -663,14 +663,17 @@
 .orb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--state-done); }
 .orb-empty { padding: 6px 16px 10px; font-size: 12px; color: var(--orb-idle); }
 .orb-urow {
-  display: grid; grid-template-columns: 54px 1fr 36px; gap: 8px; align-items: center;
+  display: grid; grid-template-columns: 60px 1fr 36px; gap: 8px; align-items: center;
   padding: 3px 16px 0; font-size: 12px; color: var(--orb-bar);
 }
+.orb-ulabel { display: flex; align-items: center; gap: 5px; }
+.orb-ulabel i { width: 6px; height: 6px; flex: none; border-radius: 50%; }
 .orb-track { height: 5px; border-radius: 3px; background: var(--orb-track); overflow: hidden; }
-.orb-track i { display: block; height: 100%; border-radius: 3px; background: var(--orb-bar); }
+.orb-track i { display: block; height: 100%; border-radius: 3px; background: var(--orb-bar); transition: width 0.6s cubic-bezier(.2,.8,.2,1), background-color 0.4s; }
+.orb-track i.warn { background: var(--state-human); }
 .orb-track i.red { background: var(--state-blocked); }
 .orb-val { text-align: right; font-family: var(--font-mono); font-size: 11px; }
-.orb-usub { padding: 1px 16px 6px 78px; font-size: 11px; color: var(--text-tertiary); }
+.orb-usub { padding: 1px 16px 6px 84px; font-size: 11px; color: var(--text-tertiary); }
 .orb-usub.red { color: var(--state-blocked); }
 .orb-foot {
   display: flex; align-items: center; height: 46px; margin-top: 6px; padding: 0 60px 0 16px;
@@ -696,6 +699,11 @@
 .orb-chip.h { border-color: var(--orb-needs-border); }
 .orb-chip.h .verb { color: var(--state-human); }
 .orb-fx { position: absolute; left: 50%; top: 50%; z-index: 2; border-radius: 50%; pointer-events: none; }
+/* Session rings ease to each new reading; the sweep circles the track while a usage check runs. */
+.orb-ring { transition: stroke-dasharray 0.9s cubic-bezier(.2,.8,.2,1), stroke 0.4s, opacity 0.3s; }
+.orb-ring[data-tone="warn"] { animation: orb-breathe 2.2s ease-in-out infinite; }
+@keyframes orb-breathe { 50% { stroke-opacity: 0.45; } }
+.orb-sweep { transform-origin: 22px 22px; opacity: 0.5; animation: orb-spin 1.6s linear infinite; }
 .orb-orbit { transform-origin: 22px 22px; animation: orb-spin 1.25s linear infinite; }
 @keyframes orb-spin { to { transform: rotate(360deg); } }
 /* Claude's robot walks in place: stepped keyframes keep it pixel-crisp. Offsets are in grid cells (--u). */
@@ -709,6 +717,9 @@
 @keyframes orb-step { 0%, 49% { transform: translateY(calc(var(--u) * -1px)); } 50%, 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .orb-root .orb-btn, .orb-root .orb-robot *, .orb-root .orb-orbit { animation: none !important; }
+  .orb-root .orb-ring, .orb-root .orb-track i { transition: none; animation: none; }
+  /* A still arc would read as usage; the panel still says it's checking. */
+  .orb-root .orb-sweep { display: none; }
 }
 
 /*

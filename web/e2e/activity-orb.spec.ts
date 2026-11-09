@@ -19,9 +19,9 @@ function entry(persona: S["PersonaSummary"], c: S["PersonaDockChat"]): S["Person
 
 function harnesses(over: { claude?: Partial<S["HarnessActivity"]>; codex?: Partial<S["HarnessActivity"]> } = {}): S["HarnessActivity"][] {
   return [
-    { harness: "claude-code", label: "Claude", running: 1, plan: "max", usage_available: true, usage_checked_at: new Date().toISOString(),
+    { harness: "claude-code", label: "Claude", running: 1, plan: "max", usage_available: true, usage_checking: false, usage_checked_at: new Date().toISOString(),
       windows: [{ id: "five_hour", kind: "session", label: "Session", used_percent: 38, resets_at: inHours(3) }, { id: "seven_day", kind: "weekly", label: "Weekly", used_percent: 61, resets_at: inHours(80) }], ...over.claude },
-    { harness: "codex", label: "Codex", running: 0, plan: "plus", usage_available: true, usage_checked_at: new Date().toISOString(),
+    { harness: "codex", label: "Codex", running: 0, plan: "plus", usage_available: true, usage_checking: false, usage_checked_at: new Date().toISOString(),
       windows: [{ id: "codex_300", kind: "session", label: "Session", used_percent: 46, resets_at: inHours(3) }], ...over.codex },
   ];
 }
@@ -181,4 +181,51 @@ test("motion keeps the approved mockup's keyframes and timings", async ({ page }
   expect(kids).toEqual([300, 360, 420]);
   const burst = await page.evaluate(() => document.querySelector(".orb-btn")!.getAnimations().filter((a) => a instanceof CSSAnimation === false).map((a) => (a.effect as KeyframeEffect).getTiming().duration));
   expect(burst).toContain(480);
+});
+
+test("rings wear each harness's colour, warn near the limit, and sweep while a check runs", async ({ page }) => {
+  const claudeNearLimit = { running: 0, windows: [{ id: "five_hour", kind: "session" as const, label: "Session", used_percent: 85, resets_at: inHours(1) }] };
+  const state = { dock: { personas: [], harnesses: harnesses({ claude: claudeNearLimit, codex: { usage_available: false, usage_checked_at: undefined, usage_checking: true, windows: [] } }) } };
+  await installOrb(page, state);
+  await page.goto("/board?project=WEB");
+
+  const rings = orb(page).locator(".orb-btn .orb-ring");
+  await expect(rings).toHaveCount(2);
+  await expect(rings.nth(0)).toHaveAttribute("data-tone", "warn");
+  await expect(rings.nth(1)).toHaveAttribute("data-tone", "ok");
+  // Only Codex is being checked; its ring has no figure yet.
+  await expect(orb(page).locator(".orb-btn .orb-sweep")).toHaveCount(1);
+  expect(await rings.nth(1).evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
+
+  await orbButton(page).click();
+  const panel = orb(page).locator("#orb-panel");
+  await expect(panel.locator(".orb-sec").nth(1)).toContainText("checking…");
+  await expect(panel.locator(".orb-urow").nth(0).locator(".orb-track i")).toHaveClass("warn");
+  await expect(panel.locator(".orb-urow").nth(1)).toContainText("…");
+  await expect(panel.locator(".orb-usub").nth(1)).toHaveText("Checking…");
+
+  // The reading lands: the sweep stops and the ring eases to it in Codex's colour.
+  state.dock = { personas: [], harnesses: harnesses({ claude: claudeNearLimit }) };
+  await pushChatUpdated(page);
+  await expect(orb(page).locator(".orb-btn .orb-sweep")).toHaveCount(0);
+  await expect(panel.locator(".orb-urow").nth(1)).toContainText("46%");
+  const codexRing = await rings.nth(1).evaluate((el) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--orb-codex)";
+    el.closest(".orb-root")!.appendChild(probe);
+    const codex = getComputedStyle(probe).color;
+    probe.remove();
+    const cs = getComputedStyle(el);
+    return { transition: cs.transitionDuration, stroke: cs.stroke, codex };
+  });
+  expect(codexRing.transition.split(", ")[0]).toBe("0.9s");
+  expect(codexRing.stroke).toBe(codexRing.codex);
+});
+
+test("with reduced motion the checking sweep is hidden rather than frozen", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const state = { dock: { personas: [], harnesses: harnesses({ codex: { usage_available: false, usage_checked_at: undefined, usage_checking: true, windows: [] } }) } };
+  await installOrb(page, state);
+  await page.goto("/board?project=WEB");
+  await expect(orb(page).locator(".orb-btn .orb-sweep")).toBeHidden();
 });
