@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,7 +44,7 @@ func memoryFilter(ctx context.Context, about *api.MemoryAbout, persona *uuid.UUI
 }
 
 func toMemory(m store.Memory) api.Memory {
-	out := api.Memory{Id: m.ID, PersonaId: m.PersonaID, Title: m.Title, Summary: m.Summary, Body: m.Body, Tags: m.Tags, Type: m.Type, Source: m.Source,
+	out := api.Memory{Id: m.ID, PersonaId: m.PersonaID, SpaceId: m.SpaceID, Title: m.Title, Summary: m.Summary, Body: m.Body, Tags: m.Tags, Type: m.Type, Source: m.Source,
 		SourceChatId: m.SourceChatID, SourceRunId: m.SourceRunID, SupersededBy: m.SupersededBy, RetiredAt: m.RetiredAt,
 		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
 	if m.RetiredReason != "" {
@@ -70,6 +71,14 @@ func (s *Server) ListMemories(ctx context.Context, req api.ListMemoriesRequestOb
 	if req.Params.Offset != nil {
 		q.Offset = *req.Params.Offset
 	}
+	if req.Params.SpaceId != nil {
+		if _, err := s.ownSpace(ctx, *req.Params.SpaceId); errors.Is(err, apperr.ErrNotFound) {
+			return nil, apperr.Invalid("space_id", "unknown space")
+		} else if err != nil {
+			return nil, err
+		}
+		q.Space = req.Params.SpaceId
+	}
 	svc := memory.New(s.Q)
 	hits, err := svc.Find(ctx, o, q)
 	if err != nil {
@@ -86,7 +95,7 @@ func (s *Server) ListMemories(ctx context.Context, req api.ListMemoriesRequestOb
 		}
 		out.Memories = append(out.Memories, toMemory(h.Memory))
 	}
-	return out, nil
+	return out, s.memorySpaceNames(ctx, out.Memories)
 }
 
 func (s *Server) GetMemory(ctx context.Context, req api.GetMemoryRequestObject) (api.GetMemoryResponseObject, error) {
@@ -94,7 +103,11 @@ func (s *Server) GetMemory(ctx context.Context, req api.GetMemoryRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	return api.GetMemory200JSONResponse(toMemory(m)), nil
+	out := []api.Memory{toMemory(m)}
+	if err := s.memorySpaceNames(ctx, out); err != nil {
+		return nil, err
+	}
+	return api.GetMemory200JSONResponse(out[0]), nil
 }
 
 // CreateMemory saves an entry by hand, to the person's memory or one of their
@@ -218,4 +231,30 @@ func (s *Server) ImportMemories(ctx context.Context, req api.ImportMemoriesReque
 		}
 	}
 	return out, nil
+}
+
+// memorySpaceNames names the space of each space memory.
+func (s *Server) memorySpaceNames(ctx context.Context, ms []api.Memory) error {
+	var ids []uuid.UUID
+	for _, m := range ms {
+		if m.SpaceId != nil && !slices.Contains(ids, *m.SpaceId) {
+			ids = append(ids, *m.SpaceId)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	u, _, ws := me(ctx)
+	rows, err := s.Q.ChatSpacesByIDs(ctx, store.ChatSpacesByIDsParams{Ids: ids, WorkspaceID: ws, UserID: u.ID})
+	if err != nil {
+		return err
+	}
+	for i := range ms {
+		for _, sp := range rows {
+			if ms[i].SpaceId != nil && *ms[i].SpaceId == sp.ID {
+				ms[i].SpaceName = &sp.Name
+			}
+		}
+	}
+	return nil
 }

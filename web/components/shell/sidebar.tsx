@@ -19,6 +19,7 @@ import { floatPanel } from "@/components/domain/pickers";
 import { SidebarCapacity } from "@/components/domain/runner-capacity";
 import { SidebarSavedViews } from "@/components/domain/saved-views";
 import { ChatHistory, NewConversationButton, PersonaRail } from "@/app/(app)/chat/_components/chat-history";
+import { SidebarSpaces, SpaceRail } from "@/app/(app)/spaces/_components/spaces-nav";
 import { useNavMode } from "./nav-mode";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
@@ -288,6 +289,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
             </div>
           ))}
         </nav>
+        {chatting && <SpaceRail viewed={viewed} />}
         {chatting && <PersonaRail id={viewed ?? undefined} viewed={viewed} />}
       </aside>
     );
@@ -341,6 +343,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
         ))}
       </nav>
 
+      {chatting && <SidebarSpaces viewed={viewed} />}
       {chatting && <ChatHistory id={viewed ?? undefined} viewed={viewed} />}
       {pathname === "/" && <SidebarCapacity />}
     </aside>

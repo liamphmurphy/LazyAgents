@@ -244,6 +244,13 @@ func ChatAgentsMD(spec agentdef.Resolved, contextFiles []string, project, memory
 // group (Markdown lines, empty for none) says who is answering this turn, who
 // else is in the conversation and how to bring a persona in.
 func ChatAgentsMDWithGroup(spec agentdef.Resolved, contextFiles []string, project, memoryIndex string, persona *Persona, group string) []byte {
+	return ChatAgentsMDInSpace(spec, contextFiles, project, memoryIndex, persona, group, "")
+}
+
+// ChatAgentsMDInSpace is ChatAgentsMDWithGroup for a chat in a space: space is
+// its rendered "## Space" section (runs.SpaceSection, empty outside one),
+// which goes below the persona so it only adds context.
+func ChatAgentsMDInSpace(spec agentdef.Resolved, contextFiles []string, project, memoryIndex string, persona *Persona, group, space string) []byte {
 	var b strings.Builder
 	if project == "" {
 		b.WriteString(sectionStart + "\n# Vesper chat\n\nNo project is attached to this chat, so tickets, epics, runs and project pages aren't available. If the person wants project work, ask them to attach a project from the chat header.\n\n")
@@ -277,6 +284,9 @@ func ChatAgentsMDWithGroup(spec agentdef.Resolved, contextFiles []string, projec
 	if persona != nil {
 		b.WriteString(personaSection(persona))
 		b.WriteString(personaMemorySection(persona))
+	}
+	if sp := strings.TrimSpace(space); sp != "" {
+		b.WriteString(sp + "\n\n")
 	}
 	if g := strings.TrimSpace(group); g != "" {
 		b.WriteString("## Other personas\n\n" + g + "\n\n")

@@ -59,6 +59,7 @@ import { HumanAvatar } from "@/components/domain/avatars";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
+import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
 
 type Message = Schemas["ChatMessage"];
@@ -609,6 +610,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
         <DropOverlay over={drop.over} />
         {/* Sized by its own width: a panel beside the chat can leave it narrow on a wide screen. */}
         <div className="@container flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
+          {c.space && <SpaceBreadcrumb space={c.space} />}
           <h1 className="type-heading min-w-0 truncate">{chatTitle(c)}</h1>
           {group ? (
             <span
@@ -645,7 +647,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               {c.work_branch && <span className="truncate font-mono text-[11.5px]">{c.work_branch}</span>}
             </span>
           )}
-          <ChatProjectPicker chat={c} disabled={running} />
+          {/* In a space the project sits with the space's context chips below. */}
+          {!c.space && <ChatProjectPicker chat={c} disabled={running} />}
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
           <span className="flex-1" />
           <span className="flex-none">
@@ -662,6 +665,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>
+        {c.space && tab === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
         {/* Mounted while hidden so memory notices still refresh. */}
         <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
           <div className="mx-auto mb-4 flex max-w-[860px] items-center gap-2">
@@ -901,7 +905,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                       ? "Sending…"
                       : running
                         ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to interrupt.`
-                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}…  / for commands, @ for a persona, [[ for context`
+                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}${c.space ? ` in ${c.space.name}` : ""}…  / for commands, @ for a persona, [[ for context`
                   }
                   onKeyDown={(e) => {
                     if (commandItems.length > 0) {

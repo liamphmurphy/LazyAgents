@@ -1078,6 +1078,18 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	for k, v := range refFiles {
 		files[k] = v
 	}
+	if c.run.Purpose == "chat" {
+		// The space's sources; its instructions list them, not ## Context.
+		spaceFiles, err := r.spaceSourceFiles(ctx, q, c.run)
+		if err != nil {
+			log.Warn("space sources", "err", err)
+			r.failChat(ctx, c, "Could not load the space's sources.")
+			return
+		}
+		for k, v := range spaceFiles {
+			files[k] = v
+		}
+	}
 	for i, f := range ctxFiles {
 		paths[i] = f.Path
 		files[f.Path] = f.Body

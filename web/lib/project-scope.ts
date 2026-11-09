@@ -57,7 +57,7 @@ const PINNED_ROUTES = ["/inbox"];
 /** Personal items Work keeps, above Project and Workspace. */
 const WORK_PERSONAL = [...PINNED_ROUTES, "/"];
 /** Everything else outside this list is Work. */
-const CHAT_ROUTES = ["/chat", "/customization", "/library", "/workflows", "/scheduled", "/learn"];
+const CHAT_ROUTES = ["/chat", "/spaces", "/customization", "/library", "/workflows", "/scheduled", "/learn"];
 
 /** The mode a page belongs to; undefined for the pinned pages. */
 export function routeMode(pathname: string): NavMode | undefined {

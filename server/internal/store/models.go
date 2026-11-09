@@ -289,6 +289,38 @@ type ChatSession struct {
 	LastReadSeq        int64
 	Hidden             bool
 	ConnectorIds       []uuid.UUID
+	SpaceID            *uuid.UUID
+}
+
+type ChatSpace struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	UserID       uuid.UUID
+	Name         string
+	Description  string
+	Color        string
+	Instructions string
+	PersonaID    *uuid.UUID
+	ProjectID    *uuid.UUID
+	ConnectorIds []uuid.UUID
+	SpaceMemory  bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type ChatSpaceSource struct {
+	ID          uuid.UUID
+	SpaceID     uuid.UUID
+	Kind        string
+	Title       string
+	Url         *string
+	Body        string
+	Filename    *string
+	ContentType string
+	SizeBytes   int64
+	BlobKey     *string
+	Tokens      int32
+	CreatedAt   time.Time
 }
 
 type ChatSuggestion struct {
@@ -572,6 +604,7 @@ type Memory struct {
 	RetiredAt           *time.Time
 	ConsolidationExempt bool
 	PersonaID           *uuid.UUID
+	SpaceID             *uuid.UUID
 }
 
 type MetricSnapshot struct {

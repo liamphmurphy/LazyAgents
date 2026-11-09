@@ -2,9 +2,10 @@
 -- Without a persona_id the chat gets its creator's default persona (none
 -- when they have no default). Callers check that a given persona_id is the
 -- creator's own.
-INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id, hidden)
+INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id, hidden, space_id)
 VALUES (sqlc.arg(workspace_id), sqlc.arg(project_id), sqlc.arg(title), sqlc.arg(created_by), sqlc.arg(agent_id), sqlc.arg(harness), sqlc.arg(model), sqlc.arg(effort),
-  COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)), sqlc.arg(hidden))
+  COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)), sqlc.arg(hidden),
+  sqlc.narg(space_id))
 RETURNING *;
 
 -- name: SetChatProject :one
@@ -152,6 +153,11 @@ WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = sqlc.arg(archiv
     WHEN 'all' THEN true
     WHEN 'none' THEN c.persona_id IS NULL
     ELSE c.persona_id = sqlc.narg(persona_id)::uuid END
+  -- space_filter: 'none' (chats outside any space), 'id' (space_id), else all.
+  AND CASE sqlc.arg(space_filter)::text
+    WHEN 'none' THEN c.space_id IS NULL
+    WHEN 'id' THEN c.space_id = sqlc.narg(space_id)::uuid
+    ELSE true END
 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 

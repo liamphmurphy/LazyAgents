@@ -1,0 +1,594 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Dialog, DropdownMenu } from "radix-ui";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { api, unwrap } from "@/lib/api/client";
+import { useChatModels } from "@/lib/api/hooks";
+import { usePersonas } from "@/lib/api/persona-hooks";
+import { useDeleteSpace, useSpace, useSpaceChats, useSpaceSources, useUpdateSpace, type Space } from "@/lib/api/space-hooks";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { chatTitle } from "@/lib/chat-ui";
+import { cx } from "@/lib/cx";
+import { shortAgo } from "@/lib/format";
+import { formatTokens, sortSpaceChats, SOURCE_KIND_LABEL, sourceName, SPACE_PAGE_CHATS, spaceSubtitle, spaceUses, type ChatSort, type SourceKind, type SpaceColor } from "@/lib/spaces";
+import { floatPanel } from "@/components/domain/pickers";
+import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/controls";
+import { Icon } from "@/components/ui/icon";
+import { Banner, Skeleton } from "@/components/ui/primitives";
+import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
+import { AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "@/app/(app)/chat/_components/attachments";
+import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
+import { modelLabel, type Selection } from "@/app/(app)/chat/_components/model-picker";
+import { ColorPicker, ConnectorSelect, PersonaSelect, ProjectSelect, SpaceTile, useConnectorNames, usePersonaName, useProjectName } from "./space-parts";
+import { SourceIcon, SourcesDialog } from "./sources-dialog";
+
+const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
+const ACCEPT = ".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.md,.markdown,.csv,.json";
+const menuItem = "flex h-[32px] cursor-default select-none items-center gap-[10px] rounded-md px-[8px] text-[13px] outline-none data-[highlighted]:bg-hover";
+
+function Card({ title, action, children, label }: { title: ReactNode; action?: ReactNode; children: ReactNode; label: string }) {
+  return (
+    <section aria-label={label} className="flex flex-col gap-[12px] rounded-xl border border-border bg-surface px-[16px] py-[14px]">
+      <div className="flex items-center justify-between gap-[8px]">
+        <h2 className="text-[13px] font-semibold text-fg">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+const linkBtn = "text-[12px] text-accent hover:underline disabled:opacity-50";
+
+function InstructionsCard({ space }: { space: Space }) {
+  const update = useUpdateSpace();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(space.instructions);
+  const lines = space.instructions.trim();
+  return (
+    <Card
+      label="Instructions"
+      title="Instructions"
+      action={
+        !editing && (
+          <button type="button" className={linkBtn} onClick={() => { setText(space.instructions); setEditing(true); }}>
+            Edit
+          </button>
+        )
+      }
+    >
+      {editing ? (
+        <form
+          className="flex flex-col gap-[8px]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            update.mutate({ id: space.id, patch: { instructions: text } }, { onSuccess: () => setEditing(false) });
+          }}
+        >
+          <div className="relative">
+            <textarea
+              aria-label="Instructions"
+              autoFocus
+              value={text}
+              maxLength={4000}
+              rows={7}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full resize-y rounded-lg border border-border-strong bg-surface-sunken px-[12px] py-[8px] pb-[20px] text-[12.5px] leading-[20px] text-fg focus:border-accent focus:outline-none"
+            />
+            <span className="pointer-events-none absolute bottom-[8px] right-[10px] text-[11px] text-fg-tertiary">{text.length} / 4000</span>
+          </div>
+          {update.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(update.error)}</p>}
+          <div className="flex justify-end gap-[8px]">
+            <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+            <Button type="submit" variant="primary" disabled={update.isPending}>{update.isPending ? "Saving…" : "Save"}</Button>
+          </div>
+        </form>
+      ) : lines ? (
+        <p className="line-clamp-6 whitespace-pre-wrap text-[12.5px] leading-[20px] text-fg-secondary">{lines}</p>
+      ) : (
+        <p className="text-[12.5px] text-fg-tertiary">No instructions yet. Say how chats here should help.</p>
+      )}
+      <p className="text-[11px] text-fg-tertiary">Added below the persona in every chat here</p>
+    </Card>
+  );
+}
+
+const SOURCE_ROWS = 5;
+
+function SourcesCard({ space, onAdd }: { space: Space; onAdd: () => void }) {
+  const sources = useSpaceSources(space.id);
+  const list = sources.data?.sources ?? [];
+  const budget = sources.data?.inline_budget ?? 40000;
+  const used = sources.data?.inline_tokens ?? space.inline_tokens;
+  return (
+    <Card
+      label="Sources"
+      title={`Sources · ${space.source_count}`}
+      action={
+        <button type="button" className={linkBtn} onClick={onAdd}>
+          + Add
+        </button>
+      }
+    >
+      {list.length === 0 ? (
+        <p className="text-[12.5px] text-fg-tertiary">{sources.isPending ? "Loading…" : "No sources yet. Add files, text or pages for every chat here to use."}</p>
+      ) : (
+        <ul className="flex flex-col gap-[12px]">
+          {list.slice(0, SOURCE_ROWS).map((s) => (
+            <li key={s.id} className="flex items-center gap-[8px]">
+              <SourceIcon kind={s.kind} size={20} />
+              <span className="min-w-[0px] flex-1 truncate text-[12.5px] text-fg" title={s.url ?? s.title}>{sourceName(s)}</span>
+              <span className="flex-none text-[11px] text-fg-tertiary">{SOURCE_KIND_LABEL[s.kind as SourceKind]}</span>
+            </li>
+          ))}
+          {list.length > SOURCE_ROWS && (
+            <li>
+              <button type="button" className={linkBtn} onClick={onAdd}>
+                View all {list.length}
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+      <div className="flex flex-col gap-[6px]">
+        <span className="self-end text-[10.5px] text-fg-tertiary">
+          {formatTokens(used)} of {formatTokens(budget)} inline
+        </span>
+        <div className="h-[4px] overflow-hidden rounded-sm bg-pill-neutral-bg" aria-hidden>
+          <div className="h-full rounded-sm bg-accent" style={{ width: `${Math.min(100, (used / budget) * 100)}%` }} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-[12px] text-[12.5px]">
+      <span className="text-fg-tertiary">{label}</span>
+      <span className={cx("min-w-[0px] truncate text-right", muted ? "text-fg-secondary" : "text-fg")}>{value}</span>
+    </div>
+  );
+}
+
+function DefaultsCard({ space }: { space: Space }) {
+  const update = useUpdateSpace();
+  const [editing, setEditing] = useState(false);
+  const persona = usePersonaName(space.persona_id ?? "");
+  const project = useProjectName(space.project ?? "");
+  const connectors = useConnectorNames(space.connector_ids);
+  const save = (patch: Parameters<typeof update.mutate>[0]["patch"]) => update.mutate({ id: space.id, patch });
+  return (
+    <Card
+      label="Defaults"
+      title="Defaults"
+      action={
+        <button type="button" className={linkBtn} onClick={() => setEditing((v) => !v)}>
+          {editing ? "Done" : "Edit"}
+        </button>
+      }
+    >
+      {editing ? (
+        <div className="flex flex-col gap-[8px]">
+          <PersonaSelect value={space.persona_id ?? ""} onChange={(id) => save({ persona_id: id })} disabled={update.isPending} />
+          <ProjectSelect value={space.project ?? ""} onChange={(key) => save({ project: key })} disabled={update.isPending} />
+          <ConnectorSelect value={space.connector_ids} onChange={(ids) => save({ connector_ids: ids })} disabled={update.isPending} />
+          <p className="text-[11px] text-fg-tertiary">For chats started from now on.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-[12px]">
+          <Row label="Persona" value={persona} />
+          <Row label="Project" value={project ?? "None"} muted={!project} />
+          <Row label="Connectors" value={connectors} muted={connectors === "None"} />
+        </div>
+      )}
+      {update.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(update.error)}</p>}
+    </Card>
+  );
+}
+
+function MemoryCard({ space }: { space: Space }) {
+  const update = useUpdateSpace();
+  return (
+    <Card
+      label="Space memory"
+      title="Space memory"
+      action={<Toggle checked={space.space_memory} disabled={update.isPending} onChange={(v) => update.mutate({ id: space.id, patch: { space_memory: v } })} label={<span className="sr-only">Space memory</span>} />}
+    >
+      <p className="text-[12px] leading-[18px] text-fg-secondary">
+        {space.space_memory ? (
+          <>
+            What you share here stays in {space.name}.
+            <br />
+            Your general memory is still read.
+          </>
+        ) : (
+          <>Chats here read and update your general memory, like any other chat.</>
+        )}
+      </p>
+      {space.memory_count > 0 && (
+        <Link href={`/customization?space=${space.id}`} className="text-[11px] text-accent hover:underline">
+          View {space.memory_count} {space.memory_count === 1 ? "memory" : "memories"}
+        </Link>
+      )}
+      {update.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(update.error)}</p>}
+    </Card>
+  );
+}
+
+/** The persona chip in the space's composer: the space default until another is picked. */
+function PersonaChip({ value, onChange, disabled }: { value?: string; onChange: (id: string) => void; disabled?: boolean }) {
+  const q = usePersonas();
+  const personas = q.data?.personas ?? [];
+  const current = personaLook(personas.find((p) => p.id === value));
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          disabled={disabled || personas.length === 0}
+          aria-label={`Persona for the new chat: ${current.name}`}
+          className="flex h-[26px] items-center gap-[6px] rounded-full border border-border-strong pl-[4px] pr-[10px] text-[12px] text-fg hover:bg-hover disabled:opacity-60"
+        >
+          <PersonaAvatar persona={current} size={16} />
+          <span className="truncate">{current.name}</span>
+          <Icon name="chev" size={11} className="text-fg-secondary" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-[220px]")}>
+          <DropdownMenu.RadioGroup value={value ?? ""} onValueChange={onChange}>
+            {personas.map((p) => (
+              <DropdownMenu.RadioItem key={p.id} value={p.id} className={menuItem}>
+                <PersonaAvatar persona={p} size={18} />
+                <span className="flex-1 truncate">{p.name}</span>
+                <span className="w-[14px] text-accent">{p.id === value && <Icon name="check" size={14} />}</span>
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** The model chip: the assistant's own model until another is picked. */
+function ModelChip({ value, onChange, disabled }: { value?: Selection; onChange: (s: Selection) => void; disabled?: boolean }) {
+  const models = useChatModels();
+  const groups = models.data ?? [];
+  const label = value ? modelLabel(groups, value).model : "Default model";
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label={`Model for the new chat: ${label}`}
+          className="flex h-[26px] items-center gap-[6px] rounded-full border border-border-strong px-[10px] text-[12px] text-fg-secondary hover:bg-hover disabled:opacity-60"
+        >
+          {label}
+          <Icon name="chev" size={11} />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "max-h-[320px] w-[240px] overflow-y-auto")}>
+          {groups.map((g, i) => (
+            <DropdownMenu.Group key={g.harness}>
+              {i > 0 && <DropdownMenu.Separator className="my-[4px] h-px bg-border-subtle" />}
+              <DropdownMenu.Label className="px-[8px] py-[4px] text-[12px] font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
+              {g.models.map((m) => (
+                <DropdownMenu.Item key={m.id} disabled={!g.available} className={menuItem} onSelect={() => onChange({ harness: g.harness, model: m.id })}>
+                  <span className="flex-1">{m.label}</span>
+                  <span className="w-[14px] text-accent">{value?.harness === g.harness && value.model === m.id && <Icon name="check" size={14} />}</span>
+                </DropdownMenu.Item>
+              ))}
+            </DropdownMenu.Group>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** "New chat in Health": starts a chat in the space and sends its first message. */
+function Composer({ space, disabled }: { space: Space; disabled: boolean }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const personas = usePersonas();
+  const [text, setText] = useState("");
+  const [persona, setPersona] = useState<string>();
+  const [model, setModel] = useState<Selection>();
+  const files = useAttachments();
+  const picker = useRef<HTMLInputElement>(null);
+  const start = useMutation({
+    mutationFn: async (body: string) => {
+      const chat = await unwrap(
+        api.POST("/chats", { body: { space_id: space.id, ...(persona ? { persona_id: persona } : {}), ...(model ? { harness: model.harness, model: model.model } : {}) } }),
+      );
+      await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id: chat.id } }, body: { body, ...(files.ids.length ? { attachment_ids: files.ids } : {}) } }));
+      return chat;
+    },
+    onSettled: () => void Promise.all([qc.invalidateQueries({ queryKey: ["chats"] }), qc.invalidateQueries({ queryKey: ["spaces"] })]),
+  });
+  const locked = disabled || start.isPending;
+  const drop = useFileDrop(files.add, !locked);
+  const shown = persona ?? space.persona_id ?? personas.data?.default_persona_id;
+  function submit(e?: FormEvent) {
+    e?.preventDefault();
+    const body = text.trim();
+    if (!body || locked || files.pending) return;
+    start.mutate(body, { onSuccess: (c) => router.push(`/chat/${c.id}`) });
+  }
+  return (
+    <div className="flex flex-col gap-[10px]">
+      <form onSubmit={submit} onPaste={files.onPaste} {...drop.props} className="relative flex flex-col gap-[12px] rounded-[14px] border border-border-strong bg-surface px-[20px] pb-[10px] pt-[16px] focus-within:border-accent">
+        <DropOverlay over={drop.over} />
+        <AttachmentChips attachments={files} />
+        <textarea
+          aria-label={`New chat in ${space.name}`}
+          rows={1}
+          value={text}
+          disabled={locked}
+          placeholder={`New chat in ${space.name}`}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          className="max-h-[192px] min-h-[24px] resize-none bg-transparent text-[15px] text-fg placeholder:text-fg-tertiary focus:outline-none [field-sizing:content]"
+        />
+        <div className="flex items-center gap-[8px]">
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            hidden
+            accept={ACCEPT}
+            onChange={(e) => {
+              files.add([...(e.target.files ?? [])]);
+              e.target.value = "";
+            }}
+          />
+          <button type="button" aria-label="Attach files" title="Attach files" disabled={locked} onClick={() => picker.current?.click()} className="grid size-[28px] place-items-center rounded-full text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-50">
+            <Icon name="plus" size={16} strokeWidth={1.8} />
+          </button>
+          <PersonaChip value={shown} onChange={setPersona} disabled={locked} />
+          <ModelChip value={model} onChange={setModel} disabled={locked} />
+          <span className="flex-1" />
+          <button
+            type="submit"
+            aria-label="Start chat"
+            disabled={locked || files.pending || !text.trim()}
+            className="grid size-[28px] place-items-center rounded-full bg-accent text-on-accent hover:brightness-110 disabled:opacity-60"
+          >
+            <svg aria-hidden viewBox="0 0 16 16" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 13V3M4 7l4-4 4 4" />
+            </svg>
+          </button>
+        </div>
+      </form>
+      {start.isError ? (
+        <p role="alert" className="px-[4px] text-[12px] text-pill-blocked-fg">{errorText(start.error)}</p>
+      ) : (
+        <p className="px-[4px] text-[12px] text-fg-tertiary">{spaceUses(space)}</p>
+      )}
+    </div>
+  );
+}
+
+function ChatList({ space }: { space: Space }) {
+  const chats = useSpaceChats(space.id);
+  const [sort, setSort] = useState<ChatSort>("newest");
+  const [all, setAll] = useState(false);
+  const list = sortSpaceChats(chats.data?.chats ?? [], sort);
+  const shown = all ? list : list.slice(0, SPACE_PAGE_CHATS);
+  const more = list.length - shown.length;
+  return (
+    <section aria-label="Chats" className="flex flex-col">
+      <div className="flex items-center justify-between border-b border-border-subtle pb-[12px]">
+        <h2 className="text-[14px] font-semibold text-fg">Chats</h2>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button type="button" aria-label={`Sort chats: ${sort}`} className="flex items-center gap-[4px] text-[12px] text-fg-secondary hover:text-fg">
+              {sort === "newest" ? "Newest" : "Oldest"}
+              <Icon name="chev" size={11} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[160px]")}>
+              <DropdownMenu.RadioGroup value={sort} onValueChange={(v) => setSort(v as ChatSort)}>
+                {(["newest", "oldest"] as const).map((v) => (
+                  <DropdownMenu.RadioItem key={v} value={v} className={menuItem}>
+                    <span className="flex-1">{v === "newest" ? "Newest" : "Oldest"}</span>
+                    <span className="w-[14px] text-accent">{sort === v && <Icon name="check" size={14} />}</span>
+                  </DropdownMenu.RadioItem>
+                ))}
+              </DropdownMenu.RadioGroup>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+      {chats.isError ? (
+        <div className="pt-[12px]">
+          <Banner tone="blocked" title="Couldn’t load the chats">{errorText(chats.error)}</Banner>
+        </div>
+      ) : !chats.data ? (
+        <div aria-busy="true" className="flex flex-col gap-[12px] pt-[16px]">
+          <Skeleton className="h-[40px]" />
+          <Skeleton className="h-[40px]" />
+        </div>
+      ) : list.length === 0 ? (
+        <p className="py-[24px] text-[13px] text-fg-secondary">No chats in {space.name} yet. Start one above.</p>
+      ) : (
+        <ul>
+          {shown.map((c) => (
+            <li key={c.id} className="border-b border-border-row">
+              <Link href={`/chat/${c.id}`} className="-mx-[8px] flex items-center gap-[12px] rounded-md px-[8px] py-[10px] hover:bg-hover">
+                <span className="flex min-w-[0px] flex-1 flex-col gap-[4px]">
+                  <span className="flex items-center gap-[8px] truncate text-[14px] text-fg">
+                    {c.state === "running" && <span aria-hidden className="size-[6px] flex-none rounded-full bg-state-done" />}
+                    <span className="truncate">{chatTitle(c)}</span>
+                  </span>
+                  <span className="truncate text-[12px] text-fg-tertiary">{c.preview ?? "No replies yet"}</span>
+                </span>
+                <time dateTime={c.last_message_at ?? c.created_at} className="flex-none text-[11px] text-fg-tertiary">
+                  {shortAgo(c.last_message_at ?? c.created_at)}
+                </time>
+                <PersonaAvatar persona={personaLook(c.persona)} size={18} />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {more > 0 && (
+        <button type="button" className="mt-[16px] self-start text-[13px] text-accent hover:underline" onClick={() => setAll(true)}>
+          Show {more} more
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Settings opens the name, description and color for editing in the header. */
+function HeaderEditor({ space, onDone }: { space: Space; onDone: () => void }) {
+  const update = useUpdateSpace();
+  const [name, setName] = useState(space.name);
+  const [description, setDescription] = useState(space.description);
+  const [color, setColor] = useState<SpaceColor>(space.color);
+  return (
+    <form
+      className="flex flex-1 flex-col gap-[8px]"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        update.mutate({ id: space.id, patch: { name: name.trim(), description: description.trim(), color } }, { onSuccess: onDone });
+      }}
+    >
+      <div className="flex items-center gap-[12px]">
+        <ColorPicker name={name} value={color} onChange={setColor} size={36} />
+        <input aria-label="Name" autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} className="h-[36px] min-w-[0px] flex-1 rounded-lg border border-border-strong bg-surface-sunken px-[12px] text-[18px] font-semibold text-fg focus:border-accent focus:outline-none" />
+      </div>
+      <input aria-label="Description" value={description} maxLength={300} placeholder="What this space is for" onChange={(e) => setDescription(e.target.value)} className="ml-[48px] h-[32px] rounded-lg border border-border-strong bg-surface-sunken px-[12px] text-[13px] text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none" />
+      {update.isError && <p role="alert" className="ml-[48px] text-[12px] text-pill-blocked-fg">{errorText(update.error)}</p>}
+      <div className="ml-[48px] flex gap-[8px]">
+        <Button type="submit" variant="primary" disabled={update.isPending || !name.trim()}>{update.isPending ? "Saving…" : "Save"}</Button>
+        <Button variant="outline" onClick={onDone}>Cancel</Button>
+      </div>
+    </form>
+  );
+}
+
+function DeleteSpaceDialog({ space, open, onOpenChange }: { space: Space; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const router = useRouter();
+  const del = useDeleteSpace();
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Content className="motion-dialog fixed left-1/2 top-[18vh] z-50 flex w-[min(460px,calc(100%-32px))] -translate-x-1/2 flex-col gap-[12px] rounded-2xl border border-border-float bg-surface-raised p-[24px] shadow-[var(--shadow-float)] outline-none">
+          <Dialog.Title className="type-heading">Delete {space.name}?</Dialog.Title>
+          <Dialog.Description className="text-[13px] text-fg-secondary">
+            Its instructions, {space.source_count} {space.source_count === 1 ? "source" : "sources"} and {space.memory_count}{" "}
+            {space.memory_count === 1 ? "memory" : "memories"} are deleted. Its {space.chat_count} {space.chat_count === 1 ? "chat moves" : "chats move"} to Recent.
+          </Dialog.Description>
+          {del.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(del.error)}</p>}
+          <div className="flex justify-end gap-[8px]">
+            <Dialog.Close asChild>
+              <Button variant="outline">Cancel</Button>
+            </Dialog.Close>
+            <Button variant="primary" className="bg-state-blocked" disabled={del.isPending} onClick={() => del.mutateAsync(space.id).then(() => router.push("/chat"), () => undefined)}>
+              Delete space
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+/** Mockup 1: a space's page. Its chats on the left; instructions, sources, defaults and memory as editable cards on the right. */
+export function SpaceScreen({ id }: { id: string }) {
+  const q = useSpace(id);
+  const health = useHarnessHealth();
+  const noHarness = !!health && !health.ready;
+  const [editing, setEditing] = useState(false);
+  const [sources, setSources] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const space = q.data;
+  if (q.isError) {
+    return (
+      <div className="p-8">
+        <Banner tone="blocked" title="Couldn’t open this space">{errorText(q.error)}</Banner>
+      </div>
+    );
+  }
+  if (!space) {
+    return (
+      <div aria-busy="true" className="flex flex-col gap-[16px] p-[40px]">
+        <Skeleton className="h-[36px] w-1/3" />
+        <Skeleton className="h-[96px] w-2/3" />
+      </div>
+    );
+  }
+  return (
+    <div className="h-dvh overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-[1048px] flex-col pb-[48px] pl-[48px] pr-[40px] pt-[40px] max-md:px-[20px]">
+        <header className="flex items-start gap-[12px]">
+          {editing ? (
+            <HeaderEditor space={space} onDone={() => setEditing(false)} />
+          ) : (
+            <>
+              <SpaceTile name={space.name} color={space.color} size={36} className="rounded-lg" />
+              <div className="flex min-w-[0px] flex-1 flex-col gap-[4px]">
+                <h1 className="truncate text-[22px] font-semibold leading-7 text-fg">{space.name}</h1>
+                <p className="truncate text-[13px] text-fg-tertiary">{spaceSubtitle(space)}</p>
+              </div>
+              <Button variant="secondary" onClick={() => setEditing(true)}>Settings</Button>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button type="button" aria-label="More for this space" className="grid size-[30px] place-items-center rounded-md border border-btn-secondary-border bg-btn-secondary text-fg hover:bg-hover">
+                    <Icon name="dots" size={14} />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[192px]")}>
+                    <DropdownMenu.Item className={menuItem} onSelect={() => setSources(true)}>
+                      <Icon name="artifacts" size={13} /> Manage sources
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item className={cx(menuItem, "text-pill-blocked-fg")} onSelect={() => setDeleting(true)}>
+                      <Icon name="trash" size={13} /> Delete space…
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </>
+          )}
+        </header>
+        {noHarness && (
+          <div className="mt-[16px]">
+            <NoHarnessNote health={health} />
+          </div>
+        )}
+        <div className="mt-[32px] grid grid-cols-[minmax(0,1fr)_308px] gap-[32px] max-lg:grid-cols-1">
+          <div className="flex min-w-[0px] flex-col gap-[40px]">
+            <Composer space={space} disabled={noHarness} />
+            <ChatList space={space} />
+          </div>
+          <aside aria-label="Space settings" className="flex flex-col gap-[16px]">
+            <InstructionsCard key={`i-${space.updated_at}`} space={space} />
+            <SourcesCard space={space} onAdd={() => setSources(true)} />
+            <DefaultsCard space={space} />
+            <MemoryCard space={space} />
+          </aside>
+        </div>
+      </div>
+      <SourcesDialog spaceId={space.id} spaceName={space.name} open={sources} onOpenChange={setSources} />
+      <DeleteSpaceDialog space={space} open={deleting} onOpenChange={setDeleting} />
+    </div>
+  );
+}

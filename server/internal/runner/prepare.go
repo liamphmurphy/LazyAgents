@@ -673,7 +673,11 @@ func chatMemoryIndex(ctx context.Context, q *store.Queries, run store.Run) (stri
 	if err != nil {
 		return "", err
 	}
-	o := memory.Owner{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy}
+	space, err := runs.ChatMemorySpace(ctx, q, chat)
+	if err != nil {
+		return "", err
+	}
+	o := memory.Owner{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, SpaceID: space}
 	entries, total, err := memory.New(q).Index(ctx, o)
 	if err != nil {
 		return "", err
@@ -706,6 +710,10 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 		if err != nil {
 			return nil, "Could not load the conversation.", fmt.Errorf("chat session: %w", err)
 		}
+		space, spaceFiles, err := chatSpaceFiles(ctx, q, chat)
+		if err != nil {
+			return nil, "Could not load the conversation's space.", fmt.Errorf("chat space: %w", err)
+		}
 		svg, err := runs.ChatCanDrawSVGs(ctx, q, chat)
 		if err != nil {
 			return nil, "Could not load the conversation's persona.", fmt.Errorf("chat svg capability: %w", err)
@@ -732,7 +740,7 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 		if svg {
 			spec.Instructions += agents.AssistantSVGSection
 		}
-		return harness.ChatAgentsMDWithGroup(spec, paths, c.project.Key, idx, persona, group), "", nil
+		return harness.ChatAgentsMDInSpace(spec, paths, c.project.Key, idx, persona, group, runs.SpaceSection(space, spaceFiles)), "", nil
 	case runs.PurposeResearch, runs.PurposeWorkflow, runs.PurposeLearning:
 		return []byte(c.spec.Instructions), "", nil
 	case "planning":
@@ -782,4 +790,51 @@ func chatPersona(ctx context.Context, q *store.Queries, run store.Run) (*harness
 	}
 	return &harness.Persona{Name: p.Name, Tone: p.Tone, Instructions: p.CustomInstructions,
 		Memory: memory.PersonaMarkdown(entries, total)}, nil
+}
+
+// chatSpaceFiles is the chat's space (nil outside one) and its sources laid
+// out as files, without their contents.
+func chatSpaceFiles(ctx context.Context, q *store.Queries, chat store.ChatSession) (*store.ChatSpace, []runs.SpaceFile, error) {
+	sp, err := runs.ChatSpaceOf(ctx, q, chat)
+	if err != nil || sp == nil {
+		return nil, nil, err
+	}
+	sources, err := q.ListChatSpaceSources(ctx, sp.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sp, runs.SpaceFiles(sources), nil
+}
+
+// spaceSourceFiles writes a chat's space sources into the turn's workspace,
+// at the paths its instructions list. A file whose bytes are gone (or with no
+// attachment store) is left out.
+func (r *Runner) spaceSourceFiles(ctx context.Context, q *store.Queries, run store.Run) (map[string][]byte, error) {
+	chat, err := q.ChatSessionForRun(ctx, &run.ID)
+	if err != nil {
+		return nil, err
+	}
+	_, files, err := chatSpaceFiles(ctx, q, chat)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]byte{}
+	for _, f := range files {
+		if f.Source.BlobKey == nil {
+			out[f.Path] = []byte(f.Source.Body)
+			continue
+		}
+		if r.Attachments == nil {
+			continue
+		}
+		body, err := r.readAttachment(ctx, *f.Source.BlobKey)
+		if errors.Is(err, blob.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out[f.Path] = body
+	}
+	return out, nil
 }

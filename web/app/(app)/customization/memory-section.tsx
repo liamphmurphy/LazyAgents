@@ -55,6 +55,12 @@ function PersonaTag({ id }: { id: string }) {
 function Meta({ m }: { m: Memory }) {
   return (
     <p className="text-[11.5px] text-fg-tertiary">
+      {m.space_id && (
+        <>
+          <span className="text-fg-secondary" data-testid="memory-space">{m.space_name ?? "A space"}’s memory</span>
+          {" · "}
+        </>
+      )}
       {m.persona_id && (
         <>
           <PersonaTag id={m.persona_id} />
