@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 
-.PHONY: help up down start setup login claude-login codex-login stop-dev dev dev-infra api web web-deps runner local-dev local-runner gen gen-check test lint build reset
+.PHONY: help up down start setup login claude-login codex-login github-login stop-dev dev dev-infra api web web-deps runner local-dev local-runner gen gen-check test lint build reset
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -37,13 +37,16 @@ start: ## One command for everything: set up, sign in if needed, run the app and
 setup: ## Create .env with a SECRETS_KEY and build the agent image
 	@scripts/vesper-setup.sh setup
 
-login: claude-login codex-login ## Sign Vesper in to both Claude and Codex plans (needs the API running)
+login: claude-login codex-login github-login ## Sign Vesper in to Claude, Codex and GitHub (needs the API running)
 
 claude-login: ## Store a Claude plan login for agent containers (needs the API running)
 	@API_PORT=$(API_PORT) scripts/vesper-setup.sh login-claude
 
 codex-login: ## Store a Codex plan login; CODEX_AUTH_FILE=~/.codex/auth.json copies an existing one (needs the API running)
 	@API_PORT=$(API_PORT) scripts/vesper-setup.sh login-codex
+
+github-login: ## Store your GitHub CLI token as git:pat so agents can push and open PRs (needs the API running)
+	@API_PORT=$(API_PORT) scripts/vesper-setup.sh login-github
 
 stop-dev: ## Kill whatever is listening on the API and web dev ports (left over from an earlier run)
 	@for port in $(API_PORT) $(WEB_PORT); do \

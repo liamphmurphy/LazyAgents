@@ -1,6 +1,8 @@
 package runner_test
 
 import (
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -47,5 +49,31 @@ func TestChatRepoSetupScript(t *testing.T) {
 		if !strings.Contains(evil, want) {
 			t.Errorf("input not shell-quoted, want %q", want)
 		}
+	}
+}
+
+// A token added after the workspace was cloned still reaches git: the
+// credential helper is set on every turn, not only by the first clone.
+func TestChatRepoSetupScriptAddsLaterToken(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q", "-b", "main").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	run := func(token string) string {
+		t.Helper()
+		cmd := exec.Command("sh", "-c", runner.ChatRepoSetupScript("https://github.com/acme/app.git", "vesper/pair-1", "Pair (Vesper)", "pair@x"))
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GH_TOKEN="+token, "HOME="+dir)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("setup script: %v\n%s", err, out)
+		}
+		out, _ := exec.Command("git", "-C", dir, "config", "--get", "credential.https://github.com.helper").Output()
+		return strings.TrimSpace(string(out))
+	}
+	if got := run(""); got != "" {
+		t.Fatalf("helper set without a token: %q", got)
+	}
+	if got := run("tok"); !strings.Contains(got, "$GH_TOKEN") {
+		t.Fatalf("existing workspace didn't get the helper once a token was added: %q", got)
 	}
 }

@@ -95,14 +95,37 @@ login_codex() {
   rm -f "$auth"
 }
 
+warn() {
+  printf '\n\033[1;33mvesper: %s\033[0m\n' "$1" >&2
+  shift
+  for line in "$@"; do printf '  %s\n' "$line" >&2; done
+  echo >&2
+}
+
+# Stores the GitHub CLI's token as git:pat. An SSH key alone doesn't cover it:
+# https repositories and gh (pull requests) need the token. With "ask", an
+# existing git:pat is kept; "login" offers to replace it.
 offer_github_token() {
-  has_secret git:pat || has_secret git:ssh && return 0
-  command -v gh >/dev/null && gh auth token >/dev/null 2>&1 || {
-    echo "vesper: agents can't clone private repos until you add git:pat in Settings → Connections & secrets."
+  mode=${1:-ask}
+  require_api
+  if has_secret git:pat; then
+    [ "$mode" = login ] || return 0
+    read -rp "vesper: replace the stored GitHub token (git:pat) with your GitHub CLI token? [y/N] " answer
+    case $answer in [yY]*) ;; *) return 0 ;; esac
+  elif ! { command -v gh >/dev/null && gh auth token >/dev/null 2>&1; }; then
+    warn "agents have no GitHub token, so they can't push to https repos or open pull requests." \
+      "Sign in with: gh auth login   then run: make github-login" \
+      "Or add a token in Settings → Connections & secrets → GitHub token."
     return 0
-  }
-  read -rp "vesper: give agents your GitHub CLI token as git:pat so they can clone and push? [y/N] " answer
-  case $answer in [yY]*) gh auth token | store_secret git:pat ;; esac
+  else
+    read -rp "vesper: give agents your GitHub CLI token as git:pat so they can push and open PRs? [y/N] " answer
+    case $answer in [yY]*) ;; *)
+      warn "skipped the GitHub token: agents can't push to https repos or open PRs." "Add it later with: make github-login"
+      return 0 ;;
+    esac
+  fi
+  command -v gh >/dev/null && gh auth token >/dev/null 2>&1 || { echo "vesper: gh isn't signed in (run gh auth login first)" >&2; return 1; }
+  gh auth token | store_secret git:pat
 }
 
 start() {
@@ -131,5 +154,6 @@ case ${1:-} in
   start) start ;;
   login-claude) login_claude ;;
   login-codex) login_codex ;;
-  *) echo "usage: $0 setup|start|login-claude|login-codex" >&2; exit 2 ;;
+  login-github) offer_github_token login ;;
+  *) echo "usage: $0 setup|start|login-claude|login-codex|login-github" >&2; exit 2 ;;
 esac
