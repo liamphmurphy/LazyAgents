@@ -303,7 +303,8 @@ export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null
   const { filter, active, pick, create, startWith } = usePersonaNav(id, false);
   const activity = usePersonaActivity(viewed);
   const all = filter.query === "all";
-  const archived = useChats(true, filter.query, view === "archived");
+  // Archived chats from spaces are listed too: the archive is one place.
+  const archived = useChats(true, filter.query, view === "archived", "all");
   const chats = view === "archived" ? archived : active;
   const list = chats.data?.chats;
   // An empty filter on a persona other than the default offers to start a conversation with it.

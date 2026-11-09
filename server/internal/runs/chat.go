@@ -170,7 +170,10 @@ type ChatInput struct {
 	NoRepo bool
 	// ConnectorIDs, when set, narrows the persona's connectors for this chat.
 	ConnectorIDs []uuid.UUID
-	Message      *ChatMessageInput
+	// SpaceID puts the chat in one of the creator's spaces, whose defaults
+	// fill in the persona, project and connectors not given here.
+	SpaceID *uuid.UUID
+	Message *ChatMessageInput
 }
 
 // ChatMessageInput is a single human prompt. A non-empty Harness/Model is
@@ -215,11 +218,14 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid.UUID, in ChatInput) (store.ChatSession, error) {
 	var out store.ChatSession
 	err := func() error {
+		space, err := chatSpace(ctx, q, ws, user, &in)
+		if err != nil {
+			return err
+		}
 		// A chat needs no project; one named here is attached from the start.
 		var p store.Project
 		var projectID *uuid.UUID
 		if in.Project != "" {
-			var err error
 			if p, err = lockAttachableProject(ctx, q, ws, in.Project); err != nil {
 				return err
 			}
@@ -275,7 +281,7 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: projectID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID, Hidden: in.Hidden})
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: projectID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID, Hidden: in.Hidden, SpaceID: space})
 		if err != nil {
 			return err
 		}

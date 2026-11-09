@@ -56,6 +56,11 @@ type Owner struct {
 	// Scope widens what reads, edits and deletes reach beyond PersonaID's
 	// memory. The zero value reaches only that memory.
 	Scope Scope
+	// SpaceID is the chat space the owner is in, when it keeps its own
+	// memory: the person's memory also reaches that space's entries, and what
+	// is saved about the person goes there. Nil reaches no space's entries
+	// (ScopeAll reaches every one regardless).
+	SpaceID *uuid.UUID
 }
 
 // Scope is how much of a person's memory an Owner reaches.
@@ -68,14 +73,28 @@ const (
 	ScopeAll      Scope = "all"      // everything: the person's memory manager
 )
 
-// Person is the person's own memory.
+// Person is the person's own memory, in the same space.
 func (o Owner) Person() Owner {
-	return Owner{WorkspaceID: o.WorkspaceID, UserID: o.UserID}
+	return Owner{WorkspaceID: o.WorkspaceID, UserID: o.UserID, SpaceID: o.SpaceID}
 }
 
-// Persona is one persona's own memory.
+// Persona is one persona's own memory, which no space keeps apart.
 func (o Owner) Persona(id uuid.UUID) Owner {
 	return Owner{WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: &id}
+}
+
+// InSpace is o inside a space that keeps its own memory; nil is outside any.
+func (o Owner) InSpace(id *uuid.UUID) Owner {
+	o.SpaceID = id
+	return o
+}
+
+// saveSpace is the space a save lands in: the owner's, for the person's memory.
+func (o Owner) saveSpace() *uuid.UUID {
+	if o.PersonaID != nil {
+		return nil
+	}
+	return o.SpaceID
 }
 
 func (o Owner) scope() string {
@@ -137,7 +156,7 @@ func (s *Service) Save(ctx context.Context, o Owner, in Input, src Source) (Save
 	if err := checkMoment(in.Type, o.PersonaID); err != nil {
 		return SaveResult{}, err
 	}
-	o = Owner{WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID}
+	o = Owner{WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID, SpaceID: o.saveSpace()}
 	if o.PersonaID != nil {
 		if err := s.checkPersona(ctx, o, *o.PersonaID); err != nil {
 			return SaveResult{}, err
@@ -146,7 +165,7 @@ func (s *Service) Save(ctx context.Context, o Owner, in Input, src Source) (Save
 	dup, err := store.NearDuplicateMemoryRow{}, pgx.ErrNoRows
 	if in.Type != TypeMoment {
 		dup, err = s.Q.NearDuplicateMemory(ctx, store.NearDuplicateMemoryParams{
-			WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID, Title: in.Title, Summary: in.Summary,
+			WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID, SpaceID: o.SpaceID, Title: in.Title, Summary: in.Summary,
 			TitleThreshold: dupTitle, SummaryThreshold: dupSummary,
 		})
 	}
@@ -173,7 +192,7 @@ func (s *Service) Save(ctx context.Context, o Owner, in Input, src Source) (Save
 		return SaveResult{}, err
 	}
 	m, err := s.Q.CreateMemory(ctx, store.CreateMemoryParams{
-		WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID, Title: in.Title, Summary: in.Summary, Body: in.Body,
+		WorkspaceID: o.WorkspaceID, UserID: o.UserID, PersonaID: o.PersonaID, SpaceID: o.SpaceID, Title: in.Title, Summary: in.Summary, Body: in.Body,
 		Tags: in.Tags, Type: in.Type, Source: src.Label, SourceChatID: src.ChatID, SourceRunID: src.RunID,
 	})
 	return SaveResult{Memory: m}, err
@@ -258,7 +277,7 @@ func (s *Service) checkPersona(ctx context.Context, o Owner, id uuid.UUID) error
 }
 
 func (s *Service) update(ctx context.Context, o Owner, id uuid.UUID, p Patch, src Source) (store.Memory, error) {
-	arg := store.UpdateMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID,
+	arg := store.UpdateMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID, SpaceID: o.SpaceID,
 		Title: p.Title, Summary: p.Summary, Body: p.Body, Type: p.Type, Move: p.Move, ToPersonaID: p.ToPersona}
 	if p.Tags != nil {
 		arg.Tags = *p.Tags
@@ -282,7 +301,7 @@ func (s *Service) Supersede(ctx context.Context, o Owner, id uuid.UUID, by *uuid
 		return store.Memory{}, apperr.Invalid("superseded_by", "an entry can't supersede itself")
 	}
 	m, err := s.Q.SetMemorySupersededBy(ctx, store.SetMemorySupersededByParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID,
-		Scope: o.scope(), PersonaID: o.PersonaID, SupersededBy: by,
+		Scope: o.scope(), PersonaID: o.PersonaID, SpaceID: o.SpaceID, SupersededBy: by,
 		// Only a person restores (the memory manager), and that exempts the
 		// entry from consolidation.
 		RetiredReason: truncate(oneLine(reason), maxReason), RestoredByPerson: by == nil})
@@ -296,7 +315,7 @@ func (s *Service) Supersede(ctx context.Context, o Owner, id uuid.UUID, by *uuid
 }
 
 func (s *Service) Get(ctx context.Context, o Owner, id uuid.UUID) (store.Memory, error) {
-	m, err := s.Q.GetMemory(ctx, store.GetMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID})
+	m, err := s.Q.GetMemory(ctx, store.GetMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID, SpaceID: o.SpaceID})
 	return m, notFound(err)
 }
 
@@ -307,7 +326,9 @@ type Query struct {
 	Type           string
 	IncludeRetired bool
 	ByCreated      bool
-	Limit, Offset  int
+	// Space, when set, keeps only that space's entries.
+	Space         *uuid.UUID
+	Limit, Offset int
 }
 
 // Hit is a memory with its search rank (0 when listing).
@@ -331,15 +352,15 @@ func (s *Service) Find(ctx context.Context, o Owner, q Query) ([]Hit, error) {
 	text := strings.TrimSpace(q.Text)
 	out := []Hit{}
 	if text == "" {
-		rows, err := s.Q.ListMemories(ctx, store.ListMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID,
-			IncludeRetired: q.IncludeRetired, Type: typ, ByCreated: q.ByCreated, Lim: int32(q.Limit), Off: int32(max(q.Offset, 0))})
+		rows, err := s.Q.ListMemories(ctx, store.ListMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID, SpaceID: o.SpaceID,
+			OnlySpace: q.Space, IncludeRetired: q.IncludeRetired, Type: typ, ByCreated: q.ByCreated, Lim: int32(q.Limit), Off: int32(max(q.Offset, 0))})
 		for _, m := range rows {
 			out = append(out, Hit{Memory: m})
 		}
 		return out, err
 	}
-	rows, err := s.Q.SearchMemories(ctx, store.SearchMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID,
-		Q: text, IncludeRetired: q.IncludeRetired, Type: typ, Lim: int32(q.Limit)})
+	rows, err := s.Q.SearchMemories(ctx, store.SearchMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID, SpaceID: o.SpaceID,
+		OnlySpace: q.Space, Q: text, IncludeRetired: q.IncludeRetired, Type: typ, Lim: int32(q.Limit)})
 	for _, r := range rows {
 		out = append(out, Hit{Memory: r.Memory, Rank: r.Rank})
 	}
@@ -352,8 +373,8 @@ func (s *Service) Count(ctx context.Context, o Owner, q Query) (int, error) {
 	if q.Type != "" {
 		typ = &q.Type
 	}
-	n, err := s.Q.CountMemories(ctx, store.CountMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID,
-		IncludeRetired: q.IncludeRetired, Type: typ})
+	n, err := s.Q.CountMemories(ctx, store.CountMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID, SpaceID: o.SpaceID,
+		OnlySpace: q.Space, IncludeRetired: q.IncludeRetired, Type: typ})
 	return int(n), err
 }
 
@@ -363,6 +384,8 @@ type IndexEntry struct {
 	Title   string    `json:"title"`
 	Summary string    `json:"summary"`
 	Type    string    `json:"type"`
+	// Space says the entry is the current space's, not the general memory's.
+	Space bool `json:"space,omitempty"`
 }
 
 // Index lists the person's most recently changed live entries, titles and
@@ -380,7 +403,7 @@ func (s *Service) Index(ctx context.Context, o Owner) ([]IndexEntry, int, error)
 	}
 	out := make([]IndexEntry, len(hits))
 	for i, h := range hits {
-		out[i] = IndexEntry{ID: h.ID, Title: h.Title, Summary: h.Summary, Type: h.Type}
+		out[i] = IndexEntry{ID: h.ID, Title: h.Title, Summary: h.Summary, Type: h.Type, Space: h.SpaceID != nil}
 	}
 	return out, total, nil
 }
@@ -395,7 +418,11 @@ func IndexMarkdown(entries []IndexEntry, total int) string {
 	}
 	b.WriteString("Titles and summaries only. Use read_memory(id) for the full entry, search_memory to find more.\n\n")
 	for _, e := range entries {
-		fmt.Fprintf(&b, "- `%s` [%s] %s", e.ID, e.Type, e.Title)
+		typ := e.Type
+		if e.Space {
+			typ += ", this space"
+		}
+		fmt.Fprintf(&b, "- `%s` [%s] %s", e.ID, typ, e.Title)
 		if e.Summary != "" {
 			fmt.Fprintf(&b, ": %s", e.Summary)
 		}
@@ -418,7 +445,7 @@ func (s *Service) Forget(ctx context.Context, o Owner, id uuid.UUID) error {
 	if err := s.clearSuggestions(ctx, o); err != nil {
 		return err
 	}
-	n, err := s.Q.DeleteMemory(ctx, store.DeleteMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID})
+	n, err := s.Q.DeleteMemory(ctx, store.DeleteMemoryParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID, SpaceID: o.SpaceID})
 	if err == nil && n == 0 {
 		return apperr.ErrNotFound
 	}
@@ -431,7 +458,7 @@ func (s *Service) DeleteAll(ctx context.Context, o Owner) (int, error) {
 	if err := s.clearSuggestions(ctx, o); err != nil {
 		return 0, err
 	}
-	n, err := s.Q.DeleteAllMemories(ctx, store.DeleteAllMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID})
+	n, err := s.Q.DeleteAllMemories(ctx, store.DeleteAllMemoriesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Scope: o.scope(), PersonaID: o.PersonaID, SpaceID: o.SpaceID})
 	return int(n), err
 }
 

@@ -89,6 +89,10 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 	for _, r := range rows {
 		counts[r.SessionID] = int(r.N)
 	}
+	spaces, err := s.chatSpaceRefs(ctx, chats)
+	if err != nil {
+		return nil, err
+	}
 	reasons := map[uuid.UUID]string{}
 	if len(failed) > 0 {
 		errs, err := s.Q.ChatLastErrors(ctx, failed)
@@ -142,6 +146,11 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		}
 		if r, ok := reasons[c.ID]; ok && c.State == "failed" {
 			item.Error = &r
+		}
+		if c.SpaceID != nil {
+			if sp, ok := spaces[*c.SpaceID]; ok {
+				item.Space = &sp
+			}
 		}
 		out = append(out, item)
 	}
@@ -297,9 +306,13 @@ func (s *Server) ListChats(ctx context.Context, req api.ListChatsRequestObject) 
 	if err != nil {
 		return nil, err
 	}
+	spaceFilter, spaceID, err := s.chatSpaceFilter(ctx, req.Params.Space)
+	if err != nil {
+		return nil, err
+	}
 	chats, err := s.Q.ListChatsForUser(ctx, store.ListChatsForUserParams{
 		WorkspaceID: ws, CreatedBy: u.ID, Archived: deref(req.Params.Archived), ProjectKey: req.Params.Project,
-		PersonaFilter: filter, PersonaID: personaID, RowOffset: int32(offset), RowLimit: chatPageSize + 1,
+		PersonaFilter: filter, PersonaID: personaID, SpaceFilter: spaceFilter, SpaceID: spaceID, RowOffset: int32(offset), RowLimit: chatPageSize + 1,
 	})
 	if err != nil {
 		return nil, err
@@ -311,6 +324,11 @@ func (s *Server) ListChats(ctx context.Context, req api.ListChatsRequestObject) 
 	items, err := s.toChats(ctx, chats)
 	if err != nil {
 		return nil, err
+	}
+	if spaceID != nil {
+		if err := s.chatPreviews(ctx, items); err != nil {
+			return nil, err
+		}
 	}
 	return api.ListChats200JSONResponse{Chats: items, HasMore: more}, nil
 }
@@ -371,7 +389,7 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 		return nil, apperr.Invalid("body", "required")
 	}
 	b := req.Body
-	in := runs.ChatInput{Project: deref(b.Project), Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl), Hidden: deref(b.Hidden)}
+	in := runs.ChatInput{Project: deref(b.Project), Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl), Hidden: deref(b.Hidden), SpaceID: b.SpaceId}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}

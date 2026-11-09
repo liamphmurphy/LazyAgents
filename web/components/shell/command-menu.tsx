@@ -149,7 +149,7 @@ export function CommandMenu() {
   const idle = open && mode === "root" && !query.trim();
   const inbox = useInbox(undefined, idle);
   const liveRuns = useLiveRuns(idle);
-  const chats = useChats(false, "", idle);
+  const chats = useChats(false, "", idle, "all");
 
   const close = (next: boolean) => {
     // A failed action's alert belongs to that attempt only.
