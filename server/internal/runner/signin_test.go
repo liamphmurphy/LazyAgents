@@ -28,6 +28,7 @@ type fakeLogins struct {
 	mu     sync.Mutex
 	specs  []LoginSpec
 	killed bool
+	typed  []string // each write to the terminal, as the runner made it
 }
 
 func (f *fakeLogins) StartLogin(_ context.Context, spec LoginSpec) (LoginProcess, error) {
@@ -47,14 +48,20 @@ func (f *fakeLogins) StartLogin(_ context.Context, spec LoginSpec) (LoginProcess
 	}
 	p := &fakeLogin{f: f, cmd: cmd, out: r, w: w}
 	if spec.TTY {
-		p.in = crlf{in} // a terminal turns Enter's \r into \n
+		p.in = crlf{f, in} // a terminal turns Enter's \r into \n
 	}
 	return p, nil
 }
 
-type crlf struct{ w io.Writer }
+type crlf struct {
+	f *fakeLogins
+	w io.Writer
+}
 
 func (c crlf) Write(b []byte) (int, error) {
+	c.f.mu.Lock()
+	c.f.typed = append(c.f.typed, string(b))
+	c.f.mu.Unlock()
 	return c.w.Write([]byte(strings.ReplaceAll(string(b), "\r", "\n")))
 }
 
@@ -246,6 +253,14 @@ exec sleep 60`)
 	if !e.f.wasKilled() {
 		t.Fatal("the CLI was left running after printing its token")
 	}
+	// Enter goes on its own: in one chunk with the code, Claude's prompt
+	// takes it as part of a paste and never submits.
+	e.f.mu.Lock()
+	typed := e.f.typed
+	e.f.mu.Unlock()
+	if len(typed) != 2 || typed[0] != code || typed[1] != "\r" {
+		t.Fatalf("typed %q, want the code then Enter separately", typed)
+	}
 }
 
 func TestSignInCancelStopsTheCLI(t *testing.T) {
@@ -317,5 +332,33 @@ func TestSignInURLAllowed(t *testing.T) {
 	}
 	if !signInURLAllowed("codex", "https://auth.openai.com/codex/device") || signInURLAllowed("codex", "https://openai.com.evil/") {
 		t.Error("codex")
+	}
+}
+
+type writeLog struct{ writes []string }
+
+func (w *writeLog) Write(b []byte) (int, error) {
+	w.writes = append(w.writes, string(b))
+	return len(b), nil
+}
+
+func TestTypeCodePressesEnterSeparately(t *testing.T) {
+	var w writeLog
+	start := time.Now()
+	if err := typeCode(context.Background(), &w, "abc#def"); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.writes) != 2 || w.writes[0] != "abc#def" || w.writes[1] != "\r" {
+		t.Fatalf("writes %q", w.writes)
+	}
+	if time.Since(start) < pasteSubmitDelay {
+		t.Fatal("Enter followed the code without a pause")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	w = writeLog{}
+	if err := typeCode(ctx, &w, "abc"); err == nil || len(w.writes) != 1 {
+		t.Fatalf("cancelled: err %v writes %q", err, w.writes)
 	}
 }
