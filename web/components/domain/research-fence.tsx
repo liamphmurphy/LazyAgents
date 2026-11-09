@@ -13,6 +13,7 @@ import { headingAnchors } from "@/lib/slug";
 import { hostOf } from "@/lib/web-search";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Collapse } from "@/components/ui/motion";
 import { CodeFence } from "./code-fence";
 import { RecommendActions } from "./recommend-fence";
 import { SvgFenceMessage } from "./svg-fence";
@@ -265,7 +266,7 @@ function ReportCard({ job, report, project }: { job: Job; report: Report; projec
             {report.sources.length} sources
             <Icon name="chev" size={12} className={cx("text-fg-tertiary transition-transform", showSources && "rotate-180")} />
           </button>
-          {showSources && (
+          <Collapse open={showSources}>
             <ol className="mt-1.5 flex flex-col gap-0.5 text-[12.5px]">
               {report.sources.map((s) => (
                 <li key={s.n} data-testid="report-source" className="flex items-baseline gap-2">
@@ -275,7 +276,7 @@ function ReportCard({ job, report, project }: { job: Job; report: Report; projec
                 </li>
               ))}
             </ol>
-          )}
+          </Collapse>
         </div>
       )}
     </div>

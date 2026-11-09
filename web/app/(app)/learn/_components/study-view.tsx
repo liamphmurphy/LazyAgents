@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { usePulse } from "@/components/ui/motion";
 import { useAttemptCheck, useGradeAttempt, useTutor, type Course, type CourseCheck, type CourseLesson } from "@/lib/api/learning-hooks";
 import { CONFIDENCE, pickLesson } from "@/lib/learning";
 import { cx } from "@/lib/cx";
@@ -157,8 +158,9 @@ function TutorPanel({ course, lesson }: { course: Course; lesson: string }) {
 
 function ProgressDot({ lesson, current }: { lesson: CourseLesson; current: boolean }) {
   const done = lesson.progress !== "new" || lesson.status === "known";
+  const ref = usePulse<HTMLSpanElement>(done);
   return (
-    <span aria-hidden className={cx("grid size-3.5 flex-none place-items-center rounded-full border text-[9px] font-bold", done ? "border-fg-2 bg-fg-2 text-bg" : current ? "border-2 border-accent" : lesson.status === "flagged" ? "border-state-human" : "border-border-strong")}>
+    <span ref={ref} aria-hidden className={cx("grid size-3.5 flex-none place-items-center rounded-full border text-[9px] font-bold", done ? "border-fg-2 bg-fg-2 text-bg" : current ? "border-2 border-accent" : lesson.status === "flagged" ? "border-state-human" : "border-border-strong")}>
       {done && "✓"}
     </span>
   );

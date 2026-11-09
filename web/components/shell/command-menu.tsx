@@ -447,9 +447,9 @@ export function CommandMenu() {
   return (
     <Dialog.Root open={open} onOpenChange={close}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-50 bg-scrim" />
         <Dialog.Content
-          className="fixed left-1/2 top-[15vh] z-50 flex max-h-[70vh] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border-float bg-surface-raised shadow-xl"
+          className="motion-dialog-fast fixed left-1/2 top-[15vh] z-50 flex max-h-[70vh] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border-float bg-surface-raised shadow-xl"
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => {
             // The input, not the scope toggle that comes first.

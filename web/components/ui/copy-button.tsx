@@ -9,6 +9,7 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
     <IconButton
       icon={copied ? "check" : "link"}
       label={copied ? "Copied" : label}
+      className={copied ? "motion-pop-child" : undefined}
       onClick={() => {
         void navigator.clipboard.writeText(text);
         setCopied(true);

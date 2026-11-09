@@ -62,7 +62,7 @@ function Options<T extends string>({ name, label, options, value, onChange }: {
               <span className="block text-xs text-fg-secondary">{o.detail}</span>
             </span>
             <span className={cx("grid size-[18px] flex-none place-items-center rounded-full border transition-colors", on ? "border-accent bg-accent text-on-accent" : "border-border-strong")}>
-              {on && <Icon name="check" size={12} strokeWidth={2.2} className="guide-pop" />}
+              {on && <Icon name="check" size={12} strokeWidth={2.2} className="motion-pop" />}
             </span>
           </label>
         );
@@ -203,11 +203,11 @@ export function NewModuleGuide() {
         <Button variant="primary" icon="plus">New Learning Module</Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="guide-scrim fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => { e.preventDefault(); focusStep(layers.current.get(step)); }}
-          className="guide-panel fixed left-1/2 top-[10vh] z-50 flex max-h-[84vh] w-[min(640px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
+          className="motion-dialog fixed left-1/2 top-[10vh] z-50 flex max-h-[84vh] w-[min(640px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
         >
           <div className="flex items-center gap-2 px-[18px] pt-3.5">
             <Dialog.Title className="type-heading">New Learning Module</Dialog.Title>

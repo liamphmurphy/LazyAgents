@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useContext, useMemo, useState } from "react";
+import { usePulse } from "@/components/ui/motion";
 import { workflowImageUrl, type Schemas } from "@/lib/api/client";
 import { useChatWorkflowRuns, useDecideGate, useStartWorkflow, useStopWorkflowRun, useWorkflows, type WorkflowRun } from "@/lib/api/workflow-hooks";
 import { cx } from "@/lib/cx";
@@ -24,7 +25,8 @@ const STATE_PILL: Record<string, string> = {
 };
 
 export function RunStatePill({ state }: { state: string }) {
-  return <span className={cx("flex-none rounded-full px-2 py-0.5 text-[11.5px] font-medium", STATE_PILL[state])}>{RUN_STATE_LABEL[state] ?? state}</span>;
+  const ref = usePulse<HTMLSpanElement>(state);
+  return <span ref={ref} className={cx("flex-none rounded-full px-2 py-0.5 text-[11.5px] font-medium transition-colors duration-200", STATE_PILL[state])}>{RUN_STATE_LABEL[state] ?? state}</span>;
 }
 
 /** Confirms a run: a persona's suggestion or a /workflow pick. Nothing starts until Run. */

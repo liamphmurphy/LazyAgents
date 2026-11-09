@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { usePulse } from "@/components/ui/motion";
 import { PersonaAvatar } from "@/app/(app)/chat/_components/persona";
 import type { Schemas } from "@/lib/api/client";
 import { useMarkChatRead, usePersonaDock } from "@/lib/api/hooks";
@@ -55,14 +56,15 @@ function ChatRow({ chat, onPick }: { chat: Chat; onPick: () => void }) {
 }
 
 function PersonaButton({ entry, expanded, onClick }: { entry: Entry; expanded: boolean; onClick: () => void }) {
+  const ref = usePulse<HTMLButtonElement>(entry.state);
   return (
-    <button type="button" aria-label={describe(entry)} aria-expanded={entry.chats.length > 1 ? expanded : undefined} title={describe(entry)} onClick={onClick}
+    <button ref={ref} type="button" aria-label={describe(entry)} aria-expanded={entry.chats.length > 1 ? expanded : undefined} title={describe(entry)} onClick={onClick}
       className={`relative rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${entry.state === "working" ? "motion-safe:animate-pulse" : ""}`}>
       <PersonaAvatar persona={entry.persona} size={36} />
       {entry.state === "needs_you" ? (
-        <span aria-hidden className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-pill-human-fg text-[10px] font-semibold text-bg">!</span>
+        <span aria-hidden className="motion-pop absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-pill-human-fg text-[10px] font-semibold text-bg">!</span>
       ) : entry.state === "replied" ? (
-        <span aria-hidden className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-fg px-0.5 text-[10px] font-semibold text-bg">{entry.unread}</span>
+        <span aria-hidden className="motion-pop absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-fg px-0.5 text-[10px] font-semibold text-bg">{entry.unread}</span>
       ) : null}
     </button>
   );

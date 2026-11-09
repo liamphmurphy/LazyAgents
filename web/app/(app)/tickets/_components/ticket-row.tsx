@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { MouseEvent } from "react";
+import { ViewTransition, type MouseEvent } from "react";
 import type { Schemas, TicketSummary } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
 import { shortAgo } from "@/lib/format";
@@ -112,7 +112,7 @@ export function TicketRow({
       <span className="flex min-w-0 flex-1 items-center gap-2">
         {/* Stretched link: the whole row opens the ticket. */}
         <Link href={`/tickets/${t.key}`} className="truncate font-medium text-fg after:absolute after:inset-0 hover:text-fg">
-          {t.title}
+          <ViewTransition name={`ticket-title-${t.key}`} share="auto" default="none"><span>{t.title}</span></ViewTransition>
         </Link>
         {isBlocked(t) && <Flag tone="human">{compact ? "Blocked" : `Blocked · ${t.unmet_dependencies}`}</Flag>}
         {!compact && t.assignee && t.status === "todo" && <Flag tone="neutral">Assigned</Flag>}

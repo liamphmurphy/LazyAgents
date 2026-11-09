@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tooltip } from "radix-ui";
+import { useEntrances } from "@/components/ui/motion";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import {
   chatKeys,
@@ -107,7 +108,7 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
   const mine = m.role === "user";
   const author = m.persona ? personaLook(m.persona) : persona;
   return (
-    <li ref={self} id={`msg-${m.id}`} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg flex scroll-mt-4 flex-col gap-1 rounded-xl transition-shadow", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-testid={`${m.role}-message`}>
+    <li ref={self} id={`msg-${m.id}`} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg flex scroll-mt-4 flex-col gap-1 rounded-xl transition-shadow", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-enter-key={m.id} data-enter={m.role} data-testid={`${m.role}-message`}>
       {mine ? (
         <span className="flex items-center gap-1.5 text-xs text-fg-tertiary">
           {m.author?.avatar_url && <HumanAvatar name={m.author.name} initials={m.author.initials} color={m.author.avatar_color} src={m.author.avatar_url} size={18} label={false} />}
@@ -317,6 +318,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     ...(effortPending ? { effort: effort ?? ("default" as const) } : {}),
   };
   const list = messages.data?.messages;
+  useEntrances(log);
   const lastUser = list?.findLast((m) => m.role === "user");
   // The running turn starts after the newest message, which may be a reply, not
   // the person's: a persona handing on, or the image follow-up.

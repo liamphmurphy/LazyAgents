@@ -13,6 +13,7 @@ import { Segmented } from "@/components/ui/controls";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Kbd, Skeleton } from "@/components/ui/primitives";
+import { useMotionList } from "@/components/ui/motion";
 import { cx } from "@/lib/cx";
 import { duration } from "@/lib/format";
 import { KIND, groupItems, isOpen, longWait, nextSelection, step, waited, type Sort, type View } from "@/lib/inbox";
@@ -36,7 +37,7 @@ function isTyping(el: EventTarget | null) {
 function Row({ item, selected, sent, onSelect }: { item: Item; selected: boolean; sent: boolean; onSelect: () => void }) {
   const kind = KIND[item.kind] ?? { label: item.kind, tone: "info" };
   return (
-    <li>
+    <li data-motion-key={item.id}>
       <button
         type="button"
         data-inbox-row={item.id}
@@ -182,6 +183,8 @@ export function InboxScreen() {
   };
   const backToList = () => current && focusRow(current);
   const actions = useRef<PaneActions>({});
+  const rows = useRef<HTMLDivElement>(null);
+  useMotionList(rows);
   const register = useCallback((a: PaneActions) => {
     actions.current = a;
   }, []);
@@ -312,7 +315,7 @@ export function InboxScreen() {
               </div>
             )
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div ref={rows} key={`${view}:${project}`} className="relative min-h-0 flex-1 overflow-y-auto">
               {groups.map((g) => (
                 <div key={g.key} role="group" aria-label={g.label}>
                   <h2 className="flex h-[33px] items-center gap-2 bg-surface-sunken px-5 text-xs font-medium text-fg-secondary">

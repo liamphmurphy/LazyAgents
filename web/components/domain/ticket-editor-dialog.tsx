@@ -42,7 +42,7 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) close(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
           aria-describedby="ticket-editor-desc"
           onCloseAutoFocus={(e) => {
@@ -51,7 +51,7 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
             if (opener?.isConnected && opener !== document.body) opener.focus();
             else document.querySelector<HTMLElement>(`[data-ticket-key="${CSS.escape(ticketKey)}"]`)?.focus();
           }}
-          className="fixed left-1/2 top-[6vh] z-50 flex max-h-[88vh] w-[min(720px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
+          className="motion-dialog fixed left-1/2 top-[6vh] z-50 flex max-h-[88vh] w-[min(720px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
         >
           <div className="border-b border-border-subtle px-[18px] py-3.5">
             <Dialog.Title className="type-heading">Edit <span className="font-mono">{ticketKey}</span></Dialog.Title>
