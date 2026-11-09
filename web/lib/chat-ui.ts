@@ -339,6 +339,12 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("web", "checking your saved links");
     case "propose_persona":
       return status("memory", "sketching a new persona");
+    case "create_space":
+      return status("thinking", "setting up a space");
+    case "create_scheduled_task":
+      return status("workflow", "scheduling a task");
+    case "create_learning_module":
+      return status("wiki", "starting a learning module");
     case "submit_research_report":
       return status("wiki", "writing up its research");
     case "get_video_transcript":
@@ -518,6 +524,12 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return named("Creating", o.prompt);
     case "propose_persona":
       return named("Sketching", o.name);
+    case "create_space":
+      return named("Setting up", o.name);
+    case "create_scheduled_task":
+      return named("Scheduling", o.name);
+    case "create_learning_module":
+      return named("Starting a module on", o.topic);
     case "get_run":
       return known(o.id) ? `Checking ${known(o.id)}` : general;
     case "list_runs":

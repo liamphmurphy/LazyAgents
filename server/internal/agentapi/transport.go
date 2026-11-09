@@ -198,7 +198,7 @@ var subagentTools = []string{"get_ticket", "read_artifact", "create_artifact", "
 // leadHidden are the tools a managed ticket run never needs: usage is reported
 // by the runner, the ticket is already assigned, and personal memory belongs
 // to chats with a person.
-var leadHidden = []string{"submit_outline", "submit_lesson", "submit_review", "submit_workflow_output", "list_workflows", "read_workflow", "propose_workflow_edit", "submit_findings", "submit_research_report", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply"}
+var leadHidden = []string{"submit_outline", "submit_lesson", "submit_review", "submit_workflow_output", "list_workflows", "read_workflow", "propose_workflow_edit", "submit_findings", "submit_research_report", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "list_runs", "get_run", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "create_space", "create_scheduled_task", "create_learning_module"}
 
 // profileFor must stay consistent with the checks in define().
 func profileFor(run store.Run) string {
