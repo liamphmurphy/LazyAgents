@@ -196,9 +196,8 @@ export function AttachmentChips({ attachments }: { attachments: Attachments }) {
   );
 }
 
-/** Files on a sent message, each a link to its download. */
-export function SentAttachments({ attachments, align = "end" }: { attachments?: Attachment[]; align?: "start" | "end" }) {
-  if (!attachments?.length) return null;
+/** Non-image files on a message, each a link to its download. */
+function FileChips({ attachments, align }: { attachments: Attachment[]; align: "start" | "end" }) {
   return (
     <ul aria-label="Attachments" className={cx("flex flex-wrap gap-1", align === "end" && "justify-end")} data-testid="sent-attachments">
       {attachments.map((a) => (
@@ -219,16 +218,24 @@ export function SentAttachments({ attachments, align = "end" }: { attachments?: 
   );
 }
 
-/** A generated image as a thumbnail; a click opens the full image with a Download action. */
-function ImageThumb({ a }: { a: Attachment }) {
+/** An image as a thumbnail; a click opens the full image with a Download action. */
+function ImageThumb({ a, compact }: { a: Attachment; compact?: boolean }) {
   const url = chatAttachmentUrl(a.id);
   return (
     <Dialog.Root>
       <Dialog.Trigger asChild>
-        <button type="button" aria-label={`Open ${a.filename}`} data-testid="generated-image" className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <button type="button" aria-label={`Open ${a.filename}`} data-testid="image-attachment" className="cursor-zoom-in rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-accent">
           {/* A same-origin, private URL: next/image would only add a proxy hop. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt={a.filename} loading="lazy" className="max-h-80 w-auto max-w-[min(480px,100%)] rounded-lg border border-border object-contain" />
+          <img
+            src={url}
+            alt={a.filename}
+            loading="lazy"
+            className={cx(
+              "w-auto rounded-lg border border-border object-contain",
+              compact ? "max-h-48 max-w-[min(320px,100%)]" : "max-h-80 max-w-[min(480px,100%)]",
+            )}
+          />
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -261,25 +268,35 @@ function ImageThumb({ a }: { a: Attachment }) {
   );
 }
 
-/** Files on an assistant reply: generated images inline, anything else as a download chip. */
-export function ReplyAttachments({ attachments }: { attachments?: Attachment[] }) {
+/** Images inline (click to preview and download), anything else as a download chip. */
+function MessageAttachments({ attachments, align, label, testId }: { attachments?: Attachment[]; align: "start" | "end"; label: string; testId: string }) {
   if (!attachments?.length) return null;
   const images = attachments.filter((a) => isImageType(a.content_type));
   const files = attachments.filter((a) => !isImageType(a.content_type));
   return (
-    <div className="flex max-w-full flex-col items-start gap-2" data-testid="reply-attachments">
+    <div className={cx("flex max-w-full flex-col gap-2", align === "end" ? "items-end" : "items-start")} data-testid={testId}>
       {images.length > 0 && (
-        <ul aria-label="Generated images" className="flex flex-wrap gap-2">
+        <ul aria-label={label} className={cx("flex flex-wrap gap-2", align === "end" && "justify-end")}>
           {images.map((a) => (
             <li key={a.id}>
-              <ImageThumb a={a} />
+              <ImageThumb a={a} compact={align === "end"} />
             </li>
           ))}
         </ul>
       )}
-      {files.length > 0 && <SentAttachments attachments={files} align="start" />}
+      {files.length > 0 && <FileChips attachments={files} align={align} />}
     </div>
   );
+}
+
+/** Files on the person's own message: attached or pasted images inline, the rest as chips. */
+export function SentAttachments({ attachments }: { attachments?: Attachment[] }) {
+  return <MessageAttachments attachments={attachments} align="end" label="Attached images" testId="message-attachments" />;
+}
+
+/** Files on an assistant reply: generated images inline, anything else as a download chip. */
+export function ReplyAttachments({ attachments }: { attachments?: Attachment[] }) {
+  return <MessageAttachments attachments={attachments} align="start" label="Generated images" testId="reply-attachments" />;
 }
 
 /**

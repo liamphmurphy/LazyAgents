@@ -263,6 +263,17 @@ test("pasted images preview above the composer and go with the message", async (
   await expect(page.getByTestId("assistant-message").first()).toContainText("Echo: what is this?");
   expect(mock.posted.at(-1)?.body.attachment_ids).toHaveLength(1);
   await expect(previews).toHaveCount(0);
+
+  // The sent image shows in the message, and a click opens it with a Download link.
+  const sent = page.getByTestId("message-attachments").getByTestId("image-attachment");
+  await expect(sent).toHaveCount(1);
+  await expect(sent.locator("img")).toHaveAttribute("src", "/api/v1/chat-attachments/att-1/content");
+  await sent.click();
+  const dialog = page.getByRole("dialog", { name: "att-1.png" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "Download" })).toHaveAttribute("download", "att-1.png");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 });
 
 test("a rejected attachment shows the server error and keeps the chips", async ({ page }) => {
