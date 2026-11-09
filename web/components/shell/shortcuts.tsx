@@ -32,10 +32,10 @@ export function ShortcutsDialog() {
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-50 bg-scrim" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-[12vh] z-50 flex max-h-[80vh] w-[600px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border-float bg-surface-raised shadow-xl outline-none"
+          className="motion-dialog fixed left-1/2 top-[12vh] z-50 flex max-h-[80vh] w-[600px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border-float bg-surface-raised shadow-xl outline-none"
         >
           <div className="flex items-center border-b border-border px-6 py-3">
             <Dialog.Title className="flex-1 text-base font-semibold">Keyboard shortcuts</Dialog.Title>

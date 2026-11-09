@@ -570,10 +570,10 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
   return (
     <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-[4vh] z-50 flex max-h-[92vh] w-[min(860px,calc(100%-32px))] -translate-x-1/2 flex-col rounded-xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
+          className="motion-dialog fixed left-1/2 top-[4vh] z-50 flex max-h-[92vh] w-[min(860px,calc(100%-32px))] -translate-x-1/2 flex-col rounded-xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
         >
           <form onSubmit={save} className="flex min-h-0 flex-1 flex-col" aria-label={saved ? `Edit ${saved.name}` : "New persona"}>
             <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-4">

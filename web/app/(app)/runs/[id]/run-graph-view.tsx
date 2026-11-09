@@ -9,6 +9,7 @@ import { buildRunGraph, type GraphDetail, type GraphNode, type NodeStatus } from
 import { layoutRunGraph, moveFrom, type BranchItem, type Column, type GroupItem, type MainItem } from "@/lib/run-graph-layout";
 import { finalMessage, turnByEvent } from "@/lib/run-view";
 import { Button } from "@/components/ui/button";
+import { usePulseList } from "@/components/ui/motion";
 import { ACTION_BOX_ID } from "./run-panels";
 
 type RunDetail = Schemas["RunDetail"];
@@ -124,6 +125,8 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
       refs.current.get(target)?.focus();
     }
   };
+  const nodes = useRef<HTMLElement>(null);
+  usePulseList(nodes);
   const nodeButton = (item: Item, className: string, style?: CSSProperties, inList = false): ReactNode => {
     const l = labels(item);
     const isSel = selected === item.id;
@@ -134,6 +137,8 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
         key={item.id}
         type="button"
         data-node-id={item.id}
+        data-pulse-id={item.id}
+        data-pulse={l.status}
         ref={inList ? undefined : (el) => { if (el) refs.current.set(item.id, el); else refs.current.delete(item.id); }}
         aria-label={ariaName(item)}
         aria-pressed={item.kind === "node" ? isSel : undefined}
@@ -143,7 +148,7 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
         onDoubleClick={() => activate(item)}
         onKeyDown={(e) => keyDown(e, item)}
         className={cx(
-          "text-left text-xs focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent",
+          "text-left text-xs transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent",
           className,
           !gate && "rounded-lg border px-2.5 py-1.5",
           !gate && TONE[l.status],
@@ -193,7 +198,7 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
   const sel = selected ? findItem(layout.columns, selected) : undefined;
 
   return (
-    <section aria-label="Run graph" className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-4 lg:flex-row">
+    <section ref={nodes} aria-label="Run graph" className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-4 lg:flex-row">
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <p className="mr-auto text-xs text-fg-secondary">Turns left to right · subagent runs below the turn that delegated them</p>

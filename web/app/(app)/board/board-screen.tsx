@@ -17,6 +17,7 @@ import { floatPanel } from "@/components/domain/pickers";
 import { EpicCompletion } from "@/components/domain/epic-completion";
 import { TicketEditorDialog } from "@/components/domain/ticket-editor-dialog";
 import { DependencyMap } from "@/components/domain/dependency-map";
+import { useMotionList } from "@/components/ui/motion";
 
 const selectClass = "h-8 max-w-52 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg";
 
@@ -109,6 +110,10 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
   const query = useBoard(project, filters);
   const moves = useBoardMoves();
   const dragging = useRef<string | null>(null);
+  const columns = useRef<HTMLDivElement>(null);
+  // Dropped cards are already under the pointer; only the others need to glide.
+  const landing = useRef<string | null>(null);
+  useMotionList(columns, landing);
   const [over, setOver] = useState<BoardStatus>();
   const statuses = filters.include_canceled ? [...BOARD_STATUSES, "canceled" as const] : BOARD_STATUSES;
   const moved = query.data && withBoardMoves(query.data, Object.values(moves.pending));
@@ -123,11 +128,11 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
       {query.isPending && <p role="status" className="text-sm text-fg-secondary">Loading board…</p>}
       {query.isError && <div role="alert" className="mb-4 text-sm">Couldn&apos;t load board: {query.error.message} <button type="button" onClick={() => void query.refetch()} className="underline">Retry</button></div>}
       {board?.epic && <EpicHeader summary={board.epic} />}
-      {board && <div aria-label="Board columns" className="flex min-h-[calc(100dvh-240px)] gap-2 overflow-x-auto pb-3">
+      {board && <div ref={columns} aria-label="Board columns" className="relative flex min-h-[calc(100dvh-240px)] gap-2 overflow-x-auto pb-3">
         {statuses.map((status) => {
           const column = board.columns.find((c) => c.status === status);
           return <section key={status} aria-label={STATUS_NAME[status]} data-testid={`column-${status}`}
-            className={cx("min-w-[220px] flex-1 rounded-lg border p-2", over === status ? "border-accent bg-accent-soft" : "border-transparent bg-surface-sunken")}
+            className={cx("min-w-[220px] flex-1 rounded-lg border p-2 transition-colors duration-150", over === status ? "border-accent bg-accent-soft" : "border-transparent bg-surface-sunken")}
             onDragOver={(e) => { if (dragging.current) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(status); } }}
             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(undefined); }}
             onDrop={(e) => {
@@ -136,6 +141,7 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
               dragging.current = null;
               setOver(undefined);
               const card = query.data?.columns.flatMap((c) => c.cards).find((c) => c.key === key);
+              if (card && card.status !== status) landing.current = card.key;
               if (card) void moves.move(card, status);
             }}>
             <header className="mb-3 flex items-center gap-2 px-1 pt-1 text-xs">
@@ -163,7 +169,7 @@ function ConflictToast({ ticket, message, onDismiss }: { ticket: string; message
     const timer = setTimeout(onDismiss, 6000);
     return () => clearTimeout(timer);
   }, [ticket, message, onDismiss]);
-  return <div role="alert" aria-label="Move conflict" className="fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-4 rounded-lg border border-border-float bg-surface-raised p-3 text-sm shadow-lg">
+  return <div role="alert" aria-label="Move conflict" className="motion-rise fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-4 rounded-lg border border-border-float bg-surface-raised p-3 text-sm shadow-lg">
     <div>
       <p className="font-semibold">{ticket} changed elsewhere</p>
       <p className="text-xs text-fg-secondary">Board refreshed. Review it and try again. ({message})</p>
@@ -176,16 +182,17 @@ function TicketCard({ card, statuses, pending, onOpen, onMove, onDragStart, onDr
   card: BoardCard; statuses: BoardStatus[]; pending: boolean; onOpen: () => void; onMove: (status: BoardStatus) => void; onDragStart: () => void; onDragEnd: () => void;
 }) {
   const [menu, setMenu] = useState(false);
+  const [lifted, setLifted] = useState(false);
   const href = `/tickets/${encodeURIComponent(card.key)}`;
   // Plain clicks open the editor; modified clicks keep normal link behavior.
   const open = (e: MouseEvent) => { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); onOpen(); };
-  return <article tabIndex={0} data-ticket-key={card.key} aria-label={`Ticket ${card.key}`} aria-busy={pending} draggable={!pending}
-    onDragStart={(e) => { e.dataTransfer.setData("text/plain", card.key); e.dataTransfer.effectAllowed = "move"; onDragStart(); }} onDragEnd={onDragEnd}
+  return <article tabIndex={0} data-ticket-key={card.key} data-motion-key={card.key} aria-label={`Ticket ${card.key}`} aria-busy={pending} draggable={!pending}
+    onDragStart={(e) => { e.dataTransfer.setData("text/plain", card.key); e.dataTransfer.effectAllowed = "move"; onDragStart(); requestAnimationFrame(() => setLifted(true)); /* After the browser captures the drag image. */ }} onDragEnd={() => { setLifted(false); onDragEnd(); }}
     onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button,[role=menu]")) onOpen(); }}
     onKeyDown={(e) => { if (e.target === e.currentTarget && !pending) {
       if (e.key === "Enter") { e.preventDefault(); onOpen(); } else if (e.key === " ") { e.preventDefault(); setMenu(true); }
     } }}
-    className={cx("rounded-md border border-border bg-surface p-3 shadow-sm outline-offset-2", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
+    className={cx("rounded-md border border-border bg-surface p-3 shadow-sm outline-offset-2 transition-[opacity,scale] duration-150", lifted && "scale-[0.98] opacity-40", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
     <div className="mb-2 flex items-start justify-between gap-1 text-[11px]">
       <Link href={href} onClick={open} className="font-mono text-fg-tertiary hover:text-fg">{card.key}</Link>
       {card.unmet_dependencies > 0 && <span className="rounded-full bg-accent-soft px-1.5 text-state-blocked" title={`${card.unmet_dependencies} open blockers`}>⛔ Blocked</span>}

@@ -11,7 +11,7 @@ import { PRIORITY_NAME, PRIORITY_ORDER, STATUS_NAME, STATUS_ORDER } from "./meta
 
 // Floating UI: raised surface + float border + shadow (DESIGN.md §1).
 export const floatPanel =
-  "z-50 rounded-xl border border-border-float bg-surface-raised p-1 text-[13px] text-fg shadow-[var(--shadow-float)] outline-none";
+  "motion-float z-50 rounded-xl border border-border-float bg-surface-raised p-1 text-[13px] text-fg shadow-[var(--shadow-float)] outline-none";
 const item =
   "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
 

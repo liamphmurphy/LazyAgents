@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSelectedLayoutSegment } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
 import { useBootstrap, useRunnerStatus } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/primitives";
@@ -59,6 +59,17 @@ function SidebarSkeleton() {
   );
 }
 
+const PAGE = "flex min-h-0 min-w-0 flex-1 flex-col";
+
+/**
+ * Fades in a new section; navigation within one stays instant. CSS rather than <ViewTransition>:
+ * a view transition around the page drops clicks and shortcuts made while it plays.
+ */
+function SectionFade({ children }: { children: ReactNode }) {
+  const section = useSelectedLayoutSegment();
+  return <div key={section} className={`motion-page ${PAGE}`}>{children}</div>;
+}
+
 /**
  * Wrapping flex row: below ~800px the sidebar stacks above the content
  * (DESIGN.md §3 Responsive).
@@ -93,7 +104,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
       <main className="flex min-w-0 flex-[999_1_560px] flex-col">
         <SystemBanner />
-        {children}
+        {/* The segment needs a Suspense boundary for prerendering; the page still paints meanwhile. */}
+        <Suspense fallback={<div className={PAGE}>{children}</div>}>
+          <SectionFade>{children}</SectionFade>
+        </Suspense>
       </main>
     </div>
   );

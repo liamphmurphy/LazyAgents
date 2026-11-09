@@ -100,7 +100,7 @@ export function AddContext({ onPick, onClosed, disabled }: { onPick: (t: LinkTar
             e.preventDefault();
             onClosed?.();
           }}
-          className="z-50 flex w-80 flex-col gap-1 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)] outline-none">
+          className="motion-float z-50 flex w-80 flex-col gap-1 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)] outline-none">
           <input
             role="combobox"
             aria-label="Search pages, artifacts and tickets"
