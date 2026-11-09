@@ -159,11 +159,11 @@ func TestResearchRunsThroughToAReport(t *testing.T) {
 	report := runs.ResearchReport{BottomLine: "Use Kokoro.", KeyFindings: []runs.ResearchKeyFinding{{Text: "Fast", Sources: []int{1}}},
 		Sources: []runs.ResearchNumberedSource{{N: 1, Title: "Repo", URL: "https://github.com/hexgrad/kokoro"}}, BodyMD: "# Report\n\nFast [1].\n"}
 	caller := agents.Caller{Agent: agent}
-	if _, err := e.runs.SaveResearchReport(ctx, caller, uuid.MustParse(chat), key, report); err == nil {
+	if _, _, err := e.runs.SaveResearchReport(ctx, caller, uuid.MustParse(chat), key, report); err == nil {
 		t.Fatal("accepted a report without the required sections")
 	}
 	report.BodyMD += "\n## Where sources disagree\nNothing.\n\n## Not covered\nPricing.\n"
-	if _, err := e.runs.SaveResearchReport(ctx, caller, uuid.MustParse(chat), key, report); err != nil {
+	if _, _, err := e.runs.SaveResearchReport(ctx, caller, uuid.MustParse(chat), key, report); err != nil {
 		t.Fatal(err)
 	}
 	j = e.job(t, chat)
@@ -251,5 +251,62 @@ func TestResearchRunsQueueBehindOtherWork(t *testing.T) {
 	}
 	if claimed.ID.String() != other || claimed.ID == ids[0] {
 		t.Fatalf("claimed %s, want the chat run %s", claimed.ID, other)
+	}
+}
+
+// A report written in a space's chat joins the space's sources.
+func TestResearchReportInASpaceBecomesASource(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := t.Context()
+	space := e.want("POST", "/chat-spaces", map[string]any{"name": "Voice", "project": "PAY"}, http.StatusCreated)["id"].(string)
+	chat := e.newChat(map[string]any{"space_id": space})["id"].(string)
+	job := e.want("POST", "/chats/"+chat+"/research", planBody(e.planMessage(t, chat), nil), http.StatusCreated)["id"].(string)
+	ids := e.researchRuns(t, job)
+	if _, err := e.runs.SubmitResearchFindings(ctx, ids[0], oneFinding); err != nil {
+		t.Fatal(err)
+	}
+	e.setRunState(t, ids[0], "completed")
+	e.setRunState(t, ids[1], "completed")
+	if err := e.runs.AdvanceResearch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var prompt string
+	if err := e.pool.QueryRow(ctx, `SELECT t.input_message FROM run_turns t JOIN chat_sessions c ON c.current_run_id = t.run_id WHERE c.id = $1 ORDER BY t.seq DESC LIMIT 1`, chat).Scan(&prompt); err != nil {
+		t.Fatal(err)
+	}
+	if indexOf(prompt, `in the space "Voice"`) < 0 {
+		t.Fatalf("write-up prompt doesn't mention the space: %q", prompt)
+	}
+
+	agent, err := agents.EnsureAssistant(ctx, e.q, e.me.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := runs.ResearchReport{BottomLine: "Use Kokoro.", KeyFindings: []runs.ResearchKeyFinding{{Text: "Fast", Sources: []int{1}}},
+		Sources: []runs.ResearchNumberedSource{{N: 1, Title: "Repo [main]", URL: "https://github.com/hexgrad/kokoro"}},
+		BodyMD:  "Fast [1].\n\n## Where sources disagree\nNothing.\n\n## Not covered\nPricing.\n"}
+	_, rs, err := e.runs.SaveResearchReport(ctx, agents.Caller{Agent: agent}, uuid.MustParse(chat), "PAY", report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rs.Space != "Voice" || !rs.Added {
+		t.Fatalf("report space %+v", rs)
+	}
+	list := e.want("GET", "/chat-spaces/"+space+"/sources", nil, http.StatusOK)["sources"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("sources %v", list)
+	}
+	src := list[0].(map[string]any)
+	if src["kind"] != "research" || src["title"] != "Local TTS" || src["chat_id"] != chat || src["delivery"] != "inline" {
+		t.Fatalf("source %v", src)
+	}
+	var body string
+	if err := e.pool.QueryRow(ctx, `SELECT body FROM chat_space_sources WHERE id = $1`, src["id"]).Scan(&body); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"# Local TTS", "**Bottom line:** Use Kokoro.", "Fast [1].", "## Sources", `1. [Repo \[main\]](https://github.com/hexgrad/kokoro)`} {
+		if indexOf(body, want) < 0 {
+			t.Errorf("source body lacks %q:\n%s", want, body)
+		}
 	}
 }

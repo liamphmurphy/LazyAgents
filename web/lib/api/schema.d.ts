@@ -3517,8 +3517,11 @@ export interface components {
             connector_ids?: string[];
             space_memory?: boolean;
         };
-        /** @enum {string} */
-        ChatSpaceSourceKind: "file" | "text" | "website" | "library" | "link" | "canvas";
+        /**
+         * @description research: a deep research report written in one of the space's chats, added when it was saved
+         * @enum {string}
+         */
+        ChatSpaceSourceKind: "file" | "text" | "website" | "library" | "link" | "canvas" | "research";
         ChatSpaceSource: {
             /** Format: uuid */
             id: string;
@@ -3527,6 +3530,11 @@ export interface components {
             /** @description For a web page or saved link: where it was read from */
             url?: string;
             filename?: string;
+            /**
+             * Format: uuid
+             * @description For a research report: the chat it was written in, while that chat exists
+             */
+            chat_id?: string;
             content_type?: string;
             /** Format: int64 */
             size_bytes: number;

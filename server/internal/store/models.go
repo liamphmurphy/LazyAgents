@@ -309,18 +309,20 @@ type ChatSpace struct {
 }
 
 type ChatSpaceSource struct {
-	ID          uuid.UUID
-	SpaceID     uuid.UUID
-	Kind        string
-	Title       string
-	Url         *string
-	Body        string
-	Filename    *string
-	ContentType string
-	SizeBytes   int64
-	BlobKey     *string
-	Tokens      int32
-	CreatedAt   time.Time
+	ID            uuid.UUID
+	SpaceID       uuid.UUID
+	Kind          string
+	Title         string
+	Url           *string
+	Body          string
+	Filename      *string
+	ContentType   string
+	SizeBytes     int64
+	BlobKey       *string
+	Tokens        int32
+	CreatedAt     time.Time
+	ResearchJobID *uuid.UUID
+	ChatID        *uuid.UUID
 }
 
 type ChatSuggestion struct {

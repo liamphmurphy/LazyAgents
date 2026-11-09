@@ -197,7 +197,7 @@ func (q *Queries) CreateChatSpace(ctx context.Context, arg CreateChatSpaceParams
 const createChatSpaceSource = `-- name: CreateChatSpaceSource :one
 INSERT INTO chat_space_sources (space_id, kind, title, url, body, filename, content_type, size_bytes, blob_key, tokens)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, space_id, kind, title, url, body, filename, content_type, size_bytes, blob_key, tokens, created_at
+RETURNING id, space_id, kind, title, url, body, filename, content_type, size_bytes, blob_key, tokens, created_at, research_job_id, chat_id
 `
 
 type CreateChatSpaceSourceParams struct {
@@ -240,6 +240,56 @@ func (q *Queries) CreateChatSpaceSource(ctx context.Context, arg CreateChatSpace
 		&i.BlobKey,
 		&i.Tokens,
 		&i.CreatedAt,
+		&i.ResearchJobID,
+		&i.ChatID,
+	)
+	return i, err
+}
+
+const createResearchSpaceSource = `-- name: CreateResearchSpaceSource :one
+INSERT INTO chat_space_sources (space_id, kind, title, body, content_type, size_bytes, tokens, research_job_id, chat_id)
+VALUES ($1, 'research', $2, $3, 'text/markdown', $4, $5, $6, $7)
+ON CONFLICT (research_job_id) DO NOTHING
+RETURNING id, space_id, kind, title, url, body, filename, content_type, size_bytes, blob_key, tokens, created_at, research_job_id, chat_id
+`
+
+type CreateResearchSpaceSourceParams struct {
+	SpaceID       uuid.UUID
+	Title         string
+	Body          string
+	SizeBytes     int64
+	Tokens        int32
+	ResearchJobID *uuid.UUID
+	ChatID        *uuid.UUID
+}
+
+// A research report as a source. A report already added is left alone.
+func (q *Queries) CreateResearchSpaceSource(ctx context.Context, arg CreateResearchSpaceSourceParams) (ChatSpaceSource, error) {
+	row := q.db.QueryRow(ctx, createResearchSpaceSource,
+		arg.SpaceID,
+		arg.Title,
+		arg.Body,
+		arg.SizeBytes,
+		arg.Tokens,
+		arg.ResearchJobID,
+		arg.ChatID,
+	)
+	var i ChatSpaceSource
+	err := row.Scan(
+		&i.ID,
+		&i.SpaceID,
+		&i.Kind,
+		&i.Title,
+		&i.Url,
+		&i.Body,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.Tokens,
+		&i.CreatedAt,
+		&i.ResearchJobID,
+		&i.ChatID,
 	)
 	return i, err
 }
@@ -280,7 +330,7 @@ func (q *Queries) DeleteChatSpace(ctx context.Context, arg DeleteChatSpaceParams
 }
 
 const deleteChatSpaceSource = `-- name: DeleteChatSpaceSource :one
-DELETE FROM chat_space_sources WHERE id = $1 AND space_id = $2 RETURNING id, space_id, kind, title, url, body, filename, content_type, size_bytes, blob_key, tokens, created_at
+DELETE FROM chat_space_sources WHERE id = $1 AND space_id = $2 RETURNING id, space_id, kind, title, url, body, filename, content_type, size_bytes, blob_key, tokens, created_at, research_job_id, chat_id
 `
 
 type DeleteChatSpaceSourceParams struct {
@@ -304,6 +354,8 @@ func (q *Queries) DeleteChatSpaceSource(ctx context.Context, arg DeleteChatSpace
 		&i.BlobKey,
 		&i.Tokens,
 		&i.CreatedAt,
+		&i.ResearchJobID,
+		&i.ChatID,
 	)
 	return i, err
 }
@@ -399,7 +451,7 @@ func (q *Queries) GetUserCanvas(ctx context.Context, arg GetUserCanvasParams) (G
 }
 
 const listChatSpaceSources = `-- name: ListChatSpaceSources :many
-SELECT id, space_id, kind, title, url, body, filename, content_type, size_bytes, blob_key, tokens, created_at FROM chat_space_sources WHERE space_id = $1 ORDER BY created_at, id
+SELECT id, space_id, kind, title, url, body, filename, content_type, size_bytes, blob_key, tokens, created_at, research_job_id, chat_id FROM chat_space_sources WHERE space_id = $1 ORDER BY created_at, id
 `
 
 // Oldest first: the order the inline budget is filled in.
@@ -425,6 +477,8 @@ func (q *Queries) ListChatSpaceSources(ctx context.Context, spaceID uuid.UUID) (
 			&i.BlobKey,
 			&i.Tokens,
 			&i.CreatedAt,
+			&i.ResearchJobID,
+			&i.ChatID,
 		); err != nil {
 			return nil, err
 		}

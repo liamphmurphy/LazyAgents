@@ -57,6 +57,13 @@ INSERT INTO chat_space_sources (space_id, kind, title, url, body, filename, cont
 VALUES (@space_id, @kind, @title, sqlc.narg(url), @body, sqlc.narg(filename), @content_type, @size_bytes, sqlc.narg(blob_key), @tokens)
 RETURNING *;
 
+-- name: CreateResearchSpaceSource :one
+-- A research report as a source. A report already added is left alone.
+INSERT INTO chat_space_sources (space_id, kind, title, body, content_type, size_bytes, tokens, research_job_id, chat_id)
+VALUES (@space_id, 'research', @title, @body, 'text/markdown', @size_bytes, @tokens, @research_job_id, @chat_id)
+ON CONFLICT (research_job_id) DO NOTHING
+RETURNING *;
+
 -- name: ListChatSpaceSources :many
 -- Oldest first: the order the inline budget is filled in.
 SELECT * FROM chat_space_sources WHERE space_id = @space_id ORDER BY created_at, id;

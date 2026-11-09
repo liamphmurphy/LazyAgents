@@ -2,6 +2,7 @@ package agentapi
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
@@ -31,9 +32,17 @@ func submitResearchReport(ctx context.Context, d Deps, c agents.Caller, in runs.
 	if s == nil {
 		return nil, apperr.Conflict("submit_research_report only works in a chat with a person")
 	}
-	job, err := d.Runs.SaveResearchReport(ctx, c, s.ChatID, s.ProjectKey, in)
+	job, sp, err := d.Runs.SaveResearchReport(ctx, c, s.ChatID, s.ProjectKey, in)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"saved": true, "artifact_id": job.ReportArtifactID}, nil
+	out := map[string]any{"saved": true, "artifact_id": job.ReportArtifactID}
+	switch {
+	case sp.Space == "":
+	case sp.Added:
+		out["space_source"] = fmt.Sprintf("Added to the sources of the space %q.", sp.Space)
+	default:
+		out["space_source"] = fmt.Sprintf("Not added to the space %q: %s. Tell the person.", sp.Space, sp.Reason)
+	}
+	return out, nil
 }
