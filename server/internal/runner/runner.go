@@ -863,7 +863,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	log := r.Log.With("run", c.run.ID, "ticket", c.ticket.Key, "turn", turn.Seq)
 	if c.run.State != "running" {
 		if c.run.Purpose == "chat" && c.run.State == "paused" {
-			r.finishChatTurn(ctx, c, turn, harness.Result{}, 130, nil, nil, nil, chatImages{})
+			r.finishChatTurn(ctx, c, turn, harness.Result{}, 130, nil, nil, chatTurnCode{}, chatImages{})
 			return
 		}
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
@@ -1229,7 +1229,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 				return // shutting down: the turn re-runs on the next runner start
 			}
 			changes := r.chatCodeChanges(ctx, c, codeBase, sensitive, res, code, waitErr)
-			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey, changes, images)
+			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey, chatTurnCode{changes: changes, branches: r.chatPushedBranches(ctx, c)}, images)
 		}
 		return
 	}

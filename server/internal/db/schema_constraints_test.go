@@ -107,10 +107,11 @@ func TestChatCodeAndAttachmentConstraints(t *testing.T) {
 		t.Fatalf("attachment source defaults to %q, want upload", source)
 	}
 	rejects(t, f.pool, map[string]string{
-		"repo without branch": `UPDATE chat_sessions SET repo_url='https://github.com/a/b' WHERE id=$1 AND $2::uuid IS NOT NULL`,
-		"branch without repo": `UPDATE chat_sessions SET work_branch='vesper/x-1' WHERE id=$1 AND $2::uuid IS NOT NULL`,
+		"branch without repo": `UPDATE chat_sessions SET work_branches='{feat/x}' WHERE id=$1 AND $2::uuid IS NOT NULL`,
 		"unknown source":      `UPDATE chat_attachments SET source='other' WHERE id=$2 AND $1::uuid IS NOT NULL`,
 	}, f.chat, att)
-	mustExec(t, f.pool, `UPDATE chat_sessions SET repo_url='https://github.com/a/b', work_branch='vesper/x-1' WHERE id=$1`, f.chat)
+	// A coding chat has no branch until its persona pushes one.
+	mustExec(t, f.pool, `UPDATE chat_sessions SET repo_url='https://github.com/a/b' WHERE id=$1`, f.chat)
+	mustExec(t, f.pool, `UPDATE chat_sessions SET work_branches='{feat/x,fix/y}' WHERE id=$1`, f.chat)
 	mustExec(t, f.pool, `UPDATE chat_attachments SET source='generated', message_id=$2 WHERE id=$1`, att, msg)
 }
