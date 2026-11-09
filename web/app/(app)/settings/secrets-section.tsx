@@ -20,7 +20,7 @@ type Target = { name: string; project: string; fixedName: boolean };
 const targetKey = (t: Target) => `${t.name}|${t.project}|${t.fixedName}`;
 
 /**
- * Provider secrets (LAZYAGENTS-44). Values are write-only: the API stores them
+ * Provider credentials (LAZYAGENTS-44). Values are write-only: the API stores them
  * encrypted and returns names, scopes and timestamps only, never any part of a
  * value. The value input clears after saving and nothing is echoed back.
  */
@@ -37,7 +37,7 @@ export function SecretsSection() {
 
   if (list.isPending) {
     return (
-      <div aria-label="Loading provider secrets" className="space-y-3">
+      <div aria-label="Loading provider credentials" className="space-y-3">
         <Skeleton className="h-14" />
         <Skeleton className="h-48" />
       </div>
@@ -45,7 +45,7 @@ export function SecretsSection() {
   }
   if (list.isError) {
     return (
-      <Banner tone="blocked" title="Couldn’t load provider secrets" actions={<Button variant="outline" onClick={() => void list.refetch()}>Retry</Button>}>
+      <Banner tone="blocked" title="Couldn’t load provider credentials" actions={<Button variant="outline" onClick={() => void list.refetch()}>Retry</Button>}>
         {sentence(list.error.message || "The API is unavailable")} Other sections keep working.
       </Banner>
     );
@@ -66,7 +66,7 @@ export function SecretsSection() {
   return (
     <div className="space-y-4">
       {readOnly && (
-        <Banner tone="human" title="Secrets are read-only until SECRETS_KEY is set">
+        <Banner tone="human" title="Credentials are read-only until SECRETS_KEY is set">
           Add <code>SECRETS_KEY=$(openssl rand -base64 32)</code> to <code>.env</code> and restart the API. Until then runs get no harness keys or git credentials.
         </Banner>
       )}
@@ -105,11 +105,11 @@ export function SecretsSection() {
       </Card>
 
       <Card
-        title="Other secrets"
+        title="Other credentials"
         bodyClassName="p-0"
         action={
           <Button variant="outline" icon="plus" disabled={readOnly} onClick={() => open({ name: "", project: "", fixedName: false })}>
-            Add secret
+            Add credential
           </Button>
         }
       >
@@ -394,7 +394,7 @@ function SecretForm({
         </Field>
         <div className="flex gap-2">
           <Button type="submit" variant="primary" disabled={!name.trim() || !value || set.isPending}>
-            {set.isPending ? "Saving…" : target.fixedName ? "Save key" : "Save secret"}
+            {set.isPending ? "Saving…" : target.fixedName ? "Save key" : "Save credential"}
           </Button>
           <Button variant="ghost" disabled={set.isPending} onClick={onCancel}>
             Cancel

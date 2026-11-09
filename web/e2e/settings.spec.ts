@@ -92,7 +92,7 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
 
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
 
-test("provider secrets show status and unlocks, are write-only, and saving refreshes the model picker", async ({ page }) => {
+test("provider credentials show status and unlocks, are write-only, and saving refreshes the model picker", async ({ page }) => {
   const mock = await installSettingsApi(page);
   await page.goto("/chat?project=WEB");
   await page.getByRole("button", { name: "New conversation" }).first().click();
@@ -130,7 +130,7 @@ test("provider secrets show status and unlocks, are write-only, and saving refre
 
   // Switching from one Replace to another remounts the form with the new name.
   await page.getByRole("button", { name: "Replace db:staging" }).click();
-  await page.getByRole("button", { name: "Add secret" }).click();
+  await page.getByRole("button", { name: "Add credential" }).click();
   const name = page.locator("#secrets").getByLabel("Name", { exact: true });
   await expect(name).toHaveValue("");
   await page.getByRole("button", { name: "Cancel" }).click();
@@ -178,7 +178,7 @@ test("runner backends show current values and what they control", async ({ page 
 test("sections show empty and error states independently", async ({ page }) => {
   await installSettingsApi(page, { runners: false, secretsFail: true });
   await page.goto("/settings");
-  await expect(page.getByRole("alert").filter({ hasText: "Couldn’t load provider secrets" })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Couldn’t load provider credentials" })).toBeVisible();
   await expect(page.locator("#secrets").getByRole("button", { name: "Retry" })).toBeVisible();
   await expect(page.locator("#runners")).toContainText("No runner online");
   await expect(page.locator("#runners")).toContainText("RUNNER_BACKEND = not reported");

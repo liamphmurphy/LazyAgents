@@ -29,7 +29,7 @@ export function SettingsScreen() {
   const activeProjects = boot.data?.projects.filter((p) => !p.archived).length ?? 0;
   const nav: { id: string; label: string; health: Health; badge?: string }[] = [
     { id: "workspace", label: "Workspace", health: !secrets.data ? "unknown" : secrets.data.key_configured ? "ok" : "attention" },
-    { id: "secrets", label: "Provider secrets", health: !secrets.data ? "unknown" : missing || !secrets.data.key_configured ? "attention" : "ok", badge: missing ? `${missing} off` : undefined },
+    { id: "secrets", label: "Provider credentials", health: !secrets.data ? "unknown" : missing || !secrets.data.key_configured ? "attention" : "ok", badge: missing ? `${missing} off` : undefined },
     { id: "projects", label: "Projects", health: !boot.data ? "unknown" : activeProjects ? "ok" : "attention" },
     { id: "runners", label: "Runner backends", health: !runner.data ? "unknown" : runner.data.online ? "ok" : "attention" },
     { id: "overrides", label: "Project overrides", health: "idle" },
@@ -59,7 +59,7 @@ export function SettingsScreen() {
           </Section>
           <Section
             id="secrets"
-            title="Provider secrets"
+            title="Provider credentials"
             lead="Values are write-only. They are stored encrypted, injected only into runs whose scopes allow them, and never shown or returned by the API."
           >
             <SecretsSection />

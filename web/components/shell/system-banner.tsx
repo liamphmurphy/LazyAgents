@@ -29,7 +29,7 @@ export function SystemBanner() {
             ? <>No harness is available: add {harness!.secrets.map((s, i) => <span key={s}>{i > 0 && (i === harness!.secrets.length - 1 ? " or " : ", ")}<code className="font-mono">{s}</code></span>)}.</>
             : `No harness is available${harness!.reasons.length ? `: ${harness!.reasons.join(" · ")}` : ""}.`,
           "/settings#secrets",
-          "Fix in Provider secrets →",
+          "Fix in Provider credentials →",
         ]
       : ["No runner online.", "Dispatched work stays queued.", "/settings#runners", "Runner backends →"];
 
