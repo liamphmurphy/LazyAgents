@@ -40,7 +40,7 @@ type Chat = {
 type Message = {
   id: string; seq: number; role: "user" | "assistant" | "system"; body_md: string;
   harness?: Harness; model?: string; created_at: string;
-  context_refs?: unknown[]; citations?: unknown[]; run_id?: string; code_changes?: unknown[];
+  context_refs?: unknown[]; citations?: unknown[]; run_id?: string; code_changes?: unknown[]; attachments?: unknown[];
 };
 export type MockMemory = {
   id: string; title: string; summary: string; body: string; tags: string[]; type: string;
@@ -639,7 +639,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         if (refs.some((r) => r.key === "OTHER-9")) return fail(err(422, "invalid", "OTHER-9 is not in this chat's project", "context_refs"));
         const interrupted = c.state === "running" ? prompts.get(c.id) : undefined;
         clearTimeout(timers.get(c.id));
-        const user = add(c, "user", text, refs.length ? { context_refs: refs } : {});
+        // Uploads are always PNGs here; the spec names them by id.
+        const attachments = ((b.attachment_ids as string[] | undefined) ?? []).map((id) => ({ id, filename: `${id}.png`, content_type: "image/png", size_bytes: 3 }));
+        const user = add(c, "user", text, { ...(refs.length ? { context_refs: refs } : {}), ...(attachments.length ? { attachments } : {}) });
         const prompt = interrupted === undefined ? text : `${text} (interrupting: ${interrupted})`;
         prompts.set(c.id, prompt);
         c.state = "running";
