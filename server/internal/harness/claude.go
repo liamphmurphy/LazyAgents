@@ -22,6 +22,20 @@ func (ClaudeCode) Name() string { return agentdef.HarnessClaudeCode }
 
 const claudeMCPFile = ".lazyagents/mcp.json"
 
+// claudePrivacyEnv keeps the CLI from sending anything beyond the model
+// requests themselves (names checked against Claude Code 2.1.316). Vesper owns
+// memory, so the CLI's own auto-memory is off too: it would be a second,
+// unsynced store inside the workspace. These are set one by one rather than
+// via CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, which would also stop the
+// autoupdater of a local runner's shared install.
+var claudePrivacyEnv = map[string]string{
+	"DISABLE_TELEMETRY":                   "1", // Statsig usage metrics
+	"DISABLE_ERROR_REPORTING":             "1", // Sentry error reports
+	"DISABLE_BUG_COMMAND":                 "1", // /bug transcript uploads
+	"CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
+	"CLAUDE_CODE_DISABLE_AUTO_MEMORY":     "1",
+}
+
 type mcpEntry struct {
 	Type    string            `json:"type"`
 	URL     string            `json:"url"`
@@ -35,6 +49,9 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		return Invocation{}, err
 	}
 	env[ws.TokenEnv] = ws.Token
+	for k, v := range claudePrivacyEnv {
+		env[k] = v
+	}
 	servers := map[string]mcpEntry{
 		// The run token is written into the (git-excluded) config; it's
 		// revoked when the run ends.
