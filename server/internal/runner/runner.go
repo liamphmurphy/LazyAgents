@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,6 +101,8 @@ type Runner struct {
 	mu     sync.Mutex
 	active int
 	wg     sync.WaitGroup
+	// sweeping keeps Run to one Sweep in flight (Sweep alone owns otherBackend).
+	sweeping atomic.Bool
 	// wtLocks serialises worktree creation, merges and removal per workspace
 	// within this runner process. Git locks and the run state machine cover
 	// cross-process operations.
@@ -141,7 +144,16 @@ func (r *Runner) Run(ctx context.Context) error {
 		case <-beat.C:
 			r.heartbeat(ctx)
 		case <-sweep.C:
-			r.Sweep(ctx)
+			// Off this loop: a sweep runs checkpoint pushes, and while one is
+			// slow nothing would be claimed and no heartbeat sent. One at a time.
+			if r.sweeping.CompareAndSwap(false, true) {
+				r.wg.Add(1)
+				go func() {
+					defer r.wg.Done()
+					defer r.sweeping.Store(false)
+					r.Sweep(ctx)
+				}()
+			}
 		case <-poll.C:
 			r.Tick(ctx)
 		case <-schedule.C:
@@ -162,7 +174,45 @@ func (r *Runner) Recover(ctx context.Context) error {
 	if err := q.RequeueInterrupted(ctx, &r.Cfg.ID); err != nil {
 		return err
 	}
+	if err := r.resumeStranded(ctx); err != nil {
+		return err
+	}
 	return q.RecoverChatCancellations(ctx, &r.Cfg.ID)
+}
+
+// StrandedResumeMessage continues a run whose last turn a runner shutdown cut short.
+const StrandedResumeMessage = "Vesper's runner restarted while your last turn was running, so it was cut short. " +
+	"Continue where you left off, in the same checkout."
+
+// resumeStranded gives a run left running with no turn (see StrandedRuns) a
+// turn that continues its session; otherwise it would hold its agent's slot
+// forever and every later run of that agent would stay queued.
+func (r *Runner) resumeStranded(ctx context.Context) error {
+	ids, err := r.q().StrandedRuns(ctx, &r.Cfg.ID)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+			q := store.New(tx)
+			run, err := q.LockRun(ctx, id)
+			if err != nil || run.State != "running" {
+				return err
+			}
+			if pending, err := q.HasPendingTurn(ctx, id); err != nil || pending {
+				return err
+			}
+			if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: id, Trigger: "resume", InputMessage: StrandedResumeMessage}); err != nil {
+				return err
+			}
+			b, _ := json.Marshal(map[string]any{"state": "stranded_resumed", "runner": r.Cfg.ID})
+			return q.AddRunEvent(ctx, store.AddRunEventParams{RunID: id, Type: "lifecycle", Payload: b})
+		})
+		if err != nil {
+			return fmt.Errorf("resume stranded run %s: %w", id, err)
+		}
+	}
+	return nil
 }
 
 // tickScheduled starts tasks that are due and records runs that have ended.
@@ -688,6 +738,14 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			return
 		}
 	}
+	// Recovering earlier work can take minutes; a run cancelled meanwhile must
+	// not get a workspace nobody records, so it would never be removed.
+	if cur, err := r.q().LockRunNoWait(ctx, run.ID); err != nil || cur.State != "starting" {
+		if err != nil {
+			log.Error("recheck run before setup", "err", err)
+		}
+		return
+	}
 	if err := r.Backend.EnsureWorkspace(ctx, run.ID.String()); err != nil {
 		fail("Couldn't create the workspace: " + err.Error())
 		return
@@ -1171,10 +1229,24 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.run.Purpose == "chat" && allowedScope(c.spec, "repo:write") {
 		codeBase = r.workspaceBase(ctx, wsID(c.run))
 	}
+	networks, stopServices, failure := r.startServices(ctx, c, turn, env)
+	if failure != "" {
+		if ctx.Err() != nil {
+			return // shutting down: the turn re-runs on the next runner start
+		}
+		if c.run.Purpose == "chat" {
+			r.failChat(ctx, c, failure)
+			return
+		}
+		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
+		r.end(ctx, c, "failed", failure, runs.VerbRunFailed)
+		return
+	}
+	defer stopServices()
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
-		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Dir: dir, Files: files,
+		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Dir: dir, Files: files, Networks: networks,
 	})
 	if err != nil {
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
@@ -1244,6 +1316,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		return
 	}
+	if ctx.Err() != nil {
+		// Shutting down killed the harness: leave the turn claimed so the next
+		// runner's Recover re-runs it. Finishing it here would strand the run.
+		return
+	}
 	usage, _ := json.Marshal(res.Usage)
 	exit := int32(code)
 	if err := q.FinishTurn(context.Background(), store.FinishTurnParams{ID: turn.ID, ExitCode: &exit, LogKey: logKey, Usage: usage}); err != nil {
@@ -1263,7 +1340,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	r.event(context.Background(), c.run.ID, "lifecycle", map[string]any{"state": "turn_ended", "turn": turn.Seq, "exit_code": code})
 	if ctx.Err() != nil {
-		return // shutting down: the turn re-runs on the next runner start
+		return // shut down after the turn finished: Recover's resumeStranded continues the run
 	}
 	if c.run.Purpose == runs.PurposeWorkflow && c.spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" {
 		if failure := r.finishWorkflowImageStep(ctx, c, res, code, waitErr, sensitive); failure != "" {

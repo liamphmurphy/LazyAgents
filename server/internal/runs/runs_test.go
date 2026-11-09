@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -280,6 +281,8 @@ func TestRunLifecycle(t *testing.T) {
 	}
 	if r, err := svc.SetRunControl(ctx, ws, me.ID, run2.ID, "cancel"); err != nil || r.State != "cancelled" {
 		t.Fatalf("cancel: %v", err)
+	} else if r.Outcome == nil || !strings.HasPrefix(*r.Outcome, "Cancelled by ") || strings.Contains(*r.Outcome, "before it started") {
+		t.Fatalf("a cancelled run must say who cancelled it: outcome %v", r.Outcome)
 	}
 	if _, err := svc.PostPlan(ctx, atlas, "", []string{"x"}); !isConflict(err) {
 		t.Fatal("cancelled run accepted work")

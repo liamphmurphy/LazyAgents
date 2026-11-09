@@ -34,6 +34,10 @@ type Docker struct {
 	Socket  string // /var/run/docker.sock
 	Image   string // vesper/agent-base:latest
 	Network string // where api:8000 resolves; "" = default bridge
+	// Stack labels this install's containers. Installs sharing a Docker daemon
+	// (the dev stack and the full compose stack) must differ, or each runner's
+	// startup Cleanup kills the other's running turns. "" means "default".
+	Stack string
 	// MemoryMB and PidsLimit cap each container; 0 leaves that limit off.
 	MemoryMB  int64
 	PidsLimit int64
@@ -49,9 +53,22 @@ const (
 	homePath      = "/home/node"
 	codexAuthPath = ".codex/auth.json"
 	labelKey      = "dev.lazyagents.run"
+	stackLabelKey = "dev.lazyagents.stack"
 )
 
 func (d *Docker) Name() string { return "docker" }
+
+func (d *Docker) stack() string {
+	if d.Stack == "" {
+		return "default"
+	}
+	return d.Stack
+}
+
+// labels marks a container or volume as this install's, for the run.
+func (d *Docker) labels(runID string) map[string]string {
+	return map[string]string{labelKey: runID, stackLabelKey: d.stack()}
+}
 
 func (d *Docker) http() *http.Client {
 	if d.client == nil {
@@ -135,7 +152,7 @@ func (d *Docker) Ping(ctx context.Context) error {
 func (d *Docker) EnsureWorkspace(ctx context.Context, runID string) error {
 	for _, name := range []string{volumeName(runID), homeVolumeName(runID)} {
 		_, err := d.do(ctx, "POST", "/volumes/create", jsonBody(map[string]any{
-			"Name": name, "Labels": map[string]string{labelKey: runID},
+			"Name": name, "Labels": d.labels(runID),
 		}), "application/json", nil)
 		if err != nil {
 			return err
@@ -166,16 +183,25 @@ func (d *Docker) RemoveWorkspace(ctx context.Context, runID string) error {
 	return nil
 }
 
-// Cleanup removes turn containers left by a runner that died; their turns
-// are re-run (the harness resumes its session).
+// Cleanup removes turn containers left by a runner of this install that died;
+// their turns are re-run (the harness resumes its session). Another install's
+// containers on the same daemon are running turns of its own: they're left alone.
 func (d *Docker) Cleanup(ctx context.Context) error {
-	filters, _ := json.Marshal(map[string][]string{"label": {labelKey}})
+	filters, _ := json.Marshal(map[string][]string{"label": {labelKey, stackLabelKey + "=" + d.stack()}})
 	var list []struct{ ID string }
 	if _, err := d.do(ctx, "GET", "/containers/json?all=1&filters="+url.QueryEscape(string(filters)), nil, "", &list); err != nil {
 		return err
 	}
 	for _, c := range list {
 		_, _ = d.do(ctx, "DELETE", "/containers/"+c.ID+"?force=1", nil, "", nil)
+	}
+	// Then the service networks those turns had (their containers are gone).
+	var nets []struct{ ID string }
+	if _, err := d.do(ctx, "GET", "/networks?filters="+url.QueryEscape(string(filters)), nil, "", &nets); err != nil {
+		return err
+	}
+	for _, n := range nets {
+		_, _ = d.do(ctx, "DELETE", "/networks/"+n.ID, nil, "", nil)
 	}
 	return nil
 }
@@ -284,7 +310,7 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	}
 	body := map[string]any{
 		"Image": d.Image, "Cmd": spec.Argv, "Env": env, "WorkingDir": dir,
-		"Labels":     map[string]string{labelKey: runID},
+		"Labels":     d.labels(runID),
 		"HostConfig": d.hostConfig(mounts),
 	}
 	var created struct{ ID string }
@@ -319,6 +345,12 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(dir), tb, "application/x-tar", nil); err != nil {
 			p.remove()
 			return nil, err
+		}
+	}
+	for _, n := range spec.Networks {
+		if _, err := d.do(ctx, "POST", "/networks/"+url.PathEscape(n)+"/connect", jsonBody(map[string]any{"Container": created.ID}), "application/json", nil); err != nil {
+			p.remove()
+			return nil, fmt.Errorf("join network %s: %w", n, err)
 		}
 	}
 	// Attach before start so no output is lost.
@@ -392,14 +424,47 @@ func (p *dockerProc) remove() {
 	_, _ = p.d.do(context.Background(), "DELETE", "/containers/"+p.id+"?force=1", nil, "", nil)
 }
 
+// waitRetries is how many times Wait re-attaches to a container after the
+// long-poll fails at the transport (the socket dropped, e.g. across a Docker
+// VM sleep). Removing the container then would kill a turn that is still fine.
+const waitRetries = 3
+
+var waitBackoff = time.Second
+
 func (p *dockerProc) Wait() (int, error) {
 	defer p.remove()
 	var res struct{ StatusCode int }
-	if _, err := p.d.do(context.Background(), "POST", "/containers/"+p.id+"/wait", nil, "", &res); err != nil {
+	var err error
+	for attempt := 0; ; attempt++ {
+		_, err = p.d.do(context.Background(), "POST", "/containers/"+p.id+"/wait", nil, "", &res)
+		var de *dockerError
+		if err == nil || errors.As(err, &de) || attempt >= waitRetries {
+			break // done, or the engine answered with an error retrying won't change
+		}
+		slog.Warn("docker wait failed; retrying", "container", p.id, "err", err)
+		time.Sleep(waitBackoff << attempt)
+	}
+	if err != nil {
 		return -1, err
 	}
+	// Even a failed turn may have rotated the Codex login: keep it first.
 	p.keepRefreshedCodexAuth()
+	if res.StatusCode != 0 && p.oomKilled() {
+		return res.StatusCode, fmt.Errorf("the container ran out of memory (exit %d); raise RUNNER_MEMORY_MB or reduce what the run builds at once", res.StatusCode)
+	}
 	return res.StatusCode, nil
+}
+
+// oomKilled reports whether the kernel killed the container for its memory
+// limit, which otherwise looks like any other SIGKILL (exit 137).
+func (p *dockerProc) oomKilled() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var info struct{ State struct{ OOMKilled bool } }
+	if _, err := p.d.do(ctx, "GET", "/containers/"+p.id+"/json", nil, "", &info); err != nil {
+		return false
+	}
+	return info.State.OOMKilled
 }
 
 // keepRefreshedCodexAuth reads the only file that ever comes back out of a

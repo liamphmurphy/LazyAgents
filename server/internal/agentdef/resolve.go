@@ -74,6 +74,7 @@ type Resolved struct {
 	MCPServers     []MCPServer                  `json:"mcp_servers"`
 	HarnessOptions map[string]string            `json:"harness_options"` // for the resolved harness only
 	Setup          []string                     `json:"setup"`
+	Services       []Service                    `json:"services,omitempty"`
 	Memory         Memory                       `json:"memory"`
 	Skills         []Skill                      `json:"skills"`
 	Provenance     map[string]Source            `json:"provenance"` // field → source, for fields a project changed
@@ -198,6 +199,10 @@ func Resolve(s Spec, o *Override) Resolved {
 		r.Setup = append(r.Setup, o.Setup...)
 		r.Provenance["setup"] = FromProject
 	}
+	if len(o.Services) > 0 {
+		r.Services = append([]Service(nil), o.Services...)
+		r.Provenance["services"] = FromProject
+	}
 
 	// Scopes: every key named by either side, plus wildcards kept as-is so
 	// a project's "prod:*: denied" also covers scopes added later.
@@ -314,6 +319,9 @@ func (o Override) Changes() []string {
 	}
 	for _, c := range o.Setup {
 		out = append(out, "setup: "+c)
+	}
+	for _, s := range o.Services {
+		out = append(out, "+ service "+s.Name+" ("+s.Image+")")
 	}
 	return out
 }

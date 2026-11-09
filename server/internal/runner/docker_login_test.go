@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -21,20 +22,35 @@ import (
 
 // fakeEngine is just enough of the Docker Engine API for a sign-in container:
 // create, attach (upgraded to a raw terminal stream with a TTY, multiplexed
-// without), start, wait, archive, kill and delete.
+// without), start, wait, inspect, archive, kill and delete.
 type fakeEngine struct {
 	mu      sync.Mutex
 	created map[string]any
 	calls   []string
 	exited  chan struct{}
+	// dropWaits makes the first N /wait long-polls lose their connection;
+	// waitCode is the exit /wait reports, and oom what inspect reports.
+	dropWaits int
+	waitCode  int
+	oom       bool
+	// listFilters is the filters query of the last container list.
+	listFilters string
 }
 
 func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	f.calls = append(f.calls, r.Method+" "+strings.TrimPrefix(r.URL.Path, "/v1.43"))
-	f.mu.Unlock()
 	p := strings.TrimPrefix(r.URL.Path, "/v1.43")
+	f.mu.Lock()
+	f.calls = append(f.calls, r.Method+" "+p)
+	drop := p == "/containers/c1/wait" && f.dropWaits > 0
+	if drop {
+		f.dropWaits--
+	}
+	f.mu.Unlock()
 	switch {
+	case drop:
+		if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+			_ = conn.Close()
+		}
 	case p == "/containers/create":
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
@@ -69,7 +85,18 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(204)
 	case p == "/containers/c1/wait":
 		<-f.exited
-		_, _ = io.WriteString(w, `{"StatusCode":0}`)
+		_, _ = fmt.Fprintf(w, `{"StatusCode":%d}`, f.waitCode)
+	case p == "/networks":
+		_, _ = io.WriteString(w, `[]`)
+	case strings.HasPrefix(p, "/networks/"):
+		w.WriteHeader(200)
+	case p == "/containers/json":
+		f.mu.Lock()
+		f.listFilters = r.URL.Query().Get("filters")
+		f.mu.Unlock()
+		_, _ = io.WriteString(w, `[{"Id":"c1"}]`)
+	case p == "/containers/c1/json":
+		_, _ = fmt.Fprintf(w, `{"State":{"OOMKilled":%t}}`, f.oom)
 	case p == "/containers/c1/archive":
 		var b bytes.Buffer
 		tw := tar.NewWriter(&b)

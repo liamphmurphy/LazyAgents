@@ -26,6 +26,9 @@ type ExecSpec struct {
 	// root). A delegated run's git worktree is one.
 	Dir   string
 	Files map[string][]byte // written relative to the working directory before start
+	// Networks the process joins besides the backend's own: a turn's service
+	// network (ServiceBackend). Only the Docker backend has networks.
+	Networks []string
 }
 
 // Process is a running ExecSpec.

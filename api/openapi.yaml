@@ -5031,6 +5031,19 @@ components:
         name: { type: string, description: "Lowercase letters, digits and -; becomes the skill's folder" }
         description: { type: string, description: When to use it. The agent matches tasks against this line }
         body: { type: string, description: Markdown instructions }
+    AgentService:
+      type: object
+      description: A container each turn of a run can reach by name, e.g. the database its tests need. Started next to every turn on a network of that turn's own, with the turn's sandbox, and removed when the turn ends.
+      required: [name, image]
+      properties:
+        name: { type: string, description: "Hostname turns use; lowercase letters, digits, - or _" }
+        image: { type: string, description: "Image, pulled if missing, e.g. postgres:17-alpine" }
+        command: { type: array, items: { type: string }, description: Replaces the image's default command }
+        user: { type: string, description: "Services get no capabilities: images that start as root and switch user need their unprivileged user here" }
+        env: { type: object, additionalProperties: { type: string } }
+        tmpfs: { type: array, items: { type: string }, description: Writable scratch directories (absolute paths) }
+        healthcheck: { type: array, items: { type: string }, description: "Docker healthcheck test, e.g. [CMD, pg_isready]; turns start once it passes" }
+        expose: { type: object, additionalProperties: { type: string }, description: "Environment variables set in each turn, e.g. TEST_DATABASE_URL" }
     AgentOverride:
       type: object
       properties:
@@ -5045,6 +5058,7 @@ components:
         budget: { $ref: "#/components/schemas/Budget" }
         mcp_servers_add: { type: array, items: { $ref: "#/components/schemas/McpServer" } }
         setup: { type: array, items: { type: string } }
+        services: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/AgentService" }, description: "What the project's tests need running (Docker runner only)" }
     ResolvedScope:
       type: object
       required: [scope, mode, source, enforcement, how, description]
@@ -5071,6 +5085,7 @@ components:
           type: object
           additionalProperties: { type: string }
         setup: { type: array, items: { type: string } }
+        services: { type: array, items: { $ref: "#/components/schemas/AgentService" } }
         memory: { $ref: "#/components/schemas/AgentMemory" }
         skills: { type: array, items: { $ref: "#/components/schemas/AgentSkill" } }
         provenance:

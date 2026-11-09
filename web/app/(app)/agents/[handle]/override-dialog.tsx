@@ -10,6 +10,26 @@ import { Segmented } from "@/components/ui/controls";
 import { Field, TextArea, TextInput } from "@/components/ui/primitives";
 
 type ScopeChoice = ScopeMode | "inherit";
+type AgentService = NonNullable<AgentOverride["services"]>[number];
+
+const SERVICES_EXAMPLE = `[{"name": "postgres", "image": "postgres:17-alpine", "user": "postgres",
+  "env": {"POSTGRES_PASSWORD": "test", "PGDATA": "/var/lib/postgresql/data/pgdata"},
+  "tmpfs": ["/var/lib/postgresql/data", "/var/run/postgresql"],
+  "healthcheck": ["CMD", "pg_isready", "-U", "postgres"],
+  "expose": {"TEST_DATABASE_URL": "postgres://postgres:test@postgres:5432/postgres?sslmode=disable"}}]`;
+
+function parseServices(text: string): { ok: true; value: AgentService[] } | { ok: false; error: string } {
+  if (!text.trim()) return { ok: true, value: [] };
+  try {
+    const v: unknown = JSON.parse(text);
+    if (!Array.isArray(v) || !v.every((s) => s && typeof s === "object" && typeof s.name === "string" && typeof s.image === "string")) {
+      return { ok: false, error: "Test services must be a JSON array of objects, each with a name and an image." };
+    }
+    return { ok: true, value: v as AgentService[] };
+  } catch {
+    return { ok: false, error: "Test services aren't valid JSON." };
+  }
+}
 
 /**
  * Edit one project's override. Scope choices only offer modes at or above
@@ -40,6 +60,9 @@ export function OverrideDialog({
   });
   const [wildcard, setWildcard] = useState("");
   const [setup, setSetup] = useState((existing.setup ?? []).join("\n"));
+  // Test services are a JSON array; the server validates each one.
+  const [servicesText, setServicesText] = useState(existing.services?.length ? JSON.stringify(existing.services, null, 2) : "");
+  const services = parseServices(servicesText);
   const [servers, setServers] = useState(existing.mcp_servers_add ?? []);
   const [server, setServer] = useState({ name: "", url: "" });
   const [runtime, setRuntime] = useState(existing.budget?.max_runtime ?? "");
@@ -68,6 +91,7 @@ export function OverrideDialog({
       scopes: Object.keys(sc).length ? sc : undefined,
       mcp_servers_add: servers.length ? servers : undefined,
       setup: setup.split("\n").map((l) => l.trim()).filter(Boolean),
+      services: services.ok && services.value.length ? services.value : undefined,
       budget: { max_runtime: runtime.trim() || undefined, max_turns: turns ? Number(turns) : undefined },
     };
   }
@@ -195,6 +219,14 @@ export function OverrideDialog({
             <Field label="Setup commands" htmlFor="ov-setup" hint="One per line. Run in the workspace after cloning (Phase 5).">
               <TextArea id="ov-setup" mono rows={2} value={setup} onChange={(e) => setSetup(e.target.value)} placeholder="make deps" />
             </Field>
+            <Field
+              label="Test services"
+              htmlFor="ov-services"
+              hint="JSON array. Each turn gets these containers on a network of its own, sandboxed like the turn, and loses them when it ends. Docker runner only."
+            >
+              <TextArea id="ov-services" mono rows={4} value={servicesText} aria-invalid={!services.ok} onChange={(e) => setServicesText(e.target.value)} placeholder={SERVICES_EXAMPLE} />
+            </Field>
+            {!services.ok && <p role="alert" className="text-xs text-pill-blocked-fg">{services.error}</p>}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
             {save.isError && (
@@ -210,7 +242,7 @@ export function OverrideDialog({
             <Dialog.Close asChild>
               <Button variant="ghost">Cancel</Button>
             </Dialog.Close>
-            <Button variant="primary" disabled={save.isPending || !removalsValid || skillDraftPending} onClick={() => submit(build())}>
+            <Button variant="primary" disabled={save.isPending || !removalsValid || skillDraftPending || !services.ok} onClick={() => submit(build())}>
               Save override
             </Button>
           </div>

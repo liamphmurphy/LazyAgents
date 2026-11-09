@@ -4234,6 +4234,28 @@ export interface components {
             /** @description Markdown instructions */
             body: string;
         };
+        /** @description A container each turn of a run can reach by name, e.g. the database its tests need. Started next to every turn on a network of that turn's own, with the turn's sandbox, and removed when the turn ends. */
+        AgentService: {
+            /** @description Hostname turns use; lowercase letters, digits, - or _ */
+            name: string;
+            /** @description Image, pulled if missing, e.g. postgres:17-alpine */
+            image: string;
+            /** @description Replaces the image's default command */
+            command?: string[];
+            /** @description Services get no capabilities: images that start as root and switch user need their unprivileged user here */
+            user?: string;
+            env?: {
+                [key: string]: string;
+            };
+            /** @description Writable scratch directories (absolute paths) */
+            tmpfs?: string[];
+            /** @description Docker healthcheck test, e.g. [CMD, pg_isready]; turns start once it passes */
+            healthcheck?: string[];
+            /** @description Environment variables set in each turn, e.g. TEST_DATABASE_URL */
+            expose?: {
+                [key: string]: string;
+            };
+        };
         AgentOverride: {
             harness?: components["schemas"]["Harness"];
             model?: string;
@@ -4248,6 +4270,8 @@ export interface components {
             budget?: components["schemas"]["Budget"];
             mcp_servers_add?: components["schemas"]["McpServer"][];
             setup?: string[];
+            /** @description What the project's tests need running (Docker runner only) */
+            services?: components["schemas"]["AgentService"][];
         };
         ResolvedScope: {
             scope: string;
@@ -4272,6 +4296,7 @@ export interface components {
                 [key: string]: string;
             };
             setup: string[];
+            services?: components["schemas"]["AgentService"][];
             memory?: components["schemas"]["AgentMemory"];
             skills?: components["schemas"]["AgentSkill"][];
             /** @description Fields a project changed, e.g. {"harness":"project"} */

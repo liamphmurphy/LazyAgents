@@ -461,14 +461,23 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			if slices.Contains(Terminal, run.State) {
 				return apperr.Conflict("the run already ended")
 			}
-			if out, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "cancelled"}); err != nil {
+			// Name who did it: a run cancelled before it started has nothing
+			// else to show, and "ended without an outcome" reads as a crash.
+			reason := "Cancelled by a person."
+			if u, err := q.GetUser(ctx, store.GetUserParams{ID: userID, WorkspaceID: ws}); err == nil && u.Name != "" {
+				reason = "Cancelled by " + u.Name + "."
+			}
+			if run.State == "queued" || run.State == "starting" {
+				reason = strings.TrimSuffix(reason, ".") + " before it started."
+			}
+			if out, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "cancelled", Outcome: &reason}); err != nil {
 				return err
 			}
 			_ = q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](143)})
 			if err := q.ExpireRunApprovals(ctx, run.ID); err != nil {
 				return err
 			}
-			if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "cancelled"}); err != nil {
+			if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "cancelled", "reason": reason, "user_id": userID}); err != nil {
 				return err
 			}
 			if err := runRecord(ctx, q, ws, t.ID, t.EpicID, actor, VerbRunCancelled, map[string]any{"run_id": run.ID}, nil); err != nil {
