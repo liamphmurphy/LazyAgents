@@ -72,9 +72,11 @@ func TestResearchStartsOneReadOnlyRunPerQuestionAndRejectsBadPlans(t *testing.T)
 	e.invalid("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"max_sources": 500}), "max_sources", "between")
 	e.invalid("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"max_minutes": 1}), "max_minutes", "between")
 	e.invalid("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"max_cost_usd": -1}), "max_cost_usd", "omitted")
+	e.want("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"report_length": "epic"}), http.StatusBadRequest)
+	e.want("POST", "/chats/"+chat+"/research", planBody(msg, map[string]any{"report_tone": "limerick"}), http.StatusBadRequest)
 
 	job := e.want("POST", "/chats/"+chat+"/research", planBody(msg, nil), http.StatusCreated)
-	if job["state"] != "running" || len(job["tasks"].([]any)) != 2 || job["max_cost_usd"] != nil {
+	if job["state"] != "running" || len(job["tasks"].([]any)) != 2 || job["max_cost_usd"] != nil || job["report_length"] != "standard" || job["report_tone"] != "report" {
 		t.Fatalf("%v", job)
 	}
 	e.want("POST", "/chats/"+chat+"/research", planBody(msg, nil), http.StatusConflict)
@@ -114,7 +116,11 @@ func TestResearchRunsThroughToAReport(t *testing.T) {
 	e := newChatEnv(t)
 	ctx := t.Context()
 	chat := e.newChat(nil)["id"].(string)
-	job := e.want("POST", "/chats/"+chat+"/research", planBody(e.planMessage(t, chat), nil), http.StatusCreated)["id"].(string)
+	created := e.want("POST", "/chats/"+chat+"/research", planBody(e.planMessage(t, chat), map[string]any{"report_length": "detailed", "report_tone": "essay"}), http.StatusCreated)
+	if created["report_length"] != "detailed" || created["report_tone"] != "essay" {
+		t.Fatalf("job %v", created)
+	}
+	job := created["id"].(string)
 	ids := e.researchRuns(t, job)
 
 	if _, err := e.runs.SubmitResearchFindings(ctx, ids[0], oneFinding); err != nil {
@@ -146,7 +152,7 @@ func TestResearchRunsThroughToAReport(t *testing.T) {
 	if err := e.pool.QueryRow(ctx, `SELECT t.input_message FROM run_turns t JOIN chat_sessions c ON c.current_run_id = t.run_id WHERE c.id = $1 ORDER BY t.seq DESC LIMIT 1`, chat).Scan(&prompt); err != nil {
 		t.Fatal(err)
 	}
-	if indexOf(prompt, "Kokoro is fast") < 0 || indexOf(prompt, "untrusted") < 0 {
+	if indexOf(prompt, "Kokoro is fast") < 0 || indexOf(prompt, "untrusted") < 0 || indexOf(prompt, "3,500 to 5,000 words") < 0 || indexOf(prompt, "as an essay") < 0 {
 		t.Fatalf("prompt %q", prompt)
 	}
 

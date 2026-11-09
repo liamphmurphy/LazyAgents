@@ -25,6 +25,7 @@ func researchTaskState(runState string) api.ResearchTaskState {
 
 func (s *Server) toResearchJob(ctx context.Context, j store.ResearchJob) (api.ResearchJob, error) {
 	out := api.ResearchJob{Id: j.ID, MessageId: j.MessageID, Title: j.Title, State: api.ResearchJobState(j.State), MaxSources: int(j.MaxSources), MaxMinutes: int(j.MaxMinutes),
+		ReportLength: api.ResearchReportLength(j.ReportLength), ReportTone: api.ResearchReportTone(j.ReportTone),
 		ArtifactId: j.ReportArtifactID, CreatedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Tasks: []api.ResearchTask{}}
 	if j.StopReason != "" {
 		out.StopReason = &j.StopReason
@@ -93,6 +94,12 @@ func (s *Server) ListChatResearch(ctx context.Context, req api.ListChatResearchR
 func (s *Server) StartChatResearch(ctx context.Context, req api.StartChatResearchRequestObject) (api.StartChatResearchResponseObject, error) {
 	u, _, ws := me(ctx)
 	in := runs.ResearchInput{MessageID: req.Body.MessageId, Title: req.Body.Title, MaxSources: req.Body.MaxSources, MaxMinutes: req.Body.MaxMinutes}
+	if req.Body.ReportLength != nil {
+		in.Length = string(*req.Body.ReportLength)
+	}
+	if req.Body.ReportTone != nil {
+		in.Tone = string(*req.Body.ReportTone)
+	}
 	if req.Body.MaxCostUsd != nil {
 		c := float64(*req.Body.MaxCostUsd)
 		in.MaxCostUSD = &c

@@ -5,7 +5,32 @@
 export const isResearchPlanFence = (info: string | undefined) => (info ?? "").trim().split(/\s+/)[0]?.toLowerCase() === "research-plan";
 
 export type PlanQuestion = { label: string; question: string };
-export type ResearchPlan = { title: string; questions: PlanQuestion[] };
+/** Length and tone are set only when the persona preset them in the fence. */
+export type ResearchPlan = { title: string; questions: PlanQuestion[]; length?: ReportLength; tone?: ReportTone };
+
+export const LENGTH_OPTIONS = [
+  { value: "brief", label: "Brief", hint: "~500–800 words" },
+  { value: "standard", label: "Standard", hint: "~1,500–2,500 words" },
+  { value: "detailed", label: "Detailed", hint: "~3,500–5,000 words" },
+  { value: "in_depth", label: "In-depth", hint: "~6,000–9,000 words" },
+] as const;
+export const TONE_OPTIONS = [
+  { value: "report", label: "Report", hint: "Sections, answer first" },
+  { value: "explainer", label: "Explainer", hint: "Plain English for a non-expert" },
+  { value: "essay", label: "Essay", hint: "Flowing argument" },
+  { value: "academic", label: "Academic", hint: "Measured, hedged, formal" },
+  { value: "news", label: "News article", hint: "Most important facts first" },
+] as const;
+export type ReportLength = (typeof LENGTH_OPTIONS)[number]["value"];
+export type ReportTone = (typeof TONE_OPTIONS)[number]["value"];
+
+const SETTING = /^\s*(length|tone)\s*:\s*(.+?)\s*$/i;
+const optionValue = <T extends string>(options: readonly { value: T; label: string }[], raw: string): T | undefined => {
+  const v = raw.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return options.find((o) => o.value === v || o.label.toLowerCase().replace(/[\s-]+/g, "_") === v)?.value;
+};
+export const lengthOf = (raw: string | null | undefined) => optionValue(LENGTH_OPTIONS, raw ?? "");
+export const toneOf = (raw: string | null | undefined) => optionValue(TONE_OPTIONS, raw ?? "");
 
 const LINE = /^\s*[-*+]\s+(.+)$/;
 export const MAX_QUESTIONS = 5;
@@ -17,16 +42,23 @@ export type Spend = number | "unlimited";
 /** The fence's title and questions, or null when it has none to research. */
 export function parseResearchPlan(code: string): ResearchPlan | null {
   let title = "";
+  let length: ReportLength | undefined;
+  let tone: ReportTone | undefined;
   const questions: PlanQuestion[] = [];
   for (const line of code.split("\n")) {
     const m = LINE.exec(line);
-    if (m) {
+    const setting = title ? SETTING.exec(line) : null;
+    if (setting) {
+      if (setting[1].toLowerCase() === "length") length = lengthOf(setting[2]) ?? length;
+      else tone = toneOf(setting[2]) ?? tone;
+    } else if (m) {
       const [label, ...rest] = m[1].split("|");
       const question = rest.join("|").trim();
       if (label.trim()) questions.push(question ? { label: label.trim(), question } : { label: label.trim().slice(0, 40), question: label.trim() });
     } else if (line.trim() && !title) title = line.trim();
   }
-  return title && questions.length > 0 && questions.length <= MAX_QUESTIONS ? { title, questions } : null;
+  if (!title || questions.length === 0 || questions.length > MAX_QUESTIONS) return null;
+  return { title, questions, ...(length && { length }), ...(tone && { tone }) };
 }
 
 /** Whether a plan can be sent as it stands. */

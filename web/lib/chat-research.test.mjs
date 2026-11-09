@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isResearchPlanFence, minutesLabel, parseResearchPlan, planReady, reportSections, researchActive, researchProgress, spendLabel } from "./chat-research.ts";
+import { isResearchPlanFence, lengthOf, minutesLabel, parseResearchPlan, toneOf, planReady, reportSections, researchActive, researchProgress, spendLabel } from "./chat-research.ts";
 
 test("a plan is a title then questions", () => {
   assert.ok(isResearchPlanFence("research-plan"));
@@ -8,6 +8,17 @@ test("a plan is a title then questions", () => {
     title: "Local TTS",
     questions: [{ label: "Quality", question: "Which | is best?" }, { label: "Just a question", question: "Just a question" }],
   });
+});
+
+test("a plan may preset the report's length and tone", () => {
+  assert.deepEqual(parseResearchPlan("WWII\nLength: in-depth\nTone: News article\n- Causes | Why?\n"), {
+    title: "WWII", length: "in_depth", tone: "news", questions: [{ label: "Causes", question: "Why?" }],
+  });
+  // Unknown values are ignored, and a title that looks like a setting stays the title.
+  assert.deepEqual(parseResearchPlan("Tone: a history\nLength: epic\n- A | q"), { title: "Tone: a history", questions: [{ label: "A", question: "q" }] });
+  assert.equal(lengthOf("Detailed"), "detailed");
+  assert.equal(toneOf("essay"), "essay");
+  assert.equal(toneOf("limerick"), undefined);
 });
 
 test("a plan without a title or questions, or with too many, isn't a plan", () => {
