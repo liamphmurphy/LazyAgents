@@ -115,6 +115,16 @@ func awaitConnectorApproval(ctx context.Context, d Deps, conn store.Connector, c
 	if err != nil {
 		return "Couldn't ask the person for approval."
 	}
+	return awaitDecision(ctx, func(ctx context.Context) (string, error) {
+		cur, err := d.Q.GetConnectorApproval(ctx, a.ID)
+		return cur.State, err
+	}, func() { _ = d.Q.ExpireConnectorApproval(store0, a.ID) })
+}
+
+// awaitDecision polls an approval until the person decides or the wait runs
+// out, returning why the call may not go ahead, or "" to go ahead. expire
+// marks the approval expired when the wait ends first.
+func awaitDecision(ctx context.Context, state func(context.Context) (string, error), expire func()) string {
 	ctx, cancel := context.WithTimeout(ctx, connectorApprovalWait)
 	defer cancel()
 	tick := time.NewTicker(time.Second)
@@ -122,14 +132,14 @@ func awaitConnectorApproval(ctx context.Context, d Deps, conn store.Connector, c
 	for {
 		select {
 		case <-ctx.Done():
-			_ = d.Q.ExpireConnectorApproval(store0, a.ID)
+			expire()
 			return "The person didn't approve this in time. Tell them it's still needed."
 		case <-tick.C:
-			cur, err := d.Q.GetConnectorApproval(ctx, a.ID)
+			cur, err := state(ctx)
 			if err != nil {
 				continue
 			}
-			switch cur.State {
+			switch cur {
 			case "allowed":
 				return ""
 			case "denied":
