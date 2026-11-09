@@ -276,7 +276,7 @@ func loadLearningEnv(ctx context.Context, q *store.Queries, c store.LearningCour
 	if e.chat, err = q.GetChatSession(ctx, store.GetChatSessionParams{ID: c.ChatID, WorkspaceID: c.WorkspaceID}); err != nil {
 		return e, err
 	}
-	p, err := q.GetProject(ctx, store.GetProjectParams{ID: e.chat.ProjectID, WorkspaceID: c.WorkspaceID})
+	p, err := chatProject(ctx, q, e.chat)
 	if err != nil {
 		return e, err
 	}
@@ -473,7 +473,7 @@ func (s *Service) ApproveCourse(ctx context.Context, ws, user, id uuid.UUID, max
 		if err != nil {
 			return err
 		}
-		p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: ws})
+		p, err := chatProject(ctx, q, chat)
 		if err != nil {
 			return err
 		}

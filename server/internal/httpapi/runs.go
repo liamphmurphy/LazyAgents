@@ -67,7 +67,7 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 	case r.Purpose == runs.PurposeResearch:
 		if j, err := s.Q.ResearchJobForRun(ctx, r.ID); err == nil {
 			if c, err := s.Q.GetChatSession(ctx, store.GetChatSessionParams{ID: j.ChatID, WorkspaceID: j.WorkspaceID}); err == nil {
-				out.ChatId, out.WorkTitle, projectID = &c.ID, &j.Title, c.ProjectID
+				out.ChatId, out.WorkTitle, projectID = &c.ID, &j.Title, runs.ProjectIDOrNil(c.ProjectID)
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
@@ -75,21 +75,21 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 	case r.Purpose == runs.PurposeLearning:
 		if l, err := s.Q.LearningCourseForRun(ctx, r.ID); err == nil {
 			if c, err := s.Q.GetChatSession(ctx, store.GetChatSessionParams{ID: l.ChatID, WorkspaceID: l.WorkspaceID}); err == nil {
-				out.WorkTitle, projectID = &l.Topic, c.ProjectID
+				out.WorkTitle, projectID = &l.Topic, runs.ProjectIDOrNil(c.ProjectID)
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}
 	case r.Purpose == runs.PurposeWorkflow:
 		if w, err := s.Q.WorkflowRunForAgentRun(ctx, &r.ID); err == nil {
-			out.ChatId, out.WorkTitle, projectID = &w.ChatID, &w.Name, w.ProjectID
+			out.ChatId, out.WorkTitle, projectID = &w.ChatID, &w.Name, runs.ProjectIDOrNil(w.ProjectID)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}
 	case r.Purpose == "chat":
 		// A chat run without its session (deleted chat) still renders.
 		if c, err := s.Q.ChatSessionOfRun(ctx, &r.ID); err == nil {
-			out.ChatId, out.WorkTitle, projectID = &c.ID, &c.Title, c.ProjectID
+			out.ChatId, out.WorkTitle, projectID = &c.ID, &c.Title, runs.ProjectIDOrNil(c.ProjectID)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}

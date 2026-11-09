@@ -370,7 +370,7 @@ func (s *Service) StartWorkflow(ctx context.Context, ws, user, chatID uuid.UUID,
 				return err
 			}
 		}
-		p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: ws})
+		p, err := chatProject(ctx, q, chat)
 		if err != nil {
 			return err
 		}
@@ -919,7 +919,7 @@ func WorkflowSpec(base agentdef.Resolved, harness, model, effort string, web, im
 // startAgent queues the run for an enrich or agent step. A non-empty reason
 // is a problem the person can fix, which fails the step.
 func (e *WorkflowEngine) startAgent(ctx context.Context, q *store.Queries, chat store.ChatSession, run store.WorkflowRun, g WorkflowGraph, n WorkflowNode, attempt int32, vars map[string]string, rows []store.LatestWorkflowStepsRow) (uuid.UUID, string, error) {
-	p, err := q.GetProject(ctx, store.GetProjectParams{ID: run.ProjectID, WorkspaceID: run.WorkspaceID})
+	p, err := OptionalProject(ctx, q, run.WorkspaceID, run.ProjectID)
 	if err != nil {
 		return uuid.Nil, "", err
 	}
@@ -1085,7 +1085,7 @@ func (e *WorkflowEngine) output(ctx context.Context, q *store.Queries, chat stor
 		return "", "There was nothing to write.", nil
 	}
 	title := strings.TrimSpace(renderWorkflowTemplate(n.Config.Title, vars))
-	p, err := q.GetProject(ctx, store.GetProjectParams{ID: run.ProjectID, WorkspaceID: run.WorkspaceID})
+	p, err := OptionalProject(ctx, q, run.WorkspaceID, run.ProjectID)
 	if err != nil {
 		return "", "", err
 	}
@@ -1129,6 +1129,9 @@ func (e *WorkflowEngine) output(ctx context.Context, q *store.Queries, chat stor
 		}
 		return "Saved to the Library as " + title, "", nil
 	case NodeTicket:
+		if p.Key == "" {
+			return "", "Attach a project to this chat to create tickets.", nil
+		}
 		t, err := tracker.CreateInTx(ctx, q, run.WorkspaceID, tracker.UserActor(run.UserID), tracker.NewTicket{ProjectKey: p.Key, Title: title, DescriptionMd: body})
 		if err != nil {
 			return "", workflowEffectError("the ticket", err), workflowInternal(err)

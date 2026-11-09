@@ -333,7 +333,7 @@ func TestChatValidationAndArchivedConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	chats, err := e.q.ListChatSessions(e.ctx, store.ListChatSessionsParams{WorkspaceID: e.ws, ProjectID: p.ID, CreatedBy: e.me.ID, Limit: 20})
+	chats, err := e.q.ListChatSessions(e.ctx, store.ListChatSessionsParams{WorkspaceID: e.ws, ProjectID: &p.ID, CreatedBy: e.me.ID, Limit: 20})
 	if err != nil || len(chats) != 0 {
 		t.Fatalf("invalid first message left chat records: %+v %v", chats, err)
 	}

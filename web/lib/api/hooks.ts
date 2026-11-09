@@ -988,7 +988,7 @@ export function useAgentRuns(handle:string,offset=0) {
 export const chatKeys = {
   all: ["chats"] as const,
   /** persona: a persona id, "all", "none", or "" for the server's default (the caller's default persona). */
-  list: (project: string, archived = false, persona = "") => ["chats", "list", project, archived, persona] as const,
+  list: (archived = false, persona = "") => ["chats", "list", archived, persona] as const,
   detail: (id: string) => ["chats", "detail", id] as const,
   messages: (id: string) => ["chats", "messages", id] as const,
   proposals: (id: string) => ["chats", "proposals", id] as const,
@@ -999,12 +999,13 @@ export const chatKeys = {
 // Slow fallback while a turn runs and the realtime connection is unavailable.
 const CHAT_POLL_MS = 3000;
 
-export function useChats(project: string, archived = false, persona = "") {
+/** Every chat of the person's, whatever project it has attached. */
+export function useChats(archived = false, persona = "", enabled = true) {
   return useQuery({
-    enabled: !!project,
-    queryKey: chatKeys.list(project, archived, persona),
+    enabled,
+    queryKey: chatKeys.list(archived, persona),
     queryFn: () =>
-      unwrap(api.GET("/chats", { params: { query: { project, archived, ...(persona ? { persona_id: persona } : {}) } } })),
+      unwrap(api.GET("/chats", { params: { query: { archived, ...(persona ? { persona_id: persona } : {}) } } })),
   });
 }
 
@@ -1310,7 +1311,7 @@ export function exportMemories() {
 export function useStartChat() {
   const done = useChatInvalidate();
   return useMutation({
-    mutationFn: async (v: { project: string; persona_id?: string; repo_url?: string; message: Schemas["NewChatMessage"] }) => {
+    mutationFn: async (v: { project?: string; persona_id?: string; repo_url?: string; message: Schemas["NewChatMessage"] }) => {
       const chat = await unwrap(
         api.POST("/chats", { body: { project: v.project, ...(v.persona_id ? { persona_id: v.persona_id } : {}), ...(v.repo_url ? { repo_url: v.repo_url } : {}) } }),
       );

@@ -247,7 +247,7 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 		if err != nil {
 			return c, err
 		}
-		c.ticket = store.Ticket{WorkspaceID: chat.WorkspaceID, ProjectID: chat.ProjectID, Key: "CHAT-" + chat.ID.String()[:8], Title: chat.Title}
+		c.ticket = store.Ticket{WorkspaceID: chat.WorkspaceID, ProjectID: runs.ProjectIDOrNil(chat.ProjectID), Key: "CHAT-" + chat.ID.String()[:8], Title: chat.Title}
 	} else if c.run.Purpose == runs.PurposeResearch {
 		job, err := q.ResearchJobForRun(ctx, c.run.ID)
 		if err != nil {
@@ -257,7 +257,7 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 		if err != nil {
 			return c, err
 		}
-		c.ticket = store.Ticket{WorkspaceID: job.WorkspaceID, ProjectID: chat.ProjectID, Key: "RES-" + job.ID.String()[:8], Title: job.Title}
+		c.ticket = store.Ticket{WorkspaceID: job.WorkspaceID, ProjectID: runs.ProjectIDOrNil(chat.ProjectID), Key: "RES-" + job.ID.String()[:8], Title: job.Title}
 	} else if c.run.Purpose == runs.PurposeLearning {
 		course, err := q.LearningCourseForRun(ctx, c.run.ID)
 		if err != nil {
@@ -267,13 +267,13 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 		if err != nil {
 			return c, err
 		}
-		c.ticket = store.Ticket{WorkspaceID: course.WorkspaceID, ProjectID: chat.ProjectID, Key: "LRN-" + course.ID.String()[:8], Title: course.Topic}
+		c.ticket = store.Ticket{WorkspaceID: course.WorkspaceID, ProjectID: runs.ProjectIDOrNil(chat.ProjectID), Key: "LRN-" + course.ID.String()[:8], Title: course.Topic}
 	} else if c.run.Purpose == runs.PurposeWorkflow {
 		wf, err := q.WorkflowRunForAgentRun(ctx, &c.run.ID)
 		if err != nil {
 			return c, err
 		}
-		c.ticket = store.Ticket{WorkspaceID: wf.WorkspaceID, ProjectID: wf.ProjectID, Key: "WF-" + wf.ID.String()[:8], Title: wf.Name}
+		c.ticket = store.Ticket{WorkspaceID: wf.WorkspaceID, ProjectID: runs.ProjectIDOrNil(wf.ProjectID), Key: "WF-" + wf.ID.String()[:8], Title: wf.Name}
 	} else {
 		plan, err := q.PlanningSessionForRun(ctx, c.run.ID)
 		if err != nil {
@@ -284,8 +284,12 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 	if c.agent, err = q.GetAgent(ctx, store.GetAgentParams{ID: c.run.AgentID, WorkspaceID: c.run.WorkspaceID}); err != nil {
 		return c, err
 	}
-	if c.project, err = q.GetProject(ctx, store.GetProjectParams{ID: c.ticket.ProjectID, WorkspaceID: c.run.WorkspaceID}); err != nil {
-		return c, err
+	// Chats and their workflows may have no project: c.project stays zero, and
+	// its uuid.Nil id matches only workspace-level secrets.
+	if c.ticket.ProjectID != uuid.Nil {
+		if c.project, err = q.GetProject(ctx, store.GetProjectParams{ID: c.ticket.ProjectID, WorkspaceID: c.run.WorkspaceID}); err != nil {
+			return c, err
+		}
 	}
 	c.spec, err = runs.Spec(c.run)
 	if c.spec.Repository != nil {

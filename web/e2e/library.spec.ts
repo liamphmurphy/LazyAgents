@@ -40,7 +40,7 @@ test("the Library lists generated images with their source and can remove one", 
   const tiles = page.getByTestId("library-item");
   await expect(tiles).toHaveCount(2);
   await expect(tiles.nth(0)).toContainText("Gwen");
-  await expect(tiles.nth(0).getByRole("link", { name: "Dragon lair" })).toHaveAttribute("href", "/chat/chat-1?project=WEB");
+  await expect(tiles.nth(0).getByRole("link", { name: "Dragon lair" })).toHaveAttribute("href", "/chat/chat-1");
   await expect(tiles.nth(1)).toContainText("chat deleted");
 
   await tiles.nth(1).getByRole("button", { name: "Open Old map" }).click();

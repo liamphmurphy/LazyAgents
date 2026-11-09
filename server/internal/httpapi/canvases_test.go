@@ -225,11 +225,11 @@ func TestCanvasCommentsFollowTheirTextAndReachTheAgent(t *testing.T) {
 	// What the turn is given, and only inside its own chat.
 	refs := []runs.ChatContextRef{{Kind: "canvas", ID: ptr(uuid.MustParse(id))}}
 	c0, _ := e.q.GetChatSession(t.Context(), store.GetChatSessionParams{ID: chat, WorkspaceID: e.me.WorkspaceID})
-	docs, err := runs.ResolveChatRefs(t.Context(), e.q, e.me.WorkspaceID, c0.ProjectID, chat, refs)
+	docs, err := runs.ResolveChatRefs(t.Context(), e.q, e.me.WorkspaceID, *c0.ProjectID, chat, refs)
 	if err != nil || !strings.Contains(docs[0].Body, "> 30 days") || !strings.Contains(docs[0].Body, "Person: Too short") || !strings.Contains(docs[0].Body, cid) || !strings.Contains(docs[0].Body, doc) {
 		t.Fatalf("doc = %+v %v", docs, err)
 	}
-	if _, err := runs.ResolveChatRefs(t.Context(), e.q, e.me.WorkspaceID, c0.ProjectID, uuid.New(), refs); err == nil {
+	if _, err := runs.ResolveChatRefs(t.Context(), e.q, e.me.WorkspaceID, *c0.ProjectID, uuid.New(), refs); err == nil {
 		t.Fatal("resolved a canvas from another chat")
 	}
 

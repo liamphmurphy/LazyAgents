@@ -91,7 +91,7 @@ type NextChatSuggestionsDueParams struct {
 type NextChatSuggestionsDueRow struct {
 	WorkspaceID uuid.UUID
 	CreatedBy   uuid.UUID
-	ProjectID   uuid.UUID
+	ProjectID   *uuid.UUID
 	Harness     string
 	Model       string
 }

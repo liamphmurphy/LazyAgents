@@ -11,7 +11,7 @@ import { DialogShell } from "@/components/domain/artifact-dialogs";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
-type Props = { chat: { id: string; title: string; project: string }; body: string };
+type Props = { chat: { id: string; title: string; project?: string }; body: string };
 
 function SaveDialog({
   title,
@@ -123,7 +123,7 @@ export function SaveActions({ chat, body }: Props) {
           done={savedArtifact && { href: `/artifacts/${savedArtifact.id}`, text: `Open ${savedArtifact.title}` }}
           onSave={(title) => {
             const f = new FormData();
-            f.set("project_key", chat.project);
+            if (chat.project) f.set("project_key", chat.project);
             f.set("type", "report");
             f.set("title", title);
             f.set("body_md", md);

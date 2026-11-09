@@ -82,7 +82,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       {data ? (
         <Suspense fallback={<SidebarSkeleton />}>
           <Sidebar
-            workspace={data.workspace.name}
             inboxCount={data.counts.inbox}
             liveRuns={runner.data?.live ?? 0}
             wikiSuggestions={data.counts.wiki_suggestions}

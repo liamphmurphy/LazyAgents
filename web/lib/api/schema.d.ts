@@ -1536,13 +1536,13 @@ export interface paths {
         get: operations["listChats"];
         put?: never;
         /**
-         * Start a chat in a project
+         * Start a chat, optionally with a project attached
          * @description Creates an idle chat. Nothing runs until the first message. When
          *     `message` is set it is posted as the first message (same rules as
          *     POST /chats/{id}/messages). Every chat is with the workspace's
          *     Personal Assistant, created on first use. The chat keeps `persona_id`
          *     (default: the caller's default persona, or none) for its whole life.
-         *     422 for an unknown or archived project, a harness/model not in
+         *     422 for an unknown project, 409 for an archived one, 422 for a harness/model not in
          *     GET /chat-models, or a persona_id that isn't one of the caller's.
          */
         post: operations["createChat"];
@@ -2026,7 +2026,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename, archive or restore a chat (revision-checked)
+         * Rename, archive, restore or change the project of a chat (revision-checked)
          * @description Archiving ends the chat's current run and removes its workspace. 409 on a stale revision or while a turn is running.
          */
         patch: operations["updateChat"];
@@ -4756,8 +4756,8 @@ export interface components {
         ChatSession: {
             /** Format: uuid */
             id: string;
-            /** @description Project key */
-            project: string;
+            /** @description Key of the attached project; absent when none is attached */
+            project?: string;
             /** @description Defaults to the start of the first message */
             title: string;
             agent: components["schemas"]["AgentRef"];
@@ -4792,8 +4792,8 @@ export interface components {
             last_message_at?: string;
         };
         NewChat: {
-            /** @description Project key */
-            project: string;
+            /** @description Project to attach from the start; omit for a chat with no project */
+            project?: string;
             title?: string;
             harness?: components["schemas"]["Harness"];
             /** @description Defaults to the harness's default model in GET /chat-models */
@@ -4814,6 +4814,8 @@ export interface components {
             revision: number;
             title?: string;
             archived?: boolean;
+            /** @description Key of the project to attach; empty detaches. The next message starts a fresh session with the conversation handed off. */
+            project?: string;
         };
         NewChatMessage: {
             /** @description Ask for a research plan to approve instead of an answer */
@@ -4858,7 +4860,7 @@ export interface components {
             /** Format: uuid */
             chat_id: string;
             chat_title: string;
-            project_key: string;
+            project_key?: string;
             /** @enum {string} */
             role: "user" | "assistant";
             archived: boolean;

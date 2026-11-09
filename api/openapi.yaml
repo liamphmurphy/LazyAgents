@@ -2020,14 +2020,14 @@ paths:
         default: { $ref: "#/components/responses/Error" }
     post:
       operationId: createChat
-      summary: Start a chat in a project
+      summary: Start a chat, optionally with a project attached
       description: |
         Creates an idle chat. Nothing runs until the first message. When
         `message` is set it is posted as the first message (same rules as
         POST /chats/{id}/messages). Every chat is with the workspace's
         Personal Assistant, created on first use. The chat keeps `persona_id`
         (default: the caller's default persona, or none) for its whole life.
-        422 for an unknown or archived project, a harness/model not in
+        422 for an unknown project, 409 for an archived one, 422 for a harness/model not in
         GET /chat-models, or a persona_id that isn't one of the caller's.
       tags: [chats]
       requestBody:
@@ -2517,7 +2517,7 @@ paths:
         default: { $ref: "#/components/responses/Error" }
     patch:
       operationId: updateChat
-      summary: Rename, archive or restore a chat (revision-checked)
+      summary: Rename, archive, restore or change the project of a chat (revision-checked)
       description: Archiving ends the chat's current run and removes its workspace. 409 on a stale revision or while a turn is running.
       tags: [chats]
       requestBody:
@@ -5409,10 +5409,10 @@ components:
         section: { type: string, description: Section anchor, when only one section was read }
     ChatSession:
       type: object
-      required: [id, project, title, agent, harness, model, state, archived, revision, message_count, created_at, updated_at]
+      required: [id, title, agent, harness, model, state, archived, revision, message_count, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
-        project: { type: string, description: Project key }
+        project: { type: string, description: "Key of the attached project; absent when none is attached" }
         title: { type: string, description: "Defaults to the start of the first message" }
         agent: { $ref: "#/components/schemas/AgentRef" }
         harness: { $ref: "#/components/schemas/Harness" }
@@ -5437,9 +5437,8 @@ components:
         last_message_at: { type: string, format: date-time }
     NewChat:
       type: object
-      required: [project]
       properties:
-        project: { type: string, description: Project key }
+        project: { type: string, description: "Project to attach from the start; omit for a chat with no project" }
         title: { type: string, maxLength: 200 }
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string, description: Defaults to the harness's default model in GET /chat-models }
@@ -5455,6 +5454,7 @@ components:
         revision: { type: integer }
         title: { type: string, minLength: 1, maxLength: 200 }
         archived: { type: boolean }
+        project: { type: string, description: "Key of the project to attach; empty detaches. The next message starts a fresh session with the conversation handed off." }
     NewChatMessage:
       type: object
       required: [body]
@@ -5500,7 +5500,7 @@ components:
         body: { type: string }
     ChatSearchHit:
       type: object
-      required: [message_id, chat_id, chat_title, project_key, role, archived, snippet, created_at]
+      required: [message_id, chat_id, chat_title, role, archived, snippet, created_at]
       properties:
         message_id: { type: string, format: uuid }
         chat_id: { type: string, format: uuid }

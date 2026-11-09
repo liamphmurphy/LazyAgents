@@ -74,7 +74,7 @@ type Content struct {
 }
 
 type NewArtifact struct {
-	ProjectKey   string // required except for notes
+	ProjectKey   string // required except for notes and reports
 	Path         string // notes only: "Payments/Ledger/Rollback runbook"
 	Type         string
 	Title        string
@@ -374,7 +374,7 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 		label = "v1"
 	}
 	var projectID *uuid.UUID
-	if in.ProjectKey != "" || in.Type != "note" {
+	if in.ProjectKey != "" || (in.Type != "note" && in.Type != "report") {
 		p, err := q.LockProjectByKey(ctx, store.LockProjectByKeyParams{WorkspaceID: ws, Key: in.ProjectKey})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return a, apperr.Invalid("project_key", "unknown project")

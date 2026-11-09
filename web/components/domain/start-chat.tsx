@@ -1,20 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useBootstrap, useCreateChat } from "@/lib/api/hooks";
+import { useCreateChat } from "@/lib/api/hooks";
 import { attachQuery, type ContextRef } from "@/lib/chat-context";
 import { Button } from "@/components/ui/button";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 
 /**
- * Opens a new chat in the item's project with the item attached as a chip.
- * Workspace-level pages (no project) use the first active project.
+ * Opens a new chat with the item attached as a chip and its project, if it has
+ * one, attached to the chat.
  */
 export function StartChatButton({ attach, title, project }: { attach: ContextRef; title: string; project?: string }) {
   const router = useRouter();
-  const boot = useBootstrap();
   const create = useCreateChat();
-  const key = project ?? boot.data?.projects.find((p) => !p.archived)?.key;
   const health = useHarnessHealth();
   const noHarness = !!health && !health.ready;
   return (
@@ -22,12 +20,11 @@ export function StartChatButton({ attach, title, project }: { attach: ContextRef
       <Button
         variant="outline"
         icon="msg"
-        disabled={!key || noHarness || create.isPending}
+        disabled={noHarness || create.isPending}
         onClick={() =>
-          key &&
           create.mutate(
-            { project: key },
-            { onSuccess: (c) => router.push(`/chat/${c.id}?${attachQuery(key, attach, title)}`) },
+            project ? { project } : {},
+            { onSuccess: (c) => router.push(`/chat/${c.id}?${attachQuery(project, attach, title)}`) },
           )
         }
       >

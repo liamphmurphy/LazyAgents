@@ -21,7 +21,7 @@ type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
 /** Starts a conversation with the persona picked in the menu, or the default when it shows the default or all personas. */
-export function useNewConversation(project: string, id?: string) {
+export function useNewConversation(id?: string) {
   const router = useRouter();
   const current = useChat(id);
   const personas = usePersonas();
@@ -33,14 +33,14 @@ export function useNewConversation(project: string, id?: string) {
     const persona_id = filter.value !== "default" && filter.value !== "all" ? filter.value : personas.data?.default_persona_id;
     // An empty current conversation with that persona is already new.
     if (id && current.data?.message_count === 0 && current.data.persona?.id === persona_id) return;
-    create.mutate({ project, ...(persona_id ? { persona_id } : {}) }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
+    create.mutate(persona_id ? { persona_id } : {}, { onSuccess: (c) => router.push(`/chat/${c.id}`) });
   }
-  return { start, disabled: !project || noHarness || create.isPending, error: create.isError ? errorText(create.error) : undefined };
+  return { start, disabled: noHarness || create.isPending, error: create.isError ? errorText(create.error) : undefined };
 }
 
 /** New conversation: on the rail under the menu toggle, otherwise a small + beside the picked persona's name. Its error floats beside it, since the menu has no room to reflow. */
-export function NewConversationButton({ project, id, rail }: { project: string; id?: string; rail?: boolean }) {
-  const conversation = useNewConversation(project, id);
+export function NewConversationButton({ id, rail }: { id?: string; rail?: boolean }) {
+  const conversation = useNewConversation(id);
   return (
     <div className="relative flex-none">
       <button
@@ -70,21 +70,21 @@ export function NewConversationButton({ project, id, rail }: { project: string; 
  * conversation, unless the open one is already with it. The rail has no list to
  * offer "Start one", so there (startWhenEmpty) a persona with no chats gets one.
  */
-function usePersonaNav(project: string, id: string | undefined, startWhenEmpty: boolean) {
+function usePersonaNav(id: string | undefined, startWhenEmpty: boolean) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
   // The persona strip starts on the default persona; GET /chats does the filtering.
   const filter = usePersonaFilter();
-  const active = useChats(project, false, filter.query);
+  const active = useChats(false, filter.query);
   const create = useCreateChat();
   const startWith = (personaId?: string) =>
-    create.mutate({ project, ...(personaId ? { persona_id: personaId } : {}) }, { onSuccess: (c) => router.push(`/chat/${c.id}?project=${encodeURIComponent(project)}`) });
+    create.mutate(personaId ? { persona_id: personaId } : {}, { onSuccess: (c) => router.push(`/chat/${c.id}`) });
   const open = (chatId: string) => {
     // Only the chat page's own params (?view=) carry over.
     const q = new URLSearchParams(isActive(pathname, "/chat") ? search.toString() : undefined);
-    q.set("project", project);
-    router.push(`/chat/${chatId}?${q.toString()}`);
+    const qs = q.toString();
+    router.push(qs ? `/chat/${chatId}?${qs}` : `/chat/${chatId}`);
   };
   const personaOf = (v: string) => (v === "default" ? filter.defaultId : v);
   // Set by a pick; the effect below runs once that persona's list arrives (a new query, so new data).
@@ -117,17 +117,17 @@ function usePersonaNav(project: string, id: string | undefined, startWhenEmpty: 
 }
 
 /** Chat mode's collapsed menu: no room for titles, so one avatar per persona opens its newest conversation. */
-export function PersonaRail({ project, id, viewed }: { project: string; id?: string; viewed: string | null }) {
-  const { filter, pick } = usePersonaNav(project, id, true);
+export function PersonaRail({ id, viewed }: { id?: string; viewed: string | null }) {
+  const { filter, pick } = usePersonaNav(id, true);
   const activity = usePersonaActivity(viewed);
   const others = filter.personas.filter((p) => p.id !== filter.defaultId);
   return (
     <div role="group" aria-label="Open a persona’s conversations" className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto border-t border-border-subtle py-2.5 [scrollbar-width:none]">
-      <PersonaAvatarButton label={`${filter.defaultLook.name} (default)`} on={filter.value === "default"} state={filter.defaultId ? activity.get(filter.defaultId) : undefined} disabled={!project || filter.loading} onClick={() => pick("default")}>
+      <PersonaAvatarButton label={`${filter.defaultLook.name} (default)`} on={filter.value === "default"} state={filter.defaultId ? activity.get(filter.defaultId) : undefined} disabled={filter.loading} onClick={() => pick("default")}>
         <PersonaAvatar persona={filter.defaultLook} size={26} />
       </PersonaAvatarButton>
       {others.map((p) => (
-        <PersonaAvatarButton key={p.id} label={p.name} on={filter.value === p.id} state={activity.get(p.id)} disabled={!project} onClick={() => pick(p.id)}>
+        <PersonaAvatarButton key={p.id} label={p.name} on={filter.value === p.id} state={activity.get(p.id)} onClick={() => pick(p.id)}>
           <PersonaAvatar persona={p} size={26} />
         </PersonaAvatarButton>
       ))}
@@ -167,11 +167,11 @@ function DeleteChat({ chat, onDeleted }: { chat: Chat; onDeleted: () => void }) 
 }
 
 /** An archived conversation: open it read-only, or restore it to the active list. */
-function ArchivedRow({ chat, active, project, onDeleted, all }: { chat: Chat; active: boolean; project: string; onDeleted: () => void; all: boolean }) {
+function ArchivedRow({ chat, active, onDeleted, all }: { chat: Chat; active: boolean; onDeleted: () => void; all: boolean }) {
   return (
     <li className={cx("flex flex-wrap items-center gap-1 rounded-md pr-1", active ? "bg-selected" : "hover:bg-hover")}>
       <Link
-        href={`/chat/${chat.id}?project=${encodeURIComponent(project)}&view=archived`}
+        href={`/chat/${chat.id}?view=archived`}
         aria-current={active ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
       >
@@ -185,7 +185,7 @@ function ArchivedRow({ chat, active, project, onDeleted, all }: { chat: Chat; ac
   );
 }
 
-function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: boolean; project: string; onLeave: () => void; all: boolean }) {
+function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; onLeave: () => void; all: boolean }) {
   const update = useUpdateChat();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(chat.title);
@@ -216,7 +216,7 @@ function ChatRow({ chat, active, project, onLeave, all }: { chat: Chat; active: 
       ) : (
         <div className={cx("group relative flex flex-wrap items-center gap-1 rounded-md pr-1", active ? "bg-selected" : "hover:bg-hover")}>
           <Link
-            href={`/chat/${chat.id}?project=${encodeURIComponent(project)}`}
+            href={`/chat/${chat.id}`}
             aria-current={active ? "page" : undefined}
             className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
           >
@@ -275,7 +275,7 @@ function ChatSearchResults({ query, onPick }: { query: string; onPick: () => voi
     <ul aria-label="Search results" className="flex flex-col gap-0.5">
       {hits.map((h) => (
         <li key={h.message_id} data-testid="chat-search-hit">
-          <Link href={`/chat/${h.chat_id}?project=${encodeURIComponent(h.project_key)}&message=${h.message_id}`} onClick={onPick} className="flex flex-col gap-0.5 rounded-md px-2 py-1.5 hover:bg-hover">
+          <Link href={`/chat/${h.chat_id}?message=${h.message_id}`} onClick={onPick} className="flex flex-col gap-0.5 rounded-md px-2 py-1.5 hover:bg-hover">
             <span className="truncate text-[13px] text-fg">{h.chat_title || "New conversation"}</span>
             <Snippet text={h.snippet} />
             <span className="truncate text-xs text-fg-tertiary">{h.role === "user" ? "You" : (h.persona_name ?? "Assistant")}{h.archived ? " · archived" : ""}</span>
@@ -287,7 +287,7 @@ function ChatSearchResults({ query, onPick }: { query: string; onPick: () => voi
 }
 
 /** The conversation history in Chat mode's menu: persona strip, then Active or Archived (kept in ?view= on the chat page). */
-export function ChatHistory({ project, id, viewed }: { project: string; id?: string; viewed: string | null }) {
+export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -297,21 +297,20 @@ export function ChatHistory({ project, id, viewed }: { project: string; id?: str
     const q = new URLSearchParams(onChat ? search.toString() : undefined);
     if (v === "archived") q.set("view", "archived");
     else q.delete("view");
-    if (!onChat) q.set("project", project);
     if (onChat) router.replace(`${pathname}?${q.toString()}`);
     else router.push(`/chat?${q.toString()}`);
   };
-  const { filter, active, pick, create, startWith } = usePersonaNav(project, id, false);
+  const { filter, active, pick, create, startWith } = usePersonaNav(id, false);
   const activity = usePersonaActivity(viewed);
   const all = filter.query === "all";
-  const archived = useChats(view === "archived" ? project : "", true, filter.query);
+  const archived = useChats(true, filter.query, view === "archived");
   const chats = view === "archived" ? archived : active;
   const list = chats.data?.chats;
   // An empty filter on a persona other than the default offers to start a conversation with it.
   const picked = filter.value !== "default" && !all ? filter.personas.find((p) => p.id === filter.value) : undefined;
   const heading = all ? "All personas" : (picked?.name ?? filter.defaultLook.name);
   // Archiving or deleting the open conversation goes back to /chat, which resumes the newest one.
-  const leave = (chatId: string) => chatId === id && router.push(`/chat?project=${encodeURIComponent(project)}`);
+  const leave = (chatId: string) => chatId === id && router.push("/chat");
   const [query, setQuery] = useState("");
   const [finding, setFinding] = useState(false);
   const deferredQuery = useDeferredValue(query);
@@ -324,15 +323,13 @@ export function ChatHistory({ project, id, viewed }: { project: string; id?: str
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
       <div className="flex items-center gap-0.5 pl-2">
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-secondary">{view === "archived" ? `${heading} · Archived` : heading}</span>
-        <NewConversationButton project={project} id={id} />
+        <NewConversationButton id={id} />
         <IconButton icon="search" size={24} label="Find in chats" aria-pressed={finding} onClick={() => (finding ? stopFinding() : setFinding(true))} />
         <IconButton icon="folder" size={24} label="Archived conversations" aria-pressed={view === "archived"} onClick={() => setView(view === "archived" ? "active" : "archived")} />
       </div>
       {finding && <TextInput aria-label="Find in chats" placeholder="Find in chats" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && stopFinding()} />}
       <nav aria-label="Chats" className="min-h-0 flex-1 overflow-y-auto">
-        {!project ? (
-          <p className="px-2 py-4 text-[13px] text-fg-secondary">Pick a project above to see its conversations.</p>
-        ) : query ? (
+        {query ? (
           <ChatSearchResults query={deferredQuery} onPick={() => undefined} />
         ) : chats.isError ? (
           <Banner tone="blocked" title="Couldn’t load conversations">{errorText(chats.error)}</Banner>
@@ -346,7 +343,7 @@ export function ChatHistory({ project, id, viewed }: { project: string; id?: str
           view === "active" && picked ? (
             <div className="flex flex-col items-start gap-1 px-2 py-4 text-[13px]">
               <p className="text-fg-secondary">No conversations with {picked.name} yet.</p>
-              <button type="button" className="text-accent hover:underline disabled:opacity-50" disabled={!project || create.isPending} onClick={() => startWith(picked.id)}>
+              <button type="button" className="text-accent hover:underline disabled:opacity-50" disabled={create.isPending} onClick={() => startWith(picked.id)}>
                 Start one with {picked.name} →
               </button>
               {create.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(create.error)}</p>}
@@ -360,7 +357,7 @@ export function ChatHistory({ project, id, viewed }: { project: string; id?: str
           <>
             <ul className="flex flex-col gap-px">
               {list.map((c) => (
-                <ArchivedRow key={c.id} chat={c} project={project} active={c.id === id} all={all} onDeleted={() => leave(c.id)} />
+                <ArchivedRow key={c.id} chat={c} active={c.id === id} all={all} onDeleted={() => leave(c.id)} />
               ))}
             </ul>
             <p className="px-2 py-3 text-xs text-fg-tertiary">Archived conversations are read-only. Restore one to continue it.</p>
@@ -371,7 +368,6 @@ export function ChatHistory({ project, id, viewed }: { project: string; id?: str
               <ChatRow
                 key={c.id}
                 chat={c}
-                project={project}
                 active={c.id === id}
                 all={all}
                 onLeave={() => leave(c.id)}

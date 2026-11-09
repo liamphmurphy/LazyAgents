@@ -296,7 +296,7 @@ func RelayChat(ctx context.Context, q *store.Queries, chatID uuid.UUID, reply st
 		_, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: body, ContextRefs: []byte("[]"), Citations: []byte("[]")})
 		return err
 	}
-	p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: chat.WorkspaceID})
+	p, err := chatProject(ctx, q, chat)
 	if err != nil {
 		return err
 	}
@@ -484,7 +484,7 @@ func introduce(ctx context.Context, q *store.Queries, chat store.ChatSession, p 
 			}
 		}
 	}
-	proj, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: chat.WorkspaceID})
+	proj, err := chatProject(ctx, q, chat)
 	if err != nil || proj.Archived {
 		return err
 	}

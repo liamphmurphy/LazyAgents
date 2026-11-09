@@ -83,9 +83,9 @@ export function parseAttach(values: string[], title?: string | null): Chip[] {
 }
 
 /** `/chat?project=KEY&attach=kind:id` query for a "Start chat" link. */
-export function attachQuery(project: string, ref: ContextRef, title?: string): string {
+export function attachQuery(project: string | undefined, ref: ContextRef, title?: string): string {
   const v = ref.kind === "ticket" ? `ticket:${ref.key}` : ref.kind === "section" ? `section:${ref.id}#${ref.anchor}` : `${ref.kind}:${ref.id}`;
-  const q = new URLSearchParams({ project, attach: v });
+  const q = new URLSearchParams({ ...(project ? { project } : {}), attach: v });
   if (title) q.set("attach_title", title);
   return q.toString();
 }

@@ -104,7 +104,7 @@ func ResumeInterruptedChat(ctx context.Context, q *store.Queries, chatID, runID 
 	if chat.Archived || chat.State == "running" {
 		return nil
 	}
-	p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: chat.WorkspaceID})
+	p, err := chatProject(ctx, q, chat)
 	if err != nil || p.Archived {
 		return err
 	}

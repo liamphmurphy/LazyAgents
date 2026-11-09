@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { DropdownMenu } from "radix-ui";
-import { useChat, useSecrets } from "@/lib/api/hooks";
+import { useSecrets } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { needsAttention } from "@/lib/settings";
 import { currentProject, isActive, modeHref, navGroupsFor, switchHref, withProject, type NavBadge, type NavMode, type ScopedProject } from "@/lib/project-scope";
@@ -20,7 +20,6 @@ import { useNavMode } from "./nav-mode";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
 export type SidebarProps = {
-  workspace: string;
   inboxCount: number;
   /** Ticket and planning runs in progress; chat runs aren't counted. */
   liveRuns: number;
@@ -218,7 +217,7 @@ function ProjectSwitcher({ projects, current }: { projects: ScopedProject[]; cur
   );
 }
 
-export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, projects }: SidebarProps) {
+export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }: SidebarProps) {
   const pathname = usePathname();
   const search = useSearchParams();
   const remembered = useRememberedProject();
@@ -236,10 +235,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
   };
   const groups = navGroupsFor(mode);
   const chatting = mode === "chat";
-  // An open conversation belongs to its own project, whatever the switcher remembers.
   const viewed = viewedChatId(pathname);
-  const openChat = useChat(viewed ?? undefined);
-  const chatProject = (viewed ? (openChat.data?.project ?? search.get("project")) : null) ?? current?.key ?? "";
   const newTicket = (
     <Link
       href={newTicketHref}
@@ -253,12 +249,12 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
   if (!expanded) {
     return (
       <aside aria-label="Main menu" className={cx("flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3", chatting && "min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh")}>
-        <span title={workspace} className="grid size-[30px] place-items-center">
+        <span title="Vesper" className="grid size-[30px] place-items-center">
           <Mark />
         </span>
         <div className="flex flex-col items-center gap-1">
           <ToggleButton expanded={false} onToggle={() => setExpanded(true)} />
-          {chatting ? <NewConversationButton project={chatProject} id={viewed ?? undefined} rail /> : newTicket}
+          {chatting ? <NewConversationButton id={viewed ?? undefined} rail /> : newTicket}
           <button
             type="button"
             aria-label="Search"
@@ -282,7 +278,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
             </div>
           ))}
         </nav>
-        {chatting && <PersonaRail project={chatProject} id={viewed ?? undefined} viewed={viewed} />}
+        {chatting && <PersonaRail id={viewed ?? undefined} viewed={viewed} />}
       </aside>
     );
   }
@@ -290,17 +286,16 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
     <aside aria-label="Main menu" className={cx("flex min-w-0 flex-[1_1_232px] flex-col gap-5 border-r min-[800px]:w-[232px] min-[800px]:flex-none border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3", chatting && "min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh")}>
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
-          <button type="button" className="flex items-center gap-[9px] rounded-md px-1.5 py-[5px] hover:bg-hover">
+          <span className="flex items-center gap-[9px] px-1.5 py-[5px]">
             <Mark />
-            <span className="text-[13.5px] font-semibold tracking-[-0.01em]">{workspace}</span>
-            <Icon name="chev" size={14} strokeWidth={1.6} className="text-fg-tertiary" />
-          </button>
+            <span className="text-[13.5px] font-semibold tracking-[-0.01em]">Vesper</span>
+          </span>
           <div className="flex flex-none items-center gap-1.5">
             {!chatting && newTicket}
             <ToggleButton expanded onToggle={() => setExpanded(false)} />
           </div>
         </div>
-        <ProjectSwitcher projects={active} current={current} />
+        {!chatting && <ProjectSwitcher projects={active} current={current} />}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -336,7 +331,7 @@ export function Sidebar({ workspace, inboxCount, liveRuns, wikiSuggestions = 0, 
         ))}
       </nav>
 
-      {chatting && <ChatHistory project={chatProject} id={viewed ?? undefined} viewed={viewed} />}
+      {chatting && <ChatHistory id={viewed ?? undefined} viewed={viewed} />}
       {pathname === "/" && <SidebarCapacity />}
     </aside>
   );

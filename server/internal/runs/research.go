@@ -146,7 +146,7 @@ func (s *Service) StartResearch(ctx context.Context, ws, user, chatID uuid.UUID,
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: ws})
+		p, err := chatProject(ctx, q, chat)
 		if err != nil {
 			return err
 		}
@@ -536,7 +536,7 @@ func advanceResearchJob(ctx context.Context, q *store.Queries, chatID, jobID uui
 }
 
 func startResearchWriteUp(ctx context.Context, q *store.Queries, chat store.ChatSession, job store.ResearchJob) error {
-	p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: chat.WorkspaceID})
+	p, err := chatProject(ctx, q, chat)
 	if err != nil || p.Archived {
 		return err
 	}

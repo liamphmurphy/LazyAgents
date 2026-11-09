@@ -109,8 +109,10 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 			e := api.ChatEffort(c.Effort)
 			item.Effort = &e
 		}
-		if i := slices.IndexFunc(projects, func(p store.Project) bool { return p.ID == c.ProjectID }); i >= 0 {
-			item.Project = projects[i].Key
+		if c.ProjectID != nil {
+			if i := slices.IndexFunc(projects, func(p store.Project) bool { return p.ID == *c.ProjectID }); i >= 0 {
+				item.Project = &projects[i].Key
+			}
 		}
 		if i := slices.IndexFunc(agentRows, func(a store.Agent) bool { return a.ID == c.AgentID }); i >= 0 {
 			item.Agent = *toAgentRef(agentRows[i])
@@ -369,7 +371,7 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 		return nil, apperr.Invalid("body", "required")
 	}
 	b := req.Body
-	in := runs.ChatInput{Project: b.Project, Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl), Hidden: deref(b.Hidden)}
+	in := runs.ChatInput{Project: deref(b.Project), Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl), Hidden: deref(b.Hidden)}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}
@@ -408,7 +410,7 @@ func (s *Server) UpdateChat(ctx context.Context, req api.UpdateChatRequestObject
 	if req.Body.Revision < 1 || req.Body.Revision > 2147483647 {
 		return nil, apperr.Invalid("revision", "invalid revision")
 	}
-	c, err := s.Runs.UpdateChat(ctx, ws, u.ID, req.Id, runs.ChatPatchInput{Revision: int32(req.Body.Revision), Title: req.Body.Title, Archived: req.Body.Archived})
+	c, err := s.Runs.UpdateChat(ctx, ws, u.ID, req.Id, runs.ChatPatchInput{Revision: int32(req.Body.Revision), Title: req.Body.Title, Archived: req.Body.Archived, Project: req.Body.Project})
 	if err != nil {
 		return nil, err
 	}

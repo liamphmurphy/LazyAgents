@@ -193,15 +193,15 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid.UUID, in ChatInput) (store.ChatSession, error) {
 	var out store.ChatSession
 	err := func() error {
-		p, err := q.LockProjectByKey(ctx, store.LockProjectByKeyParams{WorkspaceID: ws, Key: in.Project})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return apperr.Invalid("project", "unknown project")
-		}
-		if err != nil {
-			return err
-		}
-		if p.Archived {
-			return apperr.Conflict("restore the archived project before starting a chat")
+		// A chat needs no project; one named here is attached from the start.
+		var p store.Project
+		var projectID *uuid.UUID
+		if in.Project != "" {
+			var err error
+			if p, err = lockAttachableProject(ctx, q, ws, in.Project); err != nil {
+				return err
+			}
+			projectID = &p.ID
 		}
 		a, err := agents.EnsureAssistant(ctx, q, ws)
 		if err != nil {
@@ -253,7 +253,7 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: p.ID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID, Hidden: in.Hidden})
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: projectID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID, Hidden: in.Hidden})
 		if err != nil {
 			return err
 		}
@@ -348,7 +348,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	if interrupt && chat.InterruptMessageID != nil {
 		return chat, msg, apperr.Conflict("still stopping the reply for your last message; send this again in a moment")
 	}
-	p, err := q.GetProject(ctx, store.GetProjectParams{ID: chat.ProjectID, WorkspaceID: chat.WorkspaceID})
+	p, err := chatProject(ctx, q, chat)
 	if err != nil {
 		return chat, msg, err
 	}
@@ -371,7 +371,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			attachIDs = append(attachIDs, id)
 		}
 	}
-	docs, err := ResolveChatRefs(ctx, q, chat.WorkspaceID, chat.ProjectID, chat.ID, in.ContextRefs)
+	docs, err := ResolveChatRefs(ctx, q, chat.WorkspaceID, ProjectIDOrNil(chat.ProjectID), chat.ID, in.ContextRefs)
 	if err != nil {
 		return chat, msg, err
 	}
@@ -741,9 +741,11 @@ type ChatPatchInput struct {
 	Revision int32
 	Title    *string
 	Archived *bool
+	// Project attaches this project's key to the chat; "" detaches. nil leaves it.
+	Project *string
 }
 
-// UpdateChat renames, archives or restores a chat. Archiving ends the chat's
+// UpdateChat renames, archives or restores a chat, or changes its project. Archiving ends the chat's
 // current run (the runner sweeps its workspace); a restored chat starts a new
 // segment on its next message. 409 on a stale revision or while a turn runs.
 func (s *Service) UpdateChat(ctx context.Context, ws, user, id uuid.UUID, in ChatPatchInput) (store.ChatSession, error) {
@@ -763,14 +765,34 @@ func (s *Service) UpdateChat(ctx context.Context, ws, user, id uuid.UUID, in Cha
 		if in.Archived != nil {
 			archived = *in.Archived
 		}
-		if in.Title == nil && in.Archived == nil {
-			return apperr.Invalid("title", "provide a title or archived")
+		if in.Title == nil && in.Archived == nil && in.Project == nil {
+			return apperr.Invalid("title", "provide a title, archived or project")
 		}
 		if chat.Revision != in.Revision {
 			return apperr.Conflict("the chat changed; reload and try again")
 		}
 		if chat.State == "running" {
 			return apperr.Conflict("a turn is still running")
+		}
+		if in.Project != nil {
+			var projectID *uuid.UUID
+			if *in.Project != "" {
+				p, err := lockAttachableProject(ctx, q, ws, *in.Project)
+				if err != nil {
+					return err
+				}
+				projectID = &p.ID
+			}
+			if !sameProject(chat.ProjectID, projectID) {
+				// The segment's instructions name the project, so the next
+				// message starts a fresh one with the conversation handed off.
+				if chat, err = endChatSegment(ctx, q, chat, "The chat's project changed."); err != nil {
+					return err
+				}
+				if chat, err = q.SetChatProject(ctx, store.SetChatProjectParams{ID: chat.ID, WorkspaceID: ws, Revision: chat.Revision, ProjectID: projectID}); err != nil {
+					return err
+				}
+			}
 		}
 		if archived && !chat.Archived && chat.CurrentRunID != nil {
 			run, err := q.LockRun(ctx, *chat.CurrentRunID)
@@ -800,6 +822,78 @@ func (s *Service) UpdateChat(ctx context.Context, ws, user, id uuid.UUID, in Cha
 		return err
 	})
 	return out, err
+}
+
+// lockAttachableProject is the active project a chat may attach.
+func lockAttachableProject(ctx context.Context, q *store.Queries, ws uuid.UUID, key string) (store.Project, error) {
+	p, err := q.LockProjectByKey(ctx, store.LockProjectByKeyParams{WorkspaceID: ws, Key: key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return p, apperr.Invalid("project", "unknown project")
+	}
+	if err != nil {
+		return p, err
+	}
+	if p.Archived {
+		return p, apperr.Conflict("restore the archived project before attaching it to a chat")
+	}
+	return p, nil
+}
+
+func sameProject(a, b *uuid.UUID) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// ProjectIDOrNil is the id to scope lookups by: uuid.Nil matches no project, so
+// a chat without one sees only workspace-level content.
+func ProjectIDOrNil(id *uuid.UUID) uuid.UUID {
+	if id == nil {
+		return uuid.Nil
+	}
+	return *id
+}
+
+// OptionalProject is the project with this id, or the zero Project (empty key,
+// not archived) when id is nil.
+func OptionalProject(ctx context.Context, q *store.Queries, ws uuid.UUID, id *uuid.UUID) (store.Project, error) {
+	if id == nil {
+		return store.Project{}, nil
+	}
+	return q.GetProject(ctx, store.GetProjectParams{ID: *id, WorkspaceID: ws})
+}
+
+func chatProject(ctx context.Context, q *store.Queries, chat store.ChatSession) (store.Project, error) {
+	return OptionalProject(ctx, q, chat.WorkspaceID, chat.ProjectID)
+}
+
+// endChatSegment completes the chat's current run, if any is still live, and
+// detaches it so the next message starts a fresh segment. The caller holds the
+// chat lock.
+func endChatSegment(ctx context.Context, q *store.Queries, chat store.ChatSession, outcome string) (store.ChatSession, error) {
+	if chat.CurrentRunID == nil {
+		return chat, nil
+	}
+	run, err := q.LockRun(ctx, *chat.CurrentRunID)
+	if err != nil {
+		return chat, err
+	}
+	if !slices.Contains(Terminal, run.State) {
+		if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
+			return chat, err
+		}
+		if err = q.ExpireRunApprovals(ctx, run.ID); err != nil {
+			return chat, err
+		}
+		if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_segment_ended", "reason": "project_changed", "harness": chat.Harness}); err != nil {
+			return chat, err
+		}
+		if err = RecomputeAgentStatus(ctx, q, run.AgentID); err != nil {
+			return chat, err
+		}
+	}
+	return q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: chat.ID, State: chat.State})
 }
 
 // DeleteChat removes a chat and its messages. A running turn is cancelled

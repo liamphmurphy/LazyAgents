@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
@@ -99,10 +98,10 @@ func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.S
 		return nil, err
 	}
 	for _, m := range messages {
-		if m.Archived || (project != nil && m.ProjectKey != project.Key) {
+		if m.Archived || (project != nil && (m.ProjectKey == nil || *m.ProjectKey != project.Key)) {
 			continue
 		}
-		id, href := m.ID, "/chat/"+m.SessionID.String()+"?project="+url.QueryEscape(m.ProjectKey)+"&message="+m.ID.String()
+		id, href := m.ID, "/chat/"+m.SessionID.String()+"?message="+m.ID.String()
 		snippet := strings.NewReplacer("\ue000", "«", "\ue001", "»").Replace(m.Snippet)
 		// Below title matches: a word somewhere in a conversation is weak evidence.
 		out.Hits = append(out.Hits, api.SearchHit{Target: api.LinkTarget{Kind: api.LinkTargetKind("chat"), Id: &id, Title: m.ChatTitle, Href: &href}, Snippet: snippet, Score: 0.05})
