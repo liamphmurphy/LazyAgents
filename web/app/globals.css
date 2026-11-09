@@ -570,7 +570,7 @@
 .orb-badge {
   position: absolute; top: -4px; right: -4px; z-index: 4; display: grid; place-items: center;
   min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; border: 2px solid var(--bg);
-  font-size: 10px; font-weight: 700; line-height: 1; color: var(--bg);
+  font-size: 10px; font-weight: 700; color: var(--bg);
 }
 .orb-badge.n { background: var(--text); }
 .orb-badge.h { background: var(--state-human); }

@@ -145,3 +145,40 @@ test("with nothing going on the orb dims and the panel says so", async ({ page }
   await expect(panel).toContainText("not checked yet");
   await expect(panel.locator(".orb-usub").first()).toHaveText("Not read yet");
 });
+
+// The motion was approved as a mockup; these pin its timings so a refactor can't drift from it.
+test("motion keeps the approved mockup's keyframes and timings", async ({ page }) => {
+  const state = { dock: { personas: [entry(vesperBot, chat("c1", "Harness usage spike", "working", "claude-code"))], harnesses: harnesses() } };
+  await installOrb(page, state);
+  await page.goto("/board?project=WEB");
+  await expect(orbButton(page)).toHaveClass(/\blive\b/);
+
+  const timing = (sel: string) => page.evaluate((sel) => document.querySelector(sel)!.getAnimations().map((a) => {
+    const t = (a.effect as KeyframeEffect).getTiming();
+    const k = (a.effect as KeyframeEffect).getKeyframes();
+    return { duration: t.duration, delay: t.delay, easing: t.easing, offsets: k.map((f) => Number(f.computedOffset.toFixed(2))), first: String(k[0].clipPath ?? ""), last: String(k.at(-1)!.clipPath ?? "") };
+  }), sel);
+
+  await orbButton(page).click();
+  const [sprout] = await timing(".orb-panel");
+  expect(sprout).toMatchObject({ duration: 540, delay: 0, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", offsets: [0, 0.42, 1] });
+  expect(sprout.first).toMatch(/^inset\(\d+px 0px 0px \d+px round 23px\)$/);
+  expect(sprout.last).toBe("inset(0px round 14px)");
+  const rows = await page.evaluate(() => [...document.querySelectorAll("#orb-panel [data-stg]")].map((el) => { const t = (el.getAnimations()[0].effect as KeyframeEffect).getTiming(); return [t.duration, t.delay]; }));
+  expect(rows.slice(0, 3)).toEqual([[280, 220], [280, 265], [280, 310]]);
+
+  await page.keyboard.press("Escape");
+  const [fold] = await timing(".orb-panel");
+  expect(fold).toMatchObject({ duration: 380, easing: "cubic-bezier(0.4, 0, 0.2, 1)", offsets: [0, 0.58, 1] });
+
+  state.dock = { personas: [entry(vesperBot, chat("c1", "Harness usage spike", "replied", "claude-code", 1))], harnesses: harnesses({ claude: { running: 0 } }) };
+  await page.waitForTimeout(450);
+  await pushChatUpdated(page);
+  await expect(orb(page).locator(".orb-chip")).toHaveCount(1);
+  const chipMotion = await timing(".orb-chip");
+  expect(chipMotion[0]).toMatchObject({ duration: 440, delay: 120, easing: "cubic-bezier(0.2, 0.9, 0.25, 1.05)" });
+  const kids = await page.evaluate(() => [...document.querySelectorAll(".orb-chip .orb-chip-k")].map((el) => (el.getAnimations()[0].effect as KeyframeEffect).getTiming().delay));
+  expect(kids).toEqual([300, 360, 420]);
+  const burst = await page.evaluate(() => document.querySelector(".orb-btn")!.getAnimations().filter((a) => a instanceof CSSAnimation === false).map((a) => (a.effect as KeyframeEffect).getTiming().duration));
+  expect(burst).toContain(480);
+});
