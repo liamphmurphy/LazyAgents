@@ -121,7 +121,7 @@ func (q *Queries) CreateLearningCheck(ctx context.Context, arg CreateLearningChe
 
 const createLearningCourse = `-- name: CreateLearningCourse :one
 INSERT INTO learning_courses (workspace_id, user_id, chat_id, topic, goal, level, minutes_budget)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at, part
 `
 
 type CreateLearningCourseParams struct {
@@ -165,6 +165,7 @@ func (q *Queries) CreateLearningCourse(ctx context.Context, arg CreateLearningCo
 		&i.CurrentLesson,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.Part,
 	)
 	return i, err
 }
@@ -202,7 +203,7 @@ func (q *Queries) CreateLearningLesson(ctx context.Context, arg CreateLearningLe
 }
 
 const createLearningRun = `-- name: CreateLearningRun :exec
-INSERT INTO learning_runs (run_id, course_id, role, round, unit_seq) VALUES ($1, $2, $3, $4, $5)
+INSERT INTO learning_runs (run_id, course_id, role, round, unit_seq, part) VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateLearningRunParams struct {
@@ -211,6 +212,7 @@ type CreateLearningRunParams struct {
 	Role     string
 	Round    int32
 	UnitSeq  int32
+	Part     int32
 }
 
 func (q *Queries) CreateLearningRun(ctx context.Context, arg CreateLearningRunParams) error {
@@ -220,6 +222,7 @@ func (q *Queries) CreateLearningRun(ctx context.Context, arg CreateLearningRunPa
 		arg.Role,
 		arg.Round,
 		arg.UnitSeq,
+		arg.Part,
 	)
 	return err
 }
@@ -254,6 +257,21 @@ func (q *Queries) DeleteLearningChecks(ctx context.Context, lessonID uuid.UUID) 
 	return err
 }
 
+const deleteLearningLessonsFrom = `-- name: DeleteLearningLessonsFrom :exec
+DELETE FROM learning_lessons WHERE course_id = $1 AND unit_seq >= $2
+`
+
+type DeleteLearningLessonsFromParams struct {
+	CourseID uuid.UUID
+	UnitSeq  int32
+}
+
+// Drops a part that didn't get built: its units are the outline's last.
+func (q *Queries) DeleteLearningLessonsFrom(ctx context.Context, arg DeleteLearningLessonsFromParams) error {
+	_, err := q.db.Exec(ctx, deleteLearningLessonsFrom, arg.CourseID, arg.UnitSeq)
+	return err
+}
+
 const getLearningCheck = `-- name: GetLearningCheck :one
 SELECT k.id, k.lesson_id, k.seq, k.objective, k.kind, k.prompt, k.options, k.answer, k.rubric, k.explanation, k.sources FROM learning_checks k JOIN learning_lessons l ON l.id = k.lesson_id WHERE k.id = $1 AND l.course_id = $2
 `
@@ -283,7 +301,7 @@ func (q *Queries) GetLearningCheck(ctx context.Context, arg GetLearningCheckPara
 }
 
 const getLearningCourse = `-- name: GetLearningCourse :one
-SELECT id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at FROM learning_courses WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at, part FROM learning_courses WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `
 
 type GetLearningCourseParams struct {
@@ -315,6 +333,7 @@ func (q *Queries) GetLearningCourse(ctx context.Context, arg GetLearningCoursePa
 		&i.CurrentLesson,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.Part,
 	)
 	return i, err
 }
@@ -349,7 +368,7 @@ func (q *Queries) GetLearningLessonByKey(ctx context.Context, arg GetLearningLes
 }
 
 const getLearningRun = `-- name: GetLearningRun :one
-SELECT run_id, course_id, role, round, unit_seq FROM learning_runs WHERE run_id = $1
+SELECT run_id, course_id, role, round, unit_seq, part FROM learning_runs WHERE run_id = $1
 `
 
 func (q *Queries) GetLearningRun(ctx context.Context, runID uuid.UUID) (LearningRun, error) {
@@ -361,12 +380,29 @@ func (q *Queries) GetLearningRun(ctx context.Context, runID uuid.UUID) (Learning
 		&i.Role,
 		&i.Round,
 		&i.UnitSeq,
+		&i.Part,
 	)
 	return i, err
 }
 
+const learningCheckUnit = `-- name: LearningCheckUnit :one
+SELECT l.unit_seq FROM learning_checks k JOIN learning_lessons l ON l.id = k.lesson_id WHERE k.id = $1 AND l.course_id = $2
+`
+
+type LearningCheckUnitParams struct {
+	ID       uuid.UUID
+	CourseID uuid.UUID
+}
+
+func (q *Queries) LearningCheckUnit(ctx context.Context, arg LearningCheckUnitParams) (int32, error) {
+	row := q.db.QueryRow(ctx, learningCheckUnit, arg.ID, arg.CourseID)
+	var unit_seq int32
+	err := row.Scan(&unit_seq)
+	return unit_seq, err
+}
+
 const learningCourseForChat = `-- name: LearningCourseForChat :one
-SELECT id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at FROM learning_courses WHERE chat_id = $1
+SELECT id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at, part FROM learning_courses WHERE chat_id = $1
 `
 
 func (q *Queries) LearningCourseForChat(ctx context.Context, chatID uuid.UUID) (LearningCourse, error) {
@@ -392,12 +428,13 @@ func (q *Queries) LearningCourseForChat(ctx context.Context, chatID uuid.UUID) (
 		&i.CurrentLesson,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.Part,
 	)
 	return i, err
 }
 
 const learningCourseForRun = `-- name: LearningCourseForRun :one
-SELECT c.id, c.workspace_id, c.user_id, c.chat_id, c.research_job_id, c.topic, c.goal, c.level, c.minutes_budget, c.state, c.error, c.round, c.max_sources, c.max_minutes, c.max_cost_micros, c.outline, c.current_lesson, c.created_at, c.ready_at FROM learning_courses c JOIN learning_runs l ON l.course_id = c.id WHERE l.run_id = $1
+SELECT c.id, c.workspace_id, c.user_id, c.chat_id, c.research_job_id, c.topic, c.goal, c.level, c.minutes_budget, c.state, c.error, c.round, c.max_sources, c.max_minutes, c.max_cost_micros, c.outline, c.current_lesson, c.created_at, c.ready_at, c.part FROM learning_courses c JOIN learning_runs l ON l.course_id = c.id WHERE l.run_id = $1
 `
 
 func (q *Queries) LearningCourseForRun(ctx context.Context, runID uuid.UUID) (LearningCourse, error) {
@@ -423,17 +460,18 @@ func (q *Queries) LearningCourseForRun(ctx context.Context, runID uuid.UUID) (Le
 		&i.CurrentLesson,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.Part,
 	)
 	return i, err
 }
 
 const learningCourseSpend = `-- name: LearningCourseSpend :one
 SELECT coalesce(sum(r.cost_usd_micros), 0)::bigint FROM runs r WHERE r.id IN (
-  SELECT l.run_id FROM learning_runs l WHERE l.course_id = $1
+  SELECT l.run_id FROM learning_runs l JOIN learning_courses c ON c.id = l.course_id WHERE l.course_id = $1 AND l.part = c.part
   UNION SELECT t.run_id FROM research_tasks t JOIN learning_courses c ON c.research_job_id = t.job_id WHERE c.id = $1)
 `
 
-// What the course's own runs and its researchers have cost so far.
+// What the part being built has cost so far: its own runs and its researchers.
 func (q *Queries) LearningCourseSpend(ctx context.Context, courseID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, learningCourseSpend, courseID)
 	var column_1 int64
@@ -534,7 +572,7 @@ func (q *Queries) ListLearningChecks(ctx context.Context, courseID uuid.UUID) ([
 }
 
 const listLearningCourses = `-- name: ListLearningCourses :many
-SELECT id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at FROM learning_courses WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at DESC, id DESC LIMIT 100
+SELECT id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at, part FROM learning_courses WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at DESC, id DESC LIMIT 100
 `
 
 type ListLearningCoursesParams struct {
@@ -571,6 +609,7 @@ func (q *Queries) ListLearningCourses(ctx context.Context, arg ListLearningCours
 			&i.CurrentLesson,
 			&i.CreatedAt,
 			&i.ReadyAt,
+			&i.Part,
 		); err != nil {
 			return nil, err
 		}
@@ -620,7 +659,7 @@ func (q *Queries) ListLearningLessons(ctx context.Context, courseID uuid.UUID) (
 }
 
 const listLearningRuns = `-- name: ListLearningRuns :many
-SELECT l.run_id, l.course_id, l.role, l.round, l.unit_seq, r.state AS run_state FROM learning_runs l JOIN runs r ON r.id = l.run_id WHERE l.course_id = $1 ORDER BY r.created_at, l.run_id
+SELECT l.run_id, l.course_id, l.role, l.round, l.unit_seq, l.part, r.state AS run_state FROM learning_runs l JOIN runs r ON r.id = l.run_id WHERE l.course_id = $1 ORDER BY r.created_at, l.run_id
 `
 
 type ListLearningRunsRow struct {
@@ -629,6 +668,7 @@ type ListLearningRunsRow struct {
 	Role     string
 	Round    int32
 	UnitSeq  int32
+	Part     int32
 	RunState string
 }
 
@@ -647,6 +687,7 @@ func (q *Queries) ListLearningRuns(ctx context.Context, courseID uuid.UUID) ([]L
 			&i.Role,
 			&i.Round,
 			&i.UnitSeq,
+			&i.Part,
 			&i.RunState,
 		); err != nil {
 			return nil, err
@@ -715,7 +756,7 @@ func (q *Queries) LockLearningAttempt(ctx context.Context, arg LockLearningAttem
 }
 
 const lockLearningCourse = `-- name: LockLearningCourse :one
-SELECT id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at FROM learning_courses WHERE id = $1 FOR UPDATE
+SELECT id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at, part FROM learning_courses WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockLearningCourse(ctx context.Context, id uuid.UUID) (LearningCourse, error) {
@@ -741,8 +782,20 @@ func (q *Queries) LockLearningCourse(ctx context.Context, id uuid.UUID) (Learnin
 		&i.CurrentLesson,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.Part,
 	)
 	return i, err
+}
+
+const nextLearningLessonSeq = `-- name: NextLearningLessonSeq :one
+SELECT coalesce(max(seq) + 1, 0)::int FROM learning_lessons WHERE course_id = $1
+`
+
+func (q *Queries) NextLearningLessonSeq(ctx context.Context, courseID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, nextLearningLessonSeq, courseID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const ownsLearningRun = `-- name: OwnsLearningRun :one
@@ -799,7 +852,7 @@ func (q *Queries) SetLearningCourseLimits(ctx context.Context, arg SetLearningCo
 }
 
 const setLearningCourseOutline = `-- name: SetLearningCourseOutline :one
-UPDATE learning_courses SET outline = $2 WHERE id = $1 RETURNING id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at
+UPDATE learning_courses SET outline = $2 WHERE id = $1 RETURNING id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at, part
 `
 
 type SetLearningCourseOutlineParams struct {
@@ -830,6 +883,44 @@ func (q *Queries) SetLearningCourseOutline(ctx context.Context, arg SetLearningC
 		&i.CurrentLesson,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.Part,
+	)
+	return i, err
+}
+
+const setLearningCoursePart = `-- name: SetLearningCoursePart :one
+UPDATE learning_courses SET part = $2 WHERE id = $1 RETURNING id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at, part
+`
+
+type SetLearningCoursePartParams struct {
+	ID   uuid.UUID
+	Part int32
+}
+
+func (q *Queries) SetLearningCoursePart(ctx context.Context, arg SetLearningCoursePartParams) (LearningCourse, error) {
+	row := q.db.QueryRow(ctx, setLearningCoursePart, arg.ID, arg.Part)
+	var i LearningCourse
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.ChatID,
+		&i.ResearchJobID,
+		&i.Topic,
+		&i.Goal,
+		&i.Level,
+		&i.MinutesBudget,
+		&i.State,
+		&i.Error,
+		&i.Round,
+		&i.MaxSources,
+		&i.MaxMinutes,
+		&i.MaxCostMicros,
+		&i.Outline,
+		&i.CurrentLesson,
+		&i.CreatedAt,
+		&i.ReadyAt,
+		&i.Part,
 	)
 	return i, err
 }
@@ -837,7 +928,7 @@ func (q *Queries) SetLearningCourseOutline(ctx context.Context, arg SetLearningC
 const setLearningCourseState = `-- name: SetLearningCourseState :one
 UPDATE learning_courses SET state = $2, error = $3, round = $4,
   ready_at = CASE WHEN $2 = 'ready' THEN now() ELSE ready_at END
-WHERE id = $1 RETURNING id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at
+WHERE id = $1 RETURNING id, workspace_id, user_id, chat_id, research_job_id, topic, goal, level, minutes_budget, state, error, round, max_sources, max_minutes, max_cost_micros, outline, current_lesson, created_at, ready_at, part
 `
 
 type SetLearningCourseStateParams struct {
@@ -875,6 +966,7 @@ func (q *Queries) SetLearningCourseState(ctx context.Context, arg SetLearningCou
 		&i.CurrentLesson,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.Part,
 	)
 	return i, err
 }

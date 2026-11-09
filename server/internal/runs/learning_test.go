@@ -68,20 +68,20 @@ func TestOutlineApply(t *testing.T) {
 		}
 		return out
 	}
-	got, err := o.Apply(OutlineEdit{Units: units([]string{"a"}, []string{"c", "b"}), Known: []string{"a"}})
+	got, err := o.Apply(OutlineEdit{Units: units([]string{"a"}, []string{"c", "b"}), Known: []string{"a"}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !got.find("a").Known || got.find("b").Known || got.Units[1].Lessons[0].Key != "c" {
 		t.Fatalf("got %+v", got)
 	}
-	if _, err := o.Apply(OutlineEdit{Units: units([]string{"b", "a"}, []string{"c"})}); err == nil || !strings.Contains(err.Error(), "can't come before") {
+	if _, err := o.Apply(OutlineEdit{Units: units([]string{"b", "a"}, []string{"c"})}, 0); err == nil || !strings.Contains(err.Error(), "can't come before") {
 		t.Fatalf("reorder: %v", err)
 	}
-	if _, err := o.Apply(OutlineEdit{Units: units([]string{"b"}, []string{"c"})}); err == nil {
+	if _, err := o.Apply(OutlineEdit{Units: units([]string{"b"}, []string{"c"})}, 0); err == nil {
 		t.Fatal("removing a prerequisite must be refused")
 	}
-	if _, err := o.Apply(OutlineEdit{Units: []OutlineEditUnit{{Title: o.Units[0].Title, Lessons: []string{"new"}}}}); err == nil {
+	if _, err := o.Apply(OutlineEdit{Units: []OutlineEditUnit{{Title: o.Units[0].Title, Lessons: []string{"new"}}}}, 0); err == nil {
 		t.Fatal("an edit can't bring in a new lesson")
 	}
 }
@@ -90,7 +90,7 @@ func TestActiveUnitsSkipAllKnown(t *testing.T) {
 	a := lesson("a")
 	a.Known = true
 	o := outline([]CourseLesson{a}, []CourseLesson{lesson("b")})
-	if got := o.activeUnits(); len(got) != 1 || got[0] != 1 {
+	if got := o.activeUnits(0); len(got) != 1 || got[0] != 1 {
 		t.Fatalf("got %v", got)
 	}
 }

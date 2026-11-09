@@ -380,6 +380,7 @@ func (s *Service) AttemptCheck(ctx context.Context, ws, user, course, check uuid
 	if utf8.RuneCountInString(strings.Join(response, "")) > 10000 {
 		return out, apperr.Invalid("response", "that answer is too long")
 	}
+	var unit int32
 	err := s.tx(ctx, func(q *store.Queries) error {
 		c, err := q.GetLearningCourse(ctx, store.GetLearningCourseParams{ID: course, WorkspaceID: ws, UserID: user})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -387,14 +388,19 @@ func (s *Service) AttemptCheck(ctx context.Context, ws, user, course, check uuid
 		} else if err != nil {
 			return err
 		}
-		if c.State != "ready" {
-			return apperr.Conflict("this module isn't ready yet")
-		}
 		k, err := q.GetLearningCheck(ctx, store.GetLearningCheckParams{ID: check, CourseID: course})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
 		} else if err != nil {
 			return err
+		}
+		if unit, err = q.LearningCheckUnit(ctx, store.LearningCheckUnitParams{ID: k.ID, CourseID: course}); err != nil {
+			return err
+		}
+		if ok, err := studyable(c, unit); err != nil {
+			return err
+		} else if !ok {
+			return apperr.Conflict("this lesson isn't ready yet")
 		}
 		out.Attempt, err = q.CreateLearningAttempt(ctx, store.CreateLearningAttemptParams{CheckID: k.ID, UserID: user, Response: response, Correct: gradeCheck(k, response), Confidence: int16(confidence)})
 		if err != nil {
@@ -403,7 +409,22 @@ func (s *Service) AttemptCheck(ctx context.Context, ws, user, course, check uuid
 		out.Reveal, err = revealFor(ctx, q, c, k, user)
 		return err
 	})
+	if err == nil {
+		s.planNextPartNear(ctx, ws, user, course, unit)
+	}
 	return out, err
+}
+
+// studyable reports whether a unit's lessons can be studied yet.
+func studyable(c store.LearningCourse, unit int32) (bool, error) {
+	if len(c.Outline) == 0 {
+		return false, nil
+	}
+	o, err := parseOutline(c)
+	if err != nil {
+		return false, err
+	}
+	return int(unit) < StudyableUnits(c, o), nil
 }
 
 func revealFor(ctx context.Context, q *store.Queries, c store.LearningCourse, k store.LearningCheck, user uuid.UUID) (*CheckReveal, error) {
@@ -445,13 +466,16 @@ func (s *Service) PostTutorMessage(ctx context.Context, ws, user, course uuid.UU
 	} else if err != nil {
 		return out, err
 	}
-	if c.State != "ready" {
-		return out, apperr.Conflict("the tutor starts once the module is ready")
-	}
-	if _, err := q(s).GetLearningLessonByKey(ctx, store.GetLearningLessonByKeyParams{CourseID: course, Key: lesson}); errors.Is(err, pgx.ErrNoRows) {
+	l, err := q(s).GetLearningLessonByKey(ctx, store.GetLearningLessonByKeyParams{CourseID: course, Key: lesson})
+	if errors.Is(err, pgx.ErrNoRows) {
 		return out, apperr.Invalid("lesson", "there's no lesson %q", lesson)
 	} else if err != nil {
 		return out, err
+	}
+	if ok, err := studyable(c, l.UnitSeq); err != nil {
+		return out, err
+	} else if !ok {
+		return out, apperr.Conflict("the tutor starts once this lesson is ready")
 	}
 	if err := q(s).SetLearningCurrentLesson(ctx, store.SetLearningCurrentLessonParams{ID: course, CurrentLesson: lesson}); err != nil {
 		return out, err

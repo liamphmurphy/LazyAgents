@@ -2285,6 +2285,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/learn/courses/{id}/next-part": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start outlining a module's next part
+         * @description For a ready module built in parts. Its outline comes back for approval like the first part's.
+         */
+        post: operations["startCourseNextPart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/learn/courses/{id}/stop": {
         parameters: {
             query?: never;
@@ -5631,6 +5653,7 @@ export interface components {
             goal?: string;
             /** @enum {string} */
             level: "new" | "some" | "experienced";
+            /** @description Over 480 minutes the module is built in parts */
             minutes_budget: number;
             /**
              * Format: uuid
@@ -5646,6 +5669,12 @@ export interface components {
             id: string;
             topic: string;
             state: components["schemas"]["CourseState"];
+            /** @description The part being built, or the last one built once ready; from 0 */
+            part: number;
+            /** @description How many parts the module has; 1 unless it's built in parts */
+            parts: number;
+            /** @description Whether some of it can be studied now: a ready module, or the parts before the one being built */
+            studyable: boolean;
             error: string;
             /** Format: date-time */
             created_at: string;
@@ -5672,13 +5701,23 @@ export interface components {
             known?: boolean;
         };
         CourseOutlineUnit: {
+            /** @description The part it belongs to; absent is the first */
+            part?: number;
             title: string;
             question: string;
             lessons: components["schemas"]["CourseOutlineLesson"][];
         };
         CourseOutline: {
             summary: string;
+            /** @description Every part of a module built in parts; absent otherwise */
+            parts?: components["schemas"]["CourseOutlinePart"][];
+            /** @description Units of the parts outlined so far, in order */
             units: components["schemas"]["CourseOutlineUnit"][];
+        };
+        CourseOutlinePart: {
+            title: string;
+            summary: string;
+            minutes: number;
         };
         CourseOutlineEdit: {
             units: {
@@ -10392,6 +10431,31 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startCourseNextPart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The module */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Course"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

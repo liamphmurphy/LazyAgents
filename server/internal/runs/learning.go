@@ -28,18 +28,34 @@ const (
 
 	learningRoleScope, learningRoleAuthor, learningRoleReview = "scope", "author", "review"
 
+	// Caps per part: a module built in parts has these for each one.
 	learningMaxUnits, learningMaxLessons = 5, 20
 	learningMaxObjectives                = 4
 	learningMaxGlossary                  = 60
+
+	// A module longer than this is built in parts, each outlined when the
+	// learner gets near it.
+	learningPartMinutes                = 480
+	learningMinParts, learningMaxParts = 2, 6
 )
 
 var learningKeyRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
-// CourseOutline is the module's shape: what gets approved before research.
+// CourseOutline is the module's shape: what gets approved before research. A
+// module built in parts plans every part up front, and its units grow by one
+// part at a time: each unit belongs to a part, and a later part's come last.
 type CourseOutline struct {
 	Summary  string       `json:"summary" jsonschema:"What the module covers and who it's for, in one or two sentences"`
 	Glossary []CourseTerm `json:"glossary" jsonschema:"The module's key terms, so every unit uses them the same way"`
-	Units    []CourseUnit `json:"units" jsonschema:"At most 5 units, in teaching order"`
+	Parts    []CoursePart `json:"parts,omitempty" jsonschema:"Only when your task asks for parts: every part of the module, in teaching order"`
+	Units    []CourseUnit `json:"units" jsonschema:"At most 5 units, in teaching order. In a module built in parts, only the part you were asked to outline"`
+}
+
+// CoursePart is one part of a module built in parts.
+type CoursePart struct {
+	Title   string `json:"title"`
+	Summary string `json:"summary" jsonschema:"What this part covers, in a sentence or two"`
+	Minutes int    `json:"minutes" jsonschema:"About how many minutes of study it is"`
 }
 
 // CourseTerm is one glossary entry.
@@ -50,6 +66,7 @@ type CourseTerm struct {
 
 // CourseUnit is a group of lessons and the question researched for them.
 type CourseUnit struct {
+	Part     int            `json:"part,omitempty" jsonschema:"Leave unset: Vesper sets it"`
 	Title    string         `json:"title" jsonschema:"Short unit title, unique in the module"`
 	Question string         `json:"question" jsonschema:"What a web researcher should find out to ground this unit"`
 	Lessons  []CourseLesson `json:"lessons"`
@@ -72,15 +89,32 @@ func (o *CourseOutline) Validate() error {
 	if o.Summary == "" {
 		return apperr.Invalid("summary", "required")
 	}
-	if len(o.Glossary) > learningMaxGlossary {
+	if len(o.Glossary) > learningMaxGlossary*o.partCount() {
 		return apperr.Invalid("glossary", "at most %d terms", learningMaxGlossary)
 	}
-	if len(o.Units) == 0 || len(o.Units) > learningMaxUnits {
+	if len(o.Parts) > 0 && (len(o.Parts) < learningMinParts || len(o.Parts) > learningMaxParts) {
+		return apperr.Invalid("parts", "give %d to %d parts", learningMinParts, learningMaxParts)
+	}
+	for i := range o.Parts {
+		p := &o.Parts[i]
+		p.Title, p.Summary = strings.TrimSpace(p.Title), strings.TrimSpace(p.Summary)
+		if p.Title == "" || utf8.RuneCountInString(p.Title) > 120 || p.Minutes <= 0 {
+			return apperr.Invalid("parts", "each part needs a title of up to 120 characters and its minutes")
+		}
+	}
+	if len(o.Units) == 0 {
 		return apperr.Invalid("units", "give 1 to %d units", learningMaxUnits)
 	}
-	seen, titles, total := map[string]bool{}, map[string]bool{}, 0
+	units, lessons := map[int]int{}, map[int]int{}
+	seen, titles := map[string]bool{}, map[string]bool{}
 	for i := range o.Units {
 		u := &o.Units[i]
+		if u.Part < 0 || u.Part >= o.partCount() || (i > 0 && u.Part < o.Units[i-1].Part) {
+			return apperr.Invalid("units", "unit %q is in the wrong part", u.Title)
+		}
+		if units[u.Part]++; units[u.Part] > learningMaxUnits {
+			return apperr.Invalid("units", "give 1 to %d units", learningMaxUnits)
+		}
 		u.Title, u.Question = strings.TrimSpace(u.Title), strings.TrimSpace(u.Question)
 		if u.Title == "" || utf8.RuneCountInString(u.Title) > 80 || titles[u.Title] {
 			return apperr.Invalid("units", "each unit needs a unique title of up to 80 characters: %q", u.Title)
@@ -131,13 +165,41 @@ func (o *CourseOutline) Validate() error {
 				}
 			}
 			seen[l.Key] = true
-			total++
+			lessons[u.Part]++
 		}
 	}
-	if total > learningMaxLessons {
-		return apperr.Invalid("lessons", "at most %d lessons, not %d", learningMaxLessons, total)
+	for _, n := range lessons {
+		if n > learningMaxLessons {
+			return apperr.Invalid("lessons", "at most %d lessons, not %d", learningMaxLessons, n)
+		}
 	}
 	return nil
+}
+
+// partCount is how many parts the module has: one unless it's built in parts.
+func (o *CourseOutline) partCount() int { return max(1, len(o.Parts)) }
+
+// firstUnit is the index of the first unit in part or later: where that part's
+// units start, or the end if it has none yet.
+func (o *CourseOutline) firstUnit(part int) int {
+	for i, u := range o.Units {
+		if u.Part >= part {
+			return i
+		}
+	}
+	return len(o.Units)
+}
+
+// StudyableUnits is how many of the outline's units can be studied: every unit
+// of a ready module, and while a later part is built, those before it.
+func StudyableUnits(c store.LearningCourse, o CourseOutline) int {
+	if c.State == "ready" {
+		return len(o.Units)
+	}
+	if c.Part == 0 {
+		return 0
+	}
+	return o.firstUnit(int(c.Part))
 }
 
 func (o *CourseOutline) find(key string) *CourseLesson {
@@ -160,12 +222,12 @@ func (o *CourseOutline) lessonTitle(key string) string {
 	return key
 }
 
-// activeUnits are the indexes of units with something left to teach; research
-// task seq i belongs to activeUnits[i].
-func (o *CourseOutline) activeUnits() []int {
+// activeUnits are the indexes of a part's units with something left to teach;
+// research task seq i belongs to activeUnits[i].
+func (o *CourseOutline) activeUnits(part int) []int {
 	out := []int{}
 	for i, u := range o.Units {
-		if slices.ContainsFunc(u.Lessons, func(l CourseLesson) bool { return !l.Known }) {
+		if u.Part == part && slices.ContainsFunc(u.Lessons, func(l CourseLesson) bool { return !l.Known }) {
 			out = append(out, i)
 		}
 	}
@@ -185,21 +247,23 @@ type OutlineEditUnit struct {
 	Lessons []string
 }
 
-// Apply rearranges o. Nothing new can come in through an edit: only units and
-// lessons the outline already has.
-func (o *CourseOutline) Apply(e OutlineEdit) (CourseOutline, error) {
-	out := CourseOutline{Summary: o.Summary, Glossary: o.Glossary, Units: []CourseUnit{}}
+// Apply rearranges a part of o; earlier parts stay as they are. Nothing new
+// can come in through an edit: only units and lessons the part already has.
+func (o *CourseOutline) Apply(e OutlineEdit, part int) (CourseOutline, error) {
+	from := o.firstUnit(part)
+	out := CourseOutline{Summary: o.Summary, Glossary: o.Glossary, Parts: o.Parts, Units: slices.Clone(o.Units[:from])}
+	current := CourseOutline{Units: o.Units[from:]}
 	for _, eu := range e.Units {
-		i := slices.IndexFunc(o.Units, func(u CourseUnit) bool { return u.Title == eu.Title })
+		i := slices.IndexFunc(current.Units, func(u CourseUnit) bool { return u.Title == eu.Title })
 		if i < 0 {
 			return out, apperr.Invalid("units", "there's no unit called %q", eu.Title)
 		}
 		if len(eu.Lessons) == 0 {
 			continue
 		}
-		u := CourseUnit{Title: o.Units[i].Title, Question: o.Units[i].Question, Lessons: []CourseLesson{}}
+		u := CourseUnit{Part: part, Title: current.Units[i].Title, Question: current.Units[i].Question, Lessons: []CourseLesson{}}
 		for _, key := range eu.Lessons {
-			l := o.find(key)
+			l := current.find(key)
 			if l == nil {
 				return out, apperr.Invalid("units", "there's no lesson %q", key)
 			}
@@ -210,7 +274,7 @@ func (o *CourseOutline) Apply(e OutlineEdit) (CourseOutline, error) {
 		out.Units = append(out.Units, u)
 	}
 	for _, key := range e.Known {
-		if !out.hasLesson(key) {
+		if !(&CourseOutline{Units: out.Units[from:]}).hasLesson(key) {
 			return out, apperr.Invalid("known", "there's no lesson %q", key)
 		}
 	}
@@ -304,7 +368,7 @@ func (e learningEnv) queue(ctx context.Context, q *store.Queries, c store.Learni
 	if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "start", InputMessage: prompt}); err != nil {
 		return err
 	}
-	if err := q.CreateLearningRun(ctx, store.CreateLearningRunParams{RunID: run.ID, CourseID: c.ID, Role: role, Round: round, UnitSeq: unit}); err != nil {
+	if err := q.CreateLearningRun(ctx, store.CreateLearningRunParams{RunID: run.ID, CourseID: c.ID, Role: role, Round: round, UnitSeq: unit, Part: c.Part}); err != nil {
 		return err
 	}
 	return event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "queued", "purpose": PurposeLearning, "course_id": c.ID})
@@ -359,19 +423,12 @@ func parseOutline(c store.LearningCourse) (CourseOutline, error) {
 // SubmitCourseOutline stores a scoping run's outline. The run may call it again
 // after a refusal; the advance moves on once the run ends.
 func (s *Service) SubmitCourseOutline(ctx context.Context, runID uuid.UUID, o CourseOutline) (int, error) {
-	if err := o.Validate(); err != nil {
-		return 0, err
-	}
 	total := 0
 	for i := range o.Units {
 		for j := range o.Units[i].Lessons {
 			o.Units[i].Lessons[j].Known = false
 			total++
 		}
-	}
-	raw, err := json.Marshal(o)
-	if err != nil {
-		return 0, err
 	}
 	return total, s.tx(ctx, func(q *store.Queries) error {
 		c, _, err := lockCourseForRun(ctx, q, runID, learningRoleScope)
@@ -381,9 +438,55 @@ func (s *Service) SubmitCourseOutline(ctx context.Context, runID uuid.UUID, o Co
 		if c.State != "scoping" {
 			return apperr.Conflict("this module is past scoping")
 		}
+		merged, err := mergePartOutline(c, o)
+		if err != nil {
+			return err
+		}
+		raw, err := json.Marshal(merged)
+		if err != nil {
+			return err
+		}
 		_, err = q.SetLearningCourseOutline(ctx, store.SetLearningCourseOutlineParams{ID: c.ID, Outline: raw})
 		return err
 	})
+}
+
+// mergePartOutline is the course's outline with a scoping run's submission in
+// it: the whole outline for the first part, or the next part's units added to
+// what's been built.
+func mergePartOutline(c store.LearningCourse, o CourseOutline) (CourseOutline, error) {
+	part := int(c.Part)
+	for i := range o.Units {
+		o.Units[i].Part = part
+	}
+	if part == 0 {
+		if c.MinutesBudget <= learningPartMinutes {
+			o.Parts = nil
+		} else if len(o.Parts) < learningMinParts {
+			return o, apperr.Invalid("parts", "this module is too long to build at once: plan it as %d to %d parts in parts, and give units for the first part only", learningMinParts, learningMaxParts)
+		}
+		return o, o.Validate()
+	}
+	if len(o.Glossary) > learningMaxGlossary {
+		return o, apperr.Invalid("glossary", "at most %d terms", learningMaxGlossary)
+	}
+	prev, err := parseOutline(c)
+	if err != nil {
+		return o, err
+	}
+	merged := CourseOutline{Summary: prev.Summary, Parts: prev.Parts, Glossary: slices.Clone(prev.Glossary), Units: slices.Clone(prev.Units[:prev.firstUnit(part)])}
+	for _, t := range o.Glossary {
+		if !slices.ContainsFunc(merged.Glossary, func(g CourseTerm) bool {
+			return strings.EqualFold(strings.TrimSpace(g.Term), strings.TrimSpace(t.Term))
+		}) {
+			merged.Glossary = append(merged.Glossary, t)
+		}
+	}
+	merged.Units = append(merged.Units, o.Units...)
+	if len(o.Units) == 0 {
+		return merged, apperr.Invalid("units", "give 1 to %d units for this part", learningMaxUnits)
+	}
+	return merged, merged.Validate()
 }
 
 func lockCourseForRun(ctx context.Context, q *store.Queries, runID uuid.UUID, role string) (store.LearningCourse, store.LearningRun, error) {
@@ -416,7 +519,7 @@ func (s *Service) EditCourseOutline(ctx context.Context, ws, user, id uuid.UUID,
 		if err != nil {
 			return err
 		}
-		next, err := o.Apply(e)
+		next, err := o.Apply(e, int(c.Part))
 		if err != nil {
 			return err
 		}
@@ -445,19 +548,25 @@ func (s *Service) ApproveCourse(ctx context.Context, ws, user, id uuid.UUID, max
 		if err != nil {
 			return err
 		}
-		active := o.activeUnits()
+		active := o.activeUnits(int(c.Part))
 		if len(active) == 0 {
 			return apperr.Invalid("known", "you've marked every lesson as known: leave at least one to learn")
 		}
-		in := ResearchInput{Title: c.Topic, MaxSources: maxSources, MaxMinutes: maxMinutes, MaxCostUSD: maxCostUSD}
+		in := ResearchInput{Title: partTitle(c.Topic, o, int(c.Part)), MaxSources: maxSources, MaxMinutes: maxMinutes, MaxCostUSD: maxCostUSD}
 		for _, i := range active {
 			in.Questions = append(in.Questions, ResearchQuestion{Label: o.Units[i].Title, Question: o.Units[i].Question})
 		}
 		if err := in.validate(); err != nil {
 			return err
 		}
-		seq := int32(0)
+		seq, err := q.NextLearningLessonSeq(ctx, c.ID)
+		if err != nil {
+			return err
+		}
 		for i, u := range o.Units {
+			if u.Part != int(c.Part) {
+				continue
+			}
 			for _, l := range u.Lessons {
 				status := "pending"
 				if l.Known {
@@ -545,6 +654,10 @@ func (s *Service) StopCourse(ctx context.Context, ws, user, id uuid.UUID) (store
 			return apperr.Conflict("this module isn't being built")
 		}
 		if err := haltCourse(ctx, q, c, "The module was stopped."); err != nil {
+			return err
+		}
+		if c.Part > 0 {
+			c, err = dropPart(ctx, q, c, "")
 			return err
 		}
 		c, err = q.SetLearningCourseState(ctx, store.SetLearningCourseStateParams{ID: c.ID, State: "stopped", Error: "", Round: c.Round})

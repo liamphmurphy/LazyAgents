@@ -339,3 +339,190 @@ func TestCourseMissing(t *testing.T) {
 		t.Fatalf("blank topic: %d", code)
 	}
 }
+
+// buildCoursePart takes an approved part through research, writing and review,
+// passing every lesson.
+func (e *chatEnv) buildCoursePart(t *testing.T, id string, url string, keys map[int][]string) {
+	t.Helper()
+	ctx := t.Context()
+	course, err := e.q.LockLearningCourse(ctx, uuid.MustParse(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	researchers := e.researchRuns(t, course.ResearchJobID.String())
+	for _, r := range researchers {
+		if _, err := e.runs.SubmitResearchFindings(ctx, r, []runs.ResearchFinding{{Claim: "c", Sources: []runs.ResearchSource{{Title: "Docs", URL: url}}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.finishCourseRuns(t, researchers)
+	wantCourseState(t, e.courseState(t, id), "authoring")
+	authors := e.courseRuns(t, id, "author")
+	for i, a := range authors {
+		for _, k := range keys[i] {
+			if err := e.runs.SubmitCourseLesson(ctx, a, courseLesson(k, "Objective "+k)); err != nil {
+				t.Fatalf("%s: %v", k, err)
+			}
+		}
+	}
+	e.finishCourseRuns(t, authors)
+	reviewers := e.courseRuns(t, id, "review")
+	for i, r := range reviewers {
+		var verdicts []runs.LessonReview
+		for _, k := range keys[i] {
+			verdicts = append(verdicts, runs.LessonReview{Key: k, Verdict: "pass"})
+		}
+		if err := e.runs.SubmitCourseReviews(ctx, r, verdicts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.finishCourseRuns(t, reviewers)
+}
+
+func partLesson(key string, prereqs ...string) runs.CourseLesson {
+	return runs.CourseLesson{Key: key, Title: strings.ToUpper(key), Objectives: []string{"Objective " + key}, Prereqs: prereqs}
+}
+
+func summaryOf(c map[string]any) map[string]any { return c["summary"].(map[string]any) }
+
+func courseLessons(c map[string]any) map[string]map[string]any {
+	out := map[string]map[string]any{}
+	for _, l := range c["lessons"].([]any) {
+		m := l.(map[string]any)
+		out[m["key"].(string)] = m
+	}
+	return out
+}
+
+// A long module is built a part at a time: the next part is outlined as the
+// learner nears the end of what's built, from how they did, while they keep
+// studying; a part that's stopped or fails is dropped and can be tried again.
+func TestCourseInParts(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := t.Context()
+	code, created := e.do("POST", "/learn/courses", map[string]any{"project": "PAY", "topic": "Postgres internals", "level": "some", "minutes_budget": 1200, "harness": "claude-code"})
+	if code != http.StatusCreated {
+		t.Fatalf("create: %d %v", code, created)
+	}
+	id := summaryOf(created)["id"].(string)
+	scope := e.courseRuns(t, id, "scope")
+	var prompt string
+	if err := e.pool.QueryRow(ctx, `SELECT input_message FROM run_turns WHERE run_id = $1`, scope[0]).Scan(&prompt); err != nil || !strings.Contains(prompt, "built in parts") {
+		t.Fatalf("scope prompt: %q %v", prompt, err)
+	}
+	first := runs.CourseOutline{Summary: "Internals", Units: []runs.CourseUnit{
+		{Title: "Storage", Question: "How are rows stored?", Lessons: []runs.CourseLesson{partLesson("pages"), partLesson("tuples", "pages")}},
+		{Title: "MVCC", Question: "How does MVCC work?", Lessons: []runs.CourseLesson{partLesson("mvcc", "tuples")}},
+	}}
+	if _, err := e.runs.SubmitCourseOutline(ctx, scope[0], first); err == nil || !strings.Contains(err.Error(), "parts") {
+		t.Fatalf("a long module must plan parts: %v", err)
+	}
+	first.Parts = []runs.CoursePart{{Title: "Storage and MVCC", Summary: "How data lives", Minutes: 600}, {Title: "Indexes and planning", Summary: "Finding it fast", Minutes: 600}}
+	if _, err := e.runs.SubmitCourseOutline(ctx, scope[0], first); err != nil {
+		t.Fatal(err)
+	}
+	e.finishCourseRuns(t, scope)
+	c := e.courseState(t, id)
+	if s := summaryOf(c); s["state"] != "outline_ready" || s["parts"].(float64) != 2 || s["studyable"] != false {
+		t.Fatalf("outline: %v", s)
+	}
+	if code, res := e.do("POST", "/learn/courses/"+id+"/approve", map[string]any{"max_sources": 20, "max_minutes": 15}); code != http.StatusOK {
+		t.Fatalf("approve: %d %v", code, res)
+	}
+	e.buildCoursePart(t, id, "https://example.com/storage", map[int][]string{0: {"pages", "tuples"}, 1: {"mvcc"}})
+	c = e.courseState(t, id)
+	if s := summaryOf(c); s["state"] != "ready" || s["studyable"] != true || s["part"].(float64) != 0 || s["lessons"].(float64) != 3 {
+		t.Fatalf("part 1 ready: %v", s)
+	}
+	if code, _ := e.do("POST", "/learn/courses/"+id+"/next-part", nil); code != http.StatusOK {
+		t.Fatalf("next part by hand: %d", code)
+	}
+	if code, _ := e.do("POST", "/learn/courses/"+id+"/stop", nil); code != http.StatusOK {
+		t.Fatalf("stop: %d", code)
+	}
+	c = e.courseState(t, id)
+	if s := summaryOf(c); s["state"] != "ready" || s["part"].(float64) != 0 {
+		t.Fatalf("stopped part: %v", s)
+	}
+
+	// Working in the last unit built starts outlining the next part.
+	attempt := func(c map[string]any, key, answer string) {
+		t.Helper()
+		check := courseLessons(c)[key]["checks"].([]any)[0].(map[string]any)["id"].(string)
+		if code, out := e.do("POST", "/learn/courses/"+id+"/checks/"+check+"/attempts", map[string]any{"response": []string{answer}, "confidence": 2}); code != http.StatusCreated {
+			t.Fatalf("attempt %s: %d %v", key, code, out)
+		}
+	}
+	attempt(c, "pages", "wrong one")
+	wantCourseState(t, e.courseState(t, id), "ready")
+	attempt(c, "mvcc", "secretright")
+	c = e.courseState(t, id)
+	if s := summaryOf(c); s["state"] != "scoping" || s["part"].(float64) != 1 || s["studyable"] != true || len(c["lessons"].([]any)) != 3 {
+		t.Fatalf("planning part 2: %v", s)
+	}
+	attempt(c, "pages", "secretright") // still studying meanwhile
+	if code, _ := e.do("POST", "/learn/courses/"+id+"/next-part", nil); code != http.StatusConflict {
+		t.Fatalf("next part twice: %d", code)
+	}
+	scope = e.courseRuns(t, id, "scope")
+	if err := e.pool.QueryRow(ctx, `SELECT input_message FROM run_turns WHERE run_id = $1`, scope[0]).Scan(&prompt); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Indexes and planning", "<- outline this one", "Unit: MVCC\n- mvcc: MVCC (solid)", "checks wrong in: PAGES"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("part prompt lacks %q:\n%s", want, prompt)
+		}
+	}
+	second := runs.CourseOutline{Summary: "ignored", Units: []runs.CourseUnit{{Title: "Indexes", Question: "How do B-trees work?", Lessons: []runs.CourseLesson{partLesson("btree", "tuples"), partLesson("plans", "btree")}}}}
+	reused := second
+	reused.Units = []runs.CourseUnit{{Title: "Again", Question: "q", Lessons: []runs.CourseLesson{partLesson("pages")}}}
+	if _, err := e.runs.SubmitCourseOutline(ctx, scope[0], reused); err == nil || !strings.Contains(err.Error(), "used twice") {
+		t.Fatalf("reused key: %v", err)
+	}
+	if _, err := e.runs.SubmitCourseOutline(ctx, scope[0], second); err != nil {
+		t.Fatal(err)
+	}
+	e.finishCourseRuns(t, scope)
+	c = e.courseState(t, id)
+	if s := summaryOf(c); s["state"] != "outline_ready" || s["units"].(float64) != 1 || s["studyable"] != true {
+		t.Fatalf("part 2 outline: %v", s)
+	}
+	// Approving it: research that finds nothing drops the part, not the module.
+	if code, res := e.do("POST", "/learn/courses/"+id+"/approve", map[string]any{"max_sources": 20, "max_minutes": 15}); code != http.StatusOK {
+		t.Fatalf("approve part 2: %d %v", code, res)
+	}
+	course, _ := e.q.LockLearningCourse(ctx, uuid.MustParse(id))
+	e.finishCourseRuns(t, e.researchRuns(t, course.ResearchJobID.String()))
+	c = e.courseState(t, id)
+	if s := summaryOf(c); s["state"] != "ready" || s["part"].(float64) != 0 || !strings.Contains(s["error"].(string), "Part 2 couldn't be built") || len(c["outline"].(map[string]any)["units"].([]any)) != 2 {
+		t.Fatalf("dropped part: %v", s)
+	}
+
+	// Again, all the way: its lessons join the module and its sources carry on the numbering.
+	if code, _ := e.do("POST", "/learn/courses/"+id+"/next-part", nil); code != http.StatusOK {
+		t.Fatalf("retry: %d", code)
+	}
+	scope = e.courseRuns(t, id, "scope")
+	if _, err := e.runs.SubmitCourseOutline(ctx, scope[0], second); err != nil {
+		t.Fatal(err)
+	}
+	e.finishCourseRuns(t, scope)
+	if code, res := e.do("POST", "/learn/courses/"+id+"/approve", map[string]any{"max_sources": 20, "max_minutes": 15}); code != http.StatusOK {
+		t.Fatalf("approve again: %d %v", code, res)
+	}
+	e.buildCoursePart(t, id, "https://example.com/indexes", map[int][]string{0: {"btree", "plans"}})
+	c = e.courseState(t, id)
+	s := summaryOf(c)
+	if s["state"] != "ready" || s["part"].(float64) != 1 || s["lessons"].(float64) != 5 || s["error"] != "" {
+		t.Fatalf("part 2 ready: %v", s)
+	}
+	if l := courseLessons(c)["btree"]; l["unit_title"] != "Indexes" || l["status"] != "verified" {
+		t.Fatalf("btree: %v", l)
+	}
+	if src := c["sources"].([]any); len(src) != 2 || src[1].(map[string]any)["url"] != "https://example.com/indexes" {
+		t.Fatalf("sources: %v", src)
+	}
+	if code, _ := e.do("POST", "/learn/courses/"+id+"/next-part", nil); code != http.StatusConflict {
+		t.Fatalf("no third part: %d", code)
+	}
+}
