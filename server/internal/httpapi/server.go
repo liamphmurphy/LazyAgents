@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentapi"
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
@@ -85,9 +86,11 @@ func (s *Server) Handler() http.Handler {
 		},
 	})
 	// Agent API (docs/dev/plan.md §5.2): bearer agent tokens, not the local user.
-	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker, Wiki: s.Wiki, Connectors: s.connectors()}
+	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker, Wiki: s.Wiki, Connectors: s.connectors(), Secrets: s.userSecrets()}
 	mux.Handle("/mcp", agentapi.MCPHandler(deps, s.Version, s.Log))
 	mux.Handle("/mcp/connectors/{slug}", agentapi.ConnectorHandler(deps, s.Version))
+	// More specific than {slug}, so it wins; no connector slug can contain "_".
+	mux.Handle("/mcp/connectors/"+agentdef.SecretsMCPName, agentapi.SecretsHandler(deps, s.Version))
 	mux.HandleFunc("GET "+connectors.CallbackPath, s.connectorCallback)
 	mux.Handle("/api/v1/agent/", agentapi.RESTHandler(deps))
 	return requestLog(s.Log, s.localUser(mux))

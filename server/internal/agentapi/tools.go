@@ -23,11 +23,13 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/usersecrets"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
 type Deps struct {
 	Connectors *connectors.Service
+	Secrets    *usersecrets.Service
 	Q          *store.Queries
 	Runs       *runs.Service
 	Tracker    *tracker.Service
@@ -995,6 +997,7 @@ var Tools = []Tool{
 	define("submit_research_report", "Save the finished research report. Only when Vesper asks you to write one up.", submitResearchReport),
 	define("get_video_transcript", "Read the timestamped captions of a YouTube video the person shared, to watch along with them: react to what's actually said. Pass from_seconds/to_seconds for the part they're at.", videoTranscript),
 	proposeConnector,
+	proposeSecret,
 	define("create_space", "Create a space for the person: a home for their chats on one topic, with instructions every chat there gets. New chats in it start with you. Use it when the person asks for one; tell them you made it and link it.", createSpace),
 	define("create_scheduled_task", "Schedule a task that runs on its own (daily, weekly, monthly or cron): you get its instructions as a message each time and the result goes to the person's Inbox. Use it when the person asks for something recurring; confirm the time and time zone, then tell them it's scheduled.", createScheduledTask),
 	define("create_learning_module", "Start a Guided Learning module on a topic for the person. Vesper drafts an outline for them to approve, then writes lessons with checks; you're its tutor. Use it when the person wants to learn something in depth.", createLearningModule),
