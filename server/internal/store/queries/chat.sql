@@ -17,9 +17,19 @@ WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND revision =
 UPDATE chat_sessions SET connector_ids = $2 WHERE id = $1 RETURNING *;
 
 -- name: SetChatRepo :one
--- A coding chat's repository and work branch, set once right after creation
--- (the branch carries the chat id) and never changed.
-UPDATE chat_sessions SET repo_url = $2, work_branch = $3 WHERE id = $1 RETURNING *;
+-- A coding chat's repository, set once right after creation and never changed.
+UPDATE chat_sessions SET repo_url = $2 WHERE id = $1 RETURNING *;
+
+-- name: AddChatWorkBranches :exec
+-- Appends the branches a coding chat's persona pushed that it doesn't list
+-- yet, keeping the order they were first seen in, up to @max_branches.
+UPDATE chat_sessions SET work_branches = (
+  SELECT COALESCE(array_agg(b ORDER BY first), '{}') FROM (
+    SELECT b, min(n) AS first FROM unnest(work_branches || @branches::text[]) WITH ORDINALITY AS t(b, n)
+    GROUP BY b ORDER BY first LIMIT @max_branches::int
+  ) kept
+)
+WHERE id = @id AND repo_url IS NOT NULL;
 
 -- name: ListChatSessions :many
 SELECT * FROM chat_sessions

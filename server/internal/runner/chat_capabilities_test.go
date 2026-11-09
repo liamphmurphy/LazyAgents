@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -68,9 +69,9 @@ func TestCodingChatRepoSetupPushAndResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	branch := personas.WorkBranch(p.Name, chat.ID)
-	if chat.RepoUrl == nil || *chat.RepoUrl != "https://github.com/acme/app" || chat.WorkBranch == nil || *chat.WorkBranch != branch {
-		t.Fatalf("chat repo %v branch %v, want %s", chat.RepoUrl, chat.WorkBranch, branch)
+	// No branch until a change is asked for.
+	if chat.RepoUrl == nil || *chat.RepoUrl != "https://github.com/acme/app" || len(chat.WorkBranches) != 0 {
+		t.Fatalf("chat repo %v branches %v", chat.RepoUrl, chat.WorkBranches)
 	}
 	if _, err := e.pool.Exec(e.ctx, `UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
 		t.Fatal(err)
@@ -81,7 +82,7 @@ func TestCodingChatRepoSetupPushAndResume(t *testing.T) {
 	}
 
 	reply := e.postSh(chat.ID, "git rev-parse --abbrev-ref HEAD; git config user.name; git config user.email; test -x .git/hooks/pre-push && echo hook; git check-ignore .lazyagents && echo ignored")
-	for _, want := range []string{branch, "Pair Programmer (Vesper)", "pair-programmer@personas.lazyagents.local", "hook", "ignored"} {
+	for _, want := range []string{"main", "Pair Programmer (Vesper)", "pair-programmer@personas.lazyagents.local", "hook", "ignored"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("workspace setup: missing %q in %q", want, reply)
 		}
@@ -91,26 +92,43 @@ func TestCodingChatRepoSetupPushAndResume(t *testing.T) {
 		t.Fatalf("coding chat spec: %+v", spec)
 	}
 
-	e.postSh(chat.ID, "echo done > work.txt && git add work.txt && git commit -qm work && git push -q -u origin "+branch)
-	if got := gitIn(t, bare, "rev-parse", "--verify", "refs/heads/"+branch); got == "" {
-		t.Fatal("work branch not pushed")
+	// The persona makes a branch per change, and the chat keeps each it pushed.
+	e.postSh(chat.ID, "git checkout -q -b feat/add-work && echo done > work.txt && git add work.txt && git commit -qm work && git push -q -u origin feat/add-work")
+	e.postSh(chat.ID, "git checkout -q -b fix/typo origin/HEAD && echo fixed > fix.txt && git add fix.txt && git commit -qm fix && git push -q -u origin fix/typo"+
+		" && git checkout -q feat/add-work && echo more >> work.txt && git commit -qam more && git push -q")
+	for _, b := range []string{"feat/add-work", "fix/typo"} {
+		if got := gitIn(t, bare, "rev-parse", "--verify", "refs/heads/"+b); got == "" {
+			t.Fatalf("%s not pushed", b)
+		}
 	}
-	// Any other ref is refused by the pre-push hook.
-	reply = e.postSh(chat.ID, "git push origin HEAD:refs/heads/other 2>&1; git push origin HEAD:refs/tags/v1 2>&1")
-	if !strings.Contains(reply, "may only push") {
-		t.Fatalf("hook didn't refuse: %s", reply)
+	if got := e.chat(chat.ID).WorkBranches; !slices.Equal(got, []string{"feat/add-work", "fix/typo"}) {
+		t.Fatalf("chat branches %v", got)
 	}
-	if out := gitIn(t, bare, "for-each-ref", "--format=%(refname)"); strings.Contains(out, "other") || strings.Contains(out, "v1") {
-		t.Fatalf("a foreign ref landed on origin:\n%s", out)
+	// The default branch, a misnamed branch, a tag, someone else's branch and
+	// a delete are refused by the pre-push hook.
+	gitIn(t, bare, "branch", "feat/theirs", "main")
+	reply = e.postSh(chat.ID, "for r in refs/heads/main refs/heads/other refs/tags/v1 refs/heads/feat/theirs; do git push origin HEAD:$r 2>&1; done; git push origin :refs/heads/fix/typo 2>&1")
+	for _, want := range []string{"isn't one", "wasn't made in this chat", "may not delete"} {
+		if !strings.Contains(reply, want) {
+			t.Fatalf("hook didn't refuse (%q): %s", want, reply)
+		}
+	}
+	out := gitIn(t, bare, "for-each-ref", "--format=%(refname) %(subject)")
+	if strings.Contains(out, "other") || strings.Contains(out, "v1") || !strings.Contains(out, "refs/heads/main init") ||
+		!strings.Contains(out, "refs/heads/feat/theirs init") || !strings.Contains(out, "refs/heads/fix/typo") {
+		t.Fatalf("a foreign push landed on origin:\n%s", out)
 	}
 
-	// A new segment (here: a harness switch) starts in a fresh workspace and
-	// resumes the pushed branch.
+	// A new segment (here: a harness switch) starts in a fresh clone on the
+	// default branch, is told its branches, and may keep pushing them.
 	first := e.chatRun(chat.ID)
 	e.selectChat(chat.ID, agentdef.HarnessCodex, "gpt-5.5")
-	reply = e.postSh(chat.ID, "git rev-parse --abbrev-ref HEAD; cat work.txt; git log --format=%s -1")
-	if e.chatRun(chat.ID).ID == first.ID || !strings.Contains(reply, branch) || !strings.Contains(reply, "done") || !strings.Contains(reply, "work") {
-		t.Fatalf("new segment didn't resume pushed work (same run %v): %s", e.chatRun(chat.ID).ID == first.ID, reply)
+	reply = e.postSh(chat.ID, "git rev-parse --abbrev-ref HEAD; git checkout -q feat/add-work && cat work.txt && echo again >> work.txt && git commit -qam again && git push -q 2>&1 && echo pushed")
+	if e.chatRun(chat.ID).ID == first.ID || !strings.HasPrefix(strings.TrimSpace(reply), "main") || !strings.Contains(reply, "more") || !strings.Contains(reply, "pushed") {
+		t.Fatalf("new segment didn't pick up pushed work (same run %v): %s", e.chatRun(chat.ID).ID == first.ID, reply)
+	}
+	if spec, _ := runs.Spec(e.chatRun(chat.ID)); !strings.Contains(spec.Instructions, "feat/add-work, fix/typo") {
+		t.Fatalf("new segment isn't told its branches:\n%s", spec.Instructions)
 	}
 }
 

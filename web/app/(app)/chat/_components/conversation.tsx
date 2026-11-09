@@ -639,12 +639,17 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           {c.repo_url && (
             <span
               data-testid="repo-chip"
-              title={c.repo_url}
+              title={[c.repo_url, ...(c.work_branches ?? [])].join("\n")}
               className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-fg-secondary max-md:hidden @max-[720px]:hidden"
             >
               <Icon name="branch" size={13} className="flex-none" />
               <span className="truncate text-fg">{repoShortName(c.repo_url)}</span>
-              {c.work_branch && <span className="truncate font-mono text-[11.5px]">{c.work_branch}</span>}
+              {!!c.work_branches?.length && (
+                <span className="truncate font-mono text-[11.5px]">
+                  {c.work_branches[c.work_branches.length - 1]}
+                  {c.work_branches.length > 1 && ` +${c.work_branches.length - 1}`}
+                </span>
+              )}
             </span>
           )}
           {/* In a space the project sits with the space's context chips below. */}

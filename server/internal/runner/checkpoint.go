@@ -166,7 +166,7 @@ func (r *Runner) checkpointChat(ctx context.Context, run store.Run) error {
 	c := runCtx{run: run, spec: spec}
 	c.project.ID = runs.ProjectIDOrNil(chat.ProjectID)
 	var saved *string
-	if allowedScope(c.spec, "repo:write") && chat.RepoUrl != nil && chat.WorkBranch != nil {
+	if allowedScope(c.spec, "repo:write") && chat.RepoUrl != nil {
 		env := map[string]string{}
 		for name, key := range map[string]string{"git:pat": "GH_TOKEN", "git:ssh": SSHKeyEnv} {
 			v, err := r.Secrets.Reveal(ctx, c.run.WorkspaceID, &c.project.ID, name)

@@ -25,16 +25,19 @@ import (
 // a persona's free text never does.
 type ChatCaps struct {
 	// Code is the persona's can_code; it only takes effect for a chat that has
-	// a repository (RepoURL and WorkBranch are fixed when the chat is created).
-	Code                bool
-	RepoURL, WorkBranch string
-	Images              bool
+	// a repository (RepoURL is fixed when the chat is created).
+	Code    bool
+	RepoURL string
+	// WorkBranches are the branches the chat's persona has pushed so far, in
+	// the order it made them; it makes them as changes are asked for.
+	WorkBranches []string
+	Images       bool
 	// Connectors are the slugs of the MCP connectors the persona may use here.
 	Connectors []string
 }
 
 // Coding reports whether the chat may work in its repository.
-func (c ChatCaps) Coding() bool { return c.Code && c.RepoURL != "" && c.WorkBranch != "" }
+func (c ChatCaps) Coding() bool { return c.Code && c.RepoURL != "" }
 
 // codeScopes are what a coding chat is granted; every other scope stays denied.
 var codeScopes = []string{"repo:read", "repo:write", "tests:run"}
@@ -82,11 +85,7 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
 	// Every chat is the Personal Assistant, whichever agent it was started with.
-	branch := ""
-	if coding {
-		branch = caps.WorkBranch
-	}
-	r.Instructions = agents.AssistantInstructionsFor(branch, caps.Images, r.Harness == agentdef.HarnessCodex)
+	r.Instructions = agents.AssistantInstructionsFor(coding, caps.WorkBranches, caps.Images, r.Harness == agentdef.HarnessCodex)
 	return r
 }
 
@@ -115,15 +114,15 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 	for i, c := range rows {
 		slugs[i] = c.Slug
 	}
-	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranch: deref(chat.WorkBranch), Images: p.CanGenerateImages, Connectors: slugs}, nil
+	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranches: chat.WorkBranches, Images: p.CanGenerateImages, Connectors: slugs}, nil
 }
 
 // sameCapabilities reports whether two chat specs grant the same persona
 // capabilities: the modes of the scopes a coding chat is granted, and the
 // sandbox, read-only, image generation and web search options. Instructions
 // and the rest of the assistant's definition are left out on purpose, so
-// editing them never ends a segment (the work branch is fixed for the chat's
-// life, so it only changes together with these).
+// editing them never ends a segment, and neither does the persona pushing a
+// new branch.
 func sameCapabilities(a, b agentdef.Resolved) bool {
 	key := func(r agentdef.Resolved) string {
 		modes := map[string]agentdef.Mode{}
@@ -291,8 +290,8 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 			}
 		}
 		if repo != "" {
-			// The branch carries the chat id, so it is set once the chat exists.
-			out, err = q.SetChatRepo(ctx, store.SetChatRepoParams{ID: out.ID, RepoUrl: &repo, WorkBranch: ptr(personas.WorkBranch(persona.Name, out.ID))})
+			// No branch yet: the persona makes one when a change is asked for.
+			out, err = q.SetChatRepo(ctx, store.SetChatRepoParams{ID: out.ID, RepoUrl: &repo})
 			if err != nil {
 				return err
 			}

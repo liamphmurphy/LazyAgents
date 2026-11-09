@@ -34,7 +34,7 @@ type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
   id: string; project?: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
-  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branch?: string;
+  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branches?: string[];
   effort?: Effort;
 };
 type Message = {
@@ -550,7 +550,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const owner = personas.find((p) => p.id === c.persona_id);
       const repo = (b.repo_url as string | undefined) ?? owner?.repos[0];
       if (b.repo_url !== undefined && !(owner?.capabilities.code && owner.repos.includes(String(b.repo_url)))) return fail(err(422, "invalid", "not one of the persona's repos", "repo_url"));
-      if (owner?.capabilities.code && repo) Object.assign(c, { repo_url: repo, work_branch: `vesper/${owner.name.toLowerCase()}-${c.id.slice(0, 8)}` });
+      if (owner?.capabilities.code && repo) Object.assign(c, { repo_url: repo, work_branches: [] });
       chats.unshift(c);
       messages.set(c.id, []);
       return json(ref(c), 201);
