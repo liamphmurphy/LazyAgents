@@ -75,12 +75,15 @@ type AttachmentStore interface {
 }
 
 type Runner struct {
-	Cfg     Config
-	Pool    *pgxpool.Pool
-	Backend Backend
-	Secrets Revealer
-	Tracker *tracker.Service
-	Blobs   Blobs // nil: raw logs aren't kept
+	// otherBackend are ended runs whose workspace is on the other backend, so
+	// they don't crowd this runner's sweeps. Only Sweep touches it.
+	otherBackend []uuid.UUID
+	Cfg          Config
+	Pool         *pgxpool.Pool
+	Backend      Backend
+	Secrets      Revealer
+	Tracker      *tracker.Service
+	Blobs        Blobs // nil: raw logs aren't kept
 	// Attachments reads chat attachments (blob.Store); nil: they're named in
 	// the prompt but not delivered, and stale uploads aren't swept.
 	Attachments AttachmentStore
@@ -444,11 +447,16 @@ func (r *Runner) Sweep(ctx context.Context) {
 	defer r.advanceWorkflows(ctx)
 	defer r.refreshChatSuggestions(ctx, time.Now())
 	r.expireIdleChats(ctx)
-	ids, err := r.q().EndedRunsWithWorkspace(ctx)
+	ids, err := r.q().EndedRunsWithWorkspace(ctx, append([]uuid.UUID{}, r.otherBackend...))
 	if err != nil {
 		return
 	}
 	for _, id := range ids {
+		// Only the backend holding a workspace can save and remove it.
+		if has, err := r.Backend.HasWorkspace(ctx, id.String()); err == nil && !has {
+			r.otherBackend = append(r.otherBackend, id)
+			continue
+		}
 		r.cleanup(ctx, id)
 	}
 }
@@ -853,6 +861,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		return
 	}
 
+	if c.run.Purpose == "chat" && c.run.WorkspaceVolume != nil {
+		// Started on the other backend: nothing of it is here to continue.
+		has, err := r.Backend.HasWorkspace(ctx, wsID(c.run))
+		if err == nil && !has && r.restartChatSegment(ctx, c, turn, 0, nil) {
+			return
+		}
+	}
+
 	// Ticket/planning budgets accumulate harness time. Chat runtime is per
 	// invocation, and long conversations have no cumulative turn limit.
 	var maxRuntime time.Duration
@@ -1168,7 +1184,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if res.UsageLimited {
 		r.markProviderLimited(context.Background(), c, limitMsg)
 	}
-	if code != 0 && res.Error == "" && c.run.ParentRunID != nil {
+	if code != 0 && res.Error == "" && (c.run.ParentRunID != nil || c.run.Purpose == "chat") {
 		// A session the CLI can't resume is reported on stderr only.
 		for _, line := range strings.Split(string(raw), "\n") {
 			if strings.HasPrefix(line, "[stderr] ") && sessionGone.MatchString(line) {
@@ -1180,6 +1196,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	logKey := r.saveLog(c.run.ID, turn.Seq, raw)
 	if c.run.Purpose == "chat" {
 		if ctx.Err() == nil {
+			if session != "" && (code != 0 || res.IsError) && sessionGone.MatchString(res.Error) && r.restartChatSegment(ctx, c, turn, code, logKey) {
+				return
+			}
 			var images chatImages
 			if c.spec.Harness != agentdef.HarnessCodex && waitErr == nil && code == 0 && !res.IsError && !res.UsageLimited {
 				images = r.runChatImageJobs(ctx, c, turn, token)

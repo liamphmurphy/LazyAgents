@@ -267,6 +267,13 @@ sign-in is off for your ChatGPT account, enable it or run
 machine afterwards if the CLI complains. Listing models with a plan login uses
 the `claude` and `codex` CLIs on the API host.
 
+Switching backends keeps your chats. A chat whose session is on the other
+backend continues in a new session with its recent messages (the last 40, up to
+24,000 characters in total), and says so in the chat. Its old workspace stays
+with the backend that made it. Before any chat workspace is removed, unpushed
+work goes to a `vesper-checkpoint/chat/<run>` branch. If that push fails the
+workspace is kept, and files with nowhere to push stay on disk.
+
 `make local-dev` and `make local-runner` are the legacy fallback: no isolation,
 and they use this machine's CLIs and logins, ignoring stored plan logins. Direct
 `vesper serve` / `runner` commands and the full Docker stack also default

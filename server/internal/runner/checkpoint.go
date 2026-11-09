@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -98,6 +99,12 @@ func (r *Runner) runScript(ctx context.Context, runID uuid.UUID, name, script st
 // up. Runs with no repository or no repo:write have nowhere they may push, and
 // are left alone. An error means the work is not safe: keep the workspace.
 func (r *Runner) checkpoint(ctx context.Context, runID uuid.UUID) error {
+	if has, err := r.Backend.HasWorkspace(ctx, runID.String()); err == nil && !has {
+		return nil // on the other backend, which saves it
+	}
+	if run, err := r.q().LockRunNoWait(ctx, runID); err == nil && run.Purpose == "chat" {
+		return r.checkpointChat(ctx, run)
+	}
 	c, err := r.load(ctx, runID)
 	if c.run.Purpose != "ticket" || c.run.ParentRunID != nil || c.run.TicketID == nil {
 		return nil
@@ -125,6 +132,72 @@ func (r *Runner) checkpoint(ctx context.Context, runID uuid.UUID) error {
 	if strings.Contains(out, checkpointPushed) {
 		saved = &branch
 		r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "checkpoint_pushed", "branch": branch})
+	}
+	return r.q().SetRunCheckpoint(ctx, store.SetRunCheckpointParams{ID: c.run.ID, Branch: saved})
+}
+
+// chatStrayFilesScript lists what a chat left that no checkpoint can save: any
+// file beyond Vesper's own, when the workspace isn't a checkout with a remote.
+const chatStrayFilesScript = `if [ -d .git ] && git remote get-url origin >/dev/null 2>&1 && git rev-parse -q --verify HEAD >/dev/null; then exit 0; fi
+for f in * .[!.]* ..?*; do
+  [ -e "$f" ] || continue
+  case "$f" in AGENTS.md|CLAUDE.md|.lazyagents|.claude|.codex|.agents) ;; *) printf '%s\n' "$f" ;; esac
+done`
+
+// checkpointChat saves a chat's work before its workspace is given up: a
+// coding chat's to a checkpoint branch. Files with nowhere to go stay on disk,
+// and the run stops tracking them so the sweep doesn't keep retrying. An error
+// means the workspace must not be removed. A deleted chat's goes with it.
+func (r *Runner) checkpointChat(ctx context.Context, run store.Run) error {
+	if run.CheckpointAt != nil {
+		return nil
+	}
+	chat, err := r.q().ChatSessionForEndedRun(ctx, &run.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	spec, err := runs.Spec(run)
+	if err != nil {
+		return err
+	}
+	c := runCtx{run: run, spec: spec}
+	c.project.ID = runs.ProjectIDOrNil(chat.ProjectID)
+	var saved *string
+	if allowedScope(c.spec, "repo:write") && chat.RepoUrl != nil && chat.WorkBranch != nil {
+		env := map[string]string{}
+		for name, key := range map[string]string{"git:pat": "GH_TOKEN", "git:ssh": SSHKeyEnv} {
+			v, err := r.Secrets.Reveal(ctx, c.run.WorkspaceID, &c.project.ID, name)
+			switch {
+			case err == nil:
+				env[key] = v
+			case !errors.Is(err, apperr.ErrNotFound) && !errors.Is(err, secrets.ErrNoKey):
+				return r.checkpointFailed(ctx, c, err)
+			}
+		}
+		ScrubChatGitEnv(env, *chat.RepoUrl)
+		branch := CheckpointBranch("chat", c.run.ID)
+		out, err := r.runScript(ctx, c.run.ID, "lazyagents-checkpoint", CheckpointScript(branch), env)
+		if err != nil {
+			return r.checkpointFailed(ctx, c, err)
+		}
+		if strings.Contains(out, checkpointPushed) {
+			saved = &branch
+			r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "checkpoint_pushed", "branch": branch})
+		}
+	}
+	out, err := r.runScript(ctx, c.run.ID, "lazyagents-chat-files", chatStrayFilesScript, nil)
+	if err != nil {
+		return r.checkpointFailed(ctx, c, err)
+	}
+	if files := strings.Fields(out); len(files) > 0 {
+		r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "workspace_kept", "files": files, "path": r.Backend.WorkspaceDir(c.run.ID.String())})
+		if err := r.q().SetRunWorkspace(ctx, store.SetRunWorkspaceParams{ID: c.run.ID, WorkspaceVolume: nil}); err != nil {
+			return err
+		}
+		return fmt.Errorf("kept the workspace: %d file(s) can't be checkpointed", len(files))
 	}
 	return r.q().SetRunCheckpoint(ctx, store.SetRunCheckpointParams{ID: c.run.ID, Branch: saved})
 }

@@ -255,6 +255,10 @@ func main() {
 			i++
 		}
 	}
+	if resume != "" && os.Getenv("FAKE_HARNESS_RESUME") == "gone" {
+		fmt.Fprintln(os.Stderr, "No conversation found with session ID: "+resume)
+		os.Exit(1)
+	}
 	// A chat's first prompt carries a note for the agent; the scripted prompts
 	// ("slow", "quota", "read <id>") are what remains without it.
 	// A Claude turn with image inputs sends its message on stdin.

@@ -145,6 +145,7 @@ SELECT id FROM runs r
 WHERE r.workspace_volume IS NOT NULL
   AND (r.state = 'completed' OR (r.purpose = 'chat' AND r.state IN ('failed', 'cancelled')))
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status = 'running')
+  AND r.id <> ALL(sqlc.arg(skip)::uuid[]) -- workspaces on another backend
 ORDER BY r.checkpoint_error IS NOT NULL -- a stuck checkpoint must not starve the rest
 LIMIT 20;
 

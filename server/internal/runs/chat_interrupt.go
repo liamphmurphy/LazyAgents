@@ -88,6 +88,53 @@ func replacedTurnNote(dropped *store.RunTurn) string {
 	return dropped.InputMessage + "\n\n(Vesper: before you started on that, the person sent another message. Answer both together; if the new one changes or cancels the earlier request, follow the new one.)\n\n"
 }
 
+const chatSegmentRestarted = "This chat continued in a new session with its recent messages, because its earlier session isn't available on this runner."
+
+// RestartChatSegment runs in the runner's transaction (chat and run locked).
+// It ends a segment that can't continue on this runner and answers turn's
+// message from a fresh one, which gets the conversation so far. It reports
+// false, changing nothing, when the turn isn't answering a person's message.
+func RestartChatSegment(ctx context.Context, q *store.Queries, chat store.ChatSession, run store.Run, turn store.RunTurn) (bool, error) {
+	if chat.Archived || chat.InterruptMessageID != nil {
+		return false, nil
+	}
+	msg, err := q.ChatMessageForTurn(ctx, &turn.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	p, err := chatProject(ctx, q, chat)
+	if err != nil || p.Archived {
+		return false, err
+	}
+	outcome := "The chat's session wasn't available on this runner."
+	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome}); err != nil {
+		return false, err
+	}
+	if err = q.DropPendingTurns(ctx, run.ID); err != nil {
+		return false, err
+	}
+	if err = q.ExpireRunApprovals(ctx, run.ID); err != nil {
+		return false, err
+	}
+	if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_segment_ended", "reason": "session_unavailable"}); err != nil {
+		return false, err
+	}
+	if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: chatSegmentRestarted, RunID: &run.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
+		return false, err
+	}
+	if chat, err = q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: chat.ID, State: "idle"}); err != nil {
+		return false, err
+	}
+	_, next, nextTurn, err := startClassifiedChatTurn(ctx, q, chat, p.Key, msg.BodyMd, msg.BodyMd, false, false, 0)
+	if err != nil {
+		return false, err
+	}
+	return true, q.SetChatMessageTurn(ctx, store.SetChatMessageTurnParams{ID: msg.ID, RunID: &next.ID, RunTurnID: &nextTurn.ID, Harness: &next.Harness, Model: &next.Model})
+}
+
 // ResumeInterruptedChat runs in the runner's transaction once a stopped turn's
 // process has exited and the chat is idle (the chat lock is held). If a
 // message interrupted that turn, it starts the turn that answers it. since is
