@@ -943,3 +943,22 @@ func TestCodexContainerSandboxReplacesBwrapProfiles(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudeRateLimitEvents(t *testing.T) {
+	p := ClaudeCode{}.NewParser("opus")
+	lines := []string{
+		`{"type":"system","subtype":"init","session_id":"s1","model":"opus"}`,
+		`{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1794266400,"rateLimitType":"five_hour","utilization":0.38},"uuid":"u1","session_id":"s1"}`,
+		`{"type":"rate_limit_event","rate_limit_info":null,"session_id":"s1"}`,
+		`{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"seven_day","utilization":0.81},"session_id":"s1"}`,
+	}
+	for _, l := range lines {
+		if evs := p.Line([]byte(l)); len(evs) > 0 && strings.Contains(l, "rate_limit_event") {
+			t.Fatalf("rate_limit_event made events: %v", evs)
+		}
+	}
+	got := p.Result().RateLimits
+	if len(got) != 2 || !strings.Contains(string(got[0]), "five_hour") || !strings.Contains(string(got[1]), "seven_day") {
+		t.Fatalf("rate limits = %s", got)
+	}
+}

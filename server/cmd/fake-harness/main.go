@@ -144,10 +144,11 @@ func main() {
 	var mcpURL, tokenEnv, mcpApproval string
 	var images []string // codex --image files (comma-separated)
 	args := os.Args[1:]
-	// Chat model discovery for `claude` (chatmodels.DiscoverLocal): answer the
-	// initialize control request with one model, then wait for EOF.
+	// Chat model discovery for `claude` (chatmodels.DiscoverLocal) and the
+	// usage check (usage.Probe): answer control requests, then wait for EOF.
+	// Real turns persist their session, control-only checks don't.
 	for _, a := range args {
-		if a == "--input-format" && !slices.Contains(args, "--mcp-config") {
+		if a == "--input-format" && (!slices.Contains(args, "--mcp-config") || slices.Contains(args, "--no-session-persistence")) {
 			scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
 				var request struct {
@@ -155,8 +156,13 @@ func main() {
 					RequestID string `json:"request_id"`
 				}
 				if json.Unmarshal(scanner.Bytes(), &request) == nil && request.Type == "control_request" {
-					b, _ := json.Marshal(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": request.RequestID,
-						"response": map[string]any{"models": []any{map[string]any{"value": "sonnet", "displayName": "Claude Sonnet (fake)"}}}}})
+					response := any(map[string]any{"models": []any{map[string]any{"value": "sonnet", "displayName": "Claude Sonnet (fake)"}}})
+					if request.RequestID == "usage" {
+						response = map[string]any{"subscription_type": "max", "rate_limits_available": true, "rate_limits": map[string]any{
+							"five_hour": map[string]any{"utilization": 38, "resets_at": time.Now().Add(3 * time.Hour).UTC().Format(time.RFC3339)},
+							"seven_day": map[string]any{"utilization": 61, "resets_at": time.Now().Add(80 * time.Hour).UTC().Format(time.RFC3339)}}}
+					}
+					b, _ := json.Marshal(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": request.RequestID, "response": response}})
 					fmt.Println(string(b))
 				}
 			}
@@ -177,6 +183,12 @@ func main() {
 			if request.Method == "model/list" {
 				// Chat model discovery (chatmodels.DiscoverLocal).
 				result = map[string]any{"data": []any{map[string]any{"model": "gpt-5-codex", "displayName": "GPT-5 Codex (fake)", "isDefault": true}}}
+			}
+			if request.Method == "account/rateLimits/read" {
+				// The usage check (usage.Probe).
+				result = map[string]any{"rateLimits": map[string]any{"limitId": "codex", "planType": "plus",
+					"primary":   map[string]any{"usedPercent": 46, "windowDurationMins": 300, "resetsAt": time.Now().Add(3 * time.Hour).Unix()},
+					"secondary": map[string]any{"usedPercent": 72, "windowDurationMins": 10080, "resetsAt": time.Now().Add(120 * time.Hour).Unix()}}}
 			}
 			if request.Method == "hooks/list" {
 				result = map[string]any{"data": []any{map[string]any{"errors": []any{}, "hooks": []any{map[string]any{"enabled": true, "source": "sessionFlags", "handlerType": "command", "command": os.Getenv("LAZYAGENTS_POLICY_HOOK_COMMAND"), "eventName": "preToolUse", "matcher": "*", "trustStatus": "untrusted"}}}}}

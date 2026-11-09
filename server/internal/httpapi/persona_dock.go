@@ -82,7 +82,7 @@ func buildPersonaDock(rows []store.PersonaDockChatsRow, personas map[uuid.UUID]s
 		if dockRank[state] > dockRank[e.State] {
 			e.State = state
 		}
-		e.Chats = append(e.Chats, api.PersonaDockChat{Id: openapi_types.UUID(c.ID), Title: c.Title, State: state, Unread: int(c.Unread),
+		e.Chats = append(e.Chats, api.PersonaDockChat{Id: openapi_types.UUID(c.ID), Title: c.Title, State: state, Harness: c.Harness, Unread: int(c.Unread),
 			LastLine: dockLastLine(c.LastBody), LastSeq: c.LastSeq, WaitingApproval: c.WaitingApproval, LastActivityAt: c.LastActivityAt})
 	}
 	return out
@@ -110,7 +110,11 @@ func (s *Server) GetPersonaDock(ctx context.Context, _ api.GetPersonaDockRequest
 			personas[p.ID] = p
 		}
 	}
-	return api.GetPersonaDock200JSONResponse{Personas: buildPersonaDock(rows, personas)}, nil
+	harnesses, err := s.harnessActivity(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetPersonaDock200JSONResponse{Personas: buildPersonaDock(rows, personas), Harnesses: harnesses}, nil
 }
 
 func (s *Server) MarkChatRead(ctx context.Context, req api.MarkChatReadRequestObject) (api.MarkChatReadResponseObject, error) {

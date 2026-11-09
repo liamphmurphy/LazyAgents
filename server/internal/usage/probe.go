@@ -1,0 +1,185 @@
+package usage
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+)
+
+// ErrSignedOut means the CLI has no plan login to read limits for.
+var ErrSignedOut = errors.New("harness CLI is not signed in to a plan")
+
+// ErrOutdated means the CLI predates the request.
+var ErrOutdated = errors.New("harness CLI is too old to report usage")
+
+// ProbeTimeout bounds one CLI check.
+const ProbeTimeout = 25 * time.Second
+
+// claudeArgs start Claude Code with nothing that could act: no tools, MCP
+// servers, settings files, hooks or saved session. Only control requests are sent.
+var claudeArgs = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+	"--no-session-persistence", "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`,
+	"--setting-sources", "", "--settings", `{"disableAllHooks":true}`}
+
+// Probe reads a harness's allowance through its CLI's control protocol, with
+// the same binary overrides and login as the local runner. It never sends a
+// prompt, starts inference, or reads or exports credentials.
+func Probe(ctx context.Context, harness string) (Snapshot, error) {
+	var bin string
+	var args []string
+	switch harness {
+	case agentdef.HarnessClaudeCode:
+		bin, args = os.Getenv("RUNNER_CLAUDE_BIN"), claudeArgs
+		if bin == "" {
+			bin = "claude"
+		}
+	case agentdef.HarnessCodex:
+		bin, args = os.Getenv("RUNNER_CODEX_BIN"), []string{"app-server", "-c", "features.plugins=false"}
+		if bin == "" {
+			bin = "codex"
+		}
+	default:
+		return Snapshot{}, fmt.Errorf("unsupported harness")
+	}
+	ctx, cancel := context.WithTimeout(ctx, ProbeTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, args...)
+	// Keep repository instructions, hooks and MCP configs out of the check.
+	cmd.Dir = os.TempDir()
+	cmd.Stderr = io.Discard
+	cmd.Env = probeEnv(os.Environ())
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return Snapshot{}, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		return Snapshot{}, err
+	}
+	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		return Snapshot{}, fmt.Errorf("harness CLI could not start")
+	}
+	defer func() { stdin.Close(); cmd.Process.Kill(); cmd.Wait() }()
+	if harness == agentdef.HarnessClaudeCode {
+		return converseClaude(stdin, stdout, time.Now)
+	}
+	return converseCodex(stdin, stdout, time.Now)
+}
+
+// probeEnv keeps a parent agent session's variables from steering the check
+// and stops the CLI from updating itself mid-check.
+func probeEnv(base []string) []string {
+	out := make([]string, 0, len(base)+1)
+	for _, kv := range base {
+		k, _, _ := strings.Cut(kv, "=")
+		if k == "CLAUDECODE" || strings.HasPrefix(k, "CLAUDE_CODE_") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, "DISABLE_AUTOUPDATER=1")
+}
+
+func scanner(r io.Reader) *bufio.Scanner {
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, 4096), 4<<20)
+	return s
+}
+
+func converseClaude(in io.Writer, out io.Reader, now func() time.Time) (Snapshot, error) {
+	send := json.NewEncoder(in)
+	for _, req := range []map[string]any{
+		{"type": "control_request", "request_id": "initialize", "request": map[string]any{"subtype": "initialize"}},
+		{"type": "control_request", "request_id": "usage", "request": map[string]any{"subtype": "get_usage", "skip_behaviors": true}},
+	} {
+		if err := send.Encode(req); err != nil {
+			return Snapshot{}, err
+		}
+	}
+	s := scanner(out)
+	for s.Scan() {
+		var msg struct {
+			Type     string `json:"type"`
+			Response struct {
+				Subtype   string          `json:"subtype"`
+				RequestID string          `json:"request_id"`
+				Error     string          `json:"error"`
+				Response  json.RawMessage `json:"response"`
+			} `json:"response"`
+		}
+		if json.Unmarshal(s.Bytes(), &msg) != nil || msg.Type != "control_response" || msg.Response.RequestID != "usage" {
+			continue
+		}
+		if msg.Response.Subtype != "success" {
+			e := strings.ToLower(msg.Response.Error)
+			if strings.Contains(e, "unsupported") || strings.Contains(e, "unknown") {
+				return Snapshot{}, ErrOutdated
+			}
+			return Snapshot{}, fmt.Errorf("claude usage request failed")
+		}
+		snap := ParseClaudeUsage(msg.Response.Response, now())
+		if !snap.Available {
+			return snap, ErrSignedOut
+		}
+		return snap, nil
+	}
+	return Snapshot{}, fmt.Errorf("claude ended before reporting usage")
+}
+
+func converseCodex(in io.Writer, out io.Reader, now func() time.Time) (Snapshot, error) {
+	send := json.NewEncoder(in)
+	if err := send.Encode(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{"clientInfo": map[string]string{"name": "vesper_usage", "version": "1.0"}, "capabilities": map[string]any{}}}); err != nil {
+		return Snapshot{}, err
+	}
+	s := scanner(out)
+	for s.Scan() {
+		var msg struct {
+			ID    int `json:"id"`
+			Error *struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+			Result json.RawMessage `json:"result"`
+		}
+		if json.Unmarshal(s.Bytes(), &msg) != nil || msg.ID == 0 {
+			continue // notifications
+		}
+		if msg.Error != nil {
+			m := strings.ToLower(msg.Error.Message)
+			switch {
+			case msg.Error.Code == -32601 || strings.Contains(m, "unknown variant") || strings.Contains(m, "method not found"):
+				return Snapshot{}, ErrOutdated
+			case strings.Contains(m, "authentication") || strings.Contains(m, "not logged in"):
+				return Snapshot{Harness: agentdef.HarnessCodex, ObservedAt: now(), Windows: []Window{}}, ErrSignedOut
+			}
+			return Snapshot{}, fmt.Errorf("codex usage request failed")
+		}
+		switch msg.ID {
+		case 1:
+			if err := send.Encode(map[string]any{"method": "initialized"}); err != nil {
+				return Snapshot{}, err
+			}
+			if err := send.Encode(map[string]any{"id": 2, "method": "account/rateLimits/read"}); err != nil {
+				return Snapshot{}, err
+			}
+		case 2:
+			snap := ParseCodexRateLimits(msg.Result, now())
+			if !snap.Available {
+				return snap, fmt.Errorf("codex reported no plan limits")
+			}
+			return snap, nil
+		}
+	}
+	return Snapshot{}, fmt.Errorf("codex ended before reporting usage")
+}

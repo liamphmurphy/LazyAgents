@@ -28,6 +28,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/usage"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
@@ -54,6 +55,9 @@ type Server struct {
 	PublicURL      string
 	Blobs          *blob.Store
 	ArtifactBucket string
+	// Usage keeps harness plan-usage readings for the activity orb; nil
+	// leaves the orb without usage.
+	Usage *usage.Service
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)

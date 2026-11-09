@@ -705,6 +705,15 @@ type ProviderLimit struct {
 	UpdatedAt   time.Time
 }
 
+type ProviderUsage struct {
+	WorkspaceID uuid.UUID
+	Harness     string
+	Plan        string
+	Available   bool
+	Windows     json.RawMessage
+	ObservedAt  time.Time
+}
+
 type ResearchJob struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.UUID

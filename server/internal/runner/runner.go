@@ -1200,6 +1200,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if res.UsageLimited {
 		r.markProviderLimited(context.Background(), c, limitMsg)
 	}
+	r.recordUsage(context.Background(), c, res.RateLimits)
 	if code != 0 && res.Error == "" && (c.run.ParentRunID != nil || c.run.Purpose == "chat") {
 		// A session the CLI can't resume is reported on stderr only.
 		for _, line := range strings.Split(string(raw), "\n") {

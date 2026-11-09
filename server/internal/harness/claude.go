@@ -188,6 +188,8 @@ type claudeLine struct {
 	Usage      *claudeUsage                    `json:"usage"`
 	Denials    []json.RawMessage               `json:"permission_denials"`
 	MCPServers []struct{ Name, Status string } `json:"mcp_servers"`
+	// rate_limit_event
+	RateLimitInfo json.RawMessage `json:"rate_limit_info"`
 }
 
 type claudeUsage struct {
@@ -240,6 +242,11 @@ func (p *claudeParser) Line(b []byte) []Event {
 		p.res.UsageLimited = true
 	}
 	switch l.Type {
+	case "rate_limit_event":
+		if len(l.RateLimitInfo) > 0 && string(l.RateLimitInfo) != "null" {
+			p.res.RateLimits = append(p.res.RateLimits, l.RateLimitInfo)
+		}
+		return nil
 	case "stream_event":
 		return p.streamEvent(l)
 	case "system":

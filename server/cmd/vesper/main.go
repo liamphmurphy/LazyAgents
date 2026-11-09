@@ -41,6 +41,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 	"github.com/liamphmurphy/vesper/server/internal/transcript"
+	"github.com/liamphmurphy/vesper/server/internal/usage"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
@@ -169,6 +170,13 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Blobs:          blobs,
 		ArtifactBucket: cfg.S3.ArtifactBucket,
 		Log:            log,
+		Usage:          &usage.Service{Q: q, Log: log},
+	}
+	// The local backend runs the host's CLIs with their own logins, so the API
+	// can ask them for usage. In Docker the logins live in run containers and
+	// readings come from the runs' rate-limit events instead.
+	if cfg.Runner.Backend != "docker" {
+		srv.Usage.Probe = usage.Probe
 	}
 	if cfg.PRSyncInterval > 0 {
 		sync := &prsync.Syncer{Pool: pool, Secrets: secretsSvc, Tracker: trackerSvc, Log: log,

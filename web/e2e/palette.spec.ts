@@ -6,6 +6,14 @@ const palette = (page: Page) => page.getByRole("dialog", { name: "Search and com
 const input = (page: Page) => page.getByRole("combobox", { name: "Search everything" });
 const results = (page: Page) => page.getByRole("listbox", { name: "Results" });
 
+/** ⌘K right after a page load, pressed again until the palette opens: a press before the shell hydrates has no listener yet. */
+async function openPalette(page: Page) {
+  await expect(async () => {
+    if (!(await palette(page).isVisible())) await page.keyboard.press("ControlOrMeta+k");
+    await expect(palette(page)).toBeVisible({ timeout: 250 });
+  }).toPass({ timeout: 10_000 });
+}
+
 async function install(page: Page) {
   const api = await installBoardApi(page);
   const searches: string[] = [];
@@ -41,7 +49,7 @@ test("⌘K opens from any screen, Esc closes it and focus returns", async ({ pag
   await page.goto("/board?project=WEB");
   const tickets = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Tickets", exact: true });
   await tickets.focus();
-  await page.keyboard.press("ControlOrMeta+k");
+  await openPalette(page);
   await expect(palette(page)).toBeVisible();
   await expect(input(page)).toBeFocused();
   await expect(input(page)).toHaveAttribute("aria-controls", "command-results");
@@ -54,7 +62,7 @@ test("⌘K opens from any screen, Esc closes it and focus returns", async ({ pag
 test("a ticket key jumps to it and is listed under Recent next time", async ({ page }) => {
   await install(page);
   await page.goto("/board?project=WEB");
-  await page.keyboard.press("ControlOrMeta+k");
+  await openPalette(page);
   await input(page).fill("web-3");
   const jump = results(page).getByRole("group", { name: "Jump to" }).getByRole("option");
   await expect(jump).toHaveText(/Open WEB-3/);
@@ -69,7 +77,7 @@ test("a ticket key jumps to it and is listed under Recent next time", async ({ p
 test("free text returns grouped results from the server with keyboard navigation", async ({ page }) => {
   const { searches } = await install(page);
   await page.goto("/board?project=WEB");
-  await page.keyboard.press("ControlOrMeta+k");
+  await openPalette(page);
   await input(page).fill("deploy");
   for (const [group, text] of [
     ["Tickets", /Deploy staging/], ["Pages", /Payments\/Deploy runbook/], ["Artifacts", /Blue\/green deploys/],
@@ -100,7 +108,7 @@ test("free text returns grouped results from the server with keyboard navigation
 test("Enter waits for results instead of falling through to an action", async ({ page }) => {
   await install(page);
   await page.goto("/board?project=WEB");
-  await page.keyboard.press("ControlOrMeta+k");
+  await openPalette(page);
   await input(page).fill("deploy");
   await page.keyboard.press("Enter");
   await expect(palette(page)).toBeVisible();
@@ -112,7 +120,7 @@ test("actions: new ticket, start planning, new chat and switch project", async (
   const { chats } = await install(page);
   await page.goto("/board?project=WEB");
   const run = async (query: string, option: RegExp) => {
-    await page.keyboard.press("ControlOrMeta+k");
+    await openPalette(page);
     await input(page).fill(query);
     await results(page).getByRole("group", { name: "Actions" }).getByRole("option", { name: option }).click();
   };

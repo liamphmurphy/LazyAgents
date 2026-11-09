@@ -389,7 +389,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return route.fulfill({ status: 200, contentType: "image/png", body: png });
     }
     if (/^\/chats\/[^/]+\/research$/.test(path) && method === "GET") return json({ jobs: [] });
-    if (path === "/persona-dock") return json({ personas: [] });
+    if (path === "/persona-dock") return json({ personas: [], harnesses: [] });
     if (path === "/workflows" && method === "GET") return json({ workflows: [] });
     if (path === "/connectors" && method === "GET") return json({ connectors });
     if (path === "/connectors/probe" && method === "POST") return json({ reachable: true, needs_auth: false, tools: 2 });

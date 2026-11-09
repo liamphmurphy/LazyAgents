@@ -114,7 +114,7 @@ async function installWikiApi(p: Page) {
     } satisfies S["ArtifactList"]);
     const content = /^\/artifacts\/[^/]+\/versions\/([^/]+)\/content$/.exec(path);
     if (content && bodies[content[1]]) return route.fulfill({ status: 200, contentType: "text/markdown", body: bodies[content[1]] });
-    if (path === "/persona-dock") return json({ personas: [] });
+    if (path === "/persona-dock") return json({ personas: [], harnesses: [] });
     if (path === "/chat-models") return json([]);
     if (path === "/secrets") return json({ key_configured: true, known: [], secrets: [] });
     unhandled.push(`${request.method()} ${path}`);

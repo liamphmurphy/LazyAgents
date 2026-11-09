@@ -3006,7 +3006,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's personas with live or unread chat activity, most recent first */
+        /** The caller's personas with live or unread chat activity, most recent first, plus harness activity and plan usage */
         get: operations["getPersonaDock"];
         put?: never;
         post?: never;
@@ -6275,6 +6275,8 @@ export interface components {
             id: string;
             title: string;
             state: components["schemas"]["PersonaDockState"];
+            /** @description The harness the chat's current turn runs on (claude-code or codex), after any fallback */
+            harness: string;
             unread: number;
             /** @description Last line of the latest reply */
             last_line: string;
@@ -6298,6 +6300,43 @@ export interface components {
         };
         PersonaDock: {
             personas: components["schemas"]["PersonaDockEntry"][];
+            /** @description Claude Code then Codex: what each is running and how much of its plan allowance is left */
+            harnesses: components["schemas"]["HarnessActivity"][];
+        };
+        /** @description One plan allowance window, as the harness CLI reports it. */
+        UsageWindow: {
+            /** @description five_hour, seven_day, seven_day_opus, seven_day_sonnet, or codex_<minutes> */
+            id: string;
+            /** @enum {string} */
+            kind: "session" | "weekly" | "other";
+            /** @description Session, Weekly, Weekly · Opus… */
+            label: string;
+            used_percent: number;
+            /** Format: date-time */
+            resets_at?: string;
+        };
+        HarnessActivity: {
+            /** @description claude-code or codex */
+            harness: string;
+            label: string;
+            /** @description Runs and chat turns working on this harness now */
+            running: number;
+            /**
+             * Format: date-time
+             * @description Present while the harness is out of allowance; runs fall back to another harness until then
+             */
+            limited_until?: string;
+            /** @description Subscription name when the CLI reports one (max, pro, plus…) */
+            plan?: string;
+            /** @description False when plan limits don't apply or can't be read (API key, signed out, or no reading yet) */
+            usage_available: boolean;
+            /**
+             * Format: date-time
+             * @description When the windows were read; absent before the first reading
+             */
+            usage_checked_at?: string;
+            /** @description Session first, then weekly; windows that renewed since the reading are left out */
+            windows: components["schemas"]["UsageWindow"][];
         };
         /** @description A persona one of the chat's personas asked to create; nothing exists until the person approves it. */
         PersonaProposal: {
