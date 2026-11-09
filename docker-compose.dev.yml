@@ -30,6 +30,41 @@ services:
       - seaweed:/data
       - ./deploy/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
 
+  # The hardened runner for `make start` / `make runner`. It runs here rather
+  # than on the host so compose owns its lifecycle: a new start replaces the
+  # old one instead of leaving a stray runner claiming runs with stale code.
+  # Turn containers join this network; the API still runs on the host.
+  # The socket mount is root-equivalent on the host, as in the full stack.
+  runner:
+    profiles: ["runner"]
+    image: golang:1.26-alpine
+    working_dir: /src/server
+    command: ["go", "run", "./cmd/vesper", "runner"]
+    user: "0"
+    environment:
+      CGO_ENABLED: "0"
+      DATABASE_URL: postgres://lazyagents:lazyagents@postgres:5432/lazyagents?sslmode=disable
+      S3_ENDPOINT: http://seaweedfs:8333
+      SECRETS_KEY: ${SECRETS_KEY:-}
+      RUNNER_BACKEND: docker
+      RUNNER_STACK: lazyagents-dev
+      RUNNER_NETWORK: lazyagents-dev_default
+      RUNNER_MCP_URL: http://host.docker.internal:${API_PORT:-8000}/mcp
+      RUNNER_IMAGE: ${RUNNER_IMAGE:-vesper/agent-base:latest}
+      RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-4}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ./server:/src/server:ro
+      - go-mod:/go/pkg/mod
+      - go-build:/root/.cache/go-build
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
 volumes:
   pgdata:
   seaweed:
+  go-mod:
+  go-build:

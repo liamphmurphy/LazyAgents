@@ -26,7 +26,7 @@ func (d *Docker) StartLogin(ctx context.Context, spec LoginSpec) (LoginProcess, 
 	sort.Strings(env)
 	body := map[string]any{
 		"Image": d.Image, "Cmd": spec.Argv, "Env": env, "WorkingDir": homePath,
-		"Labels": map[string]string{labelKey: spec.Label},
+		"Labels": d.labels(spec.Label),
 		"Tty":    spec.TTY, "OpenStdin": spec.TTY, "AttachStdin": spec.TTY, "AttachStdout": true, "AttachStderr": true,
 		"HostConfig": d.hostConfig([]map[string]any{}),
 	}

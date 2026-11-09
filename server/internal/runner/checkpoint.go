@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -57,9 +58,17 @@ func CheckpointScript(branch string) string {
 	return b.String()
 }
 
+// ScriptTimeout bounds one housekeeping script (a checkpoint push, a file
+// scan). A push that hangs on the network would otherwise hold its caller,
+// and a sweep or a run's start, indefinitely.
+var ScriptTimeout = 5 * time.Minute
+
 // runScript runs a script in a run's workspace and returns its combined
-// output, redacted of env's values.
+// output, redacted of env's values. It is killed after ScriptTimeout or when
+// ctx ends.
 func (r *Runner) runScript(ctx context.Context, runID uuid.UUID, name, script string, env map[string]string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, ScriptTimeout)
+	defer cancel()
 	if err := r.Backend.EnsureWorkspace(ctx, runID.String()); err != nil {
 		return "", err
 	}
@@ -67,6 +76,15 @@ func (r *Runner) runScript(ctx context.Context, runID uuid.UUID, name, script st
 	if err != nil {
 		return "", err
 	}
+	exited := make(chan struct{})
+	defer close(exited)
+	go func() {
+		select {
+		case <-exited:
+		case <-ctx.Done():
+			_ = proc.Kill()
+		}
+	}()
 	var out bytes.Buffer
 	var mu sync.Mutex
 	var cp sync.WaitGroup
@@ -88,6 +106,9 @@ func (r *Runner) runScript(ctx context.Context, runID uuid.UUID, name, script st
 	output := redact(out.String(), env)
 	if err != nil {
 		return output, err
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return output, fmt.Errorf("%s timed out after %s: %s", name, ScriptTimeout, lastLines(output, 10))
 	}
 	if code != 0 {
 		return output, fmt.Errorf("exit %d: %s", code, lastLines(output, 10))

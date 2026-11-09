@@ -46,6 +46,7 @@ type Runner struct {
 	Image         string // docker
 	Network       string // docker
 	DockerSocket  string // docker
+	Stack         string // docker: the install whose containers this runner owns (RUNNER_STACK)
 	MemoryMB      int64  // docker: per-container memory limit, 0 = none
 	PidsLimit     int64  // docker: per-container process limit, 0 = none
 	DataDir       string // local: run workspaces
@@ -100,6 +101,7 @@ func Load() (Config, error) {
 		Image:        env("RUNNER_IMAGE", "vesper/agent-base:latest"),
 		Network:      env("RUNNER_NETWORK", "lazyagents_default"),
 		DockerSocket: env("DOCKER_SOCKET", "/var/run/docker.sock"),
+		Stack:        env("RUNNER_STACK", "default"),
 		DataDir:      env("RUNNER_DATA_DIR", ".lazyagents/runs"),
 		ClaudeBin:    env("RUNNER_CLAUDE_BIN", ""),
 		CodexBin:     env("RUNNER_CODEX_BIN", ""),
