@@ -161,7 +161,45 @@ func (r *Runner) Recover(ctx context.Context) error {
 	if err := q.RequeueInterrupted(ctx, &r.Cfg.ID); err != nil {
 		return err
 	}
+	if err := r.resumeStranded(ctx); err != nil {
+		return err
+	}
 	return q.RecoverChatCancellations(ctx, &r.Cfg.ID)
+}
+
+// StrandedResumeMessage continues a run whose last turn a runner shutdown cut short.
+const StrandedResumeMessage = "Vesper's runner restarted while your last turn was running, so it was cut short. " +
+	"Continue where you left off, in the same checkout."
+
+// resumeStranded gives a run left running with no turn (see StrandedRuns) a
+// turn that continues its session; otherwise it would hold its agent's slot
+// forever and every later run of that agent would stay queued.
+func (r *Runner) resumeStranded(ctx context.Context) error {
+	ids, err := r.q().StrandedRuns(ctx, &r.Cfg.ID)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+			q := store.New(tx)
+			run, err := q.LockRun(ctx, id)
+			if err != nil || run.State != "running" {
+				return err
+			}
+			if pending, err := q.HasPendingTurn(ctx, id); err != nil || pending {
+				return err
+			}
+			if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: id, Trigger: "resume", InputMessage: StrandedResumeMessage}); err != nil {
+				return err
+			}
+			b, _ := json.Marshal(map[string]any{"state": "stranded_resumed", "runner": r.Cfg.ID})
+			return q.AddRunEvent(ctx, store.AddRunEventParams{RunID: id, Type: "lifecycle", Payload: b})
+		})
+		if err != nil {
+			return fmt.Errorf("resume stranded run %s: %w", id, err)
+		}
+	}
+	return nil
 }
 
 // tickScheduled starts tasks that are due and records runs that have ended.
@@ -1233,6 +1271,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		return
 	}
+	if ctx.Err() != nil {
+		// Shutting down killed the harness: leave the turn claimed so the next
+		// runner's Recover re-runs it. Finishing it here would strand the run.
+		return
+	}
 	usage, _ := json.Marshal(res.Usage)
 	exit := int32(code)
 	if err := q.FinishTurn(context.Background(), store.FinishTurnParams{ID: turn.ID, ExitCode: &exit, LogKey: logKey, Usage: usage}); err != nil {
@@ -1252,7 +1295,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	r.event(context.Background(), c.run.ID, "lifecycle", map[string]any{"state": "turn_ended", "turn": turn.Seq, "exit_code": code})
 	if ctx.Err() != nil {
-		return // shutting down: the turn re-runs on the next runner start
+		return // shut down after the turn finished: Recover's resumeStranded continues the run
 	}
 	if c.run.Purpose == runs.PurposeWorkflow && c.spec.HarnessOptions[agentdef.OptionImageGeneration] == "true" {
 		if failure := r.finishWorkflowImageStep(ctx, c, res, code, waitErr, sensitive); failure != "" {

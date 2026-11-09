@@ -82,6 +82,18 @@ WHERE status = 'running' AND run_id IN (
   SELECT id FROM runs WHERE runner_id = sqlc.arg(runner_id) OR runner_id IS NULL
     OR runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'));
 
+-- name: StrandedRuns :many
+-- Managed runs left running with no turn to execute and no live delegated run:
+-- a runner shut down mid-turn and finished the turn instead of leaving it for
+-- RequeueInterrupted. Only this runner's and dead runners' runs, since a live
+-- runner may be between a turn and its follow-up.
+SELECT r.id FROM runs r
+WHERE r.mode = 'managed' AND r.state = 'running' AND r.purpose <> 'chat'
+  AND (r.runner_id = sqlc.arg(runner_id) OR r.runner_id IS NULL
+    OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
+  AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status IN ('pending', 'running'))
+  AND NOT EXISTS (SELECT 1 FROM runs c WHERE c.parent_run_id = r.id AND c.state NOT IN ('completed', 'failed', 'cancelled'));
+
 -- name: RequeueStarting :exec
 UPDATE runs SET state = 'queued' WHERE state = 'starting';
 

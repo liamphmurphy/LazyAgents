@@ -820,6 +820,39 @@ func (q *Queries) SetRunWorkspace(ctx context.Context, arg SetRunWorkspaceParams
 	return err
 }
 
+const strandedRuns = `-- name: StrandedRuns :many
+SELECT r.id FROM runs r
+WHERE r.mode = 'managed' AND r.state = 'running' AND r.purpose <> 'chat'
+  AND (r.runner_id = $1 OR r.runner_id IS NULL
+    OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
+  AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status IN ('pending', 'running'))
+  AND NOT EXISTS (SELECT 1 FROM runs c WHERE c.parent_run_id = r.id AND c.state NOT IN ('completed', 'failed', 'cancelled'))
+`
+
+// Managed runs left running with no turn to execute and no live delegated run:
+// a runner shut down mid-turn and finished the turn instead of leaving it for
+// RequeueInterrupted. Only this runner's and dead runners' runs, since a live
+// runner may be between a turn and its follow-up.
+func (q *Queries) StrandedRuns(ctx context.Context, runnerID *string) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, strandedRuns, runnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ticketsWithOpenPRs = `-- name: TicketsWithOpenPRs :many
 SELECT t.id, t.workspace_id, t.key, t.epic_id, t.pr_url, t.pr_number, t.pr_state, t.status, t.project_id
 FROM tickets t
