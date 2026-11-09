@@ -105,10 +105,13 @@ func (c Catalog) List(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]Ha
 				}
 			}
 			if h.Available {
+				// Provider model APIs don't take subscription logins, so those
+				// list models through the CLI, like local mode.
+				viaCLI := !c.RequireKey || subscriptionLogin(name, key)
 				discover := c.Discover
 				if discover == nil {
 					discover = Discover
-					if !c.RequireKey {
+					if viaCLI {
 						discover = DiscoverLocal
 					}
 				}
@@ -116,7 +119,7 @@ func (c Catalog) List(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]Ha
 				if err != nil {
 					h.Available = false
 					h.UnavailableReason = "model discovery failed; check provider credentials and connectivity"
-					if !c.RequireKey {
+					if viaCLI {
 						h.UnavailableReason = "Could not read models from the local CLI. Check that it is installed and signed in on the API host."
 					}
 				} else if len(discovered) == 0 {

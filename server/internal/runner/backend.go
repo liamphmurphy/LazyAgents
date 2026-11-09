@@ -168,6 +168,9 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	for k, v := range spec.Env {
+		if k == ClaudeOAuthEnv || k == CodexAuthEnv || k == CodexAuthScopeEnv {
+			continue // local runs use this machine's own CLI logins
+		}
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // signal the whole tree

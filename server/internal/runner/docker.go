@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,7 +17,12 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 )
+
+// maxCodexAuth matches the 16 KB limit on a stored secret.
+const maxCodexAuth = 16 << 10
 
 // Docker runs each process as a container from the agent image, with the
 // run's named volume at /workspace (§6.5). It talks to the Engine API over
@@ -28,12 +34,20 @@ type Docker struct {
 	Socket  string // /var/run/docker.sock
 	Image   string // vesper/agent-base:latest
 	Network string // where api:8000 resolves; "" = default bridge
-	client  *http.Client
+	// MemoryMB and PidsLimit cap each container; 0 leaves that limit off.
+	MemoryMB  int64
+	PidsLimit int64
+	// SaveCodexAuth stores a ChatGPT login a turn refreshed. scope is what
+	// SecretEnv put in CodexAuthScopeEnv.
+	SaveCodexAuth func(ctx context.Context, scope, auth string) error
+	client        *http.Client
 }
 
 const (
 	dockerAPI     = "http://docker/v1.43"
 	workspacePath = "/workspace"
+	homePath      = "/home/node"
+	codexAuthPath = ".codex/auth.json"
 	labelKey      = "dev.lazyagents.run"
 )
 
@@ -98,6 +112,10 @@ func jsonBody(v any) io.Reader {
 
 func volumeName(runID string) string { return "lazyagents-run-" + runID }
 
+// homeVolumeName is the run's home directory. Each turn is a new container, so
+// the harness sessions a later turn resumes have to outlive the container.
+func homeVolumeName(runID string) string { return volumeName(runID) + "-home" }
+
 func (d *Docker) WorkspaceDir(string) string { return workspacePath }
 
 // Ping checks the socket and that the image exists.
@@ -115,18 +133,25 @@ func (d *Docker) Ping(ctx context.Context) error {
 }
 
 func (d *Docker) EnsureWorkspace(ctx context.Context, runID string) error {
-	_, err := d.do(ctx, "POST", "/volumes/create", jsonBody(map[string]any{
-		"Name": volumeName(runID), "Labels": map[string]string{labelKey: runID},
-	}), "application/json", nil)
-	return err
+	for _, name := range []string{volumeName(runID), homeVolumeName(runID)} {
+		_, err := d.do(ctx, "POST", "/volumes/create", jsonBody(map[string]any{
+			"Name": name, "Labels": map[string]string{labelKey: runID},
+		}), "application/json", nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (d *Docker) RemoveWorkspace(ctx context.Context, runID string) error {
-	_, err := d.do(ctx, "DELETE", "/volumes/"+volumeName(runID)+"?force=1", nil, "", nil)
-	if isStatus(err, 404) {
-		return nil
+	for _, name := range []string{volumeName(runID), homeVolumeName(runID)} {
+		_, err := d.do(ctx, "DELETE", "/volumes/"+name+"?force=1", nil, "", nil)
+		if err != nil && !isStatus(err, 404) {
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 // Cleanup removes turn containers left by a runner that died; their turns
@@ -177,6 +202,44 @@ func tarFiles(files map[string][]byte) (*bytes.Buffer, error) {
 	return &buf, tw.Close()
 }
 
+// hostConfig is the sandbox every turn runs in: no capabilities, no privilege
+// escalation through setuid binaries, and bounded resources.
+func (d *Docker) hostConfig(mounts []map[string]any) map[string]any {
+	host := map[string]any{
+		"Mounts":      mounts,
+		"NetworkMode": d.Network,
+		"Init":        true, // forward SIGINT to the harness, reap children
+		"CapDrop":     []string{"ALL"},
+		"SecurityOpt": []string{"no-new-privileges"},
+		// A runner on the host is reached by this name, on Linux too.
+		"ExtraHosts": []string{"host.docker.internal:host-gateway"},
+	}
+	if d.MemoryMB > 0 {
+		host["Memory"] = d.MemoryMB << 20
+	}
+	if d.PidsLimit > 0 {
+		host["PidsLimit"] = d.PidsLimit
+	}
+	return host
+}
+
+// codexAuthTar is the archive that puts a ChatGPT login at ~/.codex/auth.json.
+func codexAuthTar(auth string) (io.Reader, error) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	dir, _ := path.Split(codexAuthPath)
+	if err := tw.WriteHeader(&tar.Header{Typeflag: tar.TypeDir, Name: dir, Mode: 0o700, Uid: 1000, Gid: 1000, ModTime: time.Now()}); err != nil {
+		return nil, err
+	}
+	if err := tw.WriteHeader(&tar.Header{Name: codexAuthPath, Mode: 0o600, Size: int64(len(auth)), Uid: 1000, Gid: 1000, ModTime: time.Now()}); err != nil {
+		return nil, err
+	}
+	if _, err := io.WriteString(tw, auth); err != nil {
+		return nil, err
+	}
+	return &buf, tw.Close()
+}
+
 func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Process, error) {
 	if spec.Env == nil {
 		spec.Env = map[string]string{}
@@ -190,9 +253,13 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	mounts := []map[string]any{{"Type": "volume", "Source": volumeName(runID), "Target": workspacePath}}
 	// A persistent volume is shared by all runs and deliberately has no run
 	// label, so workspace cleanup never removes downloaded dependencies.
+	mounts = append(mounts, map[string]any{"Type": "volume", "Source": homeVolumeName(runID), "Target": homePath})
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": "lazyagents-dependency-cache", "Target": "/cache"})
 	env := make([]string, 0, len(spec.Env))
 	for k, v := range spec.Env {
+		if k == CodexAuthEnv || k == CodexAuthScopeEnv {
+			continue // delivered as a file below, never through the environment
+		}
 		env = append(env, k+"="+v)
 	}
 	sort.Strings(env)
@@ -205,12 +272,8 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	}
 	body := map[string]any{
 		"Image": d.Image, "Cmd": spec.Argv, "Env": env, "WorkingDir": dir,
-		"Labels": map[string]string{labelKey: runID},
-		"HostConfig": map[string]any{
-			"Mounts":      mounts,
-			"NetworkMode": d.Network,
-			"Init":        true, // forward SIGINT to the harness, reap children
-		},
+		"Labels":     map[string]string{labelKey: runID},
+		"HostConfig": d.hostConfig(mounts),
 	}
 	var created struct{ ID string }
 	name := url.QueryEscape(spec.Name)
@@ -223,7 +286,18 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 			return nil, err
 		}
 	}
-	p := &dockerProc{d: d, id: created.ID}
+	p := &dockerProc{d: d, id: created.ID, codexAuth: spec.Env[CodexAuthEnv], codexScope: spec.Env[CodexAuthScopeEnv]}
+	if p.codexAuth != "" {
+		tb, err := codexAuthTar(p.codexAuth)
+		if err != nil {
+			p.remove()
+			return nil, err
+		}
+		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(homePath), tb, "application/x-tar", nil); err != nil {
+			p.remove()
+			return nil, err
+		}
+	}
 	if len(spec.Files) > 0 {
 		tb, err := tarFiles(spec.Files)
 		if err != nil {
@@ -284,6 +358,8 @@ type dockerProc struct {
 	id  string
 	out io.Reader
 	err io.Reader
+	// The ChatGPT login this process was given, and where it is stored.
+	codexAuth, codexScope string
 }
 
 func (p *dockerProc) Stdout() io.Reader { return p.out }
@@ -310,5 +386,34 @@ func (p *dockerProc) Wait() (int, error) {
 	if _, err := p.d.do(context.Background(), "POST", "/containers/"+p.id+"/wait", nil, "", &res); err != nil {
 		return -1, err
 	}
+	p.keepRefreshedCodexAuth()
 	return res.StatusCode, nil
+}
+
+// keepRefreshedCodexAuth reads the only file that ever comes back out of a
+// container. Codex rotates its refresh token, so losing a refreshed login
+// would break the stored one. The file is agent-writable, so only a newer
+// login for the same account is accepted (chatmodels.CodexAuthRefreshed).
+func (p *dockerProc) keepRefreshedCodexAuth() {
+	if p.codexAuth == "" || p.d.SaveCodexAuth == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	res, err := p.d.do(ctx, "GET", "/containers/"+p.id+"/archive?path="+url.QueryEscape(path.Join(homePath, codexAuthPath)), nil, "", nil)
+	if err != nil {
+		return
+	}
+	defer res.Body.Close()
+	tr := tar.NewReader(res.Body)
+	if _, err := tr.Next(); err != nil {
+		return
+	}
+	next, err := io.ReadAll(io.LimitReader(tr, maxCodexAuth+1))
+	if err != nil || len(next) > maxCodexAuth || !chatmodels.CodexAuthRefreshed(p.codexAuth, string(next)) {
+		return
+	}
+	if err := p.d.SaveCodexAuth(ctx, p.codexScope, string(next)); err != nil {
+		slog.Warn("save refreshed codex login", "err", err)
+	}
 }

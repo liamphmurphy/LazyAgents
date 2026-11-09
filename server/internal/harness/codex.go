@@ -75,7 +75,10 @@ func (Codex) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	// Legacy workspace-write protects .git even when the workspace is writable.
 	// Headless turns cannot request an exception, so explicitly grant Git writes
 	// to repository writers while retaining the other workspace protections.
-	if sandbox == "workspace-write" && allowed(spec, "repo:write") {
+	if ws.ContainerSandbox {
+		// The policy hook still holds read-only turns to read-only tools.
+		cfg = append(cfg, "sandbox_mode="+tomlString("danger-full-access"))
+	} else if sandbox == "workspace-write" && allowed(spec, "repo:write") {
 		cfg = append(cfg,
 			`default_permissions="lazyagents-repo-write"`,
 			// One TOML table preserves quoted path keys; dotted -c keys split

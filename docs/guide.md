@@ -24,7 +24,8 @@ compose, with Claude Code and Codex installed). Before dispatching:
 
 - set `SECRETS_KEY` in `.env` (`openssl rand -base64 32`);
 - add the harness key in **Settings → Connections & secrets**: `harness:anthropic`
-  for Claude Code, `harness:openai` for Codex. Runs bill that key;
+  for Claude Code, `harness:openai` for Codex. Runs bill that key. To use a
+  Claude or ChatGPT plan instead, use `make start` from a checkout;
 - add `git:pat` (a GitHub token) and a repo URL for the project, if agents should
   clone, push and open PRs. Open PRs are polled every 60s: merged → Done.
 
@@ -68,7 +69,7 @@ Changes take effect after updating the API/runner binaries; repository manifests
 must be on the branch that new runs clone. Existing workspaces are not rewritten.
 
 All local runs share download/browser caches under `$RUNNER_DATA_DIR/cache`
-(default `server/.lazyagents/runs/cache` when launched with `make runner`). Docker
+(default `server/.lazyagents/runs/cache` when launched with `make local-runner`). Docker
 runs share the named volume `lazyagents-dependency-cache` at `/cache`; workspace
 cleanup preserves it. Each checkout owns its own `node_modules` and writable Go
 build cache under `.lazyagents/cache/go-build`. Codex grants cache writes to
@@ -239,19 +240,36 @@ See [the board guide](board.md) for estimates, statuses and the agent MCP tools.
 Requires Go 1.26+, Node 24+ and Docker for Postgres and SeaweedFS.
 
 ```sh
+make start   # everything: .env, agent image, sign-in, infra, API, web and hardened runner
 make dev     # infra in Docker; API on :8000 and Next on :3000 run on the host
-make runner  # optional: run dispatched tickets with this machine's own claude/codex logins
+make runner  # optional: run dispatched tickets in hardened containers
 make gen     # after editing api/openapi.yaml or server/internal/store/queries (needs sqlc)
 make test
 make help    # everything else
 ```
 
-`make api`, `make dev` and `make runner` default to `RUNNER_BACKEND=local`.
-The API inherits this setting through hot reload too. Local execution has no
-isolation and uses the runner account's installed CLIs and logins. To develop
-with Docker runners, use `RUNNER_BACKEND=docker make api` (or `make dev`) and
-`RUNNER_BACKEND=docker make runner` in their respective terminals. Direct
-`vesper serve` / `runner` commands and the full Docker stack still default
+`make api`, `make dev` and `make runner` default to `RUNNER_BACKEND=docker`.
+The API inherits this setting through hot reload too. Each turn runs in a
+container with no capabilities, `no-new-privileges`, memory and process limits
+(`RUNNER_MEMORY_MB`, `RUNNER_PIDS_LIMIT`), and no mounts from your machine. The
+container is Codex's sandbox there, because Docker blocks the namespaces its own
+sandbox needs, so read-only Codex turns rely on the policy hook. A stray write
+only reaches that run's disposable volumes.
+
+Agent containers can still reach your API and the internet.
+
+`make start` signs Vesper in to Claude and Codex the first time. `make login`
+redoes it. Both store plan logins in the `harness:anthropic` and `harness:openai`
+secrets. Vesper keeps its own Codex login, because a copy of `~/.codex/auth.json`
+and the original would invalidate each other when one refreshes. If device
+sign-in is off for your ChatGPT account, enable it or run
+`CODEX_AUTH_FILE=~/.codex/auth.json make codex-login` and sign in again on this
+machine afterwards if the CLI complains. Listing models with a plan login uses
+the `claude` and `codex` CLIs on the API host.
+
+`make local-dev` and `make local-runner` are the legacy fallback: no isolation,
+and they use this machine's CLIs and logins, ignoring stored plan logins. Direct
+`vesper serve` / `runner` commands and the full Docker stack also default
 to Docker. Set `RUNNER_BACKEND=local` explicitly for direct local commands.
 
 The API catalog uses its own configured backend; it does not discover runner

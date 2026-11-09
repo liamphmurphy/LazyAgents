@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Versions the adapters were checked against (server/internal/harness).
 ARG CLAUDE_CODE_VERSION=2.1.316
-ARG CODEX_VERSION=0.166.0
+ARG CODEX_VERSION=0.167.0
 RUN npm install -g --no-fund --no-audit \
       @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @openai/codex@${CODEX_VERSION} \
  && npm cache clean --force

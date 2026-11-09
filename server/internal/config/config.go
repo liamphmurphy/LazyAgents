@@ -46,6 +46,8 @@ type Runner struct {
 	Image         string // docker
 	Network       string // docker
 	DockerSocket  string // docker
+	MemoryMB      int64  // docker: per-container memory limit, 0 = none
+	PidsLimit     int64  // docker: per-container process limit, 0 = none
 	DataDir       string // local: run workspaces
 	ClaudeBin     string // local: path to `claude`
 	CodexBin      string // local: path to `codex`
@@ -110,6 +112,18 @@ func Load() (Config, error) {
 		defMCP = "http://localhost:8000/mcp"
 	}
 	r.MCPURL = env("RUNNER_MCP_URL", defMCP)
+	memory, err := intEnv("RUNNER_MEMORY_MB", 8192)
+	if err != nil {
+		return c, err
+	}
+	pids, err := intEnv("RUNNER_PIDS_LIMIT", 4096)
+	if err != nil {
+		return c, err
+	}
+	if memory < 0 || pids < 0 {
+		return c, fmt.Errorf("config: RUNNER_MEMORY_MB and RUNNER_PIDS_LIMIT can't be negative")
+	}
+	r.MemoryMB, r.PidsLimit = int64(memory), int64(pids)
 	if r.MaxConcurrent, err = intEnv("RUNNER_MAX_CONCURRENT", 2); err != nil {
 		return c, err
 	}

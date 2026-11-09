@@ -320,6 +320,16 @@ var HarnessKeys = map[string]struct {
 	agentdef.HarnessCodex:      {chatmodels.KeySecret[agentdef.HarnessCodex], []string{"CODEX_API_KEY", "OPENAI_API_KEY"}},
 }
 
+// Subscription logins. A stored harness key can be a plan login rather than an
+// API key, recognized by its shape (chatmodels.ClaudeOAuthToken, ParseCodexAuth).
+const (
+	ClaudeOAuthEnv = "CLAUDE_CODE_OAUTH_TOKEN"
+	// CodexAuthEnv and CodexAuthScopeEnv only travel from SecretEnv to the
+	// backend: Docker turns them into ~/.codex/auth.json.
+	CodexAuthEnv      = "LAZYAGENTS_CODEX_AUTH"
+	CodexAuthScopeEnv = "LAZYAGENTS_CODEX_AUTH_SCOPE"
+)
+
 // HarnessKey is the API-key secret and env vars a resolved spec authenticates
 // with. A harness with no mapping is an error: there is no fallback to another
 // harness's key.
@@ -453,11 +463,54 @@ func SecretEnv(ctx context.Context, rv Revealer, ws uuid.UUID, project *uuid.UUI
 		} else if err != nil {
 			return nil, err
 		}
+		switch {
+		case d.Name == chatmodels.KeySecret[agentdef.HarnessClaudeCode] && chatmodels.ClaudeOAuthToken(v):
+			env[ClaudeOAuthEnv] = v
+			continue
+		case d.Name == chatmodels.KeySecret[agentdef.HarnessCodex]:
+			if _, ok := chatmodels.ParseCodexAuth(v); ok {
+				env[CodexAuthEnv] = v
+				env[CodexAuthScopeEnv] = CodexAuthScope(ws, project)
+				continue
+			}
+		}
 		for _, e := range d.Env {
 			env[e] = v
 		}
 	}
 	return env, nil
+}
+
+// CodexAuthScope says which secret a refreshed Codex login belongs to.
+func CodexAuthScope(ws uuid.UUID, project *uuid.UUID) string {
+	if project == nil {
+		return ws.String()
+	}
+	return ws.String() + "/" + project.String()
+}
+
+// ParseCodexAuthScope reverses CodexAuthScope.
+func ParseCodexAuthScope(scope string) (uuid.UUID, *uuid.UUID, error) {
+	wsID, projectID, hasProject := strings.Cut(scope, "/")
+	ws, err := uuid.Parse(wsID)
+	if err != nil || !hasProject {
+		return ws, nil, err
+	}
+	project, err := uuid.Parse(projectID)
+	return ws, &project, err
+}
+
+// sensitiveEnv is what gets scrubbed from events: the env values, plus each
+// token inside a Codex login, since an agent would print those on their own.
+func sensitiveEnv(env map[string]string) map[string]string {
+	out := make(map[string]string, len(env)+3)
+	for k, v := range env {
+		out[k] = v
+	}
+	if auth, ok := chatmodels.ParseCodexAuth(env[CodexAuthEnv]); ok {
+		out["codex_access"], out["codex_refresh"], out["codex_id"] = auth.Tokens.AccessToken, auth.Tokens.RefreshToken, auth.Tokens.IDToken
+	}
+	return out
 }
 
 // PlanningContextFile delivers exactly the source version approved at start,
