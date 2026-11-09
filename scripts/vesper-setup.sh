@@ -131,7 +131,13 @@ offer_github_token() {
 start() {
   setup
   make --no-print-directory dev-infra stop-dev
-  trap 'kill 0' EXIT
+  # The runner is a container: stop it with everything else, not just its log tail.
+  trap 'docker compose -f docker-compose.dev.yml --profile runner stop runner >/dev/null 2>&1; kill 0' EXIT
+  if [ -n "$(docker ps -q --filter label=com.docker.compose.project=lazyagents --filter label=com.docker.compose.service=runner)" ]; then
+    warn "the full stack's runner (docker compose up) is also running." \
+      "It serves a different database, so it won't take these runs, but it uses Docker resources." \
+      "Stop it with: make down"
+  fi
   make --no-print-directory api &
   echo "vesper: waiting for the API on :$API_PORT"
   for _ in $(seq 1 120); do

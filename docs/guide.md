@@ -242,7 +242,7 @@ Requires Go 1.26+, Node 24+ and Docker for Postgres and SeaweedFS.
 ```sh
 make start   # everything: .env, agent image, sign-in, infra, API, web and hardened runner
 make dev     # infra in Docker; API on :8000 and Next on :3000 run on the host
-make runner  # optional: run dispatched tickets in hardened containers
+make runner  # optional: (re)start the hardened runner, a dev compose container
 make gen     # after editing api/openapi.yaml or server/internal/store/queries (needs sqlc)
 make test
 make help    # everything else
@@ -257,6 +257,15 @@ sandbox needs, so read-only Codex turns rely on the policy hook. A stray write
 only reaches that run's disposable volumes.
 
 Agent containers can still reach your API and the internet.
+
+The runner itself runs as the `runner` service of `docker-compose.dev.yml`
+(`--profile runner`), from your checkout's source. Every `make start` or
+`make runner` replaces it, so a runner from an earlier session can't keep
+claiming runs with stale code, and stopping `make start` stops it. Its turn
+containers share that compose network and reach the API on the host as
+`host.docker.internal`. Each install labels its containers with `RUNNER_STACK`
+(`lazyagents-dev` here, `lazyagents` for `make up`), so two installs on one
+Docker daemon never clean up each other's turns.
 
 `make start` signs Vesper in to Claude and Codex the first time. `make login`
 redoes it. Both store plan logins in the `harness:anthropic` and `harness:openai`

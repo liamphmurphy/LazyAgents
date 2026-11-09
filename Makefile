@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 
-.PHONY: help up down start setup login claude-login codex-login github-login stop-dev dev dev-infra api web web-deps runner local-dev local-runner gen gen-check test lint build reset
+.PHONY: help up down start setup login claude-login codex-login github-login stop-dev dev dev-infra api web web-deps runner stop-host-runners local-dev local-runner gen gen-check test lint build reset
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -20,15 +20,15 @@ API_PORT ?= 8000
 WEB_PORT ?= 3000
 # Agents run in hardened containers. `make local-dev` and `make local-runner` are the no-isolation fallback.
 RUNNER_BACKEND ?= docker
-# Turn containers reach the API on the host through this network and name.
-RUNNER_NETWORK ?= bridge
-RUNNER_MCP_URL ?= http://host.docker.internal:$(API_PORT)/mcp
+# The hardened runner is a dev compose service (docker-compose.dev.yml).
+RUNNER_COMPOSE := $(COMPOSE_DEV) --profile runner
 # A key in the environment wins over .env (`make setup` creates that one).
 SECRETS_KEY ?= $(shell sed -n 's/^SECRETS_KEY=//p' .env 2>/dev/null)
 export SECRETS_KEY
-# Processes the host runner runs at once; delegated runs and resumed turns share these slots.
+# Processes the runner runs at once; delegated runs and resumed turns share these slots.
 RUNNER_MAX_CONCURRENT ?= 4
-# Runs inherit this, so agents' DB tests use the dev Postgres (each test makes its own database) instead of starting one.
+export RUNNER_MAX_CONCURRENT API_PORT
+# Local runs inherit this, so agents' DB tests use the dev Postgres (each test makes its own database) instead of starting one.
 TEST_DATABASE_URL ?= postgres://lazyagents:lazyagents@127.0.0.1:5432/postgres?sslmode=disable
 
 start: ## One command for everything: set up, sign in if needed, run the app and hardened runner → http://localhost:3000
@@ -68,8 +68,20 @@ api: ## Run the API (hot reload if air is installed: go install github.com/air-v
 	cd server && export RUNNER_BACKEND=$(RUNNER_BACKEND) PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000}; \
 	  if command -v air >/dev/null; then air; else go run ./cmd/vesper serve; fi
 
-runner: ## Run dispatched tickets in hardened containers
-	cd server && $(if $(filter docker,$(RUNNER_BACKEND)),RUNNER_NETWORK=$(RUNNER_NETWORK) RUNNER_MCP_URL=$(RUNNER_MCP_URL)) RUNNER_BACKEND=$(RUNNER_BACKEND) RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/vesper runner
+ifeq ($(RUNNER_BACKEND),docker)
+runner: stop-host-runners ## Run dispatched tickets in hardened containers; replaces any runner already running
+	$(RUNNER_COMPOSE) up -d --force-recreate runner
+	@trap '$(RUNNER_COMPOSE) stop runner >/dev/null 2>&1' EXIT; $(RUNNER_COMPOSE) logs -f --no-log-prefix runner
+else
+runner: ## Run dispatched tickets on this machine (no isolation)
+	cd server && RUNNER_BACKEND=local RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/vesper runner
+endif
+
+stop-host-runners: ## Stop runners an older `make start` left on the host: they claim runs with stale code
+	@for pid in $$(pgrep -f 'vesper runner$$' 2>/dev/null); do \
+	  echo "stopping host runner $$pid — $$(ps -o command= -p $$pid)"; \
+	  kill $$pid 2>/dev/null; \
+	done; true
 
 local-dev: ## Legacy: `make dev` for the no-isolation local runner
 	@$(MAKE) --no-print-directory RUNNER_BACKEND=local dev
@@ -110,5 +122,5 @@ build: web-deps ## Build both apps
 	cd web && npm run build
 
 reset: ## Delete dev volumes (all local data)
-	$(COMPOSE_DEV) down -v
+	$(RUNNER_COMPOSE) down -v
 	docker compose down -v
