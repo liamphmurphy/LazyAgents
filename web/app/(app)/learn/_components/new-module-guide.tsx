@@ -7,6 +7,7 @@ import { useBootstrap, useChatModels } from "@/lib/api/hooks";
 import { useCreateCourse } from "@/lib/api/learning-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { currentProject } from "@/lib/project-scope";
+import { PART_MINUTES, TIME_STEPS, partsEstimate, timeDetail, timeLabel } from "@/lib/learning";
 import { cx } from "@/lib/cx";
 import { useRememberedProject } from "@/components/shell/project-scope";
 import { Button, IconButton } from "@/components/ui/button";
@@ -19,16 +20,41 @@ const LEVELS = [
   { value: "some", label: "Some background", detail: "I've met the basics and want to go further." },
   { value: "experienced", label: "Experienced", detail: "I know this area and want the depth." },
 ] as const;
-const TIMES = [
-  { value: "60", label: "1 hour", short: "1h", detail: "A focused pass over what matters most." },
-  { value: "180", label: "3 hours", short: "3h", detail: "Room for the main ideas and some practice." },
-  { value: "480", label: "8 hours", short: "8h", detail: "A thorough module to work through over time." },
-] as const;
 const STEPS = ["Topic", "Purpose", "Level", "Time", "Review"] as const;
 const LAST = STEPS.length - 1;
 
 type Level = (typeof LEVELS)[number]["value"];
-type Time = (typeof TIMES)[number]["value"];
+
+/** How long the module should take, from half an hour to 20 hours. */
+function TimeSlider({ minutes, onChange }: { minutes: number; onChange: (m: number) => void }) {
+  const at = Math.max(0, TIME_STEPS.indexOf(minutes));
+  const partsFrom = TIME_STEPS.indexOf(PART_MINUTES) / (TIME_STEPS.length - 1);
+  return (
+    <div className="guide-stagger flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[22px] font-semibold text-fg" aria-live="polite">{timeLabel(minutes)}</span>
+        {minutes > PART_MINUTES && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">In {partsEstimate(minutes)} parts</span>}
+      </div>
+      <input
+        type="range"
+        aria-label="Time"
+        aria-valuetext={timeLabel(minutes)}
+        data-step-focus
+        min={0}
+        max={TIME_STEPS.length - 1}
+        value={at}
+        onChange={(e) => onChange(TIME_STEPS[Number(e.target.value)])}
+        className="w-full cursor-pointer accent-[var(--accent)]"
+      />
+      <div className="relative h-4 text-[11px] text-fg-tertiary" aria-hidden>
+        <span className="absolute left-0">30 min</span>
+        <span className="absolute -translate-x-1/2" style={{ left: `${partsFrom * 100}%` }}>8h · parts beyond</span>
+        <span className="absolute right-0">20h</span>
+      </div>
+      <p className="text-xs text-fg-secondary">{timeDetail(minutes)}</p>
+    </div>
+  );
+}
 
 /** A step's question. Text steps pass htmlFor so it labels their input. */
 function Question({ htmlFor, focus, children }: { htmlFor?: string; focus?: boolean; children: ReactNode }) {
@@ -101,7 +127,7 @@ export function NewModuleGuide() {
   const [topic, setTopic] = useState("");
   const [goal, setGoal] = useState("");
   const [level, setLevel] = useState<Level>("some");
-  const [time, setTime] = useState<Time>("180");
+  const [time, setTime] = useState(180);
   const [tutor, setTutor] = useState("");
   const [picked, setPicked] = useState<Selection | null>(null);
   const layers = useRef(new Map<number, HTMLDivElement>());
@@ -126,7 +152,7 @@ export function NewModuleGuide() {
     if (blocked || !project) return;
     if (step < LAST) return go(step + 1);
     create.mutate(
-      { project: project.key, topic: topic.trim(), goal: goal.trim() || undefined, level, minutes_budget: Number(time), persona_id: tutor || undefined, harness: selection?.harness, model: selection?.model },
+      { project: project.key, topic: topic.trim(), goal: goal.trim() || undefined, level, minutes_budget: time, persona_id: tutor || undefined, harness: selection?.harness, model: selection?.model },
       { onSuccess: (c) => router.push(`/learn/${c.summary.id}`) },
     );
   };
@@ -169,7 +195,7 @@ export function NewModuleGuide() {
         return (
           <div className="flex flex-col gap-3">
             <div className="guide-stagger"><Question>How much time do you have?</Question></div>
-            <Options name="learn-time" label="Time" options={TIMES} value={time} onChange={setTime} />
+            <TimeSlider minutes={time} onChange={setTime} />
           </div>
         );
       default:
@@ -180,7 +206,7 @@ export function NewModuleGuide() {
               <ReviewRow label="Topic" onEdit={() => go(0)}>{topic.trim()}</ReviewRow>
               <ReviewRow label="Purpose" onEdit={() => go(1)}>{goal.trim() || <span className="text-fg-tertiary">Not set</span>}</ReviewRow>
               <ReviewRow label="Level" onEdit={() => go(2)}>{LEVELS.find((l) => l.value === level)?.label}</ReviewRow>
-              <ReviewRow label="Time" onEdit={() => go(3)}>{TIMES.find((t) => t.value === time)?.label}</ReviewRow>
+              <ReviewRow label="Time" onEdit={() => go(3)}>{timeLabel(time)}{time > PART_MINUTES && `, in about ${partsEstimate(time)} parts`}</ReviewRow>
             </div>
             <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
               <Field label="Tutor" htmlFor="learn-tutor">

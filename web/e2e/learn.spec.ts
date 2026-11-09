@@ -8,7 +8,7 @@ const ID = "11111111-1111-4111-8111-111111111111";
 const CHAT = "22222222-2222-4222-8222-222222222222";
 const CHECK = "33333333-3333-4333-8333-333333333333";
 
-const summary = (state: string, extra = {}) => ({ id: ID, topic: "Postgres MVCC", state, error: "", created_at: now, units: 2, lessons: 3, complete: 0, solid: 0, flagged: 0, minutes: 30, build_note: "", ...extra });
+const summary = (state: string, extra = {}) => ({ id: ID, topic: "Postgres MVCC", state, error: "", created_at: now, units: 2, lessons: 3, complete: 0, solid: 0, flagged: 0, minutes: 30, build_note: "", part: 0, parts: 1, studyable: state === "ready", ...extra });
 const outline = {
   summary: "How row versions work.",
   units: [
@@ -61,6 +61,11 @@ function handle(route: Route, path: string, method: string, course: { current: u
     return json(route, { id: CHECK, correct: true }, 201);
   }
   if (path.endsWith("/tutor")) return route.fulfill({ status: 202 });
+  if (path.endsWith("/next-part")) {
+    const c = course.current as ReturnType<typeof ready>;
+    course.current = { ...c, summary: { ...c.summary, state: "scoping", part: 1 } };
+    return json(route, course.current);
+  }
   return json(route, course.current);
 }
 
@@ -127,7 +132,19 @@ test("a topic becomes an outline to approve", async ({ page }) => {
   await expect(dialog.getByRole("radio", { name: /^Some background/ })).toBeChecked();
   await experienced.check({ force: true });
   await dialog.getByRole("button", { name: "Continue" }).click();
-  await expect(dialog.getByRole("radio", { name: /^3 hours/ })).toBeChecked();
+  const time = dialog.getByRole("slider", { name: "Time" });
+  await expect(time).toHaveAttribute("aria-valuetext", "3 hours");
+  await time.press("End");
+  await expect(time).toHaveAttribute("aria-valuetext", "20 hours");
+  await expect(dialog.getByText("In 5 parts")).toBeVisible();
+  await page.screenshot({ path: "test-results/learn-guide-time.png", animations: "disabled" });
+  await time.press("ArrowLeft");
+  await time.press("ArrowLeft");
+  await time.press("ArrowLeft");
+  await expect(dialog.getByText("In 4 parts")).toBeVisible(); // 17 hours
+  await time.press("Home");
+  for (let i = 0; i < 5; i++) await time.press("ArrowRight");
+  await expect(time).toHaveAttribute("aria-valuetext", "3 hours");
   await dialog.getByRole("button", { name: "Continue" }).click();
   await expect(dialog.getByText("Here's your module")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Edit topic" })).toContainText("Postgres MVCC");
@@ -176,4 +193,35 @@ test("a lesson shows provenance, grades a check and reaches the tutor", async ({
   await page.getByRole("button", { name: /^Vacuum/ }).click();
   await expect(page.getByText("The claim about the OS is wrong")).toBeVisible();
   await expect(page.getByText("Prerequisite shaky")).toBeVisible();
+});
+
+test("a module built in parts keeps studying while its next part is planned", async ({ page }) => {
+  const course = { current: null as unknown };
+  const posts: { url: string; body: unknown }[] = [];
+  await mock(page, course, posts);
+  const parts = [{ title: "Visibility and vacuum", summary: "How rows live", minutes: 600 }, { title: "Indexes", summary: "Finding rows fast", minutes: 600 }];
+  const data = ready();
+  course.current = { ...data, minutes_budget: 1200, outline: { ...outline, parts }, summary: { ...data.summary, parts: 2 } };
+  await page.goto(`/learn/${ID}`);
+
+  const next = page.getByTestId("next-part");
+  await expect(next).toContainText("Part 2 of 2");
+  await expect(next).toContainText("Indexes");
+  await next.getByRole("button", { name: "Plan part 2 now" }).click();
+  await expect(next).toContainText("Drafting its outline");
+  expect(posts.map((p) => p.url)).toContain(`/learn/courses/${ID}/next-part`);
+  // Studying carries on meanwhile.
+  await expect(page.getByRole("heading", { name: "Snapshots" })).toBeVisible();
+  await page.screenshot({ path: "test-results/learn-next-part.png", animations: "disabled" });
+
+  const c = course.current as ReturnType<typeof ready>;
+  course.current = { ...c, outline: { ...outline, parts, units: [...outline.units, { part: 1, title: "B-trees", question: "How do B-trees work?", lessons: [{ key: "btree", title: "B-trees", objectives: ["Walk a lookup"], prereqs: ["snapshots"], minutes: 20 }] }] }, summary: { ...c.summary, state: "outline_ready", part: 1, units: 1 } };
+  await page.reload();
+  await page.getByTestId("next-part").getByRole("link", { name: "Review its outline" }).click();
+  await expect(page.getByText("Review part 2's outline.")).toBeVisible();
+  await expect(page.getByText("Part 2 of 2: Indexes")).toBeVisible();
+  await expect(page.getByText("Unit 3 · B-trees")).toBeVisible();
+  await expect(page.getByText("Unit 1 · Visibility")).toHaveCount(0);
+  await expect(page.getByText("needs 1.2")).toBeVisible();
+  await page.screenshot({ path: "test-results/learn-part-outline.png", fullPage: true });
 });

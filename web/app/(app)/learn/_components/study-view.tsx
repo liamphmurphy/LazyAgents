@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { usePulse } from "@/components/ui/motion";
-import { useAttemptCheck, useGradeAttempt, useTutor, type Course, type CourseCheck, type CourseLesson } from "@/lib/api/learning-hooks";
-import { CONFIDENCE, pickLesson } from "@/lib/learning";
+import { useAttemptCheck, useGradeAttempt, useNextPart, useStopCourse, useTutor, type Course, type CourseCheck, type CourseLesson } from "@/lib/api/learning-hooks";
+import { CONFIDENCE, courseBuilding, pickLesson } from "@/lib/learning";
 import { cx } from "@/lib/cx";
 import { Markdown } from "@/components/domain/markdown";
 import { LessonVisual } from "@/components/domain/visuals";
@@ -156,6 +156,40 @@ function TutorPanel({ course, lesson }: { course: Course; lesson: string }) {
   );
 }
 
+/** Where a module built in parts stands with its next part, and what to do about it. */
+function NextPart({ course }: { course: Course }) {
+  const { summary } = course;
+  const id = summary.id;
+  const next = useNextPart(id);
+  const stop = useStopCourse(id);
+  const parts = course.outline?.parts ?? [];
+  const building = summary.state !== "ready";
+  const n = building ? summary.part : summary.part + 1; // the part in question, from 0
+  if (summary.parts < 2 || (!building && n >= summary.parts)) return null;
+  const title = parts[n]?.title;
+  const error = next.error ?? stop.error;
+  return (
+    <div data-testid="next-part" className="mx-4 mb-3 flex flex-col gap-1.5 rounded-lg border border-border bg-surface p-3 text-[12.5px]">
+      <span className="text-[10.5px] font-semibold uppercase tracking-wide text-fg-tertiary">Part {n + 1} of {summary.parts}</span>
+      {title && <span className="font-medium text-fg">{title}</span>}
+      {summary.state === "ready" && (
+        <>
+          {summary.error && <span className="text-pill-blocked-fg">{summary.error}</span>}
+          <span className="text-fg-secondary">Its outline starts on its own when you reach the last unit.</span>
+          <Button variant="outline" className="self-start" disabled={next.isPending} onClick={() => next.mutate()}>{next.isPending ? "Starting…" : `Plan part ${n + 1} now`}</Button>
+        </>
+      )}
+      {summary.state === "scoping" && <span className="text-fg-secondary">Drafting its outline from how you&apos;re doing…</span>}
+      {summary.state === "outline_ready" && (
+        <Link href={`/learn/${id}?review=1`} className="inline-flex h-7 items-center self-start rounded-md bg-accent px-2.5 text-xs font-medium !text-on-accent hover:opacity-90">Review its outline</Link>
+      )}
+      {courseBuilding(summary.state) && summary.state !== "scoping" && <span className="text-fg-secondary">Building{summary.build_note ? ` · ${summary.build_note}` : ""}. Keep studying meanwhile.</span>}
+      {courseBuilding(summary.state) && <button type="button" disabled={stop.isPending} onClick={() => stop.mutate()} className="self-start text-xs text-fg-tertiary hover:text-fg">Stop building it</button>}
+      {error && <span role="alert" className="text-pill-blocked-fg">{error.message}</span>}
+    </div>
+  );
+}
+
 function ProgressDot({ lesson, current }: { lesson: CourseLesson; current: boolean }) {
   const done = lesson.progress !== "new" || lesson.status === "known";
   const ref = usePulse<HTMLSpanElement>(done);
@@ -192,6 +226,7 @@ export function StudyView({ course, onDelete }: { course: Course; onDelete: () =
           <p className="font-mono text-xs text-fg-tertiary">{summary.complete} of {summary.lessons} complete · {summary.solid} solid</p>
           <div className="h-1 overflow-hidden rounded-full bg-track"><div className="h-full rounded-full bg-fg-2" style={{ width: `${summary.lessons ? (summary.complete / summary.lessons) * 100 : 0}%` }} /></div>
         </div>
+        <NextPart course={course} />
         {units.map((u) => (
           <div key={u} className="px-2 pb-3">
             <div className="px-2 pb-1 text-[11px] font-semibold uppercase text-fg-tertiary">{u}</div>
