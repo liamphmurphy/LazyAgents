@@ -93,7 +93,12 @@ func (s *Server) ListSecrets(ctx context.Context, _ api.ListSecretsRequestObject
 	if err != nil {
 		return nil, err
 	}
-	out := api.ListSecrets200JSONResponse{Secrets: make([]api.SecretInfo, 0, len(rows)), KeyConfigured: s.Secrets.Box != nil}
+	live, err := s.Q.LiveDockerRunnerExists(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := api.ListSecrets200JSONResponse{Secrets: make([]api.SecretInfo, 0, len(rows)), KeyConfigured: s.Secrets.Box != nil,
+		SignInAvailable: live && s.Secrets.Box != nil}
 	for _, r := range rows {
 		si := api.SecretInfo{Id: r.ID, Name: r.Name, GrantsScope: r.GrantsScope, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, LastUsedAt: r.LastUsedAt}
 		if r.ProjectID != nil {

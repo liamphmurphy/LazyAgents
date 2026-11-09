@@ -843,6 +843,22 @@ type Secret struct {
 	LastUsedAt      *time.Time
 }
 
+type SignIn struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Provider    string
+	Status      string
+	Url         string
+	UserCode    string
+	PastedCode  *string
+	Error       string
+	RunnerID    *string
+	RequestedBy uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	ExpiresAt   time.Time
+}
+
 type Ticket struct {
 	ID                 uuid.UUID
 	WorkspaceID        uuid.UUID

@@ -2,15 +2,17 @@
 
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
-import { useBootstrap, useDeleteSecret, useSecrets, useSetSecret } from "@/lib/api/hooks";
+import { useBootstrap, useCancelSignIn, useDeleteSecret, useSecrets, useSetSecret, useSignIn, useStartSignIn, useSubmitSignInCode } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { ago } from "@/lib/format";
-import { CONNECTIONS, connectionState, missingConnections, otherSecrets, savedMessage, type Connection } from "@/lib/settings";
-import { Button, IconButton } from "@/components/ui/button";
+import { CONNECTIONS, connectionState, missingConnections, otherSecrets, savedMessage, SIGN_IN_STEPS, signInView, type Connection, type SignInProvider } from "@/lib/settings";
+import { Button, buttonClass, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Card, Field, Skeleton, TextInput } from "@/components/ui/primitives";
 import { MonoChip, SmallPill } from "@/components/domain/labels";
 import { floatPanel } from "@/components/domain/pickers";
+
+const buttonLinkClass = buttonClass("outline");
 
 const sentence = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
 
@@ -88,6 +90,7 @@ export function SecretsSection() {
               first={i === 0}
               state={connectionState(d.secrets, c.name)}
               readOnly={readOnly}
+              signInAvailable={d.sign_in_available}
               editing={editing?.fixedName && editing.name === c.name && !editing.project ? editing : null}
               onEdit={() => open({ name: c.name, project: "", fixedName: true })}
               onDelete={(id) => {
@@ -184,6 +187,7 @@ function ConnectionRow({
   first,
   state,
   readOnly,
+  signInAvailable,
   editing,
   onEdit,
   onDelete,
@@ -195,6 +199,7 @@ function ConnectionRow({
   first: boolean;
   state: ReturnType<typeof connectionState>;
   readOnly: boolean;
+  signInAvailable: boolean;
   editing: Target | null;
   onEdit: () => void;
   onDelete: (id: string) => void;
@@ -203,6 +208,14 @@ function ConnectionRow({
   onSaved: (name: string) => void;
 }) {
   const on = state.state === "set";
+  const start = useStartSignIn();
+  const [signInId, setSignInId] = useState<string | null>(null);
+  // Only for a key that isn't set yet: replacing one stays a paste.
+  const canSignIn = !on && !!c.signIn && signInAvailable && !readOnly;
+  const beginSignIn = () => {
+    if (!c.signIn) return;
+    start.mutate(c.signIn, { onSuccess: (s) => setSignInId(s.id) });
+  };
   return (
     <li className={cx("px-[18px] py-3", !first && "border-t border-border-row", editing && "bg-hover/40")}>
       <div className="flex flex-wrap items-start gap-3">
@@ -243,8 +256,13 @@ function ConnectionRow({
             !editing && <span className="text-[11px] text-fg-tertiary">{c.without}</span>
           )}
         </span>
-        {!editing && (
+        {!editing && !signInId && (
           <span className="flex items-center gap-1">
+            {canSignIn && (
+              <Button variant="primary" disabled={start.isPending} aria-label={`Sign in to ${c.label}`} onClick={beginSignIn}>
+                {start.isPending ? "Starting…" : "Sign in"}
+              </Button>
+            )}
             <Button variant="outline" disabled={readOnly} aria-label={`${on ? "Replace" : "Add"} ${c.label} key`} onClick={onEdit}>
               {on ? "Replace" : "Add key"}
             </Button>
@@ -255,6 +273,28 @@ function ConnectionRow({
       {editing && (
         <div className="mt-3 pl-11">
           <SecretForm key={targetKey(editing)} target={editing} onCancel={onCancel} onSaved={onSaved} hint={`Without it: ${c.without} Replacing a value takes effect on the next run.`} />
+        </div>
+      )}
+      {start.isError && !signInId && (
+        <p role="alert" className="mt-2 pl-11 text-xs text-pill-blocked-fg">{start.error.message}</p>
+      )}
+      {signInId && c.signIn && (
+        <div className="mt-3 pl-11">
+          <SignInPanel
+            key={signInId}
+            id={signInId}
+            provider={c.signIn}
+            label={c.label}
+            onRetry={beginSignIn}
+            onClose={() => {
+              setSignInId(null);
+              start.reset();
+            }}
+            onDone={() => {
+              setSignInId(null);
+              onSaved(c.name);
+            }}
+          />
         </div>
       )}
     </li>
@@ -364,5 +404,133 @@ function SecretForm({
       {hint && <p className="text-[11.5px] text-fg-tertiary">{hint}</p>}
       {set.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{set.error.message}</p>}
     </form>
+  );
+}
+
+/**
+ * A sign-in the runner drives in a throwaway container: it shows the
+ * provider's page and code, takes Claude's pasted code, and closes once the
+ * login is stored. The login itself never reaches the browser.
+ */
+function SignInPanel({
+  id,
+  provider,
+  label,
+  onRetry,
+  onClose,
+  onDone,
+}: {
+  id: string;
+  provider: SignInProvider;
+  label: string;
+  onRetry: () => void;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const s = useSignIn(id);
+  const submit = useSubmitSignInCode();
+  const cancel = useCancelSignIn();
+  const [code, setCode] = useState("");
+  const [copied, setCopied] = useState(false);
+  const status = s.data?.status;
+  const finished = useRef(false);
+  useEffect(() => {
+    if (status === "done" && !finished.current) {
+      finished.current = true;
+      onDone();
+    }
+  }, [status, onDone]);
+
+  const stop = () => {
+    cancel.mutate(id);
+    onClose();
+  };
+  if (s.isError) {
+    return (
+      <Banner tone="blocked" title="Couldn’t follow the sign-in" actions={<Button variant="outline" onClick={onClose}>Close</Button>}>
+        {sentence(s.error.message || "The API is unavailable")}
+      </Banner>
+    );
+  }
+  const v = s.data ? signInView(s.data) : ({ step: "starting" } as const);
+  if (v.step === "failed") {
+    return (
+      <Banner
+        tone="blocked"
+        title={`${label} sign-in didn’t finish`}
+        actions={
+          <>
+            <Button variant="outline" onClick={onRetry}>Try again</Button>
+            <Button variant="ghost" onClick={onClose}>Close</Button>
+          </>
+        }
+      >
+        {sentence(v.message)}
+      </Banner>
+    );
+  }
+  return (
+    <div aria-label={`${label} sign-in`} className="flex flex-col gap-2.5 rounded-lg border border-border bg-surface px-3.5 py-3 text-[13px]">
+      {v.step === "starting" && <p className="text-fg-secondary">Starting a sign-in container…</p>}
+      {v.step === "verifying" && <p className="text-fg-secondary">Checking the code and saving the login…</p>}
+      {v.step === "open" && (
+        <>
+          <p className="text-fg-secondary">{SIGN_IN_STEPS[provider]}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {v.url.startsWith("https://") && (
+              <a href={v.url} target="_blank" rel="noopener noreferrer" className={buttonLinkClass}>
+                <Icon name="link" size={13} /> Open the {label} sign-in page
+              </a>
+            )}
+            {v.code && (
+              <>
+                <code aria-label="One-time code" className="rounded-md border border-border-strong bg-selected px-2.5 py-1 font-mono text-[15px] tracking-wider">
+                  {v.code}
+                </code>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(v.code).then(() => setCopied(true));
+                  }}
+                >
+                  {copied ? "Copied" : "Copy code"}
+                </Button>
+              </>
+            )}
+          </div>
+          {v.pasteBack && (
+            <form
+              className="flex flex-wrap items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const c = code.trim();
+                if (!c) return;
+                submit.mutate({ id, code: c }, { onSuccess: () => setCode("") });
+              }}
+            >
+              <Field label="Code from the Claude page" htmlFor={`signin-${id}-code`}>
+                <TextInput
+                  id={`signin-${id}-code`}
+                  mono
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="Paste the code"
+                />
+              </Field>
+              <Button variant="primary" type="submit" disabled={!code.trim() || submit.isPending}>
+                Continue
+              </Button>
+            </form>
+          )}
+          {submit.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{submit.error.message}</p>}
+        </>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-fg-tertiary">Runs in a throwaway container. The login is stored encrypted and never shown here.</span>
+        <Button variant="ghost" onClick={stop}>Cancel</Button>
+      </div>
+    </div>
   );
 }

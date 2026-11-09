@@ -91,7 +91,10 @@ type Runner struct {
 	Workflows *runs.WorkflowEngine
 	// Scheduled starts and settles scheduled tasks; nil leaves them idle.
 	Scheduled *runs.Service
-	Log       *slog.Logger
+	// StoreSecret saves logins from sign-ins started in Settings; nil leaves
+	// them to another runner.
+	StoreSecret SecretStorer
+	Log         *slog.Logger
 
 	mu     sync.Mutex
 	active int
@@ -205,6 +208,7 @@ func (r *Runner) release() {
 // pending turns of running runs. Work runs in goroutines; Wait waits.
 func (r *Runner) Tick(ctx context.Context) {
 	q := r.q()
+	r.tickSignIns(ctx)
 	r.resumeHeld(ctx)
 	for r.slot() {
 		run, err := q.ClaimQueuedRun(ctx, &r.Cfg.ID)
