@@ -188,6 +188,19 @@ func validValue(placement, value string) error {
 	return nil
 }
 
+// SentAs describes where a value goes without the value, e.g. "Authorization: Bearer".
+func SentAs(placement, key string) string {
+	switch placement {
+	case PlacementBearer:
+		return "Authorization: Bearer"
+	case PlacementHeader:
+		return key + " header"
+	case PlacementQuery:
+		return key + " query parameter"
+	}
+	return "Basic auth"
+}
+
 // JWTExpiry reads the exp claim of a value shaped like a JWT. The signature
 // isn't checked: this only tells the person when the token stops working.
 func JWTExpiry(value string) *time.Time {

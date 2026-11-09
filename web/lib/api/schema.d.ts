@@ -2739,6 +2739,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The person's API secrets (values are never returned) */
+        get: operations["listApiSecrets"];
+        put?: never;
+        /** Add an API secret; the value is stored encrypted and never returned */
+        post: operations["createApiSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api-secrets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteApiSecret"];
+        options?: never;
+        head?: never;
+        /** Change a secret's settings, persona access or value (revision-checked) */
+        patch: operations["updateApiSecret"];
+        trace?: never;
+    };
+    "/api-secrets/{id}/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** The latest requests made with this secret, sent or not */
+        get: operations["listApiSecretCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/api-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** The secrets this chat used, for the chat header */
+        get: operations["listChatApiSecrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/api-secrets/{secret_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop this chat from using a secret, from its next request */
+        post: operations["disableChatApiSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/api-secret-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** Requests with a secret waiting for the person in this chat */
+        get: operations["listApiSecretApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api-secret-approvals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Allow once, always allow (sets reads or writes to Allow) or deny */
+        post: operations["decideApiSecretApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/api-secret-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** Secrets a persona asked for in this chat, waiting for the person */
+        get: operations["listApiSecretProposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api-secret-proposals/{id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["declineApiSecretProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scheduled-tasks": {
         parameters: {
             query?: never;
@@ -5018,7 +5188,7 @@ export interface components {
              * @description question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes
              * @enum {string}
              */
-            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion" | "workflow_gate" | "scheduled" | "connector_approval";
+            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion" | "workflow_gate" | "scheduled" | "connector_approval" | "secret_approval" | "secret_expiring";
             title: string;
             summary: string;
             href: string;
@@ -6276,6 +6446,146 @@ export interface components {
         };
         ConnectorProposalList: {
             proposals: components["schemas"]["ConnectorProposal"][];
+        };
+        /**
+         * @description Where the value goes: Authorization: Bearer, a named header, a named query parameter, or Basic auth (value is user:password)
+         * @enum {string}
+         */
+        ApiSecretPlacement: "bearer" | "header" | "query" | "basic";
+        /** @enum {string} */
+        ApiSecretPolicy: "allow" | "ask" | "off";
+        ApiSecret: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description The only name personas see */
+            handle: string;
+            placement: components["schemas"]["ApiSecretPlacement"];
+            /** @description Header or query parameter name; empty for bearer and basic */
+            placement_key: string;
+            allowed_hosts: string[];
+            read_policy: components["schemas"]["ApiSecretPolicy"];
+            write_policy: components["schemas"]["ApiSecretPolicy"];
+            persona_ids: string[];
+            /**
+             * Format: date-time
+             * @description From the value's JWT exp claim
+             */
+            expires_at?: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ApiSecretList: {
+            secrets: components["schemas"]["ApiSecret"][];
+            /** @description False until SECRETS_KEY is set; nothing can be stored until then */
+            key_configured: boolean;
+        };
+        NewApiSecret: {
+            name: string;
+            /** @description Stored encrypted and never returned */
+            value: string;
+            placement: components["schemas"]["ApiSecretPlacement"];
+            placement_key?: string;
+            allowed_hosts: string[];
+            read_policy?: components["schemas"]["ApiSecretPolicy"];
+            write_policy?: components["schemas"]["ApiSecretPolicy"];
+            persona_ids?: string[];
+            /**
+             * Format: uuid
+             * @description The persona request this completes; that persona gets access
+             */
+            proposal_id?: string;
+        };
+        ApiSecretPatch: {
+            revision: number;
+            name?: string;
+            /** @description Replace the value; stored encrypted */
+            value?: string;
+            placement?: components["schemas"]["ApiSecretPlacement"];
+            placement_key?: string;
+            allowed_hosts?: string[];
+            read_policy?: components["schemas"]["ApiSecretPolicy"];
+            write_policy?: components["schemas"]["ApiSecretPolicy"];
+            persona_ids?: string[];
+        };
+        ApiSecretCall: {
+            /** Format: uuid */
+            id: string;
+            method: string;
+            host: string;
+            path: string;
+            /** @enum {string} */
+            decision: "auto" | "approved" | "denied" | "blocked";
+            /** @description The HTTP status, when the request was sent */
+            status?: number;
+            error: string;
+            redactions: number;
+            duration_ms: number;
+            persona_name: string;
+            /** Format: uuid */
+            chat_id?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ApiSecretCallList: {
+            calls: components["schemas"]["ApiSecretCall"][];
+        };
+        ChatApiSecret: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            handle: string;
+            calls: number;
+            methods: string[];
+            /** Format: date-time */
+            last_used_at: string;
+            /** @description False once turned off for this chat */
+            enabled: boolean;
+        };
+        ChatApiSecretList: {
+            secrets: components["schemas"]["ChatApiSecret"][];
+        };
+        ApiSecretApproval: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            secret_id: string;
+            secret_name: string;
+            secret_handle: string;
+            placement: components["schemas"]["ApiSecretPlacement"];
+            placement_key: string;
+            method: string;
+            url: string;
+            headers: {
+                [key: string]: string;
+            };
+            body_preview: string;
+            persona?: components["schemas"]["PersonaSummary"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ApiSecretApprovalList: {
+            approvals: components["schemas"]["ApiSecretApproval"][];
+        };
+        ApiSecretProposal: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            host: string;
+            placement: components["schemas"]["ApiSecretPlacement"];
+            placement_key: string;
+            reason: string;
+            proposed_by?: components["schemas"]["PersonaSummary"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ApiSecretProposalList: {
+            proposals: components["schemas"]["ApiSecretProposal"][];
         };
         ScheduledTaskInput: {
             /** @description Required when updating */
@@ -11191,6 +11501,260 @@ export interface operations {
         };
     };
     declineConnectorProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declined */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listApiSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiSecretList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createApiSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewApiSecret"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiSecret"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteApiSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateApiSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiSecretPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiSecret"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listApiSecretCalls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiSecretCallList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatApiSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatApiSecretList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    disableChatApiSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Turned off */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listApiSecretApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiSecretApprovalList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    decideApiSecretApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listApiSecretProposals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiSecretProposalList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    declineApiSecretProposal: {
         parameters: {
             query?: never;
             header?: never;

@@ -67,19 +67,6 @@ type SecretInfo struct {
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 }
 
-// sentAs describes a placement without the value, e.g. "Authorization: Bearer".
-func sentAs(s store.UserSecret) string {
-	switch s.Placement {
-	case usersecrets.PlacementBearer:
-		return "Authorization: Bearer"
-	case usersecrets.PlacementHeader:
-		return s.PlacementKey + " header"
-	case usersecrets.PlacementQuery:
-		return s.PlacementKey + " query parameter"
-	}
-	return "Basic auth"
-}
-
 type HTTPRequestIn struct {
 	Secret  string            `json:"secret" jsonschema:"The secret's handle, from list_secrets"`
 	Method  string            `json:"method,omitempty" jsonschema:"GET (default), HEAD, POST, PUT, PATCH or DELETE"`
@@ -118,7 +105,7 @@ func SecretsHandler(d Deps, version string) http.Handler {
 				}
 				out := ListSecretsOut{Secrets: make([]SecretInfo, len(rows))}
 				for i, s := range rows {
-					out.Secrets[i] = SecretInfo{Handle: s.Handle, Name: s.Name, AllowedHosts: s.AllowedHosts, SentAs: sentAs(s), Reads: s.ReadPolicy, Writes: s.WritePolicy, ExpiresAt: s.ExpiresAt}
+					out.Secrets[i] = SecretInfo{Handle: s.Handle, Name: s.Name, AllowedHosts: s.AllowedHosts, SentAs: usersecrets.SentAs(s.Placement, s.PlacementKey), Reads: s.ReadPolicy, Writes: s.WritePolicy, ExpiresAt: s.ExpiresAt}
 				}
 				return nil, out, nil
 			})
