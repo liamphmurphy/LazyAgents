@@ -17,6 +17,8 @@ import { ExportMenu, ImportView, MemorySection } from "./memory-section";
 import { DefaultBadge, DeleteDialog, PersonaProfile } from "./persona-profile";
 import { ProfileSection } from "./profile-section";
 import { ConnectorsSection, PersonaConnectors } from "./connectors-section";
+import { useSpaces } from "@/lib/api/space-hooks";
+import { SpaceTile } from "../spaces/_components/space-parts";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -50,14 +52,18 @@ export function CustomizationScreen() {
   const search = useSearchParams();
   const focus = search.get("id") ?? undefined;
   const who = search.get("who") ?? "";
+  const spaceParam = search.get("space") ?? "";
   const boot = useBootstrap();
   const list = usePersonas();
+  const spaces = useSpaces();
   const count = useMemories();
   const all = list.data?.personas ?? [];
   const personas = sortPersonas(all);
   const selected = personas.find((p) => p.id === who);
+  const space = spaces.data?.spaces.find((sp) => sp.id === spaceParam);
   // A persona that's gone falls back to everything; while loading, keep what the URL says.
-  const whose = who === "person" || !list.data ? who : (selected?.id ?? "");
+  // ?space= shows one space's memory.
+  const whose = spaceParam ? `space:${spaceParam}` : who === "person" || !list.data ? who : (selected?.id ?? "");
   const scoped = useMemories("", undefined, 0, whose);
   const [editing, setEditing] = useState<Persona | "new" | null>(null);
   const [deleting, setDeleting] = useState<Persona | null>(null);
@@ -68,6 +74,11 @@ export function CustomizationScreen() {
     setImporting(false);
     setEditingProfile(false);
     router.replace(v ? `/customization?who=${encodeURIComponent(v)}` : "/customization", { scroll: false });
+  };
+  const pickSpace = (id: string) => {
+    setImporting(false);
+    setEditingProfile(false);
+    router.replace(`/customization?space=${encodeURIComponent(id)}`, { scroll: false });
   };
   const me = boot.data?.me;
   return (
@@ -96,7 +107,7 @@ export function CustomizationScreen() {
       <Content>
         <div className="flex gap-8 max-md:flex-col max-md:gap-4">
           <nav aria-label="Customize" className="flex w-52 flex-none flex-col gap-px max-md:w-full">
-            <RailButton on={!whose} onClick={() => pick("")} lead={<Icon name="bookmark" size={16} />}>
+            <RailButton on={!whose && who !== "connectors"} onClick={() => pick("")} lead={<Icon name="bookmark" size={16} />}>
               Everything
             </RailButton>
             <RailButton on={whose === "person"} onClick={() => pick("person")} lead={<HumanAvatar name={me?.name ?? "You"} initials={me?.initials} src={me?.avatar_url} size={20} label={false} />}>
@@ -132,6 +143,13 @@ export function CustomizationScreen() {
                 )}
               </>
             )}
+            {(spaces.data?.spaces.length ?? 0) > 0 && <span className="px-2 pb-1 pt-3 text-xs font-medium text-fg-tertiary">Spaces</span>}
+            {spaces.data?.spaces.map((sp) => (
+              <RailButton key={sp.id} testId="space-memory-row" on={spaceParam === sp.id} onClick={() => pickSpace(sp.id)} lead={<SpaceTile name={sp.name} color={sp.color} size={20} />}>
+                <span className="min-w-0 flex-1 truncate">{sp.name}</span>
+                <span className="text-[11px] text-fg-tertiary">{sp.memory_count}</span>
+              </RailButton>
+            ))}
           </nav>
           <div className="flex min-w-0 flex-1 flex-col gap-5">
             {who === "connectors" && !importing ? (
@@ -142,7 +160,13 @@ export function CustomizationScreen() {
               </div>
             ) : (
               <>
-                {selected ? (
+                {spaceParam ? (
+                  <PlainHeader
+                    lead={<SpaceTile name={space?.name ?? "?"} color={space?.color} size={72} className="rounded-2xl" />}
+                    title={space?.name ?? "Space"}
+                    detail={space?.space_memory === false ? "Space memory is off: chats here use your general memory. These were saved while it was on." : "What chats in this space remember. Only chats in it see these."}
+                  />
+                ) : selected ? (
                   <PersonaProfile p={selected} memories={scoped.data?.total} onEdit={() => setEditing(selected)} onDelete={() => setDeleting(selected)} />
                 ) : whose === "person" ? (
                   <>
@@ -163,7 +187,7 @@ export function CustomizationScreen() {
                 )}
                 {selected && <PersonaConnectors personaId={selected.id} />}
                 <div className="border-t border-border-subtle pt-4">
-                  <MemorySection key={whose} whose={whose} focus={focus} heading={selected ? `${selected.name}’s memory` : whose === "person" ? "About you" : "All memories"} />
+                  <MemorySection key={whose} whose={whose} focus={focus} heading={spaceParam ? `${space?.name ?? "Space"} memory` : selected ? `${selected.name}’s memory` : whose === "person" ? "About you" : "All memories"} />
                 </div>
               </>
             )}

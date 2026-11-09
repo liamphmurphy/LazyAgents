@@ -33,7 +33,9 @@ function Notice({ n }: { n: MemoryNotice }) {
   else if (gone) text = `${n.kind === "saved" ? "Saved" : "Updated"} ${quoted}, since forgotten.`;
   else {
     muted = false;
-    text = `${n.kind === "saved" ? "Saved to memory" : "Updated memory"}: ${quoted}`;
+    // A space's memory is named, so it's clear the fact stays there.
+    const where = live.data?.space_name ? `${live.data.space_name} memory` : "memory";
+    text = `${n.kind === "saved" ? `Saved to ${where}` : `Updated ${where}`}: ${quoted}`;
   }
   const actionable = !muted && !done;
   return (

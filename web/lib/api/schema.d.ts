@@ -2770,6 +2770,145 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chat-spaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in person's spaces, oldest first
+         * @description A space groups a person's chats around a topic. Its instructions and
+         *     sources reach every chat in it on every turn (below the persona), and
+         *     with space_memory on, what the assistant saves about the person there
+         *     stays in the space. Spaces are strictly per person.
+         */
+        get: operations["listChatSpaces"];
+        put?: never;
+        /**
+         * Create a space
+         * @description 422 for an invalid field, an unknown persona, project or connector; 409 for an archived project.
+         */
+        post: operations["createChatSpace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat-spaces/{spaceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        /** One of your spaces */
+        get: operations["getChatSpace"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a space
+         * @description Its sources and its memories go with it. Its chats stay, outside any space.
+         */
+        delete: operations["deleteChatSpace"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a space
+         * @description Chats in the space see new instructions, sources and memory settings on their next turn; the defaults apply to chats started after.
+         */
+        patch: operations["updateChatSpace"];
+        trace?: never;
+    };
+    "/chat-spaces/{spaceId}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        /** A space's sources, in the order they were added */
+        get: operations["listChatSpaceSources"];
+        put?: never;
+        /**
+         * Add pasted text, a web page, a Library item, a saved link or a canvas
+         * @description The source is a snapshot taken now: a web page or saved link is
+         *     fetched once (public addresses only), a canvas or Library item is
+         *     copied. 422 for an invalid field, a page that can't be read, an
+         *     unknown item or canvas, or a space that is full.
+         */
+        post: operations["addChatSpaceSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat-spaces/{spaceId}/sources/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a file to a space
+         * @description PDF, Markdown, text, CSV, JSON and images (PNG, JPEG, GIF, WebP), up to 20 MB each and 100 MB per space. 422 otherwise.
+         */
+        post: operations["uploadChatSpaceSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat-spaces/{spaceId}/sources/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a source from a space */
+        delete: operations["deleteChatSpaceSource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/canvases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's canvases across their chats, most recently changed first */
+        get: operations["listMyCanvases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -3311,6 +3450,129 @@ export interface components {
         };
         /** @description One of preference, project, person, life, work, fact, other, moment (a shared moment; persona memory only) */
         MemoryType: string;
+        /** @enum {string} */
+        ChatSpaceColor: "green" | "amber" | "red" | "blue" | "violet" | "pink" | "teal" | "orange";
+        ChatSpace: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            color: components["schemas"]["ChatSpaceColor"];
+            /** @description Added to every chat in the space, below the persona */
+            instructions: string;
+            /**
+             * Format: uuid
+             * @description Persona new chats start with; absent: the default persona
+             */
+            persona_id?: string;
+            /** @description Key of the project new chats get; absent: none */
+            project?: string;
+            /** @description Connectors chats here may use; empty is none */
+            connector_ids: string[];
+            /** @description What the assistant saves about the person in this space stays here */
+            space_memory: boolean;
+            /** @description Active chats */
+            chat_count: number;
+            source_count: number;
+            /** @description Live entries in the space's memory */
+            memory_count: number;
+            /** @description Estimated tokens of the sources every turn may read */
+            inline_tokens: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description The space a chat is in, as the chat shows it */
+        ChatSpaceRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            color: components["schemas"]["ChatSpaceColor"];
+            space_memory: boolean;
+            source_count: number;
+            has_instructions: boolean;
+        };
+        NewChatSpace: {
+            name: string;
+            description?: string;
+            color?: components["schemas"]["ChatSpaceColor"];
+            instructions?: string;
+            /** Format: uuid */
+            persona_id?: string;
+            project?: string;
+            connector_ids?: string[];
+            /** @default true */
+            space_memory: boolean;
+        };
+        ChatSpacePatch: {
+            name?: string;
+            description?: string;
+            color?: components["schemas"]["ChatSpaceColor"];
+            instructions?: string;
+            /** @description A persona id, or empty for the default persona */
+            persona_id?: string;
+            /** @description A project key, or empty for none */
+            project?: string;
+            connector_ids?: string[];
+            space_memory?: boolean;
+        };
+        /** @enum {string} */
+        ChatSpaceSourceKind: "file" | "text" | "website" | "library" | "link" | "canvas";
+        ChatSpaceSource: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ChatSpaceSourceKind"];
+            title: string;
+            /** @description For a web page or saved link: where it was read from */
+            url?: string;
+            filename?: string;
+            content_type?: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** @description Estimated from its text; 0 for a file that isn't text */
+            tokens: number;
+            /**
+             * @description inline: offered to every turn to read; searched: too long, or past the inline budget, so turns search inside it
+             * @enum {string}
+             */
+            delivery: "inline" | "searched";
+            /** Format: date-time */
+            created_at: string;
+        };
+        ChatSpaceSourceList: {
+            sources: components["schemas"]["ChatSpaceSource"][];
+            inline_tokens: number;
+            inline_budget: number;
+        };
+        /**
+         * @description text needs text (and a title); website needs url; library needs
+         *     item_id (an image, diagram or saved link); link needs item_id (a saved
+         *     link); canvas needs canvas_id. title, when given, names the source.
+         */
+        NewChatSpaceSource: {
+            /** @enum {string} */
+            kind: "text" | "website" | "library" | "link" | "canvas";
+            title?: string;
+            text?: string;
+            url?: string;
+            /** Format: uuid */
+            item_id?: string;
+            /** Format: uuid */
+            canvas_id?: string;
+        };
+        MyCanvas: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "text" | "svg";
+            title: string;
+            /** Format: uuid */
+            chat_id: string;
+            chat_title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         /**
          * @default all
          * @enum {string}
@@ -3345,6 +3607,12 @@ export interface components {
              * @description The persona whose own memory this is; absent for the person's memory
              */
             persona_id?: string;
+            /**
+             * Format: uuid
+             * @description The space whose memory this is: only chats in that space see it. Absent for the general memory.
+             */
+            space_id?: string;
+            space_name?: string;
             title: string;
             /** @description One line */
             summary: string;
@@ -5090,6 +5358,9 @@ export interface components {
             updated_at: string;
             /** Format: date-time */
             last_message_at?: string;
+            space?: components["schemas"]["ChatSpaceRef"];
+            /** @description The start of the newest reply as plain text; only when listing one space's chats */
+            preview?: string;
         };
         NewChat: {
             /** @description Project to attach from the start; omit for a chat with no project */
@@ -5108,6 +5379,11 @@ export interface components {
             repo_url?: string;
             /** @description Leave the chat out of chat lists, search and the dock; it stays reachable by id. For a chat that lives behind another screen, like the workflow editor. Fixed for the chat's life. */
             hidden?: boolean;
+            /**
+             * Format: uuid
+             * @description Start the chat in one of the caller's spaces. Its default persona, project and connectors apply unless persona_id or project is given. 422 for an unknown space.
+             */
+            space_id?: string;
             message?: components["schemas"]["NewChatMessage"];
         };
         ChatPatch: {
@@ -8593,6 +8869,8 @@ export interface operations {
                 about?: components["schemas"]["MemoryAbout"];
                 /** @description Only this persona's own memory (implies about=persona) */
                 persona_id?: string;
+                /** @description Only this space's memory */
+                space_id?: string;
                 /** @description updated: newest change first (default); created: newest first. Listing only */
                 sort?: "updated" | "created";
             };
@@ -8888,6 +9166,13 @@ export interface operations {
                  *     they have no default. 422 for an unknown id or another person's.
                  */
                 persona_id?: string;
+                /**
+                 * @description Only chats in this space: a space id of the caller's (each chat then
+                 *     carries a `preview`), `all` for chats in any space or none, or
+                 *     `none` (the default) for chats outside every space. 422 for an
+                 *     unknown id.
+                 */
+                space?: string;
                 offset?: number;
             };
             header?: never;
@@ -10855,6 +11140,261 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScheduledTask"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatSpaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spaces */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        spaces: components["schemas"]["ChatSpace"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createChatSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewChatSpace"];
+            };
+        };
+        responses: {
+            /** @description The space */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSpace"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The space */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSpace"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteChatSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateChatSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatSpacePatch"];
+            };
+        };
+        responses: {
+            /** @description The space */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSpace"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatSpaceSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sources */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSpaceSourceList"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    addChatSpaceSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewChatSpaceSource"];
+            };
+        };
+        responses: {
+            /** @description The source */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSpaceSource"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadChatSpaceSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The source */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSpaceSource"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteChatSpaceSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listMyCanvases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 100 canvases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        canvases: components["schemas"]["MyCanvas"][];
+                    };
                 };
             };
             default: components["responses"]["Error"];

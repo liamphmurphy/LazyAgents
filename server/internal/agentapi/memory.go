@@ -58,7 +58,10 @@ type UpdateMemoryIn struct {
 type memoryEntry struct {
 	ID uuid.UUID `json:"id"`
 	// About is person (the person's memory) or persona (the chat persona's own).
-	About        string     `json:"about"`
+	About string `json:"about"`
+	// ThisSpace marks an entry of this chat's space memory: only chats in the
+	// space see it.
+	ThisSpace    bool       `json:"this_space,omitempty"`
 	Title        string     `json:"title"`
 	Summary      string     `json:"summary"`
 	Body         string     `json:"body,omitempty"`
@@ -79,6 +82,7 @@ func toMemoryEntry(m store.Memory, withBody bool) memoryEntry {
 	if m.PersonaID != nil {
 		e.About = aboutPersona
 	}
+	e.ThisSpace = m.SpaceID != nil
 	if withBody {
 		e.Body = m.Body
 	}
@@ -103,7 +107,7 @@ func memoryOwner(ctx context.Context, d Deps, c agents.Caller) (chatMemory, erro
 	if s == nil {
 		return chatMemory{}, apperr.Conflict("memory tools only work in a chat with a person")
 	}
-	return chatMemory{person: memory.Owner{WorkspaceID: c.Agent.WorkspaceID, UserID: s.UserID}, persona: s.PersonaID,
+	return chatMemory{person: memory.Owner{WorkspaceID: c.Agent.WorkspaceID, UserID: s.UserID, SpaceID: s.MemorySpaceID}, persona: s.PersonaID,
 		src: memory.Source{Label: "chat " + s.ChatID.String(), ChatID: &s.ChatID, RunID: c.RunID}}, nil
 }
 
@@ -185,6 +189,8 @@ func saveMemory(ctx context.Context, d Deps, c agents.Caller, in SaveMemoryIn) (
 	where := ""
 	if o.PersonaID != nil {
 		where = " (in my own memory)"
+	} else if r.Memory.SpaceID != nil {
+		where = " (in this space's memory)"
 	}
 	out := map[string]any{"id": r.Memory.ID, "action": "created", "about": toMemoryEntry(r.Memory, false).About, "title": r.Memory.Title,
 		"tell_the_person": "Remembered" + where + ": " + r.Memory.Title + ". Say so in your reply, and that they can ask you to forget it."}

@@ -1028,8 +1028,11 @@ export function useAgentRuns(handle:string,offset=0) {
 
 export const chatKeys = {
   all: ["chats"] as const,
-  /** persona: a persona id, "all", "none", or "" for the server's default (the caller's default persona). */
-  list: (archived = false, persona = "") => ["chats", "list", archived, persona] as const,
+  /**
+   * persona: a persona id, "all", "none", or "" for the server's default (the caller's default persona).
+   * space: a space id, "all", or "" for chats outside every space (the server's default).
+   */
+  list: (archived = false, persona = "", space = "") => ["chats", "list", archived, persona, space] as const,
   detail: (id: string) => ["chats", "detail", id] as const,
   messages: (id: string) => ["chats", "messages", id] as const,
   proposals: (id: string) => ["chats", "proposals", id] as const,
@@ -1040,13 +1043,13 @@ export const chatKeys = {
 // Slow fallback while a turn runs and the realtime connection is unavailable.
 const CHAT_POLL_MS = 3000;
 
-/** Every chat of the person's, whatever project it has attached. */
-export function useChats(archived = false, persona = "", enabled = true) {
+/** The person's chats, whatever project they have attached; outside every space unless `space` says otherwise. */
+export function useChats(archived = false, persona = "", enabled = true, space = "") {
   return useQuery({
     enabled,
-    queryKey: chatKeys.list(archived, persona),
+    queryKey: chatKeys.list(archived, persona, space),
     queryFn: () =>
-      unwrap(api.GET("/chats", { params: { query: { archived, ...(persona ? { persona_id: persona } : {}) } } })),
+      unwrap(api.GET("/chats", { params: { query: { archived, ...(persona ? { persona_id: persona } : {}), ...(space ? { space } : {}) } } })),
   });
 }
 
@@ -1275,11 +1278,12 @@ export const memoryKeys = {
 /**
  * First 50 matches (ranked when q is set); `total` counts every entry of the type.
  * whose: "" for everything, "person" for what the assistant remembers about the
- * person, "persona" for every persona's own memory, or one persona's id.
+ * person, "persona" for every persona's own memory, one persona's id, or "space:<id>" for one space's.
  */
 export function useMemories(q = "", type?: MemoryType, offset = 0, whose = "") {
-  const scope: { about?: Schemas["MemoryAbout"]; persona_id?: string } =
-    whose === "person" || whose === "persona" ? { about: whose } : whose ? { persona_id: whose } : {};
+  // whose may also be "space:<id>": one space's memory.
+  const scope: { about?: Schemas["MemoryAbout"]; persona_id?: string; space_id?: string } =
+    whose === "person" || whose === "persona" ? { about: whose } : whose.startsWith("space:") ? { space_id: whose.slice(6) } : whose ? { persona_id: whose } : {};
   return useQuery({
     queryKey: [...memoryKeys.list(q, type, whose), offset] as const,
     queryFn: () =>

@@ -31,6 +31,8 @@ type chatScope struct {
 	// PersonaID is the persona answering the chat (its speaker, else its host),
 	// the one persona memory it may reach.
 	PersonaID *uuid.UUID
+	// MemorySpaceID is the chat's space when that space keeps its own memory.
+	MemorySpaceID *uuid.UUID
 }
 
 // chatScopeFor is nil unless the caller's token belongs to a chat run.
@@ -59,7 +61,11 @@ func chatScopeFor(ctx context.Context, d Deps, c agents.Caller) (*chatScope, err
 	if err != nil {
 		return nil, err
 	}
-	return &chatScope{ChatID: chat.ID, ProjectID: runs.ProjectIDOrNil(chat.ProjectID), ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: runs.ChatSpeakerID(chat)}, nil
+	memSpace, err := runs.ChatMemorySpace(ctx, d.Q, chat)
+	if err != nil {
+		return nil, err
+	}
+	return &chatScope{ChatID: chat.ID, ProjectID: runs.ProjectIDOrNil(chat.ProjectID), ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: runs.ChatSpeakerID(chat), MemorySpaceID: memSpace}, nil
 }
 
 // allowsArtifact: workspace-level pages (no project) are shared; the rest must
