@@ -219,6 +219,7 @@ type claudeUsage struct {
 type claudeBlock struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text"`
+	Thinking  string          `json:"thinking"`
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`
 	Input     json.RawMessage `json:"input"`
@@ -306,7 +307,11 @@ func (p *claudeParser) Line(b []byte) []Event {
 					out = append(out, Event{"message", map[string]any{"role": "assistant", "text": bl.Text}})
 				}
 			case "thinking":
-				// Not shown: thinking stays in the raw log.
+				// Kept for the Activity tab; never the reply. Redacted or
+				// summarised-away thinking arrives empty and is skipped.
+				if ev, ok := thinkingEvent(bl.Thinking); ok && l.Type == "assistant" {
+					out = append(out, ev)
+				}
 			case "tool_use":
 				p.tools[bl.ID] = bl.Name
 				p.res.Usage.ToolCalls++

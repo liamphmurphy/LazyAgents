@@ -45,7 +45,7 @@ func types(evs []Event) string {
 
 func TestClaudeTurn(t *testing.T) {
 	evs, res := parse(t, ClaudeCode{}, "claude-turn.jsonl", "")
-	want := "lifecycle message tool_call:mcp__lazyagents__claim_ticket tool_result:mcp__lazyagents__claim_ticket tool_call:Bash tool_result:Bash message usage tool_call:Bash"
+	want := "lifecycle message tool_call:mcp__lazyagents__claim_ticket tool_result:mcp__lazyagents__claim_ticket message tool_call:Bash tool_result:Bash message usage tool_call:Bash"
 	if types(evs) != want {
 		t.Fatalf("events:\n got %s\nwant %s", types(evs), want)
 	}
@@ -57,6 +57,9 @@ func TestClaudeTurn(t *testing.T) {
 	}
 	if evs[3].Payload["output"] != `{"run_id":"r1","state":"running"}` {
 		t.Fatalf("tool result text: %v", evs[3].Payload["output"])
+	}
+	if p := evs[4].Payload; p["kind"] != "thinking" || p["text"] != "Run the tests." || p["role"] != nil {
+		t.Fatalf("thinking: %v", p)
 	}
 	if evs[len(evs)-1].Payload["denied_by_harness"] != true {
 		t.Fatal("permission denial not flagged")
@@ -75,15 +78,18 @@ func TestClaudeAuthError(t *testing.T) {
 
 func TestCodexTurn(t *testing.T) {
 	evs, res := parse(t, Codex{}, "codex-turn.jsonl", "gpt-5-codex")
-	want := "lifecycle tool_call:claim_ticket tool_result:claim_ticket tool_call:shell tool_result:shell tool_call:apply_patch message usage"
+	want := "lifecycle tool_call:claim_ticket tool_result:claim_ticket message tool_call:shell tool_result:shell tool_call:apply_patch message usage"
 	if types(evs) != want {
 		t.Fatalf("events:\n got %s\nwant %s", types(evs), want)
 	}
 	if res.SessionID != "01a19db0-1111-7222-8333-944455556666" || res.Usage.ToolCalls != 3 || res.Final != "Fixed the failing test and asked for approval." {
 		t.Fatalf("result %+v", res)
 	}
-	if evs[4].Payload["is_error"] != true || evs[4].Payload["exit_code"] != 2 {
-		t.Fatalf("failed command: %v", evs[4].Payload)
+	if p := evs[3].Payload; p["kind"] != "thinking" || p["text"] != "Run tests next." {
+		t.Fatalf("reasoning: %v", p)
+	}
+	if evs[5].Payload["is_error"] != true || evs[5].Payload["exit_code"] != 2 {
+		t.Fatalf("failed command: %v", evs[5].Payload)
 	}
 	// 8000 uncached × 1.25 + 12000 cached × 0.125 + 3000 × 10, per million.
 	if res.Usage.CostSource != "computed" || res.Usage.CostUSD < 0.0414 || res.Usage.CostUSD > 0.0416 {

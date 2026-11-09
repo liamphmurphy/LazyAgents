@@ -10,6 +10,7 @@ import type { components } from "../lib/api/schema";
  * A message starting with "app:" is answered with an interactive app.
  * A message starting with "building-app:" keeps the turn running while it writes one.
  * A message starting with "steps:" keeps the turn running with a plan in progress.
+ * A message starting with "narrated:" keeps the turn running after narrating a decision, with thinking behind it.
  * A message starting with "slow:" keeps the turn running until it is cancelled
  * or interrupted: a message sent while a turn runs stops it, and the next reply
  * echoes "<new> (interrupting: <previous>)", like the server's merged turn;
@@ -660,13 +661,25 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
             { seq: 2, type: "tool_call", at: now(), payload: { id: "plan-2", tool: "TodoWrite", input: { todos: todos(["Read the code", "completed"], ["Fix the snapshot", "in_progress"], ["Run tests", "pending"]) } } },
           ]);
         }
+        if (text.startsWith("narrated:")) {
+          const say = (seq: number, t: string) => ({ seq, type: "message", at: now(), payload: { role: "assistant", text: t } });
+          const think = (seq: number, t: string) => ({ seq, type: "message", at: now(), payload: { kind: "thinking", text: t } });
+          runEvents.set(c.current_run_id, [
+            say(1, "On it."),
+            { seq: 2, type: "tool_call", at: now(), payload: { id: "read-1", tool: "Read", input: { file_path: "/repo/poller.go" } } },
+            { seq: 3, type: "tool_result", at: now(), payload: { id: "read-1", tool: "Read", output: "package runs" } },
+            think(4, "It fails on main as well, so the test races the backoff."),
+            say(5, "Surprise: it fails on main too, so it's the test."),
+            { seq: 6, type: "tool_call", at: now(), payload: { id: "test-1", tool: "Bash", input: { command: "go test ./internal/runs -count=10" } } },
+          ]);
+        }
         if (text.startsWith("building-app:")) {
           runEvents.set(c.current_run_id, [
             { seq: 1, type: "tool_call", at: now(), payload: { id: "read-1", tool: "Read", input: {} } },
             { seq: 2, type: "lifecycle", at: now(), payload: { state: "reply_block", kind: "app" } },
           ]);
         }
-        if (!/^(slow|steps|building-app):/.test(text)) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
+        if (!/^(slow|steps|narrated|building-app):/.test(text)) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
         void emit(c);
         return json({ chat: ref(c), message: user }, 202);
       }

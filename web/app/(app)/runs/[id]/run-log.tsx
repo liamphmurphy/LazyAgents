@@ -185,6 +185,11 @@ function EventRow({ entry, plan, tools, runs, calls }: { entry: Entry; plan: Run
             Step {str(p.step)} → <span className="font-mono text-xs">{str(p.state)}</span>
             {stepText && <span className="ml-2 text-fg-secondary">{stepText}</span>}
           </span>
+        ) : p.kind === "thinking" ? (
+          <details className="text-[13px]">
+            <summary className="cursor-pointer text-fg-secondary">Thinking</summary>
+            <p className="mt-1 whitespace-pre-wrap border-l-2 border-border pl-3 leading-relaxed text-fg-secondary">{str(p.text)}</p>
+          </details>
         ) : p.kind ? (
           <span className="font-mono text-[12px] text-fg-secondary">
             {str(p.kind)} {p.payload ? JSON.stringify(p.payload) : ""}

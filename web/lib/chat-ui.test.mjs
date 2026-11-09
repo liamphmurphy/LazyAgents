@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnWindows } from "./chat-ui.ts";
+import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -396,4 +396,86 @@ test("foldSteps never folds a failed step", () => {
   const f = foldSteps(steps);
   assert.equal(f.earlier, 2);
   assert.deepEqual(f.shown.map((s) => s.key), ["f", "c", "d", "x"]);
+});
+
+// ---- narrated decisions and thinking ----
+
+const ev = (seq, type, payload) => ({ seq, type, at: `2026-11-09T10:00:${String(seq).padStart(2, "0")}Z`, payload });
+const say = (seq, text) => ev(seq, "message", { role: "assistant", text });
+const think = (seq, text) => ev(seq, "message", { kind: "thinking", text });
+const call = (seq, tool, input = {}) => ev(seq, "tool_call", { id: `c${seq}`, tool, input });
+const result = (seq, id, extra = {}) => ev(seq, "tool_result", { id, ...extra });
+
+test("intentOf turns a leading marker into a tag", () => {
+  assert.deepEqual(intentOf("New approach: swap the sleep for a fake clock."), { text: "Swap the sleep for a fake clock.", tag: "approach" });
+  assert.deepEqual(intentOf("surprise — it fails on main too"), { text: "It fails on main too", tag: "surprise" });
+  assert.deepEqual(intentOf("  Reading the poller first. "), { text: "Reading the poller first." });
+  assert.deepEqual(intentOf("Surprise:"), { text: "Surprise:" });
+});
+
+test("turnNotes skips the opening line and the reply, and pins the rest to the next call", () => {
+  const events = [
+    say(1, "On it, let me look."),
+    think(2, "Start with the poller."),
+    call(3, "Read", { file_path: "/r/poller.go" }),
+    result(4, "c3"),
+    say(5, "Surprise: fails on main too."),
+    call(6, "Bash", { command: "go test ./..." }),
+    result(7, "c6"),
+    think(8, "Wrap up."),
+    say(9, "Fixed it."),
+  ];
+  assert.deepEqual(turnNotes(events), [
+    { kind: "thinking", text: "Start with the poller.", before: 3 },
+    { kind: "intent", text: "Fails on main too.", tag: "surprise", before: 6 },
+    { kind: "thinking", text: "Wrap up." },
+  ]);
+  // Text no call follows yet may still be the reply.
+  assert.deepEqual(turnNotes(events.slice(0, 5)).map((n) => n.kind), ["thinking"]);
+});
+
+test("chatSteps puts the newest intent and its tag on the step, and flags thinking", () => {
+  const events = [
+    say(1, "Looking."),
+    call(2, "Read", { file_path: "/r/a.go" }),
+    result(3, "c2"),
+    think(4, "Tests next."),
+    say(5, "Running the suite before touching anything."),
+    call(6, "Bash", { command: "go test ./..." }),
+    say(7, "New approach: fake the clock."),
+    call(8, "Bash", { command: "go test ./... -count=10" }),
+  ];
+  const { steps } = chatSteps(toolCalls(events), turnNotes(events));
+  assert.equal(steps.length, 2);
+  assert.equal(steps[0].intent, undefined);
+  assert.equal(steps[1].intent, "Fake the clock.");
+  assert.equal(steps[1].tag, "approach");
+  assert.equal(steps[1].reasoning, true);
+  // Without notes, steps are unchanged.
+  assert.equal(chatSteps(toolCalls(events)).steps[1].intent, undefined);
+});
+
+test("turnTrace groups calls, intents and thinking by step, with bookkeeping and the reply placed", () => {
+  const plan = (seq, a, b) => call(seq, "TodoWrite", { todos: [{ content: "Find it", status: a }, { content: "Fix it", status: b }] });
+  const events = [
+    say(1, "Let me check."),
+    think(2, "Plan first."),
+    plan(3, "in_progress", "pending"),
+    call(4, "Grep", { pattern: "retry" }),
+    result(5, "c4"),
+    say(6, "It lives in the poller."),
+    plan(7, "completed", "in_progress"),
+    call(8, "Edit", { file_path: "/r/poller.go" }),
+    result(9, "c8"),
+    think(10, "Say what changed."),
+    say(11, "Done."),
+  ];
+  const trace = turnTrace(events);
+  assert.deepEqual(trace.map((s) => s.title), ["Find it", "Fix it", "Writing the reply"]);
+  assert.deepEqual(trace[0].calls.map((c) => c.key), [3, 4]);
+  assert.deepEqual(trace[0].thinking, ["Plan first."]);
+  assert.deepEqual(trace[1].calls.map((c) => c.key), [7, 8]);
+  assert.deepEqual(trace[1].intents, ["It lives in the poller."]);
+  assert.deepEqual(trace[2].thinking, ["Say what changed."]);
+  assert.deepEqual(turnTrace([]), []);
 });

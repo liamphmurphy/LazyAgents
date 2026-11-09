@@ -121,6 +121,20 @@ func For(name string) (Harness, error) {
 const lazyagentsServer = agentdef.ReservedMCPName
 
 // clip shortens long tool output for the event stream; the raw log keeps it all.
+// thinkingClip bounds one thinking block in the run's events; the raw log keeps it all.
+const thinkingClip = 8000
+
+// thinkingEvent is the model's thinking as a message the Activity tab shows
+// beside the step it led to. It has no role, so nothing that reads the
+// assistant's text (the reply, the opening line, an interruption note) takes it.
+func thinkingEvent(text string) (Event, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return Event{}, false
+	}
+	return Event{"message", map[string]any{"kind": "thinking", "text": clip(text, thinkingClip)}}, true
+}
+
 func clip(s string, n int) string {
 	if len(s) <= n {
 		return s

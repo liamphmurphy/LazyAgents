@@ -184,7 +184,7 @@ const snippet = (s: string) => (s.length > 120 ? `${s.slice(0, 120).trimEnd()}�
  * and memory changes (with Undo), plus the running turn's live activity. Kept out of the
  * chat tab so the conversation reads as if no tools ran.
  */
-function ActivityLog({ list, turns, groups, running, runId, since }: { list: Message[] | undefined; turns: Map<string, TurnWindow>; groups: Groups; running: boolean; runId?: string; since?: string }) {
+function ActivityLog({ list, turns, groups, running, runId, since, focus }: { list: Message[] | undefined; turns: Map<string, TurnWindow>; groups: Groups; running: boolean; runId?: string; since?: string; focus?: { key: string; at: number } }) {
   const replies = (list ?? []).filter((m) => turns.has(m.id));
   const prompt = new Map<string, string>();
   let last: Message | undefined;
@@ -215,7 +215,7 @@ function ActivityLog({ list, turns, groups, running, runId, since }: { list: Mes
       {running && (
         <li className="flex flex-col gap-2" data-testid="activity-running">
           <span className="text-xs text-fg-secondary">Current turn</span>
-          <RunActivity runId={runId} since={since} />
+          <RunActivity runId={runId} since={since} focus={focus} />
         </li>
       )}
     </ol>
@@ -268,6 +268,12 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // null keeps the chat's effort; "default" clears it.
   const [pickedEffort, setPickedEffort] = useState<Effort | "default" | null>(null);
   const [tab, setTab] = useState<"chat" | "activity">("chat");
+  // "View reasoning" on a chat step: the Activity tab opens on that step.
+  const [traceFocus, setTraceFocus] = useState<{ key: string; at: number }>();
+  const openStep = (key: string) => {
+    setTab("activity");
+    setTraceFocus({ key, at: Date.now() });
+  };
   // A pick on another harness waits here until the person confirms what the switch loses.
   const [confirming, setConfirming] = useState<Selection | null>(null);
   const router = useRouter();
@@ -677,7 +683,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </span>
             )}
           </div>
-          <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={since} />
+          <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={since} focus={traceFocus} />
         </div>
         <div
           ref={scroller}
@@ -743,7 +749,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               {running && (
                 <li className="flex flex-col gap-2" data-testid="thinking">
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
-                  <ChatStatus runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} />
+                  <ChatStatus runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep} />
                 </li>
               )}
               <li ref={end} aria-hidden />
@@ -904,7 +910,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                     locked
                       ? "Sending…"
                       : running
-                        ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to interrupt.`
+                        ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to steer it.`
                         : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}${c.space ? ` in ${c.space.name}` : ""}…  / for commands, @ for a persona, [[ for context`
                   }
                   onKeyDown={(e) => {

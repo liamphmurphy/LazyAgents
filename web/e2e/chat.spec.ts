@@ -151,7 +151,7 @@ test("a message sent while a reply runs interrupts it, and the next reply answer
   await expect(page.getByTestId("chat-status")).toBeVisible();
   // The composer stays open; the model and effort wait for the reply to end.
   await expect(composer(page)).toBeEnabled();
-  await expect(composer(page)).toHaveAttribute("placeholder", /is replying\. Send a message to interrupt/);
+  await expect(composer(page)).toHaveAttribute("placeholder", /is replying\. Send a message to steer it/);
   await expect(picker(page)).toBeDisabled();
   await composer(page).fill("focus on the risks");
   await page.getByRole("button", { name: "Interrupt" }).click();
@@ -632,13 +632,31 @@ test("a running turn shows its newest tool call as a live line with a linked pag
   await expect(live).toHaveCount(0);
 });
 
+test("a narrated decision shows on its step, tagged, and links to the thinking in Activity", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "narrated: fix the flaky test");
+  // The opening line stays the interim reply, not an intent line.
+  await expect(page.getByTestId("interim-reply")).toHaveText(/On it\./);
+  const intent = page.getByTestId("chat-step-intent");
+  await expect(intent).toHaveText("It fails on main too, so it's the test.");
+  await expect(page.getByTestId("chat-steps").getByTestId("intent-tag")).toHaveText("surprise");
+  await expect(page.getByTestId("trace-thinking")).toBeHidden();
+  await page.getByTestId("view-reasoning").click();
+  await expect(page.getByRole("tab", { name: "Activity", selected: true })).toBeVisible();
+  await expect(page.getByTestId("trace-thinking")).toHaveText("It fails on main as well, so the test races the backoff.");
+  await expect(page.getByTestId("trace-intent")).toHaveText("It fails on main too, so it's the test.");
+  await page.getByRole("button", { name: "Stop" }).click();
+});
+
 test("a running turn lists its plan in a rail that collapses to a strip", async ({ page }) => {
   await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
   await send(page, "steps: work through it");
   const rail = page.getByTestId("chat-steps");
-  await expect(rail.locator("li")).toHaveText(["✓Read the code", /^Fix the snapshot\s*added$/, "Run tests"]);
+  await expect(rail.locator("li")).toHaveText(["Read the code", /^Fix the snapshot\s*added$/, "Run tests"]);
   await expect(rail.locator('[data-step-state="active"]')).toContainText("Fix the snapshot");
   await expect(page.getByTestId("chat-status-card")).toContainText("Step 2 of 3");
   await page.getByRole("button", { name: "Hide steps" }).click();
