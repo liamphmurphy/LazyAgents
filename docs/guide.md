@@ -267,6 +267,32 @@ containers share that compose network and reach the API on the host as
 (`lazyagents-dev` here, `lazyagents` for `make up`), so two installs on one
 Docker daemon never clean up each other's turns.
 
+### Test services
+
+Agents never get the Docker socket. When a project's tests need something
+running, such as a database, declare it as a **test service** in the project's
+override for the agent (Agents → the agent → the project's override, or
+`services` in the override JSON). The runner starts each service next to every
+turn on an internal network of that turn's own, reachable by its `name`, and
+removes it when the turn ends; nothing persists between turns. Services get the
+turn's sandbox (no capabilities, `no-new-privileges`, the memory and process
+limits, no host mounts or published ports, no internet), so images whose
+entrypoint starts as root need their unprivileged `user`, and writable
+directories go in `tmpfs`. `expose` sets variables in the turn:
+
+```json
+[{"name": "postgres", "image": "postgres:17-alpine", "user": "postgres",
+  "env": {"POSTGRES_PASSWORD": "test", "PGDATA": "/var/lib/postgresql/data/pgdata"},
+  "tmpfs": ["/var/lib/postgresql/data", "/var/run/postgresql"],
+  "healthcheck": ["CMD", "pg_isready", "-U", "postgres"],
+  "expose": {"TEST_DATABASE_URL": "postgres://postgres:test@postgres:5432/postgres?sslmode=disable"}}]
+```
+
+The turn starts once every healthcheck passes (or, without one, once the
+container runs), within two minutes; a service that fails to start fails the
+run with its last log lines. Services are frozen into a run at dispatch, so an
+agent can't change what it gets. The local runner skips them and says so.
+
 `make start` signs Vesper in to Claude and Codex the first time. `make login`
 redoes it. Both store plan logins in the `harness:anthropic` and `harness:openai`
 secrets. Vesper keeps its own Codex login, because a copy of `~/.codex/auth.json`

@@ -1218,10 +1218,24 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.run.Purpose == "chat" && allowedScope(c.spec, "repo:write") {
 		codeBase = r.workspaceBase(ctx, wsID(c.run))
 	}
+	networks, stopServices, failure := r.startServices(ctx, c, turn, env)
+	if failure != "" {
+		if ctx.Err() != nil {
+			return // shutting down: the turn re-runs on the next runner start
+		}
+		if c.run.Purpose == "chat" {
+			r.failChat(ctx, c, failure)
+			return
+		}
+		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
+		r.end(ctx, c, "failed", failure, runs.VerbRunFailed)
+		return
+	}
+	defer stopServices()
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
-		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Dir: dir, Files: files,
+		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Dir: dir, Files: files, Networks: networks,
 	})
 	if err != nil {
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})

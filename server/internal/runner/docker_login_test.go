@@ -86,6 +86,10 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case p == "/containers/c1/wait":
 		<-f.exited
 		_, _ = fmt.Fprintf(w, `{"StatusCode":%d}`, f.waitCode)
+	case p == "/networks":
+		_, _ = io.WriteString(w, `[]`)
+	case strings.HasPrefix(p, "/networks/"):
+		w.WriteHeader(200)
 	case p == "/containers/json":
 		f.mu.Lock()
 		f.listFilters = r.URL.Query().Get("filters")

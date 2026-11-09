@@ -195,6 +195,14 @@ func (d *Docker) Cleanup(ctx context.Context) error {
 	for _, c := range list {
 		_, _ = d.do(ctx, "DELETE", "/containers/"+c.ID+"?force=1", nil, "", nil)
 	}
+	// Then the service networks those turns had (their containers are gone).
+	var nets []struct{ ID string }
+	if _, err := d.do(ctx, "GET", "/networks?filters="+url.QueryEscape(string(filters)), nil, "", &nets); err != nil {
+		return err
+	}
+	for _, n := range nets {
+		_, _ = d.do(ctx, "DELETE", "/networks/"+n.ID, nil, "", nil)
+	}
 	return nil
 }
 
@@ -337,6 +345,12 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(dir), tb, "application/x-tar", nil); err != nil {
 			p.remove()
 			return nil, err
+		}
+	}
+	for _, n := range spec.Networks {
+		if _, err := d.do(ctx, "POST", "/networks/"+url.PathEscape(n)+"/connect", jsonBody(map[string]any{"Container": created.ID}), "application/json", nil); err != nil {
+			p.remove()
+			return nil, fmt.Errorf("join network %s: %w", n, err)
 		}
 	}
 	// Attach before start so no output is lost.

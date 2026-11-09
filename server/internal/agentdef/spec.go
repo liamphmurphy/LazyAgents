@@ -136,13 +136,15 @@ type Override struct {
 	Setup              []string        `json:"setup,omitempty"`
 	SkillsAdd          []Skill         `json:"skills_add,omitempty"`
 	SkillsRemove       []string        `json:"skills_remove,omitempty"`
+	// Services are what the project's tests need running (see Service).
+	Services []Service `json:"services,omitempty"`
 }
 
 // Empty reports whether the override changes nothing.
 func (o Override) Empty() bool {
 	return o.Harness == "" && o.Model == "" && strings.TrimSpace(o.InstructionsAppend) == "" && len(o.Scopes) == 0 &&
 		o.Budget == (Budget{}) && len(o.MCPServersAdd) == 0 && len(o.Setup) == 0 &&
-		len(o.SkillsAdd) == 0 && len(o.SkillsRemove) == 0
+		len(o.SkillsAdd) == 0 && len(o.SkillsRemove) == 0 && len(o.Services) == 0
 }
 
 // The lazyagents MCP server is always injected by the runner; definitions
@@ -395,6 +397,9 @@ func (o *Override) Normalize() error {
 			return invalid("skills_remove", "duplicate skill %q", n)
 		}
 		seenRemove[n] = true
+	}
+	if err := validServices("services", o.Services); err != nil {
+		return err
 	}
 	cleaned := o.Setup[:0]
 	for _, c := range o.Setup {
