@@ -48,7 +48,7 @@ export type MockMemory = {
   source: string; source_chat_id?: string; created_at: string; updated_at: string;
 };
 
-// What the [[ picker can offer (api: GET /knowledge/suggest). OTHER-9 lives in another project.
+// What the [[ picker can offer (api: GET /knowledge/suggest). OTHER-9 is deleted after the picker offers it, so sending it fails.
 const PLAN = { kind: "artifact", id: "11111111-1111-4111-8111-111111111111", title: "Plan", artifact_type: "note", path: "Eng/Plan", href: "/wiki/Eng/Plan" };
 const REPORT = { kind: "artifact", id: "22222222-2222-4222-8222-222222222222", title: "Q3 report", artifact_type: "report", href: "/artifacts/22222222-2222-4222-8222-222222222222" };
 const TICKET = { kind: "ticket", id: "33333333-3333-4333-8333-333333333333", title: "Fix payouts", display_id: "WEB-3", href: "/tickets/WEB-3", status: "todo" };
@@ -702,7 +702,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         if (!c.title) c.title = text.slice(0, 40);
         posted.push({ chat: c.id, body: b });
         const refs = (b.context_refs as Array<{ key?: string }> | undefined) ?? [];
-        if (refs.some((r) => r.key === "OTHER-9")) return fail(err(422, "invalid", "OTHER-9 is not in this chat's project", "context_refs"));
+        if (refs.some((r) => r.key === "OTHER-9")) return fail(err(422, "invalid", "context_refs: ticket OTHER-9 was not found", "context_refs"));
         const interrupted = c.state === "running" ? prompts.get(c.id) : undefined;
         clearTimeout(timers.get(c.id));
         // Uploads are always PNGs here; the spec names them by id.

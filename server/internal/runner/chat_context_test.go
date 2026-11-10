@@ -80,12 +80,21 @@ func TestChatContextRefsAreDeliveredPerTurn(t *testing.T) {
 	if second := msgs[3].BodyMd; strings.Contains(second, "attached these references") || strings.Contains(second, "chat-turn-2-ref") {
 		t.Fatalf("second prompt lists refs: %s", second)
 	}
-	// A ticket in another project can't be attached.
+	// A ticket in another project is delivered like any other.
 	if _, err := e.pool.Exec(e.ctx, "UPDATE tickets SET project_id=(SELECT id FROM projects WHERE key<>'PAY' ORDER BY key LIMIT 1) WHERE key=$1", key); err != nil {
 		t.Fatal(err)
 	}
-	_, err = e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "again", ContextRefs: []runs.ChatContextRef{{Kind: "ticket", Key: key}}})
-	if !errors.As(err, &ve) || !strings.Contains(ve.Msg, key) {
+	if _, err = e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "again", ContextRefs: []runs.ChatContextRef{{Kind: "ticket", Key: key}}}); err != nil {
 		t.Fatalf("cross-project ref: %v", err)
+	}
+	e.until("third reply", func() bool { return e.chat(chat.ID).State == "idle" })
+	msgs, _ = e.q.ListChatMessages(e.ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 20})
+	third := msgs[5].BodyMd
+	file := ".lazyagents/context/chat-turn-3-ref-1.md"
+	if !strings.Contains(third, file) || strings.Contains(third, "no longer available") {
+		t.Fatalf("third prompt: %s", third)
+	}
+	if got, err := os.ReadFile(filepath.Join(root, file)); err != nil || !strings.Contains(string(got), key) {
+		t.Fatalf("%s: %v\n%s", file, err, got)
 	}
 }

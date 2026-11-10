@@ -575,7 +575,7 @@ func PlanningRefFiles(ctx context.Context, q *store.Queries, run store.Run) ([]C
 	}
 	var files []ContextFile
 	for i, ref := range refs {
-		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, p.ProjectID, uuid.Nil, []runs.ChatContextRef{ref})
+		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, uuid.Nil, []runs.ChatContextRef{ref})
 		if errors.As(err, new(*apperr.ValidationError)) {
 			continue
 		}
@@ -593,7 +593,7 @@ func PlanningRefFiles(ctx context.Context, q *store.Queries, run store.Run) ([]C
 // text appended to the turn's prompt to list the files. A reference that no
 // longer resolves (deleted since it was queued) is named in the prompt but
 // not delivered.
-func ChatTurnContext(ctx context.Context, q *store.Queries, run store.Run, project uuid.UUID, turn store.RunTurn) (files []ContextFile, prompt string, err error) {
+func ChatTurnContext(ctx context.Context, q *store.Queries, run store.Run, turn store.RunTurn) (files []ContextFile, prompt string, err error) {
 	msg, err := q.ChatMessageForTurn(ctx, &turn.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, "", nil
@@ -608,7 +608,7 @@ func ChatTurnContext(ctx context.Context, q *store.Queries, run store.Run, proje
 	var b strings.Builder
 	b.WriteString("\n\nThe person attached these references to this message. Read them first:\n")
 	for i, ref := range refs {
-		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, project, msg.SessionID, []runs.ChatContextRef{ref})
+		d, err := runs.ResolveChatRefs(ctx, q, run.WorkspaceID, msg.SessionID, []runs.ChatContextRef{ref})
 		if err != nil {
 			if errors.As(err, new(*apperr.ValidationError)) {
 				fmt.Fprintf(&b, "- %s (no longer available)\n", ref)

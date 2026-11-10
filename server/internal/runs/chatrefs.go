@@ -44,17 +44,18 @@ type ChatRefDoc struct {
 	ArtifactID *uuid.UUID // set for artifact-backed refs
 }
 
-// ResolveChatRefs resolves every ref inside the chat's project and returns the
-// first failure as a 422 naming it (field context_refs). Wiki notes with no
-// project are readable from any project. Nothing is returned for a partly
-// resolvable list, so callers queue nothing.
-func ResolveChatRefs(ctx context.Context, q *store.Queries, ws, project, chat uuid.UUID, refs []ChatContextRef) ([]ChatRefDoc, error) {
+// ResolveChatRefs resolves every ref inside the workspace and returns the
+// first failure as a 422 naming it (field context_refs). The chat's project
+// doesn't narrow it: the person can open any project's documents and tickets,
+// and attaching one is an explicit ask to read it. Nothing is returned for a
+// partly resolvable list, so callers queue nothing.
+func ResolveChatRefs(ctx context.Context, q *store.Queries, ws, chat uuid.UUID, refs []ChatContextRef) ([]ChatRefDoc, error) {
 	if len(refs) > MaxChatContextRefs {
 		return nil, apperr.Invalid("context_refs", "attach at most %d references", MaxChatContextRefs)
 	}
 	out := make([]ChatRefDoc, 0, len(refs))
 	for _, r := range refs {
-		d, err := resolveChatRef(ctx, q, ws, project, chat, r)
+		d, err := resolveChatRef(ctx, q, ws, chat, r)
 		if err != nil {
 			return nil, err
 		}
@@ -63,9 +64,9 @@ func ResolveChatRefs(ctx context.Context, q *store.Queries, ws, project, chat uu
 	return out, nil
 }
 
-func resolveChatRef(ctx context.Context, q *store.Queries, ws, project, chat uuid.UUID, r ChatContextRef) (ChatRefDoc, error) {
+func resolveChatRef(ctx context.Context, q *store.Queries, ws, chat uuid.UUID, r ChatContextRef) (ChatRefDoc, error) {
 	r.Key, r.Anchor = strings.TrimSpace(r.Key), strings.TrimSpace(r.Anchor)
-	unknown := apperr.Invalid("context_refs", "%s is not in this project", r)
+	unknown := apperr.Invalid("context_refs", "%s was not found", r)
 	bad := func(why string) error { return apperr.Invalid("context_refs", "%s: %s", r, why) }
 	d := ChatRefDoc{Ref: r}
 	switch r.Kind {
@@ -87,7 +88,7 @@ func resolveChatRef(ctx context.Context, q *store.Queries, ws, project, chat uui
 			return d, bad("a ticket ref needs a key and no id")
 		}
 		t, err := q.GetTicketByKey(ctx, store.GetTicketByKeyParams{WorkspaceID: ws, Key: r.Key})
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && t.ProjectID != project) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return d, unknown
 		}
 		if err != nil {
@@ -112,10 +113,6 @@ func resolveChatRef(ctx context.Context, q *store.Queries, ws, project, chat uui
 		}
 		if err != nil {
 			return d, err
-		}
-		inProject := a.ProjectID != nil && *a.ProjectID == project
-		if !inProject && !(a.Type == "note" && a.ProjectID == nil) {
-			return d, unknown
 		}
 		if r.Kind == "page" && a.Type != "note" {
 			return d, bad("not a wiki page")

@@ -283,7 +283,7 @@ test("a rejected attachment shows the server error and keeps the chips", async (
   await page.goto(page.url() + "?attach=ticket:OTHER-9&attach_title=Elsewhere");
   await expect(chips(page)).toHaveCount(1);
   await send(page, "hi");
-  await expect(page.getByRole("alert").filter({ hasText: "OTHER-9" })).toContainText("is not in this chat's project");
+  await expect(page.getByRole("alert").filter({ hasText: "OTHER-9" })).toContainText("was not found");
   await expect(chips(page)).toHaveCount(1);
   await expect(composer(page)).toHaveValue("hi");
 });

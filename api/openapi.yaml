@@ -6164,7 +6164,7 @@ components:
         context_refs:
           type: array
           maxItems: 20
-          description: Wiki pages, sections, artifacts and tickets in the project for the planner to read; delivered as context files when the run starts.
+          description: Wiki pages, sections, artifacts and tickets anywhere in the workspace for the planner to read; delivered as context files when the run starts.
           items: { $ref: "#/components/schemas/ChatContextRef" }
     PlanningSession:
       type: object
@@ -6229,7 +6229,7 @@ components:
     ChatContextRef:
       type: object
       required: [kind]
-      description: Something attached to a message for the assistant to read. Exactly one of id or key; must belong to the chat's project (notes may be workspace-wide).
+      description: Something attached to a message for the assistant to read. Exactly one of id or key; anything in the workspace, whichever project the chat has attached (a canvas must be this chat's).
       properties:
         kind: { type: string, enum: [artifact, section, ticket, page, canvas] }
         id: { type: string, format: uuid, description: "Artifact, wiki page or canvas id" }
