@@ -65,6 +65,7 @@ const LABELS: Record<ChatStatusKind, string> = {
   "image-view": "Looking at an image",
   canvas: "Working on a canvas",
   "canvas-comment": "Commenting on a canvas",
+  playground: "Spinning up a playground",
   runs: "Checking on runs",
   workflow: "Working on a workflow",
   memory: "Memory",
@@ -342,6 +343,30 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
       <circle className="scene-accent scene-box scene-node" cx="84" cy="32" r="4" style={delay(0.6)} />
       <circle className="scene-warm scene-box scene-node" cx="106" cy="10" r="5" style={delay(0.9)} />
       <circle className="scene-accent scene-box scene-node" cx="72" cy="50" r="3" style={delay(1.2)} />
+    </>
+  ),
+  // The app's containers stack up (a database, its setup, a process), a link
+  // reaches the browser, the page fills in and the status light goes green.
+  playground: (
+    <>
+      <rect className="scene-paper scene-pg-1" x="14" y="40" width="32" height="11" rx="5.5" />
+      <path className="scene-line scene-pg-1" d="M21 45.5H39" strokeWidth="1.5" />
+      <rect className="scene-paper scene-pg-2" x="14" y="27" width="32" height="11" rx="2.5" />
+      <path className="scene-line-done scene-pg-2" d="M24 32.5l3 3 6-6" strokeWidth="1.5" />
+      <rect className="scene-paper scene-pg-3" x="14" y="14" width="32" height="11" rx="2.5" />
+      <path className="scene-accent scene-pg-3" d="M27 16.5v6l5-3z" />
+      <path className="scene-line-accent scene-pg-link" d="M48 19.5C58 19.5 58 28 68 28" pathLength={1} />
+      <rect className="scene-paper" x="70" y="6" width="50" height="44" rx="4" />
+      <path className="scene-line" d="M71 15H119" strokeWidth="1" strokeOpacity="0.5" />
+      {[75, 79, 83].map((cx) => (
+        <circle key={cx} className="scene-muted" cx={cx} cy="10.5" r="1.3" />
+      ))}
+      <g className="scene-pg-page">
+        <path className="scene-line" d="M76 22H108 M76 29H100" strokeWidth="1.5" />
+        <rect className="scene-accent" x="76" y="36" width="20" height="7" rx="2" />
+      </g>
+      <circle className="scene-box scene-pg-ring" cx="114" cy="10.5" r="2.4" fill="none" stroke="var(--state-done)" strokeWidth="1" strokeOpacity="0.4" />
+      <circle className="scene-done scene-box scene-pg-live" cx="114" cy="10.5" r="2.4" />
     </>
   ),
   // Past conversations as speech bubbles; a lens passes over each in turn and
