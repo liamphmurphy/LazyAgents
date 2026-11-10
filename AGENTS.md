@@ -18,12 +18,19 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
       "command": ["server", "-s3", "-dir=/data", "-ip.bind=0.0.0.0", "-master.volumeSizeLimitMB=64"],
       "tmpfs": ["/data"], "healthcheck": ["CMD-SHELL", "nc -z 127.0.0.1 8333"] }
   ],
-  "setup": ["cd web && { [ -d node_modules ] || npm ci; }"],
+  "setup": [
+    "(cd web && { [ -d node_modules ] || npm ci; })",
+    "(mkdir -p .lazyagents/pgbin && cd server && go build -o ../.lazyagents/pgbin/vesper ./cmd/vesper && go build -o ../.lazyagents/pgbin/fake-harness ./cmd/fake-harness)",
+    "(cd .lazyagents/pgbin && ln -sf fake-harness claude && ln -sf fake-harness codex)"
+  ],
   "processes": [
-    { "name": "api", "dir": "server", "port": 8000, "command": "go run ./cmd/vesper serve",
+    { "name": "api", "dir": "server", "port": 8000,
+      "command": "(until curl -sf http://localhost:8000/api/v1/health >/dev/null; do sleep 1; done; exec /workspace/.lazyagents/pgbin/vesper runner) & exec /workspace/.lazyagents/pgbin/vesper serve",
       "env": { "DATABASE_URL": "postgres://lazyagents:lazyagents@postgres:5432/lazyagents?sslmode=disable",
-               "S3_ENDPOINT": "http://s3:8333", "API_ADDR": "0.0.0.0:8000",
-               "RUNNER_BACKEND": "local", "VESPER_NO_SIGNIN": "1" } },
+               "S3_ENDPOINT": "http://s3:8333", "API_ADDR": "0.0.0.0:8000", "VESPER_NO_SIGNIN": "1",
+               "RUNNER_BACKEND": "local", "RUNNER_MCP_URL": "http://localhost:8000/mcp", "RUNNER_DATA_DIR": "/tmp/runs",
+               "RUNNER_CLAUDE_BIN": "/workspace/.lazyagents/pgbin/claude", "RUNNER_CODEX_BIN": "/workspace/.lazyagents/pgbin/codex",
+               "FAKE_HARNESS_MODE": "chat-read" } },
     { "name": "web", "dir": "web", "port": 3000, "command": "npm run dev -- -H 0.0.0.0 -p 3000",
       "env": { "API_INTERNAL_URL": "http://api:8000" } }
   ],
@@ -45,9 +52,15 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
   it anywhere but a disposable local instance.
 - Leave `SECRETS_KEY` unset: secrets are then off, which a throwaway instance
   doesn't need.
-- The inner Vesper has no runner, so its chats and runs never get answered.
-  It's for clicking through the UI and trying the API, not for running
-  agents.
+- The inner Vesper has a runner (`vesper runner`, local backend), started in
+  the api container once the API is healthy: a process needs a port, and the
+  runner listens on none. Its `claude` and `codex` are the repository's
+  `fake-harness`, so chats get canned replies through the real MCP path and
+  no credentials enter the playground. Change `FAKE_HARNESS_MODE` for other
+  scripts (see `server/cmd/fake-harness/main.go`).
+- Wrap each setup command in `( … )` so a `cd` stays inside it, and keep each
+  process's `dir` one that already exists: Docker creates a missing one as
+  root, and nothing can write there afterwards.
 - The first start compiles the API and starts `next dev`, which takes a few
   minutes. Call `playground_status` until it's running, and read `log` if it
   failed.
