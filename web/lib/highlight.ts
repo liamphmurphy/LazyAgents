@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { HighlighterCore } from "shiki/core";
+import { useVizPalette } from "@/lib/viz-theme";
+import { hexToHsl } from "@/lib/persona-ui";
 
 /** One highlighted token; `style` carries shiki's --shiki-light/--shiki-dark variables (see globals.css). */
 export type Tok = { content: string; style?: CSSProperties };
@@ -77,6 +79,7 @@ export async function highlightLines(lines: string[], lang: string | null): Prom
 
 /** Tokens for `lines` once shiki has loaded (null before, when disabled, or for unknown languages: render plain text). */
 export function useHighlighted(lines: string[][], lang: string | null, enabled: boolean): Tok[][][] | null {
+  const palette = useVizPalette();
   const key = lines.map((l) => l.join("\n")).join("\u0000");
   const [done, setDone] = useState<{ key: string; lang: string | null; toks: Tok[][][] } | null>(null);
   useEffect(() => {
@@ -91,5 +94,19 @@ export function useHighlighted(lines: string[][], lang: string | null, enabled: 
     // `key` stands in for `lines`, which is a fresh array every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, lang, key]);
-  return done && done.key === key && done.lang === lang ? done.toks : null;
+  return useMemo(() => {
+    if (!done || done.key !== key || done.lang !== lang) return null;
+    const color = (source: unknown) => {
+      if (typeof source !== "string" || !/^#[\da-f]{6}$/i.test(source)) return palette.ink;
+      const { h, s, l } = hexToHsl(source);
+      if (s < 0.2) return l < 0.65 ? palette.muted : palette.ink;
+      const slot = h < 15 || h >= 345 ? 7 : h < 45 ? 1 : h < 75 ? 3 : h < 160 ? 2 : h < 195 ? 5 : h < 255 ? 0 : h < 290 ? 6 : 4;
+      return palette.series[slot];
+    };
+    return done.toks.map((block) => block.map((line) => line.map((t) => ({ ...t, style: {
+      ...t.style,
+      "--shiki-dark": color((t.style as Record<string, unknown>)?.["--shiki-dark"]),
+      "--shiki-light": color((t.style as Record<string, unknown>)?.["--shiki-light"]),
+    } as CSSProperties }))));
+  }, [done, key, lang, palette]);
 }

@@ -69,6 +69,10 @@ Everything lives in `tokens.css`. Dark is the default. Set `data-theme="light"` 
 
 The light accent is darker than the dark-theme accent so white text on it still passes contrast.
 
+### Color palettes
+
+Mode and palette are independent. See [PALETTES.md](PALETTES.md) for the ten additional presets, custom radial controls, visualization colors, persistence, and export behavior.
+
 ### Dusk (v0.4)
 
 The palette is taken from the Vesper mark: a dusk gradient from `--brand-deep` `#2B2366` through `--brand-violet` `#7864D9` to the evening star `--brand-star` `#F2A97E`. Neutrals carry a slight violet tint instead of pure grey, and the accent is the mark's violet lightened for contrast (`#9B8CFF` on `--bg` is about 7:1; `--text-on-accent` `#120F24` on it is about 6.8:1). The brand gradient is for the logo, the welcome glow and persona portraits only. It never fills a control and never stands for a state, so the peach star can't be mistaken for amber.

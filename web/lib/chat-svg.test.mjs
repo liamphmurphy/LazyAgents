@@ -74,3 +74,10 @@ test("stepFrame hides what isn't in the step and only well-formed values", () =>
   assert.equal(stepFrame(`<svg><g/></svg>`, 1), `<svg><g/></svg>`);
   assert.ok(stepFrame(`<svg title="a>b"><g data-step="2"/></svg>`, 1).startsWith(`<svg title="a>b"><style>`));
 });
+
+test("exportSvg preserves selected custom colors in a portable copy", () => {
+  const palette = { ...VIZ_DARK, panel: "#123456", ink: "#abcdef" };
+  const out = exportSvg('<svg><rect fill="var(--viz-panel)"/><text fill="var(--viz-ink)">Text</text></svg>', palette);
+  assert.ok(out.includes('fill="#123456"') && out.includes('fill="#abcdef"'));
+  assert.ok(!out.includes("--viz-"));
+});

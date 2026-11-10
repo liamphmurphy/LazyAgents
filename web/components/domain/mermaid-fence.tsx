@@ -3,16 +3,16 @@
 import { useEffect, useId, useState } from "react";
 import { svgDataUrl } from "@/lib/chat-svg";
 import { CodeFence } from "./code-fence";
+import { useVizPalette } from "@/lib/viz-theme";
+import { contrast } from "@/lib/palettes";
 
 export const isMermaidFence = (info: string | undefined) => (info ?? "").trim().split(/\s+/)[0]?.toLowerCase() === "mermaid";
 
 const MAX_SOURCE = 20_000;
 
-// Works for the OS setting and an explicit theme alike: the tokens already resolved it.
-function isDark() {
-  const hex = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim().slice(1, 3);
-  return parseInt(hex, 16) < 128;
-}
+// Mermaid owns global configuration. Serialize initialize + render together so
+// simultaneous diagrams cannot render using another view's palette.
+let drawing: Promise<unknown> = Promise.resolve();
 
 /**
  * A ```mermaid fence, drawn as a diagram. The result shows as an image, like svg-image
@@ -20,25 +20,40 @@ function isDark() {
  */
 export function MermaidFence({ code, info }: { code: string; info?: string }) {
   const id = `mermaid-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const [drawn, setDrawn] = useState<{ code: string; svg?: string }>();
+  const palette = useVizPalette();
+  const paletteKey = JSON.stringify(palette);
+  const [drawn, setDrawn] = useState<{ code: string; paletteKey: string; svg?: string }>();
   const [showCode, setShowCode] = useState(false);
   useEffect(() => {
     if (code.length > MAX_SOURCE) return;
     let live = true;
-    import("mermaid")
+    drawing = drawing.catch(() => undefined).then(() => import("mermaid"))
       .then(async ({ default: mermaid }) => {
-        mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: isDark() ? "dark" : "default", suppressErrorRendering: true, htmlLabels: false, flowchart: { htmlLabels: false, useMaxWidth: false }, sequence: { useMaxWidth: false } });
+        if (!live) return;
+        mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: {
+          darkMode: contrast(palette.surface, "#ffffff") > contrast(palette.surface, "#000000"),
+          background: palette.surface, primaryColor: palette.panel, primaryTextColor: palette.ink,
+          primaryBorderColor: palette.series[0], secondaryColor: palette.panel, secondaryTextColor: palette.ink,
+          secondaryBorderColor: palette.series[1], tertiaryColor: palette.surface, tertiaryTextColor: palette.ink,
+          tertiaryBorderColor: palette.line, lineColor: palette.line, textColor: palette.ink,
+          mainBkg: palette.panel, nodeBorder: palette.series[0], clusterBkg: palette.surface, clusterBorder: palette.line,
+          edgeLabelBackground: palette.surface, actorBkg: palette.panel, actorTextColor: palette.ink,
+          actorBorder: palette.line, actorLineColor: palette.line, signalColor: palette.ink, signalTextColor: palette.ink,
+          labelBoxBkgColor: palette.panel, labelBoxBorderColor: palette.line, labelTextColor: palette.ink,
+          loopTextColor: palette.ink, noteBkgColor: palette.panel, noteTextColor: palette.ink, noteBorderColor: palette.line,
+          ...Object.fromEntries(palette.series.map((c, i) => [`pie${i + 1}`, c])),
+        }, suppressErrorRendering: true, htmlLabels: false, flowchart: { htmlLabels: false, useMaxWidth: false }, sequence: { useMaxWidth: false } });
         const { svg } = await mermaid.render(id, code);
-        if (live) setDrawn({ code, svg });
+        if (live) setDrawn({ code, paletteKey, svg });
       })
       .catch(() => {
-        if (live) setDrawn({ code });
+        if (live) setDrawn({ code, paletteKey });
       });
     return () => {
       live = false;
     };
-  }, [code, id]);
-  const current = drawn?.code === code ? drawn : undefined;
+  }, [code, id, palette, paletteKey]);
+  const current = drawn?.code === code && drawn.paletteKey === paletteKey ? drawn : undefined;
   if (code.length > MAX_SOURCE || (current && !current.svg)) return <CodeFence code={code} info={info} />;
   if (!current) return <div data-testid="mermaid-loading" aria-label="Drawing diagram" className="h-48 w-full animate-pulse rounded-lg border border-border bg-surface-sunken" />;
   return (

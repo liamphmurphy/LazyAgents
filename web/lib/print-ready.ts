@@ -21,8 +21,10 @@ export function useLightTheme() {
   useLayoutEffect(() => {
     const root = document.documentElement;
     const prev = root.getAttribute("data-theme");
+    root.setAttribute("data-print-theme", "");
     root.setAttribute("data-theme", "light");
     return () => {
+      root.removeAttribute("data-print-theme");
       if (prev) root.setAttribute("data-theme", prev);
       else root.removeAttribute("data-theme");
     };

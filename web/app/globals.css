@@ -128,8 +128,8 @@
 
 /* Inline code inside prose and descriptions (DESIGN.md §2 Typography). */
 /* Canvas comments, painted without touching the rendered text. */
-::highlight(canvas-comment) { background-color: color-mix(in srgb, #e0b13a 32%, transparent); }
-::highlight(canvas-comment-active) { background-color: color-mix(in srgb, #e0b13a 62%, transparent); }
+::highlight(canvas-comment) { background-color: color-mix(in srgb, var(--state-progress) 32%, transparent); }
+::highlight(canvas-comment-active) { background-color: color-mix(in srgb, var(--state-progress) 62%, transparent); }
 
 @layer components {
   .prose-code code,
@@ -617,54 +617,25 @@
 .orb-root {
   --orb-surface: var(--surface-raised);
   --orb-border: var(--border-float);
-  --orb-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --orb-panel-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-  --orb-chip-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
-  --orb-halo: 201, 201, 207;
-  --orb-ring: #8E8E97;
+  --orb-shadow: var(--shadow-float);
+  --orb-panel-shadow: var(--shadow-float);
+  --orb-chip-shadow: var(--shadow-float);
+  --orb-ring: var(--text-secondary);
   --orb-track: var(--border-strong);
   --orb-bar: var(--text-2);
-  --orb-claude: #E2A27E;
-  --orb-codex: #A3A8FF;
-  --orb-idle: #6B6B75;
+  --orb-claude: var(--brand-star);
+  --orb-codex: var(--brand-violet);
+  --orb-idle: var(--text-tertiary);
   --orb-hover: var(--command-on);
   --orb-divider: var(--border-subtle);
-  --orb-needs-border: #5A3B22;
-  --orb-flash-done: #1C2E25;
-  --orb-flash-needs: #3A2A1C;
+  --orb-needs-border: var(--state-human);
+  --orb-flash-done: var(--pill-done-bg);
+  --orb-flash-needs: var(--pill-human-bg);
   position: fixed;
   right: 24px;
   z-index: 30;
   width: 46px;
   height: 46px;
-}
-:root[data-theme="light"] .orb-root {
-  --orb-shadow: 0 8px 24px rgba(23, 23, 26, 0.14);
-  --orb-panel-shadow: 0 16px 40px rgba(23, 23, 26, 0.16);
-  --orb-chip-shadow: 0 10px 28px rgba(23, 23, 26, 0.14);
-  --orb-halo: 85, 85, 95;
-  --orb-ring: #8A8A93;
-  --orb-claude: #C2703F;
-  --orb-codex: #5558E3;
-  --orb-idle: #A8A8B0;
-  --orb-needs-border: #F0C9A6;
-  --orb-flash-done: #E3F4EA;
-  --orb-flash-needs: #FCEBDD;
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .orb-root {
-    --orb-shadow: 0 8px 24px rgba(23, 23, 26, 0.14);
-    --orb-panel-shadow: 0 16px 40px rgba(23, 23, 26, 0.16);
-    --orb-chip-shadow: 0 10px 28px rgba(23, 23, 26, 0.14);
-    --orb-halo: 85, 85, 95;
-    --orb-ring: #8A8A93;
-    --orb-claude: #C2703F;
-    --orb-codex: #5558E3;
-    --orb-idle: #A8A8B0;
-    --orb-needs-border: #F0C9A6;
-    --orb-flash-done: #E3F4EA;
-    --orb-flash-needs: #FCEBDD;
-  }
 }
 .orb-btn {
   position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 0;
@@ -675,8 +646,8 @@
 .orb-btn.live { animation: orb-halo 2.4s ease-out infinite; }
 .orb-btn.quiet { opacity: 0.55; }
 @keyframes orb-halo {
-  0% { box-shadow: 0 0 0 0 rgba(var(--orb-halo), 0.22), var(--orb-shadow); }
-  100% { box-shadow: 0 0 0 11px rgba(var(--orb-halo), 0), var(--orb-shadow); }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--text) 22%, transparent), var(--orb-shadow); }
+  100% { box-shadow: 0 0 0 11px transparent, var(--orb-shadow); }
 }
 .orb-badge {
   position: absolute; top: -4px; right: -4px; z-index: 4; display: grid; place-items: center;
