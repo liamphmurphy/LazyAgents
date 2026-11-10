@@ -38,14 +38,32 @@ export function useCreateDoc() {
 /** Where a document prints from; the page opens the print dialog itself. */
 export const docPrintHref = (id: string) => `/print/docs/${id}`;
 
-/** Saves the document's Markdown as a file named after its title. */
-export function downloadMarkdown(title: string, body: string) {
-  const name = `${title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "document"}.md`;
-  const url = URL.createObjectURL(new Blob([body], { type: "text/markdown;charset=utf-8" }));
+/** Downloads a file named after the document's title. */
+export function downloadFile(title: string, ext: string, blob: Blob) {
+  const name = `${title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "document"}.${ext}`;
+  const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.append(a);
   a.click();
   a.remove();
   // Revoking at once can cancel the download before the browser reads it.
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/** Records that the person finished reviewing a document up to a version. */
+export function useMarkDocReviewed(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (seq: number) => unwrap(api.POST("/docs/{canvasId}/reviewed", { params: { path: { canvasId: id } }, body: { seq } })),
+    onSuccess: (r) => qc.setQueryData<Doc>(docKeys.one(id), (d) => d && { ...d, reviewed_seq: r.reviewed_seq }),
+  });
+}
+
+/** Keeps a copy of the document as it is now in the person's Library. */
+export function useSaveDocToLibrary(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/docs/{canvasId}/library", { params: { path: { canvasId: id } } })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["library"] }),
+  });
 }
