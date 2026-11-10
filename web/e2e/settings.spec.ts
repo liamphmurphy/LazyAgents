@@ -106,7 +106,7 @@ test("provider credentials show status and unlocks, are write-only, and saving r
   const mock = await installSettingsApi(page);
   await page.goto("/chat?project=WEB");
   await page.getByRole("button", { name: "New chat" }).first().click();
-  await page.getByRole("button", { name: /Model for the next message/ }).click();
+  await page.getByRole("button", { name: /^Model and effort for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Escape");
   const before = mock.models();
@@ -150,7 +150,7 @@ test("provider credentials show status and unlocks, are write-only, and saving r
   // without a reload (the cache is otherwise fresh for a minute).
   await page.getByRole("link", { name: "Chats & personas" }).click();
   await page.getByRole("button", { name: "New chat" }).first().click();
-  await page.getByRole("button", { name: /Model for the next message/ }).click();
+  await page.getByRole("button", { name: /^Model and effort for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).not.toHaveAttribute("aria-disabled", "true");
   expect(mock.models()).toBeGreaterThan(before);
 });

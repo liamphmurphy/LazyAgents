@@ -55,12 +55,12 @@ function ProposalCard({ p, busy, onDecide }: { p: Proposal; busy: boolean; onDec
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex items-center gap-2">
             <PersonaName persona={look} className="text-[14px]" />
-            <span className="rounded-full bg-selected px-2 py-0.5 text-[11px] text-fg-secondary">{toneLabel(p.tone)}</span>
+            <span className="rounded-full bg-selected px-2 py-0.5 text-xs text-fg-secondary">{toneLabel(p.tone)}</span>
           </span>
           {p.reason && <p className="text-[13px] text-fg-secondary">{p.reason}</p>}
           {p.custom_instructions && <p className="whitespace-pre-wrap text-[12.5px] text-fg-tertiary">{p.custom_instructions}</p>}
-          {pictureNote && <p className="text-[11.5px] text-fg-tertiary" data-testid="proposal-avatar-note">{pictureNote}</p>}
-          <p className="text-[11.5px] text-fg-tertiary">Starts with no abilities (code, images, creating personas). You can change it later in Manage personas.</p>
+          {pictureNote && <p className="text-xs text-fg-tertiary" data-testid="proposal-avatar-note">{pictureNote}</p>}
+          <p className="text-xs text-fg-tertiary">Starts with no abilities (code, images, creating personas). You can change it later in Manage personas.</p>
         </div>
       </div>
       <div className="flex justify-end gap-2">

@@ -61,7 +61,7 @@ test("/effort picks from its arguments and applies to the next message", async (
   await composer(page).pressSequentially("high");
   await composer(page).press("Enter");
   await expect(composer(page)).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Effort for the next message: High" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Model and effort for the next message: .*, High effort$/ })).toBeVisible();
 });
 
 test("an unknown command stays in the composer with an error; // sends it as text", async ({ page }) => {

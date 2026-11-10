@@ -68,7 +68,7 @@ function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, num
   if (!kind || n <= 0) return null;
   if (kind === "inbox") {
     return (
-      <span ref={inbox} className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-[11px] font-semibold text-approve-fg">
+      <span ref={inbox} className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-xs font-semibold text-approve-fg">
         {n}
         <span className="sr-only"> unread</span>
       </span>
@@ -90,7 +90,7 @@ function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, num
     );
   }
   return (
-    <span className="font-mono text-[11.5px] text-pill-human-fg" title={`${n} suggested edits to review`}>
+    <span className="font-mono text-xs text-pill-human-fg" title={`${n} suggested edits to review`}>
       {n}
       <span className="sr-only"> suggested edits to review</span>
     </span>
@@ -184,7 +184,7 @@ function ProjectSwitcher({ projects, current }: { projects: ScopedProject[]; cur
             <Icon name="dashboard" size={12} className="flex-none text-fg-tertiary" />
           )}
           <span className="flex-1 truncate text-[13px] font-semibold">{current?.name ?? "All projects"}</span>
-          {current && <span className="font-mono text-[11.5px] text-fg-tertiary">{current.key}</span>}
+          {current && <span className="font-mono text-xs text-fg-tertiary">{current.key}</span>}
           <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-none text-fg-tertiary">
             <path d="m3 4.5 3-3 3 3M3 7.5l3 3 3-3" />
           </svg>
@@ -203,7 +203,7 @@ function ProjectSwitcher({ projects, current }: { projects: ScopedProject[]; cur
               <DropdownMenu.RadioItem key={p.key} value={p.key} className={menuItem}>
                 <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: p.color }} />
                 <span className="flex-1 truncate">{p.name}</span>
-                <span className="font-mono text-[11.5px] text-fg-tertiary">{p.key}</span>
+                <span className="font-mono text-xs text-fg-tertiary">{p.key}</span>
                 <span className="grid w-3.5 place-items-center">
                   <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
                 </span>

@@ -18,6 +18,7 @@ import { cx } from "@/lib/cx";
 import { duration } from "@/lib/format";
 import { KIND, groupItems, isOpen, longWait, nextSelection, step, waited, type Sort, type View } from "@/lib/inbox";
 import { DetailPane, type PaneActions } from "./detail-pane";
+import { FilterMenu } from "@/components/domain/pickers";
 
 type Item = Schemas["InboxItem"];
 
@@ -261,36 +262,13 @@ export function InboxScreen() {
                 { value: "done", label: <>Done <span className="font-mono text-fg-tertiary">{doneCount}</span></> },
               ]}
             />
-            <label className="flex items-center gap-1.5 text-xs text-fg-tertiary">
-              <span className="sr-only">Sort</span>
-              <select
-                aria-label="Sort"
-                value={sort}
-                onChange={(e) => setSort(e.target.value as Sort)}
-                className="rounded-md bg-transparent px-1 py-1 text-[12.5px] text-fg-secondary hover:bg-hover"
-              >
-                <option value="oldest">Longest wait first</option>
-                <option value="newest">Newest first</option>
-              </select>
-            </label>
-            <label className="ml-auto flex items-center gap-1.5 text-xs text-fg-tertiary">
+            <FilterMenu quiet label="Sort" value={sort} onChange={(v) => setSort(v as Sort)}
+              options={[{ value: "oldest", label: "Longest wait first" }, { value: "newest", label: "Newest first" }]} />
+            <span className="ml-auto flex items-center gap-1.5 text-xs text-fg-tertiary">
               Project
-              <select
-                aria-label="Filter project"
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
-                className="rounded-md border border-border bg-surface px-2 py-1 text-[12.5px] text-fg"
-              >
-                <option value="">All</option>
-                {bootstrap?.projects
-                  .filter((p) => !p.archived)
-                  .map((p) => (
-                    <option key={p.key} value={p.key}>
-                      {p.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
+              <FilterMenu label="Filter project" value={project} onChange={setProject}
+                options={[{ value: "", label: "All" }, ...(bootstrap?.projects ?? []).filter((p) => !p.archived).map((p) => ({ value: p.key, label: p.name }))]} />
+            </span>
           </div>
           {inbox.isPending ? (
             <div aria-busy="true" className="space-y-3 p-5">

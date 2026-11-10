@@ -289,7 +289,7 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button type="button" aria-label="More personas" title="More personas"
-                className="grid size-7 flex-none place-items-center rounded-full border border-border-strong bg-surface text-[11px] font-semibold text-fg-secondary hover:bg-hover data-[state=open]:border-accent">
+                className="grid size-7 flex-none place-items-center rounded-full border border-border-strong bg-surface text-xs font-semibold text-fg-secondary hover:bg-hover data-[state=open]:border-accent">
                 +{overflow.length}
               </button>
             </DropdownMenu.Trigger>
@@ -299,7 +299,7 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
                   <DropdownMenu.Item key={p.id} className={item} onSelect={() => filter.set(p.id)}>
                     <PersonaAvatar persona={p} />
                     <PersonaName persona={p} className="truncate" />
-                    <span className="ml-auto font-mono text-[11px] text-fg-tertiary">{p.chat_count}</span>
+                    <span className="ml-auto font-mono text-xs text-fg-tertiary">{p.chat_count}</span>
                   </DropdownMenu.Item>
                 ))}
                 <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
@@ -361,7 +361,7 @@ export function PersonaSwitcher({
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" side="top" sideOffset={6} className={cx(floatPanel, "w-[290px]")}>
-          <DropdownMenu.Label className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+          <DropdownMenu.Label className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-fg-tertiary">
             Persona for this conversation
           </DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={value ?? ""} onValueChange={onChange}>
@@ -370,7 +370,7 @@ export function PersonaSwitcher({
                 <PersonaAvatar persona={p} />
                 <PersonaName persona={p} className="truncate" />
                 <CapabilityBadges capabilities={p.capabilities} />
-                <span className="truncate text-[11px] text-fg-tertiary">
+                <span className="truncate text-xs text-fg-tertiary">
                   {p.id === defaultId ? "(default) · " : ""}
                   {toneLabel(p.tone)}
                 </span>

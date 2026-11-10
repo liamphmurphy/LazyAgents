@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay } from "./chat-ui.ts";
+import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay, catalogModelLabel, readableModelId } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -507,4 +507,14 @@ test("history groups chats by the local day of their last activity", () => {
     ["Earlier", ["e"]],
   ]);
   assert.deepEqual(groupByDay([], now), [], "no empty sections");
+});
+
+test("a chat's model shows the catalog's label, even when it is the definition's alias", () => {
+  const models = [{ id: "claude-opus-5-5", label: "Opus 5.5" }, { id: "sonnet-5.5", label: "Sonnet 5.5" }];
+  assert.equal(catalogModelLabel(models, "sonnet-5.5"), "Sonnet 5.5");
+  assert.equal(catalogModelLabel(models, "opus-5.5"), "Opus 5.5", "alias matches the catalog id");
+  assert.equal(catalogModelLabel([{ id: "x", label: "Opus 5.5" }], "opus-5.5"), "Opus 5.5", "or its label");
+  assert.equal(catalogModelLabel([], "opus-5.5"), "Opus 5.5", "unknown: made readable");
+  assert.equal(readableModelId("gpt-5-codex"), "GPT-5 Codex");
+  assert.equal(readableModelId("claude-haiku-5-5"), "Haiku 5.5");
 });

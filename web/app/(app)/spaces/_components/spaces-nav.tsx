@@ -103,7 +103,7 @@ export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null
                 {expanded ? (
                   <Icon name="chev" size={11} className="flex-none text-fg-tertiary" />
                 ) : (
-                  <span className="flex-none text-[11px] text-fg-tertiary">{s.chat_count}</span>
+                  <span className="flex-none text-xs text-fg-tertiary">{s.chat_count}</span>
                 )}
               </Link>
               {expanded && <NestedChats spaceId={s.id} chatId={open.chatId} total={s.chat_count} />}

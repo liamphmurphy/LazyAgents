@@ -13,7 +13,7 @@ import {
   type RunColumns, type RunFilters,
 } from "@/lib/run-view";
 import { AgentAvatar } from "@/components/domain/avatars";
-import { floatPanel } from "@/components/domain/pickers";
+import { FilterMenu, floatPanel } from "@/components/domain/pickers";
 import { StatusPill } from "@/components/domain/run-status";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Segmented, Toggle } from "@/components/ui/controls";
@@ -120,19 +120,15 @@ function Filters({ filters, set, clear }: { filters: RunFilters; set: (patch: Pa
   const states = STATUS.some((s) => s.value === filters.state) ? STATUS : [...STATUS, { value: filters.state, label: filters.state[0].toUpperCase() + filters.state.slice(1) }];
   return (
     <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-      <label className="flex flex-col gap-1 text-xs text-fg-tertiary">
+      <span className="flex flex-col gap-1 text-xs text-fg-tertiary">
         Status
-        <select className={selectClass} value={filters.state} onChange={(e) => set({ state: e.target.value })}>
-          {states.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-fg-tertiary">
+        <FilterMenu label="Status" value={filters.state} onChange={(v) => set({ state: v })} options={states} />
+      </span>
+      <span className="flex flex-col gap-1 text-xs text-fg-tertiary">
         Project
-        <select className={selectClass} value={filters.project ?? ""} onChange={(e) => set({ project: e.target.value || undefined })}>
-          <option value="">All projects</option>
-          {projects.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
-        </select>
-      </label>
+        <FilterMenu label="Project" value={filters.project ?? ""} onChange={(v) => set({ project: v || undefined })}
+          options={[{ value: "", label: "All projects" }, ...projects.map((p) => ({ value: p.key, label: p.name }))]} />
+      </span>
       <Popover.Root>
         <Popover.Trigger asChild>
           <Button variant="outline" icon="sliders" aria-label={count ? `Filters, ${count} active` : "Filters"}>

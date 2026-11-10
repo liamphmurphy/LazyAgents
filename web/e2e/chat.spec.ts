@@ -5,8 +5,10 @@ import { AGENTS, catalog, installChatApi, persona } from "./mock-chat-api";
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
 
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
-const picker = (page: Page) => page.getByRole("button", { name: /Model for the next message/ });
-const effort = (page: Page) => page.getByRole("button", { name: /Effort for the next message/ });
+// Model and effort are one control in the composer ("Opus 5.5 · Auto"), with one menu.
+const picker = (page: Page) => page.getByRole("button", { name: /^Model and effort for the next message/ });
+const effort = picker;
+const effortItems = (page: Page) => page.getByRole("group", { name: "Reasoning effort" }).getByRole("menuitem");
 
 const chips = (page: Page) => page.getByTestId("context-chip");
 
@@ -92,20 +94,22 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
-  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Automatic");
+  await expect(effort(page)).toHaveAttribute("aria-label", /, Automatic effort$/);
+  await expect(effort(page)).toHaveText("Opus 5.5 · Auto");
   await send(page, "hello");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello");
   expect(mock.posted.at(-1)?.body).not.toHaveProperty("effort");
 
   await effort(page).click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Automatic", "Low", "Medium", "High", "Extra high", "Max"]);
+  await expect(effortItems(page)).toHaveText(["Automatic", "Low", "Medium", "High", "Extra high", "Max"]);
   await page.getByRole("menuitem", { name: "Max" }).click();
   await expect(page.getByTestId("pending-effort")).toHaveText("Next message will use max effort");
   await send(page, "think hard");
   await expect(page.getByTestId("assistant-message").nth(1)).toContainText("Echo: think hard");
   expect(mock.posted.at(-1)?.body).toMatchObject({ effort: "max" });
   await expect(page.getByTestId("pending-effort")).toHaveCount(0);
-  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Max");
+  await expect(effort(page)).toHaveAttribute("aria-label", /, Max effort$/);
+  await expect(effort(page)).toHaveText("Opus 5.5 · Max");
 
   // Unchanged effort isn't resent.
   await send(page, "again");
@@ -116,18 +120,21 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
   await picker(page).click();
   await page.getByRole("menuitem", { name: /Codex gpt-5-codex/ }).click();
   await page.getByRole("dialog", { name: "Switch to Codex · gpt-5-codex?" }).getByRole("button", { name: "Switch harness" }).click();
-  await expect(effort(page)).toHaveAttribute("aria-label", "Effort for the next message: Automatic");
+  await expect(effort(page)).toHaveAttribute("aria-label", /, Automatic effort$/);
   await effort(page).click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Automatic", "Low", "Medium", "High"]);
+  await expect(effortItems(page)).toHaveText(["Automatic", "Low", "Medium", "High"]);
   await page.keyboard.press("Escape");
   await send(page, "on codex");
   await expect(page.getByTestId("assistant-message").nth(3)).toContainText("Echo: on codex");
   expect(mock.posted.at(-1)?.body).toMatchObject({ harness: "codex", effort: "default" });
 
-  // A model with no effort control hides the picker.
+  // A model with no effort control shows only the model, and the menu has no effort section.
   await picker(page).click();
   await page.getByRole("menuitem", { name: /Codex gpt-5-mini/ }).click();
-  await expect(effort(page)).toHaveCount(0);
+  await expect(picker(page)).toHaveText("gpt-5-mini");
+  await picker(page).click();
+  await expect(page.getByRole("group", { name: "Reasoning effort" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   expect(mock.unhandled).toEqual([]);
 });
 

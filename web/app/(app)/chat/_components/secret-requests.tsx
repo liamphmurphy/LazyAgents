@@ -53,12 +53,12 @@ export function SecretRequests({ chatId, disabled }: { chatId: string; disabled?
               <p className="break-all"><span className="font-semibold">{a.method}</span> {a.url}</p>
               <p className="mt-1 flex flex-wrap items-center gap-1.5">
                 <span className="rounded bg-pill-human-bg px-1.5 text-pill-human-fg">{sentAs(a.placement, a.placement_key, a.secret_handle)}</span>
-                <span className="font-sans text-[11px] text-fg-tertiary">added by Vesper when sent</span>
+                <span className="font-sans text-xs text-fg-tertiary">added by Vesper when sent</span>
               </p>
               {Object.entries(a.headers).map(([k, v]) => <p key={k} className="break-all text-fg-secondary">{k}: {v}</p>)}
               {a.body && (
                 <>
-                  <p className="mt-1.5 font-sans text-[11px] text-fg-tertiary">Body · {new TextEncoder().encode(a.body).length.toLocaleString()} bytes, all of it shown</p>
+                  <p className="mt-1.5 font-sans text-xs text-fg-tertiary">Body · {new TextEncoder().encode(a.body).length.toLocaleString()} bytes, all of it shown</p>
                   <pre data-testid="secret-approval-body" className="max-h-60 overflow-auto whitespace-pre-wrap break-words text-[12px] text-fg-secondary">{a.body}</pre>
                 </>
               )}
@@ -72,7 +72,7 @@ export function SecretRequests({ chatId, disabled }: { chatId: string; disabled?
               {read && <Button variant="outline" disabled={busy} onClick={() => decide.mutate({ id: a.id, decision: "always" })}>Always allow reads</Button>}
               <Button variant="outline" disabled={busy} onClick={() => decide.mutate({ id: a.id, decision: "deny" })}>Deny</Button>
             </div>
-            <p className="text-[11.5px] text-fg-tertiary">{by?.name ?? "The persona"} never gets the value. Copies of it in the response are masked as ‹{a.secret_handle}›, as far as Vesper can recognise them.</p>
+            <p className="text-xs text-fg-tertiary">{by?.name ?? "The persona"} never gets the value. Copies of it in the response are masked as ‹{a.secret_handle}›, as far as Vesper can recognise them.</p>
           </div>
         );
       })}
@@ -90,9 +90,9 @@ export function SecretRequests({ chatId, disabled }: { chatId: string; disabled?
             <p className="text-[12.5px] text-fg-secondary">
               Sent only to <span data-testid="secret-proposal-host" className="break-all rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-[13px] font-semibold text-fg">{p.host}</span> · {placementLabel(p.placement, p.placement_key)}
             </p>
-            <p className="text-[11.5px] text-fg-tertiary">Check the host is the API you expect: the name is the persona’s suggestion.</p>
+            <p className="text-xs text-fg-tertiary">Check the host is the API you expect: the name is the persona’s suggestion.</p>
             {p.reason && <p className="text-[13px] text-fg-secondary">{p.reason}</p>}
-            <p className="text-[11.5px] text-fg-tertiary">You enter the value in Vesper, never in the chat.</p>
+            <p className="text-xs text-fg-tertiary">You enter the value in Vesper, never in the chat.</p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" disabled={decline.isPending || !!disabled} onClick={() => decline.mutate(p.id)}>Decline</Button>
               <Button variant="primary" disabled={!!disabled} onClick={() => setReviewing(p)}>Add secret…</Button>

@@ -105,7 +105,7 @@ export function TemporaryToggle({ on, onChange, disabled }: { on: boolean; onCha
 /** A temporary chat's marker, in its header and the chat list. */
 export function TemporaryBadge() {
   return (
-    <span title="Temporary chat: no memory, no past chats, and it's deleted after a day without messages" className="inline-flex flex-none items-center gap-1 rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">
+    <span title="Temporary chat: no memory, no past chats, and it's deleted after a day without messages" className="inline-flex flex-none items-center gap-1 rounded-full bg-selected px-2 py-0.5 text-xs text-fg-secondary">
       <Icon name="clock" size={11} />
       Temporary
     </span>
