@@ -82,10 +82,29 @@ when it ends, and nothing a turn starts is reachable from the browser.
   no back or forward, only a path to load and reload.
 - The local runner has no playgrounds; it shares the host.
 
+## Send to chat
+
+The Preview tab's **Send to chat** attaches a Markdown report and a
+screenshot to the person's next message, as ordinary chat attachments (no new
+API).
+
+- The report comes from the gateway's probe, which posts the page's location,
+  console errors and failed fetch/XHR calls (with their `X-Request-Id`) to
+  Vesper's page. The panel accepts only messages whose origin is the
+  playground's, and reads every field as untrusted plain text. Each failed
+  request carries the log lines naming its id, or failing that, stderr written
+  within 1.5 s of it. The address bar follows the probe's location, which the
+  frame's own location can't give across origins.
+- The screenshot uses `getDisplayMedia`: the frame is another origin, so the
+  page can't draw it, and a script drawing the DOM inside the app misses
+  canvas, images and fonts. The browser asks to share the tab on each send.
+  Chrome's Region Capture (`CropTarget`) crops the stream to the frame;
+  elsewhere the frame is cropped by its viewport rectangle, or the capture is
+  sent whole when it doesn't match this tab's viewport. Declining sends the
+  report alone, and the report says why there's no screenshot.
+
 ## Follow-ups
 
-- Send to chat: the current URL, console errors, failed requests and a
-  screenshot attached to the next message.
 - An OpenAPI document for apps without one, inferred from the code by the
   persona, labelled as inferred, cached per commit.
 - The agent driving the playground (Playwright against the same app).
