@@ -202,3 +202,22 @@ test("the menu keeps its width whatever the titles and persona filter", async ({
   await expect(picked(page)).toHaveAccessibleName("Atlas (default)");
   expect(await width()).toBe(232);
 });
+
+test("the welcome's carousel slides between personas and keeps focus on the arrow keys", async ({ page }) => {
+  await installChatApi(page, { personas: [ATLAS, NOVA] });
+  await page.goto("/chat?new");
+  const current = onCarousel(page);
+  await expect(current).toHaveAccessibleName("Atlas");
+  // Nothing moves on load.
+  await expect(current.locator(".motion-slide")).toHaveCount(0);
+  await current.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(current).toHaveAccessibleName("Nova");
+  await expect(current).toBeFocused();
+  // The picked persona slides in from the side it came from.
+  await expect(current.locator(".motion-slide")).toHaveCSS("animation-name", "motion-slide");
+  await expect(current.locator(".motion-slide")).toHaveAttribute("style", /--slide-from: ?1/);
+  await page.getByRole("button", { name: "Previous persona" }).click();
+  await expect(current).toHaveAccessibleName("Atlas");
+  await expect(current.locator(".motion-slide")).toHaveAttribute("style", /--slide-from: ?-1/);
+});

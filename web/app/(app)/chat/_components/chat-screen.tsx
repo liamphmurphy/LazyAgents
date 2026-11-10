@@ -138,8 +138,11 @@ function Welcome({ disabled }: { disabled: boolean }) {
       <DropOverlay over={drop.over} />
       <div className="mx-auto flex w-full max-w-[768px] flex-1 flex-col items-center justify-center px-6 py-10">
         <PersonaCarousel ordered={ordered} current={persona} left={around.left} right={around.right} onPick={setPicked} disabled={locked} />
-        <h1 className="mt-5 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg">{persona.name}</h1>
-        <p className="mt-2 text-center text-[14px] text-fg-secondary">{personaTagline(fullPersona, toneLabel, !!fullPersona && fullPersona.id === defaultId)}</p>
+        {/* Keyed so the name and tagline fade over as the carousel steps. */}
+        <div key={personaId ?? ""} className="motion-page flex flex-col items-center">
+          <h1 className="mt-5 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg">{persona.name}</h1>
+          <p className="mt-2 text-center text-[14px] text-fg-secondary">{personaTagline(fullPersona, toneLabel, !!fullPersona && fullPersona.id === defaultId)}</p>
+        </div>
         <form
           className="mt-7 flex w-full flex-col gap-2"
           onPaste={files.onPaste}

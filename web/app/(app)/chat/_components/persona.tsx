@@ -386,13 +386,27 @@ export function PersonaCarousel({
   disabled?: boolean;
 }) {
   const index = ordered.findIndex((p) => p.id === current.id);
-  const step = (d: number) => ordered.length > 1 && onPick(ordered[(((index + d) % ordered.length) + ordered.length) % ordered.length].id);
-  const side = (p: Persona) => (
-    <button key={p.id} type="button" role="radio" aria-checked={false} aria-label={p.name} title={p.name} tabIndex={-1} disabled={disabled} onClick={() => onPick(p.id)}
-      className="rounded-full opacity-55 transition-opacity hover:opacity-100 disabled:cursor-not-allowed max-sm:hidden">
-      <PersonaAvatar persona={p} size={40} />
-    </button>
-  );
+  // Which side the picked persona came from, so it slides in from there. 0 until the first step: no motion on load.
+  const [from, setFrom] = useState<-1 | 0 | 1>(0);
+  const pick = (id: string, d: -1 | 1) => {
+    setFrom(d);
+    onPick(id);
+  };
+  const step = (d: -1 | 1) => ordered.length > 1 && pick(ordered[(((index + d) % ordered.length) + ordered.length) % ordered.length].id, d);
+  // The moving parts are keyed by the picked persona: each step remounts them, which replays the slide.
+  const slide = from ? "motion-slide" : undefined;
+  const slideFrom = { "--slide-from": from } as CSSProperties;
+  const sides = (ps: Persona[], d: -1 | 1) =>
+    ps.length > 0 && (
+      <span key={`${d}-${current.id}`} style={slideFrom} className={cx("flex items-center gap-4 max-sm:hidden", slide)}>
+        {ps.map((p) => (
+          <button key={p.id} type="button" role="radio" aria-checked={false} aria-label={p.name} title={p.name} tabIndex={-1} disabled={disabled} onClick={() => pick(p.id, d)}
+            className="rounded-full opacity-55 transition-opacity hover:opacity-100 disabled:cursor-not-allowed">
+            <PersonaAvatar persona={p} size={40} />
+          </button>
+        ))}
+      </span>
+    );
   const arrow = (d: -1 | 1) => (
     <button type="button" aria-label={d < 0 ? "Previous persona" : "Next persona"} disabled={disabled} onClick={() => step(d)}
       className="grid size-8 flex-none place-items-center rounded-full text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-not-allowed">
@@ -403,7 +417,7 @@ export function PersonaCarousel({
   // A radio group: the picked persona holds focus and the arrow keys step through the rest.
   return (
     <div role="radiogroup" aria-label="Who to talk to" className="flex items-center justify-center gap-4">
-      {left.map(side)}
+      {sides(left, -1)}
       {many && arrow(-1)}
       <button
         type="button"
@@ -417,10 +431,13 @@ export function PersonaCarousel({
         }}
         className="cursor-default rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
       >
-        <PersonaPortrait persona={current} />
+        {/* The button stays mounted so it keeps focus while the arrow keys step. */}
+        <span key={current.id ?? ""} style={slideFrom} className={cx("block", slide)}>
+          <PersonaPortrait persona={current} />
+        </span>
       </button>
       {many && arrow(1)}
-      {right.map(side)}
+      {sides(right, 1)}
     </div>
   );
 }
