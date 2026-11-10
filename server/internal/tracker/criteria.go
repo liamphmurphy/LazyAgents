@@ -256,6 +256,18 @@ type NewComment struct {
 
 // Comment adds a comment and its timeline event, returning the event.
 func (s *Service) Comment(ctx context.Context, ws uuid.UUID, actor Actor, key string, in NewComment) (store.ActivityEvent, error) {
+	var ev store.ActivityEvent
+	err := s.tx(ctx, func(q *store.Queries) error {
+		var err error
+		ev, err = AddComment(ctx, q, ws, actor, key, in)
+		return err
+	})
+	return ev, err
+}
+
+// AddComment is Comment inside the caller's transaction, for callers that
+// must write a comment together with something else.
+func AddComment(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor, key string, in NewComment) (store.ActivityEvent, error) {
 	body := strings.TrimSpace(in.BodyMd)
 	if body == "" {
 		return store.ActivityEvent{}, invalid("body_md", "is required")
@@ -266,38 +278,33 @@ func (s *Service) Comment(ctx context.Context, ws uuid.UUID, actor Actor, key st
 	if actor.ID == nil {
 		return store.ActivityEvent{}, invalid("actor", "comments need a user or agent author")
 	}
-	var ev store.ActivityEvent
-	err := s.tx(ctx, func(q *store.Queries) error {
-		t, err := Get(ctx, q, ws, key)
+	t, err := Get(ctx, q, ws, key)
+	if err != nil {
+		return store.ActivityEvent{}, err
+	}
+	if in.ParentCommentID != nil {
+		parent, err := q.GetComment(ctx, store.GetCommentParams{ID: *in.ParentCommentID, TicketID: t.ID})
 		if err != nil {
-			return err
+			return store.ActivityEvent{}, invalid("parent_comment_id", "unknown comment on this ticket")
 		}
-		if in.ParentCommentID != nil {
-			parent, err := q.GetComment(ctx, store.GetCommentParams{ID: *in.ParentCommentID, TicketID: t.ID})
-			if err != nil {
-				return invalid("parent_comment_id", "unknown comment on this ticket")
-			}
-			// Threads are one level deep: replies to a reply attach to its root.
-			if parent.ParentCommentID != nil {
-				in.ParentCommentID = parent.ParentCommentID
-			}
+		// Threads are one level deep: replies to a reply attach to its root.
+		if parent.ParentCommentID != nil {
+			in.ParentCommentID = parent.ParentCommentID
 		}
-		c, err := q.CreateComment(ctx, store.CreateCommentParams{
-			WorkspaceID: ws, TicketID: t.ID, ParentCommentID: in.ParentCommentID,
-			AuthorType: actor.Type, AuthorID: *actor.ID, BodyMd: body,
-		})
-		if err != nil {
-			return err
-		}
-		if err := links.Index(ctx, q, ws, links.Source{Kind: links.SourceComment, ID: c.ID, TicketID: &t.ID}, c.BodyMd); err != nil {
-			return err
-		}
-		payload := map[string]any{"comment_id": c.ID, "body_md": c.BodyMd}
-		if c.ParentCommentID != nil {
-			payload["parent_comment_id"] = *c.ParentCommentID
-		}
-		ev, err = insert(ctx, q, ws, t.ID, t.EpicID, actor, event{verb: VerbCommented, payload: payload, at: in.At})
-		return err
+	}
+	c, err := q.CreateComment(ctx, store.CreateCommentParams{
+		WorkspaceID: ws, TicketID: t.ID, ParentCommentID: in.ParentCommentID,
+		AuthorType: actor.Type, AuthorID: *actor.ID, BodyMd: body,
 	})
-	return ev, err
+	if err != nil {
+		return store.ActivityEvent{}, err
+	}
+	if err := links.Index(ctx, q, ws, links.Source{Kind: links.SourceComment, ID: c.ID, TicketID: &t.ID}, c.BodyMd); err != nil {
+		return store.ActivityEvent{}, err
+	}
+	payload := map[string]any{"comment_id": c.ID, "body_md": c.BodyMd}
+	if c.ParentCommentID != nil {
+		payload["parent_comment_id"] = *c.ParentCommentID
+	}
+	return insert(ctx, q, ws, t.ID, t.EpicID, actor, event{verb: VerbCommented, payload: payload, at: in.At})
 }
