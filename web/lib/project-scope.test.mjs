@@ -26,7 +26,7 @@ test("the Apps row is current on any page its flyout opens", () => {
   for (const p of ["/", "/chat/1", "/inbox", "/tickets", "/customization"]) assert.equal(inAppsMenu(p), false, p);
 });
 
-test("isActive matches the section, Dashboard only on /", () => {
+test("isActive matches the section, and / only itself", () => {
   assert.equal(isActive("/", "/"), true);
   assert.equal(isActive("/tickets", "/"), false);
   assert.equal(isActive("/runs/abc", "/runs"), true);

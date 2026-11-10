@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
       { source: "/board", destination: "/tickets?layout=board", permanent: false },
       { source: "/epics", destination: "/tickets?layout=epics", permanent: false },
       { source: "/costs", destination: "/runs?tab=costs", permanent: false },
+      // The Dashboard re-summed the Inbox, Runs and Tickets; what needs you is in the Inbox.
+      { source: "/dashboard", destination: "/inbox", permanent: false },
       // Artifacts are Library's "From projects"; /artifacts/:id stays the document page.
       { source: "/artifacts", destination: "/library?source=projects", permanent: false },
     ];

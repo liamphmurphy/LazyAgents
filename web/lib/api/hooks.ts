@@ -1007,10 +1007,6 @@ export function useSearch(q:string,project?:string) {
 }
 
 // ------------------------------------------------------------- overviews
-export type DashboardRange = "24h" | "7d" | "30d";
-export function useDashboard(range: DashboardRange) {
- return useQuery({queryKey:["dashboard",range],queryFn:()=>unwrap(api.GET("/dashboard",{params:{query:{range}}})),refetchInterval:30_000});
-}
 export function useEpicOverviews() {
  return useQuery({queryKey:["epics"],queryFn:()=>unwrap(api.GET("/epics")).then(d=>d.epics)});
 }
