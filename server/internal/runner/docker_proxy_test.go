@@ -24,6 +24,8 @@ type proxyEngine struct {
 	labels   map[string]map[string]any // container, network or volume id → labels
 	deleted  []string
 	networks map[string]bool
+	images   map[string]map[string]any // image ref → inspect body; others 404
+	query    url.Values                // of the last /build or /images/create
 }
 
 func (f *proxyEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +115,20 @@ func (f *proxyEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"Labels": l})
+	case r.Method == "GET" && strings.HasPrefix(p, "/images/") && strings.HasSuffix(p, "/json"):
+		ref, _ := url.PathUnescape(strings.TrimSuffix(strings.TrimPrefix(r.URL.EscapedPath(), "/v1.43/images/"), "/json"))
+		img, ok := f.images[ref]
+		if !ok {
+			http.Error(w, `{"message":"No such image"}`, 404)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(img)
+	case p == "/build" || p == "/images/create":
+		f.query = r.URL.Query()
+		_, _ = io.WriteString(w, `{"stream":"ok"}`+"\n")
+	case p == "/_ping":
+		w.Header().Set("Builder-Version", "2")
+		_, _ = io.WriteString(w, "OK")
 	case r.Method == "DELETE":
 		f.deleted = append(f.deleted, p)
 		w.WriteHeader(204)
@@ -138,7 +154,16 @@ func (f *proxyEngine) reachedEngine(call string) bool {
 func startProxyEngine(t *testing.T, f *proxyEngine) (*Docker, *TurnDocker) {
 	t.Helper()
 	f.labels, f.networks = map[string]map[string]any{}, map[string]bool{}
-	dir := t.TempDir()
+	if f.images == nil {
+		f.images = map[string]map[string]any{}
+	}
+	// Short: unix socket paths are limited to 108 bytes, and t.TempDir
+	// embeds the test's name.
+	dir, err := os.MkdirTemp("", "dp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	sock := filepath.Join(dir, "engine.sock")
 	l, err := net.Listen("unix", sock)
 	if err != nil {
@@ -152,7 +177,7 @@ func startProxyEngine(t *testing.T, f *proxyEngine) (*Docker, *TurnDocker) {
 	if err := d.PrepareDockerProxy(); err != nil {
 		t.Fatal(err)
 	}
-	td, err := d.StartDockerProxy(context.Background(), "run-1", "run-1-2")
+	td, err := d.StartDockerProxy(context.Background(), "run-1", "run-1", "run-1-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,9 +307,10 @@ func TestDockerProxyRefusesEscapes(t *testing.T) {
 	if code != 403 {
 		t.Fatalf("volume with driver options: %d", code)
 	}
-	code, _ = call(t, c, "POST", "/build", nil)
-	if code != 403 {
-		t.Fatalf("build: %d", code)
+	for _, q := range []string{"version=2", "networkmode=host", "networkmode=lazyagents_default"} {
+		if code, _ := call(t, c, "POST", "/build?"+q, nil); code != 403 {
+			t.Fatalf("build %s: %d", q, code)
+		}
 	}
 	code, _ = call(t, c, "POST", "/containers/x/update", map[string]any{"Memory": 0})
 	if code != 403 {
@@ -441,5 +467,122 @@ func TestDockerProxyMapsTheCLIsDefaultNetwork(t *testing.T) {
 		if fmt.Sprint(asMap(endpoints[td.Network])["Aliases"]) != "[db]" {
 			t.Fatalf("%s: aliases lost: %v", mode, endpoints)
 		}
+	}
+}
+
+// Compose resolves ./server to /workspace/server in the turn; that becomes the
+// run's own checkout at that subpath, and nothing else on the host does.
+func TestDockerProxyMountsTheCheckoutOnly(t *testing.T) {
+	f := &proxyEngine{}
+	d, td := startProxyEngine(t, f)
+	c := turnClient(d, td)
+	code, out := call(t, c, "POST", "/containers/create", map[string]any{"Image": "caddy", "HostConfig": map[string]any{
+		"Binds":  []any{"/workspace/server:/src:ro"},
+		"Mounts": []any{map[string]any{"Type": "bind", "Source": "/workspace/Caddyfile", "Target": "/etc/caddy/Caddyfile"}},
+	}})
+	if code != 201 {
+		t.Fatalf("create: %d %s", code, out)
+	}
+	host := asMap(f.creates[0]["HostConfig"])
+	if host["Binds"] != nil {
+		t.Fatalf("host binds passed through: %v", host["Binds"])
+	}
+	mounts := asList(host["Mounts"])
+	if len(mounts) != 2 {
+		t.Fatalf("mounts = %v", mounts)
+	}
+	for i, want := range []struct {
+		sub, target string
+		ro          bool
+	}{{"server", "/src", true}, {"Caddyfile", "/etc/caddy/Caddyfile", false}} {
+		m := asMap(mounts[i])
+		if m["Type"] != "volume" || m["Source"] != volumeName("run-1") || m["Target"] != want.target || m["ReadOnly"] != want.ro ||
+			asMap(m["VolumeOptions"])["Subpath"] != want.sub {
+			t.Fatalf("mount %d = %v", i, m)
+		}
+	}
+	for _, spec := range []string{"/etc:/x", "/workspace/../etc:/x", "/workspacefoo:/x", "/var/run/docker.sock:/s"} {
+		if code, out := call(t, c, "POST", "/containers/create", map[string]any{"Image": "alpine", "HostConfig": map[string]any{"Binds": []any{spec}}}); code != 403 {
+			t.Fatalf("%s: %d %s", spec, code, out)
+		}
+	}
+}
+
+// With host-folder workspaces a bind follows symlinks on the host, so a link
+// out of the checkout is refused rather than mounted.
+func TestDockerProxyHostFolderBindsStayInTheCheckout(t *testing.T) {
+	f := &proxyEngine{}
+	d, _ := startProxyEngine(t, f)
+	d.HostWorkspaces = t.TempDir()
+	folder := filepath.Join(d.HostWorkspaces, "run-2")
+	if err := os.MkdirAll(filepath.Join(folder, "server"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/", filepath.Join(folder, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	td, err := d.StartDockerProxy(context.Background(), "run-2", "run-2", "run-2-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(td.Stop)
+	c := turnClient(d, td)
+	if code, out := call(t, c, "POST", "/containers/create", map[string]any{"Image": "alpine", "HostConfig": map[string]any{"Binds": []any{"/workspace/escape:/x"}}}); code != 403 {
+		t.Fatalf("symlink out of the checkout: %d %s", code, out)
+	}
+	if code, out := call(t, c, "POST", "/containers/create", map[string]any{"Image": "alpine", "HostConfig": map[string]any{"Binds": []any{"/workspace/server:/src"}}}); code != 201 {
+		t.Fatalf("checkout dir: %d %s", code, out)
+	}
+	m := asMap(asList(asMap(f.creates[len(f.creates)-1]["HostConfig"])["Mounts"])[0])
+	real, _ := filepath.EvalSymlinks(filepath.Join(folder, "server"))
+	if m["Type"] != "bind" || m["Source"] != real {
+		t.Fatalf("mount = %v", m)
+	}
+}
+
+// Builds are classic builds on the turn's network, labeled as the turn's, and
+// neither builds nor pulls can replace an image a turn didn't make.
+func TestDockerProxyBuildsAndPullsCantReplaceLocalImages(t *testing.T) {
+	f := &proxyEngine{images: map[string]map[string]any{
+		"vesper/agent-base:latest": {"RepoDigests": []any{}, "Config": map[string]any{}},
+		"postgres:17-alpine":       {"RepoDigests": []any{"postgres@sha256:abc"}, "Config": map[string]any{}},
+		"workspace-api:latest":     {"Config": map[string]any{"Labels": map[string]any{proxyLabelKey: "run-1-1", stackLabelKey: "test"}}},
+	}}
+	d, td := startProxyEngine(t, f)
+	c := turnClient(d, td)
+	if code, out := call(t, c, "POST", "/build?t=workspace-api:latest&t=fresh:1&labels="+url.QueryEscape(`{"com.docker.compose.project":"workspace"}`)+"&extrahosts=x:1.2.3.4", nil); code != 200 {
+		t.Fatalf("build: %d %s", code, out)
+	}
+	q := f.query
+	var labels map[string]string
+	_ = json.Unmarshal([]byte(q.Get("labels")), &labels)
+	if q.Get("version") != "1" || q.Get("networkmode") != td.Network || q.Get("extrahosts") != "" ||
+		labels[proxyLabelKey] != "run-1-2" || labels["com.docker.compose.project"] != "workspace" {
+		t.Fatalf("build query = %v", q)
+	}
+	for _, tag := range []string{"vesper/agent-base:latest", "postgres:17-alpine"} {
+		if code, out := call(t, c, "POST", "/build?t="+url.QueryEscape(tag), nil); code != 403 {
+			t.Fatalf("build over %s: %d %s", tag, code, out)
+		}
+	}
+	if code, out := call(t, c, "POST", "/images/create?fromImage=vesper/agent-base&tag=latest", nil); code != 403 {
+		t.Fatalf("pull over the agent image: %d %s", code, out)
+	}
+	for _, img := range [][2]string{{"postgres", "17-alpine"}, {"redis", "7"}} {
+		if code, out := call(t, c, "POST", "/images/create?fromImage="+img[0]+"&tag="+img[1], nil); code != 200 {
+			t.Fatalf("pull %s: %d %s", img[0], code, out)
+		}
+	}
+	req, _ := http.NewRequest("GET", "http://docker/_ping", nil)
+	res, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.Header.Get("Builder-Version") != "1" {
+		t.Fatalf("ping offers builder %q, want classic", res.Header.Get("Builder-Version"))
+	}
+	if td.Env["DOCKER_BUILDKIT"] != "0" {
+		t.Fatalf("env = %v", td.Env)
 	}
 }

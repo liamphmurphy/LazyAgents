@@ -35,6 +35,14 @@ ARG DOCKER_CLI_VERSION=27.5.1
 RUN arch="$(uname -m)" \
  && curl -fsSL "https://download.docker.com/linux/static/stable/${arch}/docker-${DOCKER_CLI_VERSION}.tgz" \
     | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
+# Compose, so an agent can bring up an app's stack: its builds use the classic
+# builder (the proxy refuses BuildKit) and its ./ binds become mounts of the
+# run's checkout.
+ARG COMPOSE_VERSION=v2.32.4
+RUN mkdir -p /usr/local/lib/docker/cli-plugins \
+ && curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-$(uname -m)" \
+    -o /usr/local/lib/docker/cli-plugins/docker-compose \
+ && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 COPY --from=nix /nix /nix
 RUN groupadd --system nixbld \
