@@ -17,8 +17,9 @@ import (
 // person's own memory, plus (in a persona chat) that one persona's own memory.
 // No chat reaches another persona's memory.
 
-// temporaryChatRefusal is what memory tools answer in a temporary chat.
-const temporaryChatRefusal = "this is a temporary chat: it doesn't use the person's memory"
+// temporaryChatRefusal is what memory and chat history tools answer in a
+// temporary chat.
+const temporaryChatRefusal = "this is a temporary chat: it doesn't use the person's memory or past chats"
 
 const (
 	aboutPerson  = "person"

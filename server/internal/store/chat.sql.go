@@ -366,6 +366,70 @@ func (q *Queries) ChatGeneratedImageBytes(ctx context.Context, arg ChatGenerated
 	return total, err
 }
 
+const chatHistorySession = `-- name: ChatHistorySession :one
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden, c.connector_ids, c.space_id, c.work_branches, c.commit_email, c.secret_ids, c.temporary FROM chat_sessions c
+WHERE c.id = $1 AND c.workspace_id = $2 AND c.created_by = $3
+  AND NOT c.hidden AND NOT c.temporary
+  AND ($4::bool
+    OR c.persona_id IS NOT DISTINCT FROM $5::uuid
+    OR EXISTS (SELECT 1 FROM chat_messages pm WHERE pm.session_id = c.id AND pm.persona_id = $5::uuid))
+`
+
+type ChatHistorySessionParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	AnyPersona  bool
+	PersonaID   *uuid.UUID
+}
+
+// One past chat, under the same rules as SearchChatHistory; no row when this
+// chat's persona may not read it.
+func (q *Queries) ChatHistorySession(ctx context.Context, arg ChatHistorySessionParams) (ChatSession, error) {
+	row := q.db.QueryRow(ctx, chatHistorySession,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.AnyPersona,
+		arg.PersonaID,
+	)
+	var i ChatSession
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.CreatedBy,
+		&i.AgentID,
+		&i.Harness,
+		&i.Model,
+		&i.CurrentRunID,
+		&i.State,
+		&i.Archived,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageAt,
+		&i.PersonaID,
+		&i.RepoUrl,
+		&i.Effort,
+		&i.SpeakerPersonaID,
+		&i.QueuedPersonaIds,
+		&i.RelayTurns,
+		&i.RelayLimit,
+		&i.InterruptMessageID,
+		&i.LastReadSeq,
+		&i.Hidden,
+		&i.ConnectorIds,
+		&i.SpaceID,
+		&i.WorkBranches,
+		&i.CommitEmail,
+		&i.SecretIds,
+		&i.Temporary,
+	)
+	return i, err
+}
+
 const chatLastErrors = `-- name: ChatLastErrors :many
 SELECT DISTINCT ON (session_id) session_id, body_md FROM chat_messages
 WHERE session_id = ANY($1::uuid[]) AND role = 'system'
@@ -2365,6 +2429,96 @@ func (q *Queries) RunWebSearchEvents(ctx context.Context, runID uuid.UUID) ([]Ru
 	for rows.Next() {
 		var i RunWebSearchEventsRow
 		if err := rows.Scan(&i.Type, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchChatHistory = `-- name: SearchChatHistory :many
+WITH q AS (SELECT websearch_to_tsquery('english', $2::text) AS tsq),
+hits AS (
+  SELECT DISTINCT ON (m.session_id) m.session_id, m.seq, m.role, m.body_md, m.created_at, m.persona_id,
+    ts_rank(to_tsvector('english', left(m.body_md, 200000)), q.tsq) AS rank
+  FROM chat_messages m
+  JOIN chat_sessions c ON c.id = m.session_id
+  CROSS JOIN q
+  WHERE c.workspace_id = $3 AND c.created_by = $4
+    AND c.id <> $5 AND NOT c.hidden AND NOT c.temporary
+    AND ($6::bool
+      OR c.persona_id IS NOT DISTINCT FROM $7::uuid
+      OR EXISTS (SELECT 1 FROM chat_messages pm WHERE pm.session_id = c.id AND pm.persona_id = $7::uuid))
+    AND m.role IN ('user', 'assistant')
+    AND to_tsvector('english', left(m.body_md, 200000)) @@ q.tsq
+  ORDER BY m.session_id, rank DESC, m.seq DESC
+)
+SELECT h.session_id, h.seq, h.role, h.created_at, c.title AS chat_title, c.archived, COALESCE(p.name, '')::text AS persona_name,
+  ts_headline('english', left(h.body_md, 200000), q.tsq, 'StartSel=' || chr(57344) || ',StopSel=' || chr(57345) || ',MaxWords=30,MinWords=12,MaxFragments=1')::text AS snippet
+FROM hits h
+CROSS JOIN q
+JOIN chat_sessions c ON c.id = h.session_id
+LEFT JOIN personas p ON p.id = COALESCE(h.persona_id, c.persona_id)
+ORDER BY h.rank DESC, h.created_at DESC
+LIMIT $1
+`
+
+type SearchChatHistoryParams struct {
+	RowLimit      int32
+	Query         string
+	WorkspaceID   uuid.UUID
+	UserID        uuid.UUID
+	CurrentChatID uuid.UUID
+	AnyPersona    bool
+	PersonaID     *uuid.UUID
+}
+
+type SearchChatHistoryRow struct {
+	SessionID   uuid.UUID
+	Seq         int64
+	Role        string
+	CreatedAt   time.Time
+	ChatTitle   string
+	Archived    bool
+	PersonaName string
+	Snippet     string
+}
+
+// Past chats a chat's persona may look back on, best match first: the
+// person's own chats other than this one, never hidden or temporary ones, and
+// unless any_persona only the chats this persona hosted or spoke in (a chat
+// without a persona sees only chats without one). One row per chat, its best
+// matching message, with the snippet marked like SearchChatMessages.
+func (q *Queries) SearchChatHistory(ctx context.Context, arg SearchChatHistoryParams) ([]SearchChatHistoryRow, error) {
+	rows, err := q.db.Query(ctx, searchChatHistory,
+		arg.RowLimit,
+		arg.Query,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.CurrentChatID,
+		arg.AnyPersona,
+		arg.PersonaID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchChatHistoryRow{}
+	for rows.Next() {
+		var i SearchChatHistoryRow
+		if err := rows.Scan(
+			&i.SessionID,
+			&i.Seq,
+			&i.Role,
+			&i.CreatedAt,
+			&i.ChatTitle,
+			&i.Archived,
+			&i.PersonaName,
+			&i.Snippet,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -98,8 +98,8 @@ func (e *personaChatEnv) call(token, name string, args any) (int, map[string]any
 	return w.Code, out
 }
 
-// A temporary chat's persona can't reach the person's memory.
-func TestTemporaryChatHasNoMemory(t *testing.T) {
+// A temporary chat's persona can't reach the person's memory or past chats.
+func TestTemporaryChatHasNoMemoryOrHistory(t *testing.T) {
 	e := newPersonaChatEnv(t)
 	_, normal := e.chat(e.gwen, false, "Kokoro")
 	if code, out := e.call(normal, "save_memory", map[string]any{"title": "Lives with two cats"}); code != 200 {
@@ -110,6 +110,8 @@ func TestTemporaryChatHasNoMemory(t *testing.T) {
 		"search_memory": {},
 		"save_memory":   {"title": "Has a dog"},
 		"save_memory ":  {"title": "Auburn hair", "about": "persona"},
+		"search_chats":  {"query": "kokoro"},
+		"read_chat":     {"chat_id": uuid.NewString()},
 	} {
 		if code, out := e.call(tmp, strings.TrimSpace(name), args); code != http.StatusConflict || !strings.Contains(fmt.Sprint(out["message"]), "temporary chat") {
 			t.Errorf("%s in a temporary chat: %d %v", name, code, out)

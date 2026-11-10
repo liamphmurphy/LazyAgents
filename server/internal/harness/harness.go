@@ -176,12 +176,13 @@ const chatMemoryGuide = "## Memory\n\n" +
 	"- Save durable facts, preferences and context with save_memory when they'll help later. It updates a near-duplicate instead of adding one.\n" +
 	"- Whenever you save or update a memory, tell the person in your reply what you remembered (and what it replaced, if anything).\n" +
 	"- Never store secrets: credentials, passwords, API keys or tokens. save_memory refuses them.\n" +
-	"- When the person says 'forget that', forget_memory the entry they mean and confirm. When they say 'don't remember this', save nothing from it (and forget anything you already saved from it).\n\n"
+	"- When the person says 'forget that', forget_memory the entry they mean and confirm. When they say 'don't remember this', save nothing from it (and forget anything you already saved from it).\n" +
+	"- For something said in an earlier conversation but not in memory, search_chats finds it and read_chat opens it. It covers your own chats with the person; pass any_persona only when they ask about their chats with other personas.\n\n"
 
 // temporaryChatGuide replaces the memory guide in a temporary chat, which
 // neither loads nor changes the person's memory.
 const temporaryChatGuide = "## Temporary chat\n\n" +
-	"This is a temporary chat. You don't have your memory of this person here, and the memory tools are off. " +
+	"This is a temporary chat. You don't have your memory of this person or their past chats here, and the memory and chat search tools are off. " +
 	"Answer from this conversation alone, and don't say you'll remember anything: the chat is deleted after a day without messages.\n\n"
 
 // Persona is the person's chosen voice for one Assistant chat (wiki:
