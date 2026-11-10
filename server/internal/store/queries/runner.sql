@@ -59,6 +59,20 @@ UPDATE runs SET harness_session_id = $2 WHERE id = $1;
 -- name: SetRunWorkspace :exec
 UPDATE runs SET workspace_volume = $2 WHERE id = $1;
 
+-- name: SetRunWorkspaceHostPath :exec
+UPDATE runs SET workspace_host_path = $2 WHERE id = $1;
+
+-- name: HostFolderWorkspaces :one
+SELECT host_folder_workspaces FROM workspaces WHERE id = $1;
+
+-- name: SetHostFolderWorkspaces :exec
+UPDATE workspaces SET host_folder_workspaces = $2, updated_at = now() WHERE id = $1;
+
+-- name: RunWorkspaceHostPaths :many
+-- Host folders of runs that still have their workspace.
+SELECT id, workspace_host_path::text AS path FROM runs
+WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND workspace_host_path IS NOT NULL AND workspace_volume IS NOT NULL;
+
 -- name: SetIdleTurns :exec
 UPDATE runs SET idle_turns = $2 WHERE id = $1;
 
@@ -98,10 +112,11 @@ WHERE r.mode = 'managed' AND r.state = 'running' AND r.purpose <> 'chat'
 UPDATE runs SET state = 'queued' WHERE state = 'starting';
 
 -- name: Heartbeat :exec
-INSERT INTO runners (id, backend, max_concurrent, running, version)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO runners (id, backend, max_concurrent, running, version, host_workspaces_dir)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO UPDATE SET backend = EXCLUDED.backend, max_concurrent = EXCLUDED.max_concurrent,
-  running = EXCLUDED.running, version = EXCLUDED.version, heartbeat_at = now();
+  running = EXCLUDED.running, version = EXCLUDED.version, host_workspaces_dir = EXCLUDED.host_workspaces_dir,
+  heartbeat_at = now();
 
 -- name: DeleteRunner :exec
 DELETE FROM runners WHERE id = $1;

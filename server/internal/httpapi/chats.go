@@ -33,6 +33,29 @@ func (s *Server) ownChat(ctx context.Context, id uuid.UUID) (store.ChatSession, 
 }
 
 // toChats renders chats with batched lookups (projects, agents, counts, errors).
+// chatWorkspacePaths maps each chat's current run to the host folder holding
+// its checkout, for the runs that have one.
+func (s *Server) chatWorkspacePaths(ctx context.Context, chats []store.ChatSession) (map[uuid.UUID]string, error) {
+	var runIDs []uuid.UUID
+	for _, c := range chats {
+		if c.CurrentRunID != nil {
+			runIDs = append(runIDs, *c.CurrentRunID)
+		}
+	}
+	out := map[uuid.UUID]string{}
+	if len(runIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.Q.RunWorkspaceHostPaths(ctx, runIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[r.ID] = r.Path
+	}
+	return out, nil
+}
+
 func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.ChatSession, error) {
 	out := make([]api.ChatSession, 0, len(chats))
 	if len(chats) == 0 {
@@ -91,6 +114,10 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		counts[r.SessionID] = int(r.N)
 	}
 	spaces, err := s.chatSpaceRefs(ctx, chats)
+	if err != nil {
+		return nil, err
+	}
+	paths, err := s.chatWorkspacePaths(ctx, chats)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +181,11 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 			}
 		} else {
 			item.Speaker = item.Persona
+		}
+		if c.CurrentRunID != nil {
+			if p, ok := paths[*c.CurrentRunID]; ok {
+				item.WorkspacePath = &p
+			}
 		}
 		if r, ok := reasons[c.ID]; ok && c.State == "failed" {
 			item.Error = &r

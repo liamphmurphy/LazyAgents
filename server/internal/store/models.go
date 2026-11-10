@@ -890,6 +890,7 @@ type Run struct {
 	CheckpointBranch    *string
 	CheckpointAt        *time.Time
 	CheckpointError     *string
+	WorkspaceHostPath   *string
 }
 
 type RunEvent struct {
@@ -917,13 +918,14 @@ type RunTurn struct {
 }
 
 type Runner struct {
-	ID            string
-	Backend       string
-	MaxConcurrent int32
-	Running       int32
-	Version       string
-	StartedAt     time.Time
-	HeartbeatAt   time.Time
+	ID                string
+	Backend           string
+	MaxConcurrent     int32
+	Running           int32
+	Version           string
+	StartedAt         time.Time
+	HeartbeatAt       time.Time
+	HostWorkspacesDir string
 }
 
 type SavedView struct {
@@ -1223,9 +1225,10 @@ type WorkflowStepImage struct {
 }
 
 type Workspace struct {
-	ID        uuid.UUID
-	Name      string
-	Slug      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                   uuid.UUID
+	Name                 string
+	Slug                 string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	HostFolderWorkspaces bool
 }

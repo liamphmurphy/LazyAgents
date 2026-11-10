@@ -939,6 +939,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runner/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Turn host-folder workspaces on or off
+         * @description With host_folder_workspaces on, a run started afterwards keeps its
+         *     checkout in a folder on the person's machine (under the runner's
+         *     RUNNER_HOST_WORKSPACES_DIR) instead of a Docker volume, so they can
+         *     open it in their own editor. Runs that already have a workspace keep
+         *     it where it is. The folder itself is runner configuration and can't
+         *     be set here. Has no effect on a runner without that folder configured.
+         */
+        put: operations["updateRunnerSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runner/environment": {
         parameters: {
             query?: never;
@@ -4809,6 +4834,8 @@ export interface components {
             checkpoint_branch?: string;
             /** @description Why the last checkpoint push failed; the workspace is kept until one succeeds */
             checkpoint_error?: string;
+            /** @description The folder on the person's machine holding the run's checkout, while it exists; absent for a checkout in a Docker volume */
+            workspace_path?: string;
             /** @description The harness session turns resume */
             session_id?: string;
             dispatched_by?: components["schemas"]["UserRef"];
@@ -5177,8 +5204,15 @@ export interface components {
             version?: string;
             /** Format: date-time */
             heartbeat_at: string;
+            /** @description Where this runner keeps host-folder workspaces (RUNNER_HOST_WORKSPACES_DIR); absent when it has none */
+            host_workspaces_dir?: string;
+        };
+        RunnerSettings: {
+            host_folder_workspaces: boolean;
         };
         RunnerStatus: {
+            /** @description New runs keep their checkout in a host folder when their runner has host_workspaces_dir */
+            host_folder_workspaces: boolean;
             online: boolean;
             runners: components["schemas"]["RunnerInfo"][];
             slots: number;
@@ -5693,6 +5727,8 @@ export interface components {
              * @description The run serving the current harness segment; its events show live activity
              */
             current_run_id?: string;
+            /** @description The folder on the person's machine holding the current run's checkout, while it exists; absent for a checkout in a Docker volume */
+            workspace_path?: string;
             persona?: components["schemas"]["PersonaSummary"];
             /** @description Every persona in the chat: the host first, then the ones mentioned in (by @name or an approved proposal), in the order they joined */
             participants?: components["schemas"]["PersonaSummary"][];
@@ -8693,6 +8729,31 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunnerStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateRunnerSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunnerSettings"];
+            };
+        };
+        responses: {
+            /** @description Status with the new setting */
             200: {
                 headers: {
                     [name: string]: unknown;
