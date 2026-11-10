@@ -228,72 +228,8 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 			return err
 		}
 		for _, key := range keys {
-			t, err := q.LockTicketByKey(ctx, store.LockTicketByKeyParams{WorkspaceID: ws, Key: strings.ToUpper(strings.TrimSpace(key))})
-			if errors.Is(err, pgx.ErrNoRows) {
-				return apperr.Invalid("keys", "no ticket %s", key)
-			} else if err != nil {
-				return err
-			}
-			if t.AssigneeAgentID == nil {
-				return apperr.Invalid("keys", "%s has no agent; assign one first", t.Key)
-			}
-			if t.Status == "done" || t.Status == "canceled" {
-				return apperr.Conflict("%s is %s", t.Key, t.Status)
-			}
-			if live, err := q.ActiveRunForTicket(ctx, &t.ID); err == nil {
-				return apperr.Conflict("%s already has a %s run", t.Key, live.State)
-			} else if !errors.Is(err, pgx.ErrNoRows) {
-				return err
-			}
-			agent, err := q.GetAgent(ctx, store.GetAgentParams{ID: *t.AssigneeAgentID, WorkspaceID: ws})
+			run, err := dispatchTicket(ctx, q, ws, userID, key, "keys")
 			if err != nil {
-				return err
-			}
-			if agent.Kind == agents.KindSub {
-				return apperr.Conflict("%s is assigned to @%s, a sub agent; assign a main agent, which can delegate to it", t.Key, agent.Handle)
-			}
-			p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: ws})
-			if err != nil {
-				return err
-			}
-			// Unfinished dependencies don't refuse the dispatch: the run stays
-			// queued until its blockers are Done (see ClaimQueuedRun).
-			blockers, err := tracker.HardBlockers(ctx, q, t)
-			if err != nil {
-				return err
-			}
-			if len(blockers) > 0 {
-				return apperr.Conflict("%s: %s", t.Key, strings.Join(blockers, "; "))
-			}
-			resolved, err := agents.ResolveRunnable(ctx, q, ws, agent, p.Key)
-			if err != nil {
-				return err
-			}
-			if resolved.Repository, err = RepositoryFor(ctx, q, p, t); err != nil {
-				return err
-			}
-			raw, _ := json.Marshal(resolved)
-			run, err := q.CreateRun(ctx, store.CreateRunParams{
-				WorkspaceID: ws, TicketID: &t.ID, AgentID: agent.ID, Mode: "managed", State: "queued",
-				ResolvedSpec: raw, DefinitionVersionID: agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model, Purpose: "ticket",
-			})
-			if err != nil {
-				return err
-			}
-			if err := q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &userID}); err != nil {
-				return err
-			}
-			if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "start", InputMessage: StartPrompt(t.Key)}); err != nil {
-				return err
-			}
-			if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "queued", "mode": "managed"}); err != nil {
-				return err
-			}
-			if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, tracker.UserActor(userID), VerbDispatched,
-				map[string]any{"run_id": run.ID, "agent_id": agent.ID, "agent_name": agent.Name}, nil); err != nil {
-				return err
-			}
-			if err := RecomputeAgentStatus(ctx, q, agent.ID); err != nil {
 				return err
 			}
 			out = append(out, run)
@@ -301,6 +237,81 @@ func (s *Service) Dispatch(ctx context.Context, ws, userID uuid.UUID, keys []str
 		return nil
 	})
 	return out, err
+}
+
+// dispatchTicket queues one ticket's managed run inside the caller's
+// transaction, which must already hold the ticket's project lock
+// (tracker.LockTicketProjects). field names the request field in errors.
+func dispatchTicket(ctx context.Context, q *store.Queries, ws, userID uuid.UUID, key, field string) (store.Run, error) {
+	t, err := q.LockTicketByKey(ctx, store.LockTicketByKeyParams{WorkspaceID: ws, Key: strings.ToUpper(strings.TrimSpace(key))})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.Run{}, apperr.Invalid(field, "no ticket %s", key)
+	} else if err != nil {
+		return store.Run{}, err
+	}
+	if t.AssigneeAgentID == nil {
+		return store.Run{}, apperr.Invalid(field, "%s has no agent; assign one first", t.Key)
+	}
+	if t.Status == "done" || t.Status == "canceled" {
+		return store.Run{}, apperr.Conflict("%s is %s", t.Key, t.Status)
+	}
+	if live, err := q.ActiveRunForTicket(ctx, &t.ID); err == nil {
+		return store.Run{}, apperr.Conflict("%s already has a %s run", t.Key, live.State)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return store.Run{}, err
+	}
+	agent, err := q.GetAgent(ctx, store.GetAgentParams{ID: *t.AssigneeAgentID, WorkspaceID: ws})
+	if err != nil {
+		return store.Run{}, err
+	}
+	if agent.Kind == agents.KindSub {
+		return store.Run{}, apperr.Conflict("%s is assigned to @%s, a sub agent; assign a main agent, which can delegate to it", t.Key, agent.Handle)
+	}
+	p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: ws})
+	if err != nil {
+		return store.Run{}, err
+	}
+	// Unfinished dependencies don't refuse the dispatch: the run stays
+	// queued until its blockers are Done (see ClaimQueuedRun).
+	blockers, err := tracker.HardBlockers(ctx, q, t)
+	if err != nil {
+		return store.Run{}, err
+	}
+	if len(blockers) > 0 {
+		return store.Run{}, apperr.Conflict("%s: %s", t.Key, strings.Join(blockers, "; "))
+	}
+	resolved, err := agents.ResolveRunnable(ctx, q, ws, agent, p.Key)
+	if err != nil {
+		return store.Run{}, err
+	}
+	if resolved.Repository, err = RepositoryFor(ctx, q, p, t); err != nil {
+		return store.Run{}, err
+	}
+	raw, _ := json.Marshal(resolved)
+	run, err := q.CreateRun(ctx, store.CreateRunParams{
+		WorkspaceID: ws, TicketID: &t.ID, AgentID: agent.ID, Mode: "managed", State: "queued",
+		ResolvedSpec: raw, DefinitionVersionID: agent.CurrentDefinitionVersionID, Harness: resolved.Harness, Model: resolved.Model, Purpose: "ticket",
+	})
+	if err != nil {
+		return store.Run{}, err
+	}
+	if err := q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &userID}); err != nil {
+		return store.Run{}, err
+	}
+	if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "start", InputMessage: StartPrompt(t.Key)}); err != nil {
+		return store.Run{}, err
+	}
+	if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "queued", "mode": "managed"}); err != nil {
+		return store.Run{}, err
+	}
+	if err := tracker.Record(ctx, q, ws, t.ID, t.EpicID, tracker.UserActor(userID), VerbDispatched,
+		map[string]any{"run_id": run.ID, "agent_id": agent.ID, "agent_name": agent.Name}, nil); err != nil {
+		return store.Run{}, err
+	}
+	if err := RecomputeAgentStatus(ctx, q, agent.ID); err != nil {
+		return store.Run{}, err
+	}
+	return run, nil
 }
 
 // StartPrompt is the first message of a managed run. The rest of what the
