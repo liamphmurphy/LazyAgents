@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { useBootstrap, useMemories } from "@/lib/api/hooks";
 import { usePersonas, type Persona } from "@/lib/api/persona-hooks";
 import { MAX_PERSONAS, sortPersonas } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
-import { HumanAvatar } from "@/components/domain/avatars";
+import { AgentAvatar, HumanAvatar } from "@/components/domain/avatars";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -20,6 +21,7 @@ import { ApiSecretsSection } from "./api-secrets-section";
 import { ConnectorsSection, PersonaConnectors } from "./connectors-section";
 import { useSpaces } from "@/lib/api/space-hooks";
 import { SpaceTile } from "../spaces/_components/space-parts";
+import { AgentsSection } from "./agents-section";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -44,6 +46,16 @@ function PlainHeader({ lead, title, detail, actions }: { lead: ReactNode; title:
       </div>
       {actions}
     </header>
+  );
+}
+
+/** A rail group's heading, with a line saying what sets it apart from the others. */
+function RailGroup({ label, detail }: { label: string; detail: string }) {
+  return (
+    <span className="flex flex-col px-2 pb-1 pt-3">
+      <span className="text-xs font-medium text-fg-tertiary">{label}</span>
+      <span className="text-[11px] text-fg-tertiary">{detail}</span>
+    </span>
   );
 }
 
@@ -82,6 +94,8 @@ export function CustomizationScreen() {
     router.replace(`/customization?space=${encodeURIComponent(id)}`, { scroll: false });
   };
   const me = boot.data?.me;
+  // The Personal Assistant is Vesper's own; it's edited as personas, not here.
+  const agents = (boot.data?.agents ?? []).filter((a) => a.kind !== "assistant");
   return (
     <section aria-label="Customization">
       <TopBar
@@ -108,7 +122,7 @@ export function CustomizationScreen() {
       <Content>
         <div className="flex gap-8 max-md:flex-col max-md:gap-4">
           <nav aria-label="Customize" className="flex w-52 flex-none flex-col gap-px max-md:w-full">
-            <RailButton on={!whose && who !== "connectors" && who !== "secrets"} onClick={() => pick("")} lead={<Icon name="bookmark" size={16} />}>
+            <RailButton on={!whose && who !== "connectors" && who !== "secrets" && who !== "agents"} onClick={() => pick("")} lead={<Icon name="bookmark" size={16} />}>
               Everything
             </RailButton>
             <RailButton on={whose === "person"} onClick={() => pick("person")} lead={<HumanAvatar name={me?.name ?? "You"} initials={me?.initials} src={me?.avatar_url} size={20} label={false} />}>
@@ -120,7 +134,7 @@ export function CustomizationScreen() {
             <RailButton on={who === "secrets"} onClick={() => pick("secrets")} lead={<Icon name="key" size={16} />}>
               Secrets
             </RailButton>
-            <span className="px-2 pb-1 pt-3 text-xs font-medium text-fg-tertiary">Personas</span>
+            <RailGroup label="Personas" detail="Who you talk with" />
             {list.isError ? (
               <Banner tone="blocked" title="Couldn’t load personas" actions={<Button variant="outline" onClick={() => list.refetch()}>Retry</Button>}>
                 {errorText(list.error)}
@@ -147,6 +161,17 @@ export function CustomizationScreen() {
                 )}
               </>
             )}
+            <RailGroup label="Agents" detail="Who runs your tickets" />
+            <RailButton on={who === "agents"} onClick={() => pick("agents")} lead={<Icon name="agents" size={16} />}>
+              All agents
+            </RailButton>
+            {agents.map((a) => (
+              <Link key={a.id} href={`/agents/${a.handle}`} data-testid="agent-row" className={cx(railItem, "text-fg-secondary hover:bg-hover hover:text-fg")}>
+                <AgentAvatar name={a.name} colorIndex={a.color_index} label={false} />
+                <span className="min-w-0 flex-1 truncate">@{a.handle}</span>
+                <span className="text-[11px] text-fg-tertiary">{a.kind === "sub" ? "sub" : "main"}</span>
+              </Link>
+            ))}
             {(spaces.data?.spaces.length ?? 0) > 0 && <span className="px-2 pb-1 pt-3 text-xs font-medium text-fg-tertiary">Spaces</span>}
             {spaces.data?.spaces.map((sp) => (
               <RailButton key={sp.id} testId="space-memory-row" on={spaceParam === sp.id} onClick={() => pickSpace(sp.id)} lead={<SpaceTile name={sp.name} color={sp.color} size={20} />}>
@@ -156,7 +181,9 @@ export function CustomizationScreen() {
             ))}
           </nav>
           <div className="flex min-w-0 flex-1 flex-col gap-5">
-            {who === "connectors" && !importing ? (
+            {who === "agents" && !importing ? (
+              <AgentsSection />
+            ) : who === "connectors" && !importing ? (
               <ConnectorsSection personas={personas} />
             ) : who === "secrets" && !importing ? (
               <ApiSecretsSection personas={personas} initialId={search.get("secret") ?? undefined} />

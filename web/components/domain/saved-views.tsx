@@ -216,8 +216,8 @@ function RenameInput({ view, onDone }: { view: SavedView; onDone: () => void }) 
   );
 }
 
-/** Saved views listed under Tickets in the sidebar, with + Save view. */
-export function SidebarSavedViews({ project }: { project?: string }) {
+/** Saved views after the list's built-in views, with + Save view. */
+export function SavedViewTabs({ project }: { project?: string }) {
   const views = useSavedViews();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -226,17 +226,17 @@ export function SidebarSavedViews({ project }: { project?: string }) {
   const [saving, setSaving] = useState<string | null>(null);
   const active = pathname === "/tickets" ? search.get("sv") : null;
   return (
-    <div role="group" aria-label="Saved views" className="ml-[15px] flex flex-col gap-px border-l border-border-strong pl-1.5">
+    <div role="group" aria-label="Saved views" className="flex flex-wrap items-center gap-1 border-l border-border-strong pl-2">
       {(views.data ?? []).map((v) =>
         renaming === v.id ? (
           <RenameInput key={v.id} view={v} onDone={() => setRenaming(null)} />
         ) : (
-          <div key={v.id} className={cx("group/view flex h-7 items-center rounded-sm pr-1", active === v.id ? "bg-selected" : "hover:bg-hover")}>
+          <div key={v.id} className={cx("group/view flex h-7 items-center rounded-md pr-0.5", active === v.id ? "bg-selected" : "hover:bg-hover")}>
             <Link
               href={savedViewHref(v, project)}
               aria-current={active === v.id ? "page" : undefined}
               onKeyDown={(e) => { if (e.key === "F2") { e.preventDefault(); setRenaming(v.id); } }}
-              className={cx("flex min-w-0 flex-1 items-center gap-2 px-1.5 text-[12.5px]", active === v.id ? "font-medium text-fg" : "text-fg-secondary hover:text-fg")}
+              className={cx("flex min-w-0 max-w-[180px] items-center gap-1.5 pl-2 pr-1 text-[12.5px]", active === v.id ? "font-medium text-fg" : "text-fg-secondary hover:text-fg")}
             >
               <Bookmark on={active === v.id} className={active === v.id ? "text-accent" : "text-fg-tertiary"} />
               <span className="truncate">{v.name}</span>
@@ -250,7 +250,7 @@ export function SidebarSavedViews({ project }: { project?: string }) {
       <button
         type="button"
         onClick={() => setSaving(current)}
-        className="flex h-7 items-center gap-2 rounded-sm px-1.5 text-left text-xs text-fg-tertiary hover:bg-hover hover:text-fg"
+        className="flex h-7 items-center gap-1.5 rounded-md px-2 text-left text-xs text-fg-tertiary hover:bg-hover hover:text-fg"
       >
         <Icon name="plus" size={12} />
         Save view

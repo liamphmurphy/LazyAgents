@@ -52,7 +52,7 @@ test("epic detail shows the burn-up, board link, who checked criteria and the do
   await page.goto("/epics/epic-1");
   await expect(page.getByRole("heading", { level: 1, name: "Kanban board" })).toBeVisible();
   await expect(page.getByText("Ship the board")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Board filtered to this epic" })).toHaveAttribute("href", "/board?project=WEB&epic=epic-1");
+  await expect(page.getByRole("link", { name: "Board filtered to this epic" })).toHaveAttribute("href", "/tickets?layout=board&project=WEB&epic=epic-1");
   await expect(page.getByRole("img", { name: "Points burn-up: 5 of 10 points done (50%)" })).toBeVisible();
 
   const panel = page.getByRole("region", { name: "Epic completion" });

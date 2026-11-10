@@ -7,7 +7,10 @@ const SCOPES = { "repo:read": "allowed", "tests:run": "denied", "db:migrate": "r
 
 test("directory lists every agent with role, model, live runs and open tickets", async ({ page }) => {
   const mock = await installAgentApi(page, { spec: { scopes: SCOPES } });
+  // Agents are in Customization now, beside Personas; the old URL lands there.
   await page.goto("/agents");
+  await expect(page).toHaveURL(/\/customization\?who=agents$/);
+  await expect(page.getByRole("button", { name: "All agents" })).toHaveAttribute("aria-pressed", "true");
   const atlas = page.getByRole("article", { name: "Atlas" });
   await expect(atlas.getByText("Main · Backend")).toBeVisible();
   await expect(atlas.getByText("opus-5.5")).toBeVisible();

@@ -7,7 +7,7 @@ import { spendLabel, usd } from "@/lib/costs";
 import { Icon } from "@/components/ui/icon";
 
 /** A header pill with spend; links to the Costs page. */
-export function CostChip({ value, title, href = "/costs" }: { value: string; title: string; href?: string }) {
+export function CostChip({ value, title, href = "/runs?tab=costs" }: { value: string; title: string; href?: string }) {
   return (
     <Link
       href={href}
@@ -42,7 +42,7 @@ export function TicketCostChip({ ticketKey, project }: { ticketKey: string; proj
     <CostChip
       value={spendLabel(t.cost_micros, q.data.unpriced_runs)}
       title={`Spend on ${ticketKey} across ${t.runs} ${t.runs === 1 ? "run" : "runs"}, sub agents included`}
-      href={project ? `/costs?project=${encodeURIComponent(project)}` : "/costs"}
+      href={project ? `/runs?tab=costs&project=${encodeURIComponent(project)}` : "/runs?tab=costs"}
     />
   );
 }
@@ -55,7 +55,7 @@ export function ChatCostChip({ chatId, project }: { chatId: string; project?: st
     <CostChip
       value={spendLabel(q.data.total.cost_micros, q.data.unpriced_runs)}
       title="Spend on this chat"
-      href={project ? `/costs?project=${encodeURIComponent(project)}` : "/costs"}
+      href={project ? `/runs?tab=costs&project=${encodeURIComponent(project)}` : "/runs?tab=costs"}
     />
   );
 }

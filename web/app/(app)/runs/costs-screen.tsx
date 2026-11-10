@@ -26,6 +26,8 @@ import { Segmented } from "@/components/ui/controls";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { Content, TopBar } from "@/components/shell/topbar";
+import { ProjectPicker } from "@/components/shell/project-picker";
+import { RunsTabNav } from "./runs-tabs";
 
 type Report = Schemas["CostReport"];
 type Slice = Schemas["CostSlice"];
@@ -314,7 +316,7 @@ export function CostsScreen() {
       if (v === undefined) q.delete(k);
       else q.set(k, v);
     }
-    router.replace(`/costs?${q}`);
+    router.replace(`/runs?${q}`);
   };
   const pickPreset = (p: RangePreset) => set(p === "custom" ? { range: p, from: range.from, to: range.to } : { range: p, from: undefined, to: undefined });
 
@@ -326,7 +328,7 @@ export function CostsScreen() {
   const rangeLabel = invalid ? "" : `${yearFmt.format(new Date(range.from))} – ${yearFmt.format(new Date(range.to))} · UTC days`;
 
   let body: ReactNode;
-  if (scope.status !== "ready") body = <ProjectScopeState base="/costs" scope={scope} />;
+  if (scope.status !== "ready") body = <ProjectScopeState base="/runs" scope={scope} />;
   else if (invalid) body = <Banner tone="blocked" title="Pick a valid range">{invalid}</Banner>;
   else if (report.isError)
     body = (
@@ -379,7 +381,7 @@ export function CostsScreen() {
             rows={data.projects}
             total={data.total}
             metric="runs"
-            href={(s) => (s.key && !project ? `/costs?${new URLSearchParams({ ...Object.fromEntries(params), project: s.key })}` : undefined)}
+            href={(s) => (s.key && !project ? `/runs?${new URLSearchParams({ ...Object.fromEntries(params), project: s.key })}` : undefined)}
             name={(s) => s.label}
           />
           <Breakdown title="By model" hint="Chat turns split by the model that ran them" rows={data.models} total={data.total} metric="tokens" />
@@ -391,15 +393,21 @@ export function CostsScreen() {
 
   return (
     <>
-      <TopBar crumbs={projectCrumbs(project, "Costs")} />
+      <TopBar crumbs={[...projectCrumbs(project, "Runs").slice(0, -1), { label: "Runs", href: "/runs" }, { label: "Costs" }]} />
       <Content>
         <div className="flex flex-col gap-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-1">
-              <h1 className="type-display">Costs</h1>
-              <p className="text-sm text-fg-secondary">
-                Spend recorded on every run: ticket work, sub agents, planning and chat. Use the project switcher to scope it to one project.
-              </p>
+            <div className="flex flex-col gap-3">
+              <div className="space-y-1">
+                <h1 className="type-display">Runs</h1>
+                <p className="text-sm text-fg-secondary">
+                  Spend recorded on every run: ticket work, sub agents, planning and chat.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <RunsTabNav tab="costs" />
+                <ProjectPicker />
+              </div>
             </div>
             <div className="flex flex-col items-end gap-2">
               <Segmented label="Date range" options={RANGE_PRESETS} value={preset} onChange={pickPreset} />

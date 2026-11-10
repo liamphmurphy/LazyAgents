@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
-  useBootstrap,
   useCreateAgent,
   useAgentOverviews,
 } from "@/lib/api/hooks";
@@ -29,7 +28,7 @@ import {
   PlanningAssignment,
   type AgentOverview,
 } from "@/components/domain/overview";
-import { Content, TopBar } from "@/components/shell/topbar";
+import { Icon } from "@/components/ui/icon";
 import { useMarkAgentsReviewed } from "@/components/domain/setup";
 
 const STATUSES = ["all", "running", "waiting", "blocked", "idle"] as const;
@@ -163,9 +162,11 @@ function handleFrom(name: string) {
   return h.length >= 2 ? h : "";
 }
 
-/** Live assignments and recorded performance, alongside the definition editor. */
-export function AgentsScreen() {
-  const boot = useBootstrap();
+/**
+ * Live assignments and recorded performance, alongside the definition editor.
+ * Shown in Customization's pane, under the Agents group, next to Personas.
+ */
+export function AgentsSection() {
   useMarkAgentsReviewed();
   const roster = useAgentOverviews();
   const [status, setStatus] = useState<string>("all");
@@ -184,185 +185,175 @@ export function AgentsScreen() {
   const handle = form.handle.trim() || handleFrom(form.name);
 
   return (
-    <>
-      <TopBar
-        crumbs={[
-          { label: boot.data?.workspace.name ?? "Workspace" },
-          { label: "Agents" },
-        ]}
-        actions={
-          <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>
-            New agent
-          </Button>
-        }
-      />
-      <Content>
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-1">
-            <h1 className="type-display">Agents</h1>
-            <p className="text-sm text-fg-secondary">
-              Who does the work, what each agent may do, and what it costs.
-              Live counts refresh every 30 seconds.
-            </p>
-          </div>
-          {adding && (
-            <form
-              className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface p-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                create.mutate(
-                  {
-                    name: form.name.trim(),
-                    handle,
-                    color_index: agents.length % 8,
-                    kind: form.kind,
-                  },
-                  {
-                    onSuccess: (d) => router.push(`/agents/${d.agent.handle}`),
-                  },
-                );
-              }}
-            >
-              <Field label="Name" htmlFor="na-name">
-                <TextInput
-                  id="na-name"
-                  autoFocus
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Scout"
-                />
-              </Field>
-              <Field label="Handle" htmlFor="na-handle">
-                <TextInput
-                  id="na-handle"
-                  mono
-                  prefix="@"
-                  value={form.handle}
-                  onChange={(e) => setForm({ ...form, handle: e.target.value })}
-                  placeholder={handleFrom(form.name) || "scout"}
-                />
-              </Field>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[12.5px] font-medium text-fg-2">Kind</span>
-                <Segmented
-                  label="Agent kind"
-                  value={form.kind}
-                  onChange={(kind) => setForm({ ...form, kind })}
-                  options={[
-                    { value: "main", label: "Main" },
-                    { value: "sub", label: "Sub" },
-                  ]}
-                />
-              </div>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={!form.name.trim() || !handle || create.isPending}
-              >
-                Create
-              </Button>
-              <Button variant="ghost" onClick={() => setAdding(false)}>
-                Cancel
-              </Button>
-              {create.isError && (
-                <span
-                  role="alert"
-                  className="w-full text-xs text-pill-blocked-fg"
-                >
-                  {create.error.message}
-                </span>
-              )}
-            </form>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div
-              role="group"
-              className="flex flex-wrap gap-2"
-              aria-label="Filter agents by status"
-            >
-              {STATUSES.map((st) => (
-                <button
-                  key={st}
-                  onClick={() => setStatus(st)}
-                  aria-pressed={status === st}
-                  className={cx(
-                    "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs",
-                    status === st
-                      ? "border-border-strong bg-selected text-fg"
-                      : "border-border text-fg-secondary hover:bg-hover",
-                  )}
-                >
-                  <span className="capitalize">{st}</span>
-                  <span className="font-mono text-fg-tertiary">
-                    {
-                      ofKind.filter((a) => st === "all" || a.agent.status === st)
-                        .length
-                    }
-                  </span>
-                </button>
-              ))}
-            </div>
-            <span className="ml-auto">
-              <Segmented label="Filter agents by kind" value={kind} onChange={setKind} options={KINDS} />
-            </span>
-          </div>
-          {roster.isError ? (
-            <Banner
-              tone="blocked"
-              title="Couldn’t load agents"
-              actions={<Button onClick={() => roster.refetch()}>Retry</Button>}
-            >
-              {roster.error.message}
-            </Banner>
-          ) : roster.isLoading ? (
-            <div
-              aria-busy="true"
-              className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4"
-            >
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-80 rounded-xl" />
-              ))}
-            </div>
-          ) : !visible.length ? (
-            <EmptyState
-              icon="agents"
-              title={
-                agents.length ? "No agents match these filters" : "No agents yet"
-              }
-              actions={
-                agents.length ? (
-                  <Button onClick={() => { setStatus("all"); setKind("all"); }}>
-                    Show all agents
-                  </Button>
-                ) : (
-                  <Button onClick={() => setAdding(true)} variant="primary">
-                    New agent
-                  </Button>
-                )
-              }
-            >
-              {agents.length
-                ? "Try another status or kind to see the rest of your team."
-                : "Create an agent to define its model, instructions and permissions."}
-            </EmptyState>
-          ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
-              {visible.map((o) => (
-                <AgentCard key={o.agent.id} overview={o} />
-              ))}
-            </div>
-          )}
-          {roster.data && (
-            <p className="text-xs text-fg-tertiary">
-              Live runs include planning runs. Open tickets are assigned tickets
-              awaiting dispatch plus tickets with a live run. Spend counts runs
-              started in the last 7 days; refreshed{" "}
-              {ago(roster.data.stats_as_of)}.
-            </p>
-          )}
+    <div className="flex flex-col gap-6">
+      <header className="flex items-center gap-4">
+        <span className="grid size-[72px] flex-none place-items-center rounded-2xl bg-selected text-fg-secondary"><Icon name="agents" size={28} /></span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h2 className="truncate text-lg font-semibold text-fg">Agents</h2>
+          <p className="text-xs text-fg-secondary">
+            Agents run your tickets; personas talk with you. A Start card hands a ticket to its agent, and the agent&apos;s scopes, budget and project overrides decide what the run may do.
+          </p>
         </div>
-      </Content>
-    </>
+        <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>
+          New agent
+        </Button>
+      </header>
+      {adding && (
+        <form
+          className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            create.mutate(
+              {
+                name: form.name.trim(),
+                handle,
+                color_index: agents.length % 8,
+                kind: form.kind,
+              },
+              {
+                onSuccess: (d) => router.push(`/agents/${d.agent.handle}`),
+              },
+            );
+          }}
+        >
+          <Field label="Name" htmlFor="na-name">
+            <TextInput
+              id="na-name"
+              autoFocus
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Scout"
+            />
+          </Field>
+          <Field label="Handle" htmlFor="na-handle">
+            <TextInput
+              id="na-handle"
+              mono
+              prefix="@"
+              value={form.handle}
+              onChange={(e) => setForm({ ...form, handle: e.target.value })}
+              placeholder={handleFrom(form.name) || "scout"}
+            />
+          </Field>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12.5px] font-medium text-fg-2">Kind</span>
+            <Segmented
+              label="Agent kind"
+              value={form.kind}
+              onChange={(kind) => setForm({ ...form, kind })}
+              options={[
+                { value: "main", label: "Main" },
+                { value: "sub", label: "Sub" },
+              ]}
+            />
+          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={!form.name.trim() || !handle || create.isPending}
+          >
+            Create
+          </Button>
+          <Button variant="ghost" onClick={() => setAdding(false)}>
+            Cancel
+          </Button>
+          {create.isError && (
+            <span
+              role="alert"
+              className="w-full text-xs text-pill-blocked-fg"
+            >
+              {create.error.message}
+            </span>
+          )}
+        </form>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          className="flex flex-wrap gap-2"
+          aria-label="Filter agents by status"
+        >
+          {STATUSES.map((st) => (
+            <button
+              key={st}
+              onClick={() => setStatus(st)}
+              aria-pressed={status === st}
+              className={cx(
+                "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs",
+                status === st
+                  ? "border-border-strong bg-selected text-fg"
+                  : "border-border text-fg-secondary hover:bg-hover",
+              )}
+            >
+              <span className="capitalize">{st}</span>
+              <span className="font-mono text-fg-tertiary">
+                {
+                  ofKind.filter((a) => st === "all" || a.agent.status === st)
+                    .length
+                }
+              </span>
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto">
+          <Segmented label="Filter agents by kind" value={kind} onChange={setKind} options={KINDS} />
+        </span>
+      </div>
+      {roster.isError ? (
+        <Banner
+          tone="blocked"
+          title="Couldn’t load agents"
+          actions={<Button onClick={() => roster.refetch()}>Retry</Button>}
+        >
+          {roster.error.message}
+        </Banner>
+      ) : roster.isLoading ? (
+        <div
+          aria-busy="true"
+          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4"
+        >
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-80 rounded-xl" />
+          ))}
+        </div>
+      ) : !visible.length ? (
+        <EmptyState
+          icon="agents"
+          title={
+            agents.length ? "No agents match these filters" : "No agents yet"
+          }
+          actions={
+            agents.length ? (
+              <Button onClick={() => { setStatus("all"); setKind("all"); }}>
+                Show all agents
+              </Button>
+            ) : (
+              <Button onClick={() => setAdding(true)} variant="primary">
+                New agent
+              </Button>
+            )
+          }
+        >
+          {agents.length
+            ? "Try another status or kind to see the rest of your team."
+            : "Create an agent to define its model, instructions and permissions."}
+        </EmptyState>
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
+          {visible.map((o) => (
+            <AgentCard key={o.agent.id} overview={o} />
+          ))}
+        </div>
+      )}
+      {roster.data && (
+        <p className="text-xs text-fg-tertiary">
+          Live runs include planning runs. Open tickets are assigned tickets
+          awaiting dispatch plus tickets with a live run. Spend counts runs
+          started in the last 7 days; refreshed{" "}
+          {ago(roster.data.stats_as_of)}.
+        </p>
+      )}
+    </div>
   );
 }

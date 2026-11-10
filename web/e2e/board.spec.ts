@@ -32,7 +32,10 @@ test("renders agreed columns, card anatomy, navigation and empty states", async 
   await expect(card(page, "WEB-3")).not.toContainText("Blocked");
   await expect(card(page).getByRole("link", { name: "WEB-1" })).toHaveAttribute("href", "/tickets/WEB-1");
   await expect(card(page).getByRole("link", { name: "Build ticket modal" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Board", exact: true })).toHaveAttribute("aria-current", "page");
+  // The old /board URL is Tickets' board layout.
+  await expect(page).toHaveURL(/\/tickets\?(?=.*layout=board)(?=.*project=WEB)/);
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Tickets", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Tickets layout" }).getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
   await switchProject(page, "Operations");
   await expect(screen(page).getByText("No tickets", { exact: true })).toHaveCount(5);
   expect(api.unhandled).toEqual([]);

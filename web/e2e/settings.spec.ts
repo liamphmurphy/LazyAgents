@@ -110,8 +110,7 @@ test("provider credentials show status and unlocks, are write-only, and saving r
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Escape");
   const before = mock.models();
-  // Settings is in Work mode; both steps stay client-side, so the model cache survives.
-  await page.getByRole("link", { name: "Projects & tickets" }).click();
+  // Settings is the gear in the menu's footer; it opens client-side, so the model cache survives.
   await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /Settings/ }).click();
 
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
@@ -147,8 +146,9 @@ test("provider credentials show status and unlocks, are write-only, and saving r
   await expect(page.getByRole("button", { name: "Delete harness:anthropic" })).toBeVisible();
 
   // The chat model cache was invalidated, so back in chat Codex is selectable
-  // without a reload (the cache is otherwise fresh for a minute). /chat resumes the empty chat from before.
-  await page.getByRole("link", { name: "Chats & personas" }).click();
+  // without a reload (the cache is otherwise fresh for a minute). Back returns to the empty chat from before.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/chat\//);
   await page.getByRole("button", { name: /^Model and effort for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).not.toHaveAttribute("aria-disabled", "true");
   expect(mock.models()).toBeGreaterThan(before);

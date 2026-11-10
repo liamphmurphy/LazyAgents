@@ -19,6 +19,16 @@ const nextConfig: NextConfig = {
     return [
       { source: "/memory", destination: "/customization", permanent: false },
       { source: "/personas", destination: "/customization", permanent: false },
+      // Agents sit beside Personas in Customization; /agents/:handle stays the editor.
+      { source: "/agents", destination: "/customization?who=agents", permanent: false },
+      // Board and Epics are layouts of Tickets; their filters (?project=, ?epic=) carry over.
+      { source: "/board", destination: "/tickets?layout=board", permanent: false },
+      { source: "/epics", destination: "/tickets?layout=epics", permanent: false },
+      { source: "/costs", destination: "/runs?tab=costs", permanent: false },
+      // The Dashboard re-summed the Inbox, Runs and Tickets; what needs you is in the Inbox.
+      { source: "/dashboard", destination: "/inbox", permanent: false },
+      // Artifacts are Library's "From projects"; /artifacts/:id stays the document page.
+      { source: "/artifacts", destination: "/library?source=projects", permanent: false },
     ];
   },
   // In compose, Caddy routes these paths to the API before they reach Next.

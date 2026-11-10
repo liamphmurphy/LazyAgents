@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ArtifactSummary, ArtifactType } from "@/lib/api/client";
-import { useArtifacts, useBootstrap } from "@/lib/api/hooks";
+import { useArtifacts } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { shortAgo } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,9 @@ import { NewMockupDialog, UploadDialog } from "@/components/domain/artifact-dial
 import { DocTypeTag } from "@/components/domain/labels";
 import { ReviewChip } from "@/components/domain/mockup";
 import { TopBar } from "@/components/shell/topbar";
-import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
+import { ProjectScopeState, useProjectScope } from "@/components/shell/project-scope";
+import { ProjectPicker } from "@/components/shell/project-picker";
+import { LibrarySourceSwitch } from "./source-switch";
 import { ArtifactPreview } from "./preview";
 
 const TABS: Array<{ key: "all" | ArtifactType; label: string }> = [
@@ -56,7 +58,8 @@ function TableSkeleton() {
   );
 }
 
-export function ArtifactsScreen() {
+/** Library's "From projects": what agents read before they work and the reports they leave, from GET /artifacts. */
+export function ProjectDocs() {
   const params = useSearchParams();
   const router = useRouter();
   const type = (params.get("type") as ArtifactType | null) ?? undefined;
@@ -68,10 +71,8 @@ export function ArtifactsScreen() {
   const [dragging, setDragging] = useState(false);
   const [mockup, setMockup] = useState(false);
 
-  const boot = useBootstrap();
   // ?project= or the remembered project; "All projects" lists every artifact.
   const scope = useProjectScope("optional");
-  const current = scope.status === "ready" ? scope.project : undefined;
   const list = useArtifacts({ type, q: q || undefined, project });
 
   function setParams(changes: Record<string, string | null>) {
@@ -80,7 +81,8 @@ export function ArtifactsScreen() {
       if (v) next.set(k, v);
       else next.delete(k);
     }
-    router.replace(`/artifacts${next.size ? `?${next}` : ""}`, { scroll: false });
+    next.set("source", "projects");
+    router.replace(`/library?${next}`, { scroll: false });
   }
 
   useEffect(() => {
@@ -96,14 +98,15 @@ export function ArtifactsScreen() {
     if (k === "all") next.delete("type");
     else next.set("type", k);
     next.delete("id");
-    return `/artifacts${next.size ? `?${next}` : ""}`;
+    next.set("source", "projects");
+    return `/library?${next}`;
   };
   const artifacts = list.data?.artifacts ?? [];
 
   return (
     <>
       <TopBar
-        crumbs={current ? projectCrumbs(current, "Artifacts") : [{ label: boot.data?.workspace.name ?? "Workspace" }, { label: "Artifacts" }]}
+        crumbs={[{ label: "Library", href: "/library" }, { label: "From projects" }]}
         actions={
           <>
             <Button variant="outline" icon="plus" onClick={() => setMockup(true)}>
@@ -117,9 +120,15 @@ export function ArtifactsScreen() {
       />
       <div className="flex flex-1 flex-wrap">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5 px-7 py-8 max-sm:px-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="type-display">Artifacts</h1>
-            <p className="text-sm text-fg-secondary">Context agents read before they work, and the reports they leave behind.</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <h1 className="type-display">Library</h1>
+              <p className="text-sm text-fg-secondary">Shared with the workspace: context agents read before they work, and the reports they leave behind.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <LibrarySourceSwitch source="projects" />
+              <ProjectPicker />
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -171,7 +180,7 @@ export function ArtifactsScreen() {
           </button>
 
           {scope.status !== "ready" ? (
-            <ProjectScopeState base="/artifacts" scope={scope} />
+            <ProjectScopeState base="/library" scope={scope} />
           ) : list.isError ? (
             <Banner tone="blocked" title="Couldn't load artifacts">
               {list.error.message}

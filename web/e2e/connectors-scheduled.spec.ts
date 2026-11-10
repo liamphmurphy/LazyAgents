@@ -26,7 +26,9 @@ test("a connector is added, then given to a persona with per-tool permissions", 
 test("a scheduled task is created from the Scheduled page", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [ATLAS] });
   await page.goto("/chat");
-  await page.getByRole("link", { name: "Scheduled", exact: true }).click();
+  // Scheduled is a tool in the menu's Apps flyout.
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: /^Apps/ }).click();
+  await page.getByRole("dialog", { name: "Apps" }).getByRole("link", { name: "Scheduled" }).click();
   await expect(page).toHaveURL(/\/scheduled$/);
   await page.getByRole("button", { name: "New task" }).click();
   await page.getByLabel("Name").fill("Monday work brief");

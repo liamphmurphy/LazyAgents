@@ -31,6 +31,10 @@ type Tab = (typeof TABS)[number];
 /** Links from before the tabs were split keep working. */
 const LEGACY: Record<string, Tab> = { definition: "settings", runs: "activity" };
 
+/** Agents live in Customization, beside Personas. */
+const AGENTS_HREF = "/customization?who=agents";
+const AGENTS_CRUMBS = [{ label: "Customization", href: "/customization" }, { label: "Agents", href: AGENTS_HREF }];
+
 export function tabFrom(param: string | null): Tab {
   if (param && (TABS as readonly string[]).includes(param)) return param as Tab;
   return (param && LEGACY[param]) || "overview";
@@ -203,9 +207,9 @@ export function AgentScreen({ handle }: { handle: string }) {
     const missing = "status" in error && error.status === 404;
     return (
       <>
-        <TopBar crumbs={[{ label: "Agents", href: "/agents" }, { label: `@${handle}` }]} />
+        <TopBar crumbs={[...AGENTS_CRUMBS, { label: `@${handle}` }]} />
         {missing ? (
-          <EmptyState icon="agents" title={`No agent @${handle}`} actions={<ButtonLink href="/agents" variant="outline">All agents</ButtonLink>} />
+          <EmptyState icon="agents" title={`No agent @${handle}`} actions={<ButtonLink href={AGENTS_HREF} variant="outline">All agents</ButtonLink>} />
         ) : (
           <div className="p-6"><Banner tone="blocked" title="Couldn't load this agent">{error.message}</Banner></div>
         )}
@@ -219,7 +223,7 @@ export function AgentScreen({ handle }: { handle: string }) {
   return (
     <>
       <TopBar
-        crumbs={[{ label: boot.data?.workspace.name ?? "Workspace" }, { label: "Agents", href: "/agents" }, { label: detail?.agent.name ?? `@${handle}` }]}
+        crumbs={[...AGENTS_CRUMBS, { label: detail?.agent.name ?? `@${handle}` }]}
         actions={
           detail && (
             <>

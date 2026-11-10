@@ -25,11 +25,12 @@ import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
 import { AgentPicker, floatPanel } from "@/components/domain/pickers";
-import { SavedViewHeader } from "@/components/domain/saved-views";
+import { SavedViewHeader, SavedViewTabs } from "@/components/domain/saved-views";
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { BulkBar, BulkResultPanel } from "./bulk-bar";
 import { COL, TicketRow, type Density } from "./ticket-row";
+import { TicketsLayoutBar } from "./layout-bar";
 
 const VIEWS: Array<{ key: TicketView; label: string }> = [
   { key: "all", label: "All tickets" },
@@ -313,9 +314,13 @@ export function TicketsScreen() {
           proj?.archived ? <ButtonLink href="/settings/projects" variant="outline">Manage project</ButtonLink> : <ButtonLink href={`/tickets/new${project ? `?project=${project}` : ""}`} variant="primary" icon="plus" hint="C">New ticket</ButtonLink>
         }
       />
+      <TicketsLayoutBar layout="list" />
       {proj?.archived && <div className="px-6 py-3"><Banner tone="human" title="Archived project">Tickets and history remain available. Restore the project in Settings to start new work.</Banner></div>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-6 py-2.5">
-        <Tabs label="Views" value={view} items={VIEWS.map((v) => ({ ...v, href: href(v.key) }))} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Tabs label="Views" value={svId ? "" : view} items={VIEWS.map((v) => ({ ...v, href: href(v.key) }))} />
+          <SavedViewTabs project={project} />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" aria-pressed={ready} className={cx("h-[26px] rounded-sm border border-border-strong px-2 text-xs hover:bg-hover", ready && "bg-selected text-accent")} onClick={() => replaceParams((next) => { if (ready) next.delete("ready"); else { next.set("ready", "true"); next.set("view", "all"); } })}>Ready to dispatch</button>
           {epic && <FilterChip label="Epic" value={`${boot.data?.epics.find(e => e.id === epic)?.name ?? "Selected epic"} ×`} onClick={() => setParam("epic", null)} title="Clear epic filter"/>}

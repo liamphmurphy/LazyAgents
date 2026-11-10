@@ -1,5 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import type { components } from "../lib/api/schema";
+import { menuResponse } from "./mock-menu";
 
 type S = components["schemas"];
 const project: S["Project"] = { id: "project-web", key: "WEB", name: "Web app", color: "#6e56cf", default_branch: "main", archived: false, revision: 1 };
@@ -247,6 +248,13 @@ export async function installBoardApi(page: Page) {
       criteriaRequests.push(`DELETE ${path}`);
       crit.t.criteria = crit.t.criteria.filter((c) => c !== crit.c).map((c, i) => ({ ...c, position: i + 1 }));
       return route.fulfill({ status: 204 });
+    }
+    const menu = menuResponse(request.method(), path);
+    if (menu) return json(menu);
+    // Runs' header shows the last 7 days' spend.
+    if (path === "/costs" && request.method() === "GET") {
+      const none = { key: "", label: "", runs: 0, tokens: 0, cost_micros: 0, unpriced_runs: 0 };
+      return json({ total: none, unpriced_runs: 0, estimated: { tickets: 0, points: 0, cost_micros: 0 }, days: [], agents: [], projects: [], models: [], purposes: [], top_tickets: [] } satisfies S["CostReport"]);
     }
     unhandled.push(`${request.method()} ${path}`);
     return json({ code: "not_found", message: `mock: no handler for ${path}` }, 404);

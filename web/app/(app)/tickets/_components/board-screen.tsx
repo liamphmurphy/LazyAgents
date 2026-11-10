@@ -19,11 +19,13 @@ import { TicketEditorDialog } from "@/components/domain/ticket-editor-dialog";
 import { DependencyMap } from "@/components/domain/dependency-map";
 import { useMotionList } from "@/components/ui/motion";
 import { Toggle } from "@/components/ui/controls";
+import { ticketsHref } from "@/lib/tickets-layout";
+import { TicketsLayoutBar } from "./layout-bar";
 
 export function BoardScreen() {
   const bootstrap = useBootstrap();
   const params = useSearchParams();
-  // The sidebar switcher owns the project; ?project= wins, then the remembered one.
+  // The layout bar's picker owns the project; ?project= wins, then the remembered one.
   const scope = useProjectScope("required");
   const project = scope.status === "ready" ? scope.project : undefined;
   const filters: BoardFilters = {
@@ -40,7 +42,7 @@ export function BoardScreen() {
     const next = new URLSearchParams(window.location.search);
     if (project) next.set("project", project.key);
     if (value) next.set(name, value); else next.delete(name);
-    window.history.replaceState(null, "", `/board?${next}`);
+    window.history.replaceState(null, "", ticketsHref("board", next));
   }
   const map = params.get("tab") === "map";
   const ticketKey = params.get("ticket") || undefined;
@@ -50,12 +52,11 @@ export function BoardScreen() {
   function setTicket(key?: string) {
     const next = new URLSearchParams(window.location.search);
     if (key) next.set("ticket", key); else next.delete("ticket");
-    const qs = next.toString();
-    window.history.replaceState(null, "", qs ? `/board?${qs}` : "/board");
+    window.history.replaceState(null, "", ticketsHref("board", next));
   }
   return (
     <div data-testid="board-screen">
-      <TopBar crumbs={projectCrumbs(project, "Board")} actions={project &&
+      <TopBar crumbs={projectCrumbs(project, "Tickets")} actions={project &&
         <>
           <FilterMenu label="Epic" value={filters.epic ?? ""} onChange={(v) => setParam("epic", v)}
             options={[{ value: "", label: "All epics" }, ...epics.map((e) => ({ value: e.id, label: e.name }))]} />
@@ -63,14 +64,14 @@ export function BoardScreen() {
             options={[{ value: "", label: "All assignees" }, ...(bootstrap.data?.agents ?? []).map((a) => ({ value: a.handle, label: `@${a.handle}` }))]} />
           <Toggle label="Show canceled" checked={filters.include_canceled} onChange={(on) => setParam("include_canceled", on ? "true" : "")} />
           <Toggle label="Blocked only" checked={blockedOnly} onChange={(on) => setParam("blocked", on ? "true" : "")} />
-          <Link href={`/tickets${project ? `?project=${encodeURIComponent(project.key)}` : ""}`} className="text-xs text-fg-secondary hover:text-fg">Tickets view ↗</Link>
         </>
       } />
+      <TicketsLayoutBar layout="board" />
       {project && <nav aria-label="Board views" className="flex gap-5 border-b border-border px-5 py-3 text-sm">
         <button aria-current={!map ? "page" : undefined} className={!map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "")}>Board</button>
         <button aria-current={map ? "page" : undefined} className={map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "map")}>Map</button>
       </nav>}
-      {!project ? <ProjectScopeState base="/board" scope={scope} />
+      {!project ? <ProjectScopeState base="/tickets" scope={scope} />
         : map ? <div className="p-5"><DependencyMap key={JSON.stringify([project.key, filters])} project={project.key} epic={filters.epic} assignee={filters.assignee} includeCanceled={filters.include_canceled} onOpen={setTicket} /></div>
         : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} blockedOnly={blockedOnly} onOpen={setTicket} />}
       {ticketKey && loadFailed && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">

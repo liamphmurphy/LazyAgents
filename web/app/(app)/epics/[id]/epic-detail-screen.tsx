@@ -19,6 +19,7 @@ import { StatusGlyph } from "@/components/domain/glyphs";
 import { STATUS_NAME, STATUS_ORDER } from "@/components/domain/meta";
 import { EpicCompletion } from "@/components/domain/epic-completion";
 import { DependencyMap } from "@/components/domain/dependency-map";
+import { ticketsHref } from "@/lib/tickets-layout";
 
 type TicketSummary = Schemas["TicketSummary"];
 
@@ -28,10 +29,10 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
   const crumbs: Crumb[] = e
     ? [
         { label: e.project.name, swatch: e.project.color, href: `/tickets?project=${encodeURIComponent(e.project.key)}` },
-        { label: "Epics", href: `/epics?project=${encodeURIComponent(e.project.key)}` },
+        { label: "Epics", href: ticketsHref("epics", { project: e.project.key }) },
         { label: e.epic.name },
       ]
-    : [{ label: "Epics", href: "/epics" }];
+    : [{ label: "Epics", href: ticketsHref("epics") }];
   return (
     <>
       <TopBar
@@ -51,7 +52,7 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
             <Skeleton className="h-72 rounded-xl" />
           </div>
         ) : !e ? (
-          <EmptyState icon="epics" title="Epic not found" actions={<ButtonLink href="/epics">All epics</ButtonLink>}>
+          <EmptyState icon="epics" title="Epic not found" actions={<ButtonLink href={ticketsHref("epics")}>All epics</ButtonLink>}>
             It may have been deleted, or the link is wrong.
           </EmptyState>
         ) : (
@@ -62,7 +63,7 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
   );
 }
 
-const boardHref = (e: EpicOverview) => `/board?project=${encodeURIComponent(e.project.key)}&epic=${encodeURIComponent(e.epic.id)}`;
+const boardHref = (e: EpicOverview) => ticketsHref("board", { project: e.project.key, epic: e.epic.id });
 
 function EpicDetail({ epic: e }: { epic: EpicOverview }) {
   const [tab, setTab] = useState("overview");

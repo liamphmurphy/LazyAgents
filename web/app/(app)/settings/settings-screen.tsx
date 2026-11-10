@@ -290,7 +290,7 @@ function RunnerSection() {
           <Row label="Per agent">
             <span className="text-[12.5px] text-fg-secondary">
               Each agent also caps its own parallel runs (max concurrency). Change it on the agent’s page.{" "}
-              <Link href="/agents" className="text-accent">Agents →</Link>
+              <Link href="/customization?who=agents" className="text-accent">Agents →</Link>
             </span>
           </Row>
         </dl>

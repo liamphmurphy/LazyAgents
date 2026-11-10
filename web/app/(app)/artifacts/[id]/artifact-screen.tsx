@@ -103,9 +103,9 @@ export function ArtifactScreen({ id }: { id: string }) {
     const missing = "status" in error && error.status === 404;
     return (
       <>
-        <TopBar crumbs={[{ label: "Artifacts", href: "/artifacts" }, { label: "Not found" }]} />
+        <TopBar crumbs={[{ label: "Library", href: "/library?source=projects" }, { label: "Not found" }]} />
         {missing ? (
-          <EmptyState icon="artifacts" title="This artifact doesn't exist" actions={<ButtonLink href="/artifacts" variant="outline">All artifacts</ButtonLink>}>
+          <EmptyState icon="artifacts" title="This artifact doesn't exist" actions={<ButtonLink href="/library?source=projects" variant="outline">Library</ButtonLink>}>
             It may have been removed, or the link is wrong.
           </EmptyState>
         ) : (
@@ -126,11 +126,11 @@ export function ArtifactScreen({ id }: { id: string }) {
                 ...(a.project ? [{ label: a.project.name, swatch: a.project.color }] : []),
                 a.type === "note" && a.path
                   ? { label: "Wiki", href: wikiHref(a.path) }
-                  : { label: "Artifacts", href: "/artifacts" },
+                  : { label: "Library", href: "/library?source=projects" },
                 editing ? { label: artifactTitle(a), href: `/artifacts/${a.id}` } : { label: artifactTitle(a) },
                 ...(editing ? [{ label: "Edit" }] : []),
               ]
-            : [{ label: "Artifacts", href: "/artifacts" }, { label: "…" }]
+            : [{ label: "Library", href: "/library?source=projects" }, { label: "…" }]
         }
         actions={
           a && !editing && (

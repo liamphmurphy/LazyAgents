@@ -1,4 +1,5 @@
 import type { Page, Route } from "@playwright/test";
+import { menuResponse } from "./mock-menu";
 
 /**
  * In-memory stand-in for the agent REST contract (api/openapi.yaml, tag `agents`):
@@ -168,6 +169,10 @@ export async function installAgentApi(page: Page, opts: AgentApiOptions = {}) {
         provenance: { ...(override?.harness ? { harness: "project" } : {}), ...(override?.model ? { model: "project" } : {}) },
       });
     }
+    const menu = menuResponse(method, path);
+    if (menu) return json(menu);
+    // The agent list is in Customization, which counts memories in its header.
+    if (path === "/memories" && method === "GET") return json({ memories: [], total: 0, has_more: false });
     unhandled.push(`${method} ${path}`);
     return json({ code: "not_found", message: `mock: no handler for ${method} ${path}` }, 404);
   }

@@ -96,7 +96,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             inboxCount={data.counts.inbox}
             liveRuns={runner.data?.live ?? 0}
             wikiSuggestions={data.counts.wiki_suggestions}
-            projects={data.projects}
           />
         </Suspense>
       ) : (

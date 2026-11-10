@@ -282,7 +282,7 @@ function Reports({ depth, ctx }: { depth: number; ctx: TreeCtx }) {
         )}
         {total > newest.length && (
           <li>
-            <Link href="/artifacts?type=report" className="flex h-7 items-center text-xs text-accent hover:underline" style={{ paddingLeft: 44 + depth * 12 }}>
+            <Link href="/library?source=projects&type=report" className="flex h-7 items-center text-xs text-accent hover:underline" style={{ paddingLeft: 44 + depth * 12 }}>
               All {total} reports →
             </Link>
           </li>
