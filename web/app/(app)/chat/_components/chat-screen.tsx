@@ -20,7 +20,7 @@ import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop
 import { ChipList } from "./context-chips";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
-import { PersonaCarousel, RepoSelect, personaLook, useOpenPersonaManager } from "./persona";
+import { PersonaCarousel, personaLook, useOpenPersonaManager } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
 
@@ -105,10 +105,9 @@ function Welcome({ disabled }: { disabled: boolean }) {
   const persona = personaLook(fullPersona);
   const ordered = carouselOrder(personas.data?.personas ?? [], defaultId);
   const around = carouselWindow(ordered, ordered.findIndex((p) => p.id === personaId));
-  // A coding persona works in one of its repos: the first unless another is picked.
-  const [repoPicked, setRepoPicked] = useState<string>();
+  // A coding persona works in its first repo; /repo in the chat switches to another.
   const repos = fullPersona?.repos ?? [];
-  const repo = codesInRepos(fullPersona) ? (repoPicked && repos.includes(repoPicked) ? repoPicked : repos[0]) : undefined;
+  const repo = codesInRepos(fullPersona) ? repos[0] : undefined;
   // With several addresses, a coding chat's first message waits for which one its commits use.
   const emails = boot.data?.me.emails ?? [];
   const [commitEmail, setCommitEmail] = useState<string>();
@@ -185,7 +184,6 @@ function Welcome({ disabled }: { disabled: boolean }) {
             <div className="flex items-end gap-2">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <AttachButton onFiles={files.add} disabled={locked} compact />
-                {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                 <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
               </div>

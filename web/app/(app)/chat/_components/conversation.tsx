@@ -59,7 +59,7 @@ import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
-import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
+import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, personaLook, type PersonaLook } from "./persona";
 import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
@@ -496,9 +496,9 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const myEmails = boot.data?.me.emails ?? [];
   const askCommitEmail = !!c && !c.archived && needsCommitEmailPick(myEmails, c.repo_url, c.commit_email);
   const commitPickRequired = fresh && askCommitEmail;
-  function switchPersona(personaId: string, repo?: string) {
-    if (!c || (personaId === c.persona?.id && !repo) || create.isPending || send.isPending || send.isSuccess) return;
-    replaceChat(personaId, repo, text, !!c.temporary);
+  function switchPersona(personaId: string) {
+    if (!c || personaId === c.persona?.id || create.isPending || send.isPending || send.isSuccess) return;
+    replaceChat(personaId, undefined, text, !!c.temporary);
   }
   // A chat is temporary for life, so before the first message switching it is a fresh chat too.
   function switchTemporary(temporary: boolean) {
@@ -1065,9 +1065,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} compact />
                 <AttachButton onFiles={files.add} disabled={locked} compact />
                 {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
-                {fresh && c.persona && c.repo_url && (full?.repos.length ?? 0) > 1 && codesInRepos(full) && (
-                  <RepoSelect repos={full!.repos} value={c.repo_url} onChange={(r) => switchPersona(c.persona!.id, r)} disabled={locked || create.isPending} />
-                )}
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                 {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
                 </div>

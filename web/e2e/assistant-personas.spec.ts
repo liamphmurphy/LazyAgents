@@ -258,14 +258,14 @@ test("abilities: Write code reveals repositories; they validate, save with the c
   expect(mock.unhandled).toEqual([]);
 });
 
-test("a coding persona's new chat shows its repo and work branch in the header", async ({ page }) => {
-  const repos = ["https://github.com/acme/app.git", "git@github.com:acme/api.git"];
+test("a coding persona's new chat works in its first repo and shows it in the header", async ({ page }) => {
+  const repos = ["https://github.com/acme/api.git", "git@github.com:acme/app.git"];
   const mock = await installChatApi(page, {
     personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: true }, repos })],
   });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: /^Repository for this conversation/ }).click();
-  await page.getByRole("menuitemradio", { name: "acme/api" }).click();
+  // No repository picker: /repo in the chat switches to another of the persona's repos.
+  await expect(page.getByRole("button", { name: /^Repository for this conversation/ })).toHaveCount(0);
   await page.getByLabel("Message").fill("fix the build");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[^/]+/);
@@ -273,9 +273,9 @@ test("a coding persona's new chat shows its repo and work branch in the header",
   await expect(chip).toContainText("acme/api");
   // No branch until the persona pushes one for a change.
   await expect(chip).toHaveText("acme/api");
-  await expect(chip).toHaveAttribute("title", repos[1]);
+  await expect(chip).toHaveAttribute("title", repos[0]);
   await expect(page.getByTestId("image-hint")).toHaveCount(0);
-  expect(mock.created[0]).toMatchObject({ persona_id: mock.personas[0].id, repo_url: repos[1] });
+  expect(mock.created[0]).toMatchObject({ persona_id: mock.personas[0].id, repo_url: repos[0] });
   expect(mock.unhandled).toEqual([]);
 });
 
