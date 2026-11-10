@@ -40,14 +40,21 @@ func (s *Service) StartChatPlayground(ctx context.Context, ws, runID uuid.UUID, 
 	if !caps.Code {
 		return store.Playground{}, apperr.Conflict("A playground needs a chat that can run code; tell the person this chat can't.")
 	}
-	if spec.Services == nil && chat.RepoUrl != nil {
+	// What the agent leaves out comes from the repository's test
+	// environment: the services its tests use, and the tools agents installed.
+	if (spec.Services == nil || spec.NixPackages == nil) && chat.RepoUrl != nil {
 		row, err := q.GetTestEnvironment(ctx, store.GetTestEnvironmentParams{WorkspaceID: ws, Repo: testenv.RepoKey(*chat.RepoUrl)})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return store.Playground{}, err
 		}
 		var rec testenv.Recipe
 		if err == nil && json.Unmarshal(row.Recipe, &rec) == nil && rec.Validate() == nil {
-			spec.Services = rec.Services
+			if spec.Services == nil {
+				spec.Services = rec.Services
+			}
+			if spec.NixPackages == nil {
+				spec.NixPackages = rec.NixPackages
+			}
 		}
 	}
 	if err := spec.Validate(); err != nil {
