@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  mostUsedPersona,
   AVATAR_MAX_BYTES,
   CHAT_BG,
   MIN_CONTRAST,
@@ -235,4 +236,12 @@ test("the persona strip shows the most used and keeps an overflow pick visible",
   const picked = splitPersonaStrip(many, "g", 6);
   assert.deepEqual(picked.shown.map((x) => x.id), ["a", "b", "c", "d", "g"]);
   assert.deepEqual(picked.overflow.map((x) => x.id), ["e", "f", "h"]);
+});
+
+test("the most used persona has the most chats, ties go to the most recently used, else the fallback", () => {
+  const p = (id, chat_count, last_used_at) => ({ id, chat_count, ...(last_used_at ? { last_used_at } : {}) });
+  assert.equal(mostUsedPersona([p("maya", 3, "2026-11-09T00:00:00Z"), p("bot", 7, "2026-11-01T00:00:00Z")], "maya"), "bot");
+  assert.equal(mostUsedPersona([p("bot", 4, "2026-11-01T00:00:00Z"), p("coach", 4, "2026-11-05T00:00:00Z"), p("maya", 4)], "maya"), "coach");
+  assert.equal(mostUsedPersona([p("bot", 0), p("coach", 0)], "maya"), "maya");
+  assert.equal(mostUsedPersona(undefined, undefined), undefined);
 });

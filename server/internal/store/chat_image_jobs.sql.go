@@ -358,7 +358,7 @@ func (q *Queries) RunningChatImageJobs(ctx context.Context, runID uuid.UUID) ([]
 }
 
 const runningChatTurn = `-- name: RunningChatTurn :one
-SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage FROM run_turns WHERE run_id = $1 AND status = 'running' ORDER BY seq DESC LIMIT 1
+SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons FROM run_turns WHERE run_id = $1 AND status = 'running' ORDER BY seq DESC LIMIT 1
 `
 
 func (q *Queries) RunningChatTurn(ctx context.Context, runID uuid.UUID) (RunTurn, error) {
@@ -377,6 +377,9 @@ func (q *Queries) RunningChatTurn(ctx context.Context, runID uuid.UUID) (RunTurn
 		&i.ProcessStartedAt,
 		&i.LogKey,
 		&i.Usage,
+		&i.Effort,
+		&i.EffortLevel,
+		&i.EffortReasons,
 	)
 	return i, err
 }

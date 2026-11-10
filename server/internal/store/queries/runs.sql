@@ -48,10 +48,19 @@ WHERE id = $1 RETURNING *;
 
 -- name: StartTurn :one
 -- Managed turns wait for the runner (pending); unmanaged turns are records.
-INSERT INTO run_turns (run_id, seq, trigger, input_message, status)
+-- The turn keeps the run's current effort: a later turn may change the spec's.
+-- effort_level is the level an automatic chat aimed for. A message ('comment')
+-- turn sets its own; a resume or follow-up runs on at the previous turn's.
+INSERT INTO run_turns (run_id, seq, trigger, input_message, status, effort, effort_level)
 VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM run_turns WHERE run_id = $1), $2, $3,
-  CASE WHEN (SELECT mode FROM runs WHERE id = $1) = 'managed' THEN 'pending' ELSE 'done' END)
+  CASE WHEN (SELECT mode FROM runs WHERE id = $1) = 'managed' THEN 'pending' ELSE 'done' END,
+  (SELECT resolved_spec->'harness_options'->>'effort' FROM runs WHERE id = $1),
+  CASE WHEN $2 = 'comment' THEN sqlc.narg(effort_level)::text
+    ELSE coalesce(sqlc.narg(effort_level)::text, (SELECT effort_level FROM run_turns WHERE run_id = $1 ORDER BY seq DESC LIMIT 1)) END)
 RETURNING *;
+
+-- name: SetTurnEffortReasons :exec
+UPDATE run_turns SET effort_reasons = sqlc.arg(reasons)::text[] WHERE id = $1;
 
 -- name: EndOpenTurn :exec
 UPDATE run_turns SET ended_at = now(), exit_code = $2 WHERE run_id = $1 AND ended_at IS NULL;

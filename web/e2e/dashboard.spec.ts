@@ -135,7 +135,7 @@ const panel = (page: Page, name: string) => page.getByRole("region", { name });
 
 test("panels show live work, gates and delivery health, each linking to its full view", async ({ page }) => {
   await installDashboardApi(page);
-  await page.goto("/");
+  await page.goto("/dashboard");
 
   await expect(page.getByText("6 items need you · 3 live runs · 2 active chats")).toBeVisible();
 
@@ -193,7 +193,7 @@ test("panels show live work, gates and delivery health, each linking to its full
 
 test("panels refresh from live events without a reload", async ({ page }) => {
   const api = await installDashboardApi(page);
-  await page.goto("/");
+  await page.goto("/dashboard");
   const runs = panel(page, "Live runs");
   await expect(runs).toContainText("$0.84 so far");
 
@@ -205,7 +205,7 @@ test("panels refresh from live events without a reload", async ({ page }) => {
 
 test("a failed panel shows its error and recovers on retry", async ({ page }) => {
   const api = await installDashboardApi(page, { runsFail: true });
-  await page.goto("/");
+  await page.goto("/dashboard");
   const runs = panel(page, "Live runs");
   await expect(runs.getByRole("alert")).toContainText("Couldn’t load: runs unavailable", { timeout: 15_000 });
   // The other panels are unaffected.
@@ -219,7 +219,7 @@ test("a failed panel shows its error and recovers on retry", async ({ page }) =>
 
 test("a new workspace sees the checklist and a health banner naming missing secrets; steps tick without a reload", async ({ page }) => {
   await installDashboardApi(page, { runner: false, harness: false, repo: false, plans: 0 });
-  await page.goto("/");
+  await page.goto("/dashboard");
   const banner = page.getByRole("status", { name: /Agents can’t run/ });
   await expect(banner).toContainText("No harness is available: add harness:anthropic or harness:openai.");
   await expect(banner.getByRole("link", { name: "Fix in Provider credentials →" })).toHaveAttribute("href", "/settings#secrets");
@@ -249,7 +249,7 @@ test("a new workspace sees the checklist and a health banner naming missing secr
 
 test("the runner banner shows when a harness works but no runner is online", async ({ page }) => {
   await installDashboardApi(page, { runner: false });
-  await page.goto("/");
+  await page.goto("/dashboard");
   const banner = page.getByRole("status", { name: "No runner online" });
   await expect(banner).toContainText("Dispatched work stays queued.");
   await expect(banner.getByRole("link", { name: "Runner backends →" })).toHaveAttribute("href", "/settings#runners");
@@ -257,7 +257,7 @@ test("the runner banner shows when a harness works but no runner is online", asy
 
 test("a complete checklist can be dismissed and doesn't come back", async ({ page }) => {
   await installDashboardApi(page);
-  await page.goto("/");
+  await page.goto("/dashboard");
   const done = page.getByRole("region", { name: "Setup complete" });
   await done.getByRole("button", { name: "Dismiss" }).click();
   await expect(done).toHaveCount(0);

@@ -1003,6 +1003,9 @@ type RunTurn struct {
 	ProcessStartedAt *time.Time
 	LogKey           *string
 	Usage            json.RawMessage
+	Effort           *string
+	EffortLevel      *string
+	EffortReasons    []string
 }
 
 type Runner struct {

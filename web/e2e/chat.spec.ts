@@ -761,3 +761,16 @@ test("each reply shows its tokens and cost on hover or focus", async ({ page }) 
   await reply.getByTestId("model-tag").hover();
   await expect(tooltip).toContainText("Cost$0.042");
 });
+
+test("a reply shows the effort Vesper picked for it, and why", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "effort: try again");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo: effort: try again");
+  await page.getByRole("tab", { name: "Activity" }).click();
+  const tag = page.getByTestId("activity-turn").getByTestId("model-tag");
+  await expect(tag).toHaveText("Claude Code · Opus 5.5 · High (auto)");
+  await tag.focus();
+  await expect(page.getByTestId("usage-tooltip")).toContainText("EffortHighautomatic · aimed for extra high · raised after a retry or edit");
+});

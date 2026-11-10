@@ -7659,6 +7659,15 @@ components:
         uncached_input_tokens: { type: integer, format: int64, description: Reported input not served from cache }
         unreported_input_tokens: { type: integer, format: int64, description: Input whose cache breakdown was not reported }
         cost_usd: { type: number }
+        effort: { $ref: "#/components/schemas/ChatEffort" }
+        effort_level:
+          type: string
+          enum: [low, medium, high, xhigh]
+          description: "Set when Vesper picked the effort (the chat's effort is automatic): the level the message called for. effort is the highest the model offers at or below it."
+        effort_reasons:
+          type: array
+          items: { type: string, enum: [confirmation, effort_mismatch] }
+          description: "Rules that raised effort_level above the message's own: confirmation (a go-ahead takes the weight of what it approves), effort_mismatch (a retry or edit steps it up)"
         created_at: { type: string, format: date-time }
     ChatCodeChange:
       type: object

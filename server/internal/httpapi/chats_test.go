@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"maps"
@@ -503,6 +504,74 @@ func TestChatEffort(t *testing.T) {
 	res = e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "model": "gpt-5-mini"}, http.StatusAccepted)
 	if _, ok := res["chat"].(map[string]any)["effort"]; ok {
 		t.Fatalf("unoffered effort kept %v", res["chat"])
+	}
+}
+
+// Each reply shows the effort its turn ran at, even after a later turn changes
+// the run's, and an automatic chat's replies say why Vesper picked it.
+func TestChatRepliesShowTheirTurnsEffort(t *testing.T) {
+	e := newChatEnv(t)
+	id := e.newChat(map[string]any{"harness": "claude-code", "model": "opus-5.5"})["id"].(string)
+	// reply stands in for the runner: it ends the latest turn with a reply.
+	reply := func() {
+		t.Helper()
+		var runID, turnID uuid.UUID
+		if err := e.pool.QueryRow(t.Context(), `UPDATE run_turns SET status = 'done', ended_at = now() WHERE id = (
+			SELECT t.id FROM run_turns t JOIN chat_sessions c ON c.current_run_id = t.run_id WHERE c.id = $1 ORDER BY t.seq DESC LIMIT 1)
+			RETURNING run_id, id`, id).Scan(&runID, &turnID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.q.AppendChatMessage(t.Context(), store.AppendChatMessageParams{SessionID: uuid.MustParse(id), Role: "assistant", BodyMd: "ok",
+			RunID: &runID, RunTurnID: &turnID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	replies := func() []map[string]any {
+		t.Helper()
+		var out []map[string]any
+		for _, m := range e.want("GET", "/chats/"+id+"/messages", nil, 200)["messages"].([]any) {
+			if m := m.(map[string]any); m["role"] == "assistant" {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
+
+	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi"}, http.StatusAccepted)
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	reply()
+	// A retry steps the level up from the message's own.
+	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "that's wrong"}, http.StatusAccepted)
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	reply()
+	// The runner's image follow-up runs on at the turn's effort and level.
+	var runID uuid.UUID
+	if err := e.pool.QueryRow(t.Context(), `SELECT current_run_id FROM chat_sessions WHERE id = $1`, id).Scan(&runID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.q.StartTurn(t.Context(), store.StartTurnParams{RunID: runID, Trigger: runs.TriggerImageFollowup}); err != nil {
+		t.Fatal(err)
+	}
+	reply()
+	// A chosen effort has no level: the person picked it.
+	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi", "effort": "max"}, http.StatusAccepted)
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	reply()
+
+	got := replies()
+	if len(got) != 4 {
+		t.Fatalf("replies %v", got)
+	}
+	for i, want := range []struct{ effort, level, reasons any }{
+		{"low", "low", nil},
+		{"medium", "medium", []any{"effort_mismatch"}},
+		{"medium", "medium", nil},
+		{"max", nil, nil},
+	} {
+		m := got[i]
+		if m["effort"] != want.effort || m["effort_level"] != want.level || fmt.Sprint(m["effort_reasons"]) != fmt.Sprint(want.reasons) {
+			t.Errorf("reply %d: effort %v level %v reasons %v, want %v %v %v", i, m["effort"], m["effort_level"], m["effort_reasons"], want.effort, want.level, want.reasons)
+		}
 	}
 }
 
