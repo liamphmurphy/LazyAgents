@@ -61,14 +61,14 @@ test("usage lines", () => {
   const codex = harness("codex", { limited_until: "2026-11-09T21:20:00" });
   assert.match(usageSub(claude, [claude, codex], now), /^5h · resets 9:20\s?PM · weekly 61%$/);
   assert.match(usageSub(codex, [claude, codex], now), /^Limited until 9:20\s?PM · falls back to Claude$/);
-  assert.equal(usageSub(harness("codex"), [], now), "Not read yet");
-  assert.equal(usageSub(harness("codex", { usage_checked_at: "2026-11-09T17:00:00" }), [], now), "No plan limits to show (API key or signed out)");
+  assert.equal(usageSub(harness("codex"), [], now), "Usage not checked yet");
+  assert.equal(usageSub(harness("codex", { usage_checked_at: "2026-11-09T17:00:00" }), [], now), "Usage unavailable · check Usage settings");
   assert.match(resetLabel("2026-11-12T08:00:00", now), /^Thu 8:00\s?AM$/);
   assert.equal(checkedAgo([claude, codex], now.getTime()), "checked 40s ago");
   assert.equal(checkedAgo([codex], now.getTime()), "not checked yet");
   // A check in flight: first readings say so, later ones keep their figures.
-  assert.equal(usageSub(harness("codex", { usage_checking: true }), [], now), "Checking…");
-  assert.equal(usageSub(harness("codex", { usage_checking: true, usage_checked_at: "2026-11-09T17:00:00" }), [], now), "No plan limits to show (API key or signed out)");
+  assert.equal(usageSub(harness("codex", { usage_checking: true }), [], now), "Checking usage…");
+  assert.equal(usageSub(harness("codex", { usage_checking: true, usage_checked_at: "2026-11-09T17:00:00" }), [], now), "Checking usage…");
   assert.match(usageSub({ ...claude, usage_checking: true }, [claude], now), /^5h · resets/);
   assert.equal(checkedAgo([claude, { ...codex, usage_checking: true }], now.getTime()), "checking…");
 });
