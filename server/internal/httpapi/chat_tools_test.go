@@ -128,7 +128,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_workflows":   map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
-	needArgs := []string{"submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
+	needArgs := []string{"submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module", "finance_summary", "finance_query", "finance_recurring", "finance_categorize"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]
@@ -139,6 +139,8 @@ func TestChatRunToolAuthorization(t *testing.T) {
 			noCapability := tool.Name == "propose_workflow_edit" && strings.Contains(fmt.Sprint(out["message"]), "can't create workflows")
 			noCapability = noCapability || tool.Name == "propose_connector"
 			noCapability = noCapability || (tool.Name == "propose_secret" && strings.Contains(fmt.Sprint(out["message"]), "can't propose secrets"))
+			// Finance tools are allowed in chats but answer only in the person's Finance space.
+			noCapability = noCapability || (strings.HasPrefix(tool.Name, "finance_") && strings.Contains(fmt.Sprint(out["message"]), "only works in the person's Finance space"))
 			if code == 409 && !noCapability {
 				t.Errorf("%s: %d %v", tool.Name, code, out)
 			}
