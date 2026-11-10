@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -53,6 +55,15 @@ func toChatTicketRun(r store.ListChatTicketRunsRow) api.ChatTicketRun {
 	}
 	if r.CurrentStep != "" {
 		out.CurrentStep = &r.CurrentStep
+	}
+	if r.ActivityTool != "" {
+		out.Activity = &api.ChatTicketRunActivity{Tool: r.ActivityTool}
+		if r.ActivityCommand != "" {
+			out.Activity.Command = &r.ActivityCommand
+		}
+	}
+	if id, err := uuid.Parse(r.ApprovalID); err == nil {
+		out.Approval = &api.ChatTicketRunApproval{Id: id, Scope: r.ApprovalScope, Action: r.ApprovalAction, Detail: r.ApprovalDetail, Risk: r.ApprovalRisk}
 	}
 	return out
 }

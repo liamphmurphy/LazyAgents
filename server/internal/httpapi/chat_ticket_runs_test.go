@@ -68,3 +68,46 @@ func TestStartChatTicketRun(t *testing.T) {
 	}
 	e.want("GET", "/chats/"+uuid.NewString()+"/runs", nil, http.StatusNotFound)
 }
+
+// The tray gets what the agent is doing (the tool and, for a shell, only its
+// capped command) and any approval the run waits on.
+func TestChatTicketRunTrayFields(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := context.Background()
+	ws := e.me.WorkspaceID
+	id := e.newChat(nil)["id"].(string)
+	atlas, err := e.q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "atlas"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket, err := (&tracker.Service{Pool: e.pool}).Create(ctx, ws, tracker.UserActor(e.me.ID), tracker.NewTicket{ProjectKey: "MOB", Title: "Migrate", AssigneeAgentID: &atlas.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := e.want("POST", "/chats/"+id+"/runs", map[string]any{"ticket": ticket.Key}, http.StatusCreated)["run_id"].(string)
+	tray := func() map[string]any {
+		t.Helper()
+		return e.want("GET", "/chats/"+id+"/runs", nil, http.StatusOK)["runs"].([]any)[0].(map[string]any)
+	}
+	if r := tray(); r["activity"] != nil || r["approval"] != nil {
+		t.Fatalf("fresh run = %v", r)
+	}
+	long := strings.Repeat("x", 500)
+	for _, ev := range []string{`{"tool":"Write","input":{"file_path":"secret.go","content":"` + long + `"}}`, `{"tool":"Bash","input":{"command":"go test ./... ` + long + `"}}`} {
+		if _, err := e.pool.Exec(ctx, `INSERT INTO run_events (run_id, type, payload) VALUES ($1, 'tool_call', $2)`, runID, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	act := tray()["activity"].(map[string]any)
+	if act["tool"] != "Bash" || !strings.HasPrefix(act["command"].(string), "go test ./...") || len(act["command"].(string)) != 300 {
+		t.Fatalf("activity = %v", act)
+	}
+	if _, err := e.pool.Exec(ctx, `INSERT INTO approval_requests (workspace_id, run_id, ticket_id, agent_id, scope, action_summary, action_detail, risk_summary)
+		VALUES ($1, $2, $3, $4, 'db:migrate', 'Run migrations on staging', '{"env":"staging"}', 'Reversible')`, ws, runID, ticket.ID, atlas.ID); err != nil {
+		t.Fatal(err)
+	}
+	ap := tray()["approval"].(map[string]any)
+	if ap["scope"] != "db:migrate" || ap["action"] != "Run migrations on staging" || !strings.Contains(ap["detail"].(string), "staging") || ap["risk"] != "Reversible" {
+		t.Fatalf("approval = %v", ap)
+	}
+}

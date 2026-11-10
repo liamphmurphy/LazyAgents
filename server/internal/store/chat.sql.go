@@ -1476,30 +1476,45 @@ SELECT r.id AS run_id, ctr.message_id, r.state, r.wait_reason, r.started_at, r.e
   t.key AS ticket_key, t.title AS ticket_title, t.pr_url, a.handle AS agent_handle,
   (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id)::int AS steps_total,
   (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state = 'done')::int AS steps_done,
-  COALESCE((SELECT ps.text FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state <> 'done' ORDER BY ps.position LIMIT 1), '')::text AS current_step
+  COALESCE((SELECT ps.text FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state <> 'done' ORDER BY ps.position LIMIT 1), '')::text AS current_step,
+  -- What the agent is doing: its latest tool call, with only the shell command
+  -- (capped), which is all the tray's activity label reads.
+  coalesce(tc.tool, '')::text AS activity_tool, coalesce(tc.command, '')::text AS activity_command,
+  coalesce(ap.id::text, '')::text AS approval_id, coalesce(ap.scope, '')::text AS approval_scope, coalesce(ap.action_summary, '')::text AS approval_action,
+  coalesce(ap.risk_summary, '')::text AS approval_risk, coalesce(left(ap.action_detail::text, 2000), '')::text AS approval_detail
 FROM chat_ticket_runs ctr
 JOIN runs r ON r.id = ctr.run_id
 JOIN tickets t ON t.id = r.ticket_id
 JOIN agents a ON a.id = r.agent_id
+LEFT JOIN LATERAL (SELECT e.payload->>'tool' AS tool, left(e.payload->'input'->>'command', 300) AS command
+  FROM run_events e WHERE e.run_id = r.id AND e.type = 'tool_call' ORDER BY e.seq DESC LIMIT 1) tc ON true
+LEFT JOIN LATERAL (SELECT id, workspace_id, run_id, ticket_id, agent_id, scope, action_summary, action_detail, risk_summary, state, decided_by_user_id, decided_at, decision_note, executed_at, result, created_at FROM approval_requests x WHERE x.run_id = r.id AND x.state = 'pending' ORDER BY x.created_at DESC LIMIT 1) ap ON true
 WHERE ctr.chat_id = $1
 ORDER BY ctr.created_at, r.id
 `
 
 type ListChatTicketRunsRow struct {
-	RunID         uuid.UUID
-	MessageID     *uuid.UUID
-	State         string
-	WaitReason    *string
-	StartedAt     time.Time
-	EndedAt       *time.Time
-	CostUsdMicros int64
-	TicketKey     string
-	TicketTitle   string
-	PrUrl         *string
-	AgentHandle   string
-	StepsTotal    int32
-	StepsDone     int32
-	CurrentStep   string
+	RunID           uuid.UUID
+	MessageID       *uuid.UUID
+	State           string
+	WaitReason      *string
+	StartedAt       time.Time
+	EndedAt         *time.Time
+	CostUsdMicros   int64
+	TicketKey       string
+	TicketTitle     string
+	PrUrl           *string
+	AgentHandle     string
+	StepsTotal      int32
+	StepsDone       int32
+	CurrentStep     string
+	ActivityTool    string
+	ActivityCommand string
+	ApprovalID      string
+	ApprovalScope   string
+	ApprovalAction  string
+	ApprovalRisk    string
+	ApprovalDetail  string
 }
 
 // The ticket runs a chat started, oldest first, with what the tray shows.
@@ -1527,6 +1542,13 @@ func (q *Queries) ListChatTicketRuns(ctx context.Context, chatID uuid.UUID) ([]L
 			&i.StepsTotal,
 			&i.StepsDone,
 			&i.CurrentStep,
+			&i.ActivityTool,
+			&i.ActivityCommand,
+			&i.ApprovalID,
+			&i.ApprovalScope,
+			&i.ApprovalAction,
+			&i.ApprovalRisk,
+			&i.ApprovalDetail,
 		); err != nil {
 			return nil, err
 		}
