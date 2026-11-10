@@ -329,6 +329,8 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		nctx, cancel := context.WithTimeout(ctx, time.Minute)
 		if err := d.EnsureNixDaemon(nctx); err != nil {
 			log.Warn("runner: turns won't have Nix", "err", err)
+		} else if st, err := d.CheckNixDaemon(nctx); err != nil {
+			log.Warn("runner: turns won't have Nix", "err", err, "probe", st.Probe, "daemon_log", st.DaemonLog)
 		}
 		cancel()
 		backend = d
