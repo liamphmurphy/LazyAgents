@@ -139,8 +139,8 @@ func TestChatRunToolAuthorization(t *testing.T) {
 			noCapability := tool.Name == "propose_workflow_edit" && strings.Contains(fmt.Sprint(out["message"]), "can't create workflows")
 			noCapability = noCapability || tool.Name == "propose_connector"
 			noCapability = noCapability || (tool.Name == "propose_secret" && strings.Contains(fmt.Sprint(out["message"]), "can't propose secrets"))
-			// Finance tools are allowed in chats but answer only in the person's Finance space.
-			noCapability = noCapability || (strings.HasPrefix(tool.Name, "finance_") && strings.Contains(fmt.Sprint(out["message"]), "only works in the person's Finance space"))
+			// Finance tools are allowed in chats but answer only in the Finance app's Ask chat.
+			noCapability = noCapability || (strings.HasPrefix(tool.Name, "finance_") && strings.Contains(fmt.Sprint(out["message"]), "only works in the Finance app's Ask chat"))
 			if code == 409 && !noCapability {
 				t.Errorf("%s: %d %v", tool.Name, code, out)
 			}

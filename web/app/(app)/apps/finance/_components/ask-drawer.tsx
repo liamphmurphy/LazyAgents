@@ -88,7 +88,7 @@ export function AskDrawer({ open, onOpenChange, ask }: { open: boolean; onOpenCh
           )}
           <p className="flex items-center gap-[6px] border-t border-border-subtle px-4 py-2 text-[11px] text-fg-tertiary">
             <Icon name="lock" size={12} />
-            The finance tools only answer in this space. Other chats can&rsquo;t read your transactions.
+            The finance tools only answer here. Other chats can&rsquo;t read your transactions.
           </p>
         </Dialog.Content>
       </Dialog.Portal>

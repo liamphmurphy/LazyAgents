@@ -20,7 +20,7 @@ func TestFinanceToolsOnlyInFinanceSpace(t *testing.T) {
 	}
 
 	elsewhere := e.canvasToken(uuid.MustParse(e.newChat(nil)["id"].(string)))
-	if code, out := e.tool(elsewhere, "finance_summary", map[string]any{}); code != http.StatusConflict || !strings.Contains(out["message"].(string), "Finance space") {
+	if code, out := e.tool(elsewhere, "finance_summary", map[string]any{}); code != http.StatusConflict || !strings.Contains(out["message"].(string), "Finance app's Ask chat") {
 		t.Fatalf("outside the space = %d %v", code, out)
 	}
 	other := e.want("POST", "/chat-spaces", map[string]any{"name": "Money talk"}, http.StatusCreated)["id"].(string)
