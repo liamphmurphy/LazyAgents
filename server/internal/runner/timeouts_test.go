@@ -91,6 +91,11 @@ func TestDockerCleanupIsScopedToTheStack(t *testing.T) {
 	if f.count("DELETE /containers/c1") != 1 {
 		t.Fatal("this stack's leftover container was not removed")
 	}
+	// With its anonymous volumes: a playground's or a turn service's
+	// database data would otherwise be left behind by every restart.
+	if q := f.deletes["/containers/c1"]; !strings.Contains(q, "v=1") {
+		t.Fatalf("leftover container removed with %q, want v=1", q)
+	}
 	// What this runner starts carries the label that cleanup selects on.
 	if _, err := d.Start(context.Background(), "run-1", ExecSpec{Name: "t", Argv: []string{"true"}}); err != nil {
 		t.Fatal(err)

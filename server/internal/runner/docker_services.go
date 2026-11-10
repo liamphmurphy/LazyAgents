@@ -42,7 +42,9 @@ func (d *Docker) StartServices(ctx context.Context, runID, key string, services 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		for _, id := range started {
-			_, _ = d.do(ctx, "DELETE", "/containers/"+id+"?force=1", nil, "", nil)
+			// v=1: the image's anonymous data volume (postgres declares
+			// one) would otherwise outlive the turn, one per turn.
+			_, _ = d.do(ctx, "DELETE", "/containers/"+id+"?force=1&v=1", nil, "", nil)
 		}
 		_, _ = d.do(ctx, "DELETE", "/networks/"+url.PathEscape(network), nil, "", nil)
 	}
@@ -131,7 +133,7 @@ func (d *Docker) startService(ctx context.Context, runID, key, network string, s
 	}
 	err := create()
 	if isStatus(err, 409) { // a stale container with this name
-		_, _ = d.do(ctx, "DELETE", "/containers/"+name+"?force=1", nil, "", nil)
+		_, _ = d.do(ctx, "DELETE", "/containers/"+name+"?force=1&v=1", nil, "", nil)
 		err = create()
 	}
 	if isStatus(err, 404) { // the image isn't here yet

@@ -325,7 +325,9 @@ func (d *Docker) Cleanup(ctx context.Context) error {
 		return err
 	}
 	for _, c := range list {
-		_, _ = d.do(ctx, "DELETE", "/containers/"+c.ID+"?force=1", nil, "", nil)
+		// v=1: a service's anonymous data volume (postgres declares one) goes
+		// with it, as does a playground's.
+		_, _ = d.do(ctx, "DELETE", "/containers/"+c.ID+"?force=1&v=1", nil, "", nil)
 	}
 	// Then the service networks those turns had (their containers are gone).
 	var nets []struct{ ID string }
