@@ -186,6 +186,9 @@ export function SetupChecklist({ className }: { className?: string }) {
 
 /** Why nothing can start right now, with a link to fix it. Shown next to New chat / Start chat. */
 export function NoHarnessNote({ health }: { health: HarnessHealth }) {
+  if (health.checking) {
+    return <p role="status" className="text-xs text-fg-secondary">Checking available models… This updates automatically.</p>;
+  }
   return (
     <p role="status" className="text-xs text-pill-human-fg">
       No harness is available

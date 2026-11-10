@@ -519,6 +519,71 @@ test("an unavailable harness shows its reason and can't be selected", async ({ p
   await expect(picker(page)).toHaveAttribute("aria-label", /Claude Code/);
 });
 
+for (const codexAvailable of [true, false]) {
+  test(`new chat refreshes pending Claude discovery (${codexAvailable ? "Codex available" : "both pending"})`, async ({ page }) => {
+    await installChatApi(page);
+    let ready = false;
+    let requests = 0;
+    await page.route("**/api/v1/chat-models", (route) => {
+      requests++;
+      return route.fulfill({ json: catalog(true).map((g) =>
+        !ready && (g.harness === "claude-code" || !codexAvailable)
+          ? { ...g, available: false, checking: true, models: [], unavailable_reason: "Still checking models." }
+          : g,
+      ) });
+    });
+    await page.goto("/chat?new");
+    await expect(page.getByRole("heading", { name: "Assistant", exact: true })).toBeVisible();
+    if (codexAvailable) {
+      await picker(page).click();
+      await expect(page.getByRole("menu")).toContainText("Checking available models…");
+      await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).toBeVisible();
+      await expect(page.getByRole("menuitem", { name: /Claude Code Opus/ })).toHaveCount(0);
+    } else {
+      await expect(page.getByRole("status").filter({ hasText: "Checking available models… This updates automatically." })).toBeVisible();
+      await expect(page.getByRole("status", { name: /Agents can’t run/ })).toHaveCount(0);
+      await expect(composer(page)).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
+    }
+    ready = true;
+    // Discovery completes without navigation, focus changes, or a reload.
+    if (!codexAvailable) {
+      await expect(picker(page)).toBeEnabled({ timeout: 7_000 });
+      await picker(page).click();
+    }
+    await expect(page.getByRole("menuitem", { name: /Claude Code Opus 5.5/ })).toBeVisible({ timeout: 7_000 });
+    await expect(page.getByRole("menu")).not.toContainText("Checking available models…");
+    await page.keyboard.press("Escape");
+    await expect(picker(page)).toHaveAttribute("aria-label", /Claude Code, Opus 5.5/);
+    // Once resolved, stop polling instead of rediscovering forever.
+    const resolvedRequests = requests;
+    await page.waitForTimeout(2_500);
+    expect(requests).toBe(resolvedRequests);
+  });
+}
+
+test("pending discovery stops polling and shows the reason if the runner fails", async ({ page }) => {
+  await installChatApi(page);
+  let failed = false;
+  let requests = 0;
+  await page.route("**/api/v1/chat-models", (route) => {
+    requests++;
+    return route.fulfill({ json: catalog(true).map((g) => g.harness === "claude-code"
+      ? { ...g, available: false, checking: !failed, models: [], unavailable_reason: failed ? "Sign in again in Settings." : "Still checking models." }
+      : g,
+    ) });
+  });
+  await page.goto("/chat?new");
+  await picker(page).click();
+  await expect(page.getByRole("menu")).toContainText("Checking available models…");
+  failed = true;
+  await expect(page.getByRole("menu")).toContainText("Sign in again in Settings.", { timeout: 7_000 });
+  await expect(page.getByRole("menu")).not.toContainText("Checking available models…");
+  const resolvedRequests = requests;
+  await page.waitForTimeout(2_500);
+  expect(requests).toBe(resolvedRequests);
+});
+
 test("with no harness available, chat says why before anything is sent", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");

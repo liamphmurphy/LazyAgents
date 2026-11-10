@@ -70,7 +70,7 @@ export function ModelPicker({
               <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
               {!g.available && (
                 <div role="status" className="px-2 py-1 text-xs text-fg-tertiary">
-                  {g.unavailable_reason ?? "Model discovery unavailable"}
+                  {g.checking ? "Checking available models…" : g.unavailable_reason ?? "Model discovery unavailable"}
                 </div>
               )}
               {g.models.map((m) => {
@@ -152,7 +152,7 @@ export function ModelEffortPicker({
               <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
               {!g.available && (
                 <div role="status" className="px-2 py-1 text-xs text-fg-tertiary">
-                  {g.unavailable_reason ?? "Model discovery unavailable"}
+                  {g.checking ? "Checking available models…" : g.unavailable_reason ?? "Model discovery unavailable"}
                 </div>
               )}
               {g.models.map((m) => {

@@ -219,14 +219,14 @@ function Welcome({ disabled, onNew }: { disabled: boolean; onNew: () => void }) 
           {unavailable && (
             <Banner
               tone="human"
-              title={`${unavailable.label} is unavailable`}
+              title={unavailable.checking ? `Checking ${unavailable.label} models…` : `${unavailable.label} is unavailable`}
               actions={
-                <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
+                !unavailable.checking && <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
                   Add the key →
                 </Link>
               }
             >
-              {unavailableReason(unavailable)}. Pick another model or add the key.
+              {unavailable.checking ? "This updates automatically when the model list is ready." : `${unavailableReason(unavailable)}. Pick another model or add the key.`}
             </Banner>
           )}
           {fullPersona?.capabilities.code && !repos.length && (

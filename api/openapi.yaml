@@ -7877,6 +7877,7 @@ components:
         harness: { $ref: "#/components/schemas/Harness" }
         label: { type: string }
         available: { type: boolean }
+        checking: { type: boolean, description: "True while initial model discovery is pending; clients should poll until it finishes" }
         unavailable_reason: { type: string, description: "e.g. no harness:openai secret" }
         models: { type: array, items: { $ref: "#/components/schemas/ChatModel" } }
     PersonaTone:

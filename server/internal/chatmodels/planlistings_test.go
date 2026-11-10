@@ -199,6 +199,73 @@ func TestQueuedListingsNewLoginInvalidatesCache(t *testing.T) {
 	}
 }
 
+func TestQueuedListingsRefreshFailureKeepsModelsDuringBackoff(t *testing.T) {
+	for _, newLogin := range []bool{false, true} {
+		name := "expired listing"
+		if newLogin {
+			name = "new login"
+		}
+		t.Run(name, func(t *testing.T) {
+			e := newListingEnv(t)
+			cc := agentdef.HarnessClaudeCode
+			e.setSecret(t, KeySecret[cc], testOAuth)
+			if err := e.q.RequestModelListing(e.ctx, store.RequestModelListingParams{WorkspaceID: e.ws, Harness: cc, LoginVersion: e.version(t)}); err != nil {
+				t.Fatal(err)
+			}
+			e.runner(t, []Model{{ID: "opus", Default: true}}, "")
+			l := e.quick()
+			if newLogin {
+				e.setSecret(t, KeySecret[cc], testOAuth+"2")
+			} else {
+				l.TTL = time.Nanosecond
+			}
+			if _, err := l.Models(e.ctx, e.ws, cc, false); err != nil {
+				t.Fatal(err)
+			}
+			e.runner(t, nil, "Temporary discovery failure.")
+			before := e.row(t)
+			// Repeated reads must keep models selectable without queuing another
+			// request during the failure backoff.
+			cat := Catalog{RequireKey: true, Secrets: e.secs, PlanModels: l.Models}
+			for range 2 {
+				list, err := cat.List(e.ctx, e.q, e.ws)
+				if err != nil || !list[0].Available || list[0].Checking || len(list[0].Models) != 1 || list[0].Models[0].ID != "opus" {
+					t.Fatalf("catalog %+v err %v", list, err)
+				}
+			}
+			if after := e.row(t); after.Status != "failed" || !after.RequestedAt.Equal(before.RequestedAt) {
+				t.Fatalf("refresh failure retried during backoff: %+v", after)
+			}
+			// Once backoff expires, retain the old models until the retry lands.
+			l.FailBackoff = time.Nanosecond
+			if _, err := l.Models(e.ctx, e.ws, cc, false); err != nil {
+				t.Fatal(err)
+			}
+			e.runner(t, []Model{{ID: "opus-new", Default: true}}, "")
+			got, err := l.Models(e.ctx, e.ws, cc, false)
+			if err != nil || len(got) != 1 || got[0].ID != "opus-new" {
+				t.Fatalf("recovered models %+v err %v", got, err)
+			}
+		})
+	}
+}
+
+func TestCatalogPendingDiscoveryIsCheckingUntilRunnerFinishes(t *testing.T) {
+	e := newListingEnv(t)
+	cc := agentdef.HarnessClaudeCode
+	e.setSecret(t, KeySecret[cc], testOAuth)
+	cat := Catalog{RequireKey: true, Secrets: e.secs, PlanModels: e.quick().Models}
+	list, err := cat.List(e.ctx, e.q, e.ws)
+	if err != nil || list[0].Available || !list[0].Checking || len(list[0].Models) != 0 || list[1].Checking {
+		t.Fatalf("pending catalog %+v err %v", list, err)
+	}
+	e.runner(t, []Model{{ID: "opus", Default: true}}, "")
+	list, err = cat.List(e.ctx, e.q, e.ws)
+	if err != nil || !list[0].Available || list[0].Checking || len(list[0].Models) != 1 {
+		t.Fatalf("finished catalog %+v err %v", list, err)
+	}
+}
+
 func TestQueuedListingsTimeoutWithoutModels(t *testing.T) {
 	e := newListingEnv(t)
 	e.setSecret(t, KeySecret[agentdef.HarnessClaudeCode], testOAuth)

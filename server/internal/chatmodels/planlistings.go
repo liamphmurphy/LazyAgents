@@ -82,7 +82,7 @@ func (l *QueuedListings) Models(ctx context.Context, ws uuid.UUID, harness strin
 			return models, nil
 		}
 		if row.Status == "failed" && row.LoginVersion == sv && row.FinishedAt != nil && now().Sub(*row.FinishedAt) < backoff {
-			return nil, failure(row.Error)
+			return listingFailure(row)
 		}
 	}
 	inFlight := has && row.LoginVersion == sv && (row.Status == "pending" || row.Status == "running")
@@ -121,13 +121,22 @@ func (l *QueuedListings) Models(ctx context.Context, ws uuid.UUID, harness strin
 			case r.Status == "done" && r.ModelsVersion != nil && *r.ModelsVersion == sv && len(listedModels(r)) > 0:
 				return listedModels(r), nil
 			case r.Status == "failed" && r.LoginVersion == sv:
-				return nil, failure(r.Error)
+				return listingFailure(r)
 			}
 		}
 		if expired {
 			return fallback(row, has)
 		}
 	}
+}
+
+// A refresh failure must not hide the last successful listing. Keep the
+// failure/backoff on the row so serving cached models doesn't retry in a loop.
+func listingFailure(row store.HarnessModelListing) ([]Model, error) {
+	if models := listedModels(row); len(models) > 0 {
+		return models, nil
+	}
+	return nil, failure(row.Error)
 }
 
 func failure(msg string) error {

@@ -24,6 +24,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/realtime"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
+	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/seed"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/testdb"
@@ -187,6 +188,54 @@ func TestChatModelsCatalog(t *testing.T) {
 	}
 	if m := list[0].Models; len(m[0].Efforts) != len(agentdef.Efforts) || m[2].Efforts == nil || len(m[2].Efforts) != 0 {
 		t.Fatalf("efforts %+v", m)
+	}
+}
+
+func TestChatModelsReportsPendingDiscoveryAndRunnerCompletion(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := context.Background()
+	e.runs.RequireHarnessKey = true
+	e.runs.ModelDiscovery = nil
+	e.runs.Secrets = &secrets.Service{Q: e.q, Box: testBox(t)}
+	l := &chatmodels.QueuedListings{Pool: e.pool, Wait: time.Millisecond, Poll: time.Millisecond}
+	e.runs.PlanModels = l.Models
+	if _, err := e.runs.Secrets.Set(ctx, e.me.WorkspaceID, e.me.ID, secrets.SetInput{Name: "harness:anthropic", Value: "sk-ant-oat01-test"}); err != nil {
+		t.Fatal(err)
+	}
+	type harnessModels struct {
+		Available bool                  `json:"available"`
+		Checking  bool                  `json:"checking"`
+		Models    []struct{ ID string } `json:"models"`
+	}
+	read := func() []harnessModels {
+		t.Helper()
+		res, err := http.Get(e.srv.URL + "/api/v1/chat-models")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var list []harnessModels
+		if err := json.NewDecoder(res.Body).Decode(&list); err != nil || res.StatusCode != http.StatusOK || len(list) != 2 {
+			t.Fatalf("catalog %d %+v err %v", res.StatusCode, list, err)
+		}
+		return list
+	}
+	list := read()
+	if list[0].Available || !list[0].Checking || len(list[0].Models) != 0 || list[1].Checking {
+		t.Fatalf("pending catalog %+v", list)
+	}
+	runnerID := "test-runner"
+	claim, err := e.q.ClaimModelListing(ctx, &runnerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, _ := json.Marshal([]chatmodels.Model{{ID: "opus", Default: true}})
+	if _, err := e.q.FinishModelListing(ctx, store.FinishModelListingParams{ClaimID: claim.ClaimID, Models: models}); err != nil {
+		t.Fatal(err)
+	}
+	list = read()
+	if !list[0].Available || list[0].Checking || len(list[0].Models) != 1 || list[0].Models[0].ID != "opus" {
+		t.Fatalf("finished catalog %+v", list)
 	}
 }
 

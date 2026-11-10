@@ -57,3 +57,14 @@ test("the shell banner prefers the harness problem, then the runner", () => {
   // Unknown runner state (still loading or failed) doesn't raise a banner.
   assert.equal(systemBanner(undefined, undefined), undefined);
 });
+
+test("pending discovery is distinct from an unavailable harness", () => {
+  const health = harnessHealth([
+    { harness: "claude-code", label: "Claude Code", available: false, checking: true },
+    ...groups(false, false).slice(1),
+  ]);
+  assert.equal(health.ready, false);
+  assert.equal(health.checking, true);
+  assert.equal(systemBanner(health, true), undefined);
+  assert.equal(systemBanner(health, false), "runner");
+});

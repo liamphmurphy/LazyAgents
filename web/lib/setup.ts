@@ -6,11 +6,13 @@
  */
 
 /** One harness as GET /chat-models reports it. */
-export type HarnessGroup = { harness: string; label: string; available: boolean; unavailable_reason?: string };
+export type HarnessGroup = { harness: string; label: string; available: boolean; checking?: boolean; unavailable_reason?: string };
 
 export type HarnessHealth = {
   /** At least one harness can run agents. */
   ready: boolean;
+  /** An initial model listing is still in progress. */
+  checking?: boolean;
   /** "Claude Code: no harness:anthropic secret", one per unavailable harness. */
   reasons: string[];
   /** Missing secret names mentioned by the reasons (names only, deduped). */
@@ -27,7 +29,7 @@ export function harnessHealth(groups: HarnessGroup[] | undefined): HarnessHealth
   const down = groups.filter((g) => !g.available);
   const reasons = down.map((g) => `${g.label}: ${unavailableReason(g)}`);
   const secrets = [...new Set(down.flatMap((g) => unavailableReason(g).match(/\bharness:[a-z0-9_-]+/gi) ?? []))];
-  return { ready: groups.some((g) => g.available), reasons, secrets };
+  return { ready: groups.some((g) => g.available), checking: groups.some((g) => g.checking), reasons, secrets };
 }
 
 /** "a", "a or b", "a, b or c" */
@@ -107,7 +109,7 @@ export function setupChecklist(s: SetupState): SetupStep[] {
 
 /** Which shell banner to show, if any: no harness wins over no runner. */
 export function systemBanner(harness: HarnessHealth | undefined, runnerOnline: boolean | undefined): "harness" | "runner" | undefined {
-  if (harness && !harness.ready) return "harness";
+  if (harness && !harness.ready && !harness.checking) return "harness";
   if (runnerOnline === false) return "runner";
   return undefined;
 }
