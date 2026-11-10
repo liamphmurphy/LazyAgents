@@ -97,3 +97,19 @@ SELECT * FROM playgrounds WHERE run_id = $1 AND state IN ('starting', 'running')
 -- A waiting playground no runner can take (every port is in use).
 UPDATE playgrounds SET state = 'failed', error = sqlc.arg(error), step = '', updated_at = now()
 WHERE id = sqlc.arg(id) AND state = 'starting' AND runner_id IS NULL;
+
+-- name: SetPlaygroundSpec :one
+-- A playground's spec changed without a restart (the document its API tab reads).
+UPDATE playgrounds SET spec = sqlc.arg(spec), updated_at = now()
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: SavePlaygroundSpec :exec
+-- The last spec a repository's playground started with, for starting one
+-- in any chat on the repository without an agent turn.
+INSERT INTO playground_specs (workspace_id, repo, spec, saved_from_chat_id)
+VALUES (sqlc.arg(workspace_id), sqlc.arg(repo), sqlc.arg(spec), sqlc.arg(chat_id))
+ON CONFLICT (workspace_id, repo) DO UPDATE SET spec = excluded.spec, saved_from_chat_id = excluded.saved_from_chat_id, updated_at = now();
+
+-- name: GetPlaygroundSpec :one
+SELECT * FROM playground_specs WHERE workspace_id = $1 AND repo = $2;

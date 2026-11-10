@@ -36,6 +36,24 @@ type StartPlaygroundIn struct {
 	NixPackages []string              `json:"nix_packages,omitempty" jsonschema:"Tools setup and the processes need, as Nix installables like nixpkgs#protobuf. Omit to use this repository's test environment's"`
 }
 
+type SetPlaygroundOpenAPIIn struct {
+	Path     string `json:"path" jsonschema:"The OpenAPI document, relative to the workspace root (.yaml, .yml or .json)"`
+	Inferred bool   `json:"inferred,omitempty" jsonschema:"true when you wrote it from the code rather than it being the repository's own"`
+	Commit   string `json:"commit,omitempty" jsonschema:"The commit you read when you inferred it (git rev-parse HEAD), so the person sees when the code moved on"`
+}
+
+func setPlaygroundOpenAPI(ctx context.Context, d Deps, c agents.Caller, in SetPlaygroundOpenAPIIn) (any, error) {
+	if err := playgroundChat(ctx, d, c); err != nil {
+		return nil, err
+	}
+	pg, err := d.Runs.SetPlaygroundOpenAPI(ctx, c.Agent.WorkspaceID, *c.RunID, in.Path, in.Inferred, in.Commit)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"playground_id": pg.ID, "openapi": in.Path,
+		"tell_the_person": "The playground's API tab reads it within a few seconds, without a restart. A document the app itself serves still comes first."}, nil
+}
+
 func playgroundChat(ctx context.Context, d Deps, c agents.Caller) error {
 	s, err := chatScopeFor(ctx, d, c)
 	if err != nil {

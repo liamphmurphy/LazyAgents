@@ -2600,7 +2600,8 @@ export interface paths {
         /**
          * Start an ended playground again, reset its data, or stop it
          * @description start runs its last spec again in the chat's current workspace (refused
-         *     once that workspace was cleaned up). reset starts every service empty
+         *     once that workspace was cleaned up); a chat with no playground yet
+         *     starts one from its repository's saved spec (saved_spec). reset starts every service empty
          *     and runs setup again; the code is untouched. The runner carries each
          *     out shortly after; the playground's action shows it pending until then.
          */
@@ -4868,6 +4869,8 @@ export interface components {
         };
         ChatPlaygroundState: {
             playground: components["schemas"]["Playground"] | null;
+            /** @description The chat's repository has a playground spec from an earlier start, so start works here without asking an agent */
+            saved_spec: boolean;
         };
         Playground: {
             /** Format: uuid */
@@ -4920,8 +4923,12 @@ export interface components {
                 path: string;
                 process: string;
             }[];
-            /** @description The app's OpenAPI document in the workspace; the gateway serves it as JSON at /__vesper/openapi. Empty when it has none. */
+            /** @description The app's OpenAPI document in the workspace, when it serves none itself; the gateway serves whichever applies as JSON at /__vesper/openapi. Empty when it names none. */
             openapi: string;
+            /** @description The persona wrote the document from the code */
+            openapi_inferred: boolean;
+            /** @description The commit an inferred document was read from */
+            openapi_commit: string;
         };
         ChatCanvas: components["schemas"]["ChatCanvasSummary"] & {
             /**

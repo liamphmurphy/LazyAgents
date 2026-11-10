@@ -143,6 +143,28 @@ func (q *Queries) GetChatPlayground(ctx context.Context, arg GetChatPlaygroundPa
 	return i, err
 }
 
+const getPlaygroundSpec = `-- name: GetPlaygroundSpec :one
+SELECT workspace_id, repo, spec, saved_from_chat_id, updated_at FROM playground_specs WHERE workspace_id = $1 AND repo = $2
+`
+
+type GetPlaygroundSpecParams struct {
+	WorkspaceID uuid.UUID
+	Repo        string
+}
+
+func (q *Queries) GetPlaygroundSpec(ctx context.Context, arg GetPlaygroundSpecParams) (PlaygroundSpec, error) {
+	row := q.db.QueryRow(ctx, getPlaygroundSpec, arg.WorkspaceID, arg.Repo)
+	var i PlaygroundSpec
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.Repo,
+		&i.Spec,
+		&i.SavedFromChatID,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const heldPlaygrounds = `-- name: HeldPlaygrounds :many
 SELECT id, workspace_id, user_id, chat_id, run_id, spec, state, action, stack, runner_id, port, idle_ttl_s, branch, step, error, error_log, stop_reason, started_at, data_reset_at, last_used_at, created_at, updated_at FROM playgrounds WHERE runner_id = $1 AND state IN ('starting', 'running') ORDER BY id
 `
@@ -346,6 +368,31 @@ func (q *Queries) RestartStoppedPlayground(ctx context.Context, arg RestartStopp
 	return i, err
 }
 
+const savePlaygroundSpec = `-- name: SavePlaygroundSpec :exec
+INSERT INTO playground_specs (workspace_id, repo, spec, saved_from_chat_id)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id, repo) DO UPDATE SET spec = excluded.spec, saved_from_chat_id = excluded.saved_from_chat_id, updated_at = now()
+`
+
+type SavePlaygroundSpecParams struct {
+	WorkspaceID uuid.UUID
+	Repo        string
+	Spec        json.RawMessage
+	ChatID      *uuid.UUID
+}
+
+// The last spec a repository's playground started with, for starting one
+// in any chat on the repository without an agent turn.
+func (q *Queries) SavePlaygroundSpec(ctx context.Context, arg SavePlaygroundSpecParams) error {
+	_, err := q.db.Exec(ctx, savePlaygroundSpec,
+		arg.WorkspaceID,
+		arg.Repo,
+		arg.Spec,
+		arg.ChatID,
+	)
+	return err
+}
+
 const setPlaygroundDataReset = `-- name: SetPlaygroundDataReset :exec
 UPDATE playgrounds SET step = '', data_reset_at = now(), updated_at = now()
 WHERE id = $1 AND runner_id = $2 AND state = 'running'
@@ -375,6 +422,48 @@ type SetPlaygroundRunningParams struct {
 
 func (q *Queries) SetPlaygroundRunning(ctx context.Context, arg SetPlaygroundRunningParams) (Playground, error) {
 	row := q.db.QueryRow(ctx, setPlaygroundRunning, arg.Branch, arg.ID, arg.RunnerID)
+	var i Playground
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.ChatID,
+		&i.RunID,
+		&i.Spec,
+		&i.State,
+		&i.Action,
+		&i.Stack,
+		&i.RunnerID,
+		&i.Port,
+		&i.IdleTtlS,
+		&i.Branch,
+		&i.Step,
+		&i.Error,
+		&i.ErrorLog,
+		&i.StopReason,
+		&i.StartedAt,
+		&i.DataResetAt,
+		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setPlaygroundSpec = `-- name: SetPlaygroundSpec :one
+UPDATE playgrounds SET spec = $1, updated_at = now()
+WHERE id = $2
+RETURNING id, workspace_id, user_id, chat_id, run_id, spec, state, action, stack, runner_id, port, idle_ttl_s, branch, step, error, error_log, stop_reason, started_at, data_reset_at, last_used_at, created_at, updated_at
+`
+
+type SetPlaygroundSpecParams struct {
+	Spec json.RawMessage
+	ID   uuid.UUID
+}
+
+// A playground's spec changed without a restart (the document its API tab reads).
+func (q *Queries) SetPlaygroundSpec(ctx context.Context, arg SetPlaygroundSpecParams) (Playground, error) {
+	row := q.db.QueryRow(ctx, setPlaygroundSpec, arg.Spec, arg.ID)
 	var i Playground
 	err := row.Scan(
 		&i.ID,

@@ -158,3 +158,107 @@ func TestChatPlaygroundToolsAndAPI(t *testing.T) {
 		t.Fatalf("no playground: %d %v", code, out)
 	}
 }
+
+// A playground's spec is kept per repository, so a person can start one in
+// another chat on the repository without an agent; a document the persona
+// inferred lives in one workspace only, so it isn't kept. The persona can
+// point the API tab at a document it inferred.
+func TestPlaygroundSavedSpecAndInferredDocument(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	q := store.New(pool)
+	arts := &artifacts.Service{Pool: pool}
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true, Artifacts: arts}); err != nil {
+		t.Fatal(err)
+	}
+	me, _ := q.GetLocalUser(ctx)
+	ws := me.WorkspaceID
+	tr := &tracker.Service{Pool: pool}
+	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
+	do := func(method, path, token string, body any) (int, map[string]any) {
+		t.Helper()
+		raw, _ := json.Marshal(body)
+		req := httptest.NewRequest(method, path, bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		var out map[string]any
+		_ = json.Unmarshal(w.Body.Bytes(), &out)
+		return w.Code, out
+	}
+	const repo = "https://github.com/acme/app"
+	canCode := true
+	p, err := (&personas.Service{Pool: pool}).Create(ctx, personas.Owner{WorkspaceID: ws, UserID: me.ID}, personas.NewInput{Name: "Builder", Code: &canCode, Repos: &[]string{repo}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// newChat opens a chat on the repository; with a message, it has a
+	// running segment and an agent token for it.
+	newChat := func(message bool) (string, string) {
+		t.Helper()
+		chat, err := rs.StartChat(ctx, ws, me.ID, runs.ChatInput{PersonaID: &p.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE chat_sessions SET repo_url=$2 WHERE id=$1", chat.ID, repo); err != nil {
+			t.Fatal(err)
+		}
+		if !message {
+			return chat.ID.String(), ""
+		}
+		if _, err = rs.PostChatMessage(ctx, ws, me.ID, chat.ID, runs.ChatMessageInput{Body: "show me"}); err != nil {
+			t.Fatal(err)
+		}
+		chat, _ = q.GetChatSession(ctx, store.GetChatSessionParams{ID: chat.ID, WorkspaceID: ws})
+		assistant, _ := q.GetAgent(ctx, store.GetAgentParams{ID: chat.AgentID, WorkspaceID: ws})
+		token, _, err := agents.IssueToken(ctx, q, assistant.ID, "run", "chat", chat.CurrentRunID, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE runs SET state='running' WHERE id=$1", *chat.CurrentRunID); err != nil {
+			t.Fatal(err)
+		}
+		return chat.ID.String(), token
+	}
+
+	first, token := newChat(true)
+	if code, out := do("POST", "/api/v1/agent/tools/start_playground", token, map[string]any{
+		"processes": []any{map[string]any{"name": "runner", "command": "vesper runner"}, map[string]any{"name": "web", "command": "npm start", "port": 3000}},
+	}); code != 200 {
+		t.Fatalf("start: %d %v", code, out)
+	}
+	if code, out := do("POST", "/api/v1/agent/tools/set_playground_openapi", token, map[string]any{"path": ".lazyagents/playground/openapi.json", "inferred": true, "commit": "9f17116"}); code != 200 {
+		t.Fatalf("set document: %d %v", code, out)
+	}
+	if code, out := do("POST", "/api/v1/agent/tools/set_playground_openapi", token, map[string]any{"path": "../escape.json"}); code != 422 {
+		t.Fatalf("a document outside the workspace: %d %v", code, out)
+	}
+	_, view := do("GET", "/api/v1/chats/"+first+"/playground", "", nil)
+	pg := view["playground"].(map[string]any)
+	if pg["openapi"] != ".lazyagents/playground/openapi.json" || pg["openapi_inferred"] != true || pg["openapi_commit"] != "9f17116" || view["saved_spec"] != true {
+		t.Fatalf("first chat's view %v", view)
+	}
+	if procs := pg["processes"].([]any); procs[0].(map[string]any)["port"] != float64(0) {
+		t.Fatalf("background process %v", procs[0])
+	}
+
+	// Another chat on the repository: nothing running, but it can start one.
+	second, _ := newChat(true)
+	if _, view := do("GET", "/api/v1/chats/"+second+"/playground", "", nil); view["playground"] != nil || view["saved_spec"] != true {
+		t.Fatalf("second chat's view %v", view)
+	}
+	code, out := do("POST", "/api/v1/chats/"+second+"/playground/start", "", nil)
+	if code != 200 || out["state"] != "starting" || out["openapi"] != "" || len(out["processes"].([]any)) != 2 {
+		t.Fatalf("start from the saved spec: %d %v", code, out)
+	}
+
+	// A chat that never ran has no workspace to run it from.
+	fresh, _ := newChat(false)
+	if code, out := do("POST", "/api/v1/chats/"+fresh+"/playground/start", "", nil); code != 409 || !strings.Contains(out["message"].(string), "no workspace yet") {
+		t.Fatalf("start without a workspace: %d %v", code, out)
+	}
+}

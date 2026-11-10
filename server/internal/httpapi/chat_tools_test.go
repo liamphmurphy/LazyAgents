@@ -128,7 +128,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_workflows":   map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
-	needArgs := []string{"submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "search_chats", "read_chat", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "start_playground", "playground_status", "stop_playground"}
+	needArgs := []string{"submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "search_chats", "read_chat", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "start_playground", "playground_status", "stop_playground", "set_playground_openapi"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]
@@ -143,7 +143,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 			noCapability = noCapability || (strings.HasPrefix(tool.Name, "finance_") && strings.Contains(fmt.Sprint(out["message"]), "only works in the Finance app's Ask chat"))
 			// Playgrounds need a chat that can run code, and one started.
 			noCapability = noCapability || (tool.Name == "start_playground" && strings.Contains(fmt.Sprint(out["message"]), "can run code"))
-			noCapability = noCapability || (strings.HasSuffix(tool.Name, "_playground") || tool.Name == "playground_status") && strings.Contains(fmt.Sprint(out["message"]), "has no playground yet")
+			noCapability = noCapability || strings.Contains(tool.Name, "playground") && strings.Contains(fmt.Sprint(out["message"]), "has no playground yet")
 			if code == 409 && !noCapability {
 				t.Errorf("%s: %d %v", tool.Name, code, out)
 			}
