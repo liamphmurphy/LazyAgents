@@ -18,12 +18,12 @@ test("a palette diagram follows the theme and keeps its alt text", async ({ page
   const img = fence.getByRole("img", { name: "Client and server" });
   await expect(img).toBeVisible();
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
-  await expect.poll(async () => decoded(await img.getAttribute("src"))).toContain('fill="#1C1C22"');
+  await expect.poll(async () => decoded(await img.getAttribute("src"))).toContain('fill="#1F1D2C"');
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-  await expect.poll(async () => decoded(await img.getAttribute("src"))).toContain('fill="#F3F3F6"');
+  await expect.poll(async () => decoded(await img.getAttribute("src"))).toContain('fill="#F3F1F8"');
   expect(decoded(await img.getAttribute("src"))).not.toContain("--viz-");
 
-  await expect(fence.getByRole("link", { name: "Download SVG" })).toHaveAttribute("href", /%23F3F3F6/);
+  await expect(fence.getByRole("link", { name: "Download SVG" })).toHaveAttribute("href", /%23F3F1F8/);
   await fence.getByRole("button", { name: "Zoom" }).click();
   const dialog = page.getByRole("dialog", { name: "SVG image" });
   await expect(dialog.getByRole("img", { name: "Client and server" })).toBeVisible();

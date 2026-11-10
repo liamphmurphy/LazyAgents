@@ -59,6 +59,8 @@ test("with no personas the built-in Assistant is the default; New persona create
 });
 
 test("color: the wheel's hex input validates #rrggbb, Apply sets it, and a low-contrast color warns", async ({ page }) => {
+  // The warning is about the theme in use: #5b3fa8 is too dark on the dark ground and fine on the light one.
+  await page.emulateMedia({ colorScheme: "dark" });
   const mock = await installChatApi(page, { personas: team() });
   await openPanel(page);
   await select(page, "Nova");

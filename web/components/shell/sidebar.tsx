@@ -66,7 +66,7 @@ function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, num
   if (!kind || n <= 0) return null;
   if (kind === "inbox") {
     return (
-      <span ref={inbox} className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-accent px-[5px] text-[11px] font-semibold text-on-accent">
+      <span ref={inbox} className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-[11px] font-semibold text-approve-fg">
         {n}
         <span className="sr-only"> unread</span>
       </span>
@@ -283,7 +283,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
               {g.items.map((n) => (
                 <NavLink key={n.href} label={railLabel(n.label, n.badge, counts)} href={withProject(n.href, current?.key)} active={navActive(n.href)}>
                   <Icon name={n.icon} />
-                  {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
+                  {n.badge && counts[n.badge] > 0 && <span aria-hidden className={cx("absolute right-1 top-1 size-1.5 rounded-full", n.badge === "inbox" ? "bg-state-human" : "bg-accent")} />}
                 </NavLink>
               ))}
             </div>

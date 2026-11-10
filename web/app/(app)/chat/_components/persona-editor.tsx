@@ -30,6 +30,7 @@ import {
   fieldError,
   hslToHex,
   isConflict,
+  cssHex,
   parseHex,
   repoShortName,
   sameList,
@@ -52,7 +53,7 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something w
 function useChatBackground() {
   const [bg, setBg] = useState(CHAT_BG);
   useEffect(() => {
-    const read = () => setBg(parseHex(getComputedStyle(document.documentElement).getPropertyValue("--bg")) ?? CHAT_BG);
+    const read = () => setBg(cssHex(getComputedStyle(document.documentElement).getPropertyValue("--bg")) ?? CHAT_BG);
     read();
     const mo = new MutationObserver(read);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme", "style"] });

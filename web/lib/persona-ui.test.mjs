@@ -28,7 +28,7 @@ import {
   unusedPreset,
   wheelPoint,
   wheelPosition,
-  withDefault, splitPersonaStrip } from "./persona-ui.ts";
+  withDefault, splitPersonaStrip, cssHex } from "./persona-ui.ts";
 
 const p = (id, name, extra = {}) => ({ id, name, color: "#8b8fff", is_default: false, created_at: "2026-11-01T00:00:00Z", ...extra });
 
@@ -244,4 +244,11 @@ test("the most used persona has the most chats, ties go to the most recently use
   assert.equal(mostUsedPersona([p("bot", 4, "2026-11-01T00:00:00Z"), p("coach", 4, "2026-11-05T00:00:00Z"), p("maya", 4)], "maya"), "coach");
   assert.equal(mostUsedPersona([p("bot", 0), p("coach", 0)], "maya"), "maya");
   assert.equal(mostUsedPersona(undefined, undefined), undefined);
+});
+
+test("cssHex reads a theme color in the minifier's short form too", () => {
+  assert.equal(cssHex(" #fff"), "#ffffff");
+  assert.equal(cssHex("#FCFBFE"), "#fcfbfe");
+  assert.equal(cssHex("rgb(0 0 0)"), null);
+  assert.equal(cssHex(""), null);
 });
