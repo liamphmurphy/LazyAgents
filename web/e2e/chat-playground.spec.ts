@@ -58,30 +58,40 @@ const PROBE = `<script>
 
 type Calls = { actions: string[]; sent: { method: string; body: string | null; cookie: string }[] };
 
-async function open(page: Page, initial = playground()) {
+type Options = {
+  /** Answers a gateway request itself; undefined leaves it to the defaults. */
+  gateway?: (route: Route, url: URL, cors: () => Record<string, string>) => Promise<void> | undefined;
+  logs?: { source: string; stream: string; text: string }[];
+  /** The chat's repository has a saved playground spec. */
+  savedSpec?: boolean;
+};
+
+async function open(page: Page, initial: Record<string, unknown> | null = playground(), opts: Options = {}) {
   const calls: Calls = { actions: [], sent: [] };
-  let current: Record<string, unknown> = initial;
+  let current: Record<string, unknown> | null = initial;
   await installChatApi(page, { replyDelayMs: 10 });
   await page.route(/\/api\/v1\/chats\/[^/]+\/playground(\/[a-z]+)?$/, (route) => {
     const m = /\/playground\/([a-z]+)$/.exec(new URL(route.request().url()).pathname);
     if (m) {
       calls.actions.push(m[1]);
-      current = { ...current, ...(m[1] === "start" ? { state: "starting", step: "Starting postgres", error: null } : { action: m[1] }) };
+      current = { ...(current ?? playground()), ...(m[1] === "start" ? { state: "starting", step: "Starting postgres", error: null } : { action: m[1] }) };
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(current) });
     }
-    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ playground: current }) });
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ playground: current, saved_spec: !!opts.savedSpec }) });
   });
-  const cors = (route: Route) => ({ "Access-Control-Allow-Origin": new URL(route.request().frame().url()).origin, "Access-Control-Allow-Credentials": "true", "Access-Control-Expose-Headers": "Content-Type" });
+  const cors = (route: Route) => ({ "Access-Control-Allow-Origin": new URL(route.request().frame().url()).origin, "Access-Control-Allow-Credentials": "true", "Access-Control-Expose-Headers": "Content-Type, X-Request-Id, X-Vesper-Spec-Source" });
   await page.route(`${GATEWAY}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
+    const custom = opts.gateway?.(route, url, () => cors(route));
+    if (custom) return custom;
     if (url.pathname === "/__vesper/openapi") return route.fulfill({ headers: cors(route), contentType: "application/json", body: JSON.stringify(spec) });
     if (url.pathname === "/__vesper/logs") {
       const now = new Date().toISOString();
-      const events = [
-        { t: now, source: "web", stream: "stdout", text: "ready on :3000 in 2.1s" },
-        { t: now, source: "api", stream: "stderr", text: 'error: null value in column "packages"' },
-      ];
+      const events = (opts.logs ?? [
+        { source: "web", stream: "stdout", text: "ready on :3000 in 2.1s" },
+        { source: "api", stream: "stderr", text: 'error: null value in column "packages"' },
+      ]).map((e) => ({ t: now, ...e }));
       // retry: a long reconnect delay, so the closed mock stream doesn't restart.
       return route.fulfill({ headers: cors(route), contentType: "text/event-stream", body: "retry: 600000\n\n" + events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") });
     }
@@ -93,9 +103,9 @@ async function open(page: Page, initial = playground()) {
     return route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Acme</title><h1>Acme Admin</h1>" + PROBE });
   });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("combobox", { name: "Message" }).fill(`playground: ${ID}`);
+  await page.getByRole("combobox", { name: "Message" }).fill(initial ? `playground: ${ID}` : "hello");
   await page.getByRole("combobox", { name: "Message" }).press("Enter");
-  await expect(page.getByTestId("playground-card")).toBeVisible();
+  if (initial) await expect(page.getByTestId("playground-card")).toBeVisible();
   return calls;
 }
 
@@ -227,4 +237,71 @@ test("Send to chat still sends the report when sharing is declined", async ({ pa
   await expect(page.getByTestId("attachment-chip")).toHaveCount(1);
   expect(uploads).toHaveLength(1);
   expect(uploads[0]).toContain("- Screenshot: none (sharing was cancelled)");
+});
+
+test("a chat on a repository with a saved playground starts it without an agent", async ({ page }) => {
+  const calls = await open(page, null, { savedSpec: true });
+  await page.getByRole("button", { name: "Start playground" }).click();
+  await expect(page.getByTestId("playground-panel")).toBeVisible();
+  await expect(page.getByTestId("playground-state")).toHaveText("Starting");
+  expect(calls.actions).toEqual(["start"]);
+});
+
+const inferredSpec = {
+  openapi: "3.1.0",
+  info: { title: "Acme" },
+  paths: { "/api/orders": { get: { operationId: "listOrders", "x-source": "server/orders.go:42", responses: {} } } },
+};
+
+test("an inferred API map shows where it came from, each handler, and asks to re-infer once the code moved", async ({ page }) => {
+  await open(page, playground({ openapi: ".lazyagents/playground/openapi.json", openapi_inferred: true, openapi_commit: "abc1234" }), {
+    logs: [
+      { source: "api", stream: "stdout", text: "GET /api/orders id=req-7 500" },
+      { source: "api", stream: "stdout", text: "unrelated line" },
+    ],
+    gateway: (route, url, cors) => {
+      if (url.pathname === "/__vesper/openapi") return route.fulfill({ headers: { ...cors(), "X-Vesper-Spec-Source": "inferred:.lazyagents/playground/openapi.json@abc1234" }, contentType: "application/json", body: JSON.stringify(inferredSpec) });
+      if (url.pathname === "/__vesper/meta") return route.fulfill({ headers: cors(), contentType: "application/json", body: JSON.stringify({ branch: "main", commit: "def5678000" }) });
+      if (url.pathname === "/api/orders") return route.fulfill({ status: 500, headers: { ...cors(), "X-Request-Id": "req-7" }, contentType: "application/json", body: "{}" });
+      return undefined;
+    },
+  });
+  await page.getByTestId("playground-card").getByRole("button", { name: "Open" }).click();
+  await page.getByRole("button", { name: "Full screen" }).click();
+  const full = page.getByTestId("playground-fullscreen");
+  await full.getByRole("tab", { name: "API" }).click();
+  const source = full.getByTestId("playground-spec-source");
+  await expect(source).toContainText("Inferred");
+  await expect(source).toContainText("Read from the code at abc1234");
+  await expect(source).toContainText("The code has changed since.");
+
+  await full.locator("summary", { hasText: "other" }).click(); // untagged operations, collapsed
+  await full.getByRole("button", { name: /GET\s*\/api\/orders/ }).click();
+  await expect(full.getByTestId("playground-handler")).toHaveText("server/orders.go:42");
+  await full.getByRole("button", { name: "Send", exact: true }).click();
+  const res = full.getByTestId("playground-response");
+  await expect(res).toContainText("GET /api/orders id=req-7 500");
+  await expect(res).not.toContainText("unrelated line");
+  await expect(res).toContainText("Lines naming its request id, req-7.");
+
+  await source.getByRole("button", { name: "Re-infer" }).click();
+  await expect(source).toContainText("Added to your message");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("combobox", { name: "Message" })).toHaveValue(/update \.lazyagents\/playground\/openapi\.json/);
+});
+
+test("with no API document anywhere, the API tab says where it looked and asks the persona to map it", async ({ page }) => {
+  await open(page, playground({ openapi: "" }), {
+    gateway: (route, url, cors) =>
+      url.pathname === "/__vesper/openapi"
+        ? route.fulfill({ status: 404, headers: cors(), contentType: "application/json", body: JSON.stringify({ message: "none", checked: ["/openapi.json", "/v3/api-docs"] }) })
+        : undefined,
+  });
+  await page.getByTestId("playground-card").getByRole("button", { name: "Open" }).click();
+  const panel = page.getByTestId("playground-panel");
+  await panel.getByRole("tab", { name: "API" }).click();
+  await expect(panel).toContainText("No API document found");
+  await expect(panel).toContainText("/v3/api-docs");
+  await panel.getByRole("button", { name: "Map this API" }).click();
+  await expect(page.getByRole("combobox", { name: "Message" })).toHaveValue(/infer an OpenAPI document/);
 });
