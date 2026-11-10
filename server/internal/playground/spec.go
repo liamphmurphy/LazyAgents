@@ -39,7 +39,7 @@ type Spec struct {
 // Process is one long-running part of the app.
 type Process struct {
 	Name string `json:"name"`
-	// Command runs under bash -lc. It must listen on 0.0.0.0:Port.
+	// Command runs under bash -c. It must listen on 0.0.0.0:Port.
 	Command string `json:"command"`
 	// Dir is where Command runs, relative to the workspace root.
 	Dir  string            `json:"dir,omitempty"`

@@ -218,7 +218,9 @@ func (d *Docker) playgroundBody(pg PlaygroundRun, network, source, command, dir 
 	}
 	sort.Strings(list)
 	return map[string]any{
-		"Image": d.Image, "Cmd": []string{"bash", "-lc", command}, "Env": list, "WorkingDir": workdir,
+		// Not a login shell: /etc/profile resets PATH, dropping the image's
+		// Go and Nix profile directories.
+		"Image": d.Image, "Cmd": []string{"bash", "-c", command}, "Env": list, "WorkingDir": workdir,
 		"Labels": d.playgroundLabels(pg, source), "HostConfig": host,
 		"NetworkingConfig": map[string]any{"EndpointsConfig": map[string]any{
 			network: map[string]any{"Aliases": []string{source}},

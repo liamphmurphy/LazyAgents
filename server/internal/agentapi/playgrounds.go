@@ -15,7 +15,7 @@ import (
 
 type PlaygroundProcessIn struct {
 	Name    string            `json:"name" jsonschema:"Lowercase name, e.g. web or api; other processes reach it by this name"`
-	Command string            `json:"command" jsonschema:"Runs under bash -lc and keeps running, e.g. npm run dev -- -H 0.0.0.0. It must listen on 0.0.0.0, not localhost"`
+	Command string            `json:"command" jsonschema:"Runs under bash -c and keeps running, e.g. npm run dev -- -H 0.0.0.0. It must listen on 0.0.0.0, not localhost"`
 	Dir     string            `json:"dir,omitempty" jsonschema:"Where the command runs, relative to the workspace root"`
 	Port    int               `json:"port" jsonschema:"The port it listens on"`
 	Env     map[string]string `json:"env,omitempty" jsonschema:"Environment for this process only"`

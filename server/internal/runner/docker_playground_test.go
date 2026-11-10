@@ -156,6 +156,10 @@ func TestStartPlaygroundSandboxesEveryContainerAndReportsAProcessThatDies(t *tes
 			t.Errorf("%s labels %v", name, labels)
 		}
 	}
+	// A login shell would read /etc/profile, which resets PATH and loses Go.
+	if cmd := fmt.Sprint(f.created[web]["Cmd"]); cmd != "[bash -c npm run dev]" {
+		t.Errorf("web runs %s, want bash -c with the image's PATH", cmd)
+	}
 	if wd := f.created[web]["WorkingDir"]; wd != "/workspace/web" {
 		t.Errorf("web runs in %v", wd)
 	}
