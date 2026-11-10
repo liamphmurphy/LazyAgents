@@ -79,6 +79,8 @@ type AttachmentStore interface {
 type Runner struct {
 	// listings counts the model listings in flight (capped by tickModelListings).
 	listings atomic.Int32
+	// usageChecks counts the usage checks in flight (capped by tickUsageChecks).
+	usageChecks atomic.Int32
 	// otherBackend are ended runs whose workspace is on the other backend, so
 	// they don't crowd this runner's sweeps. Only Sweep touches it.
 	otherBackend []uuid.UUID
@@ -263,6 +265,7 @@ func (r *Runner) Tick(ctx context.Context) {
 	q := r.q()
 	r.tickSignIns(ctx)
 	r.tickModelListings(ctx)
+	r.tickUsageChecks(ctx)
 	r.resumeHeld(ctx)
 	for r.slot() {
 		run, err := q.ClaimQueuedRun(ctx, &r.Cfg.ID)

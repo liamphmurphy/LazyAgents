@@ -173,9 +173,11 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Usage:          &usage.Service{Q: q, Log: log},
 	}
 	// The local backend runs the host's CLIs with their own logins, so the API
-	// can ask them for usage. In Docker the logins live in run containers and
-	// readings come from the runs' rate-limit events instead.
-	if cfg.Runner.Backend != "docker" {
+	// can ask them for usage. In Docker the CLIs and logins live in agent
+	// containers, so the API queues checks for a runner to answer.
+	if cfg.Runner.Backend == "docker" {
+		srv.Usage.Queued = true
+	} else {
 		srv.Usage.Probe = usage.Probe
 	}
 	if cfg.PRSyncInterval > 0 {

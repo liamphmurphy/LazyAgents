@@ -16,11 +16,12 @@ import (
 var orbLabels = map[string]string{agentdef.HarnessClaudeCode: "Claude", agentdef.HarnessCodex: "Codex"}
 
 // buildHarnessActivity is the activity orb's view of each harness: what it's
-// running, whether it's out of allowance, and the windows last read.
-func buildHarnessActivity(running []store.ActiveHarnessRunsRow, limits []store.ActiveProviderLimitsRow, readings map[string]usage.Snapshot) []api.HarnessActivity {
+// running, whether it's out of allowance, the windows last read, and whether
+// a newer reading is on its way.
+func buildHarnessActivity(running []store.ActiveHarnessRunsRow, limits []store.ActiveProviderLimitsRow, readings map[string]usage.Snapshot, checking map[string]bool) []api.HarnessActivity {
 	out := make([]api.HarnessActivity, 0, len(usage.Harnesses))
 	for _, h := range usage.Harnesses {
-		a := api.HarnessActivity{Harness: h, Label: orbLabels[h], Windows: []api.UsageWindow{}}
+		a := api.HarnessActivity{Harness: h, Label: orbLabels[h], Windows: []api.UsageWindow{}, UsageChecking: checking[h]}
 		for _, r := range running {
 			if r.Harness == h {
 				a.Running = int(r.Runs)
@@ -62,11 +63,15 @@ func (s *Server) harnessActivity(ctx context.Context, ws uuid.UUID) ([]api.Harne
 		return nil, err
 	}
 	readings := map[string]usage.Snapshot{}
+	checking := map[string]bool{}
 	if s.Usage != nil {
 		if readings, err = s.Usage.Readings(ctx, ws); err != nil {
 			return nil, err
 		}
-		s.Usage.Refresh(ws, readings)
+		s.Usage.Refresh(ctx, ws, readings)
+		if checking, err = s.Usage.Checking(ctx, ws); err != nil {
+			return nil, err
+		}
 	}
-	return buildHarnessActivity(running, limits, readings), nil
+	return buildHarnessActivity(running, limits, readings, checking), nil
 }

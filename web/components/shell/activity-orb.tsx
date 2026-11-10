@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { PersonaAvatar } from "@/app/(app)/chat/_components/persona";
 import type { Schemas } from "@/lib/api/client";
 import { useMarkChatRead, usePersonaDock } from "@/lib/api/hooks";
-import { CLAUDE, CODEX, checkedAgo, chatStates, finishes, orbBadge, orbGlyph, orbLabel, orbQuiet, sessionPercent, usageSub, type HarnessActivity } from "@/lib/activity-orb";
+import { CLAUDE, CODEX, checkedAgo, chatStates, finishes, orbBadge, orbGlyph, orbLabel, orbQuiet, ringTone, sessionPercent, usageSub, type HarnessActivity } from "@/lib/activity-orb";
 import { dockEntries, viewedChatId, type DockState } from "@/lib/persona-dock";
 
 type Entry = Schemas["PersonaDockEntry"];
@@ -15,7 +15,7 @@ type Persona = Entry["persona"];
 
 /*
  * The one floating element: harness activity (Claude's robot, Codex's comets),
- * the two session-usage rings, and a badge for personas that need the person
+ * the two session-usage rings in each harness's colour, and a badge for personas that need the person
  * or replied. Clicking it sprouts a panel out to the left; a persona that
  * finishes sends a chip out of it. The motion is a straight port of the
  * approved mockup: keep its keyframes, timings and easings in step with it.
@@ -58,15 +58,25 @@ function useOrbBottom(): number {
 
 // ---- Glyphs: the mockup's ring(), robot(), orbit() and idle(), in a 44×44 box.
 
-function Ring({ r, pct, red }: { r: number; pct: number | null; red: boolean }) {
+/**
+ * One harness's session ring in its own colour, amber and breathing near the
+ * limit (amber alone is too close to Claude's orange), red once limited. It
+ * eases to each new reading, and a faint arc sweeps the track while a usage
+ * check is in flight.
+ */
+function Ring({ r, h, color }: { r: number; h: HarnessActivity | undefined; color: string }) {
   const c = 2 * Math.PI * r;
+  const pct = sessionPercent(h) ?? 0;
+  const tone = ringTone(h);
+  const stroke = tone === "limited" ? "var(--state-blocked)" : tone === "warn" ? "var(--state-human)" : color;
   return (
     <>
       <circle cx="22" cy="22" r={r} fill="none" stroke="var(--orb-track)" strokeWidth="2.4" />
-      {pct !== null && pct > 0 && (
-        <circle cx="22" cy="22" r={r} fill="none" stroke={red ? "var(--state-blocked)" : "var(--orb-ring)"} strokeWidth="2.4" strokeLinecap="round"
-          strokeDasharray={`${(c * pct) / 100} ${c}`} transform="rotate(-90 22 22)" />
+      {h?.usage_checking && (
+        <circle className="orb-sweep" cx="22" cy="22" r={r} fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeDasharray={`${c * 0.16} ${c}`} />
       )}
+      <circle className="orb-ring" data-tone={tone} cx="22" cy="22" r={r} fill="none" strokeWidth="2.4" strokeLinecap="round" transform="rotate(-90 22 22)"
+        style={{ stroke, strokeDasharray: `${(c * pct) / 100} ${c}`, opacity: pct > 0 ? 1 : 0 }} />
     </>
   );
 }
@@ -132,17 +142,20 @@ function Status({ chat }: { chat: Chat }) {
   return <span className="orb-ps"><span className="orb-dot" />Done{chat.unread ? ` · ${chat.unread} new` : ""}</span>;
 }
 
+/** Each harness's ring colour, so a panel row can be matched to its ring. */
+const RING_COLOR: Record<string, string> = { [CLAUDE]: "var(--orb-claude)", [CODEX]: "var(--orb-codex)" };
+
 function UsageRow({ h, all }: { h: HarnessActivity; all: HarnessActivity[] }) {
   const pct = sessionPercent(h);
-  const red = !!h.limited_until;
+  const tone = ringTone(h);
   return (
     <>
       <div className="orb-urow" data-stg>
-        <span>{h.label}</span>
-        <div className="orb-track"><i className={red ? "red" : ""} style={{ width: `${pct ?? 0}%` }} /></div>
-        <span className="orb-val">{pct === null ? "—" : `${pct}%`}</span>
+        <span className="orb-ulabel"><i aria-hidden style={{ background: RING_COLOR[h.harness] }} />{h.label}</span>
+        <div className="orb-track"><i className={tone === "limited" ? "red" : tone === "warn" ? "warn" : ""} style={{ width: `${pct ?? 0}%` }} /></div>
+        <span className="orb-val">{pct === null ? (h.usage_checking ? "…" : "—") : `${pct}%`}</span>
       </div>
-      <div className={`orb-usub${red ? " red" : ""}`} data-stg>{usageSub(h, all)}</div>
+      <div className={`orb-usub${tone === "limited" ? " red" : ""}`} data-stg>{usageSub(h, all)}</div>
     </>
   );
 }
@@ -387,8 +400,8 @@ export function ActivityOrb() {
         aria-expanded={open} aria-controls="orb-panel" aria-label={orbLabel(working.map((r) => r.persona.name), entries)}
         onClick={(e) => { e.stopPropagation(); if (openRef.current) hide(); else show(); }}>
         <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden>
-          <Ring r={19.5} pct={sessionPercent(usage.find((h) => h.harness === CLAUDE))} red={!!usage.find((h) => h.harness === CLAUDE)?.limited_until} />
-          <Ring r={15.5} pct={sessionPercent(usage.find((h) => h.harness === CODEX))} red={!!usage.find((h) => h.harness === CODEX)?.limited_until} />
+          <Ring r={19.5} h={usage.find((h) => h.harness === CLAUDE)} color={RING_COLOR[CLAUDE]} />
+          <Ring r={15.5} h={usage.find((h) => h.harness === CODEX)} color={RING_COLOR[CODEX]} />
           <Centre harnesses={usage} />
         </svg>
         {badge && <Badge>{badge.kind === "needs" ? "!" : badge.count}</Badge>}

@@ -7301,7 +7301,7 @@ components:
         resets_at: { type: string, format: date-time }
     HarnessActivity:
       type: object
-      required: [harness, label, running, usage_available, windows]
+      required: [harness, label, running, usage_available, usage_checking, windows]
       properties:
         harness: { type: string, description: "claude-code or codex" }
         label: { type: string }
@@ -7310,6 +7310,7 @@ components:
         plan: { type: string, description: "Subscription name when the CLI reports one (max, pro, plus…)" }
         usage_available: { type: boolean, description: "False when plan limits don't apply or can't be read (API key, signed out, or no reading yet)" }
         usage_checked_at: { type: string, format: date-time, description: When the windows were read; absent before the first reading }
+        usage_checking: { type: boolean, description: "A usage check is in flight; a newer reading may arrive on a later poll" }
         windows: { type: array, items: { $ref: "#/components/schemas/UsageWindow" }, description: "Session first, then weekly; windows that renewed since the reading are left out" }
     PersonaProposal:
       type: object

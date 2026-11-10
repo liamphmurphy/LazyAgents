@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkedAgo, chatStates, finishes, orbBadge, orbGlyph, orbLabel, orbQuiet, resetLabel, sessionPercent, usageSub } from "./activity-orb.ts";
+import { checkedAgo, chatStates, finishes, orbBadge, orbGlyph, orbLabel, orbQuiet, resetLabel, ringTone, sessionPercent, usageSub } from "./activity-orb.ts";
 
 const harness = (h, over = {}) => ({ harness: h, label: h === "codex" ? "Codex" : "Claude", running: 0, usage_available: false, windows: [], ...over });
 const session = (used, resets_at) => ({ id: "five_hour", kind: "session", label: "Session", used_percent: used, resets_at });
@@ -22,6 +22,14 @@ test("rings show the session window, full while limited, nothing when unread", (
   assert.equal(sessionPercent(harness("codex", { limited_until: "2026-11-09T21:20:00Z" })), 100);
   assert.equal(sessionPercent(harness("codex")), null);
   assert.equal(sessionPercent(undefined), null);
+});
+
+test("rings warn near the limit and turn red once it's hit", () => {
+  assert.equal(ringTone(harness("claude-code", { usage_available: true, windows: [session(79.4)] })), "ok");
+  assert.equal(ringTone(harness("claude-code", { usage_available: true, windows: [session(80)] })), "warn");
+  assert.equal(ringTone(harness("codex", { limited_until: "2026-11-09T21:20:00Z" })), "limited");
+  assert.equal(ringTone(harness("codex")), "ok");
+  assert.equal(ringTone(undefined), "ok");
 });
 
 test("the badge prefers needs-you over unread", () => {
@@ -58,6 +66,11 @@ test("usage lines", () => {
   assert.match(resetLabel("2026-11-12T08:00:00", now), /^Thu 8:00\s?AM$/);
   assert.equal(checkedAgo([claude, codex], now.getTime()), "checked 40s ago");
   assert.equal(checkedAgo([codex], now.getTime()), "not checked yet");
+  // A check in flight: first readings say so, later ones keep their figures.
+  assert.equal(usageSub(harness("codex", { usage_checking: true }), [], now), "Checking…");
+  assert.equal(usageSub(harness("codex", { usage_checking: true, usage_checked_at: "2026-11-09T17:00:00" }), [], now), "No plan limits to show (API key or signed out)");
+  assert.match(usageSub({ ...claude, usage_checking: true }, [claude], now), /^5h · resets/);
+  assert.equal(checkedAgo([claude, { ...codex, usage_checking: true }], now.getTime()), "checking…");
 });
 
 test("accessible name", () => {
