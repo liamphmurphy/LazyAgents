@@ -695,11 +695,15 @@ func derefID(id *uuid.UUID) uuid.UUID {
 }
 
 // chatMemoryIndex renders the always-loaded index of the memory of the person
-// the chat belongs to: titles and summaries only, never another person's.
+// the chat belongs to: titles and summaries only, never another person's, and
+// nothing in a temporary chat.
 func chatMemoryIndex(ctx context.Context, q *store.Queries, run store.Run) (string, error) {
 	chat, err := q.ChatSessionForRun(ctx, &run.ID)
 	if err != nil {
 		return "", err
+	}
+	if chat.Temporary {
+		return "", nil
 	}
 	space, err := runs.ChatMemorySpace(ctx, q, chat)
 	if err != nil {
@@ -768,7 +772,7 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 		if svg {
 			spec.Instructions += agents.AssistantSVGSection
 		}
-		return harness.ChatAgentsMDInSpace(spec, paths, c.project.Key, idx, persona, group, runs.SpaceSection(space, spaceFiles)), "", nil
+		return harness.ChatAgentsMDInSpace(spec, paths, c.project.Key, idx, persona, group, runs.SpaceSection(space, spaceFiles), chat.Temporary), "", nil
 	case runs.PurposeResearch, runs.PurposeWorkflow, runs.PurposeLearning:
 		return []byte(c.spec.Instructions), "", nil
 	case "planning":

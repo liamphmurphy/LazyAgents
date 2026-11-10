@@ -151,7 +151,7 @@ func (q *Queries) AppendChatMessage(ctx context.Context, arg AppendChatMessagePa
 
 const archiveChatSession = `-- name: ArchiveChatSession :one
 UPDATE chat_sessions SET archived = true, revision = revision + 1, updated_at = now()
-WHERE id = $1 AND workspace_id = $2 AND revision = $3 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $1 AND workspace_id = $2 AND revision = $3 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type ArchiveChatSessionParams struct {
@@ -194,6 +194,7 @@ func (q *Queries) ArchiveChatSession(ctx context.Context, arg ArchiveChatSession
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -278,7 +279,7 @@ func (q *Queries) AttachChatAttachments(ctx context.Context, arg AttachChatAttac
 }
 
 const bumpChatRevision = `-- name: BumpChatRevision :one
-UPDATE chat_sessions SET revision = revision + 1, updated_at = now() WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+UPDATE chat_sessions SET revision = revision + 1, updated_at = now() WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 // A change only the chat's payload shows (participants, proposals): clients
@@ -317,6 +318,7 @@ func (q *Queries) BumpChatRevision(ctx context.Context, id uuid.UUID) (ChatSessi
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -483,7 +485,7 @@ func (q *Queries) ChatParticipants(ctx context.Context, chatIds []uuid.UUID) ([]
 }
 
 const chatSessionForEndedRun = `-- name: ChatSessionForEndedRun :one
-SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden, c.connector_ids, c.space_id, c.work_branches, c.commit_email, c.secret_ids FROM chat_sessions c
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden, c.connector_ids, c.space_id, c.work_branches, c.commit_email, c.secret_ids, c.temporary FROM chat_sessions c
 WHERE c.id = (SELECT m.session_id FROM chat_messages m WHERE m.run_id = $1 LIMIT 1)
 `
 
@@ -522,12 +524,13 @@ func (q *Queries) ChatSessionForEndedRun(ctx context.Context, runID *uuid.UUID) 
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
 
 const chatSessionForRun = `-- name: ChatSessionForRun :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids FROM chat_sessions WHERE current_run_id = $1
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary FROM chat_sessions WHERE current_run_id = $1
 `
 
 func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID) (ChatSession, error) {
@@ -564,6 +567,7 @@ func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -826,11 +830,11 @@ func (q *Queries) CreateChatAttachment(ctx context.Context, arg CreateChatAttach
 }
 
 const createChatSession = `-- name: CreateChatSession :one
-INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id, hidden, space_id)
+INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id, hidden, space_id, temporary)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
   COALESCE($9::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = $1 AND p.user_id = $4 AND p.is_default)), $10,
-  $11)
-RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+  $11, $12)
+RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type CreateChatSessionParams struct {
@@ -845,6 +849,7 @@ type CreateChatSessionParams struct {
 	PersonaID   *uuid.UUID
 	Hidden      bool
 	SpaceID     *uuid.UUID
+	Temporary   bool
 }
 
 // Without a persona_id the chat gets its creator's default persona (none
@@ -863,6 +868,7 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 		arg.PersonaID,
 		arg.Hidden,
 		arg.SpaceID,
+		arg.Temporary,
 	)
 	var i ChatSession
 	err := row.Scan(
@@ -896,6 +902,7 @@ func (q *Queries) CreateChatSession(ctx context.Context, arg CreateChatSessionPa
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -1120,6 +1127,46 @@ func (q *Queries) DeleteStaleChatAttachments(ctx context.Context, arg DeleteStal
 	return items, nil
 }
 
+const expiredTemporaryChats = `-- name: ExpiredTemporaryChats :many
+SELECT id, workspace_id, created_by FROM chat_sessions
+WHERE temporary AND state <> 'running' AND COALESCE(last_message_at, created_at) < $1
+ORDER BY COALESCE(last_message_at, created_at)
+LIMIT $2
+`
+
+type ExpiredTemporaryChatsParams struct {
+	Cutoff   *time.Time
+	RowLimit int32
+}
+
+type ExpiredTemporaryChatsRow struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	CreatedBy   uuid.UUID
+}
+
+// Temporary chats idle since before the cutoff, with nothing running, oldest
+// first: the sweep deletes them.
+func (q *Queries) ExpiredTemporaryChats(ctx context.Context, arg ExpiredTemporaryChatsParams) ([]ExpiredTemporaryChatsRow, error) {
+	rows, err := q.db.Query(ctx, expiredTemporaryChats, arg.Cutoff, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExpiredTemporaryChatsRow{}
+	for rows.Next() {
+		var i ExpiredTemporaryChatsRow
+		if err := rows.Scan(&i.ID, &i.WorkspaceID, &i.CreatedBy); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const finishUnfinishedChatTurns = `-- name: FinishUnfinishedChatTurns :exec
 UPDATE run_turns SET status = 'done', ended_at = coalesce(ended_at, now()), exit_code = 1
 WHERE run_id = $1 AND status IN ('pending', 'running')
@@ -1197,7 +1244,7 @@ func (q *Queries) GetChatMessage(ctx context.Context, id uuid.UUID) (ChatMessage
 }
 
 const getChatSession = `-- name: GetChatSession :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids FROM chat_sessions WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary FROM chat_sessions WHERE id = $1 AND workspace_id = $2
 `
 
 type GetChatSessionParams struct {
@@ -1239,6 +1286,7 @@ func (q *Queries) GetChatSession(ctx context.Context, arg GetChatSessionParams) 
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -1402,7 +1450,7 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 }
 
 const listChatSessions = `-- name: ListChatSessions :many
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids FROM chat_sessions
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary FROM chat_sessions
 WHERE workspace_id = $1 AND project_id = $2 AND created_by = $3 AND NOT archived AND NOT hidden
 ORDER BY COALESCE(last_message_at, created_at) DESC, id DESC
 LIMIT $4
@@ -1460,6 +1508,7 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 			&i.WorkBranches,
 			&i.CommitEmail,
 			&i.SecretIds,
+			&i.Temporary,
 		); err != nil {
 			return nil, err
 		}
@@ -1561,7 +1610,7 @@ func (q *Queries) ListChatTicketRuns(ctx context.Context, chatID uuid.UUID) ([]L
 }
 
 const listChatsForUser = `-- name: ListChatsForUser :many
-SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden, c.connector_ids, c.space_id, c.work_branches, c.commit_email, c.secret_ids FROM chat_sessions c LEFT JOIN projects p ON p.id = c.project_id
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden, c.connector_ids, c.space_id, c.work_branches, c.commit_email, c.secret_ids, c.temporary FROM chat_sessions c LEFT JOIN projects p ON p.id = c.project_id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = $3 AND NOT c.hidden
   AND ($4::text IS NULL OR p.key = $4::text)
   -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
@@ -1643,6 +1692,7 @@ func (q *Queries) ListChatsForUser(ctx context.Context, arg ListChatsForUserPara
 			&i.WorkBranches,
 			&i.CommitEmail,
 			&i.SecretIds,
+			&i.Temporary,
 		); err != nil {
 			return nil, err
 		}
@@ -1746,7 +1796,7 @@ func (q *Queries) ListRecentChatMessages(ctx context.Context, arg ListRecentChat
 }
 
 const lockChatSession = `-- name: LockChatSession :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary FROM chat_sessions WHERE id = $1 AND workspace_id = $2 FOR UPDATE
 `
 
 type LockChatSessionParams struct {
@@ -1788,12 +1838,13 @@ func (q *Queries) LockChatSession(ctx context.Context, arg LockChatSessionParams
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
 
 const lockChatSessionByID = `-- name: LockChatSessionByID :one
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids FROM chat_sessions WHERE id = $1 FOR UPDATE
+SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary FROM chat_sessions WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSession, error) {
@@ -1830,6 +1881,7 @@ func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSe
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -2217,7 +2269,7 @@ func (q *Queries) RecoverChatCancellations(ctx context.Context, runnerID *string
 
 const renameChatSession = `-- name: RenameChatSession :one
 UPDATE chat_sessions SET title = $3, revision = revision + 1, updated_at = now()
-WHERE id = $1 AND workspace_id = $2 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $1 AND workspace_id = $2 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type RenameChatSessionParams struct {
@@ -2267,6 +2319,7 @@ func (q *Queries) RenameChatSession(ctx context.Context, arg RenameChatSessionPa
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -2330,7 +2383,7 @@ hits AS (
   FROM chat_messages m
   JOIN chat_sessions c ON c.id = m.session_id
   CROSS JOIN q
-  WHERE c.workspace_id = $2 AND c.created_by = $3 AND NOT c.hidden
+  WHERE c.workspace_id = $2 AND c.created_by = $3 AND NOT c.hidden AND NOT c.temporary
     AND m.role IN ('user', 'assistant')
     AND to_tsvector('english', left(m.body_md, 200000)) @@ q.tsq
   ORDER BY rank DESC, m.created_at DESC
@@ -2419,7 +2472,7 @@ func (q *Queries) SetChatAgent(ctx context.Context, arg SetChatAgentParams) erro
 }
 
 const setChatCommitEmail = `-- name: SetChatCommitEmail :one
-UPDATE chat_sessions SET commit_email = $3 WHERE id = $1 AND workspace_id = $2 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+UPDATE chat_sessions SET commit_email = $3 WHERE id = $1 AND workspace_id = $2 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatCommitEmailParams struct {
@@ -2464,12 +2517,13 @@ func (q *Queries) SetChatCommitEmail(ctx context.Context, arg SetChatCommitEmail
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
 
 const setChatConnectors = `-- name: SetChatConnectors :one
-UPDATE chat_sessions SET connector_ids = $2 WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+UPDATE chat_sessions SET connector_ids = $2 WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatConnectorsParams struct {
@@ -2511,13 +2565,14 @@ func (q *Queries) SetChatConnectors(ctx context.Context, arg SetChatConnectorsPa
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
 
 const setChatInterrupt = `-- name: SetChatInterrupt :one
 UPDATE chat_sessions SET interrupt_message_id = $1
-WHERE id = $2 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $2 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatInterruptParams struct {
@@ -2561,6 +2616,7 @@ func (q *Queries) SetChatInterrupt(ctx context.Context, arg SetChatInterruptPara
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -2620,7 +2676,7 @@ func (q *Queries) SetChatMessageTurn(ctx context.Context, arg SetChatMessageTurn
 
 const setChatProject = `-- name: SetChatProject :one
 UPDATE chat_sessions SET project_id = $1, revision = revision + 1, updated_at = now()
-WHERE id = $2 AND workspace_id = $3 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $2 AND workspace_id = $3 AND revision = $4 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatProjectParams struct {
@@ -2670,12 +2726,13 @@ func (q *Queries) SetChatProject(ctx context.Context, arg SetChatProjectParams) 
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
 
 const setChatRepo = `-- name: SetChatRepo :one
-UPDATE chat_sessions SET repo_url = $2 WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+UPDATE chat_sessions SET repo_url = $2 WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatRepoParams struct {
@@ -2718,6 +2775,7 @@ func (q *Queries) SetChatRepo(ctx context.Context, arg SetChatRepoParams) (ChatS
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -2725,7 +2783,7 @@ func (q *Queries) SetChatRepo(ctx context.Context, arg SetChatRepoParams) (ChatS
 const setChatRunState = `-- name: SetChatRunState :one
 UPDATE chat_sessions SET current_run_id = $2, state = $3,
  revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatRunStateParams struct {
@@ -2768,13 +2826,14 @@ func (q *Queries) SetChatRunState(ctx context.Context, arg SetChatRunStateParams
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
 
 const setChatSelection = `-- name: SetChatSelection :one
 UPDATE chat_sessions SET harness = $2, model = $3, effort = $4, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatSelectionParams struct {
@@ -2825,13 +2884,14 @@ func (q *Queries) SetChatSelection(ctx context.Context, arg SetChatSelectionPara
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
 
 const setChatSpeaker = `-- name: SetChatSpeaker :one
 UPDATE chat_sessions SET speaker_persona_id = $1, queued_persona_ids = $2::uuid[], relay_turns = $3, relay_limit = $4
-WHERE id = $5 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $5 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatSpeakerParams struct {
@@ -2884,6 +2944,7 @@ func (q *Queries) SetChatSpeaker(ctx context.Context, arg SetChatSpeakerParams) 
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
@@ -2905,7 +2966,7 @@ func (q *Queries) SetChatTicketRunReported(ctx context.Context, arg SetChatTicke
 
 const setChatTitle = `-- name: SetChatTitle :one
 UPDATE chat_sessions SET title = $2, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type SetChatTitleParams struct {
@@ -2947,13 +3008,14 @@ func (q *Queries) SetChatTitle(ctx context.Context, arg SetChatTitleParams) (Cha
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }
 
 const updateChatTitleArchived = `-- name: UpdateChatTitleArchived :one
 UPDATE chat_sessions SET title = $2, archived = $3, revision = revision + 1, updated_at = now()
-WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids
+WHERE id = $1 RETURNING id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary
 `
 
 type UpdateChatTitleArchivedParams struct {
@@ -2996,6 +3058,7 @@ func (q *Queries) UpdateChatTitleArchived(ctx context.Context, arg UpdateChatTit
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+		&i.Temporary,
 	)
 	return i, err
 }

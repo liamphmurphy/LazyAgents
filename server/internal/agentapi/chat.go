@@ -34,6 +34,8 @@ type chatScope struct {
 	PersonaID *uuid.UUID
 	// MemorySpaceID is the chat's space when that space keeps its own memory.
 	MemorySpaceID *uuid.UUID
+	// Temporary chats reach neither the person's memory nor their past chats.
+	Temporary bool
 }
 
 // chatScopeFor is nil unless the caller's token belongs to a chat run.
@@ -66,7 +68,7 @@ func chatScopeFor(ctx context.Context, d Deps, c agents.Caller) (*chatScope, err
 	if err != nil {
 		return nil, err
 	}
-	return &chatScope{ChatID: chat.ID, ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: runs.ChatSpeakerID(chat), MemorySpaceID: memSpace}, nil
+	return &chatScope{ChatID: chat.ID, ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: runs.ChatSpeakerID(chat), MemorySpaceID: memSpace, Temporary: chat.Temporary}, nil
 }
 
 // projectFilter resolves the optional project key a listing or search is

@@ -17,6 +17,9 @@ import (
 // person's own memory, plus (in a persona chat) that one persona's own memory.
 // No chat reaches another persona's memory.
 
+// temporaryChatRefusal is what memory tools answer in a temporary chat.
+const temporaryChatRefusal = "this is a temporary chat: it doesn't use the person's memory"
+
 const (
 	aboutPerson  = "person"
 	aboutPersona = "persona"
@@ -106,6 +109,9 @@ func memoryOwner(ctx context.Context, d Deps, c agents.Caller) (chatMemory, erro
 	}
 	if s == nil {
 		return chatMemory{}, apperr.Conflict("memory tools only work in a chat with a person")
+	}
+	if s.Temporary {
+		return chatMemory{}, apperr.Conflict(temporaryChatRefusal)
 	}
 	return chatMemory{person: memory.Owner{WorkspaceID: c.Agent.WorkspaceID, UserID: s.UserID, SpaceID: s.MemorySpaceID}, persona: s.PersonaID,
 		src: memory.Source{Label: "chat " + s.ChatID.String(), ChatID: &s.ChatID, RunID: c.RunID}}, nil

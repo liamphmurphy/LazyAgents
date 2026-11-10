@@ -137,6 +137,9 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 			CurrentRunId: c.CurrentRunID, Archived: c.Archived, Revision: int(c.Revision), MessageCount: counts[c.ID],
 			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, LastMessageAt: c.LastMessageAt, RepoUrl: c.RepoUrl,
 		}
+		if c.Temporary {
+			item.Temporary = &c.Temporary
+		}
 		if c.RepoUrl != nil {
 			item.WorkBranches = &c.WorkBranches
 			// Only while it is still one of the creator's addresses (chats are
@@ -432,7 +435,7 @@ func (s *Server) CreateChat(ctx context.Context, req api.CreateChatRequestObject
 		return nil, apperr.Invalid("body", "required")
 	}
 	b := req.Body
-	in := runs.ChatInput{Project: deref(b.Project), Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl), Hidden: deref(b.Hidden), SpaceID: b.SpaceId, CommitEmail: deref(b.CommitEmail)}
+	in := runs.ChatInput{Project: deref(b.Project), Title: deref(b.Title), Model: deref(b.Model), PersonaID: b.PersonaId, RepoURL: deref(b.RepoUrl), Hidden: deref(b.Hidden), Temporary: deref(b.Temporary), SpaceID: b.SpaceId, CommitEmail: deref(b.CommitEmail)}
 	if b.Harness != nil {
 		in.Harness = string(*b.Harness)
 	}

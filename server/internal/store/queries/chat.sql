@@ -2,10 +2,10 @@
 -- Without a persona_id the chat gets its creator's default persona (none
 -- when they have no default). Callers check that a given persona_id is the
 -- creator's own.
-INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id, hidden, space_id)
+INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id, hidden, space_id, temporary)
 VALUES (sqlc.arg(workspace_id), sqlc.arg(project_id), sqlc.arg(title), sqlc.arg(created_by), sqlc.arg(agent_id), sqlc.arg(harness), sqlc.arg(model), sqlc.arg(effort),
   COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)), sqlc.arg(hidden),
-  sqlc.narg(space_id))
+  sqlc.narg(space_id), sqlc.arg(temporary))
 RETURNING *;
 
 -- name: SetChatProject :one
@@ -428,7 +428,7 @@ hits AS (
   FROM chat_messages m
   JOIN chat_sessions c ON c.id = m.session_id
   CROSS JOIN q
-  WHERE c.workspace_id = sqlc.arg(workspace_id) AND c.created_by = sqlc.arg(user_id) AND NOT c.hidden
+  WHERE c.workspace_id = sqlc.arg(workspace_id) AND c.created_by = sqlc.arg(user_id) AND NOT c.hidden AND NOT c.temporary
     AND m.role IN ('user', 'assistant')
     AND to_tsvector('english', left(m.body_md, 200000)) @@ q.tsq
   ORDER BY rank DESC, m.created_at DESC
@@ -496,3 +496,11 @@ SELECT coalesce((SELECT nullif(trim(e.payload->>'reason'), '') FROM activity_eve
 
 -- name: PendingApprovalForRun :one
 SELECT * FROM approval_requests WHERE run_id = $1 AND state = 'pending' ORDER BY created_at DESC LIMIT 1;
+
+-- name: ExpiredTemporaryChats :many
+-- Temporary chats idle since before the cutoff, with nothing running, oldest
+-- first: the sweep deletes them.
+SELECT id, workspace_id, created_by FROM chat_sessions
+WHERE temporary AND state <> 'running' AND COALESCE(last_message_at, created_at) < sqlc.arg(cutoff)
+ORDER BY COALESCE(last_message_at, created_at)
+LIMIT sqlc.arg(row_limit);
