@@ -586,3 +586,95 @@ func TestDockerProxyBuildsAndPullsCantReplaceLocalImages(t *testing.T) {
 		t.Fatalf("env = %v", td.Env)
 	}
 }
+
+// A daemon inheriting the image's NIX_REMOTE=daemon connects to itself for
+// every request and never answers: new daemons are pinned to the local store,
+// and one created before that is replaced rather than reused.
+func TestEnsureNixDaemonPinsTheLocalStore(t *testing.T) {
+	for name, existing := range map[string]string{
+		"none":    "",
+		"stale":   `{"State":{"Running":true},"Config":{"Env":["NIX_REMOTE=daemon","PATH=/bin"]}}`,
+		"current": `{"State":{"Running":true},"Config":{"Env":["NIX_REMOTE=local"]}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var calls []string
+			var created map[string]any
+			mux := http.NewServeMux()
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				p := strings.TrimPrefix(r.URL.Path, "/v1.43")
+				calls = append(calls, r.Method+" "+p)
+				switch {
+				case r.Method == "GET":
+					if existing == "" {
+						http.Error(w, `{"message":"no such container"}`, 404)
+						return
+					}
+					_, _ = io.WriteString(w, existing)
+				case p == "/containers/create":
+					_ = json.NewDecoder(r.Body).Decode(&created)
+					w.WriteHeader(201)
+					_, _ = io.WriteString(w, `{"Id":"n1"}`)
+				default:
+					w.WriteHeader(204)
+				}
+			})
+			sock := filepath.Join(t.TempDir(), "d.sock")
+			l, err := net.Listen("unix", sock)
+			if err != nil {
+				t.Fatal(err)
+			}
+			srv := &http.Server{Handler: mux}
+			go func() { _ = srv.Serve(l) }()
+			t.Cleanup(func() { _ = srv.Close() })
+			d := &Docker{Socket: sock, Stack: "test", Image: "vesper/agent-base:latest", NixVolume: "lazyagents-nix"}
+			if err := d.EnsureNixDaemon(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			joined := strings.Join(calls, ", ")
+			switch name {
+			case "current":
+				if created != nil || strings.Contains(joined, "DELETE") {
+					t.Fatalf("a current daemon was touched: %s", joined)
+				}
+				return
+			case "stale":
+				if !strings.Contains(joined, "DELETE /containers/lazyagents-nix-daemon-test") {
+					t.Fatalf("stale daemon not replaced: %s", joined)
+				}
+			}
+			if created == nil || fmt.Sprint(created["Env"]) != "[NIX_REMOTE=local]" {
+				t.Fatalf("daemon env = %v (calls %s)", created["Env"], joined)
+			}
+		})
+	}
+}
+
+// A turn can remove images its run built (compose down --rmi local), and no
+// others: not another run's, a pulled one, or the agent image.
+func TestDockerProxyRemovesOnlyItsRunsImages(t *testing.T) {
+	built := func(run string) map[string]any {
+		return map[string]any{"Config": map[string]any{"Labels": map[string]any{proxyLabelKey: run + "-1", labelKey: run, stackLabelKey: "test"}}}
+	}
+	f := &proxyEngine{images: map[string]map[string]any{
+		"ctest-app:latest":         built("run-1"),
+		"acme/web:dev":             built("run-1"),
+		"other-app:latest":         built("run-9"),
+		"postgres:17-alpine":       {"RepoDigests": []any{"postgres@sha256:abc"}, "Config": map[string]any{}},
+		"vesper/agent-base:latest": {"Config": map[string]any{}},
+	}}
+	d, td := startProxyEngine(t, f)
+	c := turnClient(d, td)
+	for ref, want := range map[string]int{
+		"ctest-app:latest": 204, "acme/web:dev": 204,
+		"other-app:latest": 403, "postgres:17-alpine": 403, "vesper/agent-base:latest": 403, "missing:1": 404,
+	} {
+		if code, out := call(t, c, "DELETE", "/images/"+ref+"?force=1", nil); code != want {
+			t.Fatalf("remove %s: %d %s, want %d", ref, code, out, want)
+		}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if got := strings.Join(f.deleted, " "); got != "/images/ctest-app:latest /images/acme/web:dev" && got != "/images/acme/web:dev /images/ctest-app:latest" {
+		t.Fatalf("reached the engine: %s", got)
+	}
+}

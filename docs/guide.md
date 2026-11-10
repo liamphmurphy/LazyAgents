@@ -349,7 +349,8 @@ Builds use the classic builder (`DOCKER_BUILDKIT=0` in turns): `RUN` steps run
 on the turn's network with the daemon's defaults. BuildKit is refused because
 its session and gRPC streams can't be inspected. Neither a build tag nor a pull
 can replace a locally built image a turn didn't make, such as the agent image.
-Swarm, plugins and image removal aren't available. Ryuk is turned off
+A turn can remove images its run built (`docker compose down --rmi local`), and
+no others. Swarm and plugins aren't available. Ryuk is turned off
 (`TESTCONTAINERS_RYUK_DISABLED`), because cleanup is the runner's job. A stack
 lasts one turn; one that stays up between messages is still to come.
 
