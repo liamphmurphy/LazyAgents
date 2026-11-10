@@ -495,7 +495,7 @@ func (q *Queries) ListChatSpaceSources(ctx context.Context, spaceID uuid.UUID) (
 }
 
 const listChatSpaces = `-- name: ListChatSpaces :many
-SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at, app FROM chat_spaces WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at, id
+SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at, app FROM chat_spaces WHERE workspace_id = $1 AND user_id = $2 AND app IS NULL ORDER BY created_at, id
 `
 
 type ListChatSpacesParams struct {
@@ -504,6 +504,8 @@ type ListChatSpacesParams struct {
 }
 
 // The person's spaces, oldest first: the order they're listed in the menu.
+// An app's space (app IS NOT NULL) is left out: the person reaches it through
+// the app, and it doesn't count toward their limit.
 func (q *Queries) ListChatSpaces(ctx context.Context, arg ListChatSpacesParams) ([]ChatSpace, error) {
 	rows, err := q.db.Query(ctx, listChatSpaces, arg.WorkspaceID, arg.UserID)
 	if err != nil {

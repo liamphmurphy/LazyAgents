@@ -20,7 +20,7 @@ func TestFinanceToolsOnlyInFinanceSpace(t *testing.T) {
 	}
 
 	elsewhere := e.canvasToken(uuid.MustParse(e.newChat(nil)["id"].(string)))
-	if code, out := e.tool(elsewhere, "finance_summary", map[string]any{}); code != http.StatusConflict || !strings.Contains(out["message"].(string), "Finance space") {
+	if code, out := e.tool(elsewhere, "finance_summary", map[string]any{}); code != http.StatusConflict || !strings.Contains(out["message"].(string), "Finance app's Ask chat") {
 		t.Fatalf("outside the space = %d %v", code, out)
 	}
 	other := e.want("POST", "/chat-spaces", map[string]any{"name": "Money talk"}, http.StatusCreated)["id"].(string)
@@ -70,4 +70,25 @@ func (e *chatEnv) toolInvalid(token, name string, args any, field string) {
 	if msg, _ := out["message"].(string); code != http.StatusUnprocessableEntity || !strings.HasPrefix(msg, field+":") {
 		e.t.Fatalf("%s(%v) = %d %v, want 422 on %s", name, args, code, out, field)
 	}
+}
+
+// The Finance app keeps its Ask chats in a space of its own, but that space is
+// the app's plumbing: it stays out of the person's Spaces list (and so out of
+// the menu, the pickers and the space limit), while the app can still read it.
+func TestFinanceSpaceStaysOutOfSpacesList(t *testing.T) {
+	e := newChatEnv(t)
+	mine := e.want("POST", "/chat-spaces", map[string]any{"name": "Health"}, http.StatusCreated)["id"].(string)
+	finance := e.want("GET", "/finance", nil, http.StatusOK)["space_id"].(string)
+
+	var listed []string
+	for _, sp := range e.want("GET", "/chat-spaces", nil, http.StatusOK)["spaces"].([]any) {
+		listed = append(listed, sp.(map[string]any)["id"].(string))
+	}
+	if len(listed) != 1 || listed[0] != mine {
+		t.Fatalf("listed %v, want only %s (not the Finance space %s)", listed, mine, finance)
+	}
+	if got := e.want("GET", "/chat-spaces/"+finance, nil, http.StatusOK)["id"]; got != finance {
+		t.Fatalf("Finance space by id = %v", got)
+	}
+	e.want("GET", "/chats?space="+finance, nil, http.StatusOK)
 }

@@ -25,7 +25,7 @@ func financeFor(ctx context.Context, d Deps, c agents.Caller, tool string) (*fin
 	if err != nil {
 		return nil, o, err
 	}
-	notHere := apperr.Conflict("%s only works in the person's Finance space: they can open it from Finance in the main menu and use Ask", tool)
+	notHere := apperr.Conflict("%s only works in the Finance app's Ask chat: the person can open Finance under Apps in the main menu and use Ask", tool)
 	if s == nil || c.RunID == nil {
 		return nil, o, notHere
 	}

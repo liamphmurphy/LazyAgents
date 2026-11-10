@@ -168,7 +168,7 @@ function Welcome({ onImport }: { onImport: () => void }) {
       </Button>
       <p className="flex items-center gap-[6px] text-[11.5px] text-fg-tertiary">
         <Icon name="lock" size={12} />
-        Only you see this, and only chats in your Finance space can read it.
+        Only you see this, and only Ask, here in Finance, can read it.
       </p>
     </section>
   );
