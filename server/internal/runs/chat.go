@@ -995,43 +995,48 @@ func (s *Service) DeleteChat(ctx context.Context, ws, user, id uuid.UUID) error 
 		if err != nil {
 			return err
 		}
-		if err := q.ClearChatSuggestions(ctx, store.ClearChatSuggestionsParams{WorkspaceID: ws, UserID: user}); err != nil {
+		return deleteChat(ctx, q, chat)
+	})
+}
+
+// deleteChat removes a locked chat; see DeleteChat.
+func deleteChat(ctx context.Context, q *store.Queries, chat store.ChatSession) error {
+	if err := q.ClearChatSuggestions(ctx, store.ClearChatSuggestionsParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy}); err != nil {
+		return err
+	}
+	if err := stopResearchForChat(ctx, q, chat.ID); err != nil {
+		return err
+	}
+	if err := stopWorkflowsForChat(ctx, q, chat.ID); err != nil {
+		return err
+	}
+	if err := q.KeepWorkflowImagesForSweep(ctx, chat.ID); err != nil {
+		return err
+	}
+	if chat.CurrentRunID != nil {
+		run, err := q.LockRun(ctx, *chat.CurrentRunID)
+		if err != nil {
 			return err
 		}
-		if err := stopResearchForChat(ctx, q, chat.ID); err != nil {
-			return err
-		}
-		if err := stopWorkflowsForChat(ctx, q, chat.ID); err != nil {
-			return err
-		}
-		if err := q.KeepWorkflowImagesForSweep(ctx, chat.ID); err != nil {
-			return err
-		}
-		if chat.CurrentRunID != nil {
-			run, err := q.LockRun(ctx, *chat.CurrentRunID)
-			if err != nil {
+		if !slices.Contains(Terminal, run.State) {
+			if err = q.DropPendingTurns(ctx, run.ID); err != nil {
 				return err
 			}
-			if !slices.Contains(Terminal, run.State) {
-				if err = q.DropPendingTurns(ctx, run.ID); err != nil {
-					return err
-				}
-				outcome := "The chat was deleted."
-				if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "cancelled", Outcome: &outcome}); err != nil {
-					return err
-				}
-				_ = q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](143)})
-				if err = q.ExpireRunApprovals(ctx, run.ID); err != nil {
-					return err
-				}
-				if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "cancelled", "outcome": outcome}); err != nil {
-					return err
-				}
-				if err = RecomputeAgentStatus(ctx, q, run.AgentID); err != nil {
-					return err
-				}
+			outcome := "The chat was deleted."
+			if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "cancelled", Outcome: &outcome}); err != nil {
+				return err
+			}
+			_ = q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](143)})
+			if err = q.ExpireRunApprovals(ctx, run.ID); err != nil {
+				return err
+			}
+			if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "cancelled", "outcome": outcome}); err != nil {
+				return err
+			}
+			if err = RecomputeAgentStatus(ctx, q, run.AgentID); err != nil {
+				return err
 			}
 		}
-		return q.DeleteChatSession(ctx, chat.ID)
-	})
+	}
+	return q.DeleteChatSession(ctx, chat.ID)
 }
