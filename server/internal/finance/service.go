@@ -27,6 +27,9 @@ const SpaceInstructions = `This is the person's Finance space, opened from the F
 Amounts are in dollars; negative is money out. Transfer is money moving between their own accounts (such as a card payment) and is left out of income and spending.
 When they say how a transaction should be categorized, use finance_categorize; by default it saves a rule for that merchant, so tell them it will apply to future imports too.`
 
+// Now is the clock the dashboard and tools read "today" from; tests pin it.
+var Now = func() time.Time { return time.Now().UTC() }
+
 // Owner is the person whose finances these are.
 type Owner struct {
 	Workspace uuid.UUID
