@@ -43,6 +43,18 @@ export function profileChanges(saved: ProfileDraft, d: ProfileDraft): Partial<Pr
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * `emails` with `from` replaced by `to` in the same position, so editing the
+ * primary keeps it primary. `to` is checked against the other addresses only,
+ * which lets a full list be edited and a case-only fix through.
+ */
+export function editEmail(emails: string[], from: string, to: string): { emails?: string[]; error?: string } {
+  const others = emails.filter((e) => e !== from);
+  const error = emailError(to, others);
+  if (error) return { error };
+  return { emails: emails.map((e) => (e === from ? to.trim() : e)) };
+}
+
 /** `emails` with `email` moved to the front, making it the primary. */
 export function makePrimary(emails: string[], email: string): string[] {
   return [email, ...emails.filter((e) => e !== email)];

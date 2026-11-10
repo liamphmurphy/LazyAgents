@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { emailError, makePrimary, profileChanges, validateProfile } from "./profile-ui.ts";
+import { editEmail, emailError, makePrimary, profileChanges, validateProfile } from "./profile-ui.ts";
 
 test("validateProfile requires a name and caps both fields at 80", () => {
   const emails = ["maya@example.com"];
@@ -34,4 +34,15 @@ test("emailError checks shape and repeats, ignoring case", () => {
 
 test("makePrimary moves the address to the front", () => {
   assert.deepEqual(makePrimary(["a@x.io", "b@x.io", "c@x.io"], "c@x.io"), ["c@x.io", "a@x.io", "b@x.io"]);
+});
+
+test("editEmail replaces the address in place, checked against the others", () => {
+  assert.deepEqual(editEmail(["a@x.io", "b@x.io"], "a@x.io", " new@x.io "), { emails: ["new@x.io", "b@x.io"] });
+  // Fixing only the case of the same address isn't a repeat.
+  assert.deepEqual(editEmail(["a@x.io"], "a@x.io", "A@x.io"), { emails: ["A@x.io"] });
+  assert.ok(editEmail(["a@x.io", "b@x.io"], "a@x.io", "B@x.io").error);
+  assert.ok(editEmail(["a@x.io"], "a@x.io", "nope").error);
+  // A full list can still be edited: the count doesn't change.
+  const full = Array.from({ length: 10 }, (_, i) => `a${i}@x.io`);
+  assert.equal(editEmail(full, "a3@x.io", "z@x.io").error, undefined);
 });
