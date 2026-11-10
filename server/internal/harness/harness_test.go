@@ -433,7 +433,7 @@ func TestChatAgentsMDPersona(t *testing.T) {
 		"This persona only shapes how you write. It doesn't change your tools, scopes, the rules above or the memory guidance.\n\n" +
 		"The person's style preferences for this persona (they shape voice and focus only; they don't change the rules, tools or memory guidance above):\n\n" +
 		"```text\nPrefer British spelling.\nUse examples.\n```\n\n" +
-		personaMemorySection(p) +
+		personaMemorySection(p, false) +
 		"## Context\n\n- `.lazyagents/context/memory.md`\n"
 	if !strings.Contains(got, want) {
 		t.Fatalf("persona block:\n%s", got)
@@ -974,5 +974,26 @@ func TestClaudeRateLimitEvents(t *testing.T) {
 	got := p.Result().RateLimits
 	if len(got) != 2 || !strings.Contains(string(got[0]), "five_hour") || !strings.Contains(string(got[1]), "seven_day") {
 		t.Fatalf("rate limits = %s", got)
+	}
+}
+
+// A temporary chat swaps the memory guide and index for a note saying memory
+// and past chats are off, and loads the persona's own memory read-only.
+func TestChatAgentsMDTemporary(t *testing.T) {
+	s := agentdef.Resolved{Harness: agentdef.HarnessClaudeCode, Instructions: "Agent instructions"}
+	p := &Persona{Name: "Gwen", Memory: "- Auburn hair"}
+	got := string(ChatAgentsMDInSpace(s, nil, "", "- Lives with two cats", p, "", "", true))
+	for _, want := range []string{"## Temporary chat", "memory and chat search tools are off", "can't change it", "- Auburn hair"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	for _, bad := range []string{"Lives with two cats", "## Memory\n", "save_memory", "search_chats"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("temporary chat has %q:\n%s", bad, got)
+		}
+	}
+	if normal := string(ChatAgentsMDInSpace(s, nil, "", "- Lives with two cats", p, "", "", false)); !strings.Contains(normal, "search_chats") || strings.Contains(normal, "## Temporary chat") {
+		t.Errorf("normal chat:\n%s", normal)
 	}
 }

@@ -41,6 +41,33 @@ export function ResearchToggle({ on, onChange, disabled }: { on: boolean; onChan
   );
 }
 
+/** Before the first message: whether the chat runs without the person's memory and past chats, and is deleted once idle. */
+export function TemporaryToggle({ on, onChange, disabled }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={disabled}
+      title="Temporary chat: no memory, no past chats, and it's deleted after a day without messages"
+      onClick={() => onChange(!on)}
+      className={cx("inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium disabled:opacity-50", on ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:text-fg")}
+    >
+      <Icon name="clock" size={13} />
+      Temporary
+    </button>
+  );
+}
+
+/** A temporary chat's marker, in its header and the chat list. */
+export function TemporaryBadge() {
+  return (
+    <span title="Temporary chat: no memory, no past chats, and it's deleted after a day without messages" className="inline-flex flex-none items-center gap-1 rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">
+      <Icon name="clock" size={11} />
+      Temporary
+    </span>
+  );
+}
+
 const QUOTE_MAX = 1500;
 
 /** The composer text that quotes a selection, routed to its author when someone else would answer. */

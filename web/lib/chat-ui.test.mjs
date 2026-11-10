@@ -134,6 +134,8 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "read_workflow", input: {} }, "workflow"],
     [{ tool: "save_memory", input: {} }, "memory-save"],
     [{ tool: "search_memory", input: {} }, "memory"],
+    [{ tool: "search_chats", input: { query: "secret" } }, "chat-history"],
+    [{ tool: "mcp__lazyagents__read_chat", input: {} }, "chat-history"],
     [{ tool: "some.other_tool", input: {} }, "connector"],
     [{ tool: "", input: undefined }, "thinking"],
     [bash("python3 scripts/migrate.py"), "terminal"],

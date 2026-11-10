@@ -5766,6 +5766,8 @@ export interface components {
             /** @description The address picked for this chat's commits. Absent until one is picked, or once it is no longer one of the creator's emails; commits then use their primary email. */
             commit_email?: string;
             archived: boolean;
+            /** @description A temporary chat: it doesn't use the person's memory or past chats, stays out of search, and is deleted after a day without messages */
+            temporary?: boolean;
             revision: number;
             message_count: number;
             /** Format: date-time */
@@ -5797,6 +5799,8 @@ export interface components {
             commit_email?: string;
             /** @description Leave the chat out of chat lists, search and the dock; it stays reachable by id. For a chat that lives behind another screen, like the workflow editor. Fixed for the chat's life. */
             hidden?: boolean;
+            /** @description Start a temporary chat: its persona neither reads nor writes the caller's memory and can't search their past chats; the chat stays out of search and suggestions and is deleted after a day without messages. Fixed for the chat's life. */
+            temporary?: boolean;
             /**
              * Format: uuid
              * @description Start the chat in one of the caller's spaces. Its default persona, project and connectors apply unless persona_id or project is given. 422 for an unknown space.

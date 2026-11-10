@@ -391,6 +391,20 @@
   80% { fill: var(--border-strong); }
 }
 
+/* chat-history: the lens rests on each bubble in turn (a third of the loop each),
+   and that bubble's highlight shows while it's there. */
+.scene-history-lens { animation: scene-history-lens 3.96s ease-in-out infinite; }
+@keyframes scene-history-lens {
+  0%, 18%, 100% { transform: none; }
+  33%, 51% { transform: translate(40px, 17px); }
+  66%, 84% { transform: translate(-4px, 34px); }
+}
+.scene-history-hit { opacity: 0; animation: scene-history-hit 3.96s ease-in-out infinite both; }
+@keyframes scene-history-hit {
+  0%, 30%, 100% { opacity: 0; }
+  6%, 18% { opacity: 0.3; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .scene-layer,
   .scene-layer * { animation: none !important; }

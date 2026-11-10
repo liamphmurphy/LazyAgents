@@ -41,7 +41,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle } from "./reply-tools";
+import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { VideoCards, VideoRendererNotes } from "@/components/domain/video-card";
@@ -484,14 +484,19 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const commitPickRequired = fresh && askCommitEmail;
   function switchPersona(personaId: string, repo?: string) {
     if (!c || (personaId === c.persona?.id && !repo) || create.isPending || send.isPending || send.isSuccess) return;
-    replaceChat(personaId, repo, text);
+    replaceChat(personaId, repo, text, !!c.temporary);
+  }
+  // A chat is temporary for life, so before the first message switching it is a fresh chat too.
+  function switchTemporary(temporary: boolean) {
+    if (!c || temporary === !!c.temporary || create.isPending || send.isPending || send.isSuccess) return;
+    replaceChat(c.persona?.id, c.repo_url, text, temporary);
   }
   // Moves to a new chat, carrying the draft over. The old one is only dropped if it is still empty.
-  function replaceChat(personaId: string, repo: string | undefined, draft: string) {
+  function replaceChat(personaId: string | undefined, repo: string | undefined, draft: string, temporary: boolean) {
     if (!c) return;
     const old = c;
     create.mutate(
-      { ...(old.project ? { project: old.project } : {}), persona_id: personaId, harness: old.harness, model: old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
+      { ...(old.project ? { project: old.project } : {}), ...(personaId ? { persona_id: personaId } : {}), ...(temporary ? { temporary } : {}), harness: old.harness, model: old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
       {
         onSuccess: async (next) => {
           if (draft.trim()) putDraft(next.id, draft);
@@ -579,7 +584,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   type CommandRun = () => string | void; // a returned string is why it couldn't run
   const startInstead = (personaId: string, repo?: string): string | void => {
     if (create.isPending || send.isPending) return "Wait for the current message to finish sending.";
-    replaceChat(personaId, repo, "");
+    replaceChat(personaId, repo, "", false);
   };
   const whileIdle = (what: string, run: () => void): string | void => (running ? `Wait for the reply to finish before changing the ${what}.` : run());
   const plainCommands: Record<string, CommandRun> = {
@@ -702,6 +707,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           {/* In a space the project sits with the space's context chips below. */}
           {!c.space && <ChatProjectPicker chat={c} disabled={running} />}
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
+          {c.temporary && <TemporaryBadge />}
           <span className="flex-1" />
           <span className="flex-none">
           <Tabs
@@ -1030,6 +1036,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 <AttachButton onFiles={files.add} disabled={locked} />
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
+                {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked || running} />}
                 <EffortPicker
                   efforts={offered.efforts}
