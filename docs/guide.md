@@ -11,10 +11,28 @@ cp .env.example .env
 docker compose up --build      # → http://localhost:8080
 ```
 
-The first boot seeds the Northwind Labs demo from the design mockups. There's no
-login for now: you act as the workspace's first user (Maya Chen in the demo).
-Set `SEED=false` and `LOCAL_USER_NAME` in `.env` to start with an empty
+The first boot seeds the Northwind Labs demo from the design mockups. There are
+no accounts: a signed-in browser acts as the workspace's first user (Maya Chen in
+the demo). Set `SEED=false` and `LOCAL_USER_NAME` in `.env` to start with an empty
 workspace instead.
+
+### Signing in
+
+The API serves the app only to a signed-in browser. Agent containers can reach
+everything the app serves, so arriving at the API proves nothing; the proof is a
+one-time link that only reaches you through a terminal:
+
+```sh
+make signin    # → http://localhost:8080/api/v1/sign-in?code=…
+```
+
+Open it within 15 minutes. It works once, sets an HttpOnly, `SameSite=Strict`
+session cookie good for a year, and drops you into the app. The API also logs a
+link at startup while no browser is signed in. `make signin` asks the full
+stack's API when it's running (`docker compose exec api vesper sign-in-link`)
+and otherwise reads the dev database, linking to Next on `WEB_URL`
+(`http://localhost:3000`). Agents are unaffected: they use bearer tokens on
+`/mcp` and `/api/v1/agent/`.
 
 ### Running agents
 
