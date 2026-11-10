@@ -12,8 +12,12 @@ COPY --from=go-tools /usr/local/go /usr/local/go
 COPY --from=go-tools /go/bin/sqlc /usr/local/bin/sqlc
 ENV PATH="/usr/local/go/bin:${PATH}"
 
+# ffmpeg, numpy and Pillow let a coding chat render videos with code (chat
+# videos encode H.264 MP4s); python3-venv lets it install anything else it
+# needs without touching the system Python.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git openssh-client make jq ripgrep python3 build-essential gnupg \
+      ffmpeg python3-numpy python3-pil python3-venv \
  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli.gpg \
  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
       > /etc/apt/sources.list.d/github-cli.list \
