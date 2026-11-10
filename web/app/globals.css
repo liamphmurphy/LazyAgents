@@ -410,6 +410,22 @@
   6%, 18% { opacity: 0.3; }
 }
 
+/* The playground scene: one 4.8s story, so its parts reset together. */
+.scene-pg-1 { animation: scene-pg-1 4.8s ease-out infinite both; }
+.scene-pg-2 { animation: scene-pg-2 4.8s ease-out infinite both; }
+.scene-pg-3 { animation: scene-pg-3 4.8s ease-out infinite both; }
+.scene-pg-link { stroke-dasharray: 1; animation: scene-pg-link 4.8s ease-in-out infinite both; }
+.scene-pg-page { animation: scene-pg-page 4.8s ease-out infinite both; }
+.scene-pg-live { animation: scene-pg-live 4.8s ease-out infinite both; }
+.scene-pg-ring { animation: scene-pg-ring 4.8s ease-out infinite both; }
+@keyframes scene-pg-1 { 0% { transform: translateY(-8px); opacity: 0; } 10%, 88% { transform: none; opacity: 1; } 100% { opacity: 0; } }
+@keyframes scene-pg-2 { 0%, 12% { transform: translateY(-8px); opacity: 0; } 22%, 88% { transform: none; opacity: 1; } 100% { opacity: 0; } }
+@keyframes scene-pg-3 { 0%, 24% { transform: translateY(-8px); opacity: 0; } 34%, 88% { transform: none; opacity: 1; } 100% { opacity: 0; } }
+@keyframes scene-pg-link { 0%, 36% { stroke-dashoffset: 1; opacity: 0; } 38% { opacity: 1; } 50%, 88% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes scene-pg-page { 0%, 50% { transform: translateY(3px); opacity: 0; } 60%, 88% { transform: none; opacity: 1; } 100% { opacity: 0; } }
+@keyframes scene-pg-live { 0%, 62% { transform: scale(0); } 68% { transform: scale(1.4); } 74%, 88% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes scene-pg-ring { 0%, 64% { transform: scale(1); opacity: 0; } 67% { opacity: 1; } 86%, 100% { transform: scale(2.8); opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
   .scene-layer,
   .scene-layer * { animation: none !important; }

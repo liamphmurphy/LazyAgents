@@ -263,6 +263,7 @@ export type ChatStatusKind =
   | "image-view"
   | "canvas"
   | "canvas-comment"
+  | "playground"
   | "runs"
   | "workflow"
   | "memory"
@@ -397,6 +398,12 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "canvas_comment":
     case "canvas_reply":
       return status("canvas-comment", "commenting on a canvas");
+    case "start_playground":
+      return status("playground", "spinning up a playground");
+    case "playground_status":
+      return status("playground", "checking on the playground");
+    case "stop_playground":
+      return status("playground", "stopping the playground");
     case "list_workflows":
     case "read_workflow":
       return status("workflow", "looking over a workflow");
