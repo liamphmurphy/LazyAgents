@@ -59,6 +59,8 @@ type Config struct {
 	MaxHold         time.Duration
 	MaxHoldAttempts int
 	HoldBackoff     time.Duration
+	// Playgrounds serves chats' playgrounds (Docker backend only).
+	Playgrounds PlaygroundConfig
 }
 
 // DefaultChatIdleTTL is how long an idle chat segment keeps its workspace.
@@ -107,6 +109,9 @@ type Runner struct {
 	wg     sync.WaitGroup
 	// sweeping keeps Run to one Sweep in flight (Sweep alone owns otherBackend).
 	sweeping atomic.Bool
+	// playgrounds is what this process serves of chats' playgrounds; nil
+	// when it serves none.
+	playgrounds *playgroundHost
 	// wtLocks serialises worktree creation, merges and removal per workspace
 	// within this runner process. Git locks and the run state machine cover
 	// cross-process operations.
@@ -128,6 +133,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err := r.Recover(ctx); err != nil {
 		return err
 	}
+	r.ServePlaygrounds(ctx)
 	beat := time.NewTicker(10 * time.Second)
 	defer beat.Stop()
 	sweep := time.NewTicker(30 * time.Second)
@@ -271,6 +277,7 @@ func (r *Runner) Tick(ctx context.Context) {
 	r.tickModelListings(ctx)
 	r.tickUsageChecks(ctx)
 	r.resumeHeld(ctx)
+	r.tickPlaygrounds(ctx)
 	for r.slot() {
 		run, err := q.ClaimQueuedRun(ctx, &r.Cfg.ID)
 		if err != nil {
@@ -531,6 +538,7 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 		return
 	}
 	r.removeWorktrees(ctx, runID)
+	r.stopRunPlaygrounds(ctx, runID)
 	if err := r.Backend.RemoveWorkspace(ctx, runID.String()); err != nil {
 		r.Log.Warn("remove workspace", "run", runID, "err", err)
 		return
@@ -542,6 +550,7 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 // between turns.
 func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepChatAttachments(ctx)
+	defer r.sweepPlaygrounds(ctx)
 	defer r.sweepTemporaryChats(ctx)
 	defer r.sweepChatVideos(ctx)
 	defer r.sweepLinkPreviews(ctx)
