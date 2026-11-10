@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
@@ -35,6 +36,43 @@ Reference images may be attached to the request (files in .lazyagents/references
 // its chat_image_jobs row.
 type chatImages struct {
 	ran bool
+}
+
+// settleChatImageJobs closes requests that never reached an image step (for
+// example, the chat harness failed after generate_image returned "queued").
+// The caller records their failures and schedules the follow-up in the same
+// transaction that finishes the chat turn, so none can be silently left queued.
+func settleChatImageJobs(ctx context.Context, q *store.Queries, runID, turnID uuid.UUID, reason string) ([]store.ChatImageJob, error) {
+	jobs, err := q.ChatImageJobsForTurn(ctx, store.ChatImageJobsForTurnParams{RunID: runID, TurnID: turnID})
+	if err != nil {
+		return nil, err
+	}
+	for i := range jobs {
+		j := &jobs[i]
+		if j.State != "queued" && j.State != "running" {
+			continue
+		}
+		j.State, j.Error, j.FailureKind = "failed", &reason, new(imageFailError)
+		if err := q.FinishChatImageJob(ctx, store.FinishChatImageJobParams{ID: j.ID, State: j.State, Error: j.Error, FailureKind: j.FailureKind, OutboxFiles: []string{}}); err != nil {
+			return nil, err
+		}
+	}
+	return jobs, nil
+}
+
+// Failure/cancellation paths that cannot produce a harness follow-up still
+// report each queued request to the person before returning the chat to idle.
+func failChatImageRequests(ctx context.Context, q *store.Queries, chat store.ChatSession, run store.Run, reason string) error {
+	jobs, err := q.FailUnfinishedChatImageJobs(ctx, store.FailUnfinishedChatImageJobsParams{RunID: run.ID, Reason: &reason})
+	if err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: imageFailureMessage(imageFailError, reason), RunID: &run.ID, RunTurnID: &job.TurnID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Image job failure kinds (chat_image_jobs.failure_kind).
@@ -238,7 +276,9 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	// The Codex thread is the job's, never the run's resumable session: the
 	// policy hook lets the step copy from that thread's directory only.
 	res, _, code, waitErr := r.watchSession(ctx, c, proc, h.NewParser(spec.Model), sensitive, timeout, func(s string) {
-		if err := q.SetChatImageJobSession(context.Background(), store.SetChatImageJobSessionParams{ID: job.ID, CodexSessionID: &s}); err != nil {
+		qctx, cancel := context.WithTimeout(ctx, controlTimeout)
+		defer cancel()
+		if err := q.SetChatImageJobSession(qctx, store.SetChatImageJobSessionParams{ID: job.ID, CodexSessionID: &s}); err != nil {
 			r.Log.Warn("record image step session", "job", job.ID, "err", err)
 		}
 	})

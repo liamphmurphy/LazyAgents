@@ -55,6 +55,13 @@ SELECT * FROM run_turns WHERE run_id = $1 AND status = 'running' ORDER BY seq DE
 UPDATE chat_image_jobs SET state = 'failed', error = 'interrupted', failure_kind = 'error', finished_at = now()
 WHERE run_id = $1 AND state = 'running';
 
+-- name: FailUnfinishedChatImageJobs :many
+-- A failed preparation or recovered cancellation cannot leave image requests
+-- queued for a turn that will never run again. Return them for visible notices.
+UPDATE chat_image_jobs SET state = 'failed', error = sqlc.arg(reason), failure_kind = 'error', finished_at = now()
+WHERE run_id = sqlc.arg(run_id) AND state IN ('queued', 'running')
+RETURNING *;
+
 -- name: RecentChatImagePrompts :many
 -- The prompts behind a chat's newest generated images, newest first, so a
 -- fresh segment can revise an image it made in an earlier one.

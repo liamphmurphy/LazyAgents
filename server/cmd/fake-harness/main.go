@@ -52,11 +52,14 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
 	"net/http"
 	"os"
 	"os/exec"
@@ -139,6 +142,52 @@ func newUUID() string {
 	b[6] = b[6]&0x0f | 0x40
 	b[8] = b[8]&0x3f | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// copyFakeImage exercises the generated PreToolUse bridge instead of bypassing
+// it with os.WriteFile in the outbox. The session id arrives asynchronously, so
+// briefly retry a denied copy while the runner records the thread.started event.
+func copyFakeImage() error {
+	dir, err := os.MkdirTemp("", "fake-image-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	src := filepath.Join(dir, ".codex", "generated_images", session, "exec-"+newUUID()+".png")
+	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
+		return err
+	}
+	var picture bytes.Buffer
+	if err := png.Encode(&picture, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		return err
+	}
+	if err := os.WriteFile(src, picture.Bytes(), 0o644); err != nil {
+		return err
+	}
+	input, _ := json.Marshal(map[string]any{"tool_name": "exec_command", "tool_input": map[string]any{"cmd": fmt.Sprintf("cp %q .lazyagents/outbox/", src)}})
+	for attempt := range 10 {
+		check := exec.Command("python3", ".lazyagents/tool-policy.py")
+		check.Stdin = strings.NewReader(string(input))
+		body, err := check.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("image copy policy hook: %w", err)
+		}
+		var decision struct {
+			Hook struct {
+				Decision string `json:"permissionDecision"`
+			} `json:"hookSpecificOutput"`
+		}
+		if err := json.Unmarshal(body, &decision); err != nil {
+			return err
+		}
+		if decision.Hook.Decision == "" {
+			return exec.Command("cp", src, ".lazyagents/outbox/").Run()
+		}
+		if attempt < 9 {
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("image copy denied by the policy hook")
 }
 
 func main() {
@@ -384,8 +433,10 @@ func main() {
 			return
 		case "empty":
 		default:
-			_ = os.MkdirAll(".lazyagents/outbox", 0o755)
-			_ = os.WriteFile(".lazyagents/outbox/exec-"+newUUID()+".png", []byte("\x89PNG\r\n\x1a\nfake image"), 0o644)
+			if err := copyFakeImage(); err != nil {
+				result(true, err.Error())
+				os.Exit(1)
+			}
 		}
 		text("Image step done.")
 		result(false, "Image step done.")
@@ -548,6 +599,16 @@ func main() {
 				args["references"] = strings.Split(refs, ",")
 			}
 			out := call("generate_image", args)
+			if os.Getenv("FAKE_IMAGE_REQUESTS") == "2" {
+				call("generate_image", args)
+			}
+			if os.Getenv("FAKE_HARNESS_HOLD_AFTER_IMAGE") != "" {
+				time.Sleep(time.Hour)
+			}
+			if os.Getenv("FAKE_HARNESS_FAIL_AFTER_IMAGE") != "" {
+				result(true, "chat crashed after queuing the image")
+				os.Exit(3)
+			}
 			reply = fmt.Sprintf("Chat reply (session=%s): making it (%v)", session, out["queued"])
 		} else if want, ok := strings.CutPrefix(prompt, "persona: "); ok {
 			// "persona: <name> | <avatar prompt>" proposes a persona with a picture.

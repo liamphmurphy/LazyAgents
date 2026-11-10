@@ -298,6 +298,17 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 		if run.State != "running" && run.State != "paused" {
 			return nil
 		}
+		reason := "image generation ended without a recorded result"
+		if waitErr != nil || code != 0 || res.IsError || res.UsageLimited {
+			reason = "the chat turn stopped before the image could be made"
+		}
+		if run.State == "paused" {
+			reason = "stopped"
+		}
+		jobRows, err := settleChatImageJobs(ctx, q, run.ID, turn.ID, reason)
+		if err != nil {
+			return err
+		}
 		state, followup := "idle", false
 		replied, reply := false, ""
 		speaker := chatSpeaker(chat)
@@ -346,10 +357,6 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 				}
 				// The image jobs this turn ran, by the outbox files they made, so
 				// each job is linked to the attachment its image became.
-				jobRows, err := q.ChatImageJobsForTurn(ctx, store.ChatImageJobsForTurnParams{RunID: run.ID, TurnID: turn.ID})
-				if err != nil {
-					return err
-				}
 				jobByFile, linked := map[string]uuid.UUID{}, map[uuid.UUID]bool{}
 				for _, j := range jobRows {
 					for _, f := range j.OutboxFiles {
@@ -376,32 +383,32 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 					}
 				}
 				bound = len(imgs) > 0
-				finished := false
-				for _, j := range jobRows {
-					finished = finished || j.State == "done" || j.State == "failed"
-					if j.State != "failed" || j.FailureKind == nil || j.Error == nil {
-						continue
-					}
-					body := imageFailureMessage(*j.FailureKind, *j.Error)
-					if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: body, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
-						return err
-					}
-				}
-				// The assistant hasn't seen what came of its generate_image
-				// calls: one automatic turn shows it the images and failures to
-				// react to, and the chat keeps working until it ends. A Codex
-				// chat made its images itself, and a follow-up never gets one.
-				if finished && run.Harness != agentdef.HarnessCodex && turn.Trigger != runs.TriggerImageFollowup {
-					next, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: runs.TriggerImageFollowup, InputMessage: imageFollowupPrompt})
-					if err != nil {
-						return err
-					}
-					if err := q.SetChatImageJobsFollowup(ctx, store.SetChatImageJobsFollowupParams{FollowupTurnID: &next.ID, RunID: run.ID, TurnID: turn.ID}); err != nil {
-						return err
-					}
-					followup = true
-				}
 			}
+		}
+		finished := false
+		for _, j := range jobRows {
+			finished = finished || j.State == "done" || j.State == "failed"
+			if j.State != "failed" || j.FailureKind == nil || j.Error == nil {
+				continue
+			}
+			body := imageFailureMessage(*j.FailureKind, *j.Error)
+			if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: body, RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
+				return err
+			}
+		}
+		// The assistant hasn't seen what came of its generate_image
+		// calls: one automatic turn shows it the images and failures to
+		// react to, and the chat keeps working until it ends. A Codex
+		// chat made its images itself, and a follow-up never gets one.
+		if finished && run.State == "running" && run.Harness != agentdef.HarnessCodex && turn.Trigger != runs.TriggerImageFollowup {
+			next, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: runs.TriggerImageFollowup, InputMessage: imageFollowupPrompt})
+			if err != nil {
+				return err
+			}
+			if err := q.SetChatImageJobsFollowup(ctx, store.SetChatImageJobsFollowupParams{FollowupTurnID: &next.ID, RunID: run.ID, TurnID: turn.ID}); err != nil {
+				return err
+			}
+			followup = true
 		}
 		if !followup {
 			if err = idleChat(ctx, q, chat, run, state); err != nil {
@@ -510,6 +517,9 @@ func (r *Runner) failChat(ctx context.Context, c runCtx, outcome string) {
 			return err
 		}
 		if err = q.FinishUnfinishedChatTurns(ctx, run.ID); err != nil {
+			return err
+		}
+		if err := failChatImageRequests(ctx, q, chat, run, "the chat turn stopped before the image could be made"); err != nil {
 			return err
 		}
 		if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: outcome, RunID: &run.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {

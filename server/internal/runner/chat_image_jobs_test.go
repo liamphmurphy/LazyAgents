@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"image/png"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,6 +23,13 @@ import (
 // available in the catalog; the fake Claude turn asks for an image.
 func (e env) imageChat(t *testing.T, step string, prompt string) (store.ChatSession, string) {
 	t.Helper()
+	chat, logPath := e.startImageChat(t, step, prompt)
+	e.until("reply", func() bool { s := e.chat(chat.ID).State; return s == "idle" || s == "failed" })
+	return chat, logPath
+}
+
+func (e env) startImageChat(t *testing.T, step string, prompt string) (store.ChatSession, string) {
+	t.Helper()
 	t.Setenv("FAKE_HARNESS_MODE", "chat-image")
 	t.Setenv("FAKE_IMAGE_STEP", step)
 	logPath := filepath.Join(t.TempDir(), "harness.log")
@@ -39,7 +47,6 @@ func (e env) imageChat(t *testing.T, step string, prompt string) (store.ChatSess
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.until("reply", func() bool { s := e.chat(chat.ID).State; return s == "idle" || s == "failed" })
 	return chat, logPath
 }
 
@@ -101,6 +108,14 @@ func TestChatImageJobMakesImageWithCodex(t *testing.T) {
 	atts, err := e.q.ListChatAttachmentsForMessages(e.ctx, []uuid.UUID{msgs[1].ID})
 	if err != nil || len(atts) != 1 || atts[0].Source != "generated" || atts[0].ContentType != "image/png" || !strings.HasPrefix(atts[0].Filename, "exec-") {
 		t.Fatalf("attachments %+v %v", atts, err)
+	}
+	obj, err := e.runner.Attachments.Get(e.ctx, "artifacts", atts[0].BlobKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obj.Body.Close()
+	if _, err := png.Decode(obj.Body); err != nil {
+		t.Fatalf("delivered image cannot be rendered: %v", err)
 	}
 	// The run keeps the chat harness's own session, and the chat its harness.
 	claudeSession := strings.TrimSuffix(strings.TrimPrefix(msgs[1].BodyMd[strings.Index(msgs[1].BodyMd, "session="):], "session="), "): making it (true)")
@@ -210,6 +225,105 @@ func TestChatImageJobFailures(t *testing.T) {
 			if len(atts) != 0 || job.State != "failed" || job.Error == nil || *job.Error != tc.reason || job.FailureKind == nil || *job.FailureKind != tc.kind ||
 				job.AttachmentID != nil || job.FollowupTurnID == nil || run.HarnessSessionID == nil || e.chat(chat.ID).State != "idle" {
 				t.Fatalf("atts %v job %+v run %+v", atts, job, run)
+			}
+		})
+	}
+}
+
+func TestQueuedImagesGetFollowupAfterChatTurnFails(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_FAIL_AFTER_IMAGE", "1")
+	t.Setenv("FAKE_IMAGE_REQUESTS", "2")
+	chat, _ := e.imageChat(t, "ok", "image: a fox")
+	run := e.chatRun(chat.ID)
+	turns := e.turns(run.ID)
+	jobs, err := e.q.ChatImageJobsForTurn(e.ctx, store.ChatImageJobsForTurnParams{RunID: run.ID, TurnID: turns[0].ID})
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("queued jobs: %+v, %v", jobs, err)
+	}
+	for _, job := range jobs {
+		if job.State != "failed" || job.Error == nil || job.FailureKind == nil || *job.FailureKind != "error" || job.FollowupTurnID == nil {
+			t.Fatalf("image request silently dropped after chat failure: %+v", job)
+		}
+	}
+	msgs := e.chatMsgs(chat.ID)
+	last := msgs[len(msgs)-1]
+	if last.Role != "assistant" || strings.Count(last.BodyMd, "Failed (error)") != 2 || !strings.Contains(last.BodyMd, "chat turn stopped") {
+		t.Fatalf("missing per-request follow-up results: %+v", msgs)
+	}
+}
+
+func TestTwoImageRequestsAreCopiedAndDelivered(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_IMAGE_REQUESTS", "2")
+	chat, _ := e.imageChat(t, "ok", "image: a fox")
+	msgs := e.chatMsgs(chat.ID)
+	atts, err := e.q.ListChatAttachmentsForMessages(e.ctx, []uuid.UUID{msgs[1].ID})
+	if err != nil || len(atts) != 2 {
+		t.Fatalf("attachments: %+v, %v", atts, err)
+	}
+	if last := msgs[len(msgs)-1]; last.Role != "assistant" || !strings.Contains(last.BodyMd, "seen=2") {
+		t.Fatalf("follow-up lost one of the images: %+v", msgs)
+	}
+}
+
+func TestStoppedQueuedImagesAreReported(t *testing.T) {
+	for _, restart := range []bool{false, true} {
+		t.Run(map[bool]string{false: "stop", true: "runner_restart"}[restart], func(t *testing.T) {
+			e := setup(t)
+			t.Setenv("FAKE_HARNESS_HOLD_AFTER_IMAGE", "1")
+			t.Setenv("FAKE_IMAGE_REQUESTS", "2")
+			chat, _ := e.startImageChat(t, "ok", "image: a fox")
+			ctx, cancel := context.WithCancel(e.ctx)
+			defer cancel()
+			e.runner.Tick(ctx)
+			e.runner.Wait() // workspace setup
+			e.runner.Tick(ctx)
+			run := e.chatRun(chat.ID)
+			turns := e.turns(run.ID)
+			deadline := time.Now().Add(10 * time.Second)
+			for {
+				n, err := e.q.CountChatImageJobsForTurn(e.ctx, store.CountChatImageJobsForTurnParams{RunID: run.ID, TurnID: turns[0].ID})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if n == 2 {
+					break
+				}
+				if time.Now().After(deadline) {
+					cancel()
+					e.runner.Wait()
+					t.Fatal("image requests were not queued")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if _, err := e.runs.CancelChat(e.ctx, e.ws, e.me.ID, chat.ID); err != nil {
+				t.Fatal(err)
+			}
+			if restart {
+				cancel()
+			}
+			e.runner.Wait()
+			if restart {
+				if err := e.runner.Recover(e.ctx); err != nil {
+					t.Fatal(err)
+				}
+			}
+			jobs, err := e.q.ChatImageJobsForTurn(e.ctx, store.ChatImageJobsForTurnParams{RunID: run.ID, TurnID: turns[0].ID})
+			if err != nil || len(jobs) != 2 {
+				t.Fatalf("image jobs: %+v, %v", jobs, err)
+			}
+			for _, job := range jobs {
+				if job.State != "failed" || job.Error == nil || *job.Error != "stopped" || job.FollowupTurnID != nil {
+					t.Fatalf("stopped request lost or restarted: %+v", job)
+				}
+			}
+			msgs := e.chatMsgs(chat.ID)
+			if len(msgs) != 3 || msgs[1].BodyMd != "Couldn't create the image: stopped." || msgs[2].BodyMd != msgs[1].BodyMd || e.chat(chat.ID).State != "idle" {
+				t.Fatalf("missing cancellation results: %+v", msgs)
+			}
+			if len(e.turns(run.ID)) != 1 {
+				t.Fatal("Stop started an unsolicited image follow-up")
 			}
 		})
 	}

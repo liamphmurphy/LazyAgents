@@ -20,6 +20,13 @@ func TestImageOutboxTool(t *testing.T) {
 		want bool
 	}{
 		{"valid", run, cp(src, ".lazyagents/outbox/a.png"), true},
+		{"outbox directory", run, cp(src, ".lazyagents/outbox/"), true},
+		{"outbox directory without slash", run, cp(src, ".lazyagents/outbox"), true},
+		{"directory with wrong thread", run, cp("/home/u/.codex/generated_images/other/ig.png", ".lazyagents/outbox/"), false},
+		{"directory with hidden source", run, cp("/home/u/.codex/generated_images/"+sid+"/.hidden.png", ".lazyagents/outbox/"), false},
+		{"directory with non-image source", run, cp("/home/u/.codex/generated_images/"+sid+"/file.sh", ".lazyagents/outbox/"), false},
+		{"similar directory", run, cp(src, ".lazyagents/outbox-other/"), false},
+		{"parent directory", run, cp(src, ".lazyagents/outbox/../"), false},
 		{"valid upper ext flags", run, cp("-f "+src, ".lazyagents/outbox/a.JPG"), true},
 		{"mkdir", run, ToolCheck{Tool: "Bash", Input: map[string]any{"command": "mkdir -p .lazyagents/outbox"}}, true},
 		{"glob", run, cp("/home/u/.codex/generated_images/*/*", ".lazyagents/outbox/."), false},

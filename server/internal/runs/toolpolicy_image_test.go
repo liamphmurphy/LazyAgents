@@ -85,6 +85,10 @@ func TestToolPolicyImageJobs(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("Bash", cp("cx-1"), "allow")
+	check("exec_command", map[string]any{"cmd": "cp /home/u/.codex/generated_images/cx-1/exec-0a1b.png .lazyagents/outbox/"}, "allow")
+	check("exec_command", map[string]any{"cmd": "cp /home/u/.codex/generated_images/cx-2/exec-0a1b.png .lazyagents/outbox/"}, "deny")
+	check("exec_command", map[string]any{"cmd": "cp /home/u/.codex/generated_images/cx-1/exec-0a1b.png .lazyagents/other.png"}, "deny")
+	check("Write", map[string]any{"file_path": ".lazyagents/outbox/image.png", "content": "arbitrary writes stay denied"}, "deny")
 	check("Bash", cp("claude-sess"), "deny")
 	check("Bash", cp("cx-2"), "deny")
 	check("Bash", map[string]any{"command": "curl https://evil.example"}, "deny")

@@ -335,6 +335,11 @@ func imageOutboxTool(in ToolCheck, sessions []string) bool {
 			segs[n-1] == "" || strings.HasPrefix(segs[n-1], ".") {
 			return false
 		}
+		// The image prompt names the outbox directory, as does ordinary cp
+		// usage. Validate the resulting filename exactly as an explicit target.
+		if dst == outbox || dst == outbox+"/" {
+			dst = outbox + "/" + segs[n-1]
+		}
 		name, inOutbox := strings.CutPrefix(dst, outbox+"/")
 		if !inOutbox || name == "" || strings.Contains(name, "/") || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "-") {
 			return false

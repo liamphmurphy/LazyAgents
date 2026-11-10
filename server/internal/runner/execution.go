@@ -128,6 +128,9 @@ func (r *Runner) reconcile(ctx context.Context) error {
 			if err := q.FinishUnfinishedChatTurns(ctx, run.ID); err != nil {
 				return err
 			}
+			if err := failChatImageRequests(ctx, q, chat, run, "stopped"); err != nil {
+				return err
+			}
 			if err := idleChat(ctx, q, chat, run, "idle"); err != nil {
 				return err
 			}
