@@ -235,6 +235,8 @@ func (p *turnProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.forward(w, r)
 	case post && path == "/build":
 		p.build(w, r)
+	case r.Method == http.MethodDelete && len(parts) >= 2 && parts[0] == "images":
+		p.removeImage(w, r, strings.Join(parts[1:], "/")) // names may contain slashes
 	case get && len(parts) >= 3 && parts[0] == "images" && (parts[len(parts)-1] == "json" || parts[len(parts)-1] == "history"):
 		p.forward(w, r) // /images/{name}/json; names may contain slashes
 	case get && len(parts) >= 3 && parts[0] == "distribution" && parts[len(parts)-1] == "json":
@@ -268,7 +270,7 @@ func (p *turnProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.forward(w, r)
 
 	default:
-		proxyError(w, http.StatusForbidden, "%s %s isn't available to agents (BuildKit sessions, swarm, plugins, system and image removal are host-wide)", r.Method, path)
+		proxyError(w, http.StatusForbidden, "%s %s isn't available to agents (BuildKit sessions, swarm, plugins and system calls are host-wide)", r.Method, path)
 	}
 }
 
@@ -652,6 +654,25 @@ func (p *turnProxy) workspaceBind(src, dst string, readOnly bool) (map[string]an
 // name; an image a turn made; or, for a pull, one that came from a registry
 // (re-pulling it changes nothing a registry couldn't). Locally built images,
 // such as the agent image every turn runs in, are never replaced.
+// removeImage lets a turn clean up (docker compose down --rmi local) images
+// its run built, and nothing else: other runs' builds, pulled images and the
+// agent image are shared by every run on the daemon.
+func (p *turnProxy) removeImage(w http.ResponseWriter, r *http.Request, ref string) {
+	var info struct {
+		Config struct{ Labels map[string]string }
+	}
+	_, err := p.d.do(r.Context(), "GET", "/images/"+url.PathEscape(ref)+"/json", nil, "", &info)
+	if err != nil {
+		proxyError(w, http.StatusNotFound, "no such image built by this run: %s", ref)
+		return
+	}
+	if l := info.Config.Labels; l[proxyLabelKey] == "" || l[labelKey] != p.runID || l[stackLabelKey] != p.d.stack() {
+		proxyError(w, http.StatusForbidden, "%s wasn't built by this run; only images a run builds can be removed by it", ref)
+		return
+	}
+	p.forward(w, r)
+}
+
 func (p *turnProxy) imageReplaceable(ctx context.Context, ref string, pull bool) bool {
 	var info struct {
 		RepoDigests []string

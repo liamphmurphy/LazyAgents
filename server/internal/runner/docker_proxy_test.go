@@ -648,3 +648,33 @@ func TestEnsureNixDaemonPinsTheLocalStore(t *testing.T) {
 		})
 	}
 }
+
+// A turn can remove images its run built (compose down --rmi local), and no
+// others: not another run's, a pulled one, or the agent image.
+func TestDockerProxyRemovesOnlyItsRunsImages(t *testing.T) {
+	built := func(run string) map[string]any {
+		return map[string]any{"Config": map[string]any{"Labels": map[string]any{proxyLabelKey: run + "-1", labelKey: run, stackLabelKey: "test"}}}
+	}
+	f := &proxyEngine{images: map[string]map[string]any{
+		"ctest-app:latest":         built("run-1"),
+		"acme/web:dev":             built("run-1"),
+		"other-app:latest":         built("run-9"),
+		"postgres:17-alpine":       {"RepoDigests": []any{"postgres@sha256:abc"}, "Config": map[string]any{}},
+		"vesper/agent-base:latest": {"Config": map[string]any{}},
+	}}
+	d, td := startProxyEngine(t, f)
+	c := turnClient(d, td)
+	for ref, want := range map[string]int{
+		"ctest-app:latest": 204, "acme/web:dev": 204,
+		"other-app:latest": 403, "postgres:17-alpine": 403, "vesper/agent-base:latest": 403, "missing:1": 404,
+	} {
+		if code, out := call(t, c, "DELETE", "/images/"+ref+"?force=1", nil); code != want {
+			t.Fatalf("remove %s: %d %s, want %d", ref, code, out, want)
+		}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if got := strings.Join(f.deleted, " "); got != "/images/ctest-app:latest /images/acme/web:dev" && got != "/images/acme/web:dev /images/ctest-app:latest" {
+		t.Fatalf("reached the engine: %s", got)
+	}
+}
