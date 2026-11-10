@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -48,32 +49,57 @@ func (d *Docker) EnsureNixDaemon(ctx context.Context) error {
 		return nil
 	}
 	name := d.nixDaemonName()
-	var info struct{ State struct{ Running bool } }
+	var info struct {
+		State  struct{ Running bool }
+		Config struct{ Env []string }
+	}
 	_, err := d.do(ctx, "GET", "/containers/"+url.PathEscape(name)+"/json", nil, "", &info)
 	switch {
+	case err == nil && !slices.Contains(info.Config.Env, nixDaemonEnv):
+		// Created before the daemon was pinned to the local store: it serves
+		// every request by connecting to itself and never answers. Replace it.
+		if _, err := d.do(ctx, "DELETE", "/containers/"+url.PathEscape(name)+"?force=1", nil, "", nil); err != nil && !isStatus(err, 404) {
+			return fmt.Errorf("replace nix-daemon: %w", err)
+		}
+		if err := d.createNixDaemon(ctx, name); err != nil {
+			return err
+		}
 	case err == nil && info.State.Running:
 		return nil
 	case err == nil: // stopped (a host reboot): start it again below
 	case isStatus(err, 404):
-		// No run label: Cleanup removes leftover turns, and this isn't one.
-		body := map[string]any{
-			"Image": d.Image, "Cmd": []string{nixDaemonBin}, "User": "0",
-			"Labels": map[string]string{stackLabelKey: d.stack()},
-			"HostConfig": map[string]any{
-				"Mounts":        []map[string]any{d.nixMount()},
-				"Init":          true,
-				"SecurityOpt":   []string{"no-new-privileges"},
-				"RestartPolicy": map[string]any{"Name": "unless-stopped"},
-			},
-		}
-		if _, err := d.do(ctx, "POST", "/containers/create?name="+url.QueryEscape(name), jsonBody(body), "application/json", nil); err != nil && !isStatus(err, 409) {
-			return fmt.Errorf("create nix-daemon: %w", err)
+		if err := d.createNixDaemon(ctx, name); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("inspect nix-daemon: %w", err)
 	}
 	if _, err := d.do(ctx, "POST", "/containers/"+url.PathEscape(name)+"/start", nil, "", nil); err != nil && !isStatus(err, 304) {
 		return fmt.Errorf("start nix-daemon: %w", err)
+	}
+	return nil
+}
+
+// nixDaemonEnv pins the daemon to the store on disk. The agent image sets
+// NIX_REMOTE=daemon for turns, and a daemon that inherits it opens the
+// "daemon" store for each worker: a connection to its own socket, recursively,
+// so every store query hangs and the store is never initialized.
+const nixDaemonEnv = "NIX_REMOTE=local"
+
+func (d *Docker) createNixDaemon(ctx context.Context, name string) error {
+	// No run label: Cleanup removes leftover turns, and this isn't one.
+	body := map[string]any{
+		"Image": d.Image, "Cmd": []string{nixDaemonBin}, "User": "0", "Env": []string{nixDaemonEnv},
+		"Labels": map[string]string{stackLabelKey: d.stack()},
+		"HostConfig": map[string]any{
+			"Mounts":        []map[string]any{d.nixMount()},
+			"Init":          true,
+			"SecurityOpt":   []string{"no-new-privileges"},
+			"RestartPolicy": map[string]any{"Name": "unless-stopped"},
+		},
+	}
+	if _, err := d.do(ctx, "POST", "/containers/create?name="+url.QueryEscape(name), jsonBody(body), "application/json", nil); err != nil && !isStatus(err, 409) {
+		return fmt.Errorf("create nix-daemon: %w", err)
 	}
 	return nil
 }
