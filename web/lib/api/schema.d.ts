@@ -1030,6 +1030,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/highlights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your persona reply turns, grouped by recorded routing decisions
+         * @description Private to the signed-in person. Counts one sample per replying turn, including legacy replies without turn metadata as unknown. Dates are the first reply UTC date for each turn. Model usage does not imply automatic model selection.
+         */
+        get: operations["getHighlights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/costs": {
         parameters: {
             query?: never;
@@ -5450,6 +5470,31 @@ export interface components {
             /** @enum {string} */
             state: "pending" | "current" | "done" | "needs_human" | "failed";
         };
+        HighlightsBucket: {
+            /** @description Empty when the replying persona was not recorded or was deleted */
+            persona_id: string;
+            persona: string;
+            harness: string;
+            /** @description Recorded reply model; empty when unknown */
+            model: string;
+            /** @description Actual effort; empty means model default or unrecorded */
+            effort: string;
+            /** @description Requested automatic effort; empty means chosen or unrecorded */
+            effort_level: string;
+            reasons: string[];
+            /** Format: int64 */
+            turns: number;
+            /**
+             * Format: int64
+             * @description Sum of completed turn durations from process start to end, excluding queue time
+             */
+            duration_ms: number;
+            /**
+             * Format: int64
+             * @description Completed turns with valid process start and end timestamps
+             */
+            timed_turns: number;
+        };
         CostReport: {
             /** Format: date */
             from?: string;
@@ -9690,6 +9735,33 @@ export interface operations {
                 };
                 content: {
                     "application/x-ndjson": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getHighlights: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                project?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregated reply turns; never includes message content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        buckets: components["schemas"]["HighlightsBucket"][];
+                    };
                 };
             };
             default: components["responses"]["Error"];

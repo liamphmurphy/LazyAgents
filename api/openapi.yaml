@@ -1361,6 +1361,31 @@ paths:
               schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
 
+  /highlights:
+    get:
+      operationId: getHighlights
+      summary: Your persona reply turns, grouped by recorded routing decisions
+      description: >-
+        Private to the signed-in person. Counts one sample per replying turn,
+        including legacy replies without turn metadata as unknown. Dates are
+        the first reply UTC date for each turn. Model usage does not imply automatic model selection.
+      tags: [runs]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: project, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Aggregated reply turns; never includes message content
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [buckets]
+                properties:
+                  buckets: { type: array, items: { $ref: "#/components/schemas/HighlightsBucket" } }
+        default: { $ref: "#/components/responses/Error" }
+
   /costs:
     get:
       operationId: getCosts
@@ -6164,6 +6189,21 @@ components:
         position: { type: integer }
         text: { type: string }
         state: { type: string, enum: [pending, current, done, needs_human, failed] }
+    HighlightsBucket:
+      type: object
+      required: [persona_id, persona, harness, model, effort, effort_level, reasons, turns, duration_ms, timed_turns]
+      properties:
+        persona_id: { type: string, description: Empty when the replying persona was not recorded or was deleted }
+        persona: { type: string }
+        harness: { type: string }
+        model: { type: string, description: Recorded reply model; empty when unknown }
+        effort: { type: string, description: Actual effort; empty means model default or unrecorded }
+        effort_level: { type: string, description: Requested automatic effort; empty means chosen or unrecorded }
+        reasons: { type: array, items: { type: string } }
+        turns: { type: integer, format: int64 }
+        duration_ms: { type: integer, format: int64, description: "Sum of completed turn durations from process start to end, excluding queue time" }
+        timed_turns: { type: integer, format: int64, description: Completed turns with valid process start and end timestamps }
+
     CostReport:
       type: object
       required: [total, unpriced_runs, estimated, days, agents, projects, models, purposes, top_tickets]
