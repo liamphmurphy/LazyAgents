@@ -28,6 +28,10 @@ type svcEngine struct {
 	images   map[string]bool           // images present (others 404 until pulled)
 	pullFail bool
 	status   func(name string) string // "healthy", "running", "exited", "starting"
+	// deletes are the query of each DELETE, by path; stale names are
+	// containers that already exist (create answers 409 once).
+	deletes map[string]string
+	stale   map[string]bool
 }
 
 func (f *svcEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +39,12 @@ func (f *svcEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, r.Method+" "+p)
+	if r.Method == "DELETE" {
+		if f.deletes == nil {
+			f.deletes = map[string]string{}
+		}
+		f.deletes[p] = r.URL.RawQuery
+	}
 	switch {
 	case p == "/networks/create":
 		w.WriteHeader(201)
@@ -42,12 +52,17 @@ func (f *svcEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case p == "/containers/create":
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		name := r.URL.Query().Get("name")
+		if f.stale[name] {
+			delete(f.stale, name)
+			http.Error(w, `{"message":"Conflict"}`, 409)
+			return
+		}
 		if !f.images[body["Image"].(string)] {
 			http.Error(w, `{"message":"No such image"}`, 404)
 			return
 		}
 		id := fmt.Sprintf("s%d", len(f.ids)+1)
-		name := r.URL.Query().Get("name")
 		f.bodies[name], f.ids[id] = body, name
 		w.WriteHeader(201)
 		_, _ = fmt.Fprintf(w, `{"Id":%q}`, id)
@@ -217,5 +232,23 @@ func TestDockerStartPutsSSHDirInHome(t *testing.T) {
 	env, _ := f.created["Env"].([]any)
 	if !slices.Contains(env, any(SSHDirEnv+"=/home/node/.lazyagents/ssh")) {
 		t.Fatalf("env %v", env)
+	}
+}
+
+// A database image declares an anonymous data volume. Removing a service's
+// container without v=1 left one behind per turn; with it, the volume goes
+// with the container, at the turn's end and when a stale one is replaced.
+func TestServiceContainersTakeTheirVolumesWithThem(t *testing.T) {
+	f := &svcEngine{status: func(string) string { return "healthy" }, stale: map[string]bool{"lazyagents-svc-k-postgres": true}}
+	d := startSvcEngine(t, f)
+	_, stop, err := d.StartServices(context.Background(), "run-1", "k", []agentdef.Service{pgService()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	for _, path := range []string{"/containers/lazyagents-svc-k-postgres", "/containers/s1"} {
+		if q, ok := f.deletes[path]; !ok || !strings.Contains(q, "v=1") {
+			t.Errorf("DELETE %s?%s: want v=1 so the data volume goes too (deletes %v)", path, q, f.deletes)
+		}
 	}
 }

@@ -37,12 +37,20 @@ type fakeEngine struct {
 	listFilters string
 	// volumes are the named volumes that exist.
 	volumes map[string]bool
+	// deletes are the query of each DELETE, by path.
+	deletes map[string]string
 }
 
 func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, "/v1.43")
 	f.mu.Lock()
 	f.calls = append(f.calls, r.Method+" "+p)
+	if r.Method == "DELETE" {
+		if f.deletes == nil {
+			f.deletes = map[string]string{}
+		}
+		f.deletes[p] = r.URL.RawQuery
+	}
 	drop := p == "/containers/c1/wait" && f.dropWaits > 0
 	if drop {
 		f.dropWaits--
