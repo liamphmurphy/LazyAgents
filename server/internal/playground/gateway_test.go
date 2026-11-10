@@ -162,7 +162,9 @@ func TestGatewayLetsOnlyVesperReadAcrossOrigins(t *testing.T) {
 		r.Header.Set("Origin", vesperOrigin)
 		r.Header.Set("Sec-Fetch-Site", "same-site")
 	})
-	if rec.Header().Get("Access-Control-Allow-Origin") != vesperOrigin || !strings.Contains(rec.Header().Get("Access-Control-Expose-Headers"), "X-Total") {
+	// Exactly one value: a second (the gateway's and the app's merged)
+	// makes the browser refuse the response.
+	if acao := rec.Header().Values("Access-Control-Allow-Origin"); len(acao) != 1 || acao[0] != vesperOrigin || !strings.Contains(rec.Header().Get("Access-Control-Expose-Headers"), "X-Total") {
 		t.Errorf("Vesper's request: CORS %v", rec.Header())
 	}
 	if s := <-got; s.origin != "http://localhost:8091" || s.site != "same-origin" {
