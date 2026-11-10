@@ -18,8 +18,36 @@ import { EpicCompletion } from "@/components/domain/epic-completion";
 import { TicketEditorDialog } from "@/components/domain/ticket-editor-dialog";
 import { DependencyMap } from "@/components/domain/dependency-map";
 import { useMotionList } from "@/components/ui/motion";
+import { Toggle } from "@/components/ui/controls";
+import { Icon } from "@/components/ui/icon";
 
-const selectClass = "h-8 max-w-52 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg";
+/** A filter in the top bar: a menu like the app's other pickers rather than a native <select>. */
+function FilterMenu({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  const current = options.find((o) => o.value === value) ?? options[0];
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button type="button" aria-label={`${label}: ${current.label}`}
+          className="flex h-8 max-w-52 items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2.5 text-xs text-fg hover:bg-hover data-[state=open]:border-accent">
+          <span className="truncate">{current.label}</span>
+          <Icon name="chev" size={12} strokeWidth={1.6} className="flex-none text-fg-tertiary" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "max-h-80 w-56 overflow-y-auto")}>
+          <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
+            {options.map((o) => (
+              <DropdownMenu.RadioItem key={o.value} value={o.value} className="flex h-8 cursor-default select-none items-center gap-2 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-hover">
+                <span className="flex-1 truncate">{o.label}</span>
+                <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
 
 export function BoardScreen() {
   const bootstrap = useBootstrap();
@@ -58,20 +86,12 @@ export function BoardScreen() {
     <div data-testid="board-screen">
       <TopBar crumbs={projectCrumbs(project, "Board")} actions={project &&
         <>
-          <select aria-label="Epic" className={selectClass} value={filters.epic ?? ""} onChange={(e) => setParam("epic", e.target.value)}>
-            <option value="">All epics</option>
-            {epics.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-          <select aria-label="Assignee" className={selectClass} value={filters.assignee ?? ""} onChange={(e) => setParam("assignee", e.target.value)}>
-            <option value="">All assignees</option>
-            {bootstrap.data?.agents.map((a) => <option key={a.id} value={a.handle}>@{a.handle}</option>)}
-          </select>
-          <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
-            <input key={String(filters.include_canceled)} type="checkbox" defaultChecked={filters.include_canceled} onChange={(e) => setParam("include_canceled", e.target.checked ? "true" : "")} /> Show canceled
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
-            <input key={String(blockedOnly)} type="checkbox" defaultChecked={blockedOnly} onChange={(e) => setParam("blocked", e.target.checked ? "true" : "")} /> Blocked only
-          </label>
+          <FilterMenu label="Epic" value={filters.epic ?? ""} onChange={(v) => setParam("epic", v)}
+            options={[{ value: "", label: "All epics" }, ...epics.map((e) => ({ value: e.id, label: e.name }))]} />
+          <FilterMenu label="Assignee" value={filters.assignee ?? ""} onChange={(v) => setParam("assignee", v)}
+            options={[{ value: "", label: "All assignees" }, ...(bootstrap.data?.agents ?? []).map((a) => ({ value: a.handle, label: `@${a.handle}` }))]} />
+          <Toggle label="Show canceled" checked={filters.include_canceled} onChange={(on) => setParam("include_canceled", on ? "true" : "")} />
+          <Toggle label="Blocked only" checked={blockedOnly} onChange={(on) => setParam("blocked", on ? "true" : "")} />
           <Link href={`/tickets${project ? `?project=${encodeURIComponent(project.key)}` : ""}`} className="text-xs text-fg-secondary hover:text-fg">Tickets view ↗</Link>
         </>
       } />

@@ -119,6 +119,10 @@
   /* Human avatars: neutral circles */
   --human-avatar-bg: #2A2836;
 
+  /* Persona initials: the persona color as is on dark; mixed halfway toward --text on light so it reads (4.5:1+) */
+  --persona-ink: 100%;
+  --persona-tint: 15%;
+
   /* Artifact type tags */
   --doc-prd: #A3A6FF;    --doc-prd-bg: #8B8FFF1F;
   --doc-spec: #7CBEFD;   --doc-spec-bg: #4EA7FC1F;
@@ -197,6 +201,8 @@
   --agent-echo: #6C3BB8;   --agent-echo-bg: #7A45C917;
 
   --human-avatar-bg: #E5E1EE;
+  --persona-ink: 50%;
+  --persona-tint: 20%;
 
   --doc-prd: #4547C9;    --doc-prd-bg: #5558E31A;
   --doc-spec: #1D5FB0;   --doc-spec-bg: #2F7FE01A;
@@ -231,6 +237,7 @@
     --agent-nova: #8A6100; --agent-nova-bg: #D49A0A1F; --agent-relay: #277538; --agent-relay-bg: #2E85401A;
     --agent-pike: #A44A18; --agent-pike-bg: #B5541F17; --agent-echo: #6C3BB8; --agent-echo-bg: #7A45C917;
     --human-avatar-bg: #E5E1EE;
+    --persona-ink: 50%; --persona-tint: 20%;
     --doc-prd: #4547C9; --doc-prd-bg: #5558E31A; --doc-spec: #1D5FB0; --doc-spec-bg: #2F7FE01A; --doc-adr: #8A6100; --doc-adr-bg: #D49A0A1F;
     --doc-report: #1E7048; --doc-report-bg: #2E9E681A; --doc-design: #B42F48; --doc-design-bg: #C2364F17;
     --doc-mockup: #0E7C75; --doc-mockup-bg: #14A8A01A;

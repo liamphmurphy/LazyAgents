@@ -116,8 +116,9 @@ export function PersonaAvatar({ persona, size = 20, className }: { persona: Pers
       style={{
         ...style,
         fontSize: Math.round(size * 0.5),
-        color: persona.color,
-        background: `color-mix(in srgb, ${persona.color} 15%, transparent)`,
+        // Light themes mix the color toward the text color (--persona-ink) so the initial stays readable.
+        color: `color-mix(in srgb, ${persona.color} var(--persona-ink), var(--text))`,
+        background: `color-mix(in srgb, ${persona.color} var(--persona-tint), var(--bg))`,
       }}
     >
       {persona.name.trim().slice(0, 1).toUpperCase() || "A"}

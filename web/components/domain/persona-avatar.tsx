@@ -28,7 +28,7 @@ export function PersonaAvatar({
   return (
     <span
       aria-hidden
-      style={{ ...box, background: `${color}26`, color, fontSize: Math.max(9, Math.round(size * 0.5)) }}
+      style={{ ...box, background: `color-mix(in srgb, ${color} var(--persona-tint), var(--bg))`, color: `color-mix(in srgb, ${color} var(--persona-ink), var(--text))`, fontSize: Math.max(9, Math.round(size * 0.5)) }}
       className={cx("grid flex-none place-items-center rounded-full font-semibold leading-none", className)}
     >
       {personaInitial(name)}

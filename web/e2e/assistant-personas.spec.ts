@@ -136,7 +136,14 @@ test("avatar: client checks and the server's 415 show inline; initials stay on t
   await expect(rows(page).filter({ hasText: "Sage" }).locator("img")).toHaveCount(1);
   // The others have no image: their initial on the persona color.
   await expect(rows(page).filter({ hasText: "Nova" }).locator("img")).toHaveCount(0);
-  await expect(rows(page).filter({ hasText: "Nova" }).getByText("N", { exact: true })).toHaveCSS("color", "rgb(244, 114, 182)");
+  // On dark the initial is the persona color itself; on light it's mixed halfway toward the text color so it reads.
+  const initial = rows(page).filter({ hasText: "Nova" }).getByText("N", { exact: true });
+  // (color-mix reports #f472b6 as color(srgb 0.957 0.447 0.714).)
+  const novaPink = /^color\(srgb 0\.956\d* 0\.447\d* 0\.713\d*\)$/;
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(initial).toHaveCSS("color", novaPink);
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(initial).not.toHaveCSS("color", novaPink);
   expect(mock.unhandled).toEqual([]);
 });
 
