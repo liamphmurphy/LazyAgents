@@ -25,6 +25,8 @@ import { ChoicesFence } from "./choices-fence";
 import { ResearchFence } from "./research-fence";
 import { isWorkflowRunFence } from "@/lib/workflows";
 import { WorkflowRunFence } from "./workflow-cards";
+import { isDispatchFence } from "@/lib/chat-dispatch";
+import { DispatchFence } from "./dispatch-cards";
 import { CiteMarker, MomentLink } from "./cite-marker";
 import { CodeFence } from "./code-fence";
 import { RecommendFence } from "./recommend-fence";
@@ -117,6 +119,7 @@ export function Markdown({ children, className, anchors, codeBlocks, visualBlock
             if (isChoicesFence(info)) return <ChoicesFence code={code.children} info={info} />;
             if (isResearchPlanFence(info)) return <ResearchFence code={code.children} info={info} />;
             if (isWorkflowRunFence(info)) return <WorkflowRunFence code={code.children} info={info} />;
+            if (isDispatchFence(info)) return <DispatchFence code={code.children} info={info} />;
             // ```recommend fences show as preview cards.
             if (isRecommendFence(info)) return <RecommendFence code={code.children} info={info} />;
             return <CodeFence code={code.children} info={info} />;

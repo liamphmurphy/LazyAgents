@@ -19,6 +19,7 @@ import {
   type TicketStatus,
 } from "./client";
 import { runEach } from "../ticket-list";
+import { runEnded } from "../chat-dispatch";
 import { personaKeys } from "./persona-hooks";
 
 type NewTicket = Schemas["NewTicket"];
@@ -652,6 +653,31 @@ export function useDispatch() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: keys.tickets });
       qc.invalidateQueries({ queryKey: keys.bootstrap });
+      qc.invalidateQueries({ queryKey: ["runner"] });
+    },
+  });
+}
+
+const chatTicketRunsKey = (chatId: string) => ["chats", chatId, "ticket-runs"] as const;
+
+/** The ticket runs a chat started from ```dispatch cards; polled while any is live. */
+export function useChatTicketRuns(chatId?: string) {
+  return useQuery({
+    enabled: !!chatId,
+    queryKey: chatTicketRunsKey(chatId ?? ""),
+    queryFn: () => unwrap(api.GET("/chats/{id}/runs", { params: { path: { id: chatId! } } })),
+    refetchInterval: (q) => (q.state.data?.runs.some((r) => !runEnded(r.state)) ? LIVE_POLL_MS : false),
+  });
+}
+
+/** Starts a ticket's run from a chat's ```dispatch card, as the signed-in person. */
+export function useStartChatTicketRun(chatId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["ChatTicketRunStart"]) => unwrap(api.POST("/chats/{id}/runs", { params: { path: { id: chatId } }, body })),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: chatTicketRunsKey(chatId) });
+      qc.invalidateQueries({ queryKey: keys.tickets });
       qc.invalidateQueries({ queryKey: ["runner"] });
     },
   });

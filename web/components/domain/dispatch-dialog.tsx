@@ -33,7 +33,7 @@ function ProjectMark() {
 }
 
 /** When the run starts, from runner heartbeats and the queue. */
-function StartsLine({ p }: { p: Preview }) {
+export function StartsLine({ p }: { p: Preview }) {
   const r = p.runner;
   if (!r.online) {
     return (
