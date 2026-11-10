@@ -4172,6 +4172,63 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /docs/{canvasId}/reviewed:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: markDocReviewed
+      summary: Record that the person reviewed a document up to a version
+      description: |
+        The Docs app shows a persona's versions after the person's last edit
+        and after this mark as changes to accept or reject. Accepting all of
+        them changes nothing in the text, so this records it. The mark never
+        moves back. 404 for anyone else's document; 422 for a version it
+        doesn't have.
+      tags: [docs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seq]
+              properties:
+                seq: { type: integer, format: int32, minimum: 1 }
+      responses:
+        "200":
+          description: The document's reviewed version
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reviewed_seq]
+                properties:
+                  reviewed_seq: { type: integer, format: int32 }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /docs/{canvasId}/library:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: saveDocToLibrary
+      summary: Save a document's current version to the Library as Markdown
+      description: |
+        Keeps a copy of the text as it is now; later edits don't change it.
+        Saving the same text again returns the existing item. It counts
+        against the Library's storage cap. 404 for anyone else's canvas; 422
+        for an SVG canvas or a full Library.
+      tags: [docs]
+      responses:
+        "201":
+          description: Saved, or already in the Library
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /chats/{id}/cancel:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -5174,6 +5231,7 @@ components:
         chat_id: { type: string, format: uuid }
         chat_title: { type: string }
         updated_at: { type: string, format: date-time }
+        reviewed_seq: { type: integer, format: int32, description: "The last version the person reviewed; 0 before any review" }
     MemoryAbout:
       type: string
       enum: [all, person, persona]

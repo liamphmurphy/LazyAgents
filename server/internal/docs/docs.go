@@ -6,7 +6,10 @@ package docs
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -61,4 +64,32 @@ func (s *Service) Create(ctx context.Context, ws, user uuid.UUID, title string) 
 	}
 	cv, _, err = (&canvas.Service{Pool: s.Pool}).Create(ctx, chat.ID, canvas.New{Kind: canvas.KindText, Title: title, Body: "# " + title + "\n"}, canvas.Actor{Type: "user", ID: user})
 	return cv, chat, err
+}
+
+// LibraryContentType is how a document saved to the Library is stored.
+const LibraryContentType = "text/markdown; charset=utf-8"
+
+// LibraryKey addresses a saved copy by its content, so saving unchanged text
+// again finds the copy already made.
+func LibraryKey(ws, user uuid.UUID, body []byte) string {
+	return fmt.Sprintf("library-docs/%s/%s/%x", ws, user, sha256.Sum256(body))
+}
+
+// LibraryTitle fits a document's title to the Library's limit.
+func LibraryTitle(title string) string {
+	if r := []rune(title); len(r) > 299 {
+		return string(r[:299])
+	}
+	return title
+}
+
+var unsafeFilename = regexp.MustCompile(`[^A-Za-z0-9._ -]+`)
+
+// LibraryFilename is the Markdown file a saved document downloads as.
+func LibraryFilename(title string) string {
+	name := strings.Trim(strings.Join(strings.Fields(unsafeFilename.ReplaceAllString(title, " ")), " "), " .-")
+	if name == "" {
+		name = "document"
+	}
+	return name[:min(len(name), 200)] + ".md"
 }
