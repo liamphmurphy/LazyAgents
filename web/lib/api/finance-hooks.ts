@@ -9,6 +9,13 @@ export type FinanceOverview = Schemas["FinanceOverview"];
 export type FinanceAccount = Schemas["FinanceAccount"];
 export type FinanceReviewItem = Schemas["FinanceReviewItem"];
 export type FinanceImportResult = Schemas["FinanceImportResult"];
+export type FinancePendingImport = Schemas["FinancePendingImport"];
+export type FinanceCSVMapping = Schemas["FinanceCSVMapping"];
+
+/** An upload either imported (201) or waits for its columns to be mapped (202). */
+export function isPending(r: FinanceImportResult | FinancePendingImport): r is FinancePendingImport {
+  return "rows" in r;
+}
 
 export const financeKeys = {
   all: ["finance"] as const,
@@ -33,7 +40,7 @@ export function useImportStatement() {
       form.append("file", v.file);
       if (v.accountId) form.append("account_id", v.accountId);
       if (v.flipSign) form.append("flip_sign", "true");
-      return postForm<FinanceImportResult>("/finance/imports", form);
+      return postForm<FinanceImportResult | FinancePendingImport>("/finance/imports", form);
     },
   });
 }
@@ -74,5 +81,43 @@ export function useCategorize() {
         }),
       ),
     onSettled: () => void qc.invalidateQueries({ queryKey: financeKeys.all }),
+  });
+}
+
+const pendingKey = (id: string) => ["finance", "pending", id] as const;
+
+/** A pending import, polled while the assistant is still working on its mapping. */
+export function usePendingImport(initial: FinancePendingImport) {
+  return useQuery({
+    queryKey: pendingKey(initial.id),
+    queryFn: () => unwrap(api.GET("/finance/imports/pending/{importId}", { params: { path: { importId: initial.id } } })),
+    initialData: initial,
+    refetchInterval: (q) => (q.state.data?.assistant === "asking" ? 2000 : false),
+  });
+}
+
+/** What a mapping reads from the whole file; an error names the first row it can't read. */
+export function useMappingPreview(id: string, mapping: FinanceCSVMapping) {
+  return useQuery({
+    queryKey: ["finance", "pending", id, "preview", JSON.stringify(mapping)],
+    queryFn: () => unwrap(api.POST("/finance/imports/pending/{importId}/preview", { params: { path: { importId: id } }, body: mapping })),
+    retry: false,
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useCommitMapping() {
+  return useMutation({
+    mutationFn: (v: { id: string; mapping: FinanceCSVMapping }) =>
+      unwrap(api.POST("/finance/imports/pending/{importId}/commit", { params: { path: { importId: v.id } }, body: v.mapping })),
+  });
+}
+
+export function useCancelPending() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE("/finance/imports/pending/{importId}", { params: { path: { importId: id } } });
+      if (error || !response.ok) throw error ?? new Error(`Cancel failed (${response.status})`);
+    },
   });
 }

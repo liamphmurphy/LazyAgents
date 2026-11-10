@@ -2,11 +2,12 @@
 
 import { Dialog } from "radix-ui";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { useCreateFinanceAccount, useImportStatement, type FinanceAccount, type FinanceImportResult } from "@/lib/api/finance-hooks";
+import { isPending, useCreateFinanceAccount, useImportStatement, type FinanceAccount, type FinanceImportResult } from "@/lib/api/finance-hooks";
 import { cx } from "@/lib/cx";
 import { accountLabel, dayLabel } from "@/lib/finance";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { MappingStep } from "./mapping-step";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 const isOFX = (f: File) => /\.(ofx|qfx)$/i.test(f.name);
@@ -16,7 +17,8 @@ const field = "h-[34px] rounded-lg border border-border-strong bg-surface-sunken
 
 /**
  * Import a bank export. An OFX/QFX names its own account; a CSV goes into one the person picks
- * (or adds here). The result lists what really happened, step by step.
+ * (or adds here). A CSV layout Vesper doesn't know yet gets a mapping step first. The result
+ * lists what really happened, step by step.
  */
 export function ImportDialog({ open, onOpenChange, accounts, onImported }: { open: boolean; onOpenChange: (o: boolean) => void; accounts: FinanceAccount[]; onImported: (r: FinanceImportResult) => void }) {
   const upload = useImportStatement();
@@ -28,7 +30,11 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
   const [name, setName] = useState("");
   const [kind, setKind] = useState<(typeof KINDS)[number]>("checking");
   const [mask, setMask] = useState("");
-  const result = upload.data;
+  const uploaded = upload.data;
+  const pending = uploaded && isPending(uploaded) ? uploaded : null;
+  // Imported after the mapping step.
+  const [mapped, setMapped] = useState<FinanceImportResult | null>(null);
+  const result = mapped ?? (uploaded && !isPending(uploaded) ? uploaded : null);
   const accountId = picked || accounts[0]?.id || NEW;
   const needsAccount = !!file && !isOFX(file);
   const busy = upload.isPending || createAccount.isPending;
@@ -39,6 +45,7 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
     setFlip(false);
     setName("");
     setMask("");
+    setMapped(null);
     upload.reset();
     createAccount.reset();
   };
@@ -76,7 +83,10 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
         <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="motion-dialog fixed left-1/2 top-[10vh] z-50 flex max-h-[80vh] w-[min(480px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-y-auto rounded-2xl border border-border-float bg-surface-raised px-[22px] pb-[18px] pt-[20px] shadow-[var(--shadow-float)] outline-none"
+          className={cx(
+            "motion-dialog fixed left-1/2 top-[8vh] z-50 flex max-h-[84vh] -translate-x-1/2 flex-col overflow-y-auto rounded-2xl border border-border-float bg-surface-raised px-[22px] pb-[18px] pt-[20px] shadow-[var(--shadow-float)] outline-none transition-[width] duration-300",
+            pending && !result ? "w-[min(780px,calc(100%-32px))]" : "w-[min(480px,calc(100%-32px))]",
+          )}
         >
           <div className="flex items-center justify-between">
             <Dialog.Title className="text-[16px] font-semibold text-fg">Import transactions</Dialog.Title>
@@ -87,7 +97,9 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
           <p className="mt-1 text-[12px] text-fg-tertiary">A CSV or OFX/QFX export from your bank. Importing overlapping dates is safe: nothing is added twice.</p>
 
           {result ? (
-            <Result result={result} />
+            <Result result={result} remembered={!!mapped} />
+          ) : pending ? (
+            <MappingStep initial={pending} onImported={setMapped} onCancelled={() => close(false)} />
           ) : (
             <form onSubmit={submit} className="mt-[14px] flex flex-col gap-[12px]">
               <label
@@ -201,7 +213,7 @@ function Step({ i, title, detail }: { i: number; title: ReactNode; detail: React
 }
 
 /** What the import did, revealed one step at a time. */
-function Result({ result }: { result: FinanceImportResult }) {
+function Result({ result, remembered }: { result: FinanceImportResult; remembered: boolean }) {
   const r = result.import;
   const range = result.first_date && result.last_date ? ` · ${dayLabel(result.first_date)} – ${dayLabel(result.last_date)}` : "";
   return (
@@ -211,6 +223,7 @@ function Result({ result }: { result: FinanceImportResult }) {
       <Step i={2} title="Skipped duplicates" detail={r.duplicates ? `${r.duplicates} already imported` : "None: all new"} />
       <Step i={3} title="Linked transfers" detail={r.transfers ? `${r.transfers} between your accounts, left out of spending` : "None found"} />
       <Step i={4} title="Categorized" detail={`${r.categorized} of ${r.inserted} new${result.needs_review ? ` · ${result.needs_review} need review` : ""}`} />
+      {remembered && <Step i={5} title="Remembered this layout" detail="This bank's next export imports without the mapping step" />}
     </ol>
   );
 }

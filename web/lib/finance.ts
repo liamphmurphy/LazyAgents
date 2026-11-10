@@ -116,3 +116,96 @@ export function parseDollars(s: string): number | null {
   if (!/^-?\d+(\.\d{0,2})?$/.test(t)) return null;
   return Math.round(Number(t) * 100);
 }
+
+/** The CSV mapping the import dialog edits (same shape as the API's FinanceCSVMapping). */
+export type CsvMapping = {
+  delimiter: string;
+  header_row: number;
+  date: number;
+  date_format: string;
+  description: number[];
+  amount?: number;
+  direction?: number;
+  debit_values?: string[];
+  debit?: number;
+  credit?: number;
+  balance?: number;
+  decimal_comma?: boolean;
+  flip_sign?: boolean;
+};
+
+export const COLUMN_ROLES = ["skip", "date", "description", "amount", "direction", "debit", "credit", "balance"] as const;
+export type ColumnRole = (typeof COLUMN_ROLES)[number];
+export const ROLE_LABELS: Record<ColumnRole, string> = {
+  skip: "—",
+  date: "Date",
+  description: "Description",
+  amount: "Amount",
+  direction: "In/out marker",
+  debit: "Money out",
+  credit: "Money in",
+  balance: "Balance",
+};
+
+/** What column i is in a mapping. The date wins if a column is somehow named twice. */
+export function columnRole(m: CsvMapping, i: number): ColumnRole {
+  if (m.date === i) return "date";
+  if (m.amount === i) return "amount";
+  if (m.debit === i) return "debit";
+  if (m.credit === i) return "credit";
+  if (m.direction === i) return "direction";
+  if (m.balance === i) return "balance";
+  if (m.description.includes(i)) return "description";
+  return "skip";
+}
+
+/**
+ * Give column i a role, keeping the mapping one of its three amount shapes: a signed amount
+ * (optionally with an in/out marker) or money-out and money-in columns, never both.
+ */
+export function setColumnRole(m: CsvMapping, i: number, role: ColumnRole): CsvMapping {
+  const next: CsvMapping = { ...m, description: m.description.filter((d) => d !== i) };
+  for (const k of ["amount", "direction", "debit", "credit", "balance"] as const) if (next[k] === i) delete next[k];
+  if (next.direction === undefined) delete next.debit_values;
+  switch (role) {
+    case "date":
+      next.date = i;
+      break;
+    case "description":
+      next.description = [...next.description, i].sort((a, b) => a - b).slice(-3);
+      break;
+    case "amount":
+      next.amount = i;
+      delete next.debit;
+      delete next.credit;
+      break;
+    case "direction":
+      next.direction = i;
+      next.debit_values = [];
+      delete next.debit;
+      delete next.credit;
+      break;
+    case "debit":
+    case "credit":
+      next[role] = i;
+      delete next.amount;
+      delete next.direction;
+      delete next.debit_values;
+      break;
+    case "balance":
+      next.balance = i;
+      break;
+  }
+  return next;
+}
+
+/** The distinct values in column i of the rows after the header: what an in/out marker can be. */
+export function columnValues(rows: string[][], headerRow: number, i: number, limit = 8): string[] {
+  const out: string[] = [];
+  for (const r of rows.slice(headerRow)) {
+    const v = (r[i] ?? "").trim();
+    if (v && !out.includes(v)) out.push(v);
+    if (out.length >= limit) break;
+  }
+  return out;
+}

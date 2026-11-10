@@ -3201,6 +3201,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/finance/imports/pending/{importId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A CSV waiting for its columns to be mapped
+         * @description Poll it while assistant is asking; the assistant's mapping appears once it reads every row.
+         */
+        get: operations["getFinancePendingImport"];
+        put?: never;
+        post?: never;
+        /** Drop a pending import without importing it */
+        delete: operations["cancelFinancePendingImport"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/finance/imports/pending/{importId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a mapping reads from the whole file, without importing
+         * @description 422 names the first row the mapping can't read.
+         */
+        post: operations["previewFinanceMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/finance/imports/pending/{importId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a pending CSV with a mapping, and remember the mapping
+         * @description The next file with the same delimiter and first line imports with it directly. 422 names the first row the mapping can't read.
+         */
+        post: operations["commitFinanceMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/finance/transactions/{transactionId}/category": {
         parameters: {
             query?: never;
@@ -3940,6 +4007,78 @@ export interface components {
         MemoryType: string;
         /** @enum {string} */
         ChatSpaceColor: "green" | "amber" | "red" | "blue" | "violet" | "pink" | "teal" | "orange";
+        /** @description How to read one bank's CSV layout. Columns are 0-based; give either amount (optionally with direction and debit_values) or debit and credit. */
+        FinanceCSVMapping: {
+            /** @description One character: comma, semicolon, tab or pipe */
+            delimiter: string;
+            /** @description 1-based row with the column names (blank lines aren't rows); 0 for none */
+            header_row: number;
+            date: number;
+            /** @description One of the pending import's date_formats */
+            date_format: string;
+            description: number[];
+            /** @description Signed amount */
+            amount?: number;
+            /** @description Column saying which way the money went, e.g. DR/CR */
+            direction?: number;
+            /** @description direction values that mean money out */
+            debit_values?: string[];
+            /** @description Money out column */
+            debit?: number;
+            /** @description Money in column */
+            credit?: number;
+            /** @description Running balance column */
+            balance?: number;
+            /** @description Amounts are written 1.234,56 */
+            decimal_comma?: boolean;
+            /** @description Purchases show as positive amounts */
+            flip_sign?: boolean;
+        };
+        FinancePendingImport: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            account_id: string;
+            filename: string;
+            /** @description The file's first rows as split by prefill's delimiter, header included */
+            rows: string[][];
+            columns: number;
+            prefill: components["schemas"]["FinanceCSVMapping"];
+            /**
+             * @description asking: a hidden chat is working on a mapping; unavailable: none could be started
+             * @enum {string}
+             */
+            assistant: "asking" | "mapped" | "unavailable";
+            mapping?: components["schemas"]["FinanceCSVMapping"];
+            /** @description How the assistant read the file */
+            mapping_note: string;
+            date_formats: string[];
+            /** Format: date-time */
+            created_at: string;
+        };
+        FinanceMappingRow: {
+            /** Format: date */
+            posted_on: string;
+            description: string;
+            /** Format: int64 */
+            amount_cents: number;
+        };
+        FinanceMappingPreview: {
+            count: number;
+            /** Format: date */
+            first_date: string;
+            /** Format: date */
+            last_date: string;
+            /** Format: int64 */
+            in_cents: number;
+            /** Format: int64 */
+            out_cents: number;
+            rows: components["schemas"]["FinanceMappingRow"][];
+            /** Format: int64 */
+            balance_cents?: number;
+            /** Format: date */
+            balance_as_of?: string;
+        };
         /** @enum {string} */
         FinanceAccountKind: "checking" | "savings" | "credit" | "brokerage" | "other";
         FinanceAccount: {
@@ -12841,6 +12980,123 @@ export interface operations {
                     "application/json": components["schemas"]["FinanceImportResult"];
                 };
             };
+            /**
+             * @description A CSV layout Vesper doesn't know yet: nothing was imported. The
+             *     file waits for its columns to be mapped, and the assistant is
+             *     asked for a mapping in a hidden chat. Confirm one with commit.
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinancePendingImport"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getFinancePendingImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending import */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinancePendingImport"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelFinancePendingImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dropped */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    previewFinanceMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceCSVMapping"];
+            };
+        };
+        responses: {
+            /** @description The preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceMappingPreview"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    commitFinanceMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceCSVMapping"];
+            };
+        };
+        responses: {
+            /** @description What was imported */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceImportResult"];
+                };
+            };
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };

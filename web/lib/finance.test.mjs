@@ -78,3 +78,37 @@ test("parseDollars reads what people type", () => {
   assert.equal(parseDollars("abc"), null);
   assert.equal(parseDollars(""), null);
 });
+
+test("column roles keep the mapping one amount shape", async () => {
+  const { columnRole, setColumnRole, columnValues } = await import("./finance.ts");
+  const base = { delimiter: "|", header_row: 2, date: 0, date_format: "YYYYMMDD", description: [1], amount: 3 };
+  assert.equal(columnRole(base, 0), "date");
+  assert.equal(columnRole(base, 3), "amount");
+  assert.equal(columnRole(base, 2), "skip");
+
+  const marked = setColumnRole(base, 4, "direction");
+  assert.equal(marked.direction, 4);
+  assert.deepEqual(marked.debit_values, []);
+  assert.equal(marked.amount, 3);
+
+  const split = setColumnRole(setColumnRole(marked, 3, "debit"), 4, "credit");
+  assert.equal(split.amount, undefined);
+  assert.equal(split.direction, undefined);
+  assert.equal(split.debit_values, undefined);
+  assert.equal(split.debit, 3);
+  assert.equal(split.credit, 4);
+
+  const back = setColumnRole(split, 3, "amount");
+  assert.equal(back.debit, undefined);
+  assert.equal(back.credit, undefined);
+  assert.equal(back.amount, 3);
+
+  const two = setColumnRole(base, 2, "description");
+  assert.deepEqual(two.description, [1, 2]);
+  assert.deepEqual(setColumnRole(two, 1, "skip").description, [2]);
+  // Retyping a column takes it out of its old role.
+  assert.equal(setColumnRole(base, 3, "balance").amount, undefined);
+
+  const rows = [["Statement"], ["Dt", "Payee", "Ref", "Value", "DR/CR"], ["1", "a", "", "1", "D"], ["2", "b", "", "2", "C"], ["3", "c", "", "3", "D"]];
+  assert.deepEqual(columnValues(rows, 2, 4), ["D", "C"]);
+});
