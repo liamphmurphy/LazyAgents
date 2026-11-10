@@ -88,7 +88,42 @@ CREATE TABLE finance_rules (
   UNIQUE (workspace_id, user_id, pattern)
 );
 
+-- A CSV layout the person (or the assistant for them) mapped, keyed by the
+-- file's delimiter and first line: the next export from that bank imports
+-- without asking. The mapping is finance.CSVMapping.
+CREATE TABLE finance_csv_mappings (
+  workspace_id uuid NOT NULL REFERENCES workspaces(id),
+  user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  fingerprint  text NOT NULL,
+  mapping      jsonb NOT NULL,
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (workspace_id, user_id, fingerprint)
+);
+
+-- A CSV waiting for its columns to be mapped, in the import dialog and by
+-- the assistant in a hidden chat. Gone once imported or cancelled, and
+-- swept after a day.
+CREATE TABLE finance_pending_imports (
+  id           uuid PRIMARY KEY DEFAULT uuid_v7(),
+  workspace_id uuid NOT NULL REFERENCES workspaces(id),
+  user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_id   uuid NOT NULL REFERENCES finance_accounts(id) ON DELETE CASCADE,
+  filename     text NOT NULL,
+  data         bytea NOT NULL,
+  -- The best guess the dialog starts from.
+  prefill      jsonb NOT NULL,
+  -- The hidden chat the assistant maps it in; NULL when none started.
+  chat_id      uuid REFERENCES chat_sessions(id) ON DELETE SET NULL,
+  -- The assistant's mapping, once it proposed one that reads every row.
+  mapping      jsonb,
+  mapping_note text NOT NULL DEFAULT '' CHECK (length(mapping_note) <= 500),
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX finance_pending_imports_owner ON finance_pending_imports (workspace_id, user_id, created_at);
+
 -- +goose Down
+DROP TABLE finance_pending_imports;
+DROP TABLE finance_csv_mappings;
 DROP TABLE finance_rules;
 DROP TABLE finance_transactions;
 DROP TABLE finance_imports;

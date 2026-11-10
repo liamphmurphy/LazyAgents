@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/finance"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -164,17 +166,155 @@ func (s *Server) ImportFinanceStatement(ctx context.Context, req api.ImportFinan
 	if err != nil {
 		return nil, err
 	}
+	if res.Pending != nil {
+		s.askForMapping(ctx, o, res.Pending)
+		out, err := toPendingImport(*res.Pending)
+		return api.ImportFinanceStatement202JSONResponse(out), err
+	}
+	return api.ImportFinanceStatement201JSONResponse(s.toImportResult(ctx, o, res)), nil
+}
+
+func (s *Server) toImportResult(ctx context.Context, o finance.Owner, res finance.ImportResult) api.FinanceImportResult {
 	out := api.FinanceImportResult{Import: toFinanceImport(res.Import), AccountCreated: res.AccountCreated, NeedsReview: res.NeedsReview,
 		FirstDate: optDate(res.FirstDate), LastDate: optDate(res.LastDate), Account: toFinanceAccount(finance.Account{FinanceAccount: res.Account})}
 	// The account as the dashboard shows it, with its new balance and count.
-	if accts, err := svc.Accounts(ctx, o); err == nil {
+	if accts, err := s.finance().Accounts(ctx, o); err == nil {
 		for _, a := range accts {
 			if a.ID == res.Account.ID {
 				out.Account = toFinanceAccount(a)
 			}
 		}
 	}
-	return api.ImportFinanceStatement201JSONResponse(out), nil
+	return out
+}
+
+// askForMapping starts the hidden, temporary Finance-space chat in which the
+// assistant maps a pending CSV with finance_map_csv. Best effort: without
+// it the person maps the file in the dialog, which says the assistant is
+// unavailable.
+func (s *Server) askForMapping(ctx context.Context, o finance.Owner, p *finance.Pending) {
+	svc := s.finance()
+	sp, err := svc.EnsureSpace(ctx, o)
+	if err != nil {
+		s.Log.Warn("finance mapping: no space", "err", err)
+		return
+	}
+	kind := "bank"
+	if accts, err := svc.Accounts(ctx, o); err == nil {
+		for _, a := range accts {
+			if a.ID == p.AccountID {
+				kind = a.Kind
+			}
+		}
+	}
+	chat, err := s.Runs.StartChat(ctx, o.Workspace, o.User, runs.ChatInput{Title: "Map the columns of " + p.Filename, Hidden: true, Temporary: true, SpaceID: &sp.ID,
+		Message: &runs.ChatMessageInput{Body: finance.MappingPrompt(*p, kind)}})
+	if err != nil {
+		s.Log.Warn("finance mapping: no chat", "err", err)
+		return
+	}
+	if err := svc.AttachPendingChat(ctx, p.ID, chat.ID); err != nil {
+		s.Log.Warn("finance mapping: chat not attached", "err", err)
+		return
+	}
+	p.ChatID = &chat.ID
+}
+
+// The API's mapping and the finance package's share their JSON shape.
+func toMapping(in api.FinanceCSVMapping) (finance.CSVMapping, error) {
+	var out finance.CSVMapping
+	raw, err := json.Marshal(in)
+	if err == nil {
+		err = json.Unmarshal(raw, &out)
+	}
+	return out, err
+}
+
+func fromMapping(in finance.CSVMapping) (api.FinanceCSVMapping, error) {
+	var out api.FinanceCSVMapping
+	raw, err := json.Marshal(in)
+	if err == nil {
+		err = json.Unmarshal(raw, &out)
+	}
+	return out, err
+}
+
+func toPendingImport(p finance.Pending) (api.FinancePendingImport, error) {
+	out := api.FinancePendingImport{Id: p.ID, AccountId: p.AccountID, Filename: p.Filename, Rows: p.Sample.Rows, Columns: p.Sample.Columns,
+		MappingNote: p.MappingNote, DateFormats: finance.DateFormatNames(), CreatedAt: p.CreatedAt, Assistant: api.FinanceAssistantUnavailable}
+	if out.Rows == nil {
+		out.Rows = [][]string{}
+	}
+	var err error
+	if out.Prefill, err = fromMapping(p.Prefill); err != nil {
+		return out, err
+	}
+	switch {
+	case p.Mapping != nil:
+		m, err := fromMapping(*p.Mapping)
+		if err != nil {
+			return out, err
+		}
+		out.Mapping, out.Assistant = &m, api.FinanceAssistantMapped
+	case p.ChatID != nil:
+		out.Assistant = api.FinanceAssistantAsking
+	}
+	return out, nil
+}
+
+func (s *Server) GetFinancePendingImport(ctx context.Context, req api.GetFinancePendingImportRequestObject) (api.GetFinancePendingImportResponseObject, error) {
+	p, err := s.finance().GetPending(ctx, financeOwner(ctx), req.ImportId)
+	if err != nil {
+		return nil, err
+	}
+	out, err := toPendingImport(p)
+	return api.GetFinancePendingImport200JSONResponse(out), err
+}
+
+func (s *Server) CancelFinancePendingImport(ctx context.Context, req api.CancelFinancePendingImportRequestObject) (api.CancelFinancePendingImportResponseObject, error) {
+	if err := s.finance().CancelPending(ctx, financeOwner(ctx), req.ImportId); err != nil {
+		return nil, err
+	}
+	return api.CancelFinancePendingImport204Response{}, nil
+}
+
+func (s *Server) PreviewFinanceMapping(ctx context.Context, req api.PreviewFinanceMappingRequestObject) (api.PreviewFinanceMappingResponseObject, error) {
+	if req.Body == nil {
+		return nil, apperr.Invalid("body", "required")
+	}
+	m, err := toMapping(*req.Body)
+	if err != nil {
+		return nil, err
+	}
+	pv, err := s.finance().PreviewPending(ctx, financeOwner(ctx), req.ImportId, m)
+	if err != nil {
+		return nil, err
+	}
+	out := api.FinanceMappingPreview{Count: pv.Count, FirstDate: apiDate(pv.FirstDate), LastDate: apiDate(pv.LastDate), InCents: pv.InCents, OutCents: pv.OutCents,
+		Rows: make([]api.FinanceMappingRow, len(pv.Rows))}
+	for i, r := range pv.Rows {
+		out.Rows[i] = api.FinanceMappingRow{PostedOn: apiDate(r.PostedOn), Description: r.Description, AmountCents: r.AmountCents}
+	}
+	if pv.Balance != nil {
+		out.BalanceCents, out.BalanceAsOf = &pv.Balance.Cents, optDate(pv.Balance.AsOf)
+	}
+	return api.PreviewFinanceMapping200JSONResponse(out), nil
+}
+
+func (s *Server) CommitFinanceMapping(ctx context.Context, req api.CommitFinanceMappingRequestObject) (api.CommitFinanceMappingResponseObject, error) {
+	if req.Body == nil {
+		return nil, apperr.Invalid("body", "required")
+	}
+	m, err := toMapping(*req.Body)
+	if err != nil {
+		return nil, err
+	}
+	o := financeOwner(ctx)
+	res, err := s.finance().CommitPending(ctx, o, req.ImportId, m)
+	if err != nil {
+		return nil, err
+	}
+	return api.CommitFinanceMapping201JSONResponse(s.toImportResult(ctx, o, res)), nil
 }
 
 func (s *Server) CategorizeFinanceTransaction(ctx context.Context, req api.CategorizeFinanceTransactionRequestObject) (api.CategorizeFinanceTransactionResponseObject, error) {

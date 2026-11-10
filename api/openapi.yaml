@@ -3844,6 +3844,82 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FinanceImportResult" }
+        "202":
+          description: |
+            A CSV layout Vesper doesn't know yet: nothing was imported. The
+            file waits for its columns to be mapped, and the assistant is
+            asked for a mapping in a hidden chat. Confirm one with commit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FinancePendingImport" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /finance/imports/pending/{importId}:
+    parameters:
+      - { name: importId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getFinancePendingImport
+      summary: A CSV waiting for its columns to be mapped
+      description: Poll it while assistant is asking; the assistant's mapping appears once it reads every row.
+      tags: [finance]
+      responses:
+        "200":
+          description: The pending import
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FinancePendingImport" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: cancelFinancePendingImport
+      summary: Drop a pending import without importing it
+      tags: [finance]
+      responses:
+        "204": { description: Dropped }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /finance/imports/pending/{importId}/preview:
+    parameters:
+      - { name: importId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: previewFinanceMapping
+      summary: What a mapping reads from the whole file, without importing
+      description: 422 names the first row the mapping can't read.
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FinanceCSVMapping" }
+      responses:
+        "200":
+          description: The preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FinanceMappingPreview" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /finance/imports/pending/{importId}/commit:
+    parameters:
+      - { name: importId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: commitFinanceMapping
+      summary: Import a pending CSV with a mapping, and remember the mapping
+      description: The next file with the same delimiter and first line imports with it directly. 422 names the first row the mapping can't read.
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FinanceCSVMapping" }
+      responses:
+        "201":
+          description: What was imported
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FinanceImportResult" }
+        "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
   /finance/transactions/{transactionId}/category:
@@ -4763,6 +4839,62 @@ components:
       type: string
       enum: [green, amber, red, blue, violet, pink, teal, orange]
       x-enum-varnames: [SpaceGreen, SpaceAmber, SpaceRed, SpaceBlue, SpaceViolet, SpacePink, SpaceTeal, SpaceOrange]
+    FinanceCSVMapping:
+      type: object
+      description: How to read one bank's CSV layout. Columns are 0-based; give either amount (optionally with direction and debit_values) or debit and credit.
+      required: [delimiter, header_row, date, date_format, description]
+      properties:
+        delimiter: { type: string, description: "One character: comma, semicolon, tab or pipe" }
+        header_row: { type: integer, minimum: 0, maximum: 20, description: "1-based row with the column names (blank lines aren't rows); 0 for none" }
+        date: { type: integer, minimum: 0 }
+        date_format: { type: string, description: "One of the pending import's date_formats" }
+        description: { type: array, minItems: 1, maxItems: 3, items: { type: integer, minimum: 0 } }
+        amount: { type: integer, minimum: 0, description: Signed amount, or unsigned with direction }
+        direction: { type: integer, minimum: 0, description: "Column saying which way the money went, e.g. DR/CR" }
+        debit_values: { type: array, items: { type: string }, description: "direction values that mean money out" }
+        debit: { type: integer, minimum: 0, description: Money out column }
+        credit: { type: integer, minimum: 0, description: Money in column }
+        balance: { type: integer, minimum: 0, description: Running balance column }
+        decimal_comma: { type: boolean, description: "Amounts are written 1.234,56" }
+        flip_sign: { type: boolean, description: Purchases show as positive amounts }
+    FinancePendingImport:
+      type: object
+      required: [id, account_id, filename, rows, columns, prefill, assistant, mapping_note, date_formats, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        account_id: { type: string, format: uuid }
+        filename: { type: string }
+        rows: { type: array, items: { type: array, items: { type: string } }, description: "The file's first rows as split by prefill's delimiter, header included" }
+        columns: { type: integer }
+        prefill: { $ref: "#/components/schemas/FinanceCSVMapping" }
+        assistant:
+          type: string
+          enum: [asking, mapped, unavailable]
+          x-enum-varnames: [FinanceAssistantAsking, FinanceAssistantMapped, FinanceAssistantUnavailable]
+          description: "asking: a hidden chat is working on a mapping; unavailable: none could be started"
+        mapping: { $ref: "#/components/schemas/FinanceCSVMapping" }
+        mapping_note: { type: string, description: How the assistant read the file }
+        date_formats: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+    FinanceMappingRow:
+      type: object
+      required: [posted_on, description, amount_cents]
+      properties:
+        posted_on: { type: string, format: date }
+        description: { type: string }
+        amount_cents: { type: integer, format: int64 }
+    FinanceMappingPreview:
+      type: object
+      required: [count, first_date, last_date, in_cents, out_cents, rows]
+      properties:
+        count: { type: integer }
+        first_date: { type: string, format: date }
+        last_date: { type: string, format: date }
+        in_cents: { type: integer, format: int64 }
+        out_cents: { type: integer, format: int64 }
+        rows: { type: array, items: { $ref: "#/components/schemas/FinanceMappingRow" } }
+        balance_cents: { type: integer, format: int64 }
+        balance_as_of: { type: string, format: date }
     FinanceAccountKind:
       type: string
       enum: [checking, savings, credit, brokerage, other]

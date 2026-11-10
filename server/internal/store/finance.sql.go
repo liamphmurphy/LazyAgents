@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -165,6 +166,66 @@ func (q *Queries) CreateFinanceImport(ctx context.Context, arg CreateFinanceImpo
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const createFinancePendingImport = `-- name: CreateFinancePendingImport :one
+INSERT INTO finance_pending_imports (workspace_id, user_id, account_id, filename, data, prefill)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, workspace_id, user_id, account_id, filename, data, prefill, chat_id, mapping, mapping_note, created_at
+`
+
+type CreateFinancePendingImportParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	AccountID   uuid.UUID
+	Filename    string
+	Data        []byte
+	Prefill     json.RawMessage
+}
+
+func (q *Queries) CreateFinancePendingImport(ctx context.Context, arg CreateFinancePendingImportParams) (FinancePendingImport, error) {
+	row := q.db.QueryRow(ctx, createFinancePendingImport,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.AccountID,
+		arg.Filename,
+		arg.Data,
+		arg.Prefill,
+	)
+	var i FinancePendingImport
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.AccountID,
+		&i.Filename,
+		&i.Data,
+		&i.Prefill,
+		&i.ChatID,
+		&i.Mapping,
+		&i.MappingNote,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteFinancePendingImport = `-- name: DeleteFinancePendingImport :execrows
+DELETE FROM finance_pending_imports WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+`
+
+type DeleteFinancePendingImportParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+// Its hidden chat is temporary: the runner deletes it once it has sat idle for a day.
+func (q *Queries) DeleteFinancePendingImport(ctx context.Context, arg DeleteFinancePendingImportParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteFinancePendingImport, arg.ID, arg.WorkspaceID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const financeAccountDailyNet = `-- name: FinanceAccountDailyNet :many
@@ -653,6 +714,52 @@ func (q *Queries) GetFinanceAccountByOFX(ctx context.Context, arg GetFinanceAcco
 	return i, err
 }
 
+const getFinanceCSVMapping = `-- name: GetFinanceCSVMapping :one
+SELECT mapping FROM finance_csv_mappings WHERE workspace_id = $1 AND user_id = $2 AND fingerprint = $3
+`
+
+type GetFinanceCSVMappingParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Fingerprint string
+}
+
+func (q *Queries) GetFinanceCSVMapping(ctx context.Context, arg GetFinanceCSVMappingParams) (json.RawMessage, error) {
+	row := q.db.QueryRow(ctx, getFinanceCSVMapping, arg.WorkspaceID, arg.UserID, arg.Fingerprint)
+	var mapping json.RawMessage
+	err := row.Scan(&mapping)
+	return mapping, err
+}
+
+const getFinancePendingImport = `-- name: GetFinancePendingImport :one
+SELECT id, workspace_id, user_id, account_id, filename, data, prefill, chat_id, mapping, mapping_note, created_at FROM finance_pending_imports WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+`
+
+type GetFinancePendingImportParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+func (q *Queries) GetFinancePendingImport(ctx context.Context, arg GetFinancePendingImportParams) (FinancePendingImport, error) {
+	row := q.db.QueryRow(ctx, getFinancePendingImport, arg.ID, arg.WorkspaceID, arg.UserID)
+	var i FinancePendingImport
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.AccountID,
+		&i.Filename,
+		&i.Data,
+		&i.Prefill,
+		&i.ChatID,
+		&i.Mapping,
+		&i.MappingNote,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getFinanceTransaction = `-- name: GetFinanceTransaction :one
 SELECT t.id, t.account_id, t.import_id, t.posted_on, t.amount_cents, t.description, t.merchant, t.category, t.category_source, t.transfer_id, t.dedupe_key, t.created_at FROM finance_transactions t JOIN finance_accounts a ON a.id = t.account_id
 WHERE t.id = $1 AND a.workspace_id = $2 AND a.user_id = $3
@@ -1001,6 +1108,28 @@ func (q *Queries) QueryFinanceTransactions(ctx context.Context, arg QueryFinance
 	return items, nil
 }
 
+const saveFinanceCSVMapping = `-- name: SaveFinanceCSVMapping :exec
+INSERT INTO finance_csv_mappings (workspace_id, user_id, fingerprint, mapping) VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id, user_id, fingerprint) DO UPDATE SET mapping = EXCLUDED.mapping, updated_at = now()
+`
+
+type SaveFinanceCSVMappingParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Fingerprint string
+	Mapping     json.RawMessage
+}
+
+func (q *Queries) SaveFinanceCSVMapping(ctx context.Context, arg SaveFinanceCSVMappingParams) error {
+	_, err := q.db.Exec(ctx, saveFinanceCSVMapping,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Fingerprint,
+		arg.Mapping,
+	)
+	return err
+}
+
 const setFinanceAccountOFX = `-- name: SetFinanceAccountOFX :exec
 UPDATE finance_accounts SET ofx_account_id = $1 WHERE id = $2 AND ofx_account_id IS NULL
 `
@@ -1013,6 +1142,35 @@ type SetFinanceAccountOFXParams struct {
 // The first OFX import into an account chosen by hand ties later ones to it.
 func (q *Queries) SetFinanceAccountOFX(ctx context.Context, arg SetFinanceAccountOFXParams) error {
 	_, err := q.db.Exec(ctx, setFinanceAccountOFX, arg.OfxAccountID, arg.ID)
+	return err
+}
+
+const setFinancePendingChat = `-- name: SetFinancePendingChat :exec
+UPDATE finance_pending_imports SET chat_id = $1 WHERE id = $2
+`
+
+type SetFinancePendingChatParams struct {
+	ChatID *uuid.UUID
+	ID     uuid.UUID
+}
+
+func (q *Queries) SetFinancePendingChat(ctx context.Context, arg SetFinancePendingChatParams) error {
+	_, err := q.db.Exec(ctx, setFinancePendingChat, arg.ChatID, arg.ID)
+	return err
+}
+
+const setFinancePendingMapping = `-- name: SetFinancePendingMapping :exec
+UPDATE finance_pending_imports SET mapping = $1, mapping_note = $2 WHERE id = $3
+`
+
+type SetFinancePendingMappingParams struct {
+	Mapping     []byte
+	MappingNote string
+	ID          uuid.UUID
+}
+
+func (q *Queries) SetFinancePendingMapping(ctx context.Context, arg SetFinancePendingMappingParams) error {
+	_, err := q.db.Exec(ctx, setFinancePendingMapping, arg.Mapping, arg.MappingNote, arg.ID)
 	return err
 }
 
@@ -1031,6 +1189,22 @@ type SetFinanceTransactionCategoryParams struct {
 // Choosing a category by hand ends a matched transfer on both sides.
 func (q *Queries) SetFinanceTransactionCategory(ctx context.Context, arg SetFinanceTransactionCategoryParams) error {
 	_, err := q.db.Exec(ctx, setFinanceTransactionCategory, arg.Category, arg.CategorySource, arg.ID)
+	return err
+}
+
+const sweepFinancePendingImports = `-- name: SweepFinancePendingImports :exec
+DELETE FROM finance_pending_imports WHERE workspace_id = $1 AND user_id = $2 AND created_at < $3
+`
+
+type SweepFinancePendingImportsParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Before      time.Time
+}
+
+// Pending imports nobody finished within a day.
+func (q *Queries) SweepFinancePendingImports(ctx context.Context, arg SweepFinancePendingImportsParams) error {
+	_, err := q.db.Exec(ctx, sweepFinancePendingImports, arg.WorkspaceID, arg.UserID, arg.Before)
 	return err
 }
 

@@ -237,3 +237,77 @@ func TestEnsureSpace(t *testing.T) {
 		t.Fatalf("after delete %+v %v", c, err)
 	}
 }
+
+const oddCSV = "Statement for account ****0921\n\nTxn Dt|Payee/Memo|Ref|Value|DR/CR\n" +
+	"20261105|SQ *POWELLS BOOKS|A1|34.18|D\n20261104|PAYMENT RECEIVED|A2|1200.00|C\n"
+
+// A layout Vesper doesn't know waits as a pending import; a mapping that
+// misreads a row is refused with the row; the confirmed one imports and is
+// saved, so the bank's next export imports straight away.
+func TestPendingCSVMapping(t *testing.T) {
+	s, o := newService(t)
+	ctx := context.Background()
+	card, err := s.CreateAccount(ctx, o, NewAccount{Name: "Visa", Kind: "credit"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Import(ctx, o, ImportInput{Filename: "odd.csv", Data: []byte(oddCSV), Account: &card.ID})
+	if err != nil || res.Pending == nil || res.Import.ID != uuid.Nil {
+		t.Fatalf("unknown layout: %+v %v", res, err)
+	}
+	p := res.Pending
+	if p.Prefill.Delimiter != "|" || p.Prefill.HeaderRow != 2 || len(p.Sample.Rows) != 4 || p.AccountID != card.ID {
+		t.Fatalf("pending %+v", p)
+	}
+	prompt := MappingPrompt(*p, "credit")
+	for _, want := range []string{p.ID.String(), "finance_map_csv", `3: ["20261105","SQ *POWELLS BOOKS","A1","34.18","D"]`, "Txn Dt|Payee/Memo"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, prompt)
+		}
+	}
+
+	var ve *apperr.ValidationError
+	wrong := p.Prefill
+	wrong.DateFormat = "MM/DD/YYYY"
+	if _, err := s.ProposeMapping(ctx, o, p.ID, wrong, ""); !errors.As(err, &ve) || !strings.Contains(ve.Msg, "row 3") {
+		t.Fatalf("misread mapping: %v", err)
+	}
+	right := p.Prefill
+	right.Direction, right.DebitValues = ptr(4), []string{"D"}
+	pv, err := s.ProposeMapping(ctx, o, p.ID, right, "  Pipe-separated;   D/C marks direction. ")
+	if err != nil || pv.Count != 2 || pv.OutCents != 3418 || pv.InCents != 120000 {
+		t.Fatalf("proposed %+v %v", pv, err)
+	}
+	got, err := s.GetPending(ctx, o, p.ID)
+	if err != nil || got.Mapping == nil || got.MappingNote != "Pipe-separated; D/C marks direction." {
+		t.Fatalf("stored %+v %v", got, err)
+	}
+	if _, err := s.GetPending(ctx, Owner{Workspace: o.Workspace, User: uuid.New()}, p.ID); !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("someone else's pending import: %v", err)
+	}
+
+	done, err := s.CommitPending(ctx, o, p.ID, *got.Mapping)
+	if err != nil || done.Import.Inserted != 2 || done.Account.ID != card.ID {
+		t.Fatalf("commit %+v %v", done, err)
+	}
+	if _, err := s.GetPending(ctx, o, p.ID); !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("pending import kept after commit: %v", err)
+	}
+	// The next export from that bank: same layout, new rows.
+	next := oddCSV + "20261108|NEW SEASONS MKT|A3|62.40|D\n"
+	again, err := s.Import(ctx, o, ImportInput{Filename: "odd-2.csv", Data: []byte(next), Account: &card.ID})
+	if err != nil || again.Pending != nil || again.Import.Inserted != 1 || again.Import.Duplicates != 2 {
+		t.Fatalf("saved mapping: %+v %v", again, err)
+	}
+
+	res, err = s.Import(ctx, o, ImportInput{Filename: "x.csv", Data: []byte("a;b\nc;d\n"), Account: &card.ID})
+	if err != nil || res.Pending == nil {
+		t.Fatalf("unreadable: %+v %v", res, err)
+	}
+	if err := s.CancelPending(ctx, o, res.Pending.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CancelPending(ctx, o, res.Pending.ID); !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("cancel twice: %v", err)
+	}
+}

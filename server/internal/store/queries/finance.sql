@@ -190,3 +190,32 @@ WHERE a.workspace_id = @workspace_id AND a.user_id = @user_id
   AND (sqlc.narg(direction)::text IS NULL OR (sqlc.narg(direction)::text = 'out' AND t.amount_cents < 0) OR (sqlc.narg(direction)::text = 'in' AND t.amount_cents > 0))
 ORDER BY t.posted_on DESC, t.id
 LIMIT @row_limit;
+
+-- name: GetFinanceCSVMapping :one
+SELECT mapping FROM finance_csv_mappings WHERE workspace_id = @workspace_id AND user_id = @user_id AND fingerprint = @fingerprint;
+
+-- name: SaveFinanceCSVMapping :exec
+INSERT INTO finance_csv_mappings (workspace_id, user_id, fingerprint, mapping) VALUES (@workspace_id, @user_id, @fingerprint, @mapping)
+ON CONFLICT (workspace_id, user_id, fingerprint) DO UPDATE SET mapping = EXCLUDED.mapping, updated_at = now();
+
+-- name: CreateFinancePendingImport :one
+INSERT INTO finance_pending_imports (workspace_id, user_id, account_id, filename, data, prefill)
+VALUES (@workspace_id, @user_id, @account_id, @filename, @data, @prefill)
+RETURNING *;
+
+-- name: GetFinancePendingImport :one
+SELECT * FROM finance_pending_imports WHERE id = @id AND workspace_id = @workspace_id AND user_id = @user_id;
+
+-- name: SetFinancePendingChat :exec
+UPDATE finance_pending_imports SET chat_id = @chat_id WHERE id = @id;
+
+-- name: SetFinancePendingMapping :exec
+UPDATE finance_pending_imports SET mapping = @mapping, mapping_note = @mapping_note WHERE id = @id;
+
+-- name: DeleteFinancePendingImport :execrows
+-- Its hidden chat is temporary: the runner deletes it once it has sat idle for a day.
+DELETE FROM finance_pending_imports WHERE id = @id AND workspace_id = @workspace_id AND user_id = @user_id;
+
+-- name: SweepFinancePendingImports :exec
+-- Pending imports nobody finished within a day.
+DELETE FROM finance_pending_imports WHERE workspace_id = @workspace_id AND user_id = @user_id AND created_at < @before;

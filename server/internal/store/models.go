@@ -533,6 +533,14 @@ type FinanceBalance struct {
 	BalanceCents int64
 }
 
+type FinanceCsvMapping struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Fingerprint string
+	Mapping     json.RawMessage
+	UpdatedAt   time.Time
+}
+
 type FinanceImport struct {
 	ID          uuid.UUID
 	AccountID   uuid.UUID
@@ -543,6 +551,20 @@ type FinanceImport struct {
 	Duplicates  int32
 	Transfers   int32
 	Categorized int32
+	CreatedAt   time.Time
+}
+
+type FinancePendingImport struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	AccountID   uuid.UUID
+	Filename    string
+	Data        []byte
+	Prefill     json.RawMessage
+	ChatID      *uuid.UUID
+	Mapping     []byte
+	MappingNote string
 	CreatedAt   time.Time
 }
 

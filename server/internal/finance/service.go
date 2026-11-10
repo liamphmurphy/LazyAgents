@@ -160,6 +160,8 @@ type ImportResult struct {
 	NeedsReview    int
 	FirstDate      time.Time
 	LastDate       time.Time
+	// Pending: a CSV whose layout needs mapping first; nothing was imported.
+	Pending *Pending
 }
 
 // Import adds a statement's new transactions: duplicates of earlier imports
@@ -173,26 +175,69 @@ func (s *Service) Import(ctx context.Context, o Owner, in ImportInput) (ImportRe
 	if len(in.Data) > MaxImportBytes {
 		return out, apperr.Invalid("file", "statements are limited to 5 MB; export a shorter date range")
 	}
-	var p Parsed
-	var err error
 	if LooksLikeOFX(in.Filename, in.Data) {
-		p, err = ParseOFX(in.Data)
-	} else {
-		p, err = ParseCSV(in.Data, in.FlipSign)
+		p, err := ParseOFX(in.Data)
+		if err != nil {
+			return out, err
+		}
+		return s.write(ctx, o, p, in.Filename, in.Account)
 	}
+	// A CSV goes into the account the person picked. Its layout is read with
+	// the mapping saved for it, else header detection; a layout neither
+	// knows waits as a pending import for the mapping step.
+	if in.Account == nil {
+		return out, apperr.Invalid("account_id", "pick the account this CSV is from")
+	}
+	if _, err := s.account(ctx, s.q(), o, *in.Account); errors.Is(err, apperr.ErrNotFound) {
+		return out, apperr.Invalid("account_id", "unknown account")
+	} else if err != nil {
+		return out, err
+	}
+	fp := CSVFingerprint(in.Data)
+	saved, hasSaved, err := s.savedMapping(ctx, o, fp)
 	if err != nil {
 		return out, err
 	}
+	if hasSaved {
+		if p, err := ParseCSVWith(in.Data, saved); err == nil {
+			return s.write(ctx, o, p, in.Filename, in.Account)
+		}
+	}
+	prefill := GuessCSV(in.Data)
+	if m, ok := DetectCSV(in.Data); ok {
+		m.FlipSign = in.FlipSign
+		prefill = m
+		p, err := ParseCSVWith(in.Data, m)
+		if err == nil {
+			return s.write(ctx, o, p, in.Filename, in.Account)
+		}
+		var ve *apperr.ValidationError
+		if !errors.As(err, &ve) {
+			return out, err
+		}
+	}
+	if hasSaved {
+		prefill = saved
+	}
+	prefill.FlipSign = prefill.FlipSign || in.FlipSign
+	pending, err := s.createPending(ctx, o, *in.Account, in.Filename, in.Data, prefill)
+	out.Pending = &pending
+	return out, err
+}
+
+// write adds a parsed statement's new transactions to an account.
+func (s *Service) write(ctx context.Context, o Owner, p Parsed, filename string, account *uuid.UUID) (ImportResult, error) {
+	var out ImportResult
 	if len(p.Txns) == 0 {
 		return out, apperr.Invalid("file", "has no transactions")
 	}
-	err = s.tx(ctx, func(q *store.Queries) error {
-		acct, created, err := s.importAccount(ctx, q, o, p, in.Account)
+	err := s.tx(ctx, func(q *store.Queries) error {
+		acct, created, err := s.importAccount(ctx, q, o, p, account)
 		if err != nil {
 			return err
 		}
 		out.Account, out.AccountCreated = acct, created
-		imp, err := q.CreateFinanceImport(ctx, store.CreateFinanceImportParams{AccountID: acct.ID, Filename: importName(in.Filename), Format: p.Format, Parsed: int32(len(p.Txns))})
+		imp, err := q.CreateFinanceImport(ctx, store.CreateFinanceImportParams{AccountID: acct.ID, Filename: importName(filename), Format: p.Format, Parsed: int32(len(p.Txns))})
 		if err != nil {
 			return err
 		}

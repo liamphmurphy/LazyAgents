@@ -246,3 +246,52 @@ func financeCategorize(ctx context.Context, d Deps, c agents.Caller, in FinanceC
 	}
 	return out, nil
 }
+
+type FinanceMapCSVIn struct {
+	ImportID     string   `json:"import_id" jsonschema:"The pending import named in your instructions"`
+	Delimiter    string   `json:"delimiter" jsonschema:"One character: , ; | or a tab"`
+	HeaderRow    int      `json:"header_row" jsonschema:"1-based row holding the column names (blank lines aren't rows); 0 if there is none"`
+	Date         int      `json:"date" jsonschema:"0-based date column"`
+	DateFormat   string   `json:"date_format" jsonschema:"MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, MM/DD/YY, DD/MM/YY, DD.MM.YYYY, YYYYMMDD, MMM D, YYYY or D MMM YYYY"`
+	Description  []int    `json:"description" jsonschema:"1–3 columns joined into the description"`
+	Amount       *int     `json:"amount,omitempty" jsonschema:"Signed amount column, or unsigned with direction"`
+	Direction    *int     `json:"direction,omitempty" jsonschema:"Column saying which way the money went, with an unsigned amount"`
+	DebitValues  []string `json:"debit_values,omitempty" jsonschema:"The direction column's values that mean money out, e.g. DR"`
+	Debit        *int     `json:"debit,omitempty" jsonschema:"Money-out column, with credit, instead of amount"`
+	Credit       *int     `json:"credit,omitempty" jsonschema:"Money-in column, with debit, instead of amount"`
+	Balance      *int     `json:"balance,omitempty" jsonschema:"Running balance column, if any"`
+	DecimalComma bool     `json:"decimal_comma,omitempty" jsonschema:"Amounts are written 1.234,56"`
+	FlipSign     bool     `json:"flip_sign,omitempty" jsonschema:"Purchases show as positive numbers"`
+	Note         string   `json:"note,omitempty" jsonschema:"One sentence on how you read the file, shown to the person"`
+}
+
+// financeMapCSV takes the assistant's mapping for a pending CSV import. It is
+// kept only if it reads every row; the error otherwise names the row, so the
+// assistant can fix it. The person still confirms it in the import dialog.
+func financeMapCSV(ctx context.Context, d Deps, c agents.Caller, in FinanceMapCSVIn) (any, error) {
+	svc, o, err := financeFor(ctx, d, c, "finance_map_csv")
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseUUID("import_id", in.ImportID)
+	if err != nil {
+		return nil, err
+	}
+	m := finance.CSVMapping{Delimiter: in.Delimiter, HeaderRow: in.HeaderRow, Date: in.Date, DateFormat: strings.TrimSpace(in.DateFormat), Description: in.Description,
+		Amount: in.Amount, Direction: in.Direction, DebitValues: in.DebitValues, Debit: in.Debit, Credit: in.Credit, Balance: in.Balance,
+		DecimalComma: in.DecimalComma, FlipSign: in.FlipSign}
+	pv, err := svc.ProposeMapping(ctx, o, id, m, in.Note)
+	if errors.Is(err, apperr.ErrNotFound) {
+		return nil, apperr.Invalid("import_id", "no pending import %s: it was imported or cancelled", in.ImportID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]map[string]any, len(pv.Rows))
+	for i, r := range pv.Rows {
+		rows[i] = map[string]any{"date": r.PostedOn.Format(time.DateOnly), "description": r.Description, "amount": dollars(r.AmountCents)}
+	}
+	return ok(map[string]any{"transactions": pv.Count, "from": pv.FirstDate.Format(time.DateOnly), "to": pv.LastDate.Format(time.DateOnly),
+		"money_in": dollars(pv.InCents), "money_out": dollars(pv.OutCents), "first_rows": rows,
+		"message": "Accepted: every row reads. Check the first rows look right (purchases negative); if not, call again. The person confirms it in the import dialog."}), nil
+}

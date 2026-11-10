@@ -68,6 +68,9 @@ var dateFormatOrder = []string{"YYYY-MM-DD", "YYYYMMDD", "MM/DD/YYYY", "DD/MM/YY
 
 var delimiters = []string{",", ";", "\t", "|"}
 
+// DateFormatNames lists DateFormats in the order pickers show them.
+func DateFormatNames() []string { return slices.Clone(dateFormatOrder) }
+
 func parseDate(s, format string) (time.Time, bool) {
 	s = strings.TrimSpace(s)
 	// Some exports add a time: 2026-11-05 13:02:11 or 2026-11-05T13:02:11Z.
