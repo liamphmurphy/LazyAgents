@@ -5305,7 +5305,7 @@ export interface components {
             epic_id?: string;
             /** Format: uuid */
             artifact_id?: string;
-            /** @description Wiki pages, sections, artifacts and tickets in the project for the planner to read; delivered as context files when the run starts. */
+            /** @description Wiki pages, sections, artifacts and tickets anywhere in the workspace for the planner to read; delivered as context files when the run starts. */
             context_refs?: components["schemas"]["ChatContextRef"][];
         };
         PlanningSession: {
@@ -5370,7 +5370,7 @@ export interface components {
          * @enum {string}
          */
         ChatState: "idle" | "running" | "failed";
-        /** @description Something attached to a message for the assistant to read. Exactly one of id or key; must belong to the chat's project (notes may be workspace-wide). */
+        /** @description Something attached to a message for the assistant to read. Exactly one of id or key; anything in the workspace, whichever project the chat has attached (a canvas must be this chat's). */
         ChatContextRef: {
             /** @enum {string} */
             kind: "artifact" | "section" | "ticket" | "page" | "canvas";
