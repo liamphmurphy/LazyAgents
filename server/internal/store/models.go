@@ -200,6 +200,7 @@ type ChatCanvas struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	PromotedArtifactID *uuid.UUID
+	ReviewedSeq        int32
 }
 
 type ChatCanvasComment struct {

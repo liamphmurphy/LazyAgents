@@ -378,6 +378,51 @@ func (q *Queries) GetLibraryDiagram(ctx context.Context, arg GetLibraryDiagramPa
 	return i, err
 }
 
+const getLibraryDocumentByBlob = `-- name: GetLibraryDocumentByBlob :one
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary, duration_ms, width, height, poster_key FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'document'
+`
+
+type GetLibraryDocumentByBlobParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	BlobKey     string
+}
+
+// The caller's saved document with this content, if any.
+func (q *Queries) GetLibraryDocumentByBlob(ctx context.Context, arg GetLibraryDocumentByBlobParams) (LibraryItem, error) {
+	row := q.db.QueryRow(ctx, getLibraryDocumentByBlob, arg.WorkspaceID, arg.UserID, arg.BlobKey)
+	var i LibraryItem
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Kind,
+		&i.Title,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.ChatID,
+		&i.MessageID,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
+		&i.Source,
+		&i.Url,
+		&i.Note,
+		&i.Site,
+		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
+		&i.DurationMs,
+		&i.Width,
+		&i.Height,
+		&i.PosterKey,
+	)
+	return i, err
+}
+
 const getLibraryItem = `-- name: GetLibraryItem :one
 SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary, duration_ms, width, height, poster_key FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `

@@ -422,7 +422,7 @@ func (q *Queries) GetChatSpaceByID(ctx context.Context, id uuid.UUID) (ChatSpace
 }
 
 const getMyCanvas = `-- name: GetMyCanvas :one
-SELECT cv.id, cv.kind, cv.title, cv.updated_at, c.id AS chat_id, c.title AS chat_title
+SELECT cv.id, cv.kind, cv.title, cv.updated_at, cv.reviewed_seq, c.id AS chat_id, c.title AS chat_title
 FROM chat_canvases cv JOIN chat_sessions c ON c.id = cv.session_id
 WHERE cv.id = $1 AND c.workspace_id = $2 AND c.created_by = $3 AND NOT c.hidden
 `
@@ -434,12 +434,13 @@ type GetMyCanvasParams struct {
 }
 
 type GetMyCanvasRow struct {
-	ID        uuid.UUID
-	Kind      string
-	Title     string
-	UpdatedAt time.Time
-	ChatID    uuid.UUID
-	ChatTitle string
+	ID          uuid.UUID
+	Kind        string
+	Title       string
+	UpdatedAt   time.Time
+	ReviewedSeq int32
+	ChatID      uuid.UUID
+	ChatTitle   string
 }
 
 // One of the person's canvases, with the chat it lives in.
@@ -451,6 +452,7 @@ func (q *Queries) GetMyCanvas(ctx context.Context, arg GetMyCanvasParams) (GetMy
 		&i.Kind,
 		&i.Title,
 		&i.UpdatedAt,
+		&i.ReviewedSeq,
 		&i.ChatID,
 		&i.ChatTitle,
 	)
@@ -625,6 +627,35 @@ func (q *Queries) ListUserCanvases(ctx context.Context, arg ListUserCanvasesPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const markMyCanvasReviewed = `-- name: MarkMyCanvasReviewed :one
+UPDATE chat_canvases cv SET reviewed_seq = GREATEST(cv.reviewed_seq, $1::int)
+FROM chat_sessions c
+WHERE cv.id = $2 AND c.id = cv.session_id AND c.workspace_id = $3 AND c.created_by = $4 AND NOT c.hidden
+  AND $1::int <= (SELECT max(seq) FROM chat_canvas_versions WHERE canvas_id = cv.id)
+RETURNING cv.reviewed_seq
+`
+
+type MarkMyCanvasReviewedParams struct {
+	Seq         int32
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+// Records that the person has reviewed one of their canvases up to a version
+// it has. Never moves back, so a stale tab can't reopen a finished review.
+func (q *Queries) MarkMyCanvasReviewed(ctx context.Context, arg MarkMyCanvasReviewedParams) (int32, error) {
+	row := q.db.QueryRow(ctx, markMyCanvasReviewed,
+		arg.Seq,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+	)
+	var reviewed_seq int32
+	err := row.Scan(&reviewed_seq)
+	return reviewed_seq, err
 }
 
 const setChatSpace = `-- name: SetChatSpace :one
