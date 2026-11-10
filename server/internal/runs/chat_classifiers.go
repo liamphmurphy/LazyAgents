@@ -71,6 +71,20 @@ func (d *turnDecision) fire(name, note string) {
 	}
 }
 
+// levelRules are the rules that raise a turn's effort level.
+var levelRules = []string{"confirmation", "effort_mismatch"}
+
+// effortReasons are the fired rules that raised the turn's level.
+func (d turnDecision) effortReasons() []string {
+	var out []string
+	for _, f := range d.Fired {
+		if slices.Contains(levelRules, f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // prompt is the turn's prompt with the decision's notes after it, at the end
 // so a note never disturbs the cached prefix.
 func (d turnDecision) prompt(prompt string) string {
@@ -227,6 +241,13 @@ func startClassifiedChatTurn(ctx context.Context, q *store.Queries, chat store.C
 	chat, run, turn, err := startChatTurn(ctx, q, chat, project, d.prompt(prompt), d.Level, false, handoffChars)
 	if err != nil || len(d.Fired) == 0 {
 		return chat, run, turn, err
+	}
+	// A chosen effort ignores the level, so only an automatic turn has reasons to show.
+	if reasons := d.effortReasons(); chat.Effort == "" && len(reasons) > 0 {
+		if err = q.SetTurnEffortReasons(ctx, store.SetTurnEffortReasonsParams{ID: turn.ID, Reasons: reasons}); err != nil {
+			return chat, run, turn, err
+		}
+		turn.EffortReasons = reasons
 	}
 	return chat, run, turn, event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_classified", "fired": d.Fired, "level": d.Level, "chat_effort": chat.Effort})
 }
