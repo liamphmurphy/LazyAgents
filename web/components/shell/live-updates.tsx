@@ -17,7 +17,9 @@ const prefixes: Record<string, string[]> = {
   knowledge: ["knowledge", "wiki"],
   project: ["projects", "planning", "bootstrap", "tickets", "boards", "inbox", "search"],
   inbox: ["inbox", "bootstrap"],
-  chat: ["chats", "canvases", "dock"],
+  chat: ["chats", "canvases", "videos", "dock"],
+  // A chat video's progress, copied every couple of seconds while it renders.
+  video: ["videos"],
   // A persona edit changes the name, color and avatar every chat using it embeds.
   persona: ["personas", "chats", "dock"],
 };
@@ -48,7 +50,7 @@ export function LiveUpdates() {
           ? ["runs"]
           : (prefixes[type.split(".")[0]] ?? []))
           pending.add(key);
-        if (type !== "run.events") {
+        if (type !== "run.events" && type !== "video.updated") {
           pending.add("dashboard");
           pending.add("epics");
           pending.add("agent-overviews");

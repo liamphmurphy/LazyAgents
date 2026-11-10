@@ -76,9 +76,8 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", o.ct)
-		w.Header().Set("Content-Length", strconv.Itoa(len(o.body)))
-		w.WriteHeader(http.StatusOK)
-		w.Write(o.body)
+		// ServeContent answers a Range with 206, as S3 does.
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(o.body))
 	case http.MethodDelete:
 		delete(f.objs, key)
 		w.WriteHeader(http.StatusNoContent)

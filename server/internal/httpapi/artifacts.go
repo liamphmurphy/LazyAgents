@@ -461,11 +461,17 @@ type contentResponse struct {
 	length      int64
 	filename    string
 	inline      bool
+	// ranged says the file serves byte ranges; with partial, body holds
+	// bytes start.. of total (a 206).
+	ranged, partial bool
+	start, total    int64
+	// cache is the Cache-Control to send, if any.
+	cache string
 }
 
 var inlineSafe = map[string]bool{
 	"application/pdf": true, "image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true,
-	"text/plain": true, "text/markdown": true,
+	"text/plain": true, "text/markdown": true, "video/mp4": true,
 }
 
 func (r contentResponse) VisitGetArtifactContentResponse(w http.ResponseWriter) error {
@@ -503,7 +509,18 @@ func (r contentResponse) write(w http.ResponseWriter) error {
 	if r.length > 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(r.length))
 	}
-	w.WriteHeader(http.StatusOK)
+	if r.cache != "" {
+		w.Header().Set("Cache-Control", r.cache)
+	}
+	status := http.StatusOK
+	if r.ranged {
+		w.Header().Set("Accept-Ranges", "bytes")
+	}
+	if r.partial {
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", r.start, r.start+r.length-1, r.total))
+		status = http.StatusPartialContent
+	}
+	w.WriteHeader(status)
 	_, err := io.Copy(w, r.body)
 	return err
 }

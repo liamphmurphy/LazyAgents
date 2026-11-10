@@ -335,6 +335,56 @@ type ChatSuggestion struct {
 	AttemptedAt time.Time
 }
 
+type ChatVideoFrame struct {
+	JobID       uuid.UUID
+	Kind        string
+	Idx         int32
+	BlobKey     string
+	ContentType string
+	SizeBytes   int64
+	SourceStamp string
+	UpdatedAt   time.Time
+}
+
+type ChatVideoJob struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	UserID            uuid.UUID
+	ChatID            *uuid.UUID
+	RunID             *uuid.UUID
+	TurnID            *uuid.UUID
+	MessageID         *uuid.UUID
+	PersonaID         *uuid.UUID
+	Title             string
+	Width             int32
+	Height            int32
+	Fps               int32
+	DurationMs        int32
+	ScriptPath        string
+	ScriptLines       int32
+	ScriptTail        string
+	Stage             string
+	State             string
+	Checks            json.RawMessage
+	FramesDone        int32
+	FramesTotal       int32
+	StageNote         string
+	RenderStartedAt   *time.Time
+	Error             *string
+	FailureKind       *string
+	ErrorLog          string
+	OutputBlobKey     *string
+	OutputFilename    *string
+	OutputContentType *string
+	OutputSizeBytes   *int64
+	OutputCodec       string
+	OutputDurationMs  *int32
+	LibraryItemID     *uuid.UUID
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	FinishedAt        *time.Time
+}
+
 type Comment struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
@@ -604,6 +654,10 @@ type LibraryItem struct {
 	VideoID            string
 	LinkStatus         string
 	Summary            string
+	DurationMs         *int32
+	Width              *int32
+	Height             *int32
+	PosterKey          *string
 }
 
 type LinkPreview struct {

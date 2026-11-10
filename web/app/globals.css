@@ -739,3 +739,33 @@
   .print-doc img { max-height: 240mm; }
   .print-doc a { color: inherit; text-decoration: underline; }
 }
+
+/*
+ * The chat video card (components/domain/video-card.tsx): a spinner on the active stage, a
+ * shimmer while nothing is rendered yet, the rendering dot and the scanline over the latest
+ * frame. Reduced motion keeps each one's still frame.
+ */
+@keyframes video-spin { to { transform: rotate(360deg); } }
+@keyframes video-shimmer { to { background-position: -200% 0; } }
+@keyframes video-blink { 50% { opacity: 0.25; } }
+@keyframes video-sweep { from { top: 0%; } to { top: 100%; } }
+.video-spin { animation: video-spin 0.9s linear infinite; }
+.video-shimmer {
+  background: linear-gradient(100deg, var(--surface-sunken) 30%, var(--hover) 50%, var(--surface-sunken) 70%);
+  background-size: 200% 100%;
+  animation: video-shimmer 1.6s linear infinite;
+}
+.video-blink { animation: video-blink 1.2s ease-in-out infinite; }
+.video-sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 12px var(--accent);
+  animation: video-sweep 1.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .video-spin, .video-shimmer, .video-blink { animation: none; }
+  .video-sweep { display: none; }
+}

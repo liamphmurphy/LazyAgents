@@ -42,6 +42,9 @@ import { splitSourceList } from "@/lib/chat-sources";
 import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
+import { VideoCards, VideoRendererNotes } from "@/components/domain/video-card";
+import { useChatVideos } from "@/lib/api/video-hooks";
+import type { ChatVideo } from "@/lib/chat-video";
 import { CiteContext } from "@/components/domain/cite-marker";
 import { summaryRequestUrl } from "@/lib/chat-recommend";
 import { hostOf } from "@/lib/web-search";
@@ -98,7 +101,7 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project?: string; agent: { name: string } };
 
-function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean }) {
+function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted, videos }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[] }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body_md);
   const self = useRef<HTMLLIElement>(null);
@@ -110,7 +113,15 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
     for (const l of parts.listed) if (l.n !== undefined) titles.set(l.n, l.title || l.ref || hostOf(l.url));
     return { numbers: [...titles.keys()], value: { titles, focus: (n: number) => setCiteFocus((f) => ({ n, tick: (f?.tick ?? 0) + 1 })) } };
   }, [parts.listed]);
-  if (m.role === "system") return <Divider testId="system-message">{m.body_md}</Divider>;
+  if (m.role === "system") {
+    // A turn that failed keeps the videos it started, so what went wrong stays visible.
+    return videos?.length ? (
+      <>
+        <li className="flex flex-col items-start"><VideoCards chatId={chat.id} videos={videos} messageId={m.id} /></li>
+        <Divider testId="system-message">{m.body_md}</Divider>
+      </>
+    ) : <Divider testId="system-message">{m.body_md}</Divider>;
+  }
   const mine = m.role === "user";
   const author = m.persona ? personaLook(m.persona) : persona;
   return (
@@ -129,6 +140,7 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
           <PersonaName persona={author} className="text-[13px]" />
         </span>
       )}
+      {!mine && videos?.length ? <VideoCards chatId={chat.id} videos={videos} messageId={m.id} /> : null}
       <div
         className={cx(
           "max-w-[min(720px,100%)] rounded-xl border px-3.5 py-2.5 text-[13.5px]",
@@ -160,6 +172,7 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
           </CiteContext.Provider>
         )}
       </div>
+      {!mine && videos?.length ? <VideoRendererNotes videos={videos} /> : null}
       {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
       {!mine && <CodeChanges changes={m.code_changes} />}
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
@@ -311,6 +324,14 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const c = chat.data;
   const loaded = !!c;
   const running = c?.state === "running";
+  // Videos sit on the reply their turn stored; the running turn's show live under it.
+  const videos = useChatVideos(c?.id, running);
+  const videosByMessage = useMemo(() => {
+    const out = new Map<string, ChatVideo[]>();
+    for (const v of videos.data?.videos ?? []) if (v.message_id) out.set(v.message_id, [...(out.get(v.message_id) ?? []), v]);
+    return out;
+  }, [videos.data]);
+  const liveVideos = useMemo(() => (videos.data?.videos ?? []).filter((v) => !v.message_id && running && v.run_id === c?.current_run_id), [videos.data, running, c?.current_run_id]);
   const stopping = running && (cancel.isPending || cancel.isSuccess);
   // Also locked while a persona switch creates the replacement chat, so nothing is sent to the one it drops.
   // A running reply doesn't lock the composer: a message sent then interrupts it,
@@ -755,7 +776,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   editable={!running && !locked && !edit.isPending && !c.archived && m.id === lastUser?.id}
                   onEdit={(body) => { pinned.current = true; edit.mutate(body); }}
                   onRetry={!running && !edit.isPending && !c.archived && lastUser && m.id === list.at(-1)?.id ? () => { pinned.current = true; edit.mutate(lastUser.body_md); } : undefined}
-                  summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null} />
+                  summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null}
+                  videos={videosByMessage.get(m.id)} />
               ))}
               <PersonaProposals chatId={c.id} disabled={c.archived} />
               <ConnectorRequests chatId={c.id} disabled={c.archived} />
@@ -771,6 +793,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               {running && (
                 <li className="flex flex-col gap-2" data-testid="thinking">
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
+                  <VideoCards chatId={c.id} videos={liveVideos} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <ChatStatus runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep} />
                 </li>
               )}

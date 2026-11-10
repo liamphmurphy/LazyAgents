@@ -507,6 +507,7 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 // between turns.
 func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepChatAttachments(ctx)
+	defer r.sweepChatVideos(ctx)
 	defer r.sweepLinkPreviews(ctx)
 	defer r.advanceLearning(ctx)
 	defer r.advanceResearch(ctx)
@@ -546,6 +547,25 @@ func (r *Runner) sweepChatAttachments(ctx context.Context) {
 	for _, k := range keys {
 		if err := r.Attachments.Delete(ctx, r.Cfg.AttachmentBucket, k); err != nil {
 			r.Log.Warn("delete chat attachment object", "key", k, "err", err)
+		}
+	}
+}
+
+// sweepChatVideos removes a batch of videos whose chat was deleted, with the
+// objects only they held (their frames, and their video unless the Library
+// keeps it).
+func (r *Runner) sweepChatVideos(ctx context.Context) {
+	if r.Attachments == nil {
+		return
+	}
+	keys, err := r.q().DeleteDetachedChatVideoJobs(ctx, 50)
+	if err != nil {
+		r.Log.Warn("sweep chat videos", "err", err)
+		return
+	}
+	for _, k := range keys {
+		if err := r.Attachments.Delete(ctx, r.Cfg.AttachmentBucket, k); err != nil {
+			r.Log.Warn("delete chat video object", "key", k, "err", err)
 		}
 	}
 }
@@ -1278,8 +1298,22 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 
 	harnessStart := time.Now()
+	var videos *videoSync
+	stopVideos := func() {}
+	if c.run.Purpose == "chat" {
+		// A coding chat may render videos during the turn; their files are
+		// copied while it works so the chat can follow along.
+		videos, stopVideos = r.startVideoSync(ctx, c, sensitive)
+	}
 	res, raw, code, waitErr := r.watch(ctx, c, proc, h.NewParser(c.spec.Model), sensitive, maxRuntime-used)
 	r.addTiming(c.run.ID, 0, time.Since(harnessStart), 0)
+	if videos != nil {
+		if ctx.Err() != nil {
+			stopVideos() // shutting down: the turn re-runs and its jobs carry on
+		} else {
+			r.finishVideoSync(ctx, videos, stopVideos)
+		}
+	}
 	// Some CLI failures only reach stderr, without a JSON error event.
 	limitMsg := res.Error + " " + res.Final
 	if code != 0 && !res.UsageLimited {

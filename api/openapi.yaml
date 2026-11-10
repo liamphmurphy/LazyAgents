@@ -2582,11 +2582,35 @@ paths:
       tags: [library]
       parameters:
         - { name: download, in: query, description: Serve as an attachment instead of inline, schema: { type: boolean, default: false } }
+        - { name: Range, in: header, description: "One byte range, e.g. bytes=0-1023, so a video can seek", schema: { type: string } }
       responses:
         "200":
           description: The file
           content:
             application/octet-stream:
+              schema: { type: string, format: binary }
+        "206":
+          description: The requested range of the file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        "416": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /library/{itemId}/poster:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getLibraryItemPoster
+      summary: A video's poster image
+      description: 404 unless it is yours and has one.
+      tags: [library]
+      responses:
+        "200":
+          description: The image
+          content:
+            image/*:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
@@ -3008,6 +3032,75 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/videos:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listChatVideos
+      summary: The chat's videos, oldest first
+      description: |
+        Videos a coding chat renders with code during its turn. Each follows
+        its stages (write, stills, render, encode, save) as the agent and its
+        renderer report them; a finished one is also kept in the Library.
+      tags: [chats]
+      responses:
+        "200":
+          description: The chat's videos with their frames
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatVideos" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/videos/{videoId}/frames/{kind}/{idx}:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: videoId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: kind, in: path, required: true, schema: { $ref: "#/components/schemas/ChatVideoFrameKind" } }
+      - { name: idx, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 10000000 } }
+    get:
+      operationId: getChatVideoFrame
+      summary: One picture of a video in progress
+      description: A still, a filmstrip cell, the latest rendered frame or the poster. The URL's v changes with the picture, so it can be cached.
+      tags: [chats]
+      parameters:
+        - { name: v, in: query, description: The frame's version, from ChatVideoFrame, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The image
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/videos/{videoId}/content:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: videoId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getChatVideoContent
+      summary: A finished video, for playing or downloading
+      description: Supports a single byte Range, so players can seek.
+      tags: [chats]
+      parameters:
+        - { name: download, in: query, description: Serve as an attachment instead of inline, schema: { type: boolean, default: false } }
+        - { name: Range, in: header, description: "One byte range, e.g. bytes=0-1023", schema: { type: string } }
+      responses:
+        "200":
+          description: The video
+          content:
+            video/mp4:
+              schema: { type: string, format: binary }
+        "206":
+          description: The requested range of the video
+          content:
+            video/mp4:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        "416": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   /chats/{id}/canvases:
@@ -6794,9 +6887,75 @@ components:
         size_bytes: { type: integer, format: int64 }
         source: { type: string, enum: [upload, generated], description: "upload: the person attached it; generated: the assistant created it (e.g. an image)" }
         created_at: { type: string, format: date-time }
+    ChatVideoStage:
+      type: string
+      enum: [write, stills, render, encode, save]
+      description: "write: the renderer is being written; stills: checking a few stills; render: rendering every frame; encode: encoding the file; save: storing it"
+    ChatVideoFrameKind:
+      type: string
+      enum: [still, strip, preview, poster]
+      description: "still: a frame the agent checked (idx is its frame number); strip: a filmstrip cell (idx 0–29); preview: the latest rendered frame; poster: the video's poster"
+    ChatVideoFrame:
+      type: object
+      required: [kind, idx, version]
+      properties:
+        kind: { $ref: "#/components/schemas/ChatVideoFrameKind" }
+        idx: { type: integer }
+        version: { type: integer, format: int64, description: Changes whenever the picture does; pass it as v }
+    ChatVideoCheck:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string }
+        passed: { type: boolean, description: "Absent while still being checked" }
+    ChatVideoOutput:
+      type: object
+      required: [filename, content_type, size_bytes, codec]
+      properties:
+        filename: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        codec: { type: string, description: "The video track's codec, e.g. H.264; empty if unknown" }
+        duration_ms: { type: integer }
+    ChatVideo:
+      type: object
+      required: [id, title, width, height, fps, duration_ms, stage, state, script_path, script_lines, script_tail, checks, frames_done, frames_total, stage_note, frames, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        fps: { type: integer }
+        duration_ms: { type: integer, description: The planned length }
+        stage: { $ref: "#/components/schemas/ChatVideoStage" }
+        state: { type: string, enum: [running, done, failed] }
+        failure_kind: { type: string, enum: [error, stopped], description: "Why a failed video failed: stopped when the person stopped the reply" }
+        error: { type: string }
+        error_log: { type: string, description: The failing command's output, when the agent attached it }
+        script_path: { type: string, description: "The renderer, relative to the chat's workspace; empty until named" }
+        script_lines: { type: integer }
+        script_tail: { type: string, description: The renderer's last few non-empty lines }
+        checks: { type: array, items: { $ref: "#/components/schemas/ChatVideoCheck" } }
+        frames_done: { type: integer }
+        frames_total: { type: integer }
+        stage_note: { type: string, description: "What the renderer said of its stage, e.g. the encoder settings" }
+        render_started_at: { type: string, format: date-time }
+        run_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid, description: "The reply it belongs to, once that reply is stored; absent while the turn runs" }
+        library_item_id: { type: string, format: uuid, description: "Its copy in the Library, while that exists" }
+        output: { $ref: "#/components/schemas/ChatVideoOutput" }
+        frames: { type: array, items: { $ref: "#/components/schemas/ChatVideoFrame" } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    ChatVideos:
+      type: object
+      required: [videos]
+      properties:
+        videos: { type: array, items: { $ref: "#/components/schemas/ChatVideo" } }
     LibraryItemKind:
       type: string
-      enum: [image, diagram, link, document]
+      enum: [image, diagram, link, document, video]
     LibraryItem:
       type: object
       required: [id, kind, title, filename, content_type, size_bytes, created_at]
@@ -6822,6 +6981,10 @@ components:
         video_id: { type: string, description: "For a video link: the YouTube id" }
         link_status: { $ref: "#/components/schemas/LibraryLinkStatus" }
         summary: { type: string, description: "For a link: a saved summary, as markdown" }
+        duration_ms: { type: integer, description: "For a video: its length" }
+        width: { type: integer, description: "For a video: frame width in pixels" }
+        height: { type: integer, description: "For a video: frame height in pixels" }
+        has_poster: { type: boolean, description: "For a video: a poster image is served at /library/{itemId}/poster" }
         created_at: { type: string, format: date-time }
     LibraryLinkStatus:
       type: string
