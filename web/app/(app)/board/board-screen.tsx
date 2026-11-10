@@ -13,41 +13,12 @@ import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/
 import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
-import { floatPanel } from "@/components/domain/pickers";
+import { FilterMenu, floatPanel } from "@/components/domain/pickers";
 import { EpicCompletion } from "@/components/domain/epic-completion";
 import { TicketEditorDialog } from "@/components/domain/ticket-editor-dialog";
 import { DependencyMap } from "@/components/domain/dependency-map";
 import { useMotionList } from "@/components/ui/motion";
 import { Toggle } from "@/components/ui/controls";
-import { Icon } from "@/components/ui/icon";
-
-/** A filter in the top bar: a menu like the app's other pickers rather than a native <select>. */
-function FilterMenu({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
-  const current = options.find((o) => o.value === value) ?? options[0];
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button type="button" aria-label={`${label}: ${current.label}`}
-          className="flex h-8 max-w-52 items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2.5 text-xs text-fg hover:bg-hover data-[state=open]:border-accent">
-          <span className="truncate">{current.label}</span>
-          <Icon name="chev" size={12} strokeWidth={1.6} className="flex-none text-fg-tertiary" />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "max-h-80 w-56 overflow-y-auto")}>
-          <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
-            {options.map((o) => (
-              <DropdownMenu.RadioItem key={o.value} value={o.value} className="flex h-8 cursor-default select-none items-center gap-2 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-hover">
-                <span className="flex-1 truncate">{o.label}</span>
-                <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
-              </DropdownMenu.RadioItem>
-            ))}
-          </DropdownMenu.RadioGroup>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
 
 export function BoardScreen() {
   const bootstrap = useBootstrap();

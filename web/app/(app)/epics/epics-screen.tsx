@@ -18,6 +18,7 @@ import { HealthPill, type EpicOverview } from "@/components/domain/overview";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { SmallPill } from "@/components/domain/labels";
 import { cx } from "@/lib/cx";
+import { FilterMenu } from "@/components/domain/pickers";
 
 function Timeline({
   epics,
@@ -313,13 +314,11 @@ export function EpicsScreen() {
                   ))}
                 </div>
                 <span className="ml-auto font-mono text-xs text-fg-tertiary" role="status">{shown.length} {shown.length === 1 ? "epic" : "epics"}</span>
-                <label className="flex items-center gap-2 text-xs text-fg-secondary">
+                <span className="flex items-center gap-2 text-xs text-fg-secondary">
                   Sort
-                  <select aria-label="Sort epics" value={filters.sort} onChange={(ev) => setFilters({ sort: ev.target.value as EpicSort })}
-                    className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-fg">
-                    {(Object.keys(EPIC_SORTS) as EpicSort[]).map((s) => <option key={s} value={s}>{EPIC_SORTS[s]}</option>)}
-                  </select>
-                </label>
+                  <FilterMenu label="Sort epics" value={filters.sort} onChange={(v) => setFilters({ sort: v as EpicSort })}
+                    options={(Object.keys(EPIC_SORTS) as EpicSort[]).map((s) => ({ value: s, label: EPIC_SORTS[s] }))} />
+                </span>
               </div>
               {shown.length ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">

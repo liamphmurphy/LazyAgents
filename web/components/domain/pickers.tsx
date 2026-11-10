@@ -413,3 +413,38 @@ export function EstimatePicker({
     </div>
   );
 }
+
+/**
+ * A list page's filter or sort: a menu like the app's other pickers rather than a native <select>.
+ * Its name says what it filters and what it's set to ("Epic: All epics"). quiet: text only, for a
+ * sort that sits beside other controls.
+ */
+export function FilterMenu({ label, value, options, onChange, quiet }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void; quiet?: boolean }) {
+  const current = options.find((o) => o.value === value) ?? options[0];
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button type="button" aria-label={`${label}: ${current?.label ?? ""}`}
+          className={cx(
+            "flex h-8 max-w-56 items-center gap-1.5 rounded-md px-2.5 text-xs hover:bg-hover data-[state=open]:border-accent",
+            quiet ? "text-fg-secondary hover:text-fg" : "border border-border-strong bg-surface text-fg",
+          )}>
+          <span className="truncate">{current?.label}</span>
+          <Icon name="chev" size={12} strokeWidth={1.6} className="flex-none text-fg-tertiary" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "max-h-80 w-56 overflow-y-auto")}>
+          <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
+            {options.map((o) => (
+              <DropdownMenu.RadioItem key={o.value} value={o.value} className="flex h-8 cursor-default select-none items-center gap-2 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-hover">
+                <span className="flex-1 truncate">{o.label}</span>
+                <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}

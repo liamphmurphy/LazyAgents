@@ -17,7 +17,8 @@ test("the overview shows each epic's progress and filters by status and health i
   await expect(other).toContainText("Overdue ·");
   // Needs attention puts the at-risk epic first.
   await expect(page.getByRole("article")).toHaveText([/Other epic/, /Kanban board/]);
-  await page.getByLabel("Sort epics").selectOption("name");
+  await page.getByRole("button", { name: "Sort epics: Needs attention" }).click();
+  await page.getByRole("menuitemradio", { name: "Name" }).click();
   await expect(page).toHaveURL(/sort=name/);
   await expect(page.getByRole("article")).toHaveText([/Kanban board/, /Other epic/]);
 
