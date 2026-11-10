@@ -183,7 +183,8 @@ func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process
 		}
 		break // the first match is the program; later ones are arguments
 	}
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
 	// Desktop-launched local runners may omit Homebrew from PATH. Preserve

@@ -4,11 +4,12 @@
 -- The oldest queued run whose agent has a free slot (max_concurrency from
 -- the frozen definition; waiting runs don't hold a slot). A ticket run whose
 -- blocker tickets aren't Done stays queued.
-UPDATE runs SET state = 'starting', runner_id = sqlc.arg(runner_id)
+UPDATE runs SET state = 'starting', runner_id = sqlc.arg(runner_id),
+  execution_token = sqlc.narg(execution_token), execution_expires_at = sqlc.narg(execution_expires_at)
 WHERE id = (
   SELECT r.id FROM runs r
   WHERE r.state = 'queued'
-    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND b.status = 'running')
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND (b.status = 'running' OR b.execution_expires_at > now()))
     AND (r.parent_run_id IS NOT NULL OR NOT EXISTS (
       SELECT 1 FROM ticket_dependencies d JOIN tickets bt ON bt.id = d.blocker_id
       WHERE d.ticket_id = r.ticket_id AND bt.status <> 'done'))
@@ -25,16 +26,18 @@ RETURNING *;
 -- The next turn to execute: a pending turn of a running managed run whose
 -- previous turn has exited (a reply can arrive while the agent is still
 -- ending its turn; one process per workspace at a time).
-UPDATE run_turns SET status = 'running', process_started_at = now()
-WHERE id = (
+UPDATE run_turns SET status = 'running', process_started_at = now(),
+  execution_token = sqlc.narg(execution_token), execution_expires_at = sqlc.narg(execution_expires_at)
+WHERE status = 'pending' AND id = (
   SELECT t.id FROM run_turns t JOIN runs r ON r.id = t.run_id
   WHERE t.status = 'pending' AND r.mode = 'managed' AND r.state = 'running'
-    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = t.run_id AND b.status = 'running')
+    AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = t.run_id AND (b.status = 'running' OR b.execution_expires_at > now()))
     -- A delegated run shares its parent's checkout: wait for the parent's process to exit.
-    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND b.status = 'running')
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND (b.status = 'running' OR b.execution_expires_at > now()))
     AND NOT EXISTS (
       SELECT 1 FROM run_turns b JOIN runs c ON c.id = b.run_id
-      WHERE c.parent_run_id = r.id AND b.status = 'running')
+      WHERE c.parent_run_id = r.id AND (b.status = 'running' OR b.execution_expires_at > now()))
   ORDER BY t.seq
   FOR UPDATE OF t SKIP LOCKED
   LIMIT 1
@@ -87,14 +90,18 @@ SELECT count(*)::int AS turns,
 FROM run_turns WHERE run_id = $1 AND process_started_at IS NOT NULL;
 
 -- name: RequeueInterrupted :exec
--- On runner start: turns that were running when it died run again (the
--- harness resumes the session), and half-started runs go back to the queue.
--- The runner id is host-pid, so a restarted runner has a new one: also reclaim
--- turns of any runner that has stopped heartbeating (LiveRunners' window).
-UPDATE run_turns SET status = 'pending', process_started_at = NULL, ended_at = NULL, exit_code = NULL
-WHERE status = 'running' AND run_id IN (
-  SELECT id FROM runs WHERE runner_id = sqlc.arg(runner_id) OR runner_id IS NULL
-    OR runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'));
+-- On every poll: expired worker leases run again (the harness resumes).
+-- Unleased records from older runners use their owner's heartbeat instead.
+UPDATE run_turns SET status = 'pending', process_started_at = NULL, ended_at = NULL, exit_code = NULL,
+  execution_token = NULL, execution_expires_at = NULL
+WHERE status = 'running' AND (
+  (execution_token IS NOT NULL AND execution_expires_at <= now()) OR
+  (execution_token IS NULL AND run_id IN (
+  SELECT r.id FROM runs r WHERE r.runner_id = sqlc.arg(runner_id) OR r.runner_id IS NULL
+    OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))))
+  -- Paused chats are settled with their session lock and interruption below.
+  -- Ended runs must also release stale running rows so workspace cleanup works.
+  AND run_id IN (SELECT id FROM runs WHERE state <> 'paused');
 
 -- name: StrandedRuns :many
 -- Managed runs left running with no turn to execute and no live delegated run:
@@ -106,10 +113,52 @@ WHERE r.mode = 'managed' AND r.state = 'running' AND r.purpose <> 'chat'
   AND (r.runner_id = sqlc.arg(runner_id) OR r.runner_id IS NULL
     OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status IN ('pending', 'running'))
+  AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+  AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.execution_expires_at > now())
   AND NOT EXISTS (SELECT 1 FROM runs c WHERE c.parent_run_id = r.id AND c.state NOT IN ('completed', 'failed', 'cancelled'));
 
 -- name: RequeueStarting :exec
-UPDATE runs SET state = 'queued' WHERE state = 'starting';
+UPDATE runs SET state = 'queued', execution_token = NULL, execution_expires_at = NULL
+WHERE state = 'starting' AND (
+  (execution_token IS NOT NULL AND execution_expires_at <= now()) OR
+  (execution_token IS NULL AND (runner_id = sqlc.arg(runner_id) OR runner_id IS NULL
+    OR runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))));
+
+-- name: RenewSetupExecution :one
+UPDATE runs SET execution_expires_at = sqlc.arg(expires_at)
+WHERE id = sqlc.arg(id) AND execution_token = sqlc.arg(token) AND execution_expires_at > now()
+RETURNING execution_expires_at;
+
+-- name: RenewTurnExecution :one
+UPDATE run_turns SET execution_expires_at = sqlc.arg(expires_at)
+WHERE id = sqlc.arg(id) AND execution_token = sqlc.arg(token) AND execution_expires_at > now()
+RETURNING execution_expires_at;
+
+-- name: ReleaseSetupExecution :exec
+UPDATE runs SET execution_expires_at = now() WHERE id = $1 AND execution_token = $2;
+
+-- name: ReleaseTurnExecution :exec
+UPDATE run_turns SET execution_expires_at = now() WHERE id = $1 AND execution_token = $2;
+
+-- name: LockTurn :one
+SELECT * FROM run_turns WHERE id = $1 FOR UPDATE;
+
+-- name: OwnsRunExecution :one
+SELECT EXISTS (
+  SELECT 1 FROM runs r WHERE r.id = sqlc.arg(run_id) AND r.execution_token = sqlc.arg(token) AND r.execution_expires_at > now()
+  UNION ALL
+  SELECT 1 FROM run_turns t WHERE t.run_id = sqlc.arg(run_id) AND t.execution_token = sqlc.arg(token) AND t.execution_expires_at > now()
+)::bool;
+
+-- name: AbandonedChatCancellations :many
+SELECT r.id, r.workspace_id FROM runs r JOIN chat_sessions c ON c.current_run_id = r.id
+WHERE r.purpose = 'chat' AND r.state = 'paused'
+  AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+  AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.execution_expires_at > now())
+  AND (r.execution_token IS NOT NULL
+    OR EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.execution_token IS NOT NULL)
+    OR r.runner_id = sqlc.arg(runner_id) OR r.runner_id IS NULL
+    OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'));
 
 -- name: Heartbeat :exec
 INSERT INTO runners (id, backend, max_concurrent, running, version, host_workspaces_dir)

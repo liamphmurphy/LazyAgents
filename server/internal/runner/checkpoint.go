@@ -1,13 +1,10 @@
 package runner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -76,34 +73,8 @@ func (r *Runner) runScript(ctx context.Context, runID uuid.UUID, name, script st
 	if err != nil {
 		return "", err
 	}
-	exited := make(chan struct{})
-	defer close(exited)
-	go func() {
-		select {
-		case <-exited:
-		case <-ctx.Done():
-			_ = proc.Kill()
-		}
-	}()
-	var out bytes.Buffer
-	var mu sync.Mutex
-	var cp sync.WaitGroup
-	for _, rd := range []io.Reader{proc.Stdout(), proc.Stderr()} {
-		cp.Add(1)
-		go func() {
-			defer cp.Done()
-			b, _ := io.ReadAll(io.LimitReader(rd, 1<<20))
-			mu.Lock()
-			out.Write(b)
-			mu.Unlock()
-		}()
-	}
-	code, err := proc.Wait()
-	cp.Wait()
-	if c, ok := proc.(io.Closer); ok {
-		_ = c.Close()
-	}
-	output := redact(out.String(), env)
+	output, code, err := captureProcess(ctx, proc)
+	output = redact(output, env)
 	if err != nil {
 		return output, err
 	}

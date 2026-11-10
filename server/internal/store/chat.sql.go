@@ -2134,7 +2134,7 @@ func (q *Queries) PendingApprovalForRun(ctx context.Context, runID uuid.UUID) (A
 }
 
 const pendingChatTurn = `-- name: PendingChatTurn :one
-SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons FROM run_turns WHERE run_id = $1 AND status = 'pending' ORDER BY seq DESC LIMIT 1
+SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons, execution_token, execution_expires_at FROM run_turns WHERE run_id = $1 AND status = 'pending' ORDER BY seq DESC LIMIT 1
 `
 
 // The newest turn not yet claimed: what a chat interruption replaces when
@@ -2158,6 +2158,8 @@ func (q *Queries) PendingChatTurn(ctx context.Context, runID uuid.UUID) (RunTurn
 		&i.Effort,
 		&i.EffortLevel,
 		&i.EffortReasons,
+		&i.ExecutionToken,
+		&i.ExecutionExpiresAt,
 	)
 	return i, err
 }
@@ -2304,34 +2306,6 @@ func (q *Queries) PreviousChatUserMessage(ctx context.Context, arg PreviousChatU
 		&i.PersonaID,
 	)
 	return i, err
-}
-
-const recoverChatCancellations = `-- name: RecoverChatCancellations :exec
-WITH locked AS MATERIALIZED (
- SELECT c.id, c.current_run_id FROM chat_sessions c JOIN runs r ON r.id = c.current_run_id
- WHERE r.purpose = 'chat' AND r.state = 'paused' AND (r.runner_id = $1 OR r.runner_id IS NULL OR NOT EXISTS (
-   SELECT 1 FROM runners owner WHERE owner.id = r.runner_id
-     AND owner.heartbeat_at > now() - interval '45 seconds'
- ))
- ORDER BY c.id FOR UPDATE OF c
-), cancelled AS (
- UPDATE runs SET state = 'waiting', wait_reason = 'human_reply'
- WHERE id IN (SELECT current_run_id FROM locked) AND state = 'paused'
- RETURNING id
-), turns AS (
- UPDATE run_turns SET status = 'done', ended_at = coalesce(ended_at, now()), exit_code = 130
- WHERE run_id IN (SELECT id FROM cancelled) AND status IN ('pending', 'running')
-)
-UPDATE chat_sessions SET state = 'idle', revision = revision + 1, updated_at = now()
-WHERE current_run_id IN (SELECT id FROM cancelled)
-`
-
-// Cancel may have marked the run paused just before its runner stopped.
-// A replacement runner has a new id. Also recover cancelled turns whose
-// owner no longer has a live heartbeat, including still-running turn records.
-func (q *Queries) RecoverChatCancellations(ctx context.Context, runnerID *string) error {
-	_, err := q.db.Exec(ctx, recoverChatCancellations, runnerID)
-	return err
 }
 
 const renameChatSession = `-- name: RenameChatSession :one
