@@ -11,7 +11,7 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Toggle } from "@/components/ui/controls";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
-import { ThemeSwitch } from "@/components/shell/theme";
+import { AppearanceSection } from "./appearance-section";
 import { ProjectsSection } from "./projects/projects-screen";
 import { SecretsSection } from "./secrets-section";
 import { SetupChecklist } from "@/components/domain/setup";
@@ -80,15 +80,7 @@ export function SettingsScreen() {
             <ProjectOverridesSection />
           </Section>
           <Section id="appearance" title="Appearance">
-            <Card>
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-medium">Theme</span>
-                  <span className="type-small text-fg-tertiary">System follows your OS setting.</span>
-                </div>
-                <ThemeSwitch />
-              </div>
-            </Card>
+            <AppearanceSection />
           </Section>
         </div>
       </div>

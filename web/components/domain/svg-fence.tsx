@@ -62,7 +62,7 @@ export function DiagramVisual({ source, captions = [], alt, label = "SVG image",
   const messageId = useContext(SvgFenceMessage);
   const name = alt ?? svgTitle(source) ?? label;
   const frameAlt = stepped ? `${name}. Step ${at + 1} of ${count}${captions[at] ? `: ${captions[at]}` : ""}` : name;
-  const portable = useMemo(() => exportSvg(stepped ? stepFrame(source, count) : source), [source, stepped, count]);
+  const portable = useMemo(() => exportSvg(stepped ? stepFrame(source, count) : source, palette), [source, stepped, count, palette]);
 
   const stage = (zoomed: boolean) => (
     <div className={cx("grid overflow-auto p-2", themed ? "bg-surface" : "bg-white")}>

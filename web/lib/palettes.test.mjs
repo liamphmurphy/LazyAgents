@@ -1,0 +1,64 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { COLOR_KEYS, DEFAULT_APPEARANCE, PALETTES, contrast, paletteTokens, parseAppearance, resolvePalette } from "./palettes.ts";
+
+test("Dusk plus ten named palettes cover the complete token contract in both modes", () => {
+  assert.equal(PALETTES.length, 11);
+  assert.equal(new Set(PALETTES.map((p) => p.id)).size, 11);
+  const keys = Object.keys(PALETTES[0].dark).sort();
+  for (const p of PALETTES) for (const mode of ["light", "dark"]) {
+    const t = paletteTokens({ ...DEFAULT_APPEARANCE, palette: p.id }, mode);
+    assert.deepEqual(Object.keys(t).sort(), keys, `${p.id} ${mode}`);
+    for (const k of COLOR_KEYS) assert.match(t[k], /^#[\da-f]{6}(?:[\da-f]{2})?$/i, `${p.id} ${mode} ${k}`);
+    const series = Array.from({ length: 8 }, (_, i) => t[`viz-${i + 1}`]);
+    assert.equal(new Set(series).size, 8, `${p.id} ${mode} distinct chart slots`);
+    for (const color of series) assert.match(color, /^#[\da-f]{6}$/i);
+  }
+});
+
+test("preset text and buttons meet small text contrast on their surfaces", () => {
+  for (const p of PALETTES.slice(1)) for (const mode of ["light", "dark"]) {
+    const t = p[mode];
+    for (const fg of ["text", "text-2", "text-secondary", "text-tertiary", "state-human", "state-blocked", "state-done"])
+      for (const bg of ["bg", "surface", "surface-raised"])
+        assert.ok(contrast(t[fg], t[bg]) >= 4.5, `${p.id} ${mode} ${fg} on ${bg}`);
+    assert.ok(contrast(t["text-on-accent"], t.accent) >= 4.5, `${p.id} ${mode} primary`);
+    assert.ok(contrast(t["approve-fg"], t["state-human"]) >= 4.5, `${p.id} ${mode} approval`);
+  }
+});
+
+test("corrupt, oversized, unknown and CSS injection preferences fall back safely", () => {
+  for (const raw of [null, "{", "null", "false", '{"version":2}', "a".repeat(40001)]) assert.deepEqual(parseAppearance(raw), DEFAULT_APPEARANCE);
+  const settings = parseAppearance(JSON.stringify({ version: 1, palette: "custom", custom: { base: "unknown", dark: { bg: "red; display:none", text: "#ABCDEF", "unknown-token": "#123456", accent: "url(evil)" }, light: null } }));
+  assert.equal(settings.custom.base, "dusk");
+  assert.deepEqual(settings.custom.dark, { text: "#abcdef" });
+  assert.deepEqual(settings.custom.light, {});
+  assert.equal(parseAppearance('{"version":1,"palette":"unknown"}').palette, "dusk");
+});
+
+test("custom colors are independent by mode and explicit advanced colors win", () => {
+  const custom = { version: 1, palette: "custom", custom: { base: "nord", dark: { surface: "#182128", accent: "#aabbcc", "state-human": "#aabbcc", "viz-panel": "#123456" }, light: { bg: "#fff0ee" } } };
+  const dark = paletteTokens(custom, "dark"), light = paletteTokens(custom, "light");
+  assert.equal(dark.surface, "#182128");
+  assert.equal(dark["viz-surface"], dark.surface);
+  assert.equal(dark["viz-panel"], "#123456");
+  assert.equal(dark["accent-soft"], "#aabbcc26");
+  assert.ok(contrast(dark["text-on-accent"], dark.accent) >= 4.5);
+  assert.equal(light.bg, "#fff0ee");
+  assert.equal(light.surface, PALETTES.find((p) => p.id === "nord").light.surface);
+  assert.notEqual(dark["pill-human-bg"], PALETTES.find((p) => p.id === "nord").dark["pill-human-bg"]);
+});
+
+test("serialized resolver matches runtime custom and preset colors", () => {
+  const prepaintResolve = new Function(`return (${resolvePalette.toString()})`)();
+  for (const mode of ["dark", "light"]) for (const p of PALETTES) {
+    const settings = { version: 1, palette: "custom", custom: { base: p.id, dark: { accent: "#663399", surface: "#112233" }, light: { bg: "#eeeeee" } } };
+    assert.deepEqual(prepaintResolve(settings, mode, PALETTES), paletteTokens(settings, mode));
+  }
+});
+
+test("switching to Custom without overrides preserves the selected base exactly", () => {
+  for (const p of PALETTES) for (const mode of ["light", "dark"]) {
+    assert.deepEqual(paletteTokens({ version: 1, palette: "custom", custom: { base: p.id, dark: {}, light: {} } }, mode), p[mode]);
+  }
+});

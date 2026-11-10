@@ -85,7 +85,7 @@ export function DependencyMap({ project, epic, assignee, includeCanceled = true,
             {graph.edges.map((e) => {
               const a = positions.get(e.from)!, b = positions.get(e.to)!;
               const canceled = graph.warnings.some((w) => w.from === e.from && w.to === e.to);
-              return <path key={`${e.from}-${e.to}`} d={`M${a.x + 230},${a.y + 38} C${a.x + 254},${a.y + 38} ${b.x - 24},${b.y + 38} ${b.x},${b.y + 38} l-7,-4 m7,4 l-7,4`} fill="none" stroke={canceled ? "var(--state-blocked, #c33)" : criticalEdge(e.from, e.to) ? "var(--accent)" : "#9aa1ad"} strokeWidth={criticalEdge(e.from, e.to) ? 3 : 1.5} strokeDasharray={canceled ? "5 4" : undefined} />;
+              return <path key={`${e.from}-${e.to}`} d={`M${a.x + 230},${a.y + 38} C${a.x + 254},${a.y + 38} ${b.x - 24},${b.y + 38} ${b.x},${b.y + 38} l-7,-4 m7,4 l-7,4`} fill="none" stroke={canceled ? "var(--state-blocked)" : criticalEdge(e.from, e.to) ? "var(--accent)" : "var(--text-tertiary)"} strokeWidth={criticalEdge(e.from, e.to) ? 3 : 1.5} strokeDasharray={canceled ? "5 4" : undefined} />;
             })}
           </svg>
           {graph.columns.map((_, d) => <span key={d} className="absolute text-xs text-fg-tertiary" style={{ left: d * 270 + 20, top: 12 }}>DEPTH {d}</span>)}

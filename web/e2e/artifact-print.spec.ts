@@ -88,3 +88,16 @@ test("the print view draws visuals in light, then prints once", async ({ page })
   await expect(page.getByRole("button", { name: "Print / Save as PDF" })).toBeHidden();
   await expect(doc.getByRole("tab", { name: "Data" })).toBeHidden();
 });
+
+test("printing uses neutral light colors without overwriting a saved custom palette", async ({ page }) => {
+  await install(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("la-theme", "dark");
+    localStorage.setItem("la-appearance", JSON.stringify({ version: 1, palette: "custom", custom: { base: "nord", dark: { bg: "#112233" }, light: { bg: "#887766", "viz-ink": "#887766" } } }));
+  });
+  await page.goto(`/print/artifacts/${A}`);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __prints: number }).__prints)).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--bg"))).toBe("#FCFBFE");
+  expect(await page.evaluate(() => localStorage.getItem("la-theme"))).toBe("dark");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("la-appearance")!).palette)).toBe("custom");
+});

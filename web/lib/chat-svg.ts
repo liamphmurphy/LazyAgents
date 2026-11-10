@@ -27,8 +27,8 @@ export function svgTitle(source: string): string | undefined {
 
 // The colors every visual shares. Charts use them directly; agent-written SVGs
 // name them as var(--viz-*), swapped for real colors before drawing because an
-// <img> can't see the page's CSS. The series order is the colorblind-safe
-// order, so assign slots in sequence.
+// <img> can't see the page's CSS. Series slots stay in the same order across
+// palettes, so assign slots in sequence.
 
 export type VizPalette = { surface: string; panel: string; ink: string; muted: string; line: string; grid: string; series: readonly string[] };
 
@@ -67,9 +67,9 @@ function withStyle(doc: string, css: string): string {
 }
 
 /** A self-contained copy for downloads and the Library, readable wherever it ends up. */
-export function exportSvg(source: string): string {
+export function exportSvg(source: string, palette: VizPalette = VIZ_LIGHT): string {
   if (!isThemedSvg(source)) return svgDocument(source);
-  return withStyle(svgDocument(themeSvg(source, VIZ_LIGHT)), `:root{background:${VIZ_LIGHT.surface}}`);
+  return withStyle(svgDocument(themeSvg(source, palette)), `:root{background:${palette.surface}}`);
 }
 
 // Step-throughs: elements carry data-step="2" (from step 2 on) or "2-3" (only
