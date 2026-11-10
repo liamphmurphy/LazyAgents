@@ -23,7 +23,7 @@ func TestPhaseSevenOverviews(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr := &tracker.Service{Pool: pool}
-	s := &Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}
+	s := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}
 	handler := s.Handler()
 	get := func(path string, dst any, intended int) {
 		t.Helper()
@@ -164,7 +164,7 @@ func TestEmptyDashboard(t *testing.T) {
 	if _, err := seed.Run(ctx, pool, seed.Options{}); err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{Pool: pool, Q: store.New(pool)}
+	s := &Server{AnonymousAPI: true, Pool: pool, Q: store.New(pool)}
 	r := httptest.NewRecorder()
 	s.Handler().ServeHTTP(r, httptest.NewRequest("GET", "/api/v1/dashboard", nil))
 	if r.Code != 200 {

@@ -17,6 +17,8 @@ export default defineConfig({
   retries: 0,
   timeout: 60_000,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
-  use: { baseURL, trace: "retain-on-failure" },
+  // run.sh signs in and leaves the session cookie here: the API serves only
+  // signed-in browsers, and this covers both the page and `request`.
+  use: { baseURL, trace: "retain-on-failure", storageState: process.env.E2E_STACK_STORAGE_STATE },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });

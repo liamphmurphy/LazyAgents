@@ -28,6 +28,10 @@ type Config struct {
 	SecretsKey string
 	// PublicURL is how agents and browsers reach the app (Caddy in compose).
 	PublicURL string
+	// WebURL is where the person's browser opens the app, for sign-in links.
+	// It differs from PublicURL under `make dev`, where agents reach the API
+	// on :8000 and the browser uses Next on :3000.
+	WebURL string
 
 	Runner Runner
 	// PRSyncInterval is how often open PRs are polled (0 disables).
@@ -92,6 +96,7 @@ func Load() (Config, error) {
 		SecretsKey:     env("SECRETS_KEY", ""),
 		PublicURL:      env("PUBLIC_URL", "http://localhost:8080"),
 	}
+	c.WebURL = strings.TrimRight(env("WEB_URL", c.PublicURL), "/")
 	var err error
 	if c.Seed, err = boolEnv("SEED", false); err != nil {
 		return c, err

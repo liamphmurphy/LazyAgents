@@ -3505,7 +3505,7 @@ export interface components {
         };
         Error: {
             /** @enum {string} */
-            code: "not_found" | "invalid" | "conflict" | "internal" | "no_user";
+            code: "not_found" | "invalid" | "conflict" | "internal" | "no_user" | "unauthenticated";
             message: string;
             field?: string;
         };

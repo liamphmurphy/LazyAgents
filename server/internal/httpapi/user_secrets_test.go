@@ -35,7 +35,7 @@ func TestApiSecretsAPI(t *testing.T) {
 	ws := me.WorkspaceID
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
-	h := (&Server{Pool: pool, Q: q, Runs: rs, Tracker: tr, Artifacts: arts, Secrets: &secrets.Service{Q: q, Box: testBox(t)}}).Handler()
+	h := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Runs: rs, Tracker: tr, Artifacts: arts, Secrets: &secrets.Service{Q: q, Box: testBox(t)}}).Handler()
 	do := func(method, path, body string, want int) string {
 		t.Helper()
 		rec := httptest.NewRecorder()

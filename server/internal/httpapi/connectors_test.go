@@ -57,7 +57,7 @@ func TestConnectorProxyEnforcesPermissions(t *testing.T) {
 	ws := me.WorkspaceID
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
-	srv := &Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, PublicURL: "http://localhost"}
+	srv := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, PublicURL: "http://localhost"}
 	vesper := httptest.NewServer(srv.Handler())
 	t.Cleanup(vesper.Close)
 	up := upstreamMCP(t)

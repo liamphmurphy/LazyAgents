@@ -30,7 +30,7 @@ func TestHealth(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := &Server{Version: "test", Checks: tt.checks, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			srv := &Server{AnonymousAPI: true, Version: "test", Checks: tt.checks, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 			h := srv.Handler()
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/health", nil))

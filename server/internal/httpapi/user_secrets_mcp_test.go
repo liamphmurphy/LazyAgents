@@ -56,7 +56,7 @@ func TestSecretsToolEnforcesAccessAndNeverRevealsValue(t *testing.T) {
 	ws := me.WorkspaceID
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
-	srv := &Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, PublicURL: "http://localhost",
+	srv := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, PublicURL: "http://localhost",
 		Secrets: &secrets.Service{Q: q, Box: testBox(t)}}
 	vesper := httptest.NewServer(srv.Handler())
 	t.Cleanup(vesper.Close)
@@ -220,7 +220,7 @@ func TestProposeSecretGrantsTheProposer(t *testing.T) {
 	ws := me.WorkspaceID
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
-	srv := &Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, PublicURL: "http://localhost",
+	srv := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, PublicURL: "http://localhost",
 		Secrets: &secrets.Service{Q: q, Box: testBox(t)}}
 	vesper := httptest.NewServer(srv.Handler())
 	t.Cleanup(vesper.Close)

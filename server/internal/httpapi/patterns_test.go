@@ -39,7 +39,7 @@ func TestFindPatternsEndpoint(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	handler := (&Server{Pool: pool, Q: q}).Handler()
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q}).Handler()
 	get := func(url string, code int) (out struct{ Patterns []api.WikiPattern }) {
 		t.Helper()
 		r := httptest.NewRecorder()
@@ -83,7 +83,7 @@ func TestPatternTools(t *testing.T) {
 	me, _ := q.GetLocalUser(ctx)
 	ws := me.WorkspaceID
 	tr := &tracker.Service{Pool: pool}
-	handler := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}, Artifacts: arts,
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}, Artifacts: arts,
 		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}}).Handler()
 
 	tokenFor := func(handle string) string {

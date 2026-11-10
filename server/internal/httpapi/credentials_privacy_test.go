@@ -26,7 +26,7 @@ func TestSecretResponsesAreMetadataOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := (&Server{Pool: pool, Q: q, Secrets: &secrets.Service{Q: q, Box: box}}).Handler()
+	h := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Secrets: &secrets.Service{Q: q, Box: box}}).Handler()
 	for _, value := range []string{"unique-original-secret-END1", "unique-replaced-secret-END2"} {
 		body, _ := json.Marshal(map[string]string{"name": "harness:openai", "value": value})
 		for _, method := range []string{"PUT", "GET"} {

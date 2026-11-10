@@ -4290,7 +4290,7 @@ components:
       type: object
       required: [code, message]
       properties:
-        code: { type: string, enum: [not_found, invalid, conflict, internal, no_user] }
+        code: { type: string, enum: [not_found, invalid, conflict, internal, no_user, unauthenticated] }
         message: { type: string }
         field: { type: string }
 

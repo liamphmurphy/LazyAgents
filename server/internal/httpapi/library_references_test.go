@@ -123,7 +123,7 @@ func TestLibraryUploadAndReferences(t *testing.T) {
 	if refs, err := e.q.LibraryReferences(ctx, store.LibraryReferencesParams{WorkspaceID: e.me.WorkspaceID, UserID: stranger.ID, PersonaID: new(uuid.MustParse(gwenID))}); err != nil || len(refs) != 0 {
 		t.Fatalf("stranger's references %v %v", refs, err)
 	}
-	if err := (&Server{Pool: e.pool, Q: e.q}).setLibraryReference(ctx, e.me.WorkspaceID, stranger.ID, uuid.MustParse(otherID), nil, nil); err == nil {
+	if err := (&Server{AnonymousAPI: true, Pool: e.pool, Q: e.q}).setLibraryReference(ctx, e.me.WorkspaceID, stranger.ID, uuid.MustParse(otherID), nil, nil); err == nil {
 		t.Fatal("a stranger cleared the reference")
 	}
 
@@ -153,7 +153,7 @@ func TestGenerateImageReferences(t *testing.T) {
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts, ModelDiscovery: func(_ context.Context, h, _ string) ([]chatmodels.Model, error) {
 		return []chatmodels.Model{{ID: h + "-m1", Default: true}}, nil
 	}}
-	handler := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
 	images := true
 	ps := &personas.Service{Pool: pool}
 	owner := personas.Owner{WorkspaceID: ws, UserID: me.ID}

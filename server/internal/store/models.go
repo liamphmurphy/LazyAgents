@@ -166,6 +166,19 @@ type ArtifactVersion struct {
 	ReviewPins       json.RawMessage
 }
 
+type BrowserSession struct {
+	TokenHash  []byte
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
+	LastUsedAt time.Time
+}
+
+type BrowserSignInCode struct {
+	CodeHash  []byte
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
 type ChatAttachment struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

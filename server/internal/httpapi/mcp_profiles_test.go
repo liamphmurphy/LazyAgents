@@ -39,7 +39,8 @@ func TestMCPProfiles(t *testing.T) {
 	atlas, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "atlas"})
 	tr := &tracker.Service{Pool: pool}
 	srv := &Server{
-		Version: "test", Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Agents: &agents.Service{Pool: pool},
+		AnonymousAPI: true,
+		Version:      "test", Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Agents: &agents.Service{Pool: pool},
 		Log:  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts},
 		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr},

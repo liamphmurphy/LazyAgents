@@ -139,15 +139,17 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open **[localhost:8080](http://localhost:8080)**. The first boot creates a demo
-workspace so you can explore before connecting an agent, and a setup checklist
+Sign a browser in by opening the one-time link the API prints on first boot
+(`docker compose logs api`), or a fresh one from `make signin`. The browser
+stays signed in for a year. Then open **[localhost:8080](http://localhost:8080)**.
+The first boot creates a demo workspace so you can explore before connecting an agent, and a setup checklist
 walks you through what is still missing. To start with an empty workspace, set
 `SEED=false` and `LOCAL_USER_NAME` in `.env` before first boot.
 
 Developing Vesper or running it from a checkout? `make start` does everything in
 one command: it creates `.env`, builds the hardened agent image, signs in to your
-Claude and Codex plans, and runs the app at
-**[localhost:3000](http://localhost:3000)**.
+Claude and Codex plans, runs the app at
+**[localhost:3000](http://localhost:3000)**, and prints a sign-in link.
 
 Ready to run agents? Set `SECRETS_KEY` in `.env`, then follow the
 **[setup guide](docs/guide.md#running-agents)** to add provider keys
@@ -156,8 +158,9 @@ repository. Agent runs use your configured providers and can incur model costs.
 
 ### Current scope
 
-Vesper does not have a login yet: everyone who can reach it acts as the
-workspace's first user. The Docker runner also mounts the Docker socket, which
+Vesper has one person per install: a browser signed in with a link from
+`make signin` acts as the workspace's first user. There are no accounts or
+passwords yet. The Docker runner also mounts the Docker socket, which
 is root-equivalent on the host. On a server, keep it on a private network or
 behind your own authenticating proxy, and only run projects you trust. See the
 [guide](docs/guide.md) before running it.

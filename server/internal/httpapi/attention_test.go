@@ -41,7 +41,7 @@ func TestAttentionAndCrossTabApproval(t *testing.T) {
 	done := make(chan struct{})
 	go func() { defer close(done); h.Run(ctx, pool) }()
 	defer func() { cancel(); <-done }()
-	srv := &Server{Pool: pool, Q: q, Tracker: tr, Runs: svc, Events: h}
+	srv := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: svc, Events: h}
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 	atlas, err := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: u.WorkspaceID, Handle: "atlas"})
@@ -288,7 +288,7 @@ func TestInboxQuestionsAndStalledRuns(t *testing.T) {
 	}
 	tr := &tracker.Service{Pool: pool}
 	svc := &runs.Service{Pool: pool, Tracker: tr}
-	srv := &Server{Pool: pool, Q: q, Tracker: tr, Runs: svc}
+	srv := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: svc}
 	atlas, err := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: u.WorkspaceID, Handle: "atlas"})
 	if err != nil {
 		t.Fatal(err)

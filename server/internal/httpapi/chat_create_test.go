@@ -32,7 +32,7 @@ func TestChatCreatesSpacesTasksAndModules(t *testing.T) {
 	ws := me.WorkspaceID
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
-	handler := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
 	call := func(token, name string, args any) (int, map[string]any) {
 		t.Helper()
 		raw, _ := json.Marshal(args)

@@ -46,7 +46,7 @@ func TestWikiIndexes(t *testing.T) {
 	save("Architecture/ADR - Push branches", "# ADR\n\nStatus: Accepted (2026-11-01).\n")
 	save("Architecture/Glossary", "Status: Accepted\n")
 
-	handler := (&Server{Pool: pool, Q: q}).Handler()
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q}).Handler()
 	get := func(url string, code int, out any) {
 		t.Helper()
 		r := httptest.NewRecorder()

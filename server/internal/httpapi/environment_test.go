@@ -60,7 +60,7 @@ func TestRunnerEnvironmentSnapshots(t *testing.T) {
 	if err = q.Heartbeat(ctx, store.HeartbeatParams{ID: "runner-one", Backend: "local", MaxConcurrent: 2}); err != nil {
 		t.Fatal(err)
 	}
-	h := (&Server{Pool: pool, Q: q}).Handler()
+	h := (&Server{AnonymousAPI: true, Pool: pool, Q: q}).Handler()
 	fetch := func(query string) api.RunnerEnvironment {
 		t.Helper()
 		rec := httptest.NewRecorder()
