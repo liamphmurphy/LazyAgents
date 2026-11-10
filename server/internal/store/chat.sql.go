@@ -1237,29 +1237,6 @@ func (q *Queries) LastChatUserMessage(ctx context.Context, sessionID uuid.UUID) 
 	return i, err
 }
 
-const linkSourceInProject = `-- name: LinkSourceInProject :one
-SELECT CASE $1::text
-  WHEN 'artifact' THEN EXISTS (SELECT 1 FROM artifacts x WHERE x.id = $2 AND (x.project_id IS NULL OR x.project_id = $3))
-  WHEN 'ticket' THEN EXISTS (SELECT 1 FROM tickets x WHERE x.id = $2 AND x.project_id = $3)
-  WHEN 'comment' THEN EXISTS (SELECT 1 FROM comments c JOIN tickets t ON t.id = c.ticket_id WHERE c.id = $2 AND t.project_id = $3)
-  ELSE false END::bool AS visible
-`
-
-type LinkSourceInProjectParams struct {
-	SourceKind string
-	SourceID   uuid.UUID
-	ProjectID  uuid.UUID
-}
-
-// Whether a backlink source (artifact, ticket or comment) is visible to a chat on this project:
-// project-less artifacts are workspace-wide.
-func (q *Queries) LinkSourceInProject(ctx context.Context, arg LinkSourceInProjectParams) (bool, error) {
-	row := q.db.QueryRow(ctx, linkSourceInProject, arg.SourceKind, arg.SourceID, arg.ProjectID)
-	var visible bool
-	err := row.Scan(&visible)
-	return visible, err
-}
-
 const listChatAttachmentsForMessages = `-- name: ListChatAttachmentsForMessages :many
 SELECT id, workspace_id, user_id, message_id, filename, content_type, size_bytes, blob_key, created_at, source FROM chat_attachments WHERE message_id = ANY($1::uuid[]) ORDER BY created_at, filename, id
 `

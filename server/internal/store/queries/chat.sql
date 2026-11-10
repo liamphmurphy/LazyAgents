@@ -131,15 +131,6 @@ WHERE r.run_id = sqlc.arg(run_id) AND r.read_at >= sqlc.arg(since)
 GROUP BY a.id, v.id, s.anchor
 ORDER BY min(r.read_at), a.id, s.anchor NULLS FIRST;
 
--- name: LinkSourceInProject :one
--- Whether a backlink source (artifact, ticket or comment) is visible to a chat on this project:
--- project-less artifacts are workspace-wide.
-SELECT CASE sqlc.arg(source_kind)::text
-  WHEN 'artifact' THEN EXISTS (SELECT 1 FROM artifacts x WHERE x.id = sqlc.arg(source_id) AND (x.project_id IS NULL OR x.project_id = sqlc.arg(project_id)))
-  WHEN 'ticket' THEN EXISTS (SELECT 1 FROM tickets x WHERE x.id = sqlc.arg(source_id) AND x.project_id = sqlc.arg(project_id))
-  WHEN 'comment' THEN EXISTS (SELECT 1 FROM comments c JOIN tickets t ON t.id = c.ticket_id WHERE c.id = sqlc.arg(source_id) AND t.project_id = sqlc.arg(project_id))
-  ELSE false END::bool AS visible;
-
 -- name: SetChatSelection :one
 -- Stores the harness/model/effort the next segment turn should use. Callers
 -- validate them and hold the chat row lock; the runner applies them on the next message.

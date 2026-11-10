@@ -201,12 +201,8 @@ type GetTicketIn struct {
 
 func getTicket(ctx context.Context, d Deps, c agents.Caller, in GetTicketIn) (any, error) {
 	ws := c.Agent.WorkspaceID
-	scope, err := chatScopeFor(ctx, d, c)
-	if err != nil {
-		return nil, err
-	}
 	t, err := tracker.Get(ctx, d.Q, ws, strings.ToUpper(strings.TrimSpace(in.Ticket)))
-	if err != nil || !scope.allowsTicket(t) {
+	if err != nil {
 		return nil, apperr.Invalid("ticket", "no ticket %s", in.Ticket)
 	}
 	crit, err := d.Q.ListCriteria(ctx, t.ID)
@@ -288,10 +284,6 @@ func readRunID(ctx context.Context, d Deps, c agents.Caller, ticket string) *uui
 
 func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactIn) (any, error) {
 	ws := c.Agent.WorkspaceID
-	scope, err := chatScopeFor(ctx, d, c)
-	if err != nil {
-		return nil, err
-	}
 	var a store.Artifact
 	ref := strings.TrimSpace(in.Artifact)
 	if id, err := uuid.Parse(ref); err == nil {
@@ -313,9 +305,6 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 		}
 	} else {
 		return nil, apperr.Invalid("artifact", "pass an artifact id or ADR-NNN")
-	}
-	if !scope.allowsArtifact(a) {
-		return nil, apperr.Invalid("artifact", "no artifact %s", ref)
 	}
 	if a.CurrentVersionID == nil {
 		return nil, apperr.Invalid("artifact", "has no content")
@@ -575,23 +564,9 @@ func searchKnowledge(ctx context.Context, d Deps, c agents.Caller, in SearchIn) 
 	if strings.TrimSpace(in.Q) == "" {
 		return nil, apperr.Invalid("q", "is required")
 	}
-	scope, err := chatScopeFor(ctx, d, c)
+	project, err := projectFilter(ctx, d, c.Agent.WorkspaceID, in.Project)
 	if err != nil {
 		return nil, err
-	}
-	var project *uuid.UUID
-	if scope != nil {
-		// A chat searches its own project (plus project-less pages); a project argument can't widen that.
-		project = &scope.ProjectID
-		if in.Project != "" && !strings.EqualFold(strings.TrimSpace(in.Project), scope.ProjectKey) {
-			return nil, apperr.Invalid("project", "chats can only search %s", scope.where())
-		}
-	} else if in.Project != "" {
-		p, err := d.Q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: c.Agent.WorkspaceID, Key: strings.ToUpper(in.Project)})
-		if err != nil {
-			return nil, apperr.Invalid("project", "no project %s", in.Project)
-		}
-		project = &p.ID
 	}
 	hits, err := wiki.Search(ctx, d.Q, c.Agent.WorkspaceID, in.Q, in.Kinds, project, in.Limit)
 	if err != nil {
@@ -606,10 +581,6 @@ func searchKnowledge(ctx context.Context, d Deps, c agents.Caller, in SearchIn) 
 
 func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, error) {
 	ws := c.Agent.WorkspaceID
-	scope, err := chatScopeFor(ctx, d, c)
-	if err != nil {
-		return nil, err
-	}
 	ref, t, err := wiki.LookupRef(ctx, d.Q, ws, in.Ref)
 	if err != nil {
 		return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
@@ -623,9 +594,6 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 	a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws})
 	if err != nil {
 		return nil, err
-	}
-	if !scope.allowsArtifact(a) {
-		return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
 	}
 	if a.CurrentVersionID == nil {
 		return nil, apperr.Invalid("ref", "%q is only a suggestion so far", in.Ref)
@@ -794,21 +762,9 @@ func listProposedPatterns(ctx context.Context, d Deps, c agents.Caller, _ Empty)
 
 func getBacklinks(ctx context.Context, d Deps, c agents.Caller, in BacklinksIn) (any, error) {
 	ws := c.Agent.WorkspaceID
-	scope, err := chatScopeFor(ctx, d, c)
-	if err != nil {
-		return nil, err
-	}
 	ref, t, err := wiki.LookupRef(ctx, d.Q, ws, in.Ref)
 	if err != nil {
 		return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
-	}
-	if scope != nil {
-		// The target and every source must be in the chat's project (or workspace-wide).
-		if ok, err := scope.sourceVisible(ctx, d, ref.Kind, ref.ID); err != nil {
-			return nil, err
-		} else if !ok {
-			return nil, apperr.Invalid("ref", "nothing called %q; try search_knowledge", in.Ref)
-		}
 	}
 	bl, err := wiki.Backlinks(ctx, d.Q, ws, ref)
 	if err != nil {
@@ -816,13 +772,6 @@ func getBacklinks(ctx context.Context, d Deps, c agents.Caller, in BacklinksIn) 
 	}
 	out := make([]map[string]any, 0, len(bl))
 	for _, m := range bl {
-		if scope != nil {
-			if ok, err := scope.sourceVisible(ctx, d, m.SourceKind, m.SourceID); err != nil {
-				return nil, err
-			} else if !ok {
-				continue
-			}
-		}
 		r := map[string]any{"ref": wiki.LinkText(m.Source), "kind": m.Source.Kind, "title": m.Source.Title, "snippets": m.Snippets}
 		if len(m.Anchors) > 0 {
 			r["cites_sections"] = m.Anchors
@@ -1008,7 +957,7 @@ var Tools = []Tool{
 	define("propose_persona", "Propose a new persona for the person (another voice of their assistant). Only when the person asks for one and your instructions allow it. Nothing is created until the person approves it in the chat; it starts with no coding or image permissions. If you can make images, give it a profile picture with avatar_prompt. Tell the person you proposed it.", proposePersona),
 	define("list_runs", "List agent runs in the current chat project, newest first: live runs by default, or finished/all. Filter by ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One agent run in the current chat project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
-	define("list_epics", "List epics in the current chat project.", listChatEpics),
+	define("list_epics", "List epics, in every project unless you name one.", listChatEpics),
 	define("create_epic", "Create an epic in the current chat project.", createChatEpic),
 	define("create_ticket", "Open a follow-up ticket in the same project (unassigned, in the backlog).",
 		func(ctx context.Context, d Deps, c agents.Caller, in NewTicketIn) (any, error) {

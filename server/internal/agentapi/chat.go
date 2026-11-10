@@ -19,9 +19,11 @@ import (
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
 	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
 
-// chatScope is what a chat run may read from. ProjectID is uuid.Nil when the
-// chat has no project attached: it matches nothing, so tickets, epics, runs and
-// project pages stay out of reach. Only a nil *chatScope (not a chat) is open.
+// chatScope is who a chat run acts for. A chat reads the whole workspace, like
+// ticket agents do: the person can open every project, so a project boundary
+// here protected nothing and only got in the way. ProjectID is the chat's
+// default project (uuid.Nil when it has none): where new tickets and epics go
+// unless the persona names another.
 type chatScope struct {
 	ChatID     uuid.UUID
 	ProjectID  uuid.UUID
@@ -68,13 +70,22 @@ func chatScopeFor(ctx context.Context, d Deps, c agents.Caller) (*chatScope, err
 	return &chatScope{ChatID: chat.ID, ProjectID: runs.ProjectIDOrNil(chat.ProjectID), ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: runs.ChatSpeakerID(chat), MemorySpaceID: memSpace}, nil
 }
 
-// allowsArtifact: workspace-level pages (no project) are shared; the rest must
-// belong to the chat's project. A nil scope (not a chat) allows everything.
-func (s *chatScope) allowsArtifact(a store.Artifact) bool {
-	return s == nil || a.ProjectID == nil || *a.ProjectID == s.ProjectID
+// projectFilter resolves the optional project key a listing or search is
+// narrowed to; nil means every project.
+func projectFilter(ctx context.Context, d Deps, ws uuid.UUID, key string) (*uuid.UUID, error) {
+	key = strings.ToUpper(strings.TrimSpace(key))
+	if key == "" {
+		return nil, nil
+	}
+	p, err := d.Q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: ws, Key: key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.Invalid("project", "no project %s", key)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p.ID, nil
 }
-
-func (s *chatScope) allowsTicket(t store.Ticket) bool { return s == nil || t.ProjectID == s.ProjectID }
 
 // where names the chat's reach for instructions and errors.
 func (s *chatScope) where() string {
@@ -101,21 +112,6 @@ Tools from other MCP servers are the person's connectors. A write tool may pause
 To call an API with the person's token or key, use http_request from vesper_secrets (list_secrets shows what you may use); you never see a value. If you need one they haven't added, use propose_secret when you're allowed to, and never ask for it in chat. If someone pastes a token into chat anyway, don't repeat it; suggest saving it in Customization › Secrets.
 When the person asks, set things up for them with create_space, create_scheduled_task and create_learning_module, then link what you made.`
 
-// sourceVisible reports whether a link target or backlink source of this kind
-// (artifact, ticket, comment) is in the chat's project or workspace-wide.
-// Kinds without a project (epics, agents) are visible.
-func (s *chatScope) sourceVisible(ctx context.Context, d Deps, kind string, id uuid.UUID) (bool, error) {
-	switch kind {
-	case "artifact", "section", "ticket", "comment":
-	default:
-		return true, nil
-	}
-	if kind == "section" {
-		kind = "artifact"
-	}
-	return d.Q.LinkSourceInProject(ctx, store.LinkSourceInProjectParams{SourceKind: kind, SourceID: id, ProjectID: s.ProjectID})
-}
-
 type NewEpicIn struct {
 	Name           string   `json:"name"`
 	Objective      string   `json:"objective,omitempty"`
@@ -126,6 +122,7 @@ type NewEpicIn struct {
 // chatEpic is a list_epics row: the epic plus its status, points and criteria counts.
 type chatEpic struct {
 	store.Epic
+	Project       string
 	CriteriaTotal int32
 	CriteriaDone  int32
 	PointsTotal   int32
@@ -134,23 +131,35 @@ type chatEpic struct {
 	TicketsOpen   int32
 }
 
-func listChatEpics(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
-	s, err := chatScopeFor(ctx, d, c)
-	if err != nil {
+type ListEpicsIn struct {
+	Project string `json:"project,omitempty" jsonschema:"Only epics in this project key, e.g. PAY; default every project"`
+}
+
+func listChatEpics(ctx context.Context, d Deps, c agents.Caller, in ListEpicsIn) (any, error) {
+	if _, err := requireChat(ctx, d, c); err != nil {
 		return nil, err
 	}
-	if s == nil {
-		return nil, apperr.Conflict("this tool requires a chat")
+	project, err := projectFilter(ctx, d, c.Agent.WorkspaceID, in.Project)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := d.Q.ListEpics(ctx, c.Agent.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
+	projects, err := d.Q.ListProjects(ctx, c.Agent.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	keys := make(map[uuid.UUID]string, len(projects))
+	for _, p := range projects {
+		keys[p.ID] = p.Key
+	}
 	out := []chatEpic{}
 	ids := []uuid.UUID{}
 	for _, e := range rows {
-		if e.ProjectID == s.ProjectID {
-			out = append(out, chatEpic{Epic: e})
+		if project == nil || e.ProjectID == *project {
+			out = append(out, chatEpic{Epic: e, Project: keys[e.ProjectID]})
 			ids = append(ids, e.ID)
 		}
 	}
