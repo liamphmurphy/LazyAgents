@@ -3,7 +3,10 @@ package usersecrets
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -224,5 +227,110 @@ func TestSendMasksErrors(t *testing.T) {
 	_, err = s.Send(context.Background(), sec, "q-secret-1234567890", c, Request{})
 	if err == nil || strings.Contains(err.Error(), "q-secret-1234567890") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// Echoes an allowed host could send back, each of which once leaked part or
+// all of the value past masking.
+func TestSendMasksEchoesThatUsedToLeak(t *testing.T) {
+	const value = "sk/live+AB12cd34EF56gh78"
+	echo := func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/split":
+			// Padding puts the value across the 1 MB cut.
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = io.WriteString(w, strings.Repeat("a", maxResponse-10)+value)
+		case "/encoded":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"json":"sk\/live+AB12cd34EF56gh78","pct":"sk%2flive%2bAB12cd34EF56gh78","hex":"`+hex.EncodeToString([]byte(value))+`","html":"`+html.EscapeString(value)+`"}`)
+		case "/ctype":
+			w.Header().Set("Content-Type", "application/octet-stream; token="+value)
+			_, _ = w.Write([]byte{0, 1, 2})
+		}
+	}
+	up := httptest.NewServer(http.HandlerFunc(echo))
+	defer up.Close()
+	s := &Service{}
+	sec := secret(PlacementBearer, "", "127.0.0.1")
+	leaks := func(text string) bool {
+		for _, frag := range []string{value[:6], value[6:12], "AB12cd34", hex.EncodeToString([]byte(value))[:12]} {
+			if strings.Contains(text, frag) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, path := range []string{"/split", "/encoded", "/ctype"} {
+		c, err := s.Check(sec, Request{URL: up.URL + path})
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := s.Send(context.Background(), sec, value, c, Request{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if leaks(res.Body) || leaks(res.ContentType) || leaks(fmt.Sprint(res.Headers)) {
+			t.Errorf("%s leaked: content-type %q, body …%q", path, res.ContentType, res.Body[max(0, len(res.Body)-60):])
+		}
+		if path == "/split" && (!res.Truncated || len(res.Body) > maxResponse) {
+			t.Errorf("split: truncated=%v len=%d", res.Truncated, len(res.Body))
+		}
+	}
+	// A value too short to tell from ordinary text is still masked.
+	short := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "auth="+r.Header.Get("Authorization"))
+	}))
+	defer short.Close()
+	c, _ := s.Check(sec, Request{URL: short.URL})
+	if res, err := s.Send(context.Background(), sec, "k3y9", c, Request{}); err != nil || strings.Contains(res.Body, "k3y9") {
+		t.Fatalf("short value: %q %v", res.Body, err)
+	}
+}
+
+func TestCheckRefusesHeadersThatDefeatMasking(t *testing.T) {
+	s := &Service{}
+	sec := secret(PlacementHeader, "X-Api-Key", "api.acme.com")
+	for _, h := range []string{"Range", "If-Range", "Accept-Encoding", "X_Api_Key", "x-api-key"} {
+		if _, err := s.Check(sec, Request{URL: "https://api.acme.com/", Headers: map[string]string{h: "x"}}); err == nil {
+			t.Errorf("%s accepted", h)
+		}
+	}
+	if _, err := s.Check(sec, Request{Method: "POST", URL: "https://api.acme.com/", Body: []byte{0xff, 0xfe}}); err == nil {
+		t.Error("a body the person couldn't read was accepted")
+	}
+}
+
+// A write's 307 would resend the approved body, with the secret, to a path
+// nobody approved.
+func TestSendDoesNotFollowRedirectsOnWrites(t *testing.T) {
+	var resent atomic.Bool
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/elsewhere" {
+			resent.Store(true)
+			return
+		}
+		http.Redirect(w, r, "/elsewhere", http.StatusTemporaryRedirect)
+	}))
+	defer up.Close()
+	s := &Service{}
+	sec := secret(PlacementBearer, "", "127.0.0.1")
+	c, _ := s.Check(sec, Request{Method: "POST", URL: up.URL + "/refunds", Body: []byte("{}")})
+	res, err := s.Send(context.Background(), sec, "tok-1234567890", c, Request{Body: []byte("{}")})
+	if err != nil || res.Status != http.StatusTemporaryRedirect || resent.Load() {
+		t.Fatalf("status %d, err %v, resent %v", res.Status, err, resent.Load())
+	}
+}
+
+func TestBlockedAddrCoversTransitionAndReservedRanges(t *testing.T) {
+	for _, ip := range []string{"64:ff9b::a00:1", "64:ff9b::a9fe:a9fe", "2002:a00:1::1", "::a00:1", "fec0::1", "198.18.0.1", "240.0.0.1", "2001:0:5ef5:79fd::1", "64:ff9b:1::1"} {
+		if !blockedAddr(net.ParseIP(ip)) {
+			t.Errorf("%s not blocked", ip)
+		}
+	}
+	// Transition addresses that carry a public IPv4 stay reachable.
+	for _, ip := range []string{"64:ff9b::5db8:d822", "2002:5db8:d822::1", "2606:4700::1111"} {
+		if blockedAddr(net.ParseIP(ip)) {
+			t.Errorf("%s blocked", ip)
+		}
 	}
 }

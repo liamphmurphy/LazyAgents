@@ -3,15 +3,20 @@ package usersecrets
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -61,8 +66,15 @@ type Checked struct {
 var methods = []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
 
 // agentHeaders are headers a run may never set: they'd carry or replace a
-// credential, or confuse the request framing.
-var agentHeaders = []string{"authorization", "proxy-authorization", "cookie", "host", "content-length", "transfer-encoding", "connection", "te", "upgrade"}
+// credential, confuse the request framing, or let a run pull an echoed value
+// back in pieces (Range) or encoded past masking (Accept-Encoding).
+var agentHeaders = []string{"authorization", "proxy-authorization", "cookie", "host", "content-length", "transfer-encoding", "connection", "te", "upgrade",
+	"range", "if-range", "accept-encoding"}
+
+// headerKey compares header names the way lenient backends do: CGI-style
+// servers read X_Api_Key as X-Api-Key, so a run mustn't send that alongside
+// the real one.
+func headerKey(name string) string { return strings.ReplaceAll(strings.ToLower(name), "_", "-") }
 
 // isLocal is a host on this machine; plain http and private addresses are
 // allowed only for these, as for connectors.
@@ -116,8 +128,8 @@ func (s *Service) Check(sec store.UserSecret, req Request) (Checked, error) {
 		return c, blocked("leave the %s query parameter out: Vesper adds it", sec.PlacementKey)
 	}
 	for k := range req.Headers {
-		lk := strings.ToLower(k)
-		if slices.Contains(agentHeaders, lk) || (sec.Placement == PlacementHeader && strings.EqualFold(k, sec.PlacementKey)) {
+		lk := headerKey(k)
+		if slices.Contains(agentHeaders, lk) || (sec.Placement == PlacementHeader && lk == headerKey(sec.PlacementKey)) {
 			return c, blocked("the %s header can't be set: Vesper adds the secret itself", k)
 		}
 		if strings.ContainsAny(k+req.Headers[k], "\r\n") {
@@ -130,18 +142,64 @@ func (s *Service) Check(sec store.UserSecret, req Request) (Checked, error) {
 	if len(req.Body) > 0 && !c.Write {
 		return c, blocked("%s requests can't have a body", c.Method)
 	}
+	// The person approves the body they can read; bytes that aren't text
+	// couldn't be shown to them.
+	if !utf8.Valid(req.Body) {
+		return c, blocked("the body must be text (UTF-8)")
+	}
 	u.Host = strings.ToLower(u.Host)
 	c.URL = u
 	return c, nil
 }
 
+// reservedNets are ranges that aren't private by Go's definition but don't
+// belong to a public API either.
+var reservedNets = func() []*net.IPNet {
+	var out []*net.IPNet
+	for _, c := range []string{
+		"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "240.0.0.0/4", // this network, CGNAT, IETF, benchmarking, reserved
+		"fec0::/10",      // deprecated site-local
+		"2001::/32",      // Teredo: tunnels to an address we can't check
+		"64:ff9b:1::/48", // local-use NAT64
+	} {
+		_, n, _ := net.ParseCIDR(c)
+		out = append(out, n)
+	}
+	return out
+}()
+
+// embeddedV4 is the IPv4 address an IPv6 transition address carries: NAT64
+// (64:ff9b::/96), 6to4 (2002::/16) and the old IPv4-compatible form (::/96).
+func embeddedV4(ip net.IP) net.IP {
+	ip16 := ip.To16()
+	if ip16 == nil || ip.To4() != nil {
+		return nil
+	}
+	switch {
+	case ip16[0] == 0x00 && ip16[1] == 0x64 && ip16[2] == 0xff && ip16[3] == 0x9b && allZero(ip16[4:12]):
+		return net.IP(ip16[12:16])
+	case ip16[0] == 0x20 && ip16[1] == 0x02:
+		return net.IP(ip16[2:6])
+	case allZero(ip16[:12]):
+		return net.IP(ip16[12:16])
+	}
+	return nil
+}
+
+func allZero(b []byte) bool { return !slices.ContainsFunc(b, func(x byte) bool { return x != 0 }) }
+
 // blockedAddr is an address a request may not reach unless its host is local:
-// private networks, link-local (cloud metadata) and the like.
+// private networks, link-local (cloud metadata), reserved ranges, and IPv6
+// addresses that tunnel to any of those.
 func blockedAddr(ip net.IP) bool {
+	if v4 := embeddedV4(ip); v4 != nil && blockedAddr(v4) {
+		return true
+	}
+	if slices.ContainsFunc(reservedNets, func(n *net.IPNet) bool { return n.Contains(ip) }) {
+		return true
+	}
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() ||
-		ip.IsMulticast() || ip.IsInterfaceLocalMulticast() || (ip.To4() != nil && ip.To4()[0] == 0) ||
-		// 100.64.0.0/10, carrier-grade NAT, often internal
-		(ip.To4() != nil && ip.To4()[0] == 100 && ip.To4()[1]&0xc0 == 64)
+		ip.IsMulticast() || ip.IsInterfaceLocalMulticast()
 }
 
 // transport dials only addresses it checked, so a hostname can't resolve to
@@ -234,9 +292,10 @@ func (s *Service) Send(ctx context.Context, sec store.UserSecret, value string, 
 	t := s.transport(host)
 	defer t.CloseIdleConnections()
 	client := &http.Client{Transport: t, CheckRedirect: func(next *http.Request, via []*http.Request) error {
-		// Only to the same host and scheme: anywhere else, the run gets the 3xx
-		// and can decide what to do, and the secret stays where it was allowed.
-		if len(via) >= maxRedirects || !strings.EqualFold(next.URL.Hostname(), host) || next.URL.Scheme != c.URL.Scheme {
+		// Only reads, and only to the same host and scheme: anywhere else the run
+		// gets the 3xx and the secret stays where it was allowed. A write's 307
+		// would resend its body to a path the person didn't approve.
+		if c.Write || len(via) >= maxRedirects || !strings.EqualFold(next.URL.Hostname(), host) || next.URL.Scheme != c.URL.Scheme {
 			return http.ErrUseLastResponse
 		}
 		if sec.Placement == PlacementQuery {
@@ -260,22 +319,22 @@ func (s *Service) Send(ctx context.Context, sec store.UserSecret, value string, 
 		return Response{}, errors.New(mask.text(err.Error()))
 	}
 	defer res.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(res.Body, maxResponse+1))
+	// Read past the cap by the longest masked form, so a value that starts
+	// before the cap is whole when it's masked; see maskedPrefix.
+	raw, err := io.ReadAll(io.LimitReader(res.Body, int64(maxResponse+mask.longest())))
 	if err != nil {
 		return Response{}, errors.New(mask.text("reading the response: " + err.Error()))
 	}
-	resp := Response{Status: res.StatusCode, Headers: map[string]string{}, ContentType: res.Header.Get("Content-Type")}
-	if len(raw) > maxResponse {
-		raw, resp.Truncated = raw[:maxResponse], true
-	}
+	contentType := res.Header.Get("Content-Type")
+	resp := Response{Status: res.StatusCode, Headers: map[string]string{}, ContentType: mask.text(contentType)}
 	for k, vs := range res.Header {
 		if strings.EqualFold(k, "Set-Cookie") {
 			continue
 		}
-		resp.Headers[k] = mask.text(strings.Join(vs, ", "))
+		resp.Headers[mask.text(k)] = mask.text(strings.Join(vs, ", "))
 	}
-	if textual(resp.ContentType, raw) {
-		resp.Body = mask.text(string(raw))
+	if textual(contentType, raw) {
+		resp.Body, resp.Truncated = mask.maskedPrefix(raw, maxResponse)
 	} else {
 		resp.Body = fmt.Sprintf("(%d bytes of %s, not shown)", len(raw), resp.ContentType)
 	}
@@ -301,37 +360,79 @@ type masker struct {
 	count int
 }
 
+var percentHex = regexp.MustCompile(`%[0-9A-F]{2}`)
+
+// encodings are the forms a server commonly echoes a value back in: URL and
+// path escaping (either hex case), JSON and HTML escaping, base64 and hex.
+func encodings(v string) []string {
+	jsonEsc, _ := json.Marshal(v)
+	out := []string{
+		v,
+		url.QueryEscape(v), url.PathEscape(v),
+		string(jsonEsc[1 : len(jsonEsc)-1]), strings.ReplaceAll(v, "/", `\/`),
+		html.EscapeString(v),
+		base64.StdEncoding.EncodeToString([]byte(v)), base64.RawStdEncoding.EncodeToString([]byte(v)),
+		base64.URLEncoding.EncodeToString([]byte(v)), base64.RawURLEncoding.EncodeToString([]byte(v)),
+		hex.EncodeToString([]byte(v)), strings.ToUpper(hex.EncodeToString([]byte(v))),
+	}
+	for _, e := range out[1:3] {
+		out = append(out, percentHex.ReplaceAllStringFunc(e, strings.ToLower))
+	}
+	return out
+}
+
 func newMasker(sec store.UserSecret, value string) *masker {
 	m := &masker{label: "‹" + sec.Handle + "›"}
-	add := func(f string) {
-		// Short fragments would mask ordinary text; a value this short can't be
-		// told apart from the rest of a response anyway.
-		if len(f) >= 8 && !slices.Contains(m.forms, f) {
+	add := func(f string, min int) {
+		if len(f) >= min && !slices.Contains(m.forms, f) {
 			m.forms = append(m.forms, f)
 		}
 	}
 	for _, v := range []string{value, strings.TrimSpace(value)} {
-		add(v)
-		add(url.QueryEscape(v))
-		add(url.PathEscape(v))
-		add(base64.StdEncoding.EncodeToString([]byte(v)))
-		add(base64.RawStdEncoding.EncodeToString([]byte(v)))
-		add(base64.URLEncoding.EncodeToString([]byte(v)))
-		add(base64.RawURLEncoding.EncodeToString([]byte(v)))
+		// The value itself is always masked, however short: masking ordinary
+		// text by mistake is harmless; leaking a short value isn't.
+		add(v, 1)
+		for _, e := range encodings(v) {
+			add(e, 4)
+		}
 	}
 	if sec.Placement == PlacementBasic {
 		if _, pass, ok := strings.Cut(value, ":"); ok {
-			add(pass)
+			add(pass, 1)
+			for _, e := range encodings(pass) {
+				add(e, 4)
+			}
 		}
 	}
 	// A JWT's header and claims aren't secret, but its signature is: mask it
 	// even when it comes back on its own.
 	if parts := strings.Split(strings.TrimSpace(value), "."); len(parts) == 3 && len(parts[2]) >= 16 {
-		add(parts[2])
+		add(parts[2], 16)
 	}
 	// Longest first, so a whole value is replaced before a part of it.
 	slices.SortFunc(m.forms, func(a, b string) int { return len(b) - len(a) })
 	return m
+}
+
+func (m *masker) longest() int {
+	if len(m.forms) == 0 {
+		return 0
+	}
+	return len(m.forms[0])
+}
+
+// maskedPrefix masks a body read up to limit+longest bytes and returns at
+// most limit bytes of it. Masking runs before the cut, and the bytes read
+// past limit are dropped after it: an occurrence that starts before limit is
+// whole in what was read, so it's masked; one that starts after is dropped,
+// so no fragment of a value survives the cut.
+func (m *masker) maskedPrefix(raw []byte, limit int) (string, bool) {
+	if len(raw) <= limit {
+		return m.text(string(raw)), false
+	}
+	masked := m.text(string(raw))
+	masked = masked[:len(masked)-(len(raw)-limit)]
+	return strings.ToValidUTF8(masked, ""), true
 }
 
 func (m *masker) text(s string) string {
