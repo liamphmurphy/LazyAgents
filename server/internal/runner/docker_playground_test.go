@@ -158,11 +158,12 @@ func TestStartPlaygroundSandboxesEveryContainerAndReportsAProcessThatDies(t *tes
 		}
 	}
 	// A login shell would read /etc/profile, which resets PATH and loses Go.
-	if cmd := fmt.Sprint(f.created[web]["Cmd"]); cmd != "[bash -c npm run dev]" {
-		t.Errorf("web runs %s, want bash -c with the image's PATH", cmd)
+	if cmd := f.created[web]["Cmd"].([]any); len(cmd) != 3 || cmd[0] != "bash" || cmd[1] != "-c" || cmd[2] != processScript("web", "npm run dev") {
+		t.Errorf("web runs %v, want bash -c with the image's PATH", cmd)
 	}
-	if wd := f.created[web]["WorkingDir"]; wd != "/workspace/web" {
-		t.Errorf("web runs in %v", wd)
+	// Docker would create a missing WorkingDir as root; the root always exists.
+	if wd := f.created[web]["WorkingDir"]; wd != workspacePath {
+		t.Errorf("web starts in %v, want the workspace root", wd)
 	}
 	if svc := f.created[playgroundContainer(id, "postgres")]["HostConfig"].(map[string]any); svc["NetworkMode"] != network {
 		t.Errorf("postgres network %v", svc["NetworkMode"])
@@ -249,5 +250,23 @@ func TestPlaygroundSetupCommandsStartFromTheRootAndStopOnFailure(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "after-failure")); err == nil {
 		t.Error("setup went on after a failed command")
+	}
+}
+
+// Docker creates a missing WorkingDir as root before the process's user runs,
+// leaving a directory nothing in the playground can write to. A process's dir
+// is made by its own shell instead, as the agent user.
+func TestPlaygroundProcessMakesItsOwnDirectory(t *testing.T) {
+	root := t.TempDir()
+	cmd := exec.Command("bash", "-c", processScript("dist/it's new", "pwd > ../../where && touch here"))
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "dist", "it's new", "here")); err != nil {
+		t.Fatalf("the process didn't run in its new directory: %v", err)
+	}
+	if got := processScript("", "npm run dev"); got != "npm run dev" {
+		t.Errorf("a process at the root runs %q, want its command as given", got)
 	}
 }
