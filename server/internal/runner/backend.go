@@ -56,6 +56,11 @@ type Backend interface {
 	// (see outbox.go).
 	ReadOutbox(ctx context.Context, runID string) (files []OutboxFile, skipped []string, err error)
 	RemoveOutbox(ctx context.Context, runID string, names []string) error
+	// ReadVideoFiles and OpenWorkspaceFile serve a chat's video jobs: the
+	// files a renderer reports through, and the finished video (see
+	// videofiles.go).
+	ReadVideoFiles(ctx context.Context, runID string, req VideoFilesRequest) ([]VideoFile, error)
+	OpenWorkspaceFile(ctx context.Context, runID, rel string, limit int64) (io.ReadCloser, int64, error)
 	// Cleanup removes processes a previous runner left behind.
 	Cleanup(ctx context.Context) error
 }

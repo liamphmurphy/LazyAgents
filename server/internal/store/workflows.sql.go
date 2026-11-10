@@ -119,7 +119,7 @@ func (q *Queries) CreateWorkflow(ctx context.Context, arg CreateWorkflowParams) 
 
 const createWorkflowLibraryItem = `-- name: CreateWorkflowLibraryItem :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id)
-VALUES ($1, $2, 'document', $3, $4, 'text/markdown; charset=utf-8', $5, $6, $7) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary
+VALUES ($1, $2, 'document', $3, $4, 'text/markdown; charset=utf-8', $5, $6, $7) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary, duration_ms, width, height, poster_key
 `
 
 type CreateWorkflowLibraryItemParams struct {
@@ -166,6 +166,10 @@ func (q *Queries) CreateWorkflowLibraryItem(ctx context.Context, arg CreateWorkf
 		&i.VideoID,
 		&i.LinkStatus,
 		&i.Summary,
+		&i.DurationMs,
+		&i.Width,
+		&i.Height,
+		&i.PosterKey,
 	)
 	return i, err
 }

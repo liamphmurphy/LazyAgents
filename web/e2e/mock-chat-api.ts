@@ -145,6 +145,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const decisions: Array<{ id: string; decision: string }> = [];
   const defaultPersona = () => personas.find((p) => p.is_default);
   const personaRequests: string[] = [];
+  // Chat videos by chat: "video: <state>" puts one on the reply, "video-live: <stage>" shows one while the turn runs.
+  const videos = new Map<string, Record<string, unknown>[]>();
   // The persona_id each GET /chats asked for ("" when omitted, i.e. the default).
   const chatPersonaFilters: string[] = [];
   let n = 0;
@@ -223,6 +225,15 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
 
   function finishTurn(c: Chat, prompt: string) {
     c.state = "idle";
+    if (prompt.startsWith("video:") || prompt.startsWith("video-live:")) {
+      const reply = add(c, "assistant", "Here's the render: 15 s at 1080p. I checked four stills first.", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      const list = videos.get(c.id) ?? [];
+      if (prompt.startsWith("video:")) list.push(mockVideo(prompt.slice(6).trim(), c.current_run_id!));
+      for (const v of list) if (!v.message_id && v.run_id === c.current_run_id) v.message_id = reply.id;
+      videos.set(c.id, list);
+      void emit(c);
+      return;
+    }
     memoryEvents(c, prompt);
     if (prompt.startsWith("web:") || prompt.startsWith("webnone:")) webEvents(c);
     if (prompt.startsWith("web:") || prompt.startsWith("webnone:")) {
@@ -365,6 +376,16 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     const fail = (e: ReturnType<typeof err>) => json(e.body, e.status);
 
     if (/^\/chats\/[^/]+\/canvases$/.test(path)) return json({ canvases: [] });
+    const videoList = /^\/chats\/([^/]+)\/videos$/.exec(path);
+    if (videoList) return json({ videos: videos.get(videoList[1]) ?? [] });
+    const frame = /^\/chats\/[^/]+\/videos\/[^/]+\/frames\/([a-z]+)\/(\d+)$/.exec(path);
+    if (frame) return route.fulfill({ status: 200, contentType: "image/svg+xml", body: frameSvg(frame[1], Number(frame[2])) });
+    if (/^\/library\/[^/]+\/poster$/.test(path)) return route.fulfill({ status: 200, contentType: "image/svg+xml", body: frameSvg("poster", 0) });
+    if (path === "/library" && method === "GET" && url.searchParams.get("kind") === "video") {
+      const all = [...videos.values()].flat().filter((v) => v.library_item_id);
+      return json({ has_more: false, items: all.map((v) => ({ id: v.library_item_id, kind: "video", title: v.title, filename: "black-cat.mp4", content_type: "video/mp4", size_bytes: 25_270_000,
+        duration_ms: 15000, width: 1920, height: 1080, has_poster: true, chat_id: chats[0]?.id, chat_title: "Videos", persona_name: "VesperBot", source: "generated", created_at: now() })) });
+    }
     if (path === "/bootstrap") {
       return json({
         workspace: { id: uuid(), name: "Acme", slug: "acme" },
@@ -719,6 +740,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         c.error = undefined;
         c.current_run_id = uuid();
         touch(c);
+        if (text.startsWith("video-live:")) videos.set(c.id, [...(videos.get(c.id) ?? []), mockVideo(text.slice(11).trim(), c.current_run_id)]);
         if (text.startsWith("slow:")) {
           const events = runEvents.get(c.current_run_id) ?? [];
           events.push({ seq: events.length + 1, type: "tool_call", at: now(), payload: { id: `call-${events.length + 1}`, tool: "mcp__lazyagents__read_page", input: { ref: PLAN.path } } });
@@ -903,4 +925,55 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     await page.route("**/api/v1/**", handle);
     return { apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
   })();
+}
+
+const STAGE_ORDER = ["write", "stills", "render", "encode", "save"];
+
+/**
+ * A chat video at one state: write, stills, render, encode, save, done, failed or stopped,
+ * with the frames, checks and progress the card shows at that point.
+ */
+export function mockVideo(state: string, runId: string): Record<string, unknown> {
+  const id = `0000000v-0000-4000-8000-${String(Math.floor(Math.random() * 1e12)).padStart(12, "0")}`;
+  const stage = state === "done" ? "save" : state === "failed" || state === "stopped" ? "encode" : state;
+  const at = STAGE_ORDER.indexOf(stage);
+  const frames: { kind: string; idx: number; version: number }[] = [];
+  if (at >= 1) for (const idx of [0, 120, 300, 449]) frames.push({ kind: "still", idx, version: 1 });
+  if (at >= 2) {
+    for (let i = 0; i < (at >= 3 ? 30 : 14); i++) frames.push({ kind: "strip", idx: i, version: 1 });
+    frames.push({ kind: "preview", idx: 0, version: 1 });
+  }
+  if (state === "done") frames.push({ kind: "poster", idx: 0, version: 1 });
+  const started = new Date(Date.now() - 88_000).toISOString();
+  return {
+    id, title: "Black cat on a rainy cyberpunk street", width: 1920, height: 1080, fps: 30, duration_ms: 15000,
+    stage, state: state === "done" ? "done" : state === "failed" || state === "stopped" ? "failed" : "running",
+    ...(state === "failed" ? { failure_kind: "error", error: "ffmpeg isn't installed in this runner image. All 450 frames rendered and stay in the chat's workspace, so a retry only re-encodes.", error_log: "sh: 1: ffmpeg: not found\nexit status 127" } : {}),
+    ...(state === "stopped" ? { failure_kind: "stopped", error: "Stopped before the video was finished." } : {}),
+    script_path: "scratch/cyberpunk_cat.py", script_lines: 1024,
+    script_tail: "def rain_overlay(t):  # streaks + splashes\n    ...\ndef render_frame(t):  # reflection, fog, bloom\n    ...\ndef main():  # pool.imap -> ffmpeg libx264\n    ...",
+    checks: at >= 1 ? [
+      { label: "Paws stay planted while the street scrolls", passed: true },
+      { label: "Rain falls along its slant", passed: true },
+      { label: "Cat stays in the middle third of the frame", ...(at > 1 ? { passed: true } : {}) },
+      { label: "Neon reflections read on the wet road", ...(at > 1 ? { passed: true } : {}) },
+    ] : [],
+    frames_done: at >= 3 ? 450 : at === 2 ? 212 : 0, frames_total: at >= 2 ? 450 : 0, stage_note: at >= 3 ? "H.264 (libx264, CRF 18)" : "",
+    ...(at >= 2 ? { render_started_at: started } : {}),
+    run_id: runId,
+    ...(state === "done" ? { library_item_id: "11111111-vvvv-4vvv-8vvv-000000000001".replace(/v/g, "0"), finished_at: new Date().toISOString(),
+      output: { filename: "black-cat-on-a-rainy-cyberpunk-street.mp4", content_type: "video/mp4", size_bytes: 25_270_000, codec: "H.264", duration_ms: 15000 } } : {}),
+    frames, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  };
+}
+
+/** A small night street for frames: a gradient sky, towers with lit windows, a neon sign and a label. */
+export function frameSvg(kind: string, idx: number): string {
+  const shift = (idx * 7) % 200;
+  const towers = Array.from({ length: 9 }, (_, i) => {
+    const x = ((i * 80 - shift + 720) % 720) - 40;
+    const h = 90 + ((i * 53) % 120);
+    return `<rect x="${x}" y="${280 - h}" width="64" height="${h}" fill="#16122b"/><rect x="${x + 10}" y="${290 - h}" width="6" height="${h * 0.3}" fill="${["#ff2896", "#1ee1ff", "#9646ff", "#ffa528"][i % 4]}"/>`;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06061a"/><stop offset="1" stop-color="#46104f"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><circle cx="480" cy="68" r="28" fill="#cdd0f0" opacity=".85"/>${towers}<rect y="280" width="640" height="80" fill="#0f0f1c"/><ellipse cx="${220 + idx / 4}" cy="250" rx="46" ry="14" fill="#0a0910"/><circle cx="${266 + idx / 4}" cy="236" r="13" fill="#0a0910"/><text x="12" y="350" fill="#8b8b94" font-family="monospace" font-size="12">${kind} ${idx}</text></svg>`;
 }

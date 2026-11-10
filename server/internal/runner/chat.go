@@ -286,6 +286,10 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			if err != nil {
 				return err
 			}
+			// The turn's videos (finished or not) show on the reply it stored.
+			if err := q.LinkChatVideoJobsToMessage(ctx, store.LinkChatVideoJobsToMessageParams{MessageID: &msg.ID, RunID: &run.ID, TurnID: &turn.ID}); err != nil {
+				return err
+			}
 			if role == "assistant" {
 				replied, reply = true, body
 				if len(codeChanges) > 2 { // more than "[]"

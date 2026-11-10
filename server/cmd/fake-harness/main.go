@@ -24,6 +24,8 @@
 //	                    generate_image once more and echoes its prompt (or fails,
 //	                    with FAKE_HARNESS_FAIL_FOLLOWUP set). FAKE_IMAGE_REFERENCES
 //	                    (comma-separated) is passed as generate_image references.
+//	chat-video          chat turn; a prompt "video: <title>" renders a tiny video
+//	                    through the video tools (see fakeVideo; FAKE_VIDEO_STEP)
 //	workflow-image      a workflow step: see the handler below
 //	slow                wait for SIGINT (pause), then end the turn
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
@@ -553,6 +555,20 @@ func main() {
 			name, avatar, _ := strings.Cut(want, " | ")
 			out := call("propose_persona", map[string]any{"name": name, "avatar_prompt": avatar})
 			reply = fmt.Sprintf("Proposed %s (error=%v)", name, out["error"])
+		}
+		text(reply)
+		result(false, reply)
+		return
+	}
+	// chat-video: "video: <title>" renders a tiny video through the video
+	// tools, as FAKE_VIDEO_STEP says: ok (default; stills, render, finish),
+	// fail (fail_video at encode), unfinished (ends at render) or empty
+	// (finishes without writing the file).
+	if os.Getenv("FAKE_HARNESS_MODE") == "chat-video" {
+		reply := "Chat reply: " + prompt
+		if title, ok := strings.CutPrefix(prompt, "video: "); ok {
+			title, _, _ = strings.Cut(title, "\n\n(Vesper:")
+			reply = fakeVideo(call, title, os.Getenv("FAKE_VIDEO_STEP"))
 		}
 		text(reply)
 		result(false, reply)

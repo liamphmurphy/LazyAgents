@@ -37,14 +37,16 @@ SELECT * FROM library_items WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 
 -- name: DeleteLibraryItem :one
 -- Removes one of the caller's items. orphaned says no chat attachment,
--- workflow image or other item still uses its object, so the caller may delete it.
+-- workflow image, chat video or other item still uses its object, so the
+-- caller may delete it. A video's poster belongs to the item alone.
 WITH d AS (
   DELETE FROM library_items WHERE library_items.id = sqlc.arg(id) AND library_items.workspace_id = sqlc.arg(workspace_id) AND library_items.user_id = sqlc.arg(user_id)
-  RETURNING blob_key
+  RETURNING blob_key, poster_key
 )
-SELECT d.blob_key,
+SELECT d.blob_key, d.poster_key,
   (NOT EXISTS (SELECT 1 FROM chat_attachments a WHERE a.blob_key = d.blob_key)
    AND NOT EXISTS (SELECT 1 FROM workflow_step_images i WHERE i.blob_key = d.blob_key)
+   AND NOT EXISTS (SELECT 1 FROM chat_video_jobs v WHERE v.output_blob_key = d.blob_key)
    AND NOT EXISTS (SELECT 1 FROM library_items o WHERE o.blob_key = d.blob_key AND o.id <> sqlc.arg(id)))::boolean AS orphaned
 FROM d;
 
