@@ -52,7 +52,7 @@ async function offer(page: Page, state: State) {
   const mock = await installChatApi(page, { replyDelayMs: 10 });
   await serve(page, state);
   await page.goto("/chat");
-  const box = page.getByRole("textbox", { name: "Message" });
+  const box = page.getByRole("combobox", { name: "Message" });
   await box.fill("dispatch: fix the payout bug");
   await box.press("Enter");
   const card = page.getByTestId("dispatch-card");

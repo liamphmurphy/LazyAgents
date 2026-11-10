@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useChat, useChats, useChatSearch, useCreateChat, useDeleteChat, useUpdateChat } from "@/lib/api/hooks";
-import { usePersonas } from "@/lib/api/persona-hooks";
 import { chatTitle, groupByDay, newestChat } from "@/lib/chat-ui";
 import { shortAgo } from "@/lib/format";
 import { cx } from "@/lib/cx";
@@ -20,29 +19,28 @@ import { PersonaAvatar, PersonaAvatarButton, PersonaStrip, personaLook, usePerso
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
-/** Starts a conversation with the persona picked in the menu, or the default when it shows the default or all personas. */
+/**
+ * Opens the welcome, where the chat is only made with its first message. The persona picked in
+ * the menu is preselected; under All, the open conversation's; otherwise the welcome's default.
+ */
 export function useNewConversation(id?: string) {
   const router = useRouter();
   const current = useChat(id);
-  const personas = usePersonas();
   const filter = usePersonaFilter();
-  const create = useCreateChat();
   const health = useHarnessHealth();
   const noHarness = !!health && !health.ready;
   function start() {
-    const persona_id = filter.value !== "default" && filter.value !== "all" ? filter.value : personas.data?.default_persona_id;
-    // An empty current conversation with that persona is already new.
-    if (id && current.data?.message_count === 0 && current.data.persona?.id === persona_id) return;
-    create.mutate(persona_id ? { persona_id } : {}, { onSuccess: (c) => router.push(`/chat/${c.id}`) });
+    const persona = filter.value === "all" ? current.data?.persona?.id : filter.value === "default" ? filter.defaultId : filter.value;
+    router.push(persona ? `/chat?new&persona=${encodeURIComponent(persona)}` : "/chat?new");
   }
-  return { start, disabled: noHarness || create.isPending, error: create.isError ? errorText(create.error) : undefined };
+  return { start, disabled: noHarness };
 }
 
-/** New chat: an icon on the rail, the menu's first button otherwise. Its error floats beside it, since the menu has no room to reflow. */
+/** New chat: an icon on the rail, the menu's first button otherwise. */
 export function NewConversationButton({ id, rail }: { id?: string; rail?: boolean }) {
   const conversation = useNewConversation(id);
   return (
-    <div className={cx("relative", rail ? "flex-none" : "min-w-0 flex-1")}>
+    <div className={cx(rail ? "flex-none" : "min-w-0 flex-1")}>
       <button
         type="button"
         aria-label={rail ? "New chat" : undefined}
@@ -59,11 +57,6 @@ export function NewConversationButton({ id, rail }: { id?: string; rail?: boolea
         <Icon name="plus" size={15} strokeWidth={1.7} />
         {!rail && "New chat"}
       </button>
-      {conversation.error && (
-        <p role="alert" className={cx("absolute z-40 w-56 rounded-md border border-border-float bg-surface-raised p-2 text-xs text-pill-blocked-fg shadow-lg", rail ? "left-full top-0 ml-2" : "right-0 top-full mt-1")}>
-          {conversation.error}
-        </p>
-      )}
     </div>
   );
 }

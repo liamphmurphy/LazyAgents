@@ -72,8 +72,8 @@ async function open(page: Page, initial: Comment[] = [], card = DOC) {
     return json({ ...summary(SVG, "svg", "Run screen", 1), viewing_seq: 1, body: svgBody, versions: versions(1) });
   });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill(`canvas: ${card}`);
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill(`canvas: ${card}`);
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   return calls;
 }
 
@@ -357,7 +357,7 @@ test("a failing canvas request doesn't hold up the composer", async ({ page }) =
   await installChatApi(page, { replyDelayMs: 10 });
   await page.route(/\/api\/v1\/chats\/[^/]+\/canvases$/, (route) => route.fulfill({ status: 500, contentType: "application/json", body: '{"code":"internal","message":"boom"}' }));
   await page.goto("/chat?project=WEB");
-  const composer = page.getByRole("combobox", { name: "Message" }).or(page.getByRole("textbox", { name: "Message" })).first();
+  const composer = page.getByRole("combobox", { name: "Message" }).or(page.getByRole("combobox", { name: "Message" })).first();
   await composer.fill("hello");
   await composer.press("Enter");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: hello");
@@ -368,8 +368,8 @@ test("a fence naming an unknown canvas stays code", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   await page.route(/\/api\/v1\/chats\/[^/]+\/canvases$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"canvases":[]}' }));
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill(`canvas: ${DOC}`);
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill(`canvas: ${DOC}`);
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page.getByTestId("assistant-message")).toContainText(DOC);
   await expect(page.getByTestId("canvas-card")).toHaveCount(0);
 });

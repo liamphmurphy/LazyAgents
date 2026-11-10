@@ -506,6 +506,8 @@
 .motion-pop, .motion-pop-child svg { animation: motion-pop 220ms var(--motion-spring) both; }
 .motion-rise { animation: motion-rise var(--motion-base) var(--motion-ease) both; }
 .motion-page { animation: motion-fade-in var(--motion-fast) ease-out; }
+/* Re-keyed content arriving from a side: --slide-from is 1 (from the right) or -1 (from the left). */
+.motion-slide { animation: motion-slide var(--motion-slow) var(--motion-ease) both; }
 
 .motion-collapse {
   display: grid;
@@ -545,6 +547,7 @@
 @keyframes motion-float-in { from { opacity: 0; transform: scale(0.97); } }
 @keyframes motion-pop { from { opacity: 0; transform: scale(0.4); } }
 @keyframes motion-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes motion-slide { from { opacity: 0; transform: translateX(calc(var(--slide-from, 0) * 32px)) scale(0.94); } }
 
 /* Short rather than none: Radix and Collapse wait for their animations to end before unmounting. */
 @media (prefers-reduced-motion: reduce) {
@@ -555,6 +558,7 @@
   .motion-pop,
   .motion-pop-child svg,
   .motion-rise,
+  .motion-slide,
   .motion-page { animation-duration: 1ms !important; animation-delay: 0ms !important; }
   .motion-collapse,
   .motion-details::details-content { transition-duration: 1ms !important; }

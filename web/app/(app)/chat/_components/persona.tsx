@@ -8,10 +8,9 @@ import { usePersonaDock } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { DOCK_STATE_LABEL, dockEntries, type DockState } from "@/lib/persona-dock";
-import { STRIP_PERSONAS, repoShortName, splitPersonaStrip } from "@/lib/persona-ui";
+import { STRIP_PERSONAS, splitPersonaStrip } from "@/lib/persona-ui";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
-import { composerPill } from "./reply-tools";
 
 // Assistant personas in the Assistant view only (ADR: Assistant personas). Ticket,
 // epic and run views keep their agent identity and never render these.
@@ -57,42 +56,6 @@ export function CapabilityBadges({ capabilities, className }: { capabilities?: S
         </span>
       ))}
     </span>
-  );
-}
-
-/** Which of the persona's repositories a new conversation works in: a pill that opens upwards, like the persona's. */
-export function RepoSelect({ repos, value, onChange, disabled }: { repos: string[]; value: string; onChange: (url: string) => void; disabled?: boolean }) {
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          disabled={disabled}
-          aria-label={`Repository for this conversation: ${repoShortName(value)}`}
-          title={value}
-          className={composerPill()}
-        >
-          <Icon name="branch" size={13} className="flex-none" />
-          <span className="min-w-0 max-w-[220px] truncate font-mono text-xs text-fg">{repoShortName(value)}</span>
-          <Icon name="chev" size={12} strokeWidth={1.6} className="flex-none text-fg-tertiary" />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" side="top" sideOffset={6} className={cx(floatPanel, "w-[300px]")}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">Repository for this conversation</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
-            {repos.map((r) => (
-              <DropdownMenu.RadioItem key={r} value={r} title={r} className={item}>
-                <Icon name="branch" size={13} className="flex-none text-fg-tertiary" />
-                <span className="min-w-0 truncate font-mono text-xs">{repoShortName(r)}</span>
-                <span className="ml-auto" />
-                <Check on={r === value} />
-              </DropdownMenu.RadioItem>
-            ))}
-          </DropdownMenu.RadioGroup>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
   );
 }
 
@@ -423,13 +386,27 @@ export function PersonaCarousel({
   disabled?: boolean;
 }) {
   const index = ordered.findIndex((p) => p.id === current.id);
-  const step = (d: number) => ordered.length > 1 && onPick(ordered[(((index + d) % ordered.length) + ordered.length) % ordered.length].id);
-  const side = (p: Persona) => (
-    <button key={p.id} type="button" role="radio" aria-checked={false} aria-label={p.name} title={p.name} tabIndex={-1} disabled={disabled} onClick={() => onPick(p.id)}
-      className="rounded-full opacity-55 transition-opacity hover:opacity-100 disabled:cursor-not-allowed max-sm:hidden">
-      <PersonaAvatar persona={p} size={40} />
-    </button>
-  );
+  // Which side the picked persona came from, so it slides in from there. 0 until the first step: no motion on load.
+  const [from, setFrom] = useState<-1 | 0 | 1>(0);
+  const pick = (id: string, d: -1 | 1) => {
+    setFrom(d);
+    onPick(id);
+  };
+  const step = (d: -1 | 1) => ordered.length > 1 && pick(ordered[(((index + d) % ordered.length) + ordered.length) % ordered.length].id, d);
+  // The moving parts are keyed by the picked persona: each step remounts them, which replays the slide.
+  const slide = from ? "motion-slide" : undefined;
+  const slideFrom = { "--slide-from": from } as CSSProperties;
+  const sides = (ps: Persona[], d: -1 | 1) =>
+    ps.length > 0 && (
+      <span key={`${d}-${current.id}`} style={slideFrom} className={cx("flex items-center gap-4 max-sm:hidden", slide)}>
+        {ps.map((p) => (
+          <button key={p.id} type="button" role="radio" aria-checked={false} aria-label={p.name} title={p.name} tabIndex={-1} disabled={disabled} onClick={() => pick(p.id, d)}
+            className="rounded-full opacity-55 transition-opacity hover:opacity-100 disabled:cursor-not-allowed">
+            <PersonaAvatar persona={p} size={40} />
+          </button>
+        ))}
+      </span>
+    );
   const arrow = (d: -1 | 1) => (
     <button type="button" aria-label={d < 0 ? "Previous persona" : "Next persona"} disabled={disabled} onClick={() => step(d)}
       className="grid size-8 flex-none place-items-center rounded-full text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-not-allowed">
@@ -440,7 +417,7 @@ export function PersonaCarousel({
   // A radio group: the picked persona holds focus and the arrow keys step through the rest.
   return (
     <div role="radiogroup" aria-label="Who to talk to" className="flex items-center justify-center gap-4">
-      {left.map(side)}
+      {sides(left, -1)}
       {many && arrow(-1)}
       <button
         type="button"
@@ -454,10 +431,13 @@ export function PersonaCarousel({
         }}
         className="cursor-default rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
       >
-        <PersonaPortrait persona={current} />
+        {/* The button stays mounted so it keeps focus while the arrow keys step. */}
+        <span key={current.id ?? ""} style={slideFrom} className={cx("block", slide)}>
+          <PersonaPortrait persona={current} />
+        </span>
       </button>
       {many && arrow(1)}
-      {right.map(side)}
+      {sides(right, 1)}
     </div>
   );
 }

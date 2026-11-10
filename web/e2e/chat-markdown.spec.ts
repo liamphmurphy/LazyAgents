@@ -6,8 +6,8 @@ import { installChatApi } from "./mock-chat-api";
 test("tables, task lists, strikethrough and quotes render", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("gfm: sample");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("gfm: sample");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
 
   const table = page.getByRole("table");
   await expect(table.getByRole("columnheader", { name: "Option" })).toBeVisible();

@@ -6,7 +6,7 @@ test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("laz
 
 // Search, edit and retry, copying, selection quotes and following new replies.
 
-const box = (page: Page) => page.getByRole("combobox", { name: "Message" }).or(page.getByRole("textbox", { name: "Message" })).first();
+const box = (page: Page) => page.getByRole("combobox", { name: "Message" }).or(page.getByRole("combobox", { name: "Message" })).first();
 
 async function say(page: Page, text: string) {
   await box(page).fill(text);

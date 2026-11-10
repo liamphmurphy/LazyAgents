@@ -9,8 +9,8 @@ const JWT = `${b64({ alg: "HS256" })}.${b64({ sub: "liam", exp: 1794700800 })}.c
 
 async function openChat(page: Page) {
   await page.goto("/chat");
-  await page.getByRole("textbox", { name: "Message" }).fill("Pull last week's orders from the Acme API");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("Pull last week's orders from the Acme API");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
 }
 

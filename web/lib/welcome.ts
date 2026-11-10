@@ -96,3 +96,23 @@ export function pickUpCards(
   }
   return out;
 }
+
+type CatalogGroup<H extends string> = { harness: H; available: boolean; models: readonly { id: string; default: boolean }[] };
+type CatalogAgent = { kind: string; model: string };
+
+/**
+ * The harness and model a chat started from the welcome gets when the person doesn't pick one,
+ * for the model picker to show. The server starts every chat on the Personal Assistant's model;
+ * before its first chat there is none yet, and it takes a main agent's (the first listed, an
+ * approximation of the oldest). The harness is the catalog's group listing that model, else the
+ * first available harness's default.
+ */
+export function newChatSelection<H extends string>(groups: readonly CatalogGroup<H>[] | undefined, agents: readonly CatalogAgent[]): { harness: H; model: string } | undefined {
+  if (!groups?.length) return undefined;
+  const model = (agents.find((a) => a.kind === "assistant") ?? agents.find((a) => a.kind === "main"))?.model;
+  const owner = model ? groups.find((g) => g.models.some((m) => m.id === model)) : undefined;
+  if (owner && model) return { harness: owner.harness, model };
+  const g = groups.find((x) => x.available) ?? groups[0];
+  const m = g.models.find((x) => x.default) ?? g.models[0];
+  return m ? { harness: g.harness, model: m.id } : undefined;
+}

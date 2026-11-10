@@ -11,8 +11,8 @@ test("recommend fences become video, site and compact cards", async ({ page }) =
   });
   await installChatApi(page, { replyDelayMs: 10 });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("recommend: tonight");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("recommend: tonight");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
 
   const reply = page.getByTestId("assistant-message");
   const video = reply.locator('[data-kind="video"]');
@@ -46,8 +46,8 @@ test("recommend fences become video, site and compact cards", async ({ page }) =
 async function openReply(page: import("@playwright/test").Page) {
   const mock = await installChatApi(page, { replyDelayMs: 10 });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("recommend: tonight");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("recommend: tonight");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page.locator('[data-kind="site"]')).toBeVisible();
   return mock;
 }

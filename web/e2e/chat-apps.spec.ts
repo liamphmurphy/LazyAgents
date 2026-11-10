@@ -6,8 +6,8 @@ import { installChatApi } from "./mock-chat-api";
 test("app fences run in a sandboxed, offline frame with a code view", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("app: a counter");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("app: a counter");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
 
   const fence = page.getByTestId("app-fence");
   const iframe = fence.locator("iframe");

@@ -6,8 +6,8 @@ import { installChatApi } from "./mock-chat-api";
 async function send(page: import("@playwright/test").Page, text: string) {
   await installChatApi(page, { replyDelayMs: 10 });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill(text);
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill(text);
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
 }
 
 test("svg fences render as an image, without running scripts", async ({ page }) => {

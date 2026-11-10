@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installChatApi } from "./mock-chat-api";
+import { installChatApi, openEmptyChat } from "./mock-chat-api";
 
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const notices = (page: Page) => page.getByTestId("memory-notice");
@@ -19,7 +19,7 @@ async function showActivity(page: Page) {
 
 async function openChat(page: Page) {
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
+  await openEmptyChat(page);
   await expect(composer(page)).toBeVisible();
 }
 

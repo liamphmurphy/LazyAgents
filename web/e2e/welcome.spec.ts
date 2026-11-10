@@ -30,7 +30,7 @@ test("the carousel picks who the first message goes to, by click or arrow keys",
   await page.getByRole("button", { name: "Previous persona" }).click();
   await expect(checked(page)).toHaveAccessibleName("Nova");
 
-  await page.getByRole("textbox", { name: "Message" }).fill("hi nova");
+  await page.getByRole("combobox", { name: "Message" }).fill("hi nova");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   expect(mock.created[0].persona_id).toBe(NOVA.id);
@@ -51,7 +51,7 @@ test("personalised starters fill the box without sending", async ({ page }) => {
   const starters = page.getByRole("list", { name: "Suggestions" }).getByRole("button");
   await expect(starters).toHaveText(["Plan chapter three", "Review this week’s spending", "Wind down"]);
   await starters.first().click();
-  await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("Help me plan chapter three of the novel");
+  await expect(page.getByRole("combobox", { name: "Message" })).toHaveValue("Help me plan chapter three of the novel");
   expect(mock.posted).toEqual([]);
 });
 

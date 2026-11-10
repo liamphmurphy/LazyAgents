@@ -7,8 +7,8 @@ async function open(page: Page) {
   const mock = await installChatApi(page, { replyDelayMs: 10 });
   await page.route(/youtube-nocookie/, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "ok" }));
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("rich: everything");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("rich: everything");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page.getByTestId("assistant-message")).toContainText("A claim");
   return mock;
 }
@@ -64,8 +64,8 @@ test("a choice sends one message, then records the pick", async ({ page }) => {
 test("a summary reply can be saved with its link", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("recommend: tonight");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("recommend: tonight");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await page.locator('[data-kind="site"]').getByRole("button", { name: "Summarize page" }).click();
   const summary = page.getByTestId("assistant-message").nth(1);
   const saves: unknown[] = [];

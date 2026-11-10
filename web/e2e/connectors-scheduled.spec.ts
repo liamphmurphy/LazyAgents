@@ -42,8 +42,8 @@ test("a scheduled task is created from the Scheduled page", async ({ page }) => 
 test("a connector tool waiting for approval shows in the chat", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [ATLAS] });
   await page.goto("/chat");
-  await page.getByRole("textbox", { name: "Message" }).fill("hello");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   mock.connectorApprovals.push({ id: "11111111-1111-4111-8111-111111111111", connector_id: "11111111-1111-4111-8111-111111111112", connector_name: "GitHub", tool: "create_issue", arguments: { title: "Fix it" }, created_at: new Date().toISOString() });
   const card = page.getByTestId("connector-approval");
