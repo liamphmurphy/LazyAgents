@@ -20,7 +20,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Personal",
     items: [
       { href: "/inbox", label: "Inbox", icon: "inbox", badge: "inbox" },
-      { href: "/", label: "Dashboard", icon: "dashboard" },
+      { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
       { href: "/library", label: "Library", icon: "library" },
       { href: "/workflows", label: "Workflows", icon: "graph" },
       { href: "/scheduled", label: "Scheduled", icon: "clock", badge: "scheduled" },
@@ -64,9 +64,9 @@ export type NavMode = "chat" | "work";
 /** Shown in both modes, so opening them leaves the mode alone. */
 const PINNED_ROUTES = ["/inbox"];
 /** Personal items Work keeps, above Project and Workspace. */
-const WORK_PERSONAL = [...PINNED_ROUTES, "/"];
-/** Everything else outside this list is Work. */
-const CHAT_ROUTES = ["/chat", "/spaces", "/customization", "/library", "/workflows", "/scheduled", "/learn", "/apps"];
+const WORK_PERSONAL = [...PINNED_ROUTES, "/dashboard"];
+/** Everything else outside this list is Work. The landing page (/) opens a chat. */
+const CHAT_ROUTES = ["/", "/chat", "/spaces", "/customization", "/library", "/workflows", "/scheduled", "/learn", "/apps"];
 
 /** The mode a page belongs to; undefined for the pinned pages. */
 export function routeMode(pathname: string): NavMode | undefined {

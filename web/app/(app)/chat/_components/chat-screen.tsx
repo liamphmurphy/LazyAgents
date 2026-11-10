@@ -38,9 +38,11 @@ function Welcome({ disabled }: { disabled: boolean }) {
   const boot = useBootstrap();
   const start = useStartChat();
   const personas = usePersonas();
-  // Undefined until picked: the chat gets the default persona.
+  // Undefined until picked: the chat gets the persona the link named (the landing page's most used), else the default.
   const [picked, setPicked] = useState<string>();
-  const personaId = picked ?? personas.data?.default_persona_id;
+  const linked = search.get("persona");
+  const linkedKnown = personas.data?.personas.some((p) => p.id === linked) ? linked! : undefined;
+  const personaId = picked ?? linkedKnown ?? personas.data?.default_persona_id;
   const fullPersona = personas.data?.personas.find((p) => p.id === personaId);
   const persona = personaLook(fullPersona);
   // A coding persona works in one of its repos: the first unless another is picked.
@@ -168,7 +170,8 @@ function Welcome({ disabled }: { disabled: boolean }) {
 /**
  * The Personal Assistant (replaces Chat): one conversation surface with no agent
  * picker; its history (rename, archive, restore, delete) is in the main menu's Chat mode.
- * /chat opens the newest conversation, or the first-time welcome; "New
+ * /chat opens the newest conversation, or the first-time welcome; /chat?new (the landing
+ * page, with ?persona=) always opens the welcome; "New
  * conversation" starts afresh. Memory and Personas open as right-hand panels from the main menu.
  */
 export function ChatScreen({ id }: { id?: string }) {
@@ -179,21 +182,22 @@ export function ChatScreen({ id }: { id?: string }) {
   const turnRunning = current.data?.state === "running";
   const health = useHarnessHealth();
   const noHarness = !!health && !health.ready;
-  // /chat resumes the newest conversation, unless a "Start chat" link brought context to attach.
-  const attaching = search.has("attach");
+  // /chat resumes the newest conversation, unless a "Start chat" link brought context to attach
+  // or the landing page asked for a new one (?new).
+  const fresh = search.has("attach") || search.has("new");
   // Resume the newest conversation with any persona, whatever the sidebar shows.
   const chats = useChats(false, "all");
   const newest = newestChat(chats.data?.chats);
   useEffect(() => {
-    if (id || attaching || !newest) return;
+    if (id || fresh || !newest) return;
     const q = new URLSearchParams(search.toString());
     q.delete("project"); // Old links; a chat carries its own project.
     const qs = q.toString();
     router.replace(qs ? `/chat/${newest.id}?${qs}` : `/chat/${newest.id}`);
-  }, [id, attaching, newest, router, search]);
+  }, [id, fresh, newest, router, search]);
 
   const conversation = useNewConversation(id);
-  const resolving = !id && !attaching && (!chats.data || !!newest);
+  const resolving = !id && !fresh && (!chats.data || !!newest);
   return (
     <div className="flex h-dvh flex-col">
       <TopBar crumbs={[{ label: "Assistant" }]} />
