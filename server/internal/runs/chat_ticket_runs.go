@@ -130,8 +130,13 @@ func reportChatTicketRun(ctx context.Context, q *store.Queries, chatID, runID uu
 	if err != nil {
 		return err
 	}
-	if run.State != "waiting" && run.State != key {
-		return nil // it moved on since the sweep looked; the next one sees where it is now
+	// It may have moved on since the sweep looked; the next sweep sees where it is now.
+	if run.State == "waiting" {
+		if !strings.HasPrefix(key, "needs:"+deref(run.WaitReason)+":") {
+			return nil
+		}
+	} else if run.State != key {
+		return nil
 	}
 	markTold := func() error {
 		return q.SetChatTicketRunReported(ctx, store.SetChatTicketRunReportedParams{ChatID: chatID, RunID: runID, Reported: key})
