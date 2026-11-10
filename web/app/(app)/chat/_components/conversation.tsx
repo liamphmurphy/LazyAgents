@@ -67,6 +67,7 @@ import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
 import { CommitEmailChip, CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
+import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
 
@@ -691,6 +692,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               )}
             </span>
           )}
+          {c.workspace_path && <WorkspaceFolderChip path={c.workspace_path} className="max-md:hidden @max-[720px]:hidden" />}
           <SecretsChip chatId={c.id} />
           {c.repo_url && c.commit_email && myEmails.length > 1 && (
             <CommitEmailChip email={c.commit_email} open={commitPickerOpen} onClick={() => setCommitPickerOpen((o) => !o)} />

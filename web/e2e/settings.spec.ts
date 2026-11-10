@@ -7,7 +7,7 @@ const SECRET = "sk-proj-super-secret-value-WXYZ";
 type Secret = { id: string; name: string; grants_scope?: string; created_at: string; updated_at: string; last_used_at?: string; project?: unknown };
 
 /** Secrets, projects and runner mocks on top of the shared API mock. */
-async function installSettingsApi(page: Page, opts: { runners?: boolean; secretsFail?: boolean; signIn?: boolean; noClaude?: boolean } = {}) {
+async function installSettingsApi(page: Page, opts: { runners?: boolean; secretsFail?: boolean; signIn?: boolean; noClaude?: boolean; hostDir?: string } = {}) {
   const api = await installChatApi(page, { codexAvailable: false });
   const secrets: Secret[] = [
     { id: "s1", name: "harness:anthropic", created_at: at, updated_at: at, last_used_at: at },
@@ -75,19 +75,29 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
     projectPuts.push(body);
     return route.fulfill({ json: { ...project, ...body, repo_url: "git@github.com:acme/payments.git", revision: 2 } });
   });
-  await page.route("**/api/v1/runner", (route) =>
-    route.fulfill({
-      json: opts.runners === false
-        ? { online: false, runners: [], slots: 0, busy: 0, live: 0, queued: 3 }
-        : { online: true, runners: [{ id: "mbp-4242", backend: "docker", max_concurrent: 4, running: 2, version: "0.9.1", heartbeat_at: new Date().toISOString() }], slots: 4, busy: 2, live: 2, queued: 3 },
-    }),
-  );
+  let hostFolders = false;
+  const runnerPuts: Record<string, unknown>[] = [];
+  const runnerStatus = () =>
+    opts.runners === false
+      ? { online: false, runners: [], slots: 0, busy: 0, live: 0, queued: 3, host_folder_workspaces: hostFolders }
+      : {
+          online: true,
+          runners: [{ id: "mbp-4242", backend: "docker", max_concurrent: 4, running: 2, version: "0.9.1", heartbeat_at: new Date().toISOString(), ...(opts.hostDir ? { host_workspaces_dir: opts.hostDir } : {}) }],
+          slots: 4, busy: 2, live: 2, queued: 3, host_folder_workspaces: hostFolders,
+        };
+  await page.route("**/api/v1/runner", (route) => route.fulfill({ json: runnerStatus() }));
+  await page.route("**/api/v1/runner/settings", (route) => {
+    const body = route.request().postDataJSON() as { host_folder_workspaces: boolean };
+    runnerPuts.push(body);
+    hostFolders = body.host_folder_workspaces;
+    return route.fulfill({ json: runnerStatus() });
+  });
   // Like the server: Codex is available once harness:openai exists.
   await page.route("**/api/v1/chat-models", (route) => {
     modelFetches++;
     return route.fulfill({ json: catalog(secrets.some((s) => s.name === "harness:openai")) });
   });
-  return { api, puts, projectPuts, signIns, models: () => modelFetches };
+  return { api, puts, projectPuts, runnerPuts, signIns, models: () => modelFetches };
 }
 
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -173,6 +183,30 @@ test("runner backends show current values and what they control", async ({ page 
   await expect(runners).toContainText("RUNNER_MAX_CONCURRENT = 4");
   await expect(runners).toContainText("How many runs one runner executes at once");
   await expect(runners).toContainText("2 of 4");
+});
+
+test("host folders can only be turned on when a runner has a folder", async ({ page }) => {
+  await installSettingsApi(page);
+  await page.goto("/settings#runners");
+  const runners = page.locator("#runners");
+  const toggle = runners.getByRole("switch", { name: "Keep new checkouts in a folder on this machine" });
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await expect(toggle).toBeDisabled();
+  await expect(runners).toContainText("Set VESPER_WORKSPACES_DIR to an absolute path");
+});
+
+test("host folders turn on for new runs and show where checkouts go", async ({ page }) => {
+  const mock = await installSettingsApi(page, { hostDir: "/Users/me/vesper/workspaces" });
+  await page.goto("/settings#runners");
+  const runners = page.locator("#runners");
+  await expect(runners).toContainText("/Users/me/vesper/workspaces/<run>");
+  const toggle = runners.getByRole("switch", { name: "Keep new checkouts in a folder on this machine" });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  expect(mock.runnerPuts).toEqual([{ host_folder_workspaces: true }]);
+  // A reload reads it back from the server.
+  await page.reload();
+  await expect(runners.getByRole("switch", { name: "Keep new checkouts in a folder on this machine" })).toHaveAttribute("aria-checked", "true");
 });
 
 test("sections show empty and error states independently", async ({ page }) => {

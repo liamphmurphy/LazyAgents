@@ -665,6 +665,15 @@ export function useRunnerStatus() {
   });
 }
 
+/** Turn host-folder workspaces on or off; runs started afterwards follow it. */
+export function useUpdateRunnerSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["RunnerSettings"]) => unwrap(api.PUT("/runner/settings", { body })),
+    onSuccess: (status) => qc.setQueryData(["runner"], status),
+  });
+}
+
 const RUN_DONE = ["completed", "failed", "cancelled"];
 
 /**

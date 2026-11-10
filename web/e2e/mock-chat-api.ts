@@ -35,7 +35,7 @@ type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
   id: string; project?: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
-  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branches?: string[]; commit_email?: string;
+  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branches?: string[]; commit_email?: string; workspace_path?: string;
   effort?: Effort;
 };
 type Message = {

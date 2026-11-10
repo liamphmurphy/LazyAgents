@@ -24,6 +24,7 @@ import { Flag, MonoChip, SmallPill } from "@/components/domain/labels";
 import { RunCostChip } from "@/components/domain/cost-chip";
 import { RUN_ENDED, RUN_STATE as STATE, StatusPill } from "@/components/domain/run-status";
 import { TopBar, type Crumb } from "@/components/shell/topbar";
+import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { ActionBox, RunRail, confirmCancel } from "./run-panels";
 import { CostValue, SimpleHeader, SimpleView } from "./run-simple";
 import { RunGraphView } from "./run-graph-view";
@@ -493,6 +494,7 @@ export function RunLogScreen({ id }: { id: string }) {
         crumbs={crumbs}
         actions={
           <>
+            {run.workspace_path && <WorkspaceFolderChip path={run.workspace_path} className="max-md:hidden" />}
             <Segmented
               label="Run view"
               value={mode}

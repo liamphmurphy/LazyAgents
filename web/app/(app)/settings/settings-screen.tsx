@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useBootstrap, useRunnerStatus, useSecrets } from "@/lib/api/hooks";
+import { useBootstrap, useRunnerStatus, useSecrets, useUpdateRunnerSettings } from "@/lib/api/hooks";
+import type { Schemas } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
 import { ago } from "@/lib/format";
 import { missingConnections } from "@/lib/settings";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Toggle } from "@/components/ui/controls";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ThemeSwitch } from "@/components/shell/theme";
 import { ProjectsSection } from "./projects/projects-screen";
@@ -172,6 +174,39 @@ function WorkspaceSection() {
   );
 }
 
+/**
+ * Host-folder workspaces: the folder is runner configuration
+ * (RUNNER_HOST_WORKSPACES_DIR, reported by heartbeat); only on/off is set here.
+ */
+function HostFoldersSetting({ status }: { status: Schemas["RunnerStatus"] }) {
+  const update = useUpdateRunnerSettings();
+  const dirs = [...new Set(status.runners.flatMap((x) => (x.host_workspaces_dir ? [x.host_workspaces_dir] : [])))];
+  const on = status.host_folder_workspaces;
+  return (
+    <>
+      <Toggle
+        checked={on}
+        // Turning it off always works; turning it on needs a runner with a folder.
+        disabled={update.isPending || (!on && dirs.length === 0)}
+        onChange={(host_folder_workspaces) => update.mutate({ host_folder_workspaces })}
+        label="Keep new checkouts in a folder on this machine"
+      />
+      <span className="mt-1 block text-[11.5px] text-fg-tertiary">
+        {dirs.length > 0 ? (
+          <>
+            New runs check out into <code className="font-mono">{dirs.join(", ")}/&lt;run&gt;</code>, so you can open the code in your own editor while the agent works. Runs that already have a workspace keep it where it is.
+          </>
+        ) : (
+          <>
+            No online runner has a folder for this. Set <code className="font-mono">VESPER_WORKSPACES_DIR</code> to an absolute path and restart the runner (see README, “Open a run’s code”).
+          </>
+        )}
+      </span>
+      {update.isError && <span className="mt-1 block text-[11.5px] text-pill-blocked-fg">Couldn’t save: {update.error.message}</span>}
+    </>
+  );
+}
+
 function RunnerSection() {
   const q = useRunnerStatus();
   if (q.isError) {
@@ -248,6 +283,9 @@ function RunnerSection() {
             <span className="mt-1 block text-[11.5px] text-fg-tertiary">
               How many runs one runner executes at once (1–32). Extra dispatched runs wait in the queue until a slot frees up.
             </span>
+          </Row>
+          <Row label="Host folders">
+            <HostFoldersSetting status={r} />
           </Row>
           <Row label="Per agent">
             <span className="text-[12.5px] text-fg-secondary">
