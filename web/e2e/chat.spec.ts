@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { catalog, installChatApi } from "./mock-chat-api";
+import { catalog, installChatApi, persona } from "./mock-chat-api";
 
 // History lives in the expanded menu.
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -129,6 +129,25 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
   await page.getByRole("menuitem", { name: /Codex gpt-5-mini/ }).click();
   await expect(effort(page)).toHaveCount(0);
   expect(mock.unhandled).toEqual([]);
+});
+
+test("Send stays at the composer's bottom right when the options wrap", async ({ page }) => {
+  // A persona adds its switcher to a new chat's options, which is what pushes them past one line.
+  await installChatApi(page, { personas: [persona(1, { name: "VesperBot", tone: "direct", color: "#4fd1c5", is_default: true })] });
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await composer(page).fill("hello");
+  // Whether Send lands alone on a line depends on how much room the last line has left, so sweep widths.
+  for (let width = 760; width <= 1400; width += 20) {
+    await page.setViewportSize({ width, height: 800 });
+    const form = await composer(page).locator("xpath=ancestor::form").boundingBox();
+    const sendBox = await page.getByRole("button", { name: "Send" }).boundingBox();
+    const last = await effort(page).boundingBox();
+    expect(form && sendBox && last, `boxes at ${width}px`).toBeTruthy();
+    // Right-aligned, and level with the last row of options rather than on a line of its own below them.
+    expect(form!.x + form!.width - (sendBox!.x + sendBox!.width), `right edge at ${width}px`).toBeLessThan(24);
+    expect(sendBox!.y, `row at ${width}px`).toBeLessThan(last!.y + last!.height);
+  }
 });
 
 test("stop ends a running reply", async ({ page }) => {

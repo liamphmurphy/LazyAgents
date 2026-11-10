@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useLinkSuggest } from "@/lib/api/hooks";
 import { chipFromTarget, type Chip } from "@/lib/chat-context";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { SuggestionList } from "@/components/domain/link-editor";
 
@@ -63,7 +63,7 @@ export function SentChips({ chips }: { chips: Chip[] }) {
 }
 
 /** "Add context": the same suggestions as [[ in the composer, in a popover. */
-export function AddContext({ onPick, onClosed, disabled }: { onPick: (t: LinkTarget) => void; onClosed?: () => void; disabled?: boolean }) {
+export function AddContext({ onPick, onClosed, disabled, compact }: { onPick: (t: LinkTarget) => void; onClosed?: () => void; disabled?: boolean; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
@@ -87,9 +87,13 @@ export function AddContext({ onPick, onClosed, disabled }: { onPick: (t: LinkTar
       }}
     >
       <Popover.Trigger asChild>
-        <Button variant="outline" icon="plus" disabled={disabled}>
-          Add context
-        </Button>
+        {compact ? (
+          <IconButton icon="plus" label="Add context" size={32} disabled={disabled} className="disabled:opacity-50" />
+        ) : (
+          <Button variant="outline" icon="plus" disabled={disabled}>
+            Add context
+          </Button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

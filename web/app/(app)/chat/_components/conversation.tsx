@@ -41,7 +41,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
+import { AskAboutSelection, composerFrame, composerInput, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { VideoCards, VideoRendererNotes } from "@/components/domain/video-card";
@@ -308,6 +308,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const log = useRef<HTMLOListElement>(null);
   // Following the newest message; off once the person scrolls up, or arrives at a search hit.
   const pinned = useRef(!target);
+  // Dragging the scrollbar or touch-scrolling: only then does a scroll away from the end mean the person moved.
+  const dragging = useRef(false);
   const [newReply, setNewReply] = useState(false);
   // On for one message: asks for a research plan to approve.
   const [research, setResearch] = useState(false);
@@ -399,6 +401,20 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     const show = setTimeout(() => setNewReply(true), 0);
     return () => clearTimeout(show);
   }, [list?.length, running]); // eslint-disable-line react-hooks/exhaustive-deps -- only a new message or turn moves the view
+  // Replies keep growing after they land (a running turn's narration and steps, diagrams, apps,
+  // images) and trays above the composer shrink the view; stay at the end while pinned there.
+  const hasLog = !!list && (list.length > 0 || running);
+  useEffect(() => {
+    const view = scroller.current;
+    const content = log.current;
+    if (!view || !content) return;
+    const follow = new ResizeObserver(() => {
+      if (pinned.current) view.scrollTop = view.scrollHeight;
+    });
+    follow.observe(view);
+    follow.observe(content);
+    return () => follow.disconnect();
+  }, [hasLog]);
   const targetFound = !!target && !!list?.some((m) => m.id === target);
   useEffect(() => {
     if (!target || !targetFound) return;
@@ -743,11 +759,29 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           aria-label="Chat"
           hidden={tab !== "chat"}
           className="relative flex-1 overflow-y-auto px-6 py-5"
+          // Only the person's input lets go of the end. A scroll event alone can't tell: the one for our
+          // own scroll, or for the browser clamping it as content shrinks, may land after the content grew
+          // again, far from the end without anyone having moved.
+          onWheel={(e) => {
+            if (e.deltaY < 0) pinned.current = false;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowUp" || e.key === "PageUp" || e.key === "Home") pinned.current = false;
+          }}
+          onPointerDown={(e) => {
+            // On the panel itself rather than a message: that's the scrollbar.
+            if (e.target === e.currentTarget) dragging.current = true;
+          }}
+          onPointerUp={() => (dragging.current = false)}
+          onTouchStart={() => (dragging.current = true)}
+          onTouchEnd={() => (dragging.current = false)}
           onScroll={(e) => {
             const el = e.currentTarget;
             const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-            pinned.current = atEnd;
-            if (atEnd) setNewReply(false);
+            if (atEnd) {
+              pinned.current = true;
+              setNewReply(false);
+            } else if (dragging.current) pinned.current = false;
           }}
         >
           {messages.isError ? (
@@ -906,6 +940,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             >
               <AttachmentChips attachments={files} />
               <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
+              <div className={composerFrame}>
               <div className="relative">
                 {commandItems.length > 0 && (
                   <ul
@@ -960,6 +995,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   }}
                   mono={false}
                   aria-label="Message"
+                  className={composerInput}
                   rows={1}
                   value={text}
                   onChange={(v) => {
@@ -1028,13 +1064,15 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   }}
                 />
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              {/* The options wrap within their own column so Stop and Send never drop to a line of their own. */}
+              <div className="flex items-end gap-2">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
                 {fresh && c.persona && c.repo_url && (full?.repos.length ?? 0) > 1 && codesInRepos(full) && (
                   <RepoSelect repos={full!.repos} value={c.repo_url} onChange={(r) => switchPersona(c.persona!.id, r)} disabled={locked || create.isPending} />
                 )}
-                <AttachButton onFiles={files.add} disabled={locked} />
-                <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
+                <AttachButton onFiles={files.add} disabled={locked} compact />
+                <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} compact />
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                 {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked || running} />}
@@ -1044,7 +1082,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   onChange={(e) => setPickedEffort(e ?? "default")}
                   disabled={locked || running}
                 />
-                <span className="flex-1" />
+                </div>
+                <div className="flex flex-none items-center gap-2">
                 {running && (
                   <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
                     {stopping ? "Stopping…" : "Stop"}
@@ -1064,6 +1103,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 >
                   {running ? "Interrupt" : research ? "Plan it" : "Send"}
                 </Button>
+                </div>
+              </div>
               </div>
             </form>
             </>
