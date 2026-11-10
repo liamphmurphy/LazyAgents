@@ -26,23 +26,22 @@ import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflo
 import { ChatRunsPill, ChatTicketRunTray } from "@/components/domain/dispatch-cards";
 import { ActivityScene } from "./activity-scene";
 import { Tabs } from "@/components/ui/controls";
-import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
+import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
-import { CHAT_COMMANDS, commandMenu, literalBody, parseCommand } from "@/lib/chat-commands";
-import { codesInRepos, insertMention, mentionQuery, mentionSuggestions, repoShortName } from "@/lib/persona-ui";
+import { codesInRepos, repoShortName } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
-import { LinkEditor } from "@/components/domain/link-editor";
 import { ChatMarkdown } from "./chat-markdown";
 import { CodeChanges } from "./code-changes";
-import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
+import { SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, ComposerHints, composerFrame, composerInput, CopyButton, quoteForComposer, ResearchToggle, SendButton, TemporaryBadge, TemporaryToggle } from "./reply-tools";
+import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
+import { Composer, type CommandRun } from "./composer";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { VideoCards, VideoRendererNotes } from "@/components/domain/video-card";
 import { useChatVideos } from "@/lib/api/video-hooks";
@@ -54,7 +53,7 @@ import { timelineTime } from "@/lib/format";
 import { ModelEffortPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
-import { AttachButton, AttachmentChips, DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
+import { DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
@@ -312,15 +311,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // On for one message: asks for a research plan to approve.
   const [research, setResearch] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
-  // The @mention being typed in the composer, and which suggestion is highlighted.
-  const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
-  const [mentionActive, setMentionActive] = useState(0);
   const workflows = useWorkflows();
   const [startingWorkflow, setStartingWorkflow] = useState<Workflow | null>(null);
-  // The / command menu: which row is highlighted, whether Esc closed it, and why the last command didn't run.
-  const [commandActive, setCommandActive] = useState(0);
-  const [commandDismissed, setCommandDismissed] = useState(false);
-  const [commandError, setCommandError] = useState<string | null>(null);
   const setCommitEmail = useSetChatCommitEmail();
   const [commitPickerOpen, setCommitPickerOpen] = useState(false);
 
@@ -373,10 +365,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   }, [search, router, id]);
   // Refs only carry ids; remember what the chips were called so sent messages can show it.
   const [names, setNames] = useState(() => new Map<string, string>());
-  const attach = (t: Parameters<typeof chipFromTarget>[0]) => {
-    const chip = chipFromTarget(t);
-    if (chip) setChips((cs) => addChip(cs, chip));
-  };
 
   // Refetch the transcript when the chat changes (also covers polling without SSE).
   const stamp = c && `${c.state}:${c.message_count}:${c.revision}`;
@@ -563,25 +551,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     }
     return { newest, lastMessage: (canvasId: string) => last.get(canvasId), live: running, readOnly: c.archived, agent: (c.speaker ?? c.persona)?.name ?? "Assistant" };
   })();
-  const menu = commandDismissed ? null : commandMenu(text);
-  const suggestions = mention && !menu ? mentionSuggestions(personas.data?.personas ?? [], mention.query) : [];
-  const syncMention = (value: string) => {
-    const el = area.current;
-    const next = el ? mentionQuery(value, el.selectionStart) : null;
-    if (next?.query !== mention?.query) setMentionActive(0);
-    setMention(next);
-  };
-  const pickMention = (name: string) => {
-    const el = area.current;
-    if (!el || !mention) return;
-    const next = insertMention(text, mention.start, el.selectionStart, name);
-    setText(next.text);
-    setMention(null);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(next.caret, next.caret);
-    });
-  };
   // Restoring a chat opened from the Archived list shows it under Active again.
   const restored = () => {
     if (!search.has("view")) return;
@@ -594,8 +563,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     else setPicked(s);
   };
 
-  // ---- / commands: what each does, and the composer's handling of them ----
-  type CommandRun = () => string | void; // a returned string is why it couldn't run
+  // ---- / commands: what each does; the Composer parses and runs them ----
   const startInstead = (personaId: string, repo?: string): string | void => {
     if (create.isPending || send.isPending) return "Wait for the current message to finish sending.";
     replaceChat(personaId, repo, "", false);
@@ -629,41 +597,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
       default:
         return [];
     }
-  };
-  const runCommand = (run: CommandRun) => {
-    const problem = run();
-    setCommandError(problem || null);
-    if (!problem) setText("");
-  };
-  const commandItems: { name: string; label: string; hint?: string; choose: () => void }[] = !menu
-    ? []
-    : menu.stage === "arg"
-      ? mentionSuggestions(commandOptions(menu.name), menu.query, 8).map((o) => ({ name: o.name, label: o.name, choose: () => runCommand(o.run) }))
-      : mentionSuggestions(CHAT_COMMANDS, menu.query, CHAT_COMMANDS.length).map((cmd) => ({
-          name: cmd.name,
-          label: `/${cmd.name}`,
-          hint: cmd.hint,
-          choose: () => {
-            setCommandActive(0);
-            if (cmd.args) setText(`/${cmd.name} `);
-            else runCommand(plainCommands[cmd.name]);
-          },
-        }));
-  // A finished command, typed in full or with the menu closed.
-  const runTyped = ({ name, arg }: { name: string; arg: string }) => {
-    const command = CHAT_COMMANDS.find((x) => x.name === name);
-    if (!command) return setCommandError(`Unknown command /${name}. Start with // to send it as a message.`);
-    if (!command.args) return arg ? setCommandError(`/${name} doesn’t take anything after it.`) : runCommand(plainCommands[name]);
-    if (name === "workflow" && published.length === 0) return setCommandError("You have no published workflows yet. Build one under Workflows.");
-    if (!arg) return setCommandError(`Say which ${command.args}: /${name} <${command.args}>`);
-    const match = mentionSuggestions(commandOptions(name), arg)[0];
-    if (!match) return setCommandError(`No ${command.args} matches “${arg}”.`);
-    runCommand(match.run);
-  };
-  const submitComposer = () => {
-    const command = parseCommand(text);
-    if (command) runTyped(command);
-    else submit(literalBody(text));
   };
   return (
     <Tooltip.Provider delayDuration={200}>
@@ -888,11 +821,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 : errorText(actionError)}
             </p>
           )}
-          {commandError && (
-            <p role="alert" data-testid="command-error" className="text-[12.5px] text-pill-blocked-fg">
-              {commandError}
-            </p>
-          )}
           {c.archived ? (
             <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
               <p className="flex-1 text-[13px] text-fg-secondary">This chat is archived. Restore it to continue.</p>
@@ -924,183 +852,62 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 <WorkflowStartCard workflow={startingWorkflow} chatId={c.id} onDone={() => setStartingWorkflow(null)} onDismiss={() => setStartingWorkflow(null)} />
               </div>
             )}
-            <form
-              data-dock-avoid=""
-              onPaste={files.onPaste}
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitComposer();
+            <Composer
+              text={text}
+              onText={setText}
+              inputRef={area}
+              files={files}
+              chips={chips}
+              onChips={setChips}
+              onSubmit={submit}
+              commands={{ plain: plainCommands, options: commandOptions, hasWorkflows: published.length > 0 }}
+              personas={personas.data?.personas ?? []}
+              inChat={(personaId) => participants.some((x) => x.id === personaId)}
+              disabled={locked}
+              placeholder={
+                locked
+                  ? "Sending…"
+                  : running
+                    ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to steer it.`
+                    : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}${c.space ? ` in ${c.space.name}` : ""}…`
+              }
+              options={
+                <>
+                  {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
+                  <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
+                  {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
+                </>
+              }
+              actions={
+                <>
+                  {selection && (
+                    <ModelEffortPicker
+                      groups={groups}
+                      value={selection}
+                      onChange={pick}
+                      efforts={offered.efforts}
+                      effort={effort}
+                      onEffort={(e) => setPickedEffort(e ?? "default")}
+                      disabled={locked || running}
+                    />
+                  )}
+                  {running && (
+                    <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
+                      {stopping ? "Stopping…" : "Stop"}
+                    </Button>
+                  )}
+                </>
+              }
+              send={{
+                label: running ? "Interrupt" : research ? "Plan it" : "Send",
+                disabled: locked || !!unavailable || files.pending || !text.trim() || commitPickRequired,
+                title: commitPickRequired
+                  ? "Pick which email commits use first"
+                  : running
+                    ? "Stop the reply and answer this together with your last message"
+                    : undefined,
               }}
-              className="flex flex-col gap-2"
-            >
-              <AttachmentChips attachments={files} />
-              <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
-              <div className={composerFrame}>
-              <div className="relative">
-                {commandItems.length > 0 && (
-                  <ul
-                    role="listbox"
-                    aria-label="Commands"
-                    data-testid="command-suggestions"
-                    className="absolute bottom-full left-2 z-10 mb-1 flex min-w-[280px] flex-col rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
-                  >
-                    {commandItems.map((item, i) => (
-                      <li key={item.name} role="option" aria-selected={i === commandActive}>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onMouseEnter={() => setCommandActive(i)}
-                          onClick={item.choose}
-                          className={cx("flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[13px]", i === commandActive && "bg-selected")}
-                        >
-                          <span className="flex-none">{item.label}</span>
-                          {item.hint && <span className="ml-auto truncate text-xs text-fg-tertiary">{item.hint}</span>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {suggestions.length > 0 && (
-                  <ul
-                    role="listbox"
-                    aria-label="Mention a persona"
-                    data-testid="mention-suggestions"
-                    className="absolute bottom-full left-2 z-10 mb-1 flex min-w-[200px] flex-col rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
-                  >
-                    {suggestions.map((p, i) => (
-                      <li key={p.id} role="option" aria-selected={i === mentionActive}>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onMouseEnter={() => setMentionActive(i)}
-                          onClick={() => pickMention(p.name)}
-                          className={cx("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]", i === mentionActive && "bg-selected")}
-                        >
-                          <PersonaAvatar persona={personaLook(p)} size={18} />
-                          <PersonaName persona={personaLook(p)} />
-                          {participants.some((x) => x.id === p.id) && <span className="ml-auto text-xs text-fg-tertiary">in chat</span>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <LinkEditor
-                  inputRef={(el) => {
-                    area.current = el;
-                  }}
-                  mono={false}
-                  aria-label="Message"
-                  className={composerInput}
-                  rows={1}
-                  value={text}
-                  onChange={(v) => {
-                    setText(v);
-                    syncMention(v);
-                    setCommandActive(0);
-                    setCommandDismissed(false);
-                    setCommandError(null);
-                  }}
-                  onBlur={() =>
-                    setTimeout(() => {
-                      if (document.activeElement === area.current) return;
-                      setMention(null);
-                      setCommandDismissed(true);
-                    }, 120)
-                  }
-                  onPick={attach}
-                  accept={acceptTarget}
-                  disabled={locked}
-                  placeholder={
-                    locked
-                      ? "Sending…"
-                      : running
-                        ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to steer it.`
-                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}${c.space ? ` in ${c.space.name}` : ""}…`
-                  }
-                  onKeyDown={(e) => {
-                    if (commandItems.length > 0) {
-                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                        e.preventDefault();
-                        setCommandActive((a) => (a + (e.key === "ArrowDown" ? 1 : commandItems.length - 1)) % commandItems.length);
-                        return;
-                      }
-                      if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        commandItems[Math.min(commandActive, commandItems.length - 1)].choose();
-                        return;
-                      }
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        setCommandDismissed(true);
-                        return;
-                      }
-                    }
-                    if (suggestions.length > 0) {
-                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                        e.preventDefault();
-                        setMentionActive((a) => (a + (e.key === "ArrowDown" ? 1 : suggestions.length - 1)) % suggestions.length);
-                        return;
-                      }
-                      if ((e.key === "Enter" || e.key === "Tab") && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        pickMention(suggestions[Math.min(mentionActive, suggestions.length - 1)].name);
-                        return;
-                      }
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        setMention(null);
-                        return;
-                      }
-                    }
-                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                      e.preventDefault();
-                      submitComposer();
-                    }
-                  }}
-                />
-              </div>
-              {/* The options wrap within their own column so model, Stop and Send never drop to a line of their own. */}
-              <div className="flex items-end gap-2">
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} compact />
-                <AttachButton onFiles={files.add} disabled={locked} compact />
-                {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
-                <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
-                {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
-                </div>
-                <div className="flex flex-none items-center gap-1">
-                {selection && (
-                  <ModelEffortPicker
-                    groups={groups}
-                    value={selection}
-                    onChange={pick}
-                    efforts={offered.efforts}
-                    effort={effort}
-                    onEffort={(e) => setPickedEffort(e ?? "default")}
-                    disabled={locked || running}
-                  />
-                )}
-                {running && (
-                  <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
-                    {stopping ? "Stopping…" : "Stop"}
-                  </Button>
-                )}
-                <SendButton
-                  label={running ? "Interrupt" : research ? "Plan it" : "Send"}
-                  disabled={locked || !!unavailable || files.pending || !text.trim() || commitPickRequired}
-                  title={
-                    commitPickRequired
-                      ? "Pick which email commits use first"
-                      : running
-                        ? "Stop the reply and answer this together with your last message"
-                        : undefined
-                  }
-                />
-                </div>
-              </div>
-              </div>
-            </form>
-            <ComposerHints />
+            />
             </>
           )}
         </div>
