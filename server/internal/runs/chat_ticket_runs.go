@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -251,4 +252,72 @@ func clipStart(s string, n int) string {
 		return string(r[:n]) + "…"
 	}
 	return s
+}
+
+// RelayChatReply passes the person's answer from a chat to a run the chat
+// started that's waiting for a reply: a comment on the ticket, written by the
+// assistant and saying whose answer it carries, and the run resumes with it.
+//
+// Only the person may answer a run (OnHumanComment resumes on human comments
+// only), so the persona may relay only after the person spoke: the run must
+// have asked, the chat must have been told (the follow-up turn), and the
+// person must have sent a message since then.
+func (s *Service) RelayChatReply(ctx context.Context, ws, chatID, assistantID uuid.UUID, relayedBy, ticketKey, answer string) (store.Run, error) {
+	var run store.Run
+	answer = strings.TrimSpace(answer)
+	if answer == "" || utf8.RuneCountInString(answer) > 4000 {
+		return run, apperr.Invalid("answer", "give the person's answer in 1–4000 characters")
+	}
+	key := strings.ToUpper(strings.TrimSpace(ticketKey))
+	err := s.tx(ctx, func(q *store.Queries) error {
+		chat, err := q.LockChatSessionByID(ctx, chatID)
+		if err != nil {
+			return err
+		}
+		t, err := tracker.Get(ctx, q, ws, key)
+		if err != nil {
+			return apperr.Invalid("ticket", "no ticket %s", key)
+		}
+		live, err := q.ActiveRunForTicket(ctx, &t.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperr.Conflict("%s has no live run", t.Key)
+		} else if err != nil {
+			return err
+		}
+		ctr, err := q.LockChatTicketRun(ctx, store.LockChatTicketRunParams{ChatID: chat.ID, RunID: live.ID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperr.Conflict("%s's run wasn't started from this chat; the person can answer on the ticket", t.Key)
+		} else if err != nil {
+			return err
+		}
+		if run, err = q.LockRun(ctx, live.ID); err != nil {
+			return err
+		}
+		if run.State != "waiting" || deref(run.WaitReason) != "human_reply" {
+			return apperr.Conflict("%s's run isn't waiting for a reply", t.Key)
+		}
+		if !strings.HasPrefix(ctr.Reported, "needs:human_reply:") || ctr.ReportedAt == nil {
+			return apperr.Conflict("the person hasn't been asked yet")
+		}
+		last, err := q.LastChatUserMessage(ctx, chat.ID)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !last.CreatedAt.After(*ctr.ReportedAt)) {
+			return apperr.Conflict("wait for the person to answer in the chat before passing anything on")
+		} else if err != nil {
+			return err
+		}
+		agent, err := q.GetAgent(ctx, store.GetAgentParams{ID: run.AgentID, WorkspaceID: ws})
+		if err != nil {
+			return err
+		}
+		person, err := q.GetUser(ctx, store.GetUserParams{ID: chat.CreatedBy, WorkspaceID: ws})
+		if err != nil {
+			return err
+		}
+		body := fmt.Sprintf("@%s %s\n\n_Relayed by %s from %s's reply in chat._", agent.Handle, answer, relayedBy, person.Name)
+		if _, err := tracker.AddComment(ctx, q, ws, tracker.AgentActor(assistantID), t.Key, tracker.NewComment{BodyMd: body}); err != nil {
+			return err
+		}
+		return resume(ctx, q, run, "comment", body)
+	})
+	return run, err
 }
