@@ -92,8 +92,8 @@ export function usageSub(h: HarnessActivity, all: HarnessActivity[], now: Date =
     return `Limited until ${resetLabel(h.limited_until, now)}${other ? ` · falls back to ${other.label}` : ""}`;
   }
   if (!h.usage_available) {
-    if (h.usage_checking && !h.usage_checked_at) return "Checking…";
-    return h.usage_checked_at ? "No plan limits to show (API key or signed out)" : "Not read yet";
+    if (h.usage_checking) return "Checking usage…";
+    return h.usage_checked_at ? "Usage unavailable · check Usage settings" : "Usage not checked yet";
   }
   const session = h.windows.find((w) => w.kind === "session");
   const weekly = weeklyWindow(h);
