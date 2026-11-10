@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Popover } from "radix-ui";
 import { useState, useSyncExternalStore } from "react";
 import type { Schemas } from "@/lib/api/client";
-import { useBootstrap, useRunnerStatus, useRunPages } from "@/lib/api/hooks";
+import { useBootstrap, useCosts, useRunnerStatus, useRunPages } from "@/lib/api/hooks";
+import { presetRange, spendLabel } from "@/lib/costs";
 import { absoluteTime, ago, duration, runCost } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import {
@@ -20,6 +21,7 @@ import { Segmented, Toggle } from "@/components/ui/controls";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { useProjectScope } from "@/components/shell/project-scope";
 import { Content, TopBar } from "@/components/shell/topbar";
+import { RunsTabNav } from "./runs-tabs";
 
 type Run = Schemas["Run"];
 
@@ -166,6 +168,20 @@ function Filters({ filters, set, clear }: { filters: RunFilters; set: (patch: Pa
   );
 }
 
+/** The last 7 days' spend in the filtered project, linking to the Costs tab. */
+function WeekSpend({ project }: { project?: string }) {
+  const [range] = useState(() => presetRange(7, new Date()));
+  const costs = useCosts({ ...range, project });
+  const report = costs.data;
+  const href = `/runs?tab=costs&range=7${project ? `&project=${encodeURIComponent(project)}` : ""}`;
+  return (
+    <Link href={href} className="flex flex-col rounded-lg border border-border bg-surface px-3 py-1.5 hover:bg-hover">
+      <span className="text-[11px] text-fg-tertiary">Spend · last 7 days</span>
+      <span className="font-mono text-[13px] font-semibold text-fg">{report ? spendLabel(report.total.cost_micros, report.unpriced_runs) : "–"}</span>
+    </Link>
+  );
+}
+
 /** Runs across agents. SSE invalidates ["runs"] and ["runner"]. */
 export function RunsScreen() {
   const params = useSearchParams();
@@ -218,14 +234,20 @@ export function RunsScreen() {
       <Content>
         <div className="flex flex-col gap-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="type-display">Runs</h1>
-              <p className="text-sm text-fg-secondary">Ticket and planning runs across agents.</p>
+            <div className="flex flex-col gap-3">
+              <div className="space-y-1">
+                <h1 className="type-display">Runs</h1>
+                <p className="text-sm text-fg-secondary">Ticket and planning runs across agents.</p>
+              </div>
+              <RunsTabNav tab="runs" />
             </div>
-            <p role="status" className="flex items-center gap-3 font-mono text-xs text-fg-tertiary">
-              {r && (r.online ? `${r.busy} running · ${r.queued} queued · ${r.slots} slots` : `Runner offline · ${r.queued} queued`)}
-              <span className="flex items-center gap-1.5 text-pill-done-fg"><span aria-hidden className="size-1.5 rounded-full bg-state-done" />Live</span>
-            </p>
+            <div className="flex flex-col items-end gap-2">
+              <WeekSpend project={filters.project} />
+              <p role="status" className="flex items-center gap-3 font-mono text-xs text-fg-tertiary">
+                {r && (r.online ? `${r.busy} running · ${r.queued} queued · ${r.slots} slots` : `Runner offline · ${r.queued} queued`)}
+                <span className="flex items-center gap-1.5 text-pill-done-fg"><span aria-hidden className="size-1.5 rounded-full bg-state-done" />Live</span>
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <Filters filters={filters} set={set} clear={clear} />

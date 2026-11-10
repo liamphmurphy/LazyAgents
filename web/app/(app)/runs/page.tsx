@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { RunsScreen } from "./runs-screen";
+import { RunsTabs } from "./runs-tabs";
 
 export default function RunsPage() {
   return (
     <Suspense>
-      <RunsScreen />
+      <RunsTabs />
     </Suspense>
   );
 }

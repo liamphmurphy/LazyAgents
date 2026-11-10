@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DropdownMenu } from "radix-ui";
 import { useBootstrap } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
-import { currentProject, switchHref } from "@/lib/project-scope";
+import { currentProject, pickerHref } from "@/lib/project-scope";
 import { Icon } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
 import { rememberProject, useRememberedProject } from "./project-scope";
@@ -28,7 +28,7 @@ export function ProjectPicker({ allowAll = true }: { allowAll?: boolean }) {
   const current = currentProject(pathname, search, remembered, projects);
   function pick(value: string) {
     const key = value || null;
-    const href = switchHref(pathname, new URLSearchParams(search.toString()), key);
+    const href = pickerHref(pathname, new URLSearchParams(search.toString()), key);
     // A chosen project is remembered when its route opens (useProjectScope);
     // remembering first would also fire the chooser page's own redirect.
     // "All projects" must be forgotten before navigating, or the bare route

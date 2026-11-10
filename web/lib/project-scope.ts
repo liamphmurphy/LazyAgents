@@ -40,7 +40,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Workspace",
     items: [
       { href: "/runs", label: "Runs", icon: "play", badge: "runs" },
-      { href: "/costs", label: "Costs", icon: "dollar" },
       { href: "/agents", label: "Agents", icon: "agents" },
       { href: "/wiki", label: "Wiki", icon: "wiki", badge: "wiki" },
       { href: "/settings", label: "Settings", icon: "gear", badge: "settings" },
@@ -94,7 +93,6 @@ export const PROJECT_ROUTES: Record<string, ProjectMode> = {
   "/plans": "required",
   "/tickets": "optional",
   "/artifacts": "optional",
-  "/costs": "optional",
 };
 
 /** Pages under a project route where switching only updates the remembered project (a draft would be lost). */
@@ -131,13 +129,30 @@ export function switchHref(pathname: string, search: URLSearchParams, key: strin
   return qs ? `${base}?${qs}` : base;
 }
 
+/** Params that pick how a page shows its project (Tickets' ?layout=, Runs' ?tab=), not what it shows. */
+const VIEW_PARAMS = ["project", "layout", "tab"];
+
+/**
+ * Where a page's own project picker goes: a project route switches as the
+ * menu's switcher did; any other page (Runs' Costs tab) just changes its
+ * ?project=. null: stay put (a draft would be lost).
+ */
+export function pickerHref(pathname: string, search: URLSearchParams, key: string | null): string | null {
+  if (projectSection(pathname)) return switchHref(pathname, search, key);
+  const next = new URLSearchParams(search);
+  for (const p of PROJECT_BOUND_PARAMS) next.delete(p);
+  if (key) next.set("project", key);
+  const qs = next.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
 /**
  * A URL with filters but no project (/tickets?assignee=…) is a
  * deliberate cross-project link: optional routes honor it instead of narrowing
- * it to the remembered project. ?layout= only picks how Tickets shows them.
+ * it to the remembered project.
  */
 export function hasFilters(search: URLSearchParams): boolean {
-  return [...search.keys()].some((k) => k !== "project" && k !== "layout");
+  return [...search.keys()].some((k) => !VIEW_PARAMS.includes(k));
 }
 
 /** The board is a Tickets layout that, unlike the list, needs one project. */

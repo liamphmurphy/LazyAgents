@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NAV_GROUPS, currentProject, hasFilters, isActive, modeHref, navGroupsFor, navMode, projectSection, resolveProject, routeMode, switchHref, withProject } from "./project-scope.ts";
+import { NAV_GROUPS, currentProject, hasFilters, pickerHref, isActive, modeHref, navGroupsFor, navMode, projectSection, resolveProject, routeMode, switchHref, withProject } from "./project-scope.ts";
 
 const web = { key: "WEB", name: "Web app", color: "#6e56cf", archived: false };
 const ops = { key: "OPS", name: "Operations", color: "#3e9bff", archived: false };
@@ -60,6 +60,14 @@ test("switchHref rewrites the current project route and drops project-bound para
   assert.equal(switchHref("/inbox", q(""), "OPS"), null);
 });
 
+test("a page's picker switches project routes, and only changes ?project= elsewhere", () => {
+  const q = (s) => new URLSearchParams(s);
+  assert.equal(pickerHref("/tickets", q("layout=board&project=WEB&epic=e1"), "OPS"), "/tickets?layout=board&project=OPS");
+  assert.equal(pickerHref("/runs", q("tab=costs&range=7&project=WEB"), "OPS"), "/runs?tab=costs&range=7&project=OPS");
+  assert.equal(pickerHref("/runs", q("tab=costs&project=WEB"), null), "/runs?tab=costs");
+  assert.equal(pickerHref("/tickets/new", q("project=WEB"), "OPS"), null);
+});
+
 test("currentProject prefers the URL on project routes and hides archived projects", () => {
   const q = (s) => new URLSearchParams(s);
   assert.equal(currentProject("/tickets", q("layout=board&project=OPS"), "WEB", projects), ops);
@@ -79,6 +87,7 @@ test("cross-project links on optional routes show All projects, bare routes the 
   assert.equal(currentProject("/tickets", q(""), "WEB", projects), web);
   // Picking a layout isn't a filter: /epics and /board redirect here without a project.
   assert.equal(hasFilters(q("layout=epics")), false);
+  assert.equal(hasFilters(q("tab=costs")), false);
   assert.equal(currentProject("/tickets", q("layout=epics"), "WEB", projects), web);
   // The board always needs one project.
   assert.equal(currentProject("/tickets", q("layout=board&epic=e1"), "WEB", projects), web);
