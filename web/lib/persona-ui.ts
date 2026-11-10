@@ -376,3 +376,17 @@ export function insertMention(text: string, start: number, caret: number, name: 
   const mention = `@${name.trim()} `;
   return { text: text.slice(0, start) + mention + text.slice(caret), caret: start + mention.length };
 }
+
+/**
+ * The persona the person chats with most, by chat count (archived included), ties going
+ * to the one used more recently; `fallback` (the default persona) when none has a chat yet.
+ */
+export function mostUsedPersona(personas: readonly { id: string; chat_count: number; last_used_at?: string }[] | undefined, fallback: string | undefined): string | undefined {
+  const used = (p: { last_used_at?: string }) => (p.last_used_at ? Date.parse(p.last_used_at) : -Infinity);
+  let best: (typeof personas & {})[number] | undefined;
+  for (const p of personas ?? []) {
+    if (p.chat_count < 1) continue;
+    if (!best || p.chat_count > best.chat_count || (p.chat_count === best.chat_count && used(p) > used(best))) best = p;
+  }
+  return best?.id ?? fallback;
+}
