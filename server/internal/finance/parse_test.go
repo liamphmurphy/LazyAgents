@@ -185,7 +185,15 @@ func TestParseCSV(t *testing.T) {
 	if _, err := ParseCSV([]byte("Foo,Bar\n1,2\n"), false); !errors.As(err, &ve) || !strings.Contains(ve.Msg, "no header row") {
 		t.Errorf("no header: %v", err)
 	}
-	if _, err := ParseCSV([]byte("Date,Description,Amount\n31/31/2026,X,1\n"), false); !errors.As(err, &ve) || !strings.Contains(ve.Msg, "line 2") {
+	// A mapping must read every row: the first one it can't is the error.
+	m, ok := DetectCSV([]byte("Date,Description,Amount\n11/01/2026,X,1\n31/31/2026,Y,2\n"))
+	if ok {
+		t.Fatalf("a column with an impossible date isn't a date column: %+v", m)
+	}
+	amount := 2
+	m = CSVMapping{Delimiter: ",", HeaderRow: 1, Date: 0, DateFormat: "MM/DD/YYYY", Description: []int{1}, Amount: &amount}
+	m.Amount = ptr(2)
+	if _, err := ParseCSVWith([]byte("Date,Description,Amount\n11/01/2026,X,1\n31/31/2026,Y,2\n"), m); !errors.As(err, &ve) || !strings.Contains(ve.Msg, "row 3") {
 		t.Errorf("bad date: %v", err)
 	}
 }
