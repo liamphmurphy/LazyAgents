@@ -572,6 +572,15 @@ nonnegative `input_per_million`, `cached_input_per_million`, and
 is inferred for an unknown model. Aggregates identify windows containing
 unpriced runs. The migration also marks older unpriced turns as unknown/partial.
 
+**Runs → Highlights** summarizes routing across your own persona chats. Filter by
+project, UTC date range, replying persona, or Auto effort only. It shows requested
+and actual effort, model usage, reasons effort was raised, and average turn time
+(including tools, excluding queue time). Each turn counts once on its first reply's
+UTC date. Legacy replies without turn metadata count individually as unclassified;
+unknown persona, model and effort remain explicit. Model usage does not identify
+whether the model was selected automatically. Unlike Costs, Highlights excludes
+other people's chats and non-chat runs.
+
 Codex session-total token counters are normalized to per-turn deltas on resume,
 so resumed turns do not bill earlier usage twice. The migration repairs older
 turns where recorded lifecycle events identify the Codex session; original usage

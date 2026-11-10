@@ -796,6 +796,16 @@ export function useCosts(q: CostQuery, enabled = true) {
   });
 }
 
+/** Private persona routing samples, refreshed while chats work. */
+export function useHighlights(q: { from: string; to: string; project?: string }, enabled = true) {
+  return useQuery({
+    queryKey: ["chats", "highlights", q] as const,
+    queryFn: () => unwrap(api.GET("/highlights", { params: { query: q } })),
+    enabled,
+    refetchInterval: 30_000,
+  });
+}
+
 // ------------------------------------------------------------- wiki (§12)
 
 export const wikiKeys = {
