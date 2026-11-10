@@ -26,7 +26,7 @@ import {
   type PaletteGroup,
   type PaletteLink,
 } from "@/lib/command-palette";
-import { NAV_GROUPS, projectSection, switchHref, withProject } from "@/lib/project-scope";
+import { APP_GROUP, NAV_GROUPS, projectSection, switchHref, withProject } from "@/lib/project-scope";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
 const RECENT_KEY = "la:palette-recent";
@@ -368,7 +368,7 @@ export function CommandMenu() {
   });
 
   // Same item set as the sidebar (lib/project-scope.ts), scoped to the remembered project.
-  const goTo: Item[] = NAV_GROUPS.flatMap((g) =>
+  const goTo: Item[] = [...NAV_GROUPS, APP_GROUP].flatMap((g) =>
     g.items.map((i) => ({
       id: `nav-${i.href}`,
       title: `Go to ${i.label}`,

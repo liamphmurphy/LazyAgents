@@ -88,12 +88,13 @@ test("each page belongs to a mode, and pinned pages keep the last one", () => {
   assert.equal(routeMode("/inbox"), undefined);
   assert.equal(navMode("/board", "chat"), "work");
   assert.equal(navMode("/inbox", "chat"), "chat");
+  assert.equal(routeMode("/apps/finance"), "chat");
   assert.equal(navMode("/inbox", null), "work");
 });
 
-test("Work pins Inbox and Dashboard above Project and Workspace; Chat has Personal without Dashboard", () => {
+test("Work pins Inbox and Dashboard above Project and Workspace; Chat has Personal without Dashboard, then Apps", () => {
   const labels = (m) => navGroupsFor(m).map((g) => [g.label, g.items.map((i) => i.label)]);
-  assert.deepEqual(labels("chat"), [["Personal", ["Inbox", "Library", "Workflows", "Scheduled", "Learn", "Customization"]]]);
+  assert.deepEqual(labels("chat"), [["Personal", ["Inbox", "Library", "Workflows", "Scheduled", "Learn", "Customization"]], ["Apps", ["Finance"]]]);
   assert.deepEqual(labels("work")[0], ["Personal", ["Inbox", "Dashboard"]]);
   assert.deepEqual(labels("work").slice(1).map(([l]) => l), ["Project", "Workspace"]);
 });

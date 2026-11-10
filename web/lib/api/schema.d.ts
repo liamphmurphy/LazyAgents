@@ -3108,6 +3108,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/finance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in person's Finance dashboard
+         * @description Cash flow by month (oldest first, ending with this one), net worth
+         *     rolled from each account's newest balance, savings rate, spending by
+         *     category for the last full month against the months before, the
+         *     transactions waiting for a category, and monthly recurring charges.
+         *     Opening it makes the person's Finance space the first time: the
+         *     space the Ask drawer's chats live in.
+         */
+        get: operations["getFinanceOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/finance/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an account by hand, for CSV imports
+         * @description OFX imports add their own accounts. 422 for an invalid field or a name already in use.
+         */
+        post: operations["createFinanceAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/finance/accounts/{accountId}/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record an account's balance on a day
+         * @description Net worth rolls the newest balance of each account through its transactions. CSV exports rarely carry one, so the person enters it.
+         */
+        put: operations["setFinanceAccountBalance"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/finance/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a bank's CSV or OFX/QFX export
+         * @description Transactions already imported are skipped, so overlapping exports
+         *     are safe. New ones are categorized by the person's rules, then
+         *     built-in keywords; card payments are paired with their other side
+         *     as transfers. An OFX file finds or creates its account; a CSV needs
+         *     account_id. Up to 5 MB and 20,000 transactions. 422 for a file that
+         *     can't be read, a CSV without an account, or an OFX for a different
+         *     account than the one picked.
+         */
+        post: operations["importFinanceStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/finance/transactions/{transactionId}/category": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a transaction's category
+         * @description With save_rule (the default), the merchant's first words become a
+         *     rule: it recategorizes past matches (except ones set by hand or
+         *     matched transfers) and categorizes future imports. Moving a matched
+         *     transfer to another category sends its other side back to review.
+         */
+        put: operations["categorizeFinanceTransaction"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chat-spaces": {
         parameters: {
             query?: never;
@@ -3822,6 +3940,187 @@ export interface components {
         MemoryType: string;
         /** @enum {string} */
         ChatSpaceColor: "green" | "amber" | "red" | "blue" | "violet" | "pink" | "teal" | "orange";
+        /** @enum {string} */
+        FinanceAccountKind: "checking" | "savings" | "credit" | "brokerage" | "other";
+        FinanceAccount: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["FinanceAccountKind"];
+            /** @description Last digits of the account number, e.g. 4417 */
+            mask: string;
+            transaction_count: number;
+            /** @description OFX imports find this account by itself */
+            from_ofx: boolean;
+            /**
+             * Format: int64
+             * @description Newest balance; negative for debt. Absent until one is known.
+             */
+            balance_cents?: number;
+            /** Format: date */
+            balance_as_of?: string;
+        };
+        NewFinanceAccount: {
+            name: string;
+            kind: components["schemas"]["FinanceAccountKind"];
+            mask?: string;
+        };
+        FinanceBalanceInput: {
+            /**
+             * Format: int64
+             * @description Negative for debt, e.g. a card's balance owed
+             */
+            balance_cents: number;
+            /** Format: date */
+            as_of: string;
+        };
+        FinanceMonth: {
+            /**
+             * Format: date
+             * @description The month's first day
+             */
+            month: string;
+            /**
+             * Format: int64
+             * @description Money in
+             */
+            inflow_cents: number;
+            /**
+             * Format: int64
+             * @description Money out
+             */
+            outflow_cents: number;
+            /**
+             * Format: int64
+             * @description Transfers out between the person's accounts: what counting card payments would add
+             */
+            transfer_out_cents: number;
+            /**
+             * Format: int64
+             * @description At the month's end (today for this month); absent until an account has a balance
+             */
+            net_worth_cents?: number;
+        };
+        FinanceCategorySpend: {
+            /** @description A category, or Uncategorized */
+            category: string;
+            /** Format: int64 */
+            spent_cents: number;
+            /**
+             * Format: int64
+             * @description Average over up to six months before, counting months with any spending
+             */
+            average_cents: number;
+        };
+        FinanceReviewItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            posted_on: string;
+            description: string;
+            /** Format: int64 */
+            amount_cents: number;
+            account_name: string;
+            account_mask: string;
+            /** @description Up to three likely categories, best first */
+            suggestions: string[];
+        };
+        FinanceRecurring: {
+            label: string;
+            /**
+             * Format: int64
+             * @description The latest charge
+             */
+            amount_cents: number;
+            /**
+             * Format: int64
+             * @description The price before the latest change, if it changed
+             */
+            previous_cents?: number;
+            /** Format: date */
+            changed_on?: string;
+            day_of_month: number;
+            /** Format: date */
+            first_seen: string;
+            /** Format: date */
+            last_seen: string;
+            count: number;
+            /** @description First charged within the last two months */
+            new: boolean;
+        };
+        FinanceImportSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            account_id: string;
+            filename: string;
+            /** @enum {string} */
+            format: "csv" | "ofx";
+            parsed: number;
+            inserted: number;
+            duplicates: number;
+            /** @description Transfers matched with another account */
+            transfers: number;
+            categorized: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        FinanceImportResult: {
+            import: components["schemas"]["FinanceImportSummary"];
+            account: components["schemas"]["FinanceAccount"];
+            account_created: boolean;
+            needs_review: number;
+            /** Format: date */
+            first_date?: string;
+            /** Format: date */
+            last_date?: string;
+        };
+        FinanceCategorize: {
+            category: string;
+            /** @default true */
+            save_rule: boolean;
+        };
+        FinanceCategorizeResult: {
+            /** Format: uuid */
+            id: string;
+            category: string;
+            /** @description The rule saved */
+            pattern?: string;
+            /** @description Other transactions the rule recategorized */
+            updated: number;
+        };
+        FinanceOverview: {
+            /**
+             * Format: uuid
+             * @description The person's Finance space
+             */
+            space_id: string;
+            /** @description Every category */
+            categories_all: string[];
+            accounts: components["schemas"]["FinanceAccount"][];
+            months: components["schemas"]["FinanceMonth"][];
+            /** Format: int64 */
+            net_worth_cents?: number;
+            /**
+             * Format: int64
+             * @description Since the end of last month
+             */
+            net_worth_change_cents?: number;
+            /**
+             * Format: double
+             * @description (in − out) / in over the months shown; absent with no income
+             */
+            savings_rate?: number;
+            /** Format: date */
+            category_month: string;
+            categories: components["schemas"]["FinanceCategorySpend"][];
+            /** @description The newest 25 waiting for a category */
+            review: components["schemas"]["FinanceReviewItem"][];
+            review_count: number;
+            transaction_count: number;
+            recurring: components["schemas"]["FinanceRecurring"][];
+            last_import?: components["schemas"]["FinanceImportSummary"];
+        };
         ChatSpace: {
             /** Format: uuid */
             id: string;
@@ -12427,6 +12726,147 @@ export interface operations {
                     "application/json": components["schemas"]["ScheduledTask"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFinanceOverview: {
+        parameters: {
+            query?: {
+                /** @description Months of cash flow, 1–24 (default 12) */
+                months?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The dashboard */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceOverview"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createFinanceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewFinanceAccount"];
+            };
+        };
+        responses: {
+            /** @description The account */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceAccount"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setFinanceAccountBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceBalanceInput"];
+            };
+        };
+        responses: {
+            /** @description The account with its balance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceAccount"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    importFinanceStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** Format: uuid */
+                    account_id?: string;
+                    /** @description The CSV shows purchases as positive amounts (some card exports do) */
+                    flip_sign?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What was imported */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceImportResult"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    categorizeFinanceTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceCategorize"];
+            };
+        };
+        responses: {
+            /** @description The result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceCategorizeResult"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
