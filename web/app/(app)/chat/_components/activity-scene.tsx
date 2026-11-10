@@ -69,6 +69,7 @@ const LABELS: Record<ChatStatusKind, string> = {
   workflow: "Working on a workflow",
   memory: "Memory",
   "memory-save": "Making a note",
+  "chat-history": "Searching past chats",
 };
 
 export const sceneLabel = (kind: ChatStatusKind) => LABELS[kind];
@@ -341,6 +342,28 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
       <circle className="scene-accent scene-box scene-node" cx="84" cy="32" r="4" style={delay(0.6)} />
       <circle className="scene-warm scene-box scene-node" cx="106" cy="10" r="5" style={delay(0.9)} />
       <circle className="scene-accent scene-box scene-node" cx="72" cy="50" r="3" style={delay(1.2)} />
+    </>
+  ),
+  // Past conversations as speech bubbles; a lens passes over each in turn and
+  // the one under it lights up, like a match turning up.
+  "chat-history": (
+    <>
+      {[
+        { x: 22, y: 4, w: 48, tail: "M30 16l-4 5 9-5" },
+        { x: 62, y: 21, w: 48, tail: "M102 33l4 5-9-5" },
+        { x: 22, y: 38, w: 40, tail: "" },
+      ].map(({ x, y, w, tail }, i) => (
+        <g key={y}>
+          {tail && <path className="scene-paper" d={tail} />}
+          <rect className="scene-paper" x={x} y={y} width={w} height="13" rx="6.5" />
+          <rect className="scene-accent scene-history-hit" x={x} y={y} width={w} height="13" rx="6.5" style={delay(i * 1.32)} />
+          <path className="scene-line" d={`M${x + 7} ${y + 6.5}H${x + w - 12}`} strokeWidth="1.5" />
+        </g>
+      ))}
+      <g className="scene-history-lens">
+        <circle cx="46" cy="10.5" r="7" fill="var(--surface)" fillOpacity="0.4" stroke="var(--accent)" strokeWidth="2" />
+        <path className="scene-line-accent" d="M51 15.5l5 5" />
+      </g>
     </>
   ),
 };

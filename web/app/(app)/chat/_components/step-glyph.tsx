@@ -216,6 +216,15 @@ const GLYPHS: Record<ChatStatusKind, ReactNode> = {
       </g>
     </>
   ),
+  "chat-history": (
+    <>
+      <path className="glyph-s" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v5A1.5 1.5 0 0 1 12.5 10H7l-3 3v-3h-.5A1.5 1.5 0 0 1 2 8.5z" opacity=".5" />
+      <g className="glyph-a glyph-sweep">
+        <circle className="glyph-s glyph-knock" cx="8" cy="6" r="2.6" />
+        <path className="glyph-s" d="M9.9 7.9l2 2" />
+      </g>
+    </>
+  ),
 };
 
 const FAILED = (
