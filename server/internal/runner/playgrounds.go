@@ -191,7 +191,7 @@ func (r *Runner) tickPlaygrounds(ctx context.Context) {
 			}
 			continue
 		}
-		claimed, err := q.ClaimPlayground(ctx, store.ClaimPlaygroundParams{ID: pg.ID, RunnerID: &r.Cfg.ID, Stack: refOf(pb.StackName()), Port: refOf(int32(port)), IdleTtlS: refOf(int32(r.playgroundIdleTTL().Seconds()))})
+		claimed, err := q.ClaimPlayground(ctx, store.ClaimPlaygroundParams{ID: pg.ID, RunnerID: &r.Cfg.ID, Stack: refOf(pb.StackName()), Port: refOf(int32(port)), IdleTtlS: refOf(int32(max(1, r.playgroundIdleTTL().Seconds())))})
 		if err != nil {
 			h.release(pg.ID)
 			if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
