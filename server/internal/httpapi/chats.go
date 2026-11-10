@@ -346,6 +346,9 @@ func (s *Server) ListChatModels(ctx context.Context, _ api.ListChatModelsRequest
 	out := make(api.ListChatModels200JSONResponse, 0, len(list))
 	for _, h := range list {
 		item := api.ChatHarnessModels{Harness: api.Harness(h.Harness), Label: h.Label, Available: h.Available, Models: make([]api.ChatModel, len(h.Models))}
+		if h.Checking {
+			item.Checking = &h.Checking
+		}
 		if h.UnavailableReason != "" {
 			reason := h.UnavailableReason
 			item.UnavailableReason = &reason

@@ -63,6 +63,7 @@ type Harness struct {
 	Harness           string
 	Label             string
 	Available         bool
+	Checking          bool
 	UnavailableReason string
 	Models            []Model
 }
@@ -171,6 +172,7 @@ func (c Catalog) harness(ctx context.Context, q *store.Queries, ws uuid.UUID, na
 	discovered, err := discover(ctx, name, key)
 	if err != nil {
 		h.Available = false
+		h.Checking = errors.Is(err, errStillChecking)
 		h.UnavailableReason = "model discovery failed; check provider credentials and connectivity"
 		if queued {
 			h.UnavailableReason = err.Error()

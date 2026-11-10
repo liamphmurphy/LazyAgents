@@ -1217,7 +1217,10 @@ export function useChatModels() {
   return useQuery({
     queryKey: chatKeys.models,
     queryFn: () => unwrap(api.GET("/chat-models")),
-    staleTime: 60_000,
+    // A partial catalog is a successful response, so query retries won't
+    // pick up a runner's later answer. Poll only while discovery is pending.
+    staleTime: (q) => (q.state.data?.some((g) => g.checking) ? 0 : 60_000),
+    refetchInterval: (q) => (q.state.data?.some((g) => g.checking) ? 2_000 : false),
   });
 }
 

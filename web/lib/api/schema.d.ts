@@ -7376,6 +7376,8 @@ export interface components {
             harness: components["schemas"]["Harness"];
             label: string;
             available: boolean;
+            /** @description True while initial model discovery is pending; clients should poll until it finishes */
+            checking?: boolean;
             /** @description e.g. no harness:openai secret */
             unavailable_reason?: string;
             models: components["schemas"]["ChatModel"][];
