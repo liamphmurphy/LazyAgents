@@ -86,8 +86,16 @@ services:
       RUNNER_CHAT_IDLE_TTL_S: ${RUNNER_CHAT_IDLE_TTL_S:-14400}
       RUNNER_MAX_HOLD_S: ${RUNNER_MAX_HOLD_S:-86400}
       RUNNER_MAX_HOLD_ATTEMPTS: ${RUNNER_MAX_HOLD_ATTEMPTS:-12}
+      # Each turn's sandboxed Docker API socket; turns mount the volume read-only.
+      RUNNER_DOCKER_PROXY_DIR: /run/lazyagents-docker
+      RUNNER_DOCKER_PROXY_VOLUME: lazyagents-docker-proxy
+      # The volume (created on first use) holding the Nix store turns share
+      # through this runner's nix-daemon. One daemon per store: the stacks
+      # must not share it.
+      RUNNER_NIX_VOLUME: lazyagents-nix
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - docker-proxy:/run/lazyagents-docker
     depends_on:
       api: { condition: service_healthy }
       agent-base: { condition: service_completed_successfully }
@@ -121,3 +129,6 @@ volumes:
   pgdata:
   seaweed:
   caddy:
+  docker-proxy:
+    # Fixed name: the runner mounts it into turns as RUNNER_DOCKER_PROXY_VOLUME.
+    name: lazyagents-docker-proxy

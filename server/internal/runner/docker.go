@@ -58,7 +58,15 @@ type Docker struct {
 	// creates and removes the run folders itself, then hands the path to
 	// Docker as a bind source.
 	HostWorkspaces string
-	client         *http.Client
+	// ProxyDir is where this runner serves each turn's Docker API socket, and
+	// ProxyVolume is the volume holding it, mounted read-only into turns at
+	// proxyMountPath (RUNNER_DOCKER_PROXY_DIR, RUNNER_DOCKER_PROXY_VOLUME).
+	// Either empty turns the per-turn Docker API off.
+	ProxyDir, ProxyVolume string
+	// NixVolume is the Nix store every turn shares through the runner's
+	// nix-daemon (RUNNER_NIX_VOLUME); "" leaves turns without Nix.
+	NixVolume string
+	client    *http.Client
 }
 
 const (
@@ -320,6 +328,16 @@ func (d *Docker) Cleanup(ctx context.Context) error {
 	for _, n := range nets {
 		_, _ = d.do(ctx, "DELETE", "/networks/"+n.ID, nil, "", nil)
 	}
+	// And the volumes their tests created through the Docker proxy. Run
+	// checkouts are volumes too, but they carry no proxy label.
+	proxyFilters, _ := json.Marshal(map[string][]string{"label": {proxyLabelKey, stackLabelKey + "=" + d.stack()}})
+	var vols struct{ Volumes []struct{ Name string } }
+	if _, err := d.do(ctx, "GET", "/volumes?filters="+url.QueryEscape(string(proxyFilters)), nil, "", &vols); err != nil {
+		return err
+	}
+	for _, v := range vols.Volumes {
+		_, _ = d.do(ctx, "DELETE", "/volumes/"+url.PathEscape(v.Name)+"?force=1", nil, "", nil)
+	}
 	return nil
 }
 
@@ -417,6 +435,14 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	// label, so workspace cleanup never removes downloaded dependencies.
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": homeVolumeName(runID), "Target": homePath})
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": "lazyagents-dependency-cache", "Target": "/cache"})
+	if m := d.nixMount(); m != nil {
+		mounts = append(mounts, m)
+	}
+	if d.ProxyDir != "" && d.ProxyVolume != "" {
+		// Read-only, and turns can't list it: a turn reaches only the socket
+		// whose name its DOCKER_HOST carries.
+		mounts = append(mounts, map[string]any{"Type": "volume", "Source": d.ProxyVolume, "Target": proxyMountPath, "ReadOnly": true})
+	}
 	env := make([]string, 0, len(spec.Env))
 	for k, v := range spec.Env {
 		if k == CodexAuthEnv || k == CodexAuthScopeEnv {
@@ -528,7 +554,12 @@ type dockerProc struct {
 	err io.Reader
 	// The ChatGPT login this process was given, and where it is stored.
 	codexAuth, codexScope string
+	// nixManifest is the run's Nix profile as the turn left it.
+	nixManifest []byte
 }
+
+// NixManifest implements NixManifestProcess.
+func (p *dockerProc) NixManifest() []byte { return p.nixManifest }
 
 func (p *dockerProc) Stdout() io.Reader { return p.out }
 func (p *dockerProc) Stderr() io.Reader { return p.err }
@@ -573,6 +604,7 @@ func (p *dockerProc) Wait() (int, error) {
 	}
 	// Even a failed turn may have rotated the Codex login: keep it first.
 	p.keepRefreshedCodexAuth()
+	p.readNixManifest()
 	if res.StatusCode != 0 && p.oomKilled() {
 		return res.StatusCode, fmt.Errorf("the container ran out of memory (exit %d); raise RUNNER_MEMORY_MB or reduce what the run builds at once", res.StatusCode)
 	}
@@ -607,6 +639,32 @@ func (p *dockerProc) keepRefreshedCodexAuth() {
 	}
 	if err := p.d.SaveCodexAuth(ctx, p.codexScope, next); err != nil {
 		slog.Warn("save refreshed codex login", "err", err)
+	}
+}
+
+// readNixManifest keeps what the run's Nix profile holds, read from the
+// stopped container like the Codex login, so the runner can add the tools the
+// agent installed to the repository's test environment.
+func (p *dockerProc) readNixManifest() {
+	if p.d.NixVolume == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	// ~/.nix-profile is a symlink into the store; the Engine resolves every
+	// path element but the last inside the container's mounts.
+	res, err := p.d.do(ctx, "GET", "/containers/"+p.id+"/archive?path="+url.QueryEscape(path.Join(homePath, ".nix-profile", "manifest.json")), nil, "", nil)
+	if err != nil {
+		return // no profile: the agent installed nothing
+	}
+	defer res.Body.Close()
+	tr := tar.NewReader(res.Body)
+	if _, err := tr.Next(); err != nil {
+		return
+	}
+	b, err := io.ReadAll(io.LimitReader(tr, 1<<20))
+	if err == nil {
+		p.nixManifest = b
 	}
 }
 

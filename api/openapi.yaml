@@ -1294,6 +1294,51 @@ paths:
               schema: { $ref: "#/components/schemas/RunnerEnvironment" }
         default: { $ref: "#/components/responses/Error" }
 
+  /runner/test-environments:
+    get:
+      operationId: listTestEnvironments
+      summary: What each repository's tests need in a turn, as inferred and learned
+      description: |
+        A repository's test environment is the services started next to each
+        turn and the Nix packages installed when a run starts. Its first run
+        infers it from the repository's CI workflows and compose files; tools
+        agents install with Nix are added after each turn. Services declared
+        on a project override win over it.
+      tags: [runs]
+      responses:
+        "200":
+          description: Test environments, by repository
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestEnvironmentList" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: putTestEnvironment
+      summary: Replace a repository's test environment
+      description: Agents keep adding Nix packages they install afterwards; services are only ever changed here or by forgetting it.
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestEnvironmentInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestEnvironment" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteTestEnvironment
+      summary: Forget a repository's test environment; its next run infers it again
+      tags: [runs]
+      parameters:
+        - { name: repo, in: query, required: true, schema: { type: string }, description: "Repository key, e.g. github.com/acme/app" }
+      responses:
+        "204": { description: Forgotten }
+        default: { $ref: "#/components/responses/Error" }
+
   /runs/{id}/turns/{seq}/log:
     parameters:
       - name: id
@@ -5814,17 +5859,44 @@ components:
         body: { type: string, description: Markdown instructions }
     AgentService:
       type: object
-      description: A container each turn of a run can reach by name, e.g. the database its tests need. Started next to every turn on a network of that turn's own, with the turn's sandbox, and removed when the turn ends.
+      description: A container each turn of a run can reach by name, e.g. the database its tests need. Started next to every turn on a network of that turn's own, sandboxed like the turn but with Docker's default capabilities, and removed when the turn ends.
       required: [name, image]
       properties:
         name: { type: string, description: "Hostname turns use; lowercase letters, digits, - or _" }
         image: { type: string, description: "Image, pulled if missing, e.g. postgres:17-alpine" }
         command: { type: array, items: { type: string }, description: Replaces the image's default command }
-        user: { type: string, description: "Services get no capabilities: images that start as root and switch user need their unprivileged user here" }
+        user: { type: string, description: "Run as this user instead of the image's" }
         env: { type: object, additionalProperties: { type: string } }
         tmpfs: { type: array, items: { type: string }, description: Writable scratch directories (absolute paths) }
         healthcheck: { type: array, items: { type: string }, description: "Docker healthcheck test, e.g. [CMD, pg_isready]; turns start once it passes" }
         expose: { type: object, additionalProperties: { type: string }, description: "Environment variables set in each turn, e.g. TEST_DATABASE_URL" }
+    TestRecipe:
+      type: object
+      properties:
+        services: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/AgentService" } }
+        nix_packages: { type: array, maxItems: 40, items: { type: string }, description: "Flake installables, e.g. nixpkgs#protobuf" }
+    TestEnvironment:
+      type: object
+      required: [repo, recipe, inferred_from, created_at, updated_at]
+      properties:
+        repo: { type: string, description: "Repository key: host and path, e.g. github.com/acme/app" }
+        recipe: { $ref: "#/components/schemas/TestRecipe" }
+        inferred_from: { type: array, items: { type: string }, description: Files the first recipe was read from }
+        learned_from_run_id: { type: string, format: uuid, description: The run whose turn last added a package }
+        edited_at: { type: string, format: date-time, description: When a person last replaced it }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TestEnvironmentInput:
+      type: object
+      required: [repo, recipe]
+      properties:
+        repo: { type: string, description: "A repository URL or key; stored as its key" }
+        recipe: { $ref: "#/components/schemas/TestRecipe" }
+    TestEnvironmentList:
+      type: object
+      required: [environments]
+      properties:
+        environments: { type: array, items: { $ref: "#/components/schemas/TestEnvironment" } }
     AgentOverride:
       type: object
       properties:

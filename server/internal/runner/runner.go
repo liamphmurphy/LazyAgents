@@ -862,6 +862,14 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			return
 		}
 	}
+	// The repository's test environment: install its tools, or, the first
+	// time, report the files a first recipe is inferred from.
+	testRepo := testEnvRepo(ctx, r.q(), c)
+	recipe, hasRecipe := r.loadTestEnv(ctx, c, testRepo)
+	script += "\n" + recipe.NixInstallScript()
+	if testRepo != "" && !hasRecipe && len(c.spec.Services) == 0 {
+		script += testFilesScript()
+	}
 	r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "starting", "runner": r.Cfg.ID, "backend": r.Backend.Name(), "branch": branch})
 	proc, err := r.Backend.Start(ctx, run.ID.String(), ExecSpec{
 		Name: "lazyagents-setup-" + run.ID.String(), Argv: []string{"sh", "-c", script}, Env: env,
@@ -889,12 +897,14 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		_ = c.Close()
 	}
 	r.addTiming(run.ID, time.Since(setupStart), 0, 0)
-	output := r.recordEnvironment(ctx, c, redact(out.String(), env), err != nil || code != 0)
+	output, testFiles := takeTestFiles(redact(out.String(), env))
+	output = r.recordEnvironment(ctx, c, output, err != nil || code != 0)
 	tail := lastLines(output, 30)
 	if err != nil || code != 0 {
 		fail(fmt.Sprintf("Workspace setup failed (exit %d):\n%s", code, tail))
 		return
 	}
+	r.inferTestEnv(ctx, c, testRepo, testFiles)
 	if checkpoint != "" && strings.Contains(output, checkpointRecovered) {
 		r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "checkpoint_recovered", "branch": checkpoint})
 	}
@@ -1337,6 +1347,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		return
 	}
 	defer stopServices()
+	dockerNetworks, stopDocker := r.startDockerProxy(ctx, c, turn, env)
+	defer stopDocker()
+	networks = append(networks, dockerNetworks...)
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
@@ -1375,6 +1388,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	res, raw, code, waitErr := r.watch(ctx, c, proc, h.NewParser(c.spec.Model), sensitive, maxRuntime-used)
 	r.addTiming(c.run.ID, 0, time.Since(harnessStart), 0)
+	r.learnTestEnv(context.Background(), c, proc)
 	if videos != nil {
 		if ctx.Err() != nil {
 			stopVideos() // shutting down: the turn re-runs and its jobs carry on

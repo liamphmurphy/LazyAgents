@@ -2,6 +2,8 @@
 //
 // Tests are skipped unless TEST_DATABASE_URL points at a Postgres server the
 // tests may create databases on (CI provides one; locally use dev compose).
+// Inside a Vesper run or on CI they fail instead: a skip there reads as a
+// pass, and agents reported "tests pass" without ever reaching a database.
 package testdb
 
 import (
@@ -19,11 +21,28 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/db"
 )
 
+// requiredBy names what requires database tests to run rather than skip, or
+// "" when skipping is fine (a person running go test locally).
+func requiredBy() string {
+	switch {
+	case os.Getenv("LAZYAGENTS_RUN_ID") != "":
+		return "a Vesper run"
+	case os.Getenv("CI") != "":
+		return "CI"
+	}
+	return ""
+}
+
 // New creates a uniquely named database, migrates it and drops it when the test ends.
 func New(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
+		if reason := requiredBy(); reason != "" {
+			t.Fatalf("testdb: TEST_DATABASE_URL is not set, and %s requires database tests to run. "+
+				"Start Postgres 17 (e.g. `docker run -d --name pg -e POSTGRES_PASSWORD=pg -p 5432 postgres:17-alpine`) "+
+				"and point TEST_DATABASE_URL at it", reason)
+		}
 		t.Skip("TEST_DATABASE_URL not set")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

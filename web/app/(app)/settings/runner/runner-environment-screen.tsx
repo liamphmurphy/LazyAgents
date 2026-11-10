@@ -10,6 +10,7 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { SmallPill } from "@/components/domain/labels";
 import { Content, TopBar } from "@/components/shell/topbar";
+import { TestEnvironmentsCard } from "./test-environments-card";
 
 const resultLabel = { ready: "Ready", failed: "Setup failed", unconfigured: "No manifest" } as const;
 const selectClass = "h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg";
@@ -104,6 +105,7 @@ export function RunnerEnvironmentScreen() {
             </Card>
             <p className="text-xs text-fg-tertiary">Update shared tools in the runner image or local installation, and project libraries in their lockfiles. <Link href="/settings/projects" className="underline underline-offset-2">Manage project repositories</Link>.</p>
           </>}
+          <TestEnvironmentsCard />
         </>}
       </div>
     </Content>

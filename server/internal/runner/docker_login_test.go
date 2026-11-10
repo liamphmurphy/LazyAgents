@@ -90,6 +90,8 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, `{"StatusCode":%d}`, f.waitCode)
 	case p == "/networks":
 		_, _ = io.WriteString(w, `[]`)
+	case p == "/volumes":
+		_, _ = io.WriteString(w, `{"Volumes":[]}`)
 	case strings.HasPrefix(p, "/networks/"):
 		w.WriteHeader(200)
 	case p == "/containers/json":

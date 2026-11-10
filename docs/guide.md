@@ -326,31 +326,68 @@ as `host.docker.internal`. Each install labels its containers with `RUNNER_STACK
 (`lazyagents-dev` here, `lazyagents` for `make up`), so two installs on one
 Docker daemon never clean up each other's turns.
 
-### Test services
+### Test environments
 
-Agents never get the Docker socket. When a project's tests need something
-running, such as a database, declare it as a **test service** in the project's
-override for the agent (Agents → the agent → the project's override, or
-`services` in the override JSON). The runner starts each service next to every
-turn on an internal network of that turn's own, reachable by its `name`, and
-removes it when the turn ends; nothing persists between turns. Services get the
-turn's sandbox (no capabilities, `no-new-privileges`, the memory and process
-limits, no host mounts or published ports, no internet), so images whose
-entrypoint starts as root need their unprivileged `user`, and writable
-directories go in `tmpfs`. `expose` sets variables in the turn:
+A repository needs no Vesper file for its tests to run in a turn. Three things
+make that work, and none of them gives an agent the host's Docker socket.
+
+**Docker, sandboxed per turn.** Each Docker turn gets its own Docker API
+(`DOCKER_HOST`), served by the runner on a socket in a directory turns mount
+read-only and can't list (`RUNNER_DOCKER_PROXY_DIR`, `RUNNER_DOCKER_PROXY_VOLUME`).
+`docker run` and Testcontainers in any language work through it, with any
+image. Every container it creates is rebuilt into a sandbox: privileged mode,
+added capabilities, devices, host namespaces, host paths, other runs' volumes
+and the stack's networks are refused with a message; containers get Docker's
+default capabilities, `no-new-privileges` and the turn's memory and process
+limits; published ports listen only on the turn network's gateway, which turns
+reach as `$TESTCONTAINERS_HOST_OVERRIDE` and your LAN doesn't. A turn sees and
+acts on only what it created, and all of it is removed when the turn ends.
+Builds, swarm, plugins and image removal aren't available. Ryuk is turned off
+(`TESTCONTAINERS_RYUK_DISABLED`), because cleanup is the runner's job.
+
+**Nix, without root.** The agent image ships Nix pointed at the runner's
+`nix-daemon`, which owns a store every turn shares (`RUNNER_NIX_VOLUME`). An
+agent installs a missing tool with `nix profile install nixpkgs#protobuf`; it's
+on `PATH` for the rest of the run and a cache hit for every later run. To move
+to a newer Nix, remove the store volume and the
+`lazyagents-nix-daemon-<stack>` container; the next runner start recreates
+both from the image.
+
+**A remembered recipe per repository.** On a repository's first run the runner
+reads its CI workflows and compose files: GitHub Actions service containers
+become services, and job variables that reach them through `localhost` are
+rewritten to the service's name (Vesper's own CI gives `postgres:17-alpine`
+and `TEST_DATABASE_URL=postgres://...@postgres:5432/...`). Compose files
+contribute well-known backing services (databases, queues, caches, object
+stores) only when CI declares none. After each turn the runner adds the Nix
+packages the agent installed, and the next run installs them during setup.
+Recipes are keyed by repository, so coding chats and ticket runs share them.
+Settings → Runner environment lists each one, with where it came from, a JSON
+editor and Forget (the next run infers it again); the API is
+`/runner/test-environments`.
+
+Services start next to every turn on an internal network of that turn's own,
+reachable by `name`, and are removed when it ends. They get the turn's sandbox
+with Docker's default capabilities, so official database images work as they
+are. A project can still declare services on its agent override
+(`services` in the override JSON); those win over the recipe and are frozen
+into a run at dispatch, so an agent can't change them:
 
 ```json
-[{"name": "postgres", "image": "postgres:17-alpine", "user": "postgres",
-  "env": {"POSTGRES_PASSWORD": "test", "PGDATA": "/var/lib/postgresql/data/pgdata"},
-  "tmpfs": ["/var/lib/postgresql/data", "/var/run/postgresql"],
+[{"name": "postgres", "image": "postgres:17-alpine",
+  "env": {"POSTGRES_PASSWORD": "test"},
   "healthcheck": ["CMD", "pg_isready", "-U", "postgres"],
   "expose": {"TEST_DATABASE_URL": "postgres://postgres:test@postgres:5432/postgres?sslmode=disable"}}]
 ```
 
 The turn starts once every healthcheck passes (or, without one, once the
 container runs), within two minutes; a service that fails to start fails the
-run with its last log lines. Services are frozen into a run at dispatch, so an
-agent can't change what it gets. The local runner skips them and says so.
+run with its last log lines. The local runner skips services, the Docker proxy
+and Nix, and says so.
+
+Database-backed Go tests skip without `TEST_DATABASE_URL` when you run them,
+but fail inside a Vesper run (`LAZYAGENTS_RUN_ID`) or on CI, so "tests pass"
+from an agent means they reached a database.
 
 `make start` signs Vesper in to Claude and Codex the first time. `make login`
 redoes it. Both store plan logins in the `harness:anthropic` and `harness:openai`

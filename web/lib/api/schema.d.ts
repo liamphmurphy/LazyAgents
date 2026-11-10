@@ -981,6 +981,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runner/test-environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What each repository's tests need in a turn, as inferred and learned
+         * @description A repository's test environment is the services started next to each
+         *     turn and the Nix packages installed when a run starts. Its first run
+         *     infers it from the repository's CI workflows and compose files; tools
+         *     agents install with Nix are added after each turn. Services declared
+         *     on a project override win over it.
+         */
+        get: operations["listTestEnvironments"];
+        /**
+         * Replace a repository's test environment
+         * @description Agents keep adding Nix packages they install afterwards; services are only ever changed here or by forgetting it.
+         */
+        put: operations["putTestEnvironment"];
+        post?: never;
+        /** Forget a repository's test environment; its next run infers it again */
+        delete: operations["deleteTestEnvironment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/turns/{seq}/log": {
         parameters: {
             query?: never;
@@ -5092,7 +5121,7 @@ export interface components {
             /** @description Markdown instructions */
             body: string;
         };
-        /** @description A container each turn of a run can reach by name, e.g. the database its tests need. Started next to every turn on a network of that turn's own, with the turn's sandbox, and removed when the turn ends. */
+        /** @description A container each turn of a run can reach by name, e.g. the database its tests need. Started next to every turn on a network of that turn's own, sandboxed like the turn but with Docker's default capabilities, and removed when the turn ends. */
         AgentService: {
             /** @description Hostname turns use; lowercase letters, digits, - or _ */
             name: string;
@@ -5100,7 +5129,7 @@ export interface components {
             image: string;
             /** @description Replaces the image's default command */
             command?: string[];
-            /** @description Services get no capabilities: images that start as root and switch user need their unprivileged user here */
+            /** @description Run as this user instead of the image's */
             user?: string;
             env?: {
                 [key: string]: string;
@@ -5113,6 +5142,40 @@ export interface components {
             expose?: {
                 [key: string]: string;
             };
+        };
+        TestRecipe: {
+            services?: components["schemas"]["AgentService"][];
+            /** @description Flake installables, e.g. nixpkgs#protobuf */
+            nix_packages?: string[];
+        };
+        TestEnvironment: {
+            /** @description Repository key: host and path, e.g. github.com/acme/app */
+            repo: string;
+            recipe: components["schemas"]["TestRecipe"];
+            /** @description Files the first recipe was read from */
+            inferred_from: string[];
+            /**
+             * Format: uuid
+             * @description The run whose turn last added a package
+             */
+            learned_from_run_id?: string;
+            /**
+             * Format: date-time
+             * @description When a person last replaced it
+             */
+            edited_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TestEnvironmentInput: {
+            /** @description A repository URL or key; stored as its key */
+            repo: string;
+            recipe: components["schemas"]["TestRecipe"];
+        };
+        TestEnvironmentList: {
+            environments: components["schemas"]["TestEnvironment"][];
         };
         AgentOverride: {
             harness?: components["schemas"]["Harness"];
@@ -9419,6 +9482,74 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RunnerEnvironment"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listTestEnvironments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test environments, by repository */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestEnvironmentList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putTestEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestEnvironmentInput"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestEnvironment"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteTestEnvironment: {
+        parameters: {
+            query: {
+                /** @description Repository key, e.g. github.com/acme/app */
+                repo: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Forgotten */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

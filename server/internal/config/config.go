@@ -69,6 +69,15 @@ type Runner struct {
 	// turns on host-folder workspaces (RUNNER_HOST_WORKSPACES_DIR, docker
 	// only). The runner and the Docker daemon must both see it at that path.
 	HostWorkspaces string
+	// DockerProxyDir is where the runner serves each turn's sandboxed Docker
+	// API socket, and DockerProxyVolume the Docker volume mounted there, which
+	// turns mount read-only (RUNNER_DOCKER_PROXY_DIR and
+	// RUNNER_DOCKER_PROXY_VOLUME, docker only). Unset, turns get no Docker.
+	DockerProxyDir, DockerProxyVolume string
+	// NixVolume is the Docker volume holding the Nix store turns share
+	// through the runner's nix-daemon (RUNNER_NIX_VOLUME, docker only).
+	// Unset, turns have no Nix.
+	NixVolume string
 }
 
 type S3 struct {
@@ -116,6 +125,13 @@ func Load() (Config, error) {
 		DataDir:      env("RUNNER_DATA_DIR", ".lazyagents/runs"),
 		ClaudeBin:    env("RUNNER_CLAUDE_BIN", ""),
 		CodexBin:     env("RUNNER_CODEX_BIN", ""),
+
+		DockerProxyDir:    env("RUNNER_DOCKER_PROXY_DIR", ""),
+		DockerProxyVolume: env("RUNNER_DOCKER_PROXY_VOLUME", ""),
+		NixVolume:         env("RUNNER_NIX_VOLUME", ""),
+	}
+	if (r.DockerProxyDir == "") != (r.DockerProxyVolume == "") {
+		return c, fmt.Errorf("config: set both RUNNER_DOCKER_PROXY_DIR and RUNNER_DOCKER_PROXY_VOLUME, or neither")
 	}
 	if r.HostWorkspaces = env("RUNNER_HOST_WORKSPACES_DIR", ""); r.HostWorkspaces != "" && !filepath.IsAbs(r.HostWorkspaces) {
 		return c, fmt.Errorf("config: RUNNER_HOST_WORKSPACES_DIR=%q must be an absolute path: Docker resolves it on the host", r.HostWorkspaces)

@@ -66,3 +66,56 @@ test("environment request errors can be retried", async ({ page }) => {
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByRole("cell", { name: "v24.21.0" })).toBeVisible();
 });
+
+test("test environments show what was inferred and learned, and can be edited or forgotten", async ({ page }) => {
+  await installChatApi(page);
+  await page.route("**/api/v1/runner/environment*", (route) => route.fulfill({ json: environment }));
+  const learned: Schemas["TestEnvironment"] = {
+    repo: "github.com/acme/app", inferred_from: [".github/workflows/ci.yml"], learned_from_run_id: runId,
+    created_at: at, updated_at: at,
+    recipe: {
+      services: [{ name: "postgres", image: "postgres:17-alpine", expose: { TEST_DATABASE_URL: "postgres://postgres@postgres:5432/postgres" } }],
+      nix_packages: ["nixpkgs#protobuf"],
+    },
+  };
+  let environments = [learned];
+  let saved: unknown = null;
+  let forgotten = "";
+  await page.route("**/api/v1/runner/test-environments*", async (route) => {
+    const req = route.request();
+    if (req.method() === "PUT") {
+      saved = req.postDataJSON();
+      environments = [{ ...learned, recipe: (saved as { recipe: Schemas["TestRecipe"] }).recipe, edited_at: at }];
+      return route.fulfill({ json: environments[0] });
+    }
+    if (req.method() === "DELETE") {
+      forgotten = new URL(req.url()).searchParams.get("repo") ?? "";
+      environments = [];
+      return route.fulfill({ status: 204 });
+    }
+    return route.fulfill({ json: { environments } });
+  });
+  await page.goto("/settings/runner");
+  const card = page.getByRole("region", { name: "Test environments" }).or(page.locator("section", { hasText: "Test environments" })).first();
+  await expect(card.getByText("github.com/acme/app", { exact: true })).toBeVisible();
+  await expect(card.getByText("postgres:17-alpine")).toBeVisible();
+  await expect(card.getByText("TEST_DATABASE_URL")).toBeVisible();
+  await expect(card.getByText("nixpkgs#protobuf")).toBeVisible();
+  await expect(card.getByText(/read from \.github\/workflows\/ci\.yml/)).toBeVisible();
+  await card.screenshot({ path: "test-results/test-environments.png" });
+
+  await card.getByRole("button", { name: "Edit" }).click();
+  const editor = card.getByLabel("Test environment for github.com/acme/app as JSON");
+  await editor.fill("{ not json");
+  await expect(card.getByRole("alert")).toBeVisible();
+  await expect(card.getByRole("button", { name: "Save" })).toBeDisabled();
+  await editor.fill(JSON.stringify({ nix_packages: ["nixpkgs#jq"] }));
+  await card.getByRole("button", { name: "Save" }).click();
+  await expect(card.getByText("nixpkgs#jq")).toBeVisible();
+  expect(saved).toEqual({ repo: "github.com/acme/app", recipe: { nix_packages: ["nixpkgs#jq"] } });
+
+  page.once("dialog", (d) => void d.accept());
+  await card.getByRole("button", { name: "Forget" }).click();
+  await expect(card.getByText(/None yet/)).toBeVisible();
+  expect(forgotten).toBe("github.com/acme/app");
+});

@@ -7,6 +7,11 @@ FROM golang:1.26.0-bookworm AS go-tools
 RUN git clone --depth 1 --branch v1.31.1 https://github.com/sqlc-dev/sqlc.git /tmp/sqlc \
  && cd /tmp/sqlc && go build -o /go/bin/sqlc ./cmd/sqlc
 
+# Nix lets a turn install any tool it needs without root (nix profile
+# install nixpkgs#protobuf): the runner's nix-daemon owns the store, shared by
+# every turn through the lazyagents-nix volume (see runner/docker_nix.go).
+FROM nixos/nix:2.24.10 AS nix
+
 FROM node:24-bookworm-slim
 COPY --from=go-tools /usr/local/go /usr/local/go
 COPY --from=go-tools /go/bin/sqlc /usr/local/bin/sqlc
@@ -23,6 +28,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       > /etc/apt/sources.list.d/github-cli.list \
  && apt-get update && apt-get install -y --no-install-recommends gh \
  && rm -rf /var/lib/apt/lists/*
+
+# The docker CLI only: turns get a Docker API through the runner's sandboxing
+# proxy (DOCKER_HOST), never the host's daemon or socket.
+ARG DOCKER_CLI_VERSION=27.5.1
+RUN arch="$(uname -m)" \
+ && curl -fsSL "https://download.docker.com/linux/static/stable/${arch}/docker-${DOCKER_CLI_VERSION}.tgz" \
+    | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
+
+COPY --from=nix /nix /nix
+RUN groupadd --system nixbld \
+ && for i in $(seq 1 8); do useradd --system --no-create-home --home-dir /var/empty --shell /usr/sbin/nologin \
+      --gid nixbld --groups nixbld "nixbld$i"; done \
+ && mkdir -p /etc/nix \
+ && printf '%s\n' 'build-users-group = nixbld' 'experimental-features = nix-command flakes' \
+      'sandbox = false' 'auto-optimise-store = true' > /etc/nix/nix.conf
+# Turns reach the store through the daemon; what a turn installs lands in its
+# run's home profile, which later turns of the run keep.
+ENV NIX_REMOTE=daemon
+ENV PATH="/home/node/.nix-profile/bin:${PATH}:/nix/var/nix/profiles/default/bin"
 
 # Versions the adapters were checked against (server/internal/harness).
 ARG CLAUDE_CODE_VERSION=2.1.316
