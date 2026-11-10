@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -212,5 +213,41 @@ func TestPlaygroundLogsMergeContainersInTimeOrder(t *testing.T) {
 	_ = d.Logs(context.Background(), id, 1, false, func(l playground.LogLine) error { got = append(got, l.Text); return nil })
 	if !slices.Equal(got, []string{"error: null value"}) {
 		t.Errorf("tail 1 = %q, want only the newest line", got)
+	}
+}
+
+// Each setup command starts from the workspace root, and one that fails
+// stops setup, even mid-way through an && chain. The script runs under bash
+// against a stand-in workspace, as the setup container would run it.
+func TestPlaygroundSetupCommandsStartFromTheRootAndStopOnFailure(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{"web", "server"} {
+		if err := os.Mkdir(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func(cmds ...string) error {
+		script := strings.ReplaceAll(setupScript(cmds), "cd "+workspacePath+" ", "cd "+root+" ")
+		cmd := exec.Command("bash", "-c", script)
+		cmd.Dir = filepath.Join(root, "web") // anywhere but the root
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%v: %s", err, out)
+		}
+		return nil
+	}
+	if err := run("cd web && touch from-web", "cd server && touch from-server", "touch at-root"); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"web/from-web", "server/from-server", "at-root"} {
+		if _, err := os.Stat(filepath.Join(root, f)); err != nil {
+			t.Errorf("%s: %v", f, err)
+		}
+	}
+	if err := run("cd missing && touch never", "touch after-failure"); err == nil {
+		t.Error("setup succeeded though a command failed")
+	}
+	if _, err := os.Stat(filepath.Join(root, "after-failure")); err == nil {
+		t.Error("setup went on after a failed command")
 	}
 }
