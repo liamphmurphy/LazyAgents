@@ -99,7 +99,7 @@ export function useAttachments() {
 export type Attachments = ReturnType<typeof useAttachments>;
 
 /** The paperclip: opens the file picker. */
-export function AttachButton({ onFiles, disabled }: { onFiles: (f: File[]) => void; disabled?: boolean }) {
+export function AttachButton({ onFiles, disabled, compact }: { onFiles: (f: File[]) => void; disabled?: boolean; compact?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -121,12 +121,12 @@ export function AttachButton({ onFiles, disabled }: { onFiles: (f: File[]) => vo
         title="Attach or drop files"
         disabled={disabled}
         onClick={() => input.current?.click()}
-        className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] text-fg-secondary hover:bg-hover disabled:opacity-50"
+        className={cx("inline-flex h-8 items-center gap-1.5 rounded-md text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-50", compact ? "w-8 justify-center" : "px-2")}
       >
         <svg aria-hidden viewBox="0 0 16 16" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="m13 7.5-4.8 4.8a3 3 0 0 1-4.2-4.2l5-5a2 2 0 0 1 2.8 2.8L6.8 10.9a1 1 0 0 1-1.4-1.4L9.7 5.2" />
         </svg>
-        Attach
+        {!compact && "Attach"}
       </button>
     </>
   );

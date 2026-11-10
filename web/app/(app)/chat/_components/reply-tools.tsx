@@ -24,6 +24,12 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
   );
 }
 
+/** The composer's frame: the message box and its options share one border, which takes the focus ring. */
+export const composerFrame =
+  "flex flex-col gap-2 rounded-xl border border-border-strong bg-surface p-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30";
+/** The message box inside the frame: the frame draws the border and focus, so the box doesn't. */
+export const composerInput = "!border-0 !bg-transparent !px-1.5 !py-1 focus-visible:!outline-none";
+
 /** On for one message: asks for a research plan to approve instead of an answer. */
 export function ResearchToggle({ on, onChange, disabled }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
   return (

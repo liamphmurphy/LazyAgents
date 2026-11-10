@@ -1,7 +1,7 @@
 "use client";
 
 import { useCanvasPanel } from "@/lib/use-canvas-panel";
-import { ResearchToggle, TemporaryToggle } from "./reply-tools";
+import { composerFrame, composerInput, ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useBootstrap, useChat, useChats, useStartChat } from "@/lib/api/hooks";
@@ -124,9 +124,11 @@ function Welcome({ disabled }: { disabled: boolean }) {
         )}
         <AttachmentChips attachments={files} />
         <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
+        <div className={composerFrame}>
         <TextArea
           ref={area}
           aria-label="Message"
+          className={composerInput}
           rows={3}
           value={text}
           disabled={locked}
@@ -139,14 +141,16 @@ function Welcome({ disabled }: { disabled: boolean }) {
             }
           }}
         />
-        <div className="flex items-center gap-2">
-          <PersonaSwitcher value={personaId} onChange={setPicked} disabled={locked} />
-          {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
-          <AttachButton onFiles={files.add} disabled={locked} />
-          <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
-          <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
-          <span className="flex-1" />
+        <div className="flex items-end gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <PersonaSwitcher value={personaId} onChange={setPicked} disabled={locked} />
+            {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
+            <AttachButton onFiles={files.add} disabled={locked} compact />
+            <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
+            <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
+          </div>
           <Button
+            className="flex-none"
             type="submit"
             variant="primary"
             disabled={locked || files.pending || !text.trim() || askCommitEmail}
@@ -154,6 +158,7 @@ function Welcome({ disabled }: { disabled: boolean }) {
           >
             {start.isPending ? "Starting…" : research ? "Plan it" : "Send"}
           </Button>
+        </div>
         </div>
       </form>
     </div>

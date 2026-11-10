@@ -41,7 +41,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
+import { AskAboutSelection, composerFrame, composerInput, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { VideoCards, VideoRendererNotes } from "@/components/domain/video-card";
@@ -940,6 +940,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             >
               <AttachmentChips attachments={files} />
               <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
+              <div className={composerFrame}>
               <div className="relative">
                 {commandItems.length > 0 && (
                   <ul
@@ -994,6 +995,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   }}
                   mono={false}
                   aria-label="Message"
+                  className={composerInput}
                   rows={1}
                   value={text}
                   onChange={(v) => {
@@ -1069,8 +1071,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 {fresh && c.persona && c.repo_url && (full?.repos.length ?? 0) > 1 && codesInRepos(full) && (
                   <RepoSelect repos={full!.repos} value={c.repo_url} onChange={(r) => switchPersona(c.persona!.id, r)} disabled={locked || create.isPending} />
                 )}
-                <AttachButton onFiles={files.add} disabled={locked} />
-                <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} />
+                <AttachButton onFiles={files.add} disabled={locked} compact />
+                <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} compact />
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                 {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked || running} />}
@@ -1102,6 +1104,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   {running ? "Interrupt" : research ? "Plan it" : "Send"}
                 </Button>
                 </div>
+              </div>
               </div>
             </form>
             </>
