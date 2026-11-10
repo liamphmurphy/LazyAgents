@@ -15,7 +15,9 @@ SELECT * FROM chat_spaces WHERE id = @id;
 
 -- name: ListChatSpaces :many
 -- The person's spaces, oldest first: the order they're listed in the menu.
-SELECT * FROM chat_spaces WHERE workspace_id = @workspace_id AND user_id = @user_id ORDER BY created_at, id;
+-- An app's space (app IS NOT NULL) is left out: the person reaches it through
+-- the app, and it doesn't count toward their limit.
+SELECT * FROM chat_spaces WHERE workspace_id = @workspace_id AND user_id = @user_id AND app IS NULL ORDER BY created_at, id;
 
 -- name: ChatSpacesByIDs :many
 SELECT * FROM chat_spaces WHERE id = ANY(@ids::uuid[]) AND workspace_id = @workspace_id AND user_id = @user_id;
