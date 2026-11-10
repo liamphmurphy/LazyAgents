@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"math"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,6 +30,11 @@ type Config struct {
 
 	// SecretsKey encrypts stored secrets (base64, 32 bytes). Empty = secrets disabled.
 	SecretsKey string
+	// NoSignIn serves the person-facing API without a browser session
+	// (VESPER_NO_SIGNIN), for a disposable local instance such as one an
+	// agent runs in a playground. Load refuses it unless PublicURL is a
+	// loopback address.
+	NoSignIn bool
 	// PublicURL is how agents and browsers reach the app (Caddy in compose).
 	PublicURL string
 	// WebURL is where the person's browser opens the app, for sign-in links.
@@ -124,6 +131,12 @@ func Load() (Config, error) {
 	var err error
 	if c.Seed, err = boolEnv("SEED", false); err != nil {
 		return c, err
+	}
+	if c.NoSignIn, err = boolEnv("VESPER_NO_SIGNIN", false); err != nil {
+		return c, err
+	}
+	if c.NoSignIn && !loopbackURL(c.PublicURL) {
+		return c, fmt.Errorf("config: VESPER_NO_SIGNIN lets anyone who reaches the API act as you; it's only for a local instance, and PUBLIC_URL=%q isn't a loopback address", c.PublicURL)
 	}
 	r := Runner{
 		Backend:      env("RUNNER_BACKEND", "docker"),
@@ -233,6 +246,20 @@ func Load() (Config, error) {
 		return c, err
 	}
 	return c, nil
+}
+
+// loopbackURL reports whether a URL's host is this machine.
+func loopbackURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // maxPlaygroundPorts bounds RUNNER_PLAYGROUND_PORTS: each is a running app.

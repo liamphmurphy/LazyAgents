@@ -23,3 +23,31 @@ func TestPortListAcceptsRangesAndLists(t *testing.T) {
 		}
 	}
 }
+
+// No sign-in is for a disposable local instance: anywhere else, anyone who
+// reaches the API would act as the person.
+func TestNoSignInOnlyOnLoopback(t *testing.T) {
+	t.Setenv("VESPER_NO_SIGNIN", "1")
+	for url, ok := range map[string]bool{
+		"http://localhost:8080":         true,
+		"http://127.0.0.1:3000":         true,
+		"http://[::1]:8000":             true,
+		"https://vesper.example.com":    false,
+		"http://192.168.1.20:8080":      false,
+		"http://localhost.example.com/": false,
+	} {
+		t.Setenv("PUBLIC_URL", url)
+		c, err := Load()
+		if ok && (err != nil || !c.NoSignIn) {
+			t.Errorf("PUBLIC_URL=%s: %v, NoSignIn=%v; want it on", url, err, c.NoSignIn)
+		}
+		if !ok && err == nil {
+			t.Errorf("PUBLIC_URL=%s: accepted", url)
+		}
+	}
+	t.Setenv("VESPER_NO_SIGNIN", "")
+	t.Setenv("PUBLIC_URL", "https://vesper.example.com")
+	if c, err := Load(); err != nil || c.NoSignIn {
+		t.Errorf("unset: %v, NoSignIn=%v", err, c.NoSignIn)
+	}
+}

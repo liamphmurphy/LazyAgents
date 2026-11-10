@@ -159,13 +159,17 @@ func serve(ctx context.Context, log *slog.Logger) error {
 	trackerSvc := &tracker.Service{Pool: pool}
 	events := realtime.New()
 	go events.Run(ctx, pool)
+	if cfg.NoSignIn {
+		log.Warn("VESPER_NO_SIGNIN is on: the API serves anyone who reaches it as the local user, without signing in")
+	}
 	srv := &httpapi.Server{
-		Events:  events,
-		Version: cfg.Version,
-		Checks:  map[string]httpapi.Pinger{"postgres": pool, "s3": blobs},
-		Pool:    pool,
-		Q:       q,
-		Tracker: trackerSvc,
+		AnonymousAPI: cfg.NoSignIn,
+		Events:       events,
+		Version:      cfg.Version,
+		Checks:       map[string]httpapi.Pinger{"postgres": pool, "s3": blobs},
+		Pool:         pool,
+		Q:            q,
+		Tracker:      trackerSvc,
 
 		Artifacts:      arts,
 		Agents:         &agents.Service{Pool: pool},
