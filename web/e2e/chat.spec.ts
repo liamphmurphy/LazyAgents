@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { catalog, installChatApi, persona } from "./mock-chat-api";
+import { AGENTS, catalog, installChatApi, persona } from "./mock-chat-api";
 
 // History lives in the expanded menu.
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -12,7 +12,7 @@ const chips = (page: Page) => page.getByTestId("context-chip");
 
 // Starts a conversation from the Welcome (or the conversation header).
 async function newChat(page: Page) {
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   // The route swap finishes once the composer of the new chat is there.
   await expect(composer(page)).toBeVisible();
 }
@@ -482,7 +482,7 @@ test("with no harness available, chat says why before anything is sent", async (
   await composer(page).press("Enter");
   expect(mock.posted).toEqual([]);
   // New conversation is refused up front, naming the missing secrets.
-  await expect(page.getByRole("button", { name: "New conversation", exact: true }).first()).toBeDisabled();
+  await expect(page.getByRole("button", { name: "New chat", exact: true }).first()).toBeDisabled();
   await expect(page.locator('p[role="status"]').filter({ hasText: "No harness is available: add harness:anthropic or harness:openai." })).toBeVisible();
   // The shell banner names the same secrets on every screen.
   await expect(page.getByRole("status", { name: /Agents can’t run/ })).toBeVisible();
@@ -762,4 +762,19 @@ test("each reply shows its tokens and cost on hover or focus", async ({ page }) 
 
   await reply.getByTestId("model-tag").hover();
   await expect(tooltip).toContainText("Cost$0.042");
+});
+
+test("the history groups conversations by the day they were last active", async ({ page }) => {
+  const mock = await installChatApi(page);
+  const at = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+  const chat = (n: number, title: string, when: string) =>
+    ({
+      id: `d0000000-0000-4000-8000-00000000000${n}`, title, agent_id: AGENTS[0].id, harness: "claude-code", model: "opus-5.5", state: "idle",
+      archived: false, revision: 1, message_count: 2, created_at: when, updated_at: when, last_message_at: when,
+    }) as (typeof mock.chats)[number];
+  mock.chats.push(chat(1, "Fresh one", at(0)), chat(2, "Old one", at(5)));
+  await page.goto("/chat?new");
+  await expect(historyNav(page).getByRole("region", { name: "Today" }).getByRole("link")).toHaveText([/Fresh one/]);
+  await expect(historyNav(page).getByRole("region", { name: "Earlier" }).getByRole("link")).toHaveText([/Old one/]);
+  await expect(historyNav(page).getByRole("region", { name: "Yesterday" })).toHaveCount(0);
 });

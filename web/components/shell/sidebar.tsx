@@ -5,12 +5,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode, type TransitionEvent } from "react";
 import { usePulse } from "@/components/ui/motion";
 import { DropdownMenu } from "radix-ui";
-import { useSecrets } from "@/lib/api/hooks";
+import { useBootstrap, useSecrets } from "@/lib/api/hooks";
 import { useScheduledTasks } from "@/lib/api/connector-hooks";
 import { tasksNeedingYou } from "@/lib/schedule-ui";
 import { cx } from "@/lib/cx";
 import { needsAttention } from "@/lib/settings";
-import { currentProject, isActive, modeHref, navGroupsFor, switchHref, withProject, type NavBadge, type NavMode, type ScopedProject } from "@/lib/project-scope";
+import { APP_GROUP, NAV_GROUPS, currentProject, isActive, modeHref, navGroupsFor, switchHref, withProject, type NavBadge, type NavItem, type NavMode, type ScopedProject } from "@/lib/project-scope";
 import { viewedChatId } from "@/lib/persona-dock";
 import { Icon, Mark } from "@/components/ui/icon";
 import { Segmented } from "@/components/ui/controls";
@@ -20,6 +20,8 @@ import { SidebarCapacity } from "@/components/domain/runner-capacity";
 import { SidebarSavedViews } from "@/components/domain/saved-views";
 import { ChatHistory, NewConversationButton, PersonaRail } from "@/app/(app)/chat/_components/chat-history";
 import { SidebarSpaces, SpaceRail } from "@/app/(app)/spaces/_components/spaces-nav";
+import { NewSpaceDialog } from "@/app/(app)/spaces/_components/new-space-dialog";
+import { HumanAvatar } from "@/components/domain/avatars";
 import { useNavMode } from "./nav-mode";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
@@ -74,10 +76,9 @@ function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, num
   }
   if (kind === "runs") {
     return (
-      <span className="flex items-center gap-[5px] text-[11.5px] text-fg-tertiary">
+      <span className="flex items-center gap-[6px] text-xs text-fg-tertiary">
         <span aria-hidden className="size-1.5 rounded-full bg-state-done" />
-        {n}
-        <span className="sr-only"> running</span>
+        {n} running
       </span>
     );
   }
@@ -222,6 +223,102 @@ function ProjectSwitcher({ projects, current }: { projects: ScopedProject[]; cur
   );
 }
 
+/** Chat mode's "Needs you": the Inbox and the runs going, the two things that want a look. */
+function NeedsYou({ counts, active }: { counts: Record<NavBadge, number>; active: (href: string) => boolean }) {
+  return (
+    <div role="group" aria-label="Needs you" className="mt-2 flex flex-col gap-px">
+      <span aria-hidden className="px-2 pb-1 text-xs font-medium text-fg-tertiary">Needs you</span>
+      <NavLink href="/inbox" active={active("/inbox")}>
+        <Icon name="inbox" />
+        <span className="flex-1">Inbox</span>
+        <Badge kind="inbox" counts={counts} />
+      </NavLink>
+      <NavLink href="/runs" active={active("/runs")}>
+        <Icon name="play" />
+        <span className="flex-1">Runs</span>
+        <Badge kind="runs" counts={counts} />
+      </NavLink>
+    </div>
+  );
+}
+
+/** The personal pages that aren't apps, behind Apps' "More" tile. */
+const MORE_ROUTES = ["/workflows", "/scheduled", "/learn"];
+const MORE_ITEMS: NavItem[] = NAV_GROUPS[0].items.filter((i) => MORE_ROUTES.includes(i.href));
+const LIBRARY: NavItem = NAV_GROUPS[0].items.find((i) => i.href === "/library")!;
+
+const tile = "flex h-[50px] min-w-0 flex-col items-center justify-center gap-1 rounded-[10px] border text-xs";
+
+/** Apps as tiles, then More, which opens in place (and is open on its own pages). */
+function AppTiles({ counts, active, onNewSpace }: { counts: Record<NavBadge, number>; active: (href: string) => boolean; onNewSpace: () => void }) {
+  const onMorePage = MORE_ITEMS.some((i) => active(i.href));
+  const [opened, setOpened] = useState(false);
+  const open = opened || onMorePage;
+  const moreNews = MORE_ITEMS.some((i) => i.badge && counts[i.badge] > 0);
+  return (
+    <div role="group" aria-label="Apps" className="flex flex-col gap-1.5">
+      <span aria-hidden className="px-2 text-xs font-medium text-fg-tertiary">Apps</span>
+      <div className="grid grid-cols-4 gap-1.5">
+        {[...APP_GROUP.items, LIBRARY].map((n) => {
+          const on = active(n.href);
+          return (
+            <Link key={n.href} href={n.href} aria-current={on ? "page" : undefined}
+              className={cx(tile, on ? "border-accent/40 bg-selected text-fg" : "border-border bg-surface text-fg-secondary hover:bg-hover hover:text-fg")}>
+              <Icon name={n.icon} size={15} />
+              <span className="max-w-full truncate px-0.5">{n.label}</span>
+            </Link>
+          );
+        })}
+        <button type="button" aria-expanded={open} aria-controls="sidebar-more" onClick={() => setOpened(!open)} disabled={onMorePage}
+          className={cx(tile, "relative border-border bg-surface text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-default", open && "bg-selected text-fg")}>
+          <Icon name="dots" size={15} />
+          <span>More</span>
+          {moreNews && !open && <span aria-hidden className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-state-human" />}
+        </button>
+      </div>
+      {open && (
+        <div id="sidebar-more" className="flex flex-col gap-px">
+          {MORE_ITEMS.map((n) => (
+            <NavLink key={n.href} href={n.href} active={active(n.href)}>
+              <Icon name={n.icon} />
+              <span className="flex-1">{n.label}</span>
+              <Badge kind={n.badge} counts={counts} />
+            </NavLink>
+          ))}
+          <button type="button" onClick={onNewSpace} className="flex h-[30px] items-center gap-2.5 rounded-sm px-2 text-[13px] font-medium text-fg-secondary hover:bg-hover hover:text-fg">
+            <Icon name="plus" />
+            New space
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The bottom of the menu: the way to the other mode, then you, with Customization (personas, memory, profile) behind the gear. */
+function MenuFooter({ mode, href, active }: { mode: NavMode; href: string; active: (href: string) => boolean }) {
+  const boot = useBootstrap();
+  const me = boot.data?.me;
+  const other = mode === "chat" ? { label: "Projects & tickets", icon: "briefcase" as const } : { label: "Chats & personas", icon: "msg" as const };
+  return (
+    <div className="flex flex-col gap-2.5">
+      <Link href={href} className="flex h-[34px] items-center gap-2.5 rounded-[9px] border border-border px-2.5 text-[13px] font-medium text-fg-2 hover:bg-hover hover:text-fg">
+        <Icon name={other.icon} />
+        <span className="flex-1">{other.label}</span>
+        <Icon name="chev" size={12} className="-rotate-90 text-fg-tertiary" />
+      </Link>
+      <div className="flex items-center gap-2.5 border-t border-border-subtle px-1 pt-2.5">
+        {me && <HumanAvatar name={me.name} initials={me.initials} color={me.avatar_color} src={me.avatar_url} size={24} label={false} />}
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{me?.name ?? ""}</span>
+        <Link href="/customization" aria-label="Customization" title="Customization: personas, memory and your profile" aria-current={active("/customization") ? "page" : undefined}
+          className={cx("grid size-[28px] place-items-center rounded-md", active("/customization") ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover hover:text-fg")}>
+          <Icon name="sliders" size={15} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }: SidebarProps) {
   const pathname = usePathname();
   const search = useSearchParams();
@@ -234,6 +331,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
   const scheduled = useScheduledTasks(mode === "chat");
   const counts: Record<NavBadge, number> = { scheduled: tasksNeedingYou(scheduled.data?.tasks), inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
   const [expanded, setExpanded] = useExpanded();
+  const [creatingSpace, setCreatingSpace] = useState(false);
   // Only a toggle animates, not restoring the remembered state after mount.
   const [toggled, setToggled] = useState(false);
   const toggle = (next: boolean) => { setToggled(true); setExpanded(next); };
@@ -294,13 +392,15 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
       </aside>
     );
   }
+  const otherHref = modeHref(chatting ? "work" : "chat", current?.key, lastWork);
+  const searchEvent = () => window.dispatchEvent(new Event("la:search"));
   return (
-    <aside aria-label="Main menu" data-expanded onTransitionEnd={settle} className={cx("flex min-w-0 flex-[1_1_232px] flex-col gap-5 border-r min-[800px]:w-[232px] min-[800px]:flex-none border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3", toggled && "motion-sidebar", chatting && "min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh")}>
+    <aside aria-label="Main menu" data-expanded onTransitionEnd={settle} className={cx("flex min-w-0 flex-[1_1_232px] flex-col gap-4 border-r min-[800px]:w-[232px] min-[800px]:flex-none border-border-subtle bg-sidebar px-2.5 pb-3.5 pt-3", toggled && "motion-sidebar", chatting && "min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh")}>
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-[9px] px-1.5 py-[5px]">
             <Mark />
-            <span className="text-[13.5px] font-semibold tracking-[-0.01em]">Vesper</span>
+            <span className="text-[14px] font-semibold tracking-[-0.01em]">Vesper</span>
           </span>
           <div className="flex flex-none items-center gap-1.5">
             {!chatting && newTicket}
@@ -308,44 +408,68 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
           </div>
         </div>
         {!chatting && <ProjectSwitcher projects={active} current={current} />}
+        {chatting ? (
+          <div className="flex items-center gap-2">
+            <NewConversationButton id={viewed ?? undefined} />
+            <button
+              type="button"
+              aria-label="Search"
+              title="Search (⌘K)"
+              onClick={searchEvent}
+              className="grid size-[34px] flex-none place-items-center rounded-[9px] border border-border bg-surface text-fg-secondary hover:bg-hover hover:text-fg"
+            >
+              <Icon name="search" size={15} strokeWidth={1.6} />
+            </button>
+          </div>
+        ) : (
+          // Shared command menu also opens from the keyboard.
+          <button
+            type="button"
+            onClick={searchEvent}
+            className="flex h-8 items-center gap-[9px] rounded-md border border-border bg-search px-2.5 text-[13px] text-fg-tertiary hover:bg-hover"
+          >
+            <Icon name="search" size={14} strokeWidth={1.6} />
+            <span className="flex-1 text-left">Search…</span>
+            <Kbd>⌘K</Kbd>
+          </button>
+        )}
       </div>
 
-      <div className="flex flex-col gap-2">
-        {/* Shared command menu also opens from the keyboard. */}
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new Event("la:search"))}
-          className="flex h-8 items-center gap-[9px] rounded-md border border-border bg-search px-2.5 text-[13px] text-fg-tertiary hover:bg-hover"
-        >
-          <Icon name="search" size={14} strokeWidth={1.6} />
-          <span className="flex-1 text-left">Search…</span>
-          <Kbd>⌘K</Kbd>
-        </button>
-        <ModeToggle mode={mode} onChange={switchMode} />
-      </div>
-
-      <nav aria-label="Primary" className="flex flex-col gap-3.5">
-        {groups.map((g) => (
-          <div key={g.label} role="group" aria-label={g.label} className="flex flex-col gap-px">
-            {/* Work's pinned items sit above the labelled groups without a heading of their own. */}
-            {(chatting || g.label !== "Personal") && <span aria-hidden className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</span>}
-            {g.items.map((n) => (
-              <div key={n.href} className="contents">
-                <NavLink href={withProject(n.href, current?.key)} active={navActive(n.href)}>
-                  <Icon name={n.icon} />
-                  <span className="flex-1">{n.label}</span>
-                  <Badge kind={n.badge} counts={counts} />
-                </NavLink>
-                {n.href === "/tickets" && <SidebarSavedViews project={current?.key} />}
+      {chatting ? (
+        // History first: it's what the menu is for in Chat mode. Everything else sits under it.
+        <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col gap-4">
+          <ChatHistory id={viewed ?? undefined} viewed={viewed} afterFilter={<NeedsYou counts={counts} active={navActive} />} />
+          <SidebarSpaces viewed={viewed} hideWhenEmpty />
+          <div className="flex flex-col gap-3 border-t border-border-subtle pt-3">
+            <AppTiles counts={counts} active={navActive} onNewSpace={() => setCreatingSpace(true)} />
+            <MenuFooter mode="chat" href={otherHref} active={navActive} />
+          </div>
+        </nav>
+      ) : (
+        <>
+          <nav aria-label="Primary" className="flex flex-col gap-3.5">
+            {groups.map((g) => (
+              <div key={g.label} role="group" aria-label={g.label} className="flex flex-col gap-px">
+                {/* Work's pinned items sit above the labelled groups without a heading of their own. */}
+                {g.label !== "Personal" && <span aria-hidden className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</span>}
+                {g.items.map((n) => (
+                  <div key={n.href} className="contents">
+                    <NavLink href={withProject(n.href, current?.key)} active={navActive(n.href)}>
+                      <Icon name={n.icon} />
+                      <span className="flex-1">{n.label}</span>
+                      <Badge kind={n.badge} counts={counts} />
+                    </NavLink>
+                    {n.href === "/tickets" && <SidebarSavedViews project={current?.key} />}
+                  </div>
+                ))}
               </div>
             ))}
-          </div>
-        ))}
-      </nav>
-
-      {chatting && <SidebarSpaces viewed={viewed} />}
-      {chatting && <ChatHistory id={viewed ?? undefined} viewed={viewed} />}
-      {pathname === "/dashboard" && <SidebarCapacity />}
+          </nav>
+          {pathname === "/dashboard" && <SidebarCapacity />}
+          <MenuFooter mode="work" href={otherHref} active={navActive} />
+        </>
+      )}
+      <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
     </aside>
   );
 }

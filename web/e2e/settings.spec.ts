@@ -105,13 +105,13 @@ test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("laz
 test("provider credentials show status and unlocks, are write-only, and saving refreshes the model picker", async ({ page }) => {
   const mock = await installSettingsApi(page);
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: "New conversation" }).first().click();
+  await page.getByRole("button", { name: "New chat" }).first().click();
   await page.getByRole("button", { name: /Model for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Escape");
   const before = mock.models();
   // Settings is in Work mode; both steps stay client-side, so the model cache survives.
-  await page.getByRole("radio", { name: "Work" }).click();
+  await page.getByRole("link", { name: "Projects & tickets" }).click();
   await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /Settings/ }).click();
 
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
@@ -148,8 +148,8 @@ test("provider credentials show status and unlocks, are write-only, and saving r
 
   // The chat model cache was invalidated, so back in chat Codex is selectable
   // without a reload (the cache is otherwise fresh for a minute).
-  await page.getByRole("radio", { name: "Chat" }).click();
-  await page.getByRole("button", { name: "New conversation" }).first().click();
+  await page.getByRole("link", { name: "Chats & personas" }).click();
+  await page.getByRole("button", { name: "New chat" }).first().click();
   await page.getByRole("button", { name: /Model for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).not.toHaveAttribute("aria-disabled", "true");
   expect(mock.models()).toBeGreaterThan(before);

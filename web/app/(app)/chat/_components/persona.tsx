@@ -272,9 +272,10 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
   return (
     <div className="flex flex-col gap-1">
       <div role="group" aria-label="Show conversations for" className={cx("flex items-center py-0.5", overflow.length > 0 || shown.length === STRIP_PERSONAS - 1 ? "justify-between" : "gap-1.5")}>
-        <PersonaAvatarButton label="All personas" on={value === "all"} disabled={filter.loading} onClick={() => filter.set("all")}>
-          <span className="grid size-[26px] place-items-center rounded-full border border-border-strong bg-surface text-fg-secondary"><Icon name="users" size={14} /></span>
-        </PersonaAvatarButton>
+        <button type="button" aria-label="All personas" aria-pressed={value === "all"} title="All personas" disabled={filter.loading} onClick={() => filter.set("all")}
+          className={cx("h-7 flex-none rounded-full px-3 text-xs font-semibold disabled:opacity-60", value === "all" ? "bg-selected text-fg outline-2 outline-accent" : "bg-surface text-fg-secondary hover:text-fg")}>
+          All
+        </button>
         <PersonaAvatarButton label={`${defaultLook.name} (default)`} on={value === "default"} state={defaultId ? activity.get(defaultId) : undefined} disabled={filter.loading} onClick={() => filter.set("default")}>
           <PersonaAvatar persona={defaultLook} size={26} />
         </PersonaAvatarButton>
