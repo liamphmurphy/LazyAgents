@@ -154,8 +154,7 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 
 	if len(spec.Setup) > 0 {
 		step("Running setup")
-		script := "set -e\n" + strings.Join(spec.Setup, "\n")
-		body, err := d.playgroundBody(pg, network, playgroundSetup, script, "", spec.ProcessEnv(nil))
+		body, err := d.playgroundBody(pg, network, playgroundSetup, setupScript(spec.Setup), "", spec.ProcessEnv(nil))
 		if err != nil {
 			return nil, err
 		}
@@ -190,6 +189,19 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 		}
 	}
 	return addrs, nil
+}
+
+// setupScript runs each setup command from the workspace root, as the spec
+// promises, in a subshell of its own: a cd in one doesn't move the next, and
+// a command whose status is non-zero stops setup even when it's an && chain,
+// which set -e alone lets through.
+func setupScript(cmds []string) string {
+	var b strings.Builder
+	b.WriteString("set -e\n")
+	for _, c := range cmds {
+		b.WriteString("(cd " + workspacePath + " && " + c + "\n)\n")
+	}
+	return b.String()
 }
 
 // playgroundBody is a setup or process container: the agent image in the
