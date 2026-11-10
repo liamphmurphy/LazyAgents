@@ -399,6 +399,20 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     const show = setTimeout(() => setNewReply(true), 0);
     return () => clearTimeout(show);
   }, [list?.length, running]); // eslint-disable-line react-hooks/exhaustive-deps -- only a new message or turn moves the view
+  // Replies keep growing after they land (a running turn's narration and steps, diagrams, apps,
+  // images) and trays above the composer shrink the view; stay at the end while pinned there.
+  const hasLog = !!list && (list.length > 0 || running);
+  useEffect(() => {
+    const view = scroller.current;
+    const content = log.current;
+    if (!view || !content) return;
+    const follow = new ResizeObserver(() => {
+      if (pinned.current) view.scrollTop = view.scrollHeight;
+    });
+    follow.observe(view);
+    follow.observe(content);
+    return () => follow.disconnect();
+  }, [hasLog]);
   const targetFound = !!target && !!list?.some((m) => m.id === target);
   useEffect(() => {
     if (!target || !targetFound) return;

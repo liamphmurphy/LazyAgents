@@ -108,6 +108,16 @@ test("a chat row's actions leave the title its full width until hovered", async 
   await expect(rename.locator("xpath=..")).toHaveCSS("opacity", "1");
 });
 
+test("a running reply that grows keeps the view at the bottom", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 500 });
+  await open(page, "rich: diagrams and cards");
+  // The narration and step card stream in after the turn starts, growing the view without adding a message.
+  await say(page, "narrated: go");
+  await expect(page.getByTestId("thinking")).toContainText("On it.");
+  const panel = page.getByRole("tabpanel", { name: "Chat" });
+  await expect.poll(() => panel.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(24);
+});
+
 test("a reply arriving while scrolled up offers a New reply pill instead of moving the view", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 500 });
   await open(page, "rich: long reply", 900);
