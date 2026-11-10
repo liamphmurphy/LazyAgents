@@ -45,6 +45,9 @@ services:
     build:
       context: ./server
     environment: *api-env
+    # The only service on the agents network, so turn containers reach it as
+    # api:8000 and nothing else in the stack.
+    networks: [default, agents]
     depends_on:
       postgres: { condition: service_healthy }
       seaweedfs: { condition: service_healthy }
@@ -63,8 +66,9 @@ services:
 
   # Executes dispatched runs (docs/dev/plan.md §6.4–6.6). It drives Docker through the
   # socket, which is root-equivalent on the host: fine for a laptop (v1),
-  # documented in README. Turn containers join this compose network and
-  # reach the API as api:8000.
+  # documented in README. Turn containers join the agents network and reach
+  # the API as api:8000; Postgres and SeaweedFS aren't on it, so a shell in a
+  # turn can't connect to them with the stack's default credentials.
   runner:
     build:
       context: ./server
@@ -74,7 +78,7 @@ services:
       <<: *api-env
       RUNNER_BACKEND: docker
       RUNNER_IMAGE: ${RUNNER_IMAGE:-vesper/agent-base:latest}
-      RUNNER_NETWORK: lazyagents_default
+      RUNNER_NETWORK: lazyagents_agents
       RUNNER_MCP_URL: http://api:8000/mcp
       # Its containers are this stack's alone: cleanup never touches the dev stack's.
       RUNNER_STACK: lazyagents
@@ -107,6 +111,11 @@ services:
     depends_on:
       - api
       - web
+
+networks:
+  agents:
+    # Fixed name: the runner passes it to Docker as RUNNER_NETWORK.
+    name: lazyagents_agents
 
 volumes:
   pgdata:

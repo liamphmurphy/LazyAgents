@@ -99,7 +99,7 @@ func Load() (Config, error) {
 	r := Runner{
 		Backend:      env("RUNNER_BACKEND", "docker"),
 		Image:        env("RUNNER_IMAGE", "vesper/agent-base:latest"),
-		Network:      env("RUNNER_NETWORK", "lazyagents_default"),
+		Network:      env("RUNNER_NETWORK", "lazyagents_agents"),
 		DockerSocket: env("DOCKER_SOCKET", "/var/run/docker.sock"),
 		Stack:        env("RUNNER_STACK", "default"),
 		DataDir:      env("RUNNER_DATA_DIR", ".lazyagents/runs"),
