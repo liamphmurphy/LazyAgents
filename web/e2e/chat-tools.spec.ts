@@ -124,7 +124,10 @@ test("a reply arriving while scrolled up offers a New reply pill instead of movi
   await say(page, "another");
   const panel = page.getByRole("tabpanel", { name: "Chat" });
   await page.waitForTimeout(150);
-  await panel.evaluate((el) => { el.scrollTop = 0; });
+  // A wheel, not a scripted scrollTop: only the person's input lets go of the end.
+  await panel.hover();
+  await page.mouse.wheel(0, -5000);
+  await expect.poll(() => panel.evaluate((el) => el.scrollTop)).toBeLessThan(50);
   const pill = page.getByRole("button", { name: "New reply" });
   await expect(pill).toBeVisible({ timeout: 5000 });
   expect(await panel.evaluate((el) => el.scrollTop)).toBeLessThan(50);

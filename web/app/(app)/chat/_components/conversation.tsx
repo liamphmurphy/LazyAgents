@@ -308,6 +308,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const log = useRef<HTMLOListElement>(null);
   // Following the newest message; off once the person scrolls up, or arrives at a search hit.
   const pinned = useRef(!target);
+  // Dragging the scrollbar or touch-scrolling: only then does a scroll away from the end mean the person moved.
+  const dragging = useRef(false);
   const [newReply, setNewReply] = useState(false);
   // On for one message: asks for a research plan to approve.
   const [research, setResearch] = useState(false);
@@ -757,11 +759,29 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           aria-label="Chat"
           hidden={tab !== "chat"}
           className="relative flex-1 overflow-y-auto px-6 py-5"
+          // Only the person's input lets go of the end. A scroll event alone can't tell: the one for our
+          // own scroll, or for the browser clamping it as content shrinks, may land after the content grew
+          // again, far from the end without anyone having moved.
+          onWheel={(e) => {
+            if (e.deltaY < 0) pinned.current = false;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowUp" || e.key === "PageUp" || e.key === "Home") pinned.current = false;
+          }}
+          onPointerDown={(e) => {
+            // On the panel itself rather than a message: that's the scrollbar.
+            if (e.target === e.currentTarget) dragging.current = true;
+          }}
+          onPointerUp={() => (dragging.current = false)}
+          onTouchStart={() => (dragging.current = true)}
+          onTouchEnd={() => (dragging.current = false)}
           onScroll={(e) => {
             const el = e.currentTarget;
             const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-            pinned.current = atEnd;
-            if (atEnd) setNewReply(false);
+            if (atEnd) {
+              pinned.current = true;
+              setNewReply(false);
+            } else if (dragging.current) pinned.current = false;
           }}
         >
           {messages.isError ? (
