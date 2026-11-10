@@ -46,6 +46,7 @@ const LABELS: Record<ChatStatusKind, string> = {
   secret: "Using a secret",
   wiki: "Reading the wiki",
   tickets: "Working on tickets",
+  "ticket-lookup": "Pulling in tickets",
   "reading-code": "Reading code",
   "searching-code": "Searching code",
   "writing-code": "Writing code",
@@ -78,6 +79,7 @@ export const sceneLabel = (kind: ChatStatusKind) => LABELS[kind];
 const CODE_LINES = "M20 10H72 M30 19H112 M30 28H88 M20 37H60 M20 46H108";
 
 const toX = (px: number) => ({ "--to-x": `${px}px` }) as CSSProperties;
+const toFrom = (px: number) => ({ "--from-x": `${px}px` }) as CSSProperties;
 
 function canvasScene(pin?: boolean) {
   return (
@@ -126,6 +128,30 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
       <rect className="scene-paper" x="61" y="36" width="20" height="10" rx="2" />
       <rect className="scene-paper" x="95" y="26" width="20" height="10" rx="2" />
       <rect className="scene-accent scene-card" x="27" y="12" width="20" height="10" rx="2" />
+    </>
+  ),
+  // Ticket and epic cards fly in from the right and settle into a stack by the
+  // persona, which pulses as each one lands. The still frame is the full stack.
+  "ticket-lookup": (
+    <>
+      <path className="scene-line-accent scene-link" d="M120 28H40" pathLength={1} strokeOpacity="0.35" strokeDasharray="0.04 0.03" />
+      <circle className="scene-box scene-node" cx="22" cy="28" r="10" fill="var(--accent)" fillOpacity="0.18" stroke="var(--accent)" strokeWidth="1.5" style={delay(0.7)} />
+      <circle className="scene-accent" cx="22" cy="28" r="3.5" />
+      {[
+        { y: 7, epic: false, wait: 0 },
+        { y: 22, epic: false, wait: 0.55 },
+        { y: 37, epic: true, wait: 1.1 },
+      ].map(({ y, epic, wait }) => (
+        <g key={y} className="scene-pull" style={{ ...toFrom(64), ...delay(wait) }}>
+          <rect className={epic ? "scene-accent" : "scene-paper"} x="42" y={y} width="34" height="12" rx="2.5" opacity={epic ? 0.85 : 1} />
+          {epic ? (
+            <path d={`M47 ${y + 6}l2.5-2.5 2.5 2.5-2.5 2.5z`} fill="var(--surface-raised)" />
+          ) : (
+            <path className="scene-line" d={`M47 ${y + 6}H52`} strokeWidth="1.5" stroke="var(--accent)" />
+          )}
+          <path className="scene-line" d={`M56 ${y + 6}H${epic ? 70 : 72}`} strokeWidth="1.5" style={epic ? { stroke: "var(--surface-raised)" } : undefined} />
+        </g>
+      ))}
     </>
   ),
   "reading-code": (

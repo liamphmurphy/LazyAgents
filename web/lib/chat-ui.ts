@@ -244,6 +244,7 @@ export type ChatStatusKind =
   | "secret"
   | "wiki"
   | "tickets"
+  | "ticket-lookup"
   | "reading-code"
   | "searching-code"
   | "writing-code"
@@ -346,7 +347,7 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("wiki", "looking through the wiki");
     case "get_ticket":
     case "list_epics":
-      return status("tickets", "checking tickets");
+      return status("ticket-lookup", "checking tickets");
     case "create_ticket":
     case "create_epic":
       return status("tickets", "drafting a ticket");
@@ -612,10 +613,14 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return named("Drafting", o.title);
     case "create_epic":
       return named("Drafting", o.name);
+    case "get_ticket":
+      return o.ticket ? `Reading ${clip(str(o.ticket))}` : general;
+    case "list_epics":
+      return o.project ? `Looking over ${clip(str(o.project))} epics` : general;
     case "update_ticket":
-      return named("Updating", o.ticket);
+      return o.ticket ? `Updating ${clip(str(o.ticket))}` : general;
     case "comment_ticket":
-      return named("Commenting on", o.ticket);
+      return o.ticket ? `Commenting on ${clip(str(o.ticket))}` : general;
     case "generate_image":
     case "image_generation":
     case "image_gen":

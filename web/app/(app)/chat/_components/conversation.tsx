@@ -870,7 +870,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </div>
             )}
             <ChatWorkflowTray chatId={c.id} />
-            <ChatTicketRunTray chatId={c.id} scene={(kind) => <ActivityScene current={kind} />} />
+            <ChatTicketRunTray chatId={c.id} scene={(kind) => <ActivityScene current={kind} />} persona={<PersonaAvatar persona={persona} size={26} />} />
             {workflowCard && (
               <div className="mb-2">
                 <WorkflowStartCard workflow={workflowCard} chatId={c.id} onDone={closeWorkflow} onDismiss={closeWorkflow} />

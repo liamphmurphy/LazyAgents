@@ -360,6 +360,35 @@
   100% { transform: none; opacity: 0; }
 }
 
+/*
+ * A chat run's hand-off (dispatch-cards.tsx): the ticket's key travels from the persona to the
+ * agent, the agent bumps as it lands, then the cover fades to reveal the run card.
+ */
+.handoff { animation: handoff-cover 2.8s ease-in both; }
+.handoff-chip { animation: handoff-chip 2.8s cubic-bezier(0.5, 0, 0.2, 1) both; }
+.handoff-agent { animation: handoff-agent 2.8s ease-out both; }
+@keyframes handoff-cover { 0% { opacity: 0; } 8%, 78% { opacity: 1; } 100% { opacity: 0; } }
+/* Travels by its left edge from the track's start to its end, ending flush with it. */
+@keyframes handoff-chip {
+  0%, 12% { left: 0; transform: translate(0, -50%); opacity: 0; }
+  20% { opacity: 1; }
+  52%, 100% { left: 100%; transform: translate(-100%, -50%); opacity: 1; }
+}
+@keyframes handoff-agent { 0%, 50% { transform: none; } 58% { transform: scale(1.2); } 66%, 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .handoff { animation: none; }
+  .handoff-chip { animation: none; left: 100%; transform: translate(-100%, -50%); }
+  .handoff-agent { animation: none; }
+}
+
+.scene-pull { animation: scene-pull 3.6s cubic-bezier(0.2, 0.7, 0.2, 1) infinite both; }
+@keyframes scene-pull {
+  0% { transform: translateX(var(--from-x)); opacity: 0; }
+  10% { opacity: 1; }
+  32%, 86% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+
 .scene-card { animation: scene-card 3.6s ease-in-out infinite both; }
 @keyframes scene-card {
   0% { transform: none; opacity: 0; }
@@ -462,6 +491,7 @@
 .glyph-flip { transform-origin: left center; animation: glyph-flip 2.2s ease-in-out infinite; }
 .glyph-ring { animation: glyph-ring 1.6s ease-out infinite; }
 .glyph-hop { animation: glyph-hop 2.4s ease-in-out infinite; }
+.glyph-pull { animation: glyph-pull 1.8s ease-in-out infinite; }
 .glyph-tile { animation: glyph-tile 1.6s ease-in-out infinite; }
 .glyph-grow { transform-origin: left center; animation: glyph-grow 2s ease-in-out infinite alternate; }
 .glyph-plug { animation: glyph-plug 1.8s ease-in-out infinite; }
@@ -482,6 +512,7 @@
 @keyframes glyph-scroll { to { transform: translateY(-6px); } }
 @keyframes glyph-flip { 0%, 30% { transform: none; } 70%, 100% { transform: scaleX(-1); } }
 @keyframes glyph-ring { from { transform: none; opacity: 0.6; } to { transform: scale(2.4); opacity: 0; } }
+@keyframes glyph-pull { 0% { transform: translateX(3px); opacity: 0; } 30% { opacity: 1; } 60%, 100% { transform: translateX(-3px); opacity: 0.4; } }
 @keyframes glyph-hop { 0%, 25%, 100% { transform: none; } 50%, 75% { transform: translateX(7px); } }
 @keyframes glyph-tile { 0%, 100% { opacity: 0.25; } 35%, 65% { opacity: 1; } }
 @keyframes glyph-grow { from { transform: scaleX(0.15); } to { transform: none; } }
