@@ -6564,7 +6564,8 @@ export interface components {
             headers: {
                 [key: string]: string;
             };
-            body_preview: string;
+            /** @description The whole request body, exactly as it will be sent */
+            body: string;
             persona?: components["schemas"]["PersonaSummary"];
             /** Format: date-time */
             created_at: string;

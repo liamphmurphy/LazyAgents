@@ -285,7 +285,7 @@ export function AddSecretDialog({ proposal, onClose }: { proposal?: Schemas["Api
           </Field>
           {hostError && <p className="-mt-2 text-[12px] text-pill-blocked-fg">{hostError}</p>}
           <div className="rounded-md border border-border bg-surface px-3 py-2.5 text-[12.5px] text-fg-secondary">
-            Vesper adds the value on the server, and only to HTTPS requests to these hosts. Any copy of it in a response is masked.
+            Vesper adds the value on the server, and only to HTTPS requests to these hosts. Copies of it in a response are masked as far as Vesper can recognise them.
             <span className="mt-1 block text-xs text-fg-tertiary">{proposal?.proposed_by ? `${proposal.proposed_by.name} gets access. Reads run on their own; writes ask you first.` : "Personas get no access until you turn it on. Reads run on their own; writes ask you first."}</span>
           </div>
           {create.isError && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(create.error)}</p>}

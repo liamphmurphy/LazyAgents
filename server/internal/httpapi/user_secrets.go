@@ -312,7 +312,7 @@ func (s *Server) ListApiSecretApprovals(ctx context.Context, req api.ListApiSecr
 	out := make([]api.ApiSecretApproval, 0, len(rows))
 	for _, r := range rows {
 		item := api.ApiSecretApproval{Id: r.ID, SecretId: r.SecretID, SecretName: r.SecretName, SecretHandle: r.SecretHandle, Placement: api.ApiSecretPlacement(r.SecretPlacement), PlacementKey: r.SecretPlacementKey,
-			Method: r.Method, Url: r.Url, Headers: map[string]string{}, BodyPreview: r.BodyPreview, CreatedAt: r.CreatedAt}
+			Method: r.Method, Url: r.Url, Headers: map[string]string{}, Body: r.Body, CreatedAt: r.CreatedAt}
 		_ = json.Unmarshal(r.Headers, &item.Headers)
 		if r.PersonaID != nil {
 			if p, err := s.Q.GetPersona(ctx, store.GetPersonaParams{ID: *r.PersonaID, WorkspaceID: ws, UserID: u.ID}); err == nil {

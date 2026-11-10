@@ -1041,7 +1041,7 @@ type UserSecretApproval struct {
 	Method      string
 	Url         string
 	Headers     json.RawMessage
-	BodyPreview string
+	Body        string
 	State       string
 	CreatedAt   time.Time
 	DecidedAt   *time.Time

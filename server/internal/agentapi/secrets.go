@@ -31,8 +31,9 @@ func parseLoose(raw string) *url.URL {
 	return u
 }
 
-// bodyPreview is how much of a request body the person sees when approving.
-const bodyPreview = 2000
+// maxPendingApprovals caps the requests one chat can have waiting: each one
+// holds a tool call open for up to 30 minutes and lands in the inbox.
+const maxPendingApprovals = 3
 
 // secretsFor are the secrets this run's persona may use in its chat. Anything
 // else fails closed, as connectorFor does.
@@ -178,12 +179,15 @@ func secretRequest(ctx context.Context, d Deps, c agents.Caller, in HTTPRequestI
 		if req.Headers == nil {
 			headers = []byte("{}")
 		}
-		preview := string(req.Body)
-		if len(preview) > bodyPreview {
-			preview = preview[:bodyPreview] + "…"
+		if n, err := d.Q.CountPendingUserSecretApprovals(ctx, chat.ID); err != nil {
+			return toolFailure("Couldn't ask the person for approval.")
+		} else if n >= maxPendingApprovals {
+			log(ck, "blocked", nil, "too many requests waiting", 0, 0)
+			return toolFailure("Three requests are already waiting for the person in this chat. Wait for them before asking again.")
 		}
+		// The whole body, not a preview: the person approves exactly what's sent.
 		a, err := d.Q.CreateUserSecretApproval(logged, store.CreateUserSecretApprovalParams{WorkspaceID: sec.WorkspaceID, UserID: sec.UserID, SecretID: sec.ID, PersonaID: persona,
-			ChatID: chat.ID, Method: ck.Method, Url: ck.URL.String(), Headers: headers, BodyPreview: preview})
+			ChatID: chat.ID, Method: ck.Method, Url: ck.URL.String(), Headers: headers, Body: string(req.Body)})
 		if err != nil {
 			return toolFailure("Couldn't ask the person for approval.")
 		}

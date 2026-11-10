@@ -87,6 +87,17 @@ func (q *Queries) ClearUserSecretPersonas(ctx context.Context, secretID uuid.UUI
 	return err
 }
 
+const countPendingUserSecretApprovals = `-- name: CountPendingUserSecretApprovals :one
+SELECT count(*)::int FROM user_secret_approvals WHERE chat_id = $1 AND state = 'pending'
+`
+
+func (q *Queries) CountPendingUserSecretApprovals(ctx context.Context, chatID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countPendingUserSecretApprovals, chatID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countPendingUserSecretProposals = `-- name: CountPendingUserSecretProposals :one
 SELECT count(*)::int FROM user_secret_proposals WHERE chat_id = $1 AND state = 'pending'
 `
@@ -161,8 +172,8 @@ func (q *Queries) CreateUserSecret(ctx context.Context, arg CreateUserSecretPara
 }
 
 const createUserSecretApproval = `-- name: CreateUserSecretApproval :one
-INSERT INTO user_secret_approvals (workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body_preview)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body_preview, state, created_at, decided_at
+INSERT INTO user_secret_approvals (workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body, state, created_at, decided_at
 `
 
 type CreateUserSecretApprovalParams struct {
@@ -174,7 +185,7 @@ type CreateUserSecretApprovalParams struct {
 	Method      string
 	Url         string
 	Headers     json.RawMessage
-	BodyPreview string
+	Body        string
 }
 
 func (q *Queries) CreateUserSecretApproval(ctx context.Context, arg CreateUserSecretApprovalParams) (UserSecretApproval, error) {
@@ -187,7 +198,7 @@ func (q *Queries) CreateUserSecretApproval(ctx context.Context, arg CreateUserSe
 		arg.Method,
 		arg.Url,
 		arg.Headers,
-		arg.BodyPreview,
+		arg.Body,
 	)
 	var i UserSecretApproval
 	err := row.Scan(
@@ -200,7 +211,7 @@ func (q *Queries) CreateUserSecretApproval(ctx context.Context, arg CreateUserSe
 		&i.Method,
 		&i.Url,
 		&i.Headers,
-		&i.BodyPreview,
+		&i.Body,
 		&i.State,
 		&i.CreatedAt,
 		&i.DecidedAt,
@@ -256,7 +267,7 @@ func (q *Queries) CreateUserSecretProposal(ctx context.Context, arg CreateUserSe
 
 const decideUserSecretApproval = `-- name: DecideUserSecretApproval :one
 UPDATE user_secret_approvals SET state = $2, decided_at = now()
-WHERE id = $1 AND workspace_id = $3 AND user_id = $4 AND state = 'pending' RETURNING id, workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body_preview, state, created_at, decided_at
+WHERE id = $1 AND workspace_id = $3 AND user_id = $4 AND state = 'pending' RETURNING id, workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body, state, created_at, decided_at
 `
 
 type DecideUserSecretApprovalParams struct {
@@ -284,7 +295,7 @@ func (q *Queries) DecideUserSecretApproval(ctx context.Context, arg DecideUserSe
 		&i.Method,
 		&i.Url,
 		&i.Headers,
-		&i.BodyPreview,
+		&i.Body,
 		&i.State,
 		&i.CreatedAt,
 		&i.DecidedAt,
@@ -387,7 +398,7 @@ func (q *Queries) GetUserSecret(ctx context.Context, arg GetUserSecretParams) (U
 }
 
 const getUserSecretApproval = `-- name: GetUserSecretApproval :one
-SELECT id, workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body_preview, state, created_at, decided_at FROM user_secret_approvals WHERE id = $1
+SELECT id, workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body, state, created_at, decided_at FROM user_secret_approvals WHERE id = $1
 `
 
 func (q *Queries) GetUserSecretApproval(ctx context.Context, id uuid.UUID) (UserSecretApproval, error) {
@@ -403,7 +414,7 @@ func (q *Queries) GetUserSecretApproval(ctx context.Context, id uuid.UUID) (User
 		&i.Method,
 		&i.Url,
 		&i.Headers,
-		&i.BodyPreview,
+		&i.Body,
 		&i.State,
 		&i.CreatedAt,
 		&i.DecidedAt,
@@ -657,7 +668,7 @@ func (q *Queries) LogUserSecretCall(ctx context.Context, arg LogUserSecretCallPa
 }
 
 const pendingUserSecretApprovals = `-- name: PendingUserSecretApprovals :many
-SELECT a.id, a.workspace_id, a.user_id, a.secret_id, a.persona_id, a.chat_id, a.method, a.url, a.headers, a.body_preview, a.state, a.created_at, a.decided_at, s.name AS secret_name, s.handle AS secret_handle, s.placement AS secret_placement, s.placement_key AS secret_placement_key
+SELECT a.id, a.workspace_id, a.user_id, a.secret_id, a.persona_id, a.chat_id, a.method, a.url, a.headers, a.body, a.state, a.created_at, a.decided_at, s.name AS secret_name, s.handle AS secret_handle, s.placement AS secret_placement, s.placement_key AS secret_placement_key
 FROM user_secret_approvals a JOIN user_secrets s ON s.id = a.secret_id
 WHERE a.chat_id = $1 AND a.state = 'pending' ORDER BY a.created_at
 `
@@ -672,7 +683,7 @@ type PendingUserSecretApprovalsRow struct {
 	Method             string
 	Url                string
 	Headers            json.RawMessage
-	BodyPreview        string
+	Body               string
 	State              string
 	CreatedAt          time.Time
 	DecidedAt          *time.Time
@@ -701,7 +712,7 @@ func (q *Queries) PendingUserSecretApprovals(ctx context.Context, chatID uuid.UU
 			&i.Method,
 			&i.Url,
 			&i.Headers,
-			&i.BodyPreview,
+			&i.Body,
 			&i.State,
 			&i.CreatedAt,
 			&i.DecidedAt,

@@ -7135,7 +7135,7 @@ components:
         secrets: { type: array, items: { $ref: "#/components/schemas/ChatApiSecret" } }
     ApiSecretApproval:
       type: object
-      required: [id, secret_id, secret_name, secret_handle, placement, placement_key, method, url, headers, body_preview, created_at]
+      required: [id, secret_id, secret_name, secret_handle, placement, placement_key, method, url, headers, body, created_at]
       properties:
         id: { type: string, format: uuid }
         secret_id: { type: string, format: uuid }
@@ -7146,7 +7146,7 @@ components:
         method: { type: string }
         url: { type: string }
         headers: { type: object, additionalProperties: { type: string } }
-        body_preview: { type: string }
+        body: { type: string, description: "The whole request body, exactly as it will be sent" }
         persona: { $ref: "#/components/schemas/PersonaSummary" }
         created_at: { type: string, format: date-time }
     ApiSecretApprovalList:

@@ -52,7 +52,8 @@ CREATE TABLE user_secret_approvals (
   method       text NOT NULL,
   url          text NOT NULL,
   headers      jsonb NOT NULL DEFAULT '{}',
-  body_preview text NOT NULL DEFAULT '',
+  -- The whole body, as sent: the person approves exactly what goes out.
+  body         text NOT NULL DEFAULT '',
   state        text NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'allowed', 'denied', 'expired')),
   created_at   timestamptz NOT NULL DEFAULT now(),
   decided_at   timestamptz

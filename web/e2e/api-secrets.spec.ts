@@ -47,7 +47,7 @@ test("a request with a secret waits in the chat; writes can only be allowed once
   await openChat(page);
   mock.secretApprovals.push({
     id: "21111111-1111-4111-8111-111111111111", secret_id: "21111111-1111-4111-8111-111111111112", secret_name: "Acme API JWT", secret_handle: "acme-jwt",
-    placement: "bearer", placement_key: "", method: "POST", url: "https://api.acme.com/v1/refunds", headers: { Accept: "application/json" }, body_preview: '{"order":"ord_9f2"}', created_at: new Date().toISOString(),
+    placement: "bearer", placement_key: "", method: "POST", url: "https://api.acme.com/v1/refunds", headers: { Accept: "application/json" }, body: '{"order":"ord_9f2"}', created_at: new Date().toISOString(),
   });
   const card = page.getByTestId("secret-approval");
   await expect(card).toContainText("wants to call an API with");
@@ -55,6 +55,7 @@ test("a request with a secret waits in the chat; writes can only be allowed once
   await expect(card).toContainText("Authorization: Bearer ‹acme-jwt›");
   await expect(card).toContainText("api.acme.com is an allowed host");
   await expect(card.getByRole("button", { name: "Always allow reads" })).toHaveCount(0);
+  await expect(card.getByTestId("secret-approval-body")).toHaveText('{"order":"ord_9f2"}');
   await expect(page.getByTestId("secrets-chip")).toContainText("acme-jwt waiting");
   await card.getByRole("button", { name: "Allow once" }).click();
   await expect(card).toHaveCount(0);
@@ -77,7 +78,8 @@ test("a persona asks for a secret; adding it starts from what it asked for", asy
   const card = page.getByTestId("secret-proposal");
   // Proposals poll every 5 s, like connector proposals.
   await expect(card).toContainText("asks for a secret", { timeout: 10_000 });
-  await expect(card).toContainText("api.acme.com · X-Api-Key header");
+  await expect(card.getByTestId("secret-proposal-host")).toHaveText("api.acme.com");
+  await expect(card).toContainText("X-Api-Key header");
   await card.getByRole("button", { name: "Add secret…" }).click();
   const dialog = page.getByRole("dialog", { name: "Add secret" });
   await expect(dialog.getByLabel("Name", { exact: true })).toHaveValue("Acme API JWT");

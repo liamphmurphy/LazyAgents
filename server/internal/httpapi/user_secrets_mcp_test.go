@@ -139,13 +139,15 @@ func TestSecretsToolEnforcesAccessAndNeverRevealsValue(t *testing.T) {
 	}
 
 	// A write waits for the person: denied, then allowed.
+	wantBody := `{"note":"` + strings.Repeat("n", 3000) + `","order":"ord_9f2"}`
 	decide := func(state string) {
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
 			rows, _ := q.PendingUserSecretApprovals(ctx, chat.ID)
 			if len(rows) == 1 {
-				if rows[0].Method != "POST" || !strings.HasSuffix(rows[0].Url, "/v1/refunds") || rows[0].BodyPreview != `{"order":"ord_9f2"}` {
-					t.Errorf("approval shows %s %s %q", rows[0].Method, rows[0].Url, rows[0].BodyPreview)
+				if rows[0].Method != "POST" || !strings.HasSuffix(rows[0].Url, "/v1/refunds") || rows[0].Body != wantBody {
+					// The person approves the whole body, not a preview of it.
+					t.Errorf("approval shows %s %s, %d of %d body bytes", rows[0].Method, rows[0].Url, len(rows[0].Body), len(wantBody))
 				}
 				if _, err := q.DecideUserSecretApproval(ctx, store.DecideUserSecretApprovalParams{ID: rows[0].ID, State: state, WorkspaceID: ws, UserID: me.ID}); err != nil {
 					t.Error(err)
@@ -156,7 +158,7 @@ func TestSecretsToolEnforcesAccessAndNeverRevealsValue(t *testing.T) {
 		}
 		t.Error("no approval appeared")
 	}
-	write := map[string]any{"secret": "acme-api-jwt", "method": "POST", "url": up.URL + "/v1/refunds", "json": map[string]string{"order": "ord_9f2"}}
+	write := map[string]any{"secret": "acme-api-jwt", "method": "POST", "url": up.URL + "/v1/refunds", "json": map[string]string{"order": "ord_9f2", "note": strings.Repeat("n", 3000)}}
 	hits = upstreamHits.Load()
 	go decide("denied")
 	if res := call(write); !res.IsError || !strings.Contains(text(res), "denied") || upstreamHits.Load() != hits {
@@ -183,6 +185,16 @@ func TestSecretsToolEnforcesAccessAndNeverRevealsValue(t *testing.T) {
 	}
 	if calls[len(calls)-1].Path != "/v1/orders" || calls[len(calls)-1].Status == nil || *calls[len(calls)-1].Status != 200 {
 		t.Fatalf("first call logged as %+v", calls[len(calls)-1])
+	}
+
+	// At most three requests wait at once; a fourth is refused straight away.
+	for range 3 {
+		if _, err := q.CreateUserSecretApproval(ctx, store.CreateUserSecretApprovalParams{WorkspaceID: ws, UserID: me.ID, SecretID: sec.ID, ChatID: chat.ID, Method: "POST", Url: up.URL, Headers: []byte("{}")}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if res := call(write); !res.IsError || !strings.Contains(text(res), "already waiting") {
+		t.Fatalf("fourth approval: %s", text(res))
 	}
 
 	// Turning it off for this chat applies to the very next request.

@@ -55,7 +55,7 @@ ORDER BY s.handle;
 UPDATE chat_sessions SET secret_ids = sqlc.narg(secret_ids)::uuid[] WHERE id = $1 RETURNING *;
 
 -- name: CreateUserSecretApproval :one
-INSERT INTO user_secret_approvals (workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body_preview)
+INSERT INTO user_secret_approvals (workspace_id, user_id, secret_id, persona_id, chat_id, method, url, headers, body)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;
 
 -- name: GetUserSecretApproval :one
@@ -109,3 +109,6 @@ SELECT s.id, s.name, s.handle, count(*)::int AS calls, max(c.created_at)::timest
 FROM user_secret_calls c JOIN user_secrets s ON s.id = c.secret_id
 WHERE c.chat_id = $1 AND s.workspace_id = $2 AND s.user_id = $3
 GROUP BY s.id, s.name, s.handle ORDER BY max(c.created_at) DESC;
+
+-- name: CountPendingUserSecretApprovals :one
+SELECT count(*)::int FROM user_secret_approvals WHERE chat_id = $1 AND state = 'pending';
