@@ -569,7 +569,7 @@ func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID
 }
 
 const chatTicketRunForMessage = `-- name: ChatTicketRunForMessage :one
-SELECT chat_id, run_id, message_id, created_at FROM chat_ticket_runs WHERE message_id = $1
+SELECT chat_id, run_id, message_id, created_at, reported, reported_at FROM chat_ticket_runs WHERE message_id = $1
 `
 
 func (q *Queries) ChatTicketRunForMessage(ctx context.Context, messageID *uuid.UUID) (ChatTicketRun, error) {
@@ -580,8 +580,58 @@ func (q *Queries) ChatTicketRunForMessage(ctx context.Context, messageID *uuid.U
 		&i.RunID,
 		&i.MessageID,
 		&i.CreatedAt,
+		&i.Reported,
+		&i.ReportedAt,
 	)
 	return i, err
+}
+
+const chatTicketRunsToReport = `-- name: ChatTicketRunsToReport :many
+SELECT ctr.chat_id, ctr.run_id, ctr.reported, r.state, coalesce(r.wait_reason, '')::text AS wait_reason,
+  coalesce((SELECT rt.id::text FROM run_turns rt WHERE rt.run_id = r.id ORDER BY rt.seq DESC LIMIT 1), '')::text AS last_turn
+FROM chat_ticket_runs ctr JOIN runs r ON r.id = ctr.run_id
+WHERE ((r.state = 'waiting' AND r.wait_reason IN ('human_reply', 'approval'))
+    OR (r.state IN ('completed', 'failed', 'blocked') AND ctr.reported <> r.state))
+ORDER BY ctr.created_at
+`
+
+type ChatTicketRunsToReportRow struct {
+	ChatID     uuid.UUID
+	RunID      uuid.UUID
+	Reported   string
+	State      string
+	WaitReason string
+	LastTurn   string
+}
+
+// Chat-started runs whose news the chat hasn't heard yet: waiting on the
+// person (each wait is keyed by the turn that asked), or ended. A cancelled
+// run isn't news: the person stopped it.
+func (q *Queries) ChatTicketRunsToReport(ctx context.Context) ([]ChatTicketRunsToReportRow, error) {
+	rows, err := q.db.Query(ctx, chatTicketRunsToReport)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatTicketRunsToReportRow{}
+	for rows.Next() {
+		var i ChatTicketRunsToReportRow
+		if err := rows.Scan(
+			&i.ChatID,
+			&i.RunID,
+			&i.Reported,
+			&i.State,
+			&i.WaitReason,
+			&i.LastTurn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const chatTurnCitations = `-- name: ChatTurnCitations :many
@@ -1762,6 +1812,29 @@ func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSe
 	return i, err
 }
 
+const lockChatTicketRun = `-- name: LockChatTicketRun :one
+SELECT chat_id, run_id, message_id, created_at, reported, reported_at FROM chat_ticket_runs WHERE chat_id = $1 AND run_id = $2 FOR UPDATE
+`
+
+type LockChatTicketRunParams struct {
+	ChatID uuid.UUID
+	RunID  uuid.UUID
+}
+
+func (q *Queries) LockChatTicketRun(ctx context.Context, arg LockChatTicketRunParams) (ChatTicketRun, error) {
+	row := q.db.QueryRow(ctx, lockChatTicketRun, arg.ChatID, arg.RunID)
+	var i ChatTicketRun
+	err := row.Scan(
+		&i.ChatID,
+		&i.RunID,
+		&i.MessageID,
+		&i.CreatedAt,
+		&i.Reported,
+		&i.ReportedAt,
+	)
+	return i, err
+}
+
 const lockPersonaProposal = `-- name: LockPersonaProposal :one
 SELECT id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at, avatar_job_id FROM persona_proposals WHERE id = $1 AND chat_id = $2 FOR UPDATE
 `
@@ -1894,6 +1967,34 @@ func (q *Queries) PageChatMessages(ctx context.Context, arg PageChatMessagesPara
 	return items, nil
 }
 
+const pendingApprovalForRun = `-- name: PendingApprovalForRun :one
+SELECT id, workspace_id, run_id, ticket_id, agent_id, scope, action_summary, action_detail, risk_summary, state, decided_by_user_id, decided_at, decision_note, executed_at, result, created_at FROM approval_requests WHERE run_id = $1 AND state = 'pending' ORDER BY created_at DESC LIMIT 1
+`
+
+func (q *Queries) PendingApprovalForRun(ctx context.Context, runID uuid.UUID) (ApprovalRequest, error) {
+	row := q.db.QueryRow(ctx, pendingApprovalForRun, runID)
+	var i ApprovalRequest
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.RunID,
+		&i.TicketID,
+		&i.AgentID,
+		&i.Scope,
+		&i.ActionSummary,
+		&i.ActionDetail,
+		&i.RiskSummary,
+		&i.State,
+		&i.DecidedByUserID,
+		&i.DecidedAt,
+		&i.DecisionNote,
+		&i.ExecutedAt,
+		&i.Result,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const pendingChatTurn = `-- name: PendingChatTurn :one
 SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage FROM run_turns WHERE run_id = $1 AND status = 'pending' ORDER BY seq DESC LIMIT 1
 `
@@ -1927,7 +2028,9 @@ SELECT c.id, c.title, c.state, c.persona_id, c.speaker_persona_id,
   u.unread, p.waiting_approval, l.persona_id AS last_persona_id, coalesce(l.body_md, '')::text AS last_body, coalesce(l.seq, 0)::bigint AS last_seq
 FROM chat_sessions c
 CROSS JOIN LATERAL (SELECT count(*)::int AS unread FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' AND m.seq > c.last_read_seq) u
-CROSS JOIN LATERAL (SELECT EXISTS(SELECT 1 FROM persona_proposals pp WHERE pp.chat_id = c.id AND pp.state = 'pending') AS waiting_approval) p
+CROSS JOIN LATERAL (SELECT coalesce(EXISTS(SELECT 1 FROM persona_proposals pp WHERE pp.chat_id = c.id AND pp.state = 'pending')
+  OR EXISTS(SELECT 1 FROM chat_ticket_runs ctr JOIN runs r ON r.id = ctr.run_id
+    WHERE ctr.chat_id = c.id AND r.state = 'waiting' AND r.wait_reason IN ('human_reply', 'approval')), false)::bool AS waiting_approval) p
 LEFT JOIN LATERAL (SELECT m.persona_id, m.body_md, m.seq FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' ORDER BY m.seq DESC LIMIT 1) l ON true
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND NOT c.archived AND NOT c.hidden
   AND (c.state = 'running' OR u.unread > 0 OR p.waiting_approval)
@@ -1955,6 +2058,7 @@ type PersonaDockChatsRow struct {
 }
 
 // A person's chats with live or unread activity, newest first.
+// waiting_approval: a persona proposal to decide, or a run this chat started waiting on the person.
 func (q *Queries) PersonaDockChats(ctx context.Context, arg PersonaDockChatsParams) ([]PersonaDockChatsRow, error) {
 	rows, err := q.db.Query(ctx, personaDockChats, arg.WorkspaceID, arg.CreatedBy)
 	if err != nil {
@@ -2143,6 +2247,25 @@ func (q *Queries) RenameChatSession(ctx context.Context, arg RenameChatSessionPa
 		&i.SecretIds,
 	)
 	return i, err
+}
+
+const runWaitQuestion = `-- name: RunWaitQuestion :one
+SELECT coalesce((SELECT nullif(trim(e.payload->>'reason'), '') FROM activity_events e
+  WHERE e.ticket_id = $1 AND e.verb = 'waiting_for_human' AND e.payload->>'run_id' = $2::text
+  ORDER BY e.created_at DESC LIMIT 1), '')::text AS question
+`
+
+type RunWaitQuestionParams struct {
+	TicketID *uuid.UUID
+	RunID    string
+}
+
+// What a run's agent asked when it last called await_human (” if it said nothing).
+func (q *Queries) RunWaitQuestion(ctx context.Context, arg RunWaitQuestionParams) (string, error) {
+	row := q.db.QueryRow(ctx, runWaitQuestion, arg.TicketID, arg.RunID)
+	var question string
+	err := row.Scan(&question)
+	return question, err
 }
 
 const runWebSearchEvents = `-- name: RunWebSearchEvents :many
@@ -2741,6 +2864,21 @@ func (q *Queries) SetChatSpeaker(ctx context.Context, arg SetChatSpeakerParams) 
 		&i.SecretIds,
 	)
 	return i, err
+}
+
+const setChatTicketRunReported = `-- name: SetChatTicketRunReported :exec
+UPDATE chat_ticket_runs SET reported = $3, reported_at = now() WHERE chat_id = $1 AND run_id = $2
+`
+
+type SetChatTicketRunReportedParams struct {
+	ChatID   uuid.UUID
+	RunID    uuid.UUID
+	Reported string
+}
+
+func (q *Queries) SetChatTicketRunReported(ctx context.Context, arg SetChatTicketRunReportedParams) error {
+	_, err := q.db.Exec(ctx, setChatTicketRunReported, arg.ChatID, arg.RunID, arg.Reported)
+	return err
 }
 
 const setChatTitle = `-- name: SetChatTitle :one

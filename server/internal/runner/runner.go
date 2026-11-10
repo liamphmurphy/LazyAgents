@@ -486,6 +486,15 @@ func (r *Runner) advanceLearning(ctx context.Context) {
 	}
 }
 
+// advanceChatTicketRuns tells chats about the runs they started. A ticket
+// turn ending is when there's news (a wait on the person, or the end); a chat
+// turn ending is when a chat that was busy can hear it.
+func (r *Runner) advanceChatTicketRuns(ctx context.Context) {
+	if err := runs.AdvanceChatTicketRuns(ctx, r.Pool); err != nil && ctx.Err() == nil {
+		r.Log.Warn("advance chat ticket runs", "err", err)
+	}
+}
+
 func (r *Runner) advanceResearch(ctx context.Context) {
 	if err := runs.AdvanceResearchJobs(ctx, r.Pool); err != nil && ctx.Err() == nil {
 		r.Log.Warn("advance research", "err", err)
@@ -538,6 +547,7 @@ func (r *Runner) Sweep(ctx context.Context) {
 	defer r.advanceLearning(ctx)
 	defer r.advanceResearch(ctx)
 	defer r.advanceWorkflows(ctx)
+	defer r.advanceChatTicketRuns(ctx)
 	defer r.refreshChatSuggestions(ctx, time.Now())
 	r.expireIdleChats(ctx)
 	ids, err := r.q().EndedRunsWithWorkspace(ctx, append([]uuid.UUID{}, r.otherBackend...))
@@ -969,6 +979,10 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if err != nil {
 		r.Log.Error("load run", "run", turn.RunID, "err", err)
 		return
+	}
+	if c.run.Purpose == "ticket" || c.run.Purpose == "chat" {
+		// Once the turn has settled the run's state: see advanceChatTicketRuns.
+		defer r.advanceChatTicketRuns(context.WithoutCancel(ctx))
 	}
 	q := r.q()
 	log := r.Log.With("run", c.run.ID, "ticket", c.ticket.Key, "turn", turn.Seq)
