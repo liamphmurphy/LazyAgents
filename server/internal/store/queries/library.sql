@@ -62,6 +62,13 @@ UPDATE library_items SET reference = NULL, reference_persona_id = NULL
 WHERE workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND reference = sqlc.arg(role)::text
   AND (sqlc.arg(role)::text = 'self' OR reference_persona_id = sqlc.narg(persona_id)::uuid);
 
+-- name: LibraryItemByBlobKey :one
+-- The person's Library copy of a generated chat image, which shares the
+-- attachment's object.
+SELECT * FROM library_items
+WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'image'
+ORDER BY created_at LIMIT 1;
+
 -- name: SetLibraryReference :one
 -- Marks (or, with a NULL role, unmarks) one of the caller's items.
 UPDATE library_items SET reference = sqlc.narg(role)::text, reference_persona_id = sqlc.narg(persona_id)::uuid

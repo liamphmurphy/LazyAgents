@@ -467,6 +467,54 @@ func (q *Queries) GetLibraryLink(ctx context.Context, arg GetLibraryLinkParams) 
 	return i, err
 }
 
+const libraryItemByBlobKey = `-- name: LibraryItemByBlobKey :one
+SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary, duration_ms, width, height, poster_key FROM library_items
+WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'image'
+ORDER BY created_at LIMIT 1
+`
+
+type LibraryItemByBlobKeyParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	BlobKey     string
+}
+
+// The person's Library copy of a generated chat image, which shares the
+// attachment's object.
+func (q *Queries) LibraryItemByBlobKey(ctx context.Context, arg LibraryItemByBlobKeyParams) (LibraryItem, error) {
+	row := q.db.QueryRow(ctx, libraryItemByBlobKey, arg.WorkspaceID, arg.UserID, arg.BlobKey)
+	var i LibraryItem
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Kind,
+		&i.Title,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.BlobKey,
+		&i.ChatID,
+		&i.MessageID,
+		&i.PersonaID,
+		&i.CreatedAt,
+		&i.Reference,
+		&i.ReferencePersonaID,
+		&i.Source,
+		&i.Url,
+		&i.Note,
+		&i.Site,
+		&i.VideoID,
+		&i.LinkStatus,
+		&i.Summary,
+		&i.DurationMs,
+		&i.Width,
+		&i.Height,
+		&i.PosterKey,
+	)
+	return i, err
+}
+
 const libraryReferences = `-- name: LibraryReferences :many
 SELECT id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary, duration_ms, width, height, poster_key FROM library_items
 WHERE workspace_id = $1 AND user_id = $2

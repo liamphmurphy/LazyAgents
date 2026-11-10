@@ -62,14 +62,44 @@ func ChatReferences(ctx context.Context, q *store.Queries, chat store.ChatSessio
 // have a reference image in the person's Library.
 func (s *Service) QueueChatImage(ctx context.Context, ws, runID uuid.UUID, prompt string, references []string) (store.ChatImageJob, error) {
 	var job store.ChatImageJob
+	req, err := s.prepareChatImage(ctx, ws, runID, prompt, references)
+	if err != nil {
+		return job, err
+	}
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		tq := store.New(tx)
+		if _, err := tq.LockChatSession(ctx, store.LockChatSessionParams{ID: req.chatID, WorkspaceID: ws}); err != nil {
+			return err
+		}
+		job, err = insertChatImageJob(ctx, tq, req)
+		return err
+	})
+	return job, err
+}
+
+// chatImageRequest is a checked generate_image request, ready for
+// insertChatImageJob.
+type chatImageRequest struct {
+	ws, runID, turnID, chatID uuid.UUID
+	prompt, model             string
+	roles                     []string
+}
+
+// prepareChatImage checks a request to make an image in a chat turn: the
+// prompt, the references, that the run is answering a message on a harness
+// that can't make images itself, the persona's capability and that Codex is
+// available. It reads without locking; insertChatImageJob enforces the per-turn
+// cap under the chat's lock.
+func (s *Service) prepareChatImage(ctx context.Context, ws, runID uuid.UUID, prompt string, references []string) (chatImageRequest, error) {
+	var none chatImageRequest
 	prompt = strings.TrimSpace(prompt)
 	if n := utf8.RuneCountInString(prompt); n < 1 || n > MaxChatImagePromptRunes {
-		return job, apperr.Invalid("prompt", "provide 1–4000 characters")
+		return none, apperr.Invalid("prompt", "provide 1–4000 characters")
 	}
 	roles := []string{}
 	for _, r := range references {
 		if r != ReferencePersona && r != ReferencePerson {
-			return job, apperr.Invalid("references", "use %q (your own likeness) or %q (the person's)", ReferencePersona, ReferencePerson)
+			return none, apperr.Invalid("references", "use %q (your own likeness) or %q (the person's)", ReferencePersona, ReferencePerson)
 		}
 		if !slices.Contains(roles, r) {
 			roles = append(roles, r)
@@ -78,56 +108,56 @@ func (s *Service) QueueChatImage(ctx context.Context, ws, runID uuid.UUID, promp
 	q := store.New(s.Pool)
 	run, err := q.GetRun(ctx, store.GetRunParams{ID: runID, WorkspaceID: ws})
 	if err != nil {
-		return job, err
+		return none, err
 	}
 	if run.Purpose != "chat" {
-		return job, apperr.Conflict("generate_image only works in a chat")
+		return none, apperr.Conflict("generate_image only works in a chat")
 	}
 	if run.State != "running" {
-		return job, apperr.Conflict("generate_image only works while you are answering a message")
+		return none, apperr.Conflict("generate_image only works while you are answering a message")
 	}
 	if run.Harness == agentdef.HarnessCodex {
-		return job, apperr.Conflict("This chat runs on Codex: use your own image generation tool, then copy the image into .lazyagents/outbox/. generate_image is for other models.")
+		return none, apperr.Conflict("This chat runs on Codex: use your own image generation tool, then copy the image into .lazyagents/outbox/. generate_image is for other models.")
 	}
 	chat, err := q.ChatSessionForRun(ctx, &run.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return job, apperr.Conflict("this chat run is no longer attached to a chat")
+		return none, apperr.Conflict("this chat run is no longer attached to a chat")
 	}
 	if err != nil {
-		return job, err
+		return none, err
 	}
 	// The Codex step shares the run's token and sees its tools; it must not
 	// queue more images for itself.
 	if running, err := q.RunningChatImageJobs(ctx, run.ID); err != nil {
-		return job, err
+		return none, err
 	} else if len(running) > 0 {
-		return job, apperr.Conflict("An image is being made right now; generate_image isn't available to that step")
+		return none, apperr.Conflict("An image is being made right now; generate_image isn't available to that step")
 	}
 	caps, err := chatCaps(ctx, q, chat)
 	if err != nil {
-		return job, err
+		return none, err
 	}
 	if !caps.Images {
-		return job, apperr.Conflict("This persona can't generate images; tell the person it isn't enabled.")
+		return none, apperr.Conflict("This persona can't generate images; tell the person it isn't enabled.")
 	}
 	if len(roles) > 0 {
 		refs, err := ChatReferences(ctx, q, chat)
 		if err != nil {
-			return job, err
+			return none, err
 		}
 		for _, r := range roles {
 			if _, ok := refs[r]; ok {
 				continue
 			}
 			if r == ReferencePersona {
-				return job, apperr.Conflict("There is no reference image of you (this persona). Call generate_image again without \"persona\" in references, describing your look in the prompt; the person can pick one in their Library with \"Use as reference\".")
+				return none, apperr.Conflict("There is no reference image of you (this persona). Call generate_image again without \"persona\" in references, describing your look in the prompt; the person can pick one in their Library with \"Use as reference\".")
 			}
-			return job, apperr.Conflict("The person hasn't set a reference image of themselves. Call generate_image again without \"person\" in references, describing them in the prompt; they can upload a photo in their Library and choose \"Use as my reference\".")
+			return none, apperr.Conflict("The person hasn't set a reference image of themselves. Call generate_image again without \"person\" in references, describing them in the prompt; they can upload a photo in their Library and choose \"Use as my reference\".")
 		}
 	}
 	catalog, err := s.ChatCatalog().List(ctx, q, ws)
 	if err != nil {
-		return job, err
+		return none, err
 	}
 	model, reason := "", "Codex isn't available"
 	for _, h := range catalog {
@@ -148,36 +178,34 @@ func (s *Service) QueueChatImage(ctx context.Context, ws, runID uuid.UUID, promp
 		}
 	}
 	if model == "" {
-		return job, apperr.Conflict("Image generation needs Codex: %s", reason)
+		return none, apperr.Conflict("Image generation needs Codex: %s", reason)
 	}
 	turn, err := q.RunningChatTurn(ctx, run.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return job, apperr.Conflict("generate_image only works while you are answering a message")
+		return none, apperr.Conflict("generate_image only works while you are answering a message")
 	}
 	if err != nil {
-		return job, err
+		return none, err
 	}
 	// The follow-up only reports what earlier requests made; a request from it
 	// would queue another follow-up, and so on.
 	if turn.Trigger == TriggerImageFollowup {
-		return job, apperr.Conflict("generate_image isn't available while you react to the images you already asked for. Tell the person what came of them; make another only when they ask in a new message.")
+		return none, apperr.Conflict("generate_image isn't available while you react to the images you already asked for. Tell the person what came of them; make another only when they ask in a new message.")
 	}
-	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		tq := store.New(tx)
-		if _, err := tq.LockChatSession(ctx, store.LockChatSessionParams{ID: chat.ID, WorkspaceID: ws}); err != nil {
-			return err
-		}
-		n, err := tq.CountChatImageJobsForTurn(ctx, store.CountChatImageJobsForTurnParams{RunID: run.ID, TurnID: turn.ID})
-		if err != nil {
-			return err
-		}
-		if n >= MaxChatImageJobsPerTurn {
-			return apperr.Conflict("You can request at most %d images in one reply; tell the person to ask again for more.", MaxChatImageJobsPerTurn)
-		}
-		job, err = tq.CreateChatImageJob(ctx, store.CreateChatImageJobParams{WorkspaceID: ws, RunID: run.ID, TurnID: turn.ID, ChatID: chat.ID, Prompt: prompt, Model: model, ReferenceRoles: roles})
-		return err
-	})
-	return job, err
+	return chatImageRequest{ws: ws, runID: run.ID, turnID: turn.ID, chatID: chat.ID, prompt: prompt, model: model, roles: roles}, nil
+}
+
+// insertChatImageJob queues a prepared request. The caller holds the chat's
+// lock, so two requests can't both pass the per-turn cap.
+func insertChatImageJob(ctx context.Context, tq *store.Queries, req chatImageRequest) (store.ChatImageJob, error) {
+	n, err := tq.CountChatImageJobsForTurn(ctx, store.CountChatImageJobsForTurnParams{RunID: req.runID, TurnID: req.turnID})
+	if err != nil {
+		return store.ChatImageJob{}, err
+	}
+	if n >= MaxChatImageJobsPerTurn {
+		return store.ChatImageJob{}, apperr.Conflict("You can request at most %d images in one reply; tell the person to ask again for more.", MaxChatImageJobsPerTurn)
+	}
+	return tq.CreateChatImageJob(ctx, store.CreateChatImageJobParams{WorkspaceID: req.ws, RunID: req.runID, TurnID: req.turnID, ChatID: req.chatID, Prompt: req.prompt, Model: req.model, ReferenceRoles: req.roles})
 }
 
 // ChatImagesOn reports whether the chat's persona may make images right now.

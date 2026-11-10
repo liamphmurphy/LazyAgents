@@ -3257,8 +3257,12 @@ export interface paths {
          * @description Approving creates the persona with the proposed name, tone, colour and
          *     instructions and every capability off, adds it to the chat, and (when
          *     the chat is idle) gives it a turn to introduce itself. Both add a system
-         *     message. 404 unknown chat or proposal; 409 already decided; 422 when
-         *     the persona can't be created (name taken, persona limit).
+         *     message. With a ready picture (avatar_state), approving also makes
+         *     it the persona's avatar and its reference image in the Library; if
+         *     storing the avatar fails, the persona is still created, without one.
+         *     404 unknown chat or proposal; 409 already decided, or approving while
+         *     its picture is still pending; 422 when the persona can't be created
+         *     (name taken, persona limit).
          */
         post: operations["decidePersonaProposal"];
         delete?: never;
@@ -6977,6 +6981,20 @@ export interface components {
             /** @enum {string} */
             state: "pending" | "approved" | "declined";
             persona?: components["schemas"]["PersonaSummary"];
+            /**
+             * @description The picture the proposing persona asked to make for it; absent
+             *     when it asked for none. pending: still being made, and the
+             *     proposal can't be approved until it settles. ready: approving
+             *     makes it the persona's avatar and reference image. failed: it
+             *     wasn't made, and approving creates the persona without one.
+             * @enum {string}
+             */
+            avatar_state?: "pending" | "ready" | "failed";
+            /**
+             * Format: uuid
+             * @description The picture (GET /chat-attachments/{attachmentId}/content), while avatar_state is ready
+             */
+            avatar_attachment_id?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */

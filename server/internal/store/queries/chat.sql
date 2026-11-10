@@ -332,8 +332,21 @@ INSERT INTO chat_participants (chat_id, persona_id) VALUES ($1, $2) ON CONFLICT 
 SELECT chat_id, persona_id FROM chat_participants WHERE chat_id = ANY(sqlc.arg(chat_ids)::uuid[]) ORDER BY joined_at, persona_id;
 
 -- name: CreatePersonaProposal :one
-INSERT INTO persona_proposals (chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;
+INSERT INTO persona_proposals (chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, avatar_job_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;
+
+-- name: PersonaProposalAvatars :many
+-- Where each proposal's picture stands. An image is linked to its job when
+-- the turn that asked for it finishes, in the same transaction that ends the
+-- turn; a turn that ended without one, or a failed job, made none.
+SELECT p.id AS proposal_id, j.attachment_id,
+  (CASE WHEN j.attachment_id IS NOT NULL THEN 'ready'
+        WHEN j.state = 'failed' OR t.ended_at IS NOT NULL THEN 'failed'
+        ELSE 'pending' END)::text AS avatar_state
+FROM persona_proposals p
+JOIN chat_image_jobs j ON j.id = p.avatar_job_id
+JOIN run_turns t ON t.id = j.turn_id
+WHERE p.id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: CountPendingPersonaProposals :one
 SELECT count(*)::int FROM persona_proposals WHERE chat_id = $1 AND state = 'pending';

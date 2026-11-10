@@ -578,6 +578,14 @@ func (s *Server) toProposals(ctx context.Context, rows []store.PersonaProposal) 
 			}
 		}
 	}
+	pids := make([]uuid.UUID, len(rows))
+	for i, r := range rows {
+		pids[i] = r.ID
+	}
+	avatars, err := runs.PersonaProposalAvatars(ctx, s.Q, pids)
+	if err != nil {
+		return nil, err
+	}
 	byID := map[uuid.UUID]store.Persona{}
 	if len(ids) > 0 {
 		ps, err := s.Q.PersonasByIDs(ctx, store.PersonasByIDsParams{Ids: ids, WorkspaceID: ws, UserID: u.ID})
@@ -600,6 +608,11 @@ func (s *Server) toProposals(ctx context.Context, rows []store.PersonaProposal) 
 		if p, ok := byID[deref(r.PersonaID)]; ok {
 			item.Persona = toPersonaSummary(p)
 		}
+		if a, ok := avatars[r.ID]; ok {
+			state := api.PersonaProposalAvatarState(a.AvatarState)
+			item.AvatarState = &state
+			item.AvatarAttachmentId = a.AttachmentID
+		}
 		out = append(out, item)
 	}
 	return out, nil
@@ -620,11 +633,19 @@ func (s *Server) DecidePersonaProposal(ctx context.Context, req api.DecidePerson
 	if req.Body == nil || !req.Body.Decision.Valid() {
 		return nil, apperr.Invalid("decision", "must be approve or decline")
 	}
-	p, err := s.Runs.DecidePersonaProposal(ctx, ws, u.ID, req.Id, req.ProposalId, req.Body.Decision == api.Approve)
+	d, err := s.Runs.DecidePersonaProposal(ctx, ws, u.ID, req.Id, req.ProposalId, req.Body.Decision == api.Approve)
 	if err != nil {
 		return nil, err
 	}
-	out, err := s.toProposals(ctx, []store.PersonaProposal{p})
+	if d.Avatar != nil && d.Proposal.PersonaID != nil {
+		// The persona exists now whatever happens here: a picture that can't
+		// be stored leaves it without an avatar, which the person can add in
+		// Manage personas.
+		if err := s.avatarFromAttachment(ctx, personaOwner(ctx), *d.Proposal.PersonaID, *d.Avatar); err != nil {
+			s.Log.Warn("proposed persona avatar", "proposal", d.Proposal.ID, "err", err)
+		}
+	}
+	out, err := s.toProposals(ctx, []store.PersonaProposal{d.Proposal})
 	if err != nil {
 		return nil, err
 	}

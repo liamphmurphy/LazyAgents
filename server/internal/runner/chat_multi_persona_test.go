@@ -195,9 +195,10 @@ func TestPersonaProposalNeedsApproval(t *testing.T) {
 		t.Fatalf("a proposal created a persona: %d personas, want %d", n, before)
 	}
 
-	decided, err := e.runs.DecidePersonaProposal(e.ctx, e.ws, e.me.ID, chat.ID, poet.ID, true)
-	if err != nil || decided.State != "approved" || decided.PersonaID == nil {
-		t.Fatalf("approve: %+v %v", decided, err)
+	d, err := e.runs.DecidePersonaProposal(e.ctx, e.ws, e.me.ID, chat.ID, poet.ID, true)
+	decided := d.Proposal
+	if err != nil || decided.State != "approved" || decided.PersonaID == nil || d.Avatar != nil {
+		t.Fatalf("approve: %+v %v", d, err)
 	}
 	p, err := ps.Get(e.ctx, o, *decided.PersonaID)
 	if err != nil || p.Name != "Poet" || p.Tone != "playful" || p.Color != "#aa3366" || p.CanCode || p.CanGenerateImages || p.CanCreatePersonas {
@@ -222,7 +223,7 @@ func TestPersonaProposalNeedsApproval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d, err := e.runs.DecidePersonaProposal(e.ctx, e.ws, e.me.ID, chat.ID, other.ID, false); err != nil || d.State != "declined" || d.PersonaID != nil {
+	if d, err := e.runs.DecidePersonaProposal(e.ctx, e.ws, e.me.ID, chat.ID, other.ID, false); err != nil || d.Proposal.State != "declined" || d.Proposal.PersonaID != nil {
 		t.Fatalf("decline: %+v %v", d, err)
 	}
 	if n := count(); n != before+1 {

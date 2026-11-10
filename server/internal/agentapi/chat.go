@@ -229,6 +229,7 @@ type ProposePersonaIn struct {
 	Color        string `json:"color,omitempty" jsonschema:"Its colour in the chat as #rrggbb (default #64748b)"`
 	Instructions string `json:"instructions,omitempty" jsonschema:"Its style and focus, at most 2000 characters, written to it in the second person"`
 	Reason       string `json:"reason,omitempty" jsonschema:"One sentence for the person on why it helps, at most 500 characters"`
+	AvatarPrompt string `json:"avatar_prompt,omitempty" jsonschema:"A detailed prompt for its profile picture, a portrait of it, at most 4000 characters. Needs your image permission. Once the person approves, the image becomes its avatar and its reference likeness"`
 }
 
 // proposePersona asks the person to approve a new persona (see
@@ -241,9 +242,13 @@ func proposePersona(ctx context.Context, d Deps, c agents.Caller, in ProposePers
 	if s == nil {
 		return nil, apperr.Conflict("propose_persona only works in a chat with a person")
 	}
-	p, err := d.Runs.ProposePersona(ctx, c.Agent.WorkspaceID, *c.RunID, runs.PersonaProposalInput{Name: in.Name, Tone: in.Tone, Color: in.Color, Instructions: in.Instructions, Reason: in.Reason})
+	p, err := d.Runs.ProposePersona(ctx, c.Agent.WorkspaceID, *c.RunID, runs.PersonaProposalInput{Name: in.Name, Tone: in.Tone, Color: in.Color, Instructions: in.Instructions, Reason: in.Reason, AvatarPrompt: in.AvatarPrompt})
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"proposal_id": p.ID, "name": p.Name, "state": p.State, "tell_the_person": "Proposed. The person sees Approve and Decline in the chat; " + p.Name + " is only created if they approve. Don't describe it as created yet."}, nil
+	tell := "Proposed. The person sees Approve and Decline in the chat; " + p.Name + " is only created if they approve. Don't describe it as created yet."
+	if p.AvatarJobID != nil {
+		tell += " Its picture is made right after your reply and shows on the proposal; it may still fail. Don't describe the picture: you'll see it in a follow-up turn."
+	}
+	return map[string]any{"proposal_id": p.ID, "name": p.Name, "state": p.State, "tell_the_person": tell}, nil
 }

@@ -10,10 +10,13 @@ import (
 	"net/http"
 	"slices"
 
+	"github.com/google/uuid"
+
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // Persona avatars (ADR Decision 4). They live in the blob bucket under
@@ -117,6 +120,39 @@ func (s *Server) UploadPersonaAvatar(ctx context.Context, req api.UploadPersonaA
 	s.deleteAvatarBlob(ctx, old)
 	out, err := s.toPersona(ctx, p)
 	return api.UploadPersonaAvatar200JSONResponse(out), err
+}
+
+// avatarFromAttachment makes a stored image, such as one generated in a chat,
+// the persona's avatar (personas.AvatarFromImage), replacing any it had.
+func (s *Server) avatarFromAttachment(ctx context.Context, o personas.Owner, persona uuid.UUID, att store.ChatAttachment) error {
+	if s.Blobs == nil {
+		return errNoBlobs
+	}
+	obj, err := s.Blobs.Get(ctx, s.ArtifactBucket, att.BlobKey)
+	if err != nil {
+		return err
+	}
+	src, err := io.ReadAll(io.LimitReader(obj.Body, personas.MaxAvatarSourceBytes+1))
+	obj.Body.Close()
+	if err != nil {
+		return err
+	}
+	b, ct, err := personas.AvatarFromImage(src)
+	if err != nil {
+		return err
+	}
+	key := personas.AvatarKey(o, persona)
+	if err := s.Blobs.Put(ctx, s.ArtifactBucket, key, bytes.NewReader(b), int64(len(b)), ct); err != nil {
+		return err
+	}
+	_, old, err := s.personas().SetAvatar(ctx, o, persona, &key, &ct)
+	if err != nil {
+		// Deleted meanwhile, or the write failed: nothing points at the new blob.
+		s.deleteAvatarBlob(ctx, &key)
+		return err
+	}
+	s.deleteAvatarBlob(ctx, old)
+	return nil
 }
 
 func (s *Server) DeletePersonaAvatar(ctx context.Context, req api.DeletePersonaAvatarRequestObject) (api.DeletePersonaAvatarResponseObject, error) {

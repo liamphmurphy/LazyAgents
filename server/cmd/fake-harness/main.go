@@ -549,6 +549,12 @@ func main() {
 			}
 			out := call("generate_image", args)
 			reply = fmt.Sprintf("Chat reply (session=%s): making it (%v)", session, out["queued"])
+		} else if want, ok := strings.CutPrefix(prompt, "persona: "); ok {
+			// "persona: <name> | <avatar prompt>" proposes a persona with a picture.
+			want, _, _ = strings.Cut(want, "\n\n(Vesper:")
+			name, avatar, _ := strings.Cut(want, " | ")
+			out := call("propose_persona", map[string]any{"name": name, "avatar_prompt": avatar})
+			reply = fmt.Sprintf("Proposed %s (error=%v)", name, out["error"])
 		}
 		text(reply)
 		result(false, reply)

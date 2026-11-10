@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installChatApi, persona } from "./mock-chat-api";
+import { installChatApi, persona, type MockProposal } from "./mock-chat-api";
 
 // Several personas in one chat: @mentions in the composer bring another persona
 // in, and a persona's proposal for a new persona waits for the person's approval.
@@ -54,4 +54,28 @@ test("a proposed persona is created only when the person approves it", async ({ 
   await card.getByRole("button", { name: "Approve Sage" }).click();
   await expect.poll(() => mock.decisions).toEqual([{ id: "77777777-7777-4777-8777-777777777777", decision: "approve" }]);
   await expect(card).toHaveCount(0);
+});
+
+test("a proposal's picture holds approval until it's ready, then shows on the card", async ({ page }) => {
+  const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
+  const id = await openChat(page);
+  const proposal: MockProposal = {
+    id: "88888888-8888-4888-8888-888888888888", chat_id: id, name: "Muse", tone: "playful", color: "#bb6bd9",
+    custom_instructions: "", reason: "You asked for an art critic.", state: "pending", avatar_state: "pending",
+    proposed_by: { id: ATLAS.id, name: ATLAS.name, color: ATLAS.color }, created_at: "2026-11-07T10:00:00Z",
+  };
+  mock.proposals.push(proposal);
+  await page.reload();
+
+  const card = page.getByTestId("persona-proposal");
+  await expect(card.getByTestId("proposal-avatar-note")).toContainText("Making its picture");
+  await expect(card.getByRole("button", { name: "Approve Muse" })).toBeDisabled();
+  await expect(card.getByRole("button", { name: "Decline" })).toBeEnabled();
+
+  Object.assign(proposal, { avatar_state: "ready", avatar_attachment_id: "99999999-9999-4999-8999-999999999999" });
+  await page.reload();
+  await expect(card.getByTestId("proposal-avatar-note")).toContainText("makes this picture its avatar");
+  await expect(card.locator('img[src="/api/v1/chat-attachments/99999999-9999-4999-8999-999999999999/content"]')).toHaveCount(1);
+  await card.getByRole("button", { name: "Approve Muse" }).click();
+  await expect.poll(() => mock.decisions).toEqual([{ id: proposal.id, decision: "approve" }]);
 });

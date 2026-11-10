@@ -3920,8 +3920,12 @@ paths:
         Approving creates the persona with the proposed name, tone, colour and
         instructions and every capability off, adds it to the chat, and (when
         the chat is idle) gives it a turn to introduce itself. Both add a system
-        message. 404 unknown chat or proposal; 409 already decided; 422 when
-        the persona can't be created (name taken, persona limit).
+        message. With a ready picture (avatar_state), approving also makes
+        it the persona's avatar and its reference image in the Library; if
+        storing the avatar fails, the persona is still created, without one.
+        404 unknown chat or proposal; 409 already decided, or approving while
+        its picture is still pending; 422 when the persona can't be created
+        (name taken, persona limit).
       tags: [chats]
       requestBody:
         required: true
@@ -7490,6 +7494,16 @@ components:
         reason: { type: string, description: Why the proposing persona thinks it helps }
         state: { type: string, enum: [pending, approved, declined] }
         persona: { $ref: "#/components/schemas/PersonaSummary" }
+        avatar_state:
+          type: string
+          enum: [pending, ready, failed]
+          description: |
+            The picture the proposing persona asked to make for it; absent
+            when it asked for none. pending: still being made, and the
+            proposal can't be approved until it settles. ready: approving
+            makes it the persona's avatar and reference image. failed: it
+            wasn't made, and approving creates the persona without one.
+        avatar_attachment_id: { type: string, format: uuid, description: "The picture (GET /chat-attachments/{attachmentId}/content), while avatar_state is ready" }
         created_at: { type: string, format: date-time }
         decided_at: { type: string, format: date-time }
     Persona:
