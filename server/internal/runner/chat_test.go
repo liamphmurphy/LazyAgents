@@ -273,13 +273,13 @@ func TestChatDoesNotOccupyTicketDispatchSlot(t *testing.T) {
 	if _, err := e.pool.Exec(e.ctx, "UPDATE runs SET resolved_spec=jsonb_set(resolved_spec,'{max_concurrency}','1') WHERE id=$1", ticket.ID); err != nil {
 		t.Fatal(err)
 	}
-	claimed, err := e.q.ClaimQueuedRun(e.ctx, nil)
+	claimed, err := e.q.ClaimQueuedRun(e.ctx, store.ClaimQueuedRunParams{})
 	if err != nil || claimed.ID != ticket.ID {
 		t.Fatalf("chat blocked ticket dispatch: %+v %v", claimed, err)
 	}
 	// Conversely, an occupied ticket slot cannot block another chat turn.
 	other := e.startChat("Another question")
-	claimed, err = e.q.ClaimQueuedRun(e.ctx, nil)
+	claimed, err = e.q.ClaimQueuedRun(e.ctx, store.ClaimQueuedRunParams{})
 	if err != nil || claimed.ID != *other.CurrentRunID {
 		t.Fatalf("ticket blocked chat dispatch: %+v %v", claimed, err)
 	}

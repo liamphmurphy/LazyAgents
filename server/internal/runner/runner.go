@@ -149,7 +149,9 @@ func (r *Runner) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			r.wg.Wait()
-			_ = r.q().DeleteRunner(context.Background(), r.Cfg.ID)
+			qctx, cancel := context.WithTimeout(context.Background(), controlTimeout)
+			_ = r.q().DeleteRunner(qctx, r.Cfg.ID)
+			cancel()
 			return nil
 		case <-beat.C:
 			r.heartbeat(ctx)
@@ -177,17 +179,7 @@ func (r *Runner) Recover(ctx context.Context) error {
 	if err := r.Backend.Cleanup(ctx); err != nil {
 		r.Log.Warn("runner cleanup", "err", err)
 	}
-	q := r.q()
-	if err := q.RequeueStarting(ctx); err != nil {
-		return err
-	}
-	if err := q.RequeueInterrupted(ctx, &r.Cfg.ID); err != nil {
-		return err
-	}
-	if err := r.resumeStranded(ctx); err != nil {
-		return err
-	}
-	return q.RecoverChatCancellations(ctx, &r.Cfg.ID)
+	return r.reconcile(ctx)
 }
 
 // StrandedResumeMessage continues a run whose last turn a runner shutdown cut short.
@@ -239,6 +231,8 @@ func (r *Runner) tickScheduled(ctx context.Context) {
 }
 
 func (r *Runner) heartbeat(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, controlTimeout)
+	defer cancel()
 	r.mu.Lock()
 	n := r.active
 	r.mu.Unlock()
@@ -272,6 +266,12 @@ func (r *Runner) release() {
 // Tick starts what it can: queued runs first (workspace setup), then
 // pending turns of running runs. Work runs in goroutines; Wait waits.
 func (r *Runner) Tick(ctx context.Context) {
+	if err := r.reconcile(ctx); err != nil {
+		if ctx.Err() == nil {
+			r.Log.Warn("reconcile runner work", "err", err)
+		}
+		return
+	}
 	q := r.q()
 	r.tickSignIns(ctx)
 	r.tickModelListings(ctx)
@@ -279,7 +279,10 @@ func (r *Runner) Tick(ctx context.Context) {
 	r.resumeHeld(ctx)
 	r.tickPlaygrounds(ctx)
 	for r.slot() {
-		run, err := q.ClaimQueuedRun(ctx, &r.Cfg.ID)
+		token, expires := uuid.New(), time.Now().Add(executionTTL)
+		claimCtx, cancel := context.WithTimeout(ctx, controlTimeout)
+		run, err := q.ClaimQueuedRun(claimCtx, store.ClaimQueuedRunParams{RunnerID: &r.Cfg.ID, ExecutionToken: &token, ExecutionExpiresAt: &expires})
+		cancel()
 		if err != nil {
 			r.mu.Lock()
 			r.active--
@@ -292,11 +295,14 @@ func (r *Runner) Tick(ctx context.Context) {
 		r.wg.Add(1)
 		go func() {
 			defer r.release()
-			r.start(ctx, run)
+			r.execute(ctx, run.ID, false, run.ExecutionToken, run.ExecutionExpiresAt, func(ctx context.Context) { r.start(ctx, run) })
 		}()
 	}
 	for r.slot() {
-		turn, err := q.ClaimPendingTurn(ctx)
+		token, expires := uuid.New(), time.Now().Add(executionTTL)
+		claimCtx, cancel := context.WithTimeout(ctx, controlTimeout)
+		turn, err := q.ClaimPendingTurn(claimCtx, store.ClaimPendingTurnParams{ExecutionToken: &token, ExecutionExpiresAt: &expires})
+		cancel()
 		if err != nil {
 			r.mu.Lock()
 			r.active--
@@ -309,7 +315,7 @@ func (r *Runner) Tick(ctx context.Context) {
 		r.wg.Add(1)
 		go func() {
 			defer r.release()
-			r.turn(ctx, turn)
+			r.execute(ctx, turn.ID, true, turn.ExecutionToken, turn.ExecutionExpiresAt, func(ctx context.Context) { r.turn(ctx, turn) })
 		}()
 	}
 }
@@ -398,7 +404,9 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 // addTiming adds to a run's cumulative phase timings. It is best-effort and
 // uses its own context so a shutting-down runner still records the phase.
 func (r *Runner) addTiming(runID uuid.UUID, setup, harness, checks time.Duration) {
-	err := r.q().AddRunTiming(context.Background(), store.AddRunTimingParams{ID: runID,
+	ctx, cancel := context.WithTimeout(context.Background(), controlTimeout)
+	defer cancel()
+	err := r.q().AddRunTiming(ctx, store.AddRunTimingParams{ID: runID,
 		SetupMs: setup.Milliseconds(), HarnessMs: harness.Milliseconds(), ChecksMs: checks.Milliseconds()})
 	if err != nil {
 		r.Log.Warn("record timing", "run", runID, "err", err)
@@ -887,26 +895,20 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		fail("Couldn't start the workspace setup: " + err.Error())
 		return
 	}
-	var out bytes.Buffer
-	var mu sync.Mutex
-	var cp sync.WaitGroup
-	for _, rd := range []io.Reader{proc.Stdout(), proc.Stderr()} {
-		cp.Add(1)
-		go func() {
-			defer cp.Done()
-			b, _ := io.ReadAll(io.LimitReader(rd, 1<<20))
-			mu.Lock()
-			out.Write(b)
-			mu.Unlock()
-		}()
+	stop := r.supervise(ctx, c, proc, ScriptTimeout, nil)
+	output, code, err := captureProcess(ctx, proc)
+	expired, _ := stop()
+	if ctx.Err() != nil {
+		return
 	}
-	code, err := proc.Wait()
-	cp.Wait()
-	if c, ok := proc.(io.Closer); ok {
-		_ = c.Close()
+	if c.run.Purpose == "chat" && r.finishStoppedChatSetup(ctx, c) {
+		return
+	}
+	if expired {
+		err = errors.Join(err, errors.New("workspace setup timed out"))
 	}
 	r.addTiming(run.ID, time.Since(setupStart), 0, 0)
-	output, testFiles := takeTestFiles(redact(out.String(), env))
+	output, testFiles := takeTestFiles(redact(output, env))
 	output = r.recordEnvironment(ctx, c, output, err != nil || code != 0)
 	tail := lastLines(output, 30)
 	if err != nil || code != 0 {
@@ -932,6 +934,9 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		cur, err := q.LockRun(ctx, run.ID)
 		if err != nil {
 			return err
+		}
+		if token := executionToken(ctx); token != nil && (cur.ExecutionToken == nil || *cur.ExecutionToken != *token || cur.ExecutionExpiresAt == nil || !cur.ExecutionExpiresAt.After(time.Now())) {
+			return errors.New("setup execution lease was lost")
 		}
 		if c.run.Purpose == "chat" && cur.State == "paused" {
 			vol := run.ID.String()
@@ -1029,7 +1034,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	if c.run.Purpose == "ticket" || c.run.Purpose == "chat" {
 		// Once the turn has settled the run's state: see advanceChatTicketRuns.
-		defer r.advanceChatTicketRuns(context.WithoutCancel(ctx))
+		defer func() {
+			qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), controlTimeout)
+			defer cancel()
+			r.advanceChatTicketRuns(qctx)
+		}()
 	}
 	q := r.q()
 	log := r.Log.With("run", c.run.ID, "ticket", c.ticket.Key, "turn", turn.Seq)
@@ -1174,7 +1183,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		log.Error("token", "err", err)
 		return
 	}
-	defer func() { _ = agents.RevokeToken(context.Background(), q, c.agent.ID, tok.ID) }()
+	defer func() {
+		qctx, cancel := context.WithTimeout(context.Background(), controlTimeout)
+		defer cancel()
+		_ = agents.RevokeToken(qctx, q, c.agent.ID, tok.ID)
+	}()
 
 	ctxFiles, err := ContextFiles(ctx, q, c.agent, c.ticket, c.spec.Memory)
 	if err != nil {
@@ -1398,7 +1411,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	res, raw, code, waitErr := r.watch(ctx, c, proc, h.NewParser(c.spec.Model), sensitive, maxRuntime-used)
 	r.addTiming(c.run.ID, 0, time.Since(harnessStart), 0)
-	r.learnTestEnv(context.Background(), c, proc)
+	r.learnTestEnv(ctx, c, proc)
 	if videos != nil {
 		if ctx.Err() != nil {
 			stopVideos() // shutting down: the turn re-runs and its jobs carry on
@@ -1418,9 +1431,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 	}
 	if res.UsageLimited {
-		r.markProviderLimited(context.Background(), c, limitMsg)
+		r.markProviderLimited(ctx, c, limitMsg)
 	}
-	r.recordUsage(context.Background(), c, res.RateLimits)
+	r.recordUsage(ctx, c, res.RateLimits)
 	if code != 0 && res.Error == "" && (c.run.ParentRunID != nil || c.run.Purpose == "chat") {
 		// A session the CLI can't resume is reported on stderr only.
 		for _, line := range strings.Split(string(raw), "\n") {
@@ -1430,7 +1443,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			}
 		}
 	}
-	logKey := r.saveLog(c.run.ID, turn.Seq, raw)
+	logKey := r.saveLog(ctx, c.run.ID, turn.Seq, raw)
 	if c.run.Purpose == "chat" {
 		if ctx.Err() == nil {
 			if session != "" && (code != 0 || res.IsError) && sessionGone.MatchString(res.Error) && r.restartChatSegment(ctx, c, turn, code, logKey) {
@@ -1455,7 +1468,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	usage, _ := json.Marshal(res.Usage)
 	exit := int32(code)
-	if err := q.FinishTurn(context.Background(), store.FinishTurnParams{ID: turn.ID, ExitCode: &exit, LogKey: logKey, Usage: usage}); err != nil {
+	if err := q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, ExitCode: &exit, LogKey: logKey, Usage: usage}); err != nil {
 		log.Error("finish turn", "err", err)
 	}
 	if res.Usage != (harness.Usage{}) {
@@ -1464,13 +1477,13 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		if src != "" {
 			srcp = &src
 		}
-		_, usageErr := q.AddRunUsage(context.Background(), store.AddRunUsageParams{ID: c.run.ID, ToolCalls: int32(res.Usage.ToolCalls),
+		_, usageErr := q.AddRunUsage(ctx, store.AddRunUsageParams{ID: c.run.ID, ToolCalls: int32(res.Usage.ToolCalls),
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens, CostUsdMicros: int64(res.Usage.CostUSD * 1e6), CostSource: srcp})
 		if usageErr != nil {
 			log.Error("record usage", "err", usageErr)
 		}
 	}
-	r.event(context.Background(), c.run.ID, "lifecycle", map[string]any{"state": "turn_ended", "turn": turn.Seq, "exit_code": code})
+	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_ended", "turn": turn.Seq, "exit_code": code})
 	if ctx.Err() != nil {
 		return // shut down after the turn finished: Recover's resumeStranded continues the run
 	}
@@ -1487,7 +1500,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 // runtime guard, and returns what the parser learned.
 func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Parser, env map[string]string, remaining time.Duration) (harness.Result, []byte, int, error) {
 	return r.watchSession(ctx, c, proc, p, env, remaining, func(s string) {
-		_ = r.q().SetRunSession(context.Background(), store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: &s})
+		qctx, cancel := context.WithTimeout(ctx, controlTimeout)
+		defer cancel()
+		_ = r.q().SetRunSession(qctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: &s})
 	})
 }
 
@@ -1495,6 +1510,8 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 // its session id. The run's own turn records it as the run's resumable
 // session; a side step (an image job's Codex) must not.
 func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p harness.Parser, env map[string]string, remaining time.Duration, onSession func(string)) (harness.Result, []byte, int, error) {
+	readCtx, cancelReads := context.WithCancel(ctx)
+	defer cancelReads()
 	var raw bytes.Buffer
 	var rawMu sync.Mutex
 	appendRaw := func(prefix string, b []byte) {
@@ -1507,7 +1524,7 @@ func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p har
 		}
 	}
 	var opening openingLine // written by the stdout reader, read after readers.Wait
-	done := make(chan struct{})
+	streamErrors := make(chan error, 2)
 	var readers sync.WaitGroup
 	readers.Add(2)
 	go func() {
@@ -1516,6 +1533,10 @@ func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p har
 		sc.Buffer(make([]byte, 64<<10), 4<<20)
 		for sc.Scan() {
 			appendRaw("[stderr] ", sc.Bytes())
+		}
+		if err := sc.Err(); err != nil {
+			streamErrors <- streamError("stderr", err)
+			_, _ = io.Copy(io.Discard, proc.Stderr())
 		}
 	}()
 	go func() {
@@ -1526,74 +1547,44 @@ func (r *Runner) watchSession(ctx context.Context, c runCtx, proc Process, p har
 		for sc.Scan() {
 			line := sc.Bytes()
 			appendRaw("", line)
+			if readCtx.Err() != nil {
+				_, _ = io.Copy(io.Discard, proc.Stdout())
+				return
+			}
 			for _, e := range p.Line(line) {
 				payload, b := redactPayload(e.Payload, env)
 				opening.see(e.Type, payload)
-				r.eventJSON(context.Background(), c.run.ID, e.Type, b)
+				func() {
+					ectx, cancel := context.WithTimeout(readCtx, controlTimeout)
+					defer cancel()
+					r.eventJSON(ectx, c.run.ID, e.Type, b)
+				}()
 			}
 			if s := p.Result().SessionID; s != "" && s != session {
 				session = s
 				onSession(s)
 			}
 		}
+		if err := sc.Err(); err != nil {
+			streamErrors <- streamError("stdout", err)
+			_, _ = io.Copy(io.Discard, proc.Stdout())
+		}
+
 	}()
 
-	// Watchdog: people pause or cancel through the API; we act on it here.
-	var watchdog sync.WaitGroup
-	watchdog.Add(1)
-	go func() {
-		defer watchdog.Done()
-		t := time.NewTicker(time.Second)
-		defer t.Stop()
-		var deadline <-chan time.Time
-		if remaining > 0 {
-			deadline = time.After(remaining)
-		}
-		interrupted := time.Time{}
-		for {
-			select {
-			case <-done:
-				return
-			case <-ctx.Done():
-				_ = proc.Kill()
-				return
-			case <-deadline:
-				if c.run.Purpose == "chat" {
-					_ = proc.Kill()
-					return
-				}
-				r.end(context.Background(), c, "cancelled", "Stopped: reached the "+c.spec.Budget.MaxRuntime+" runtime limit.", runs.VerbRunCancelled)
-				_ = proc.Kill()
-				return
-			case <-t.C:
-				run, err := r.q().GetRun(context.Background(), store.GetRunParams{ID: c.run.ID, WorkspaceID: c.run.WorkspaceID})
-				if err != nil {
-					continue
-				}
-				switch {
-				case run.State == "cancelled" || run.State == "failed":
-					_ = proc.Kill()
-				case run.State == "paused" && c.run.Purpose == "chat":
-					// Chat Stop cancels this reply; do not wait through the
-					// ticket shutdown grace period for an unresponsive CLI.
-					_ = proc.Kill()
-				case run.State == "paused" && interrupted.IsZero():
-					// Let the harness close the turn cleanly (§6.4).
-					interrupted = time.Now()
-					_ = proc.Interrupt()
-				case !interrupted.IsZero() && time.Since(interrupted) > r.Cfg.Grace:
-					_ = proc.Kill()
-				}
-			}
-		}
-	}()
+	stop := r.supervise(ctx, c, proc, remaining, streamErrors)
 	code, err := proc.Wait()
-	readers.Wait()
-	if c, ok := proc.(io.Closer); ok {
-		_ = c.Close()
+	drainErr := drainProcess(proc, &readers, cancelReads)
+	expired, readErr := stop()
+	for len(streamErrors) > 0 {
+		readErr = errors.Join(readErr, <-streamErrors)
 	}
-	close(done)
-	watchdog.Wait()
+	if expired && c.run.Purpose != "chat" {
+		endCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), controlTimeout)
+		r.end(endCtx, c, "cancelled", "Stopped: reached the "+c.spec.Budget.MaxRuntime+" runtime limit.", runs.VerbRunCancelled)
+		cancel()
+	}
+	err = errors.Join(err, drainErr, readErr)
 	res := p.Result()
 	res.Opening = opening.line
 	return res, raw.Bytes(), code, err
@@ -1623,12 +1614,12 @@ func containsSecret(b []byte, env map[string]string) bool {
 	return false
 }
 
-func (r *Runner) saveLog(runID uuid.UUID, seq int32, raw []byte) *string {
+func (r *Runner) saveLog(ctx context.Context, runID uuid.UUID, seq int32, raw []byte) *string {
 	if r.Blobs == nil || len(raw) == 0 {
 		return nil
 	}
 	key := fmt.Sprintf("runs/%s/turn-%03d.jsonl", runID, seq)
-	if err := r.Blobs.Put(context.Background(), r.Cfg.LogBucket, key, bytes.NewReader(raw), int64(len(raw)), "application/x-ndjson"); err != nil {
+	if err := r.Blobs.Put(ctx, r.Cfg.LogBucket, key, bytes.NewReader(raw), int64(len(raw)), "application/x-ndjson"); err != nil {
 		r.Log.Warn("save raw log", "run", runID, "err", err)
 		return nil
 	}

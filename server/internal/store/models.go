@@ -1012,6 +1012,8 @@ type Run struct {
 	CheckpointAt        *time.Time
 	CheckpointError     *string
 	WorkspaceHostPath   *string
+	ExecutionToken      *uuid.UUID
+	ExecutionExpiresAt  *time.Time
 }
 
 type RunEvent struct {
@@ -1024,21 +1026,23 @@ type RunEvent struct {
 }
 
 type RunTurn struct {
-	ID               uuid.UUID
-	RunID            uuid.UUID
-	Seq              int32
-	Trigger          string
-	InputMessage     string
-	StartedAt        time.Time
-	EndedAt          *time.Time
-	ExitCode         *int32
-	Status           string
-	ProcessStartedAt *time.Time
-	LogKey           *string
-	Usage            json.RawMessage
-	Effort           *string
-	EffortLevel      *string
-	EffortReasons    []string
+	ID                 uuid.UUID
+	RunID              uuid.UUID
+	Seq                int32
+	Trigger            string
+	InputMessage       string
+	StartedAt          time.Time
+	EndedAt            *time.Time
+	ExitCode           *int32
+	Status             string
+	ProcessStartedAt   *time.Time
+	LogKey             *string
+	Usage              json.RawMessage
+	Effort             *string
+	EffortLevel        *string
+	EffortReasons      []string
+	ExecutionToken     *uuid.UUID
+	ExecutionExpiresAt *time.Time
 }
 
 type Runner struct {

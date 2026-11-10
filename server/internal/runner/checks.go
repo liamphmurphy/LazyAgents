@@ -1,12 +1,9 @@
 package runner
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -30,34 +27,7 @@ func (r *Runner) execIn(ctx context.Context, ws, dir, name, script string, env m
 	if err != nil {
 		return "", -1, err
 	}
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = proc.Kill()
-		case <-done:
-		}
-	}()
-	var out bytes.Buffer
-	var mu sync.Mutex
-	var cp sync.WaitGroup
-	for _, rd := range []io.Reader{proc.Stdout(), proc.Stderr()} {
-		cp.Add(1)
-		go func() {
-			defer cp.Done()
-			b, _ := io.ReadAll(io.LimitReader(rd, 1<<20))
-			mu.Lock()
-			out.Write(b)
-			mu.Unlock()
-		}()
-	}
-	code, err := proc.Wait()
-	cp.Wait()
-	if c, ok := proc.(io.Closer); ok {
-		_ = c.Close()
-	}
-	return out.String(), code, err
+	return captureProcess(ctx, proc)
 }
 
 // parseStatus lists the files `git status --porcelain` reports, minus

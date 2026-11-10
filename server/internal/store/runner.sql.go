@@ -13,29 +13,72 @@ import (
 	"github.com/google/uuid"
 )
 
+const abandonedChatCancellations = `-- name: AbandonedChatCancellations :many
+SELECT r.id, r.workspace_id FROM runs r JOIN chat_sessions c ON c.current_run_id = r.id
+WHERE r.purpose = 'chat' AND r.state = 'paused'
+  AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+  AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.execution_expires_at > now())
+  AND (r.execution_token IS NOT NULL
+    OR EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.execution_token IS NOT NULL)
+    OR r.runner_id = $1 OR r.runner_id IS NULL
+    OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
+`
+
+type AbandonedChatCancellationsRow struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) AbandonedChatCancellations(ctx context.Context, runnerID *string) ([]AbandonedChatCancellationsRow, error) {
+	rows, err := q.db.Query(ctx, abandonedChatCancellations, runnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AbandonedChatCancellationsRow{}
+	for rows.Next() {
+		var i AbandonedChatCancellationsRow
+		if err := rows.Scan(&i.ID, &i.WorkspaceID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const claimPendingTurn = `-- name: ClaimPendingTurn :one
-UPDATE run_turns SET status = 'running', process_started_at = now()
-WHERE id = (
+UPDATE run_turns SET status = 'running', process_started_at = now(),
+  execution_token = $1, execution_expires_at = $2
+WHERE status = 'pending' AND id = (
   SELECT t.id FROM run_turns t JOIN runs r ON r.id = t.run_id
   WHERE t.status = 'pending' AND r.mode = 'managed' AND r.state = 'running'
-    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = t.run_id AND b.status = 'running')
+    AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = t.run_id AND (b.status = 'running' OR b.execution_expires_at > now()))
     -- A delegated run shares its parent's checkout: wait for the parent's process to exit.
-    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND b.status = 'running')
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND (b.status = 'running' OR b.execution_expires_at > now()))
     AND NOT EXISTS (
       SELECT 1 FROM run_turns b JOIN runs c ON c.id = b.run_id
-      WHERE c.parent_run_id = r.id AND b.status = 'running')
+      WHERE c.parent_run_id = r.id AND (b.status = 'running' OR b.execution_expires_at > now()))
   ORDER BY t.seq
   FOR UPDATE OF t SKIP LOCKED
   LIMIT 1
 )
-RETURNING id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons
+RETURNING id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons, execution_token, execution_expires_at
 `
+
+type ClaimPendingTurnParams struct {
+	ExecutionToken     *uuid.UUID
+	ExecutionExpiresAt *time.Time
+}
 
 // The next turn to execute: a pending turn of a running managed run whose
 // previous turn has exited (a reply can arrive while the agent is still
 // ending its turn; one process per workspace at a time).
-func (q *Queries) ClaimPendingTurn(ctx context.Context) (RunTurn, error) {
-	row := q.db.QueryRow(ctx, claimPendingTurn)
+func (q *Queries) ClaimPendingTurn(ctx context.Context, arg ClaimPendingTurnParams) (RunTurn, error) {
+	row := q.db.QueryRow(ctx, claimPendingTurn, arg.ExecutionToken, arg.ExecutionExpiresAt)
 	var i RunTurn
 	err := row.Scan(
 		&i.ID,
@@ -53,17 +96,20 @@ func (q *Queries) ClaimPendingTurn(ctx context.Context) (RunTurn, error) {
 		&i.Effort,
 		&i.EffortLevel,
 		&i.EffortReasons,
+		&i.ExecutionToken,
+		&i.ExecutionExpiresAt,
 	)
 	return i, err
 }
 
 const claimQueuedRun = `-- name: ClaimQueuedRun :one
 
-UPDATE runs SET state = 'starting', runner_id = $1
+UPDATE runs SET state = 'starting', runner_id = $1,
+  execution_token = $2, execution_expires_at = $3
 WHERE id = (
   SELECT r.id FROM runs r
   WHERE r.state = 'queued'
-    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND b.status = 'running')
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.parent_run_id AND (b.status = 'running' OR b.execution_expires_at > now()))
     AND (r.parent_run_id IS NOT NULL OR NOT EXISTS (
       SELECT 1 FROM ticket_dependencies d JOIN tickets bt ON bt.id = d.blocker_id
       WHERE d.ticket_id = r.ticket_id AND bt.status <> 'done'))
@@ -74,15 +120,21 @@ WHERE id = (
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
-RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path
+RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at
 `
+
+type ClaimQueuedRunParams struct {
+	RunnerID           *string
+	ExecutionToken     *uuid.UUID
+	ExecutionExpiresAt *time.Time
+}
 
 // The runner (docs/dev/plan.md §6.4–6.6): queue, turns, heartbeats, PR sync.
 // The oldest queued run whose agent has a free slot (max_concurrency from
 // the frozen definition; waiting runs don't hold a slot). A ticket run whose
 // blocker tickets aren't Done stays queued.
-func (q *Queries) ClaimQueuedRun(ctx context.Context, runnerID *string) (Run, error) {
-	row := q.db.QueryRow(ctx, claimQueuedRun, runnerID)
+func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) (Run, error) {
+	row := q.db.QueryRow(ctx, claimQueuedRun, arg.RunnerID, arg.ExecutionToken, arg.ExecutionExpiresAt)
 	var i Run
 	err := row.Scan(
 		&i.ID,
@@ -126,6 +178,8 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, runnerID *string) (Run, er
 		&i.CheckpointAt,
 		&i.CheckpointError,
 		&i.WorkspaceHostPath,
+		&i.ExecutionToken,
+		&i.ExecutionExpiresAt,
 	)
 	return i, err
 }
@@ -244,7 +298,7 @@ func (q *Queries) FinishTurn(ctx context.Context, arg FinishTurnParams) error {
 }
 
 const getTurn = `-- name: GetTurn :one
-SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons FROM run_turns WHERE id = $1
+SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons, execution_token, execution_expires_at FROM run_turns WHERE id = $1
 `
 
 func (q *Queries) GetTurn(ctx context.Context, id uuid.UUID) (RunTurn, error) {
@@ -266,6 +320,8 @@ func (q *Queries) GetTurn(ctx context.Context, id uuid.UUID) (RunTurn, error) {
 		&i.Effort,
 		&i.EffortLevel,
 		&i.EffortReasons,
+		&i.ExecutionToken,
+		&i.ExecutionExpiresAt,
 	)
 	return i, err
 }
@@ -314,7 +370,7 @@ const holdRun = `-- name: HoldRun :one
 UPDATE runs SET state = 'waiting_for_quota', wait_reason = NULL, hold_until = $1,
   hold_reset_known = $2, hold_attempts = hold_attempts + 1,
   hold_started_at = coalesce(hold_started_at, now())
-WHERE id = $3 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path
+WHERE id = $3 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at
 `
 
 type HoldRunParams struct {
@@ -370,6 +426,8 @@ func (q *Queries) HoldRun(ctx context.Context, arg HoldRunParams) (Run, error) {
 		&i.CheckpointAt,
 		&i.CheckpointError,
 		&i.WorkspaceHostPath,
+		&i.ExecutionToken,
+		&i.ExecutionExpiresAt,
 	)
 	return i, err
 }
@@ -486,7 +544,7 @@ func (q *Queries) LiveWorkRunsCount(ctx context.Context) (int32, error) {
 }
 
 const lockRunNoWait = `-- name: LockRunNoWait :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path FROM runs WHERE id = $1
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at FROM runs WHERE id = $1
 `
 
 // Plain read used by the runner (it locks inside its own transactions).
@@ -535,8 +593,59 @@ func (q *Queries) LockRunNoWait(ctx context.Context, id uuid.UUID) (Run, error) 
 		&i.CheckpointAt,
 		&i.CheckpointError,
 		&i.WorkspaceHostPath,
+		&i.ExecutionToken,
+		&i.ExecutionExpiresAt,
 	)
 	return i, err
+}
+
+const lockTurn = `-- name: LockTurn :one
+SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons, execution_token, execution_expires_at FROM run_turns WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockTurn(ctx context.Context, id uuid.UUID) (RunTurn, error) {
+	row := q.db.QueryRow(ctx, lockTurn, id)
+	var i RunTurn
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.Seq,
+		&i.Trigger,
+		&i.InputMessage,
+		&i.StartedAt,
+		&i.EndedAt,
+		&i.ExitCode,
+		&i.Status,
+		&i.ProcessStartedAt,
+		&i.LogKey,
+		&i.Usage,
+		&i.Effort,
+		&i.EffortLevel,
+		&i.EffortReasons,
+		&i.ExecutionToken,
+		&i.ExecutionExpiresAt,
+	)
+	return i, err
+}
+
+const ownsRunExecution = `-- name: OwnsRunExecution :one
+SELECT EXISTS (
+  SELECT 1 FROM runs r WHERE r.id = $1 AND r.execution_token = $2 AND r.execution_expires_at > now()
+  UNION ALL
+  SELECT 1 FROM run_turns t WHERE t.run_id = $1 AND t.execution_token = $2 AND t.execution_expires_at > now()
+)::bool
+`
+
+type OwnsRunExecutionParams struct {
+	RunID uuid.UUID
+	Token *uuid.UUID
+}
+
+func (q *Queries) OwnsRunExecution(ctx context.Context, arg OwnsRunExecutionParams) (bool, error) {
+	row := q.db.QueryRow(ctx, ownsRunExecution, arg.RunID, arg.Token)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const queuedRunsCount = `-- name: QueuedRunsCount :one
@@ -550,6 +659,72 @@ func (q *Queries) QueuedRunsCount(ctx context.Context) (int32, error) {
 	return column_1, err
 }
 
+const releaseSetupExecution = `-- name: ReleaseSetupExecution :exec
+UPDATE runs SET execution_expires_at = now() WHERE id = $1 AND execution_token = $2
+`
+
+type ReleaseSetupExecutionParams struct {
+	ID             uuid.UUID
+	ExecutionToken *uuid.UUID
+}
+
+func (q *Queries) ReleaseSetupExecution(ctx context.Context, arg ReleaseSetupExecutionParams) error {
+	_, err := q.db.Exec(ctx, releaseSetupExecution, arg.ID, arg.ExecutionToken)
+	return err
+}
+
+const releaseTurnExecution = `-- name: ReleaseTurnExecution :exec
+UPDATE run_turns SET execution_expires_at = now() WHERE id = $1 AND execution_token = $2
+`
+
+type ReleaseTurnExecutionParams struct {
+	ID             uuid.UUID
+	ExecutionToken *uuid.UUID
+}
+
+func (q *Queries) ReleaseTurnExecution(ctx context.Context, arg ReleaseTurnExecutionParams) error {
+	_, err := q.db.Exec(ctx, releaseTurnExecution, arg.ID, arg.ExecutionToken)
+	return err
+}
+
+const renewSetupExecution = `-- name: RenewSetupExecution :one
+UPDATE runs SET execution_expires_at = $1
+WHERE id = $2 AND execution_token = $3 AND execution_expires_at > now()
+RETURNING execution_expires_at
+`
+
+type RenewSetupExecutionParams struct {
+	ExpiresAt *time.Time
+	ID        uuid.UUID
+	Token     *uuid.UUID
+}
+
+func (q *Queries) RenewSetupExecution(ctx context.Context, arg RenewSetupExecutionParams) (*time.Time, error) {
+	row := q.db.QueryRow(ctx, renewSetupExecution, arg.ExpiresAt, arg.ID, arg.Token)
+	var execution_expires_at *time.Time
+	err := row.Scan(&execution_expires_at)
+	return execution_expires_at, err
+}
+
+const renewTurnExecution = `-- name: RenewTurnExecution :one
+UPDATE run_turns SET execution_expires_at = $1
+WHERE id = $2 AND execution_token = $3 AND execution_expires_at > now()
+RETURNING execution_expires_at
+`
+
+type RenewTurnExecutionParams struct {
+	ExpiresAt *time.Time
+	ID        uuid.UUID
+	Token     *uuid.UUID
+}
+
+func (q *Queries) RenewTurnExecution(ctx context.Context, arg RenewTurnExecutionParams) (*time.Time, error) {
+	row := q.db.QueryRow(ctx, renewTurnExecution, arg.ExpiresAt, arg.ID, arg.Token)
+	var execution_expires_at *time.Time
+	err := row.Scan(&execution_expires_at)
+	return execution_expires_at, err
+}
+
 const requestHoldResume = `-- name: RequestHoldResume :exec
 UPDATE runs SET hold_until = now() WHERE id = $1
 `
@@ -561,27 +736,35 @@ func (q *Queries) RequestHoldResume(ctx context.Context, id uuid.UUID) error {
 }
 
 const requeueInterrupted = `-- name: RequeueInterrupted :exec
-UPDATE run_turns SET status = 'pending', process_started_at = NULL, ended_at = NULL, exit_code = NULL
-WHERE status = 'running' AND run_id IN (
-  SELECT id FROM runs WHERE runner_id = $1 OR runner_id IS NULL
-    OR runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
+UPDATE run_turns SET status = 'pending', process_started_at = NULL, ended_at = NULL, exit_code = NULL,
+  execution_token = NULL, execution_expires_at = NULL
+WHERE status = 'running' AND (
+  (execution_token IS NOT NULL AND execution_expires_at <= now()) OR
+  (execution_token IS NULL AND run_id IN (
+  SELECT r.id FROM runs r WHERE r.runner_id = $1 OR r.runner_id IS NULL
+    OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))))
+  -- Paused chats are settled with their session lock and interruption below.
+  -- Ended runs must also release stale running rows so workspace cleanup works.
+  AND run_id IN (SELECT id FROM runs WHERE state <> 'paused')
 `
 
-// On runner start: turns that were running when it died run again (the
-// harness resumes the session), and half-started runs go back to the queue.
-// The runner id is host-pid, so a restarted runner has a new one: also reclaim
-// turns of any runner that has stopped heartbeating (LiveRunners' window).
+// On every poll: expired worker leases run again (the harness resumes).
+// Unleased records from older runners use their owner's heartbeat instead.
 func (q *Queries) RequeueInterrupted(ctx context.Context, runnerID *string) error {
 	_, err := q.db.Exec(ctx, requeueInterrupted, runnerID)
 	return err
 }
 
 const requeueStarting = `-- name: RequeueStarting :exec
-UPDATE runs SET state = 'queued' WHERE state = 'starting'
+UPDATE runs SET state = 'queued', execution_token = NULL, execution_expires_at = NULL
+WHERE state = 'starting' AND (
+  (execution_token IS NOT NULL AND execution_expires_at <= now()) OR
+  (execution_token IS NULL AND (runner_id = $1 OR runner_id IS NULL
+    OR runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))))
 `
 
-func (q *Queries) RequeueStarting(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, requeueStarting)
+func (q *Queries) RequeueStarting(ctx context.Context, runnerID *string) error {
+	_, err := q.db.Exec(ctx, requeueStarting, runnerID)
 	return err
 }
 
@@ -909,6 +1092,8 @@ WHERE r.mode = 'managed' AND r.state = 'running' AND r.purpose <> 'chat'
   AND (r.runner_id = $1 OR r.runner_id IS NULL
     OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
   AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.status IN ('pending', 'running'))
+  AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+  AND NOT EXISTS (SELECT 1 FROM run_turns t WHERE t.run_id = r.id AND t.execution_expires_at > now())
   AND NOT EXISTS (SELECT 1 FROM runs c WHERE c.parent_run_id = r.id AND c.state NOT IN ('completed', 'failed', 'cancelled'))
 `
 

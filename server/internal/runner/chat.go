@@ -121,6 +121,40 @@ func idleChat(ctx context.Context, q *store.Queries, chat store.ChatSession, run
 	return runs.RecomputeAgentStatus(ctx, q, run.AgentID)
 }
 
+// A stopped setup has no harness result to finalize, but must still release
+// the chat and deliver any message that interrupted it.
+func (r *Runner) finishStoppedChatSetup(ctx context.Context, c runCtx) bool {
+	stopped := false
+	err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		chat, err := lockRunChat(ctx, q, c.run)
+		if err != nil {
+			return err
+		}
+		run, err := q.LockRun(ctx, c.run.ID)
+		if err != nil || run.State != "paused" {
+			return err
+		}
+		if err := verifyExecution(ctx, q, run.ID); err != nil {
+			return err
+		}
+		stopped = true
+		// Setup may have been killed halfway through a clone or install. A new
+		// turn must run setup again rather than trusting the partial workspace.
+		if err := q.FinishUnfinishedChatTurns(ctx, run.ID); err != nil {
+			return err
+		}
+		if err := idleChat(ctx, q, chat, run, "idle"); err != nil {
+			return err
+		}
+		return runs.ResumeInterruptedChat(ctx, q, chat.ID, run.ID, nil, 0)
+	})
+	if err != nil {
+		r.Log.Error("finish stopped chat setup", "run", c.run.ID, "err", err)
+	}
+	return stopped
+}
+
 // generatedImage is an outbox file already stored as a blob, waiting to be
 // bound to the turn's assistant message.
 type generatedImage struct {
@@ -217,8 +251,8 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 		imgs = r.harvestChatImages(ctx, c)
 	}
 	bound := false
-	err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
-		q := store.New(tx)
+	err := r.retryChatTransaction(ctx, func(ctx context.Context, q *store.Queries) error {
+		bound = false
 		chat, err := lockRunChat(ctx, q, c.run)
 		if err != nil {
 			return err
@@ -226,6 +260,19 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 		run, err := q.LockRun(ctx, c.run.ID)
 		if err != nil {
 			return err
+		}
+		current, err := q.LockTurn(ctx, turn.ID)
+		if err != nil {
+			return err
+		}
+		if current.Status == "done" {
+			// A commit whose acknowledgement was lost must not duplicate the
+			// reply, its usage, or its automatic follow-up turn.
+			bound = len(imgs) > 0
+			return nil
+		}
+		if token := executionToken(ctx); token != nil && (current.ExecutionToken == nil || *current.ExecutionToken != *token || current.ExecutionExpiresAt == nil || !current.ExecutionExpiresAt.After(time.Now())) {
+			return errors.New("chat execution lease was lost")
 		}
 		// Kept whatever came of the turn: a branch it pushed is on the remote.
 		if len(work.branches) > 0 {
@@ -384,6 +431,9 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 	if err != nil {
 		r.Log.Error("finish chat turn", "run", c.run.ID, "err", err)
 	}
+	if err != nil && ctx.Err() == nil {
+		r.failChat(ctx, c, "The reply could not be saved. Send another message to retry.")
+	}
 	switch {
 	case len(imgs) == 0:
 	case err != nil || !bound:
@@ -427,6 +477,9 @@ func (r *Runner) restartChatSegment(ctx context.Context, c runCtx, turn store.Ru
 		if err != nil || run.State != "running" {
 			return err
 		}
+		if err := verifyExecution(ctx, q, run.ID); err != nil {
+			return err
+		}
 		if restarted, err = runs.RestartChatSegment(ctx, q, chat, run, turn); err != nil || !restarted {
 			return err
 		}
@@ -441,8 +494,7 @@ func (r *Runner) restartChatSegment(ctx context.Context, c runCtx, turn store.Ru
 }
 
 func (r *Runner) failChat(ctx context.Context, c runCtx, outcome string) {
-	err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
-		q := store.New(tx)
+	err := r.retryChatTransaction(ctx, func(ctx context.Context, q *store.Queries) error {
 		chat, err := lockRunChat(ctx, q, c.run)
 		if err != nil {
 			return err
@@ -451,13 +503,22 @@ func (r *Runner) failChat(ctx context.Context, c runCtx, outcome string) {
 		if err != nil {
 			return err
 		}
+		if run.State != "running" && run.State != "paused" && run.State != "starting" {
+			return nil
+		}
+		if err := verifyExecution(ctx, q, run.ID); err != nil {
+			return err
+		}
 		if err = q.FinishUnfinishedChatTurns(ctx, run.ID); err != nil {
 			return err
 		}
 		if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: outcome, RunID: &run.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
 			return err
 		}
-		return idleChat(ctx, q, chat, run, "failed")
+		if err := idleChat(ctx, q, chat, run, "failed"); err != nil {
+			return err
+		}
+		return runs.ResumeInterruptedChat(ctx, q, chat.ID, run.ID, nil, 0)
 	})
 	if err != nil {
 		r.Log.Error("fail chat turn", "run", c.run.ID, "err", err)

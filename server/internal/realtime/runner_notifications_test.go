@@ -42,10 +42,10 @@ func TestIdleRunnerPollingDoesNotNotify(t *testing.T) {
 	}
 	runner := "idle-test"
 	for i := 0; i < 3; i++ {
-		if _, err = q.ClaimQueuedRun(ctx, &runner); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err = q.ClaimQueuedRun(ctx, store.ClaimQueuedRunParams{RunnerID: &runner}); !errors.Is(err, pgx.ErrNoRows) {
 			t.Fatalf("claim queued: %v", err)
 		}
-		if _, err = q.ClaimPendingTurn(ctx); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err = q.ClaimPendingTurn(ctx, store.ClaimPendingTurnParams{}); !errors.Is(err, pgx.ErrNoRows) {
 			t.Fatalf("claim turn: %v", err)
 		}
 	}
