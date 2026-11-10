@@ -295,6 +295,21 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 		if _, err = q.AddRunUsage(ctx, store.AddRunUsageParams{ID: run.ID, ToolCalls: int32(res.Usage.ToolCalls), InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens, CostUsdMicros: int64(res.Usage.CostUSD * 1e6), CostSource: source}); err != nil {
 			return err
 		}
+		// generate_image requests the turn never got to (its reply failed, or
+		// the run was stopped) end as failed rather than staying queued with
+		// nothing to show for them.
+		turnFailed := waitErr != nil || code != 0 || res.IsError || res.UsageLimited
+		dropReason := "the image step never ran"
+		switch {
+		case run.State != "running":
+			dropReason = "stopped"
+		case turnFailed:
+			dropReason = "the reply failed before the image could be made"
+		}
+		dropped, err := q.FailQueuedChatImageJobs(ctx, store.FailQueuedChatImageJobsParams{RunID: run.ID, TurnID: turn.ID, Error: dropReason})
+		if err != nil {
+			return err
+		}
 		if run.State != "running" && run.State != "paused" {
 			return nil
 		}
@@ -303,7 +318,7 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 		speaker := chatSpeaker(chat)
 		if run.State == "running" {
 			role, body := "assistant", res.Final
-			if waitErr != nil || code != 0 || res.IsError || res.UsageLimited {
+			if turnFailed {
 				state, role = "failed", "system"
 				body = res.Error
 				if body == "" {
@@ -336,6 +351,15 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			// The turn's videos (finished or not) show on the reply it stored.
 			if err := q.LinkChatVideoJobsToMessage(ctx, store.LinkChatVideoJobsToMessageParams{MessageID: &msg.ID, RunID: &run.ID, TurnID: &turn.ID}); err != nil {
 				return err
+			}
+			// A failed reply gets no follow-up turn, so the person hears of its
+			// image requests here. (A reply's own jobs are reported below.)
+			if role == "system" {
+				for _, j := range dropped {
+					if _, err := q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: imageFailureMessage(imageFailError, *j.Error), RunID: &run.ID, RunTurnID: &turn.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
+						return err
+					}
+				}
 			}
 			if role == "assistant" {
 				replied, reply = true, body

@@ -263,6 +263,34 @@ func TestChatImageJobDoesNotCollectTwice(t *testing.T) {
 	}
 }
 
+// A reply that fails after asking for an image never runs the image step and
+// gets no follow-up turn: the request still ends with a reason the person
+// sees, instead of staying queued with nothing to show for it.
+func TestChatImageJobFailedTurnReportsQueuedRequest(t *testing.T) {
+	t.Setenv("FAKE_HARNESS_FAIL_AFTER_IMAGE", "1")
+	e := setup(t)
+	chat, logPath := e.imageChat(t, "ok", "image: a fox")
+	const reason = "the reply failed before the image could be made"
+	run := e.chatRun(chat.ID)
+	job := e.imageJob(run.ID)
+	if job.State != "failed" || job.Error == nil || *job.Error != reason || job.FailureKind == nil || *job.FailureKind != "error" || job.FollowupTurnID != nil {
+		t.Fatalf("job %+v", job)
+	}
+	msgs := e.chatMsgs(chat.ID)
+	last := msgs[len(msgs)-1]
+	if last.Role != "system" || last.BodyMd != "Couldn't create the image: "+reason+"." || e.chat(chat.ID).State != "failed" {
+		t.Fatalf("messages %+v", msgs)
+	}
+	if turns := e.turns(run.ID); len(turns) != 1 {
+		t.Fatalf("turns %+v", turns)
+	}
+	for _, l := range readLog(t, logPath) {
+		if l["harness"] == "codex" {
+			t.Fatalf("an image step ran: %+v", l)
+		}
+	}
+}
+
 // unreadableOutbox is a backend whose outbox can't be listed, like a Docker
 // helper container that fails to start.
 type unreadableOutbox struct{ runner.Backend }

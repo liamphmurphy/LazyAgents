@@ -22,7 +22,9 @@
 //	                    with a content-policy refusal, writes nothing), saved
 //	                    (saves into $CODEX_HOME/generated_images/<thread>/ like
 //	                    codex-cli, and says its copy was denied), saved-copied
-//	                    (saves there and copies it to the outbox as portrait.png). The
+//	                    (saves there and copies it to the outbox as portrait.png).
+//	                    FAKE_HARNESS_FAIL_AFTER_IMAGE fails the turn after it
+//	                    calls generate_image. The
 //	                    image_followup turn after it reads the delivered images, calls
 //	                    generate_image once more and echoes its prompt (or fails,
 //	                    with FAKE_HARNESS_FAIL_FOLLOWUP set). FAKE_IMAGE_REFERENCES
@@ -571,6 +573,10 @@ func main() {
 				args["references"] = strings.Split(refs, ",")
 			}
 			out := call("generate_image", args)
+			if os.Getenv("FAKE_HARNESS_FAIL_AFTER_IMAGE") != "" {
+				result(true, "turn crashed after asking for an image")
+				os.Exit(3)
+			}
 			reply = fmt.Sprintf("Chat reply (session=%s): making it (%v)", session, out["queued"])
 		} else if want, ok := strings.CutPrefix(prompt, "persona: "); ok {
 			// "persona: <name> | <avatar prompt>" proposes a persona with a picture.
