@@ -4397,7 +4397,7 @@ components:
         key: { type: string }
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
+        repo_url: { type: string, description: "GitHub URL: https://github.com/owner/repo[.git] (stored as https://github.com/owner/repo.git; runs use the git:pat token), git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git] (runs use the git:ssh key). Legacy values are kept until changed." }
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
@@ -6368,7 +6368,7 @@ components:
         key: { type: string }
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
+        repo_url: { type: string, description: "GitHub URL: https://github.com/owner/repo[.git] (stored as https://github.com/owner/repo.git; runs use the git:pat token), git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git] (runs use the git:ssh key). Legacy values are kept until changed." }
         default_branch: { type: string }
     ProjectUpdate:
       type: object
@@ -6376,7 +6376,7 @@ components:
       properties:
         name: { type: string }
         color: { type: string }
-        repo_url: { type: string, description: "GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed." }
+        repo_url: { type: string, description: "GitHub URL: https://github.com/owner/repo[.git] (stored as https://github.com/owner/repo.git; runs use the git:pat token), git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git] (runs use the git:ssh key). Legacy values are kept until changed." }
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }

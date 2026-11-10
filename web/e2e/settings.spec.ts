@@ -167,7 +167,7 @@ test("project repo URLs are validated inline and accept SSH and HTTPS", async ({
   await expect(repo).toHaveAttribute("aria-invalid", "true");
   await expect(projects.getByRole("button", { name: "Save changes" })).toBeDisabled();
   await repo.fill("https://github.com/acme/payments");
-  await expect(projects).toContainText("Saved as git@github.com:acme/payments.git");
+  await expect(projects).toContainText("Saved as https://github.com/acme/payments.git");
   await expect(repo).not.toHaveAttribute("aria-invalid");
   await projects.getByRole("button", { name: "Save changes" }).click();
   await expect(projects.getByRole("status")).toContainText("Web app saved.");

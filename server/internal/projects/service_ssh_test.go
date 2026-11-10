@@ -19,10 +19,11 @@ func TestRepoURLValidation(t *testing.T) {
 		}
 	}
 	https := map[string]string{
-		"https://github.com/northwind/payments":      "git@github.com:northwind/payments.git",
-		"https://github.com/northwind/payments.git":  "git@github.com:northwind/payments.git",
-		" https://www.github.com/a/b.js/ ":           "git@github.com:a/b.js.git",
-		"https://github.com/liamphmurphy/Vesper.git": "git@github.com:liamphmurphy/Vesper.git",
+		// HTTPS stays HTTPS (runs use the git:pat token), in one canonical form.
+		"https://github.com/northwind/payments":      "https://github.com/northwind/payments.git",
+		"https://github.com/northwind/payments.git":  "https://github.com/northwind/payments.git",
+		" https://www.github.com/a/b.js/ ":           "https://github.com/a/b.js.git",
+		"https://github.com/liamphmurphy/Vesper.git": "https://github.com/liamphmurphy/Vesper.git",
 	}
 	for in, want := range https {
 		c := Config{Name: "N", Color: "#aabbcc", RepoURL: in}
@@ -63,9 +64,9 @@ func TestUpdateKeepsUnchangedLegacyHTTPSRepoURL(t *testing.T) {
 	if err == nil || !errors.As(err, &ae) || ae.Field != "repo_url" {
 		t.Fatalf("changed non-GitHub URL: err = %v", err)
 	}
-	// A new HTTPS GitHub link is accepted and stored in SSH form.
+	// A new HTTPS GitHub link is accepted and stays HTTPS, so runs can use the git:pat token.
 	p, err = svc.Update(ctx, ws.ID, "LEG", Config{Name: "Renamed", Color: "#112233", RepoURL: "https://github.com/a/c", DefaultBranch: "main", Revision: p.Revision})
-	if err != nil || p.RepoUrl == nil || *p.RepoUrl != "git@github.com:a/c.git" {
+	if err != nil || p.RepoUrl == nil || *p.RepoUrl != "https://github.com/a/c.git" {
 		t.Fatalf("HTTPS change: %v %v", p.RepoUrl, err)
 	}
 	if _, err := svc.Update(ctx, ws.ID, "LEG", Config{Name: "Renamed", Color: "#112233", RepoURL: "git@github.com:a/d.git", DefaultBranch: "main", Revision: p.Revision}); err != nil {

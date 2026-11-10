@@ -3593,7 +3593,7 @@ export interface components {
             key: string;
             name: string;
             color: string;
-            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: https://github.com/owner/repo[.git] (stored as https://github.com/owner/repo.git; runs use the git:pat token), git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git] (runs use the git:ssh key). Legacy values are kept until changed. */
             repo_url?: string;
             default_branch: string;
             archived: boolean;
@@ -5673,14 +5673,14 @@ export interface components {
             key: string;
             name: string;
             color: string;
-            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: https://github.com/owner/repo[.git] (stored as https://github.com/owner/repo.git; runs use the git:pat token), git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git] (runs use the git:ssh key). Legacy values are kept until changed. */
             repo_url: string;
             default_branch: string;
         };
         ProjectUpdate: {
             name: string;
             color: string;
-            /** @description GitHub URL: git@github.com:owner/repo[.git], ssh://git@github.com/owner/repo[.git], or https://github.com/owner/repo[.git] (stored in SSH form). Legacy HTTPS values are kept until changed. */
+            /** @description GitHub URL: https://github.com/owner/repo[.git] (stored as https://github.com/owner/repo.git; runs use the git:pat token), git@github.com:owner/repo[.git] or ssh://git@github.com/owner/repo[.git] (runs use the git:ssh key). Legacy values are kept until changed. */
             repo_url: string;
             default_branch: string;
             archived: boolean;

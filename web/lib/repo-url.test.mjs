@@ -13,11 +13,11 @@ test("SSH forms are kept as typed", () => {
   assert.deepEqual(checkRepoURL(" git@github.com:a/b.git/ "), { state: "ok", kind: "ssh", saved: "git@github.com:a/b.git" });
 });
 
-test("HTTPS GitHub links are saved in SSH form, matching the server", () => {
+test("HTTPS GitHub links stay HTTPS in one canonical form, matching the server", () => {
   const cases = {
-    "https://github.com/northwind/payments": "git@github.com:northwind/payments.git",
-    "https://github.com/northwind/payments.git": "git@github.com:northwind/payments.git",
-    " https://www.github.com/a/b.js/ ": "git@github.com:a/b.js.git",
+    "https://github.com/northwind/payments": "https://github.com/northwind/payments.git",
+    "https://github.com/northwind/payments.git": "https://github.com/northwind/payments.git",
+    " https://www.github.com/a/b.js/ ": "https://github.com/a/b.js.git",
   };
   for (const [input, saved] of Object.entries(cases)) {
     assert.deepEqual(checkRepoURL(input), { state: "ok", kind: "https", saved });
