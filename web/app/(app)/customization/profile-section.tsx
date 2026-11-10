@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useBootstrap } from "@/lib/api/hooks";
 import { useDeleteProfileAvatar, useUpdateProfile, useUploadProfileAvatar } from "@/lib/api/profile-hooks";
 import { AVATAR_ACCEPT, AVATAR_HINT, avatarUploadError, checkAvatarFile, fieldError, type AvatarError } from "@/lib/persona-ui";
-import { EMAILS_MAX, NAME_MAX, ROLE_MAX, emailError, makePrimary, profileChanges, validateProfile } from "@/lib/profile-ui";
-import { Button } from "@/components/ui/button";
+import { EMAILS_MAX, NAME_MAX, ROLE_MAX, editEmail, emailError, makePrimary, profileChanges, validateProfile } from "@/lib/profile-ui";
+import { Button, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Card, Field, Skeleton, TextInput } from "@/components/ui/primitives";
 import { HumanAvatar } from "@/components/domain/avatars";
@@ -144,6 +144,7 @@ function DetailsCard({ name, roleTitle, emails }: { name: string; roleTitle: str
 function EmailList({ emails, error, onChange }: { emails: string[]; error?: string; onChange: (next: string[]) => void }) {
   const [adding, setAdding] = useState("");
   const [addError, setAddError] = useState<string>();
+  const [editing, setEditing] = useState<string | null>(null);
   const add = () => {
     const bad = emailError(adding, emails);
     if (bad) return setAddError(bad);
@@ -161,7 +162,9 @@ function EmailList({ emails, error, onChange }: { emails: string[]; error?: stri
   return (
     <Field label="Email addresses" htmlFor="profile-email-new" hint={hint}>
       <ul aria-label="Email addresses" className="flex flex-col divide-y divide-border overflow-hidden rounded-md border border-border-strong">
-        {emails.map((e, i) => (
+        {emails.map((e, i) => editing === e ? (
+          <EmailEditor key={e} emails={emails} email={e} onDone={(next) => { if (next) onChange(next); setEditing(null); }} />
+        ) : (
           <li key={e} className="flex min-w-0 items-center gap-2 bg-surface px-3 py-1.5">
             <Icon name="at" size={13} className="flex-none text-fg-tertiary" />
             <span className="min-w-0 flex-1 truncate text-[13px] text-fg" title={e}>{e}</span>
@@ -172,6 +175,7 @@ function EmailList({ emails, error, onChange }: { emails: string[]; error?: stri
                 Make primary
               </button>
             )}
+            <IconButton icon="edit" label={`Edit ${e}`} onClick={() => setEditing(e)} />
             <button
               type="button"
               aria-label={`Remove ${e}`}
@@ -216,5 +220,51 @@ function EmailList({ emails, error, onChange }: { emails: string[]; error?: stri
         </div>
       )}
     </Field>
+  );
+}
+
+/**
+ * One address being changed in place. It sits inside the profile form, so it
+ * can't be a form itself: Enter and Escape are handled here instead.
+ */
+function EmailEditor({ emails, email, onDone }: { emails: string[]; email: string; onDone: (next?: string[]) => void }) {
+  const [value, setValue] = useState(email);
+  const [error, setError] = useState<string>();
+  const commit = () => {
+    const out = editEmail(emails, email, value);
+    if (out.error) return setError(out.error);
+    onDone(out.emails);
+  };
+  return (
+    <li className="flex flex-col gap-1 bg-surface px-3 py-1.5">
+      <div className="flex min-w-0 items-center gap-1">
+        <TextInput
+          type="email"
+          aria-label={`New address for ${email}`}
+          value={value}
+          autoFocus
+          autoComplete="email"
+          aria-invalid={!!error}
+          className="flex-1"
+          onChange={(ev) => {
+            setValue(ev.target.value);
+            setError(undefined);
+          }}
+          onKeyDown={(ev) => {
+            if (ev.nativeEvent.isComposing) return;
+            if (ev.key === "Enter") {
+              ev.preventDefault();
+              commit();
+            } else if (ev.key === "Escape") {
+              ev.preventDefault();
+              onDone();
+            }
+          }}
+        />
+        <IconButton icon="check" label={`Save ${email}`} onClick={commit} />
+        <IconButton icon="x" label="Cancel edit" onClick={() => onDone()} />
+      </div>
+      {error && <span role="alert" className="text-xs text-pill-blocked-fg">{error}</span>}
+    </li>
   );
 }

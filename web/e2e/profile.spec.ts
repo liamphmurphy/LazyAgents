@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { installChatApi } from "./mock-chat-api";
 
-// Customization → You: display name, role title, email addresses, picture upload/replace/remove. The menu has no profile.
+// Customization → You: display name, role title, email addresses (add, edit, reorder, remove), picture upload/replace/remove. The menu has no profile.
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 const profile = (page: import("@playwright/test").Page) => page.getByRole("region", { name: "Profile" });
@@ -80,6 +80,41 @@ test("add, reorder and remove email addresses; Save sends the whole list, primar
   await list.getByRole("listitem").filter({ hasText: "someone@taken.example" }).getByRole("button", { name: "Make primary" }).click();
   await save.click();
   await expect(section.getByRole("alert").filter({ hasText: "already another person's primary email" })).toBeVisible();
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("edit the only address in place: Escape cancels, Enter keeps it primary, Save sends it", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await openProfile(page);
+  const section = profile(page);
+  const list = section.getByRole("list", { name: "Email addresses" });
+  const save = section.getByRole("button", { name: "Save profile" });
+
+  await list.getByRole("button", { name: "Edit liam@example.com" }).click();
+  const field = list.getByLabel("New address for liam@example.com");
+  await expect(field).toBeFocused();
+  await field.fill("changed@example.com");
+  await field.press("Escape");
+  await expect(list).toHaveText(/liam@example\.com/);
+  await expect(save).toBeDisabled();
+
+  await list.getByRole("button", { name: "Edit liam@example.com" }).click();
+  await field.fill("not an email");
+  await field.press("Enter");
+  await expect(list.getByRole("alert")).toHaveText("That doesn’t look like an email address.");
+  expect(mock.profileRequests).toEqual([]);
+
+  // Enter commits the row, not the whole form.
+  await field.fill("liam@phmurphy.com");
+  await field.press("Enter");
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+  await expect(list.getByRole("listitem").first()).toContainText("liam@phmurphy.com");
+  await expect(list.getByRole("listitem").first()).toContainText("Primary");
+  expect(mock.profileRequests).toEqual([]);
+
+  await save.click();
+  await expect(section.getByRole("status")).toHaveText("Profile saved.");
+  expect(mock.profileRequests).toEqual([`PATCH ${JSON.stringify({ emails: ["liam@phmurphy.com"] })}`]);
   expect(mock.unhandled).toEqual([]);
 });
 
