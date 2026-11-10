@@ -155,6 +155,52 @@ func TestChatWithoutRepoHasNoCodeChanges(t *testing.T) {
 	}
 }
 
+// A persona that can code but lists no repository still writes and runs
+// code, in an empty workspace with nothing to push to. A chat whose
+// repository the persona stopped listing gets no shell at all.
+func TestCodingChatWithoutRepoUsesScratchWorkspace(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	p := e.persona("Scratch", true, false)
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "scratch", PersonaID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chat.RepoUrl != nil {
+		t.Fatalf("a persona with no repos gave the chat repo %q", *chat.RepoUrl)
+	}
+	reply := e.postSh(chat.ID, "printf 'echo $((6*7))' > calc.sh && sh calc.sh; test -d .git || echo no-checkout")
+	for _, want := range []string{"42", "no-checkout"} {
+		if !strings.Contains(reply, want) {
+			t.Fatalf("scratch workspace: missing %q in %q", want, reply)
+		}
+	}
+	spec, _ := runs.Spec(e.chatRun(chat.ID))
+	for _, scope := range []string{"repo:read", "repo:write", "tests:run"} {
+		if spec.Mode(scope) != agentdef.Allowed {
+			t.Errorf("scratch chat: %s is %s", scope, spec.Mode(scope))
+		}
+	}
+	if spec.HarnessOptions["sandbox"] != "workspace-write" || spec.HarnessOptions["readonly"] != "" || !strings.Contains(spec.Instructions, "This chat has no repository.") {
+		t.Fatalf("scratch chat spec: %v", spec.HarnessOptions)
+	}
+
+	// A repository the persona no longer lists still revokes coding.
+	listed := e.persona("Lister", true, false, "https://github.com/acme/app")
+	repoChat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "repo", PersonaID: &listed.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(e.ctx, `UPDATE personas SET repos='{}' WHERE id=$1`, listed.ID); err != nil {
+		t.Fatal(err)
+	}
+	e.say(repoChat.ID, "hi")
+	spec, _ = runs.Spec(e.chatRun(repoChat.ID))
+	if spec.Mode("tests:run") != agentdef.Denied || spec.HarnessOptions["readonly"] != "true" {
+		t.Fatalf("delisted repo kept coding: %v", spec.HarnessOptions)
+	}
+}
+
 // A coding chat gets the harness key and only the git credentials its
 // repository can use, whichever other secrets the workspace holds.
 func TestCodingChatGitCredentials(t *testing.T) {
@@ -214,8 +260,9 @@ func TestCodingChatGitCredentials(t *testing.T) {
 			}
 		}
 	}
-	// No repository: no git credentials at all.
-	p := e.persona("Plain", false, false)
+	// No repository: no git credentials at all, even for a persona that codes
+	// in its scratch workspace.
+	p := e.persona("Scratch", true, false)
 	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "none", PersonaID: &p.ID})
 	if err != nil {
 		t.Fatal(err)

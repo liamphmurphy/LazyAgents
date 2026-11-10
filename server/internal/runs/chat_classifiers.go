@@ -118,7 +118,7 @@ func classifyTurn(s turnSignals) turnDecision {
 	if s.Interrupted && correctionRe.MatchString(t) {
 		d.fire("course_correction", "The person stopped your last reply to correct it. Re-read what they asked before continuing, and don't resume the stopped approach unless it still fits.")
 	}
-	if s.Caps.Coding() && code {
+	if s.Caps.RepoCoding() && code {
 		d.fire("needs_code", "This message looks like it depends on the repository. Fetch the latest and read the relevant code before answering; don't rely on what you remember of it.")
 	}
 	if s.RepeatMention != "" {
@@ -127,7 +127,7 @@ func classifyTurn(s turnSignals) turnDecision {
 	if imageAskRe.MatchString(t) && !s.Caps.Images {
 		d.fire("capability_mismatch", "This message seems to ask for a generated image, which you aren't allowed to make. Say so, and that image generation can be enabled in the persona's settings, instead of attempting it.")
 	} else if !s.Caps.Coding() && codeAskRe.MatchString(t) && code {
-		d.fire("capability_mismatch", "This message seems to ask for changes to code, which you can't make in this chat. Say so, and that it needs a persona allowed to code with this chat's repository attached, instead of attempting it.")
+		d.fire("capability_mismatch", "This message seems to ask for changes to code, which you can't make in this chat. Say so, and that it needs a persona allowed to write code, instead of attempting it.")
 	}
 	if !strings.Contains(t, "ticket") && (bigWorkRe.MatchString(t) || (level == "xhigh" && words >= ticketSizedWords)) {
 		d.fire("ticket_sized", "This looks bigger than one chat. Offer in one sentence to create a ticket or epic for it; don't create one unless the person asks.")

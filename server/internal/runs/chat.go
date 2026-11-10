@@ -25,8 +25,10 @@ import (
 // these structured values widen the frozen spec (ADR "Assistant personas");
 // a persona's free text never does.
 type ChatCaps struct {
-	// Code is the persona's can_code; it only takes effect for a chat that has
-	// a repository (RepoURL is fixed when the chat is created).
+	// Code is the persona's can_code: the chat may write and run code in its
+	// workspace. RepoURL (fixed when the chat is created) is the repository
+	// checked out there; without one the workspace starts empty, a throwaway
+	// scratch space with no git credentials.
 	Code    bool
 	RepoURL string
 	// WorkBranches are the branches the chat's persona has pushed so far, in
@@ -40,8 +42,12 @@ type ChatCaps struct {
 	Secrets bool
 }
 
-// Coding reports whether the chat may work in its repository.
-func (c ChatCaps) Coding() bool { return c.Code && c.RepoURL != "" }
+// Coding reports whether the chat may write and run code in its workspace.
+func (c ChatCaps) Coding() bool { return c.Code }
+
+// RepoCoding reports whether the chat works in a checked-out repository,
+// with branches and pushes, rather than an empty scratch workspace.
+func (c ChatCaps) RepoCoding() bool { return c.Code && c.RepoURL != "" }
 
 // codeScopes are what a coding chat is granted; every other scope stays denied.
 var codeScopes = []string{"repo:read", "repo:write", "tests:run"}
@@ -92,7 +98,7 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
 	// Every chat is the Personal Assistant, whichever agent it was started with.
-	r.Instructions = agents.AssistantInstructionsFor(coding, caps.WorkBranches, caps.Images, r.Harness == agentdef.HarnessCodex)
+	r.Instructions = agents.AssistantInstructionsFor(coding, caps.RepoCoding(), caps.WorkBranches, caps.Images, r.Harness == agentdef.HarnessCodex)
 	return r
 }
 
@@ -111,8 +117,10 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 	if err != nil {
 		return ChatCaps{}, err
 	}
-	// A repository the persona doesn't list (any more) revokes coding for this chat.
-	code := p.CanCode && chat.RepoUrl != nil && slices.Contains(p.Repos, *chat.RepoUrl)
+	// A repository the persona doesn't list (any more) revokes coding for this
+	// chat, rather than leaving a shell beside a checkout it may no longer
+	// push to. A chat without a repository codes in a scratch workspace.
+	code := p.CanCode && (chat.RepoUrl == nil || slices.Contains(p.Repos, *chat.RepoUrl))
 	rows, err := q.ConnectorsForPersona(ctx, store.ConnectorsForPersonaParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, PersonaID: p.ID, AllowedIds: chat.ConnectorIds})
 	if err != nil {
 		return ChatCaps{}, err

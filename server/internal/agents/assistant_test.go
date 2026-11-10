@@ -64,7 +64,7 @@ func TestEnsureAssistant(t *testing.T) {
 
 // Every persona is told how to write interactive apps, whatever its capabilities.
 func TestAssistantInstructionsInteractiveApps(t *testing.T) {
-	for _, ins := range []string{agents.AssistantInstructions, agents.AssistantInstructionsFor(true, []string{"feat/x"}, true, false)} {
+	for _, ins := range []string{agents.AssistantInstructions, agents.AssistantInstructionsFor(true, true, []string{"feat/x"}, true, false)} {
 		if !strings.Contains(ins, "## Interactive apps") || !strings.Contains(ins, "fenced code block tagged app") || !strings.Contains(ins, "aren't just for coding") {
 			t.Fatalf("instructions lack the interactive apps section:\n%s", ins)
 		}
