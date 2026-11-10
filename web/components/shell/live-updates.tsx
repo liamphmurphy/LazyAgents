@@ -20,6 +20,8 @@ const prefixes: Record<string, string[]> = {
   chat: ["chats", "canvases", "videos", "dock"],
   // A chat video's progress, copied every couple of seconds while it renders.
   video: ["videos"],
+  // A chat's playground starting, resetting or stopping on the runner.
+  playground: ["playgrounds"],
   // A persona edit changes the name, color and avatar every chat using it embeds.
   persona: ["personas", "chats", "dock"],
 };

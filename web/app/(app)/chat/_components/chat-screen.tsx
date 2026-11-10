@@ -23,6 +23,7 @@ import { Composer, type CommandRun, type ComposerCommands } from "./composer";
 import { ModelEffortPicker, effortLabel, modelEfforts, type Effort, type Selection } from "./model-picker";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
+import { PlaygroundButton, PlaygroundFullscreen, PlaygroundPanel } from "@/components/domain/playground";
 import { PersonaCarousel, personaLook, useOpenPersonaManager } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
@@ -344,7 +345,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </div>
             )}
             {id ? (
-              <Conversation key={id} id={id} onNew={conversation.start} actions={<CanvasButton chatId={id} live={turnRunning} />} />
+              <Conversation key={id} id={id} onNew={conversation.start} actions={<><PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
             ) : (
               <>
                 {chats.isError ? (
@@ -363,6 +364,9 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
+          {/* The playground sits beside the chat: a running app needs the width more than a canvas does. */}
+          {id && <PlaygroundPanel chatId={id} />}
+          {id && <PlaygroundFullscreen chatId={id} />}
           {id && canvas.fullscreen ? <CanvasFullscreen chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : null}
       </div>
     </div>
