@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Dialog, DropdownMenu } from "radix-ui";
+import { useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { libraryItemUrl } from "@/lib/api/client";
 import {
@@ -16,6 +17,7 @@ import {
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { formatBytes } from "@/lib/files";
+import { clock } from "@/lib/chat-video";
 import { timelineTime } from "@/lib/format";
 import { LIBRARY_UPLOAD_ACCEPT, checkLibraryUpload, referenceBadge, referenceCaption, referenceChoices } from "@/lib/library-ui";
 import { floatPanel } from "@/components/domain/pickers";
@@ -105,11 +107,11 @@ function ReferenceBadge({ item }: { item: LibraryItem }) {
 }
 
 /** The dialog a Library tile opens: the item's header with Download and Remove, over the item itself. */
-function ItemDialog({ item, trigger, extra, children }: { item: LibraryItem; trigger: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode }) {
+function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { item: LibraryItem; open?: boolean; onOpenChange?: (open: boolean) => void; trigger: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode }) {
   const del = useDeleteLibraryItem();
-  const noun = item.kind === "diagram" ? "diagram" : "image";
+  const noun = item.kind === "diagram" ? "diagram" : item.kind === "video" ? "video" : "image";
   return (
-    <Dialog.Root>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
@@ -121,7 +123,8 @@ function ItemDialog({ item, trigger, extra, children }: { item: LibraryItem; tri
             <div className="flex min-w-0 flex-1 flex-col">
               <Dialog.Title className="truncate text-[13px] text-fg">{item.title}</Dialog.Title>
               <span className="truncate text-xs text-fg-tertiary">
-                {item.filename} · {formatBytes(item.size_bytes)} · {timelineTime(item.created_at)}
+                {item.filename} · {formatBytes(item.size_bytes)}
+                {item.duration_ms ? ` · ${clock(item.duration_ms)}` : ""} · {timelineTime(item.created_at)}
                 {referenceCaption(item) && ` · ${referenceCaption(item)}`}
               </span>
             </div>
@@ -161,10 +164,59 @@ function ItemDialog({ item, trigger, extra, children }: { item: LibraryItem; tri
   );
 }
 
+/**
+ * A video: its poster with the length and a Video tag; hovering plays a muted
+ * preview, and a click opens the player. The one a chat's "Open in Library"
+ * names starts open.
+ */
+function VideoTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
+  const [hover, setHover] = useState(false);
+  const url = libraryItemUrl(item.id);
+  const poster = item.has_poster ? `/api/v1/library/${item.id}/poster` : undefined;
+  return (
+    <li className="flex min-w-0 flex-col gap-1.5" data-testid="library-item" data-kind="video">
+      <ItemDialog
+        item={item}
+        open={open}
+        onOpenChange={setOpen}
+        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-xs text-accent hover:underline">Open chat</Link>}
+        trigger={
+          <button
+            type="button"
+            aria-label={`Play ${item.title}`}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            onFocus={() => setHover(true)}
+            onBlur={() => setHover(false)}
+            className="relative aspect-video overflow-hidden rounded-lg border border-border bg-[#000] outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {hover ? (
+              <video src={url} poster={poster} muted autoPlay loop playsInline preload="metadata" className="size-full object-cover" />
+            ) : poster ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={poster} alt="" loading="lazy" className="size-full object-cover" />
+            ) : (
+              <span className="grid size-full place-items-center text-fg-tertiary"><Icon name="film" size={22} /></span>
+            )}
+            <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px text-[10px] text-[#fff]"><Icon name="play" size={8} />Video</span>
+            {item.duration_ms ? <span className="absolute bottom-1.5 right-1.5 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px font-mono text-[11px] text-[#fff]">{clock(item.duration_ms)}</span> : null}
+          </button>
+        }
+      >
+        <video src={url} poster={poster} controls autoPlay playsInline className="min-h-0 max-h-[80vh] w-full bg-[#000]" />
+      </ItemDialog>
+      <span className="truncate text-[13px] text-fg">{item.title}</span>
+      <Source item={item} />
+    </li>
+  );
+}
+
 /** One tile; a click opens the full item with Download, Remove and, for an image, the reference actions. */
-function ItemTile({ item }: { item: LibraryItem }) {
+function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | null }) {
   const del = useDeleteLibraryItem();
   const url = libraryItemUrl(item.id);
+  if (item.kind === "video") return <VideoTile item={item} initiallyOpen={openItem === item.id} />;
   if (item.kind === "document") {
     return (
       <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-surface p-3" data-testid="library-item">
@@ -241,7 +293,7 @@ function UploadButton() {
 const grid = "grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4";
 
 /** One kind's items, a page at a time. */
-function Items({ kind }: { kind: LibraryItemKind }) {
+function Items({ kind, openItem }: { kind: LibraryItemKind; openItem?: string | null }) {
   const lib = useLibrary(kind);
   const items = lib.data?.pages.flatMap((p) => p.items) ?? [];
   if (lib.isError) {
@@ -268,6 +320,8 @@ function Items({ kind }: { kind: LibraryItemKind }) {
       <EmptyState icon="library" title="Nothing here yet">
         {kind === "document"
           ? "Workflows with an Add to library step save their results here."
+          : kind === "video"
+          ? "When a persona that can code renders a video in a chat, it\u2019s added here once it\u2019s finished."
           : kind === "diagram"
           ? "When a persona draws an SVG diagram in a chat, choose Save to Library on it to keep it here."
           : "When a persona that can generate images makes one in a chat, it\u2019s added here. You can also upload your own, like a photo of yourself to use as your reference."}
@@ -278,7 +332,7 @@ function Items({ kind }: { kind: LibraryItemKind }) {
     <>
       <ul className={grid}>
         {items.map((it) => (
-          <ItemTile key={it.id} item={it} />
+          <ItemTile key={it.id} item={it} openItem={openItem} />
         ))}
       </ul>
       {lib.hasNextPage && (
@@ -292,8 +346,13 @@ function Items({ kind }: { kind: LibraryItemKind }) {
   );
 }
 
+const KINDS: Record<string, LibraryItemKind> = { images: "image", videos: "video", diagrams: "diagram", documents: "document" };
+
 export function LibraryScreen() {
-  const [tab, setTab] = useState("images");
+  // A chat's "Open in Library" lands on the item: ?tab=videos&item=<id>.
+  const params = useSearchParams();
+  const [tab, setTab] = useState(() => params.get("tab") ?? "images");
+  const openItem = params.get("item");
   return (
     <>
       <TopBar crumbs={[{ label: "Library" }]} />
@@ -303,14 +362,14 @@ export function LibraryScreen() {
             <div className="min-w-0 flex-1 space-y-1">
               <h1 className="type-display">Library</h1>
               <p className="text-sm text-fg-secondary">
-                Keepsakes from your Assistant chats, private to you. Images your personas generate are saved here automatically and stay after their chat is deleted.
+                Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos they render, are saved here automatically and stay after their chat is deleted.
                 Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
               </p>
             </div>
             <UploadButton />
           </div>
-          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
-          {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={tab === "diagrams" ? "diagram" : tab === "documents" ? "document" : "image"} />}
+          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "videos", label: "Videos" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
+          {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={KINDS[tab] ?? "image"} openItem={openItem} />}
         </div>
       </Content>
     </>
