@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useBootstrap } from "@/lib/api/hooks";
-import { PROJECT_ROUTES, hasFilters, resolveProject, withProject, type ProjectMode } from "@/lib/project-scope";
+import { hasFilters, needsOneProject, resolveProject, type ProjectMode } from "@/lib/project-scope";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState, Skeleton } from "@/components/ui/primitives";
 import type { Crumb } from "./topbar";
@@ -178,14 +178,22 @@ export function ProjectUnavailable({
   scope: Extract<ProjectScope, { status: "unavailable" }>;
 }) {
   const back = scope.fallback;
+  // Keep the rest of the page (/tickets?layout=board) and only change its project.
+  const params = useSearchParams();
+  const href = (key: string | null) => {
+    const next = new URLSearchParams(params.toString());
+    if (key) next.set("project", key);
+    else next.delete("project");
+    return next.size ? `${base}?${next}` : base;
+  };
   return (
     <EmptyState
       icon="alert"
       title="Project unavailable"
       actions={
         <>
-          <ButtonLink variant="primary" href={back ? withProject(base, back.key) : base}>
-            {back ? `Back to ${back.name}` : PROJECT_ROUTES[base] === "required" ? "Choose a project" : "All projects"}
+          <ButtonLink variant="primary" href={href(back?.key ?? null)}>
+            {back ? `Back to ${back.name}` : needsOneProject(base, params) ? "Choose a project" : "All projects"}
           </ButtonLink>
           <ButtonLink variant="outline" href="/settings/projects">Manage projects</ButtonLink>
         </>

@@ -248,6 +248,18 @@ export async function installBoardApi(page: Page) {
       crit.t.criteria = crit.t.criteria.filter((c) => c !== crit.c).map((c, i) => ({ ...c, position: i + 1 }));
       return route.fulfill({ status: 204 });
     }
+    // The menu is on every page: its history, personas, spaces and scheduled tasks start empty.
+    if (request.method() === "GET") {
+      if (path === "/chats") return json({ chats: [], has_more: false });
+      if (path === "/personas") return json({ personas: [] });
+      if (path === "/chat-spaces") return json({ spaces: [] });
+      if (path === "/scheduled-tasks") return json({ tasks: [] });
+    }
+    // Runs' header shows the last 7 days' spend.
+    if (path === "/costs" && request.method() === "GET") {
+      const none = { key: "", label: "", runs: 0, tokens: 0, cost_micros: 0, unpriced_runs: 0 };
+      return json({ total: none, unpriced_runs: 0, estimated: { tickets: 0, points: 0, cost_micros: 0 }, days: [], agents: [], projects: [], models: [], purposes: [], top_tickets: [] } satisfies S["CostReport"]);
+    }
     unhandled.push(`${request.method()} ${path}`);
     return json({ code: "not_found", message: `mock: no handler for ${path}` }, 404);
   }

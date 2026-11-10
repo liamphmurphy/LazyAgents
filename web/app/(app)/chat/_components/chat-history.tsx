@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useRef, useState, type FormEvent } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useChat, useChats, useChatSearch, useCreateChat, useDeleteChat, useUpdateChat } from "@/lib/api/hooks";
 import { chatTitle, groupByDay, newestChat } from "@/lib/chat-ui";
@@ -289,10 +289,10 @@ function ChatSearchResults({ query, onPick }: { query: string; onPick: () => voi
 }
 
 /**
- * The conversation history in Chat mode's menu: persona strip, then whatever the menu puts
- * under it (afterFilter: "Needs you"), then Active by day or Archived (kept in ?view= on the chat page).
+ * The conversation history at the top of the menu: persona strip, then Active by day or
+ * Archived (kept in ?view= on the chat page).
  */
-export function ChatHistory({ id, viewed, afterFilter }: { id?: string; viewed: string | null; afterFilter?: ReactNode }) {
+export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -327,7 +327,6 @@ export function ChatHistory({ id, viewed, afterFilter }: { id?: string; viewed: 
   return (
     <aside aria-label="Chat history" className="flex min-h-0 flex-1 flex-col gap-1.5 max-[799px]:max-h-64">
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
-      {afterFilter}
       <div className="mt-2 flex items-center gap-0.5 pl-2">
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-tertiary">{view === "archived" ? `${heading} · Archived` : heading}</span>
         <IconButton icon="search" size={24} label="Find in chats" aria-pressed={finding} onClick={() => (finding ? stopFinding() : setFinding(true))} />

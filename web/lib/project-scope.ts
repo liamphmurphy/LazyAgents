@@ -12,79 +12,50 @@ export type ProjectMode = "required" | "optional";
 
 export type NavBadge = "inbox" | "runs" | "wiki" | "settings" | "scheduled";
 export type NavItem = { href: string; label: string; icon: IconName; badge?: NavBadge };
-export type NavGroup = { label: "Personal" | "Project" | "Workspace" | "Apps"; items: NavItem[] };
+export type NavGroup = { label: "Work" | "Apps" | "Tools" | "You"; items: NavItem[] };
 
-/** The one canonical item set: the sidebar and the command menu both read it. */
-export const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Personal",
-    items: [
-      { href: "/inbox", label: "Inbox", icon: "inbox", badge: "inbox" },
-      { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-      { href: "/library", label: "Library", icon: "library" },
-      { href: "/workflows", label: "Workflows", icon: "graph" },
-      { href: "/scheduled", label: "Scheduled", icon: "clock", badge: "scheduled" },
-      { href: "/learn", label: "Learn", icon: "learn" },
-      { href: "/customization", label: "Customization", icon: "sliders" },
-    ],
-  },
-  {
-    label: "Project",
-    items: [
-      { href: "/tickets", label: "Tickets", icon: "tickets" },
-      { href: "/plans", label: "Plans", icon: "edit" },
-    ],
-  },
-  {
-    label: "Workspace",
-    items: [
-      { href: "/runs", label: "Runs", icon: "play", badge: "runs" },
-      { href: "/agents", label: "Agents", icon: "agents" },
-      { href: "/wiki", label: "Wiki", icon: "wiki", badge: "wiki" },
-      { href: "/settings", label: "Settings", icon: "gear", badge: "settings" },
-    ],
-  },
+/**
+ * The one menu (no Chat/Work modes): conversations first, then Work (what
+ * agents are doing for you), the Apps row whose flyout holds Apps and Tools,
+ * and Customization and Settings in the footer. The sidebar and the command
+ * menu both read these.
+ */
+export const WORK_ITEMS: NavItem[] = [
+  { href: "/inbox", label: "Inbox", icon: "inbox", badge: "inbox" },
+  { href: "/runs", label: "Runs", icon: "play", badge: "runs" },
+  { href: "/tickets", label: "Tickets", icon: "tickets" },
 ];
 
-/** Apps: a full page of their own with an Ask drawer, each backed by one of the person's spaces. Chat mode lists them. */
-export const APP_GROUP: NavGroup = {
-  label: "Apps",
-  items: [
-    { href: "/apps/docs", label: "Docs", icon: "edit" },
-    { href: "/apps/finance", label: "Finance", icon: "dollar" },
-  ],
-};
+/** Apps: a full page of their own; Docs and Finance have an Ask drawer, each backed by one of the person's spaces. */
+export const APP_ITEMS: NavItem[] = [
+  { href: "/apps/docs", label: "Docs", icon: "edit" },
+  { href: "/apps/finance", label: "Finance", icon: "dollar" },
+  { href: "/library", label: "Library", icon: "library" },
+];
 
-export type NavMode = "chat" | "work";
+/** Tools: pages you open now and then, beside the apps in the same flyout. */
+export const TOOL_ITEMS: NavItem[] = [
+  { href: "/workflows", label: "Workflows", icon: "graph" },
+  { href: "/scheduled", label: "Scheduled", icon: "clock", badge: "scheduled" },
+  { href: "/learn", label: "Learn", icon: "learn" },
+  { href: "/wiki", label: "Wiki", icon: "wiki", badge: "wiki" },
+];
 
-/** Shown in both modes, so opening them leaves the mode alone. */
-const PINNED_ROUTES = ["/inbox"];
-/** Personal items Work keeps, above Project and Workspace. */
-const WORK_PERSONAL = [...PINNED_ROUTES, "/dashboard"];
-/** Everything else outside this list is Work. The landing page (/) opens a chat. */
-const CHAT_ROUTES = ["/", "/chat", "/spaces", "/customization", "/library", "/workflows", "/scheduled", "/learn", "/apps"];
+export const FOOTER_ITEMS: NavItem[] = [
+  { href: "/customization", label: "Customization", icon: "sliders" },
+  { href: "/settings", label: "Settings", icon: "gear", badge: "settings" },
+];
 
-/** The mode a page belongs to; undefined for the pinned pages. */
-export function routeMode(pathname: string): NavMode | undefined {
-  if (PINNED_ROUTES.some((r) => isActive(pathname, r))) return undefined;
-  return CHAT_ROUTES.some((r) => isActive(pathname, r)) ? "chat" : "work";
-}
+export const NAV_GROUPS: NavGroup[] = [
+  { label: "Work", items: WORK_ITEMS },
+  { label: "Apps", items: APP_ITEMS },
+  { label: "Tools", items: TOOL_ITEMS },
+  { label: "You", items: FOOTER_ITEMS },
+];
 
-/** The page decides; a pinned page keeps the last mode, and Work is the first-run default. */
-export function navMode(pathname: string, remembered: NavMode | null | undefined): NavMode {
-  return routeMode(pathname) ?? remembered ?? "work";
-}
-
-/** Chat keeps Personal minus the Dashboard, then Apps; a conversation is opened from the history. Work keeps Inbox and Dashboard. */
-export function navGroupsFor(mode: NavMode): NavGroup[] {
-  const [personal, ...work] = NAV_GROUPS;
-  if (mode === "chat") return [{ ...personal, items: personal.items.filter((i) => !WORK_PERSONAL.includes(i.href) || PINNED_ROUTES.includes(i.href)) }, APP_GROUP];
-  return [{ ...personal, items: personal.items.filter((i) => WORK_PERSONAL.includes(i.href)) }, ...work];
-}
-
-/** Where the Chat/Work toggle goes: Chat resumes the newest conversation, Work the last Work page. */
-export function modeHref(mode: NavMode, project: string | null | undefined, lastWork: string | null | undefined): string {
-  return mode === "chat" ? "/chat" : withProject(lastWork ?? "/tickets", project);
+/** The Apps row reads as current on any page its flyout opens. */
+export function inAppsMenu(pathname: string): boolean {
+  return [...APP_ITEMS, ...TOOL_ITEMS].some((i) => isActive(pathname, i.href));
 }
 
 /** Routes whose content belongs to one project, read from ?project=. */
@@ -154,7 +125,7 @@ export function hasFilters(search: URLSearchParams): boolean {
 }
 
 /** The board is a Tickets layout that, unlike the list, needs one project. */
-function needsOneProject(section: string, search: URLSearchParams): boolean {
+export function needsOneProject(section: string, search: URLSearchParams): boolean {
   return PROJECT_ROUTES[section] === "required" || (section === "/tickets" && search.get("layout") === "board");
 }
 

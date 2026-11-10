@@ -1,18 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NAV_GROUPS, currentProject, hasFilters, pickerHref, isActive, modeHref, navGroupsFor, navMode, projectSection, resolveProject, routeMode, switchHref, withProject } from "./project-scope.ts";
+import { NAV_GROUPS, currentProject, hasFilters, inAppsMenu, isActive, pickerHref, projectSection, resolveProject, switchHref, withProject } from "./project-scope.ts";
 
 const web = { key: "WEB", name: "Web app", color: "#6e56cf", archived: false };
 const ops = { key: "OPS", name: "Operations", color: "#3e9bff", archived: false };
 const old = { key: "OLD", name: "Legacy", color: "#888888", archived: true };
 const projects = [web, ops, old];
 
-test("nav is three groups with unique hrefs", () => {
-  assert.deepEqual(NAV_GROUPS.map((g) => g.label), ["Personal", "Project", "Workspace"]);
+test("one menu: Work, the Apps flyout's Apps and Tools, and the footer, with unique hrefs", () => {
+  const labels = NAV_GROUPS.map((g) => [g.label, g.items.map((i) => i.label)]);
+  assert.deepEqual(labels, [
+    ["Work", ["Inbox", "Runs", "Tickets"]],
+    ["Apps", ["Docs", "Finance", "Library"]],
+    ["Tools", ["Workflows", "Scheduled", "Learn", "Wiki"]],
+    ["You", ["Customization", "Settings"]],
+  ]);
   const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
   assert.equal(new Set(hrefs).size, hrefs.length);
-  assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Library", "Workflows", "Scheduled", "Learn", "Customization"]);
-  assert.deepEqual(NAV_GROUPS[1].items.map((i) => i.label), ["Tickets", "Plans"]);
+  // Work-mode pages that were merged or cut aren't in the menu.
+  for (const gone of ["/dashboard", "/board", "/epics", "/plans", "/artifacts", "/costs", "/agents"]) assert.ok(!hrefs.includes(gone), gone);
+});
+
+test("the Apps row is current on any page its flyout opens", () => {
+  for (const p of ["/apps/finance", "/library", "/workflows/1", "/scheduled", "/learn/2", "/wiki/agents/x"]) assert.equal(inAppsMenu(p), true, p);
+  for (const p of ["/", "/chat/1", "/inbox", "/tickets", "/customization"]) assert.equal(inAppsMenu(p), false, p);
 });
 
 test("isActive matches the section, Dashboard only on /", () => {
@@ -92,30 +103,4 @@ test("cross-project links on optional routes show All projects, bare routes the 
   assert.equal(currentProject("/tickets", q("layout=epics"), "WEB", projects), web);
   // The board always needs one project.
   assert.equal(currentProject("/tickets", q("layout=board&epic=e1"), "WEB", projects), web);
-});
-
-
-test("each page belongs to a mode, and pinned pages keep the last one", () => {
-  for (const p of ["/", "/chat", "/chat/1", "/customization", "/library", "/workflows", "/learn/2"]) assert.equal(routeMode(p), "chat", p);
-  for (const p of ["/dashboard", "/tickets", "/tickets/WEB-1", "/runs/1", "/settings/projects", "/wiki"]) assert.equal(routeMode(p), "work", p);
-  assert.equal(routeMode("/inbox"), undefined);
-  assert.equal(navMode("/tickets", "chat"), "work");
-  assert.equal(navMode("/inbox", "chat"), "chat");
-  assert.equal(routeMode("/apps/finance"), "chat");
-  assert.equal(navMode("/inbox", null), "work");
-});
-
-test("Work pins Inbox and Dashboard above Project and Workspace; Chat has Personal without Dashboard, then Apps", () => {
-  const labels = (m) => navGroupsFor(m).map((g) => [g.label, g.items.map((i) => i.label)]);
-  assert.deepEqual(labels("chat"), [["Personal", ["Inbox", "Library", "Workflows", "Scheduled", "Learn", "Customization"]], ["Apps", ["Docs", "Finance"]]]);
-  assert.deepEqual(labels("work")[0], ["Personal", ["Inbox", "Dashboard"]]);
-  assert.deepEqual(labels("work").slice(1).map(([l]) => l), ["Project", "Workspace"]);
-});
-
-test("the toggle resumes chat and returns to the last Work page in the current project", () => {
-  assert.equal(modeHref("chat", "WEB", "/runs"), "/chat");
-  assert.equal(modeHref("work", "WEB", "/tickets"), "/tickets?project=WEB");
-  assert.equal(modeHref("work", "WEB", "/runs/1"), "/runs/1");
-  assert.equal(modeHref("work", "WEB", null), "/tickets?project=WEB");
-  assert.equal(modeHref("work", undefined, null), "/tickets");
 });
