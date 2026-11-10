@@ -1,6 +1,8 @@
 // Pure logic for the chat screen (LAZYAGENTS-57): the live activity line, when a model switch asks first, and reply cost.
 // Kept free of React so `npm run test:unit` covers it.
 
+import { secretCall } from "./secrets-ui.ts";
+
 export type RunEventLike = { seq: number; type: string; at: string; payload: Record<string, unknown> };
 export type ToolCall = { key: number; tool: string; input: unknown; done: boolean; output?: string; failed?: true };
 
@@ -171,6 +173,9 @@ export function activityOf(call: { tool: string; input: unknown }): Activity {
     case "Bash":
       return { verb: "Running a command" };
     default: {
+      const secret = secretCall(call.tool, call.input);
+      if (secret?.tool === "http_request") return { verb: `Using ${secret.handle || "a secret"}:`, text: clip(`${secret.method} ${secret.target}`) };
+      if (secret) return { verb: "Checking which secrets it can use" };
       const connector = connectorCall(call.tool);
       if (connector) return { verb: `Using ${connector.name}:`, text: connector.tool };
       return { verb: "Using", text: bareTool(call.tool) || "a tool" };
@@ -216,6 +221,7 @@ export function newestChat<T extends { last_message_at?: string | null; updated_
 export type ChatStatusKind =
   | "thinking"
   | "connector"
+  | "secret"
   | "wiki"
   | "tickets"
   | "reading-code"
@@ -413,6 +419,8 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "shell_command":
       return shellStatus(typeof o.command === "string" ? o.command : typeof o.cmd === "string" ? o.cmd : "");
     default: {
+      const secret = secretCall(call.tool, o);
+      if (secret) return status("secret", secret.handle ? `using ${secret.handle}` : "checking its secrets");
       const connector = connectorCall(call.tool);
       if (connector) return status("connector", `using ${connector.name}`);
       return githubToolStatus(tool) ?? status("thinking", "working on it");
@@ -488,7 +496,7 @@ function planVersions(calls: ToolCall[]): PlanVersion[] {
 }
 
 /** Kinds where an errored call means the work failed. Elsewhere an error is routine: a search with no match, an edit retried. */
-const FAILABLE = new Set<ChatStatusKind>(["tests", "build", "install", "commit", "push", "pull-request", "github", "terminal", "connector", "image"]);
+const FAILABLE = new Set<ChatStatusKind>(["tests", "build", "install", "commit", "push", "pull-request", "github", "terminal", "connector", "secret", "image"]);
 
 const failedAt = (call: ToolCall, kind: ChatStatusKind) => !!call.failed && FAILABLE.has(kind);
 

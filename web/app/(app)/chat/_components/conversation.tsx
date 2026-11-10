@@ -56,6 +56,8 @@ import { UsageTag } from "./usage-tag";
 import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
 import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
+import { SecretRequests } from "./secret-requests";
+import { SecretsChip } from "./secrets-chip";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
@@ -668,6 +670,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               )}
             </span>
           )}
+          <SecretsChip chatId={c.id} />
           {c.repo_url && c.commit_email && myEmails.length > 1 && (
             <CommitEmailChip email={c.commit_email} open={commitPickerOpen} onClick={() => setCommitPickerOpen((o) => !o)} />
           )}
@@ -756,6 +759,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               ))}
               <PersonaProposals chatId={c.id} disabled={c.archived} />
               <ConnectorRequests chatId={c.id} disabled={c.archived} />
+              <SecretRequests chatId={c.id} disabled={c.archived} />
               {pending && selection && (
                 <Divider testId="pending-switch">
                   {`Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}

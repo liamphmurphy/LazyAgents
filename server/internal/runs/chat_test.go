@@ -140,6 +140,11 @@ func TestSameCapabilities(t *testing.T) {
 		sameCapabilities(a, ChatSpec(base, ChatCaps{Code: true, RepoURL: "https://github.com/a/b"})) {
 		t.Fatal("capability comparison is wrong")
 	}
+	// A secret granted mid-chat reaches the next message as its own MCP server.
+	withSecrets := ChatSpec(base, ChatCaps{Secrets: true})
+	if sameCapabilities(a, withSecrets) || len(withSecrets.MCPServers) != 1 || withSecrets.MCPServers[0].Name != agentdef.SecretsMCPName || !withSecrets.MCPServers[0].Connector {
+		t.Fatalf("secrets server: %+v", withSecrets.MCPServers)
+	}
 	// Unrelated edits to the assistant's definition don't count.
 	edited := base
 	edited.Instructions = "different"

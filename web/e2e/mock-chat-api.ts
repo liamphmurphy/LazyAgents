@@ -121,6 +121,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const connectors: { id: string; name: string; slug: string; url: string; auth_kind: unknown; status: string; last_error: string; revision: number; created_at: string; persona_ids: string[]; tools: { name: string; description: string; write: boolean; policy: string }[] }[] = [];
   const connectorApprovals: Record<string, unknown>[] = [];
   const connectorDecisions: string[] = [];
+  const apiSecrets: Record<string, unknown>[] = [];
+  const apiSecretPosts: Record<string, unknown>[] = [];
+  const secretApprovals: Record<string, unknown>[] = [];
+  const secretDecisions: string[] = [];
+  const secretProposals: Record<string, unknown>[] = [];
+  const chatSecrets: Record<string, unknown>[] = [];
   const scheduledTasks: Record<string, unknown>[] = [];
   const posted: Posted[] = [];
   const suggestions = opts.suggestions ?? [];
@@ -422,6 +428,42 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return route.fulfill({ status: 204 });
     }
     if (/^\/chats\/[^/]+\/connector-proposals$/.test(path) && method === "GET") return json({ proposals: [] });
+    if (path === "/api-secrets" && method === "GET") return json({ secrets: apiSecrets, key_configured: true });
+    if (path === "/api-secrets" && method === "POST") {
+      const b = body();
+      apiSecretPosts.push(b);
+      const name = String(b.name);
+      const sec = { id: uuid(), name, handle: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""), placement: b.placement, placement_key: b.placement_key ?? "",
+        allowed_hosts: b.allowed_hosts, read_policy: "allow", write_policy: "ask", persona_ids: [] as string[], revision: 1, created_at: now(), updated_at: now() };
+      apiSecrets.push(sec);
+      secretProposals.length = 0;
+      return json(sec);
+    }
+    if (/^\/api-secrets\/[^/]+$/.test(path) && method === "PATCH") {
+      const sec = apiSecrets.find((x) => path.endsWith(String(x.id)))!;
+      const patch = body();
+      delete patch.revision;
+      delete patch.value; // Values are write-only: never echoed back.
+      Object.assign(sec, patch, { revision: Number(sec.revision) + 1 });
+      return json(sec);
+    }
+    if (/^\/api-secrets\/[^/]+\/calls$/.test(path) && method === "GET") return json({ calls: [] });
+    if (/^\/chats\/[^/]+\/api-secrets$/.test(path) && method === "GET") return json({ secrets: chatSecrets });
+    if (/^\/chats\/[^/]+\/api-secrets\/[^/]+\/disable$/.test(path) && method === "POST") {
+      for (const c of chatSecrets) if (path.includes(String(c.id))) c.enabled = false;
+      return route.fulfill({ status: 204 });
+    }
+    if (/^\/chats\/[^/]+\/api-secret-approvals$/.test(path) && method === "GET") return json({ approvals: secretApprovals });
+    if (/^\/api-secret-approvals\/[^/]+$/.test(path) && method === "POST") {
+      secretDecisions.push(body().decision as string);
+      secretApprovals.length = 0;
+      return route.fulfill({ status: 204 });
+    }
+    if (/^\/chats\/[^/]+\/api-secret-proposals$/.test(path) && method === "GET") return json({ proposals: secretProposals });
+    if (/^\/api-secret-proposals\/[^/]+\/decline$/.test(path) && method === "POST") {
+      secretProposals.length = 0;
+      return route.fulfill({ status: 204 });
+    }
     if (path === "/scheduled-tasks" && method === "GET") return json({ tasks: scheduledTasks });
     if (path === "/scheduled-tasks" && method === "POST") {
       const b = body();
@@ -854,6 +896,6 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
+    return { apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
   })();
 }

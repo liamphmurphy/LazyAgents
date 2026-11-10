@@ -35,6 +35,9 @@ type ChatCaps struct {
 	Images       bool
 	// Connectors are the slugs of the MCP connectors the persona may use here.
 	Connectors []string
+	// Secrets is whether the persona may use any of the person's API secrets
+	// here; their values stay in Vesper (agentapi.SecretsHandler).
+	Secrets bool
 }
 
 // Coding reports whether the chat may work in its repository.
@@ -67,6 +70,9 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	r.MCPServers = []agentdef.MCPServer{}
 	for _, slug := range caps.Connectors {
 		r.MCPServers = append(r.MCPServers, agentdef.MCPServer{Name: slug, URL: "vesper", Connector: true})
+	}
+	if caps.Secrets {
+		r.MCPServers = append(r.MCPServers, agentdef.MCPServer{Name: agentdef.SecretsMCPName, URL: "vesper", Connector: true})
 	}
 	// web_search turns on the harness's own web search and page fetch tools
 	// (Claude Code WebSearch/WebFetch, Codex cached web search) for every chat,
@@ -115,7 +121,11 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 	for i, c := range rows {
 		slugs[i] = c.Slug
 	}
-	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranches: chat.WorkBranches, Images: p.CanGenerateImages, Connectors: slugs}, nil
+	secrets, err := q.UserSecretsForPersona(ctx, store.UserSecretsForPersonaParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, PersonaID: p.ID, AllowedIds: chat.SecretIds})
+	if err != nil {
+		return ChatCaps{}, err
+	}
+	return ChatCaps{Code: code, RepoURL: deref(chat.RepoUrl), WorkBranches: chat.WorkBranches, Images: p.CanGenerateImages, Connectors: slugs, Secrets: len(secrets) > 0}, nil
 }
 
 // sameCapabilities reports whether two chat specs grant the same persona

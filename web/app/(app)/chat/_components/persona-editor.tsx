@@ -713,8 +713,8 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     id="persona-connectors"
                     checked={draft.connectors}
                     onChange={(v) => set({ connectors: v })}
-                    title="Create connectors"
-                    hint="Can propose new MCP connectors in a chat. Each one is added only after you review it and sign in."
+                    title="Request connectors and secrets"
+                    hint="Can propose MCP connectors and ask for API secrets in a chat. Each one is added only after you review it; you enter secret values yourself."
                   />
                 </fieldset>
               </div>

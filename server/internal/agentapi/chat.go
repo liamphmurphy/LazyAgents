@@ -17,7 +17,7 @@ import (
 // chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run",
-	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "create_space", "create_scheduled_task", "create_learning_module"}
+	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "list_saved_links", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
 
 // chatScope is what a chat run may read from. ProjectID is uuid.Nil when the
 // chat has no project attached: it matches nothing, so tickets, epics, runs and
@@ -98,6 +98,7 @@ Use create_ticket and create_epic when asked and return their identifiers. Never
 You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this". In a persona chat, about: "persona" reaches the persona's own memory (its identity and shared moments) instead.
 set_chat_title names the conversation on its first message. When the person shares a YouTube link, read it with get_video_transcript before reacting to the video.
 Tools from other MCP servers are the person's connectors. A write tool may pause until the person approves it. If a tool says it was denied, don't retry it. To add a connector, use propose_connector when you're allowed to; never ask for a token in chat.
+To call an API with the person's token or key, use http_request from vesper_secrets (list_secrets shows what you may use); you never see a value. If you need one they haven't added, use propose_secret when you're allowed to, and never ask for it in chat. If someone pastes a token into chat anyway, don't repeat it; suggest saving it in Customization › Secrets.
 When the person asks, set things up for them with create_space, create_scheduled_task and create_learning_module, then link what you made.`
 
 // sourceVisible reports whether a link target or backlink source of this kind
