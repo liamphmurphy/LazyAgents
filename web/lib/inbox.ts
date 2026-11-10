@@ -19,7 +19,8 @@ type Item = { id: string; kind: string; created_at: string; resolved: boolean; r
 
 /** Groups in urgency order. Failed and stalled runs share one group. */
 export const GROUPS: ReadonlyArray<{ key: string; label: string; kinds: readonly string[] }> = [
-  { key: "approval", label: "Approvals", kinds: ["approval", "connector_approval"] },
+  { key: "approval", label: "Approvals", kinds: ["approval", "connector_approval", "secret_approval"] },
+  { key: "secrets", label: "Secrets", kinds: ["secret_expiring"] },
   { key: "scheduled", label: "Scheduled tasks", kinds: ["scheduled"] },
   { key: "question", label: "Questions", kinds: ["question"] },
   { key: "runs", label: "Failed & stalled runs", kinds: ["blocked", "stalled"] },
@@ -46,6 +47,8 @@ export const KIND: Record<string, { label: string; tone: "human" | "blocked" | "
   workflow_gate: { label: "Workflow", tone: "human" },
   scheduled: { label: "Scheduled", tone: "info" },
   connector_approval: { label: "Connector", tone: "human" },
+  secret_approval: { label: "Secret", tone: "human" },
+  secret_expiring: { label: "Expiring", tone: "human" },
 };
 
 export type View = "open" | "done";

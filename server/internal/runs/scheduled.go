@@ -344,6 +344,11 @@ func (s *Service) settleScheduled(ctx context.Context, q *store.Queries, r store
 	if err != nil {
 		return err
 	}
+	if !waiting {
+		if waiting, err = q.HasPendingUserSecretApproval(ctx, chat.ID); err != nil {
+			return err
+		}
+	}
 	if waiting {
 		return q.SetScheduledRunState(ctx, store.SetScheduledRunStateParams{ID: r.ID, State: "waiting"})
 	}

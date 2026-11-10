@@ -3388,6 +3388,150 @@ paths:
       responses:
         "204": { description: Declined }
         default: { $ref: "#/components/responses/Error" }
+  /api-secrets:
+    get:
+      operationId: listApiSecrets
+      summary: The person's API secrets (values are never returned)
+      tags: [api-secrets]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSecretList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createApiSecret
+      summary: Add an API secret; the value is stored encrypted and never returned
+      tags: [api-secrets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewApiSecret" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSecret" }
+        default: { $ref: "#/components/responses/Error" }
+  /api-secrets/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateApiSecret
+      summary: Change a secret's settings, persona access or value (revision-checked)
+      tags: [api-secrets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApiSecretPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSecret" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteApiSecret
+      tags: [api-secrets]
+      responses:
+        "204": { description: Removed }
+        default: { $ref: "#/components/responses/Error" }
+  /api-secrets/{id}/calls:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listApiSecretCalls
+      summary: The latest requests made with this secret, sent or not
+      tags: [api-secrets]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSecretCallList" }
+        default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/api-secrets:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listChatApiSecrets
+      summary: The secrets this chat used, for the chat header
+      tags: [api-secrets]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatApiSecretList" }
+        default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/api-secrets/{secret_id}/disable:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: secret_id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: disableChatApiSecret
+      summary: Stop this chat from using a secret, from its next request
+      tags: [api-secrets]
+      responses:
+        "204": { description: Turned off }
+        default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/api-secret-approvals:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listApiSecretApprovals
+      summary: Requests with a secret waiting for the person in this chat
+      tags: [api-secrets]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSecretApprovalList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api-secret-approvals/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: decideApiSecretApproval
+      summary: Allow once, always allow (sets reads or writes to Allow) or deny
+      tags: [api-secrets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectorApprovalDecision" }
+      responses:
+        "204": { description: Decided }
+        default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/api-secret-proposals:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listApiSecretProposals
+      summary: Secrets a persona asked for in this chat, waiting for the person
+      tags: [api-secrets]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiSecretProposalList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api-secret-proposals/{id}/decline:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: declineApiSecretProposal
+      tags: [api-secrets]
+      responses:
+        "204": { description: Declined }
+        default: { $ref: "#/components/responses/Error" }
   /scheduled-tasks:
     get:
       operationId: listScheduledTasks
@@ -5758,7 +5902,7 @@ components:
         kind:
           type: string
           description: "question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes"
-          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion, workflow_gate, scheduled, connector_approval]
+          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion, workflow_gate, scheduled, connector_approval, secret_approval, secret_expiring]
         title: { type: string }
         summary: { type: string }
         href: { type: string }
@@ -6895,6 +7039,138 @@ components:
       required: [proposals]
       properties:
         proposals: { type: array, items: { $ref: "#/components/schemas/ConnectorProposal" } }
+    ApiSecretPlacement:
+      type: string
+      enum: [bearer, header, query, basic]
+      description: "Where the value goes: Authorization: Bearer, a named header, a named query parameter, or Basic auth (value is user:password)"
+    ApiSecretPolicy:
+      type: string
+      enum: [allow, ask, off]
+    ApiSecret:
+      type: object
+      required: [id, name, handle, placement, placement_key, allowed_hosts, read_policy, write_policy, persona_ids, revision, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        handle: { type: string, description: "The only name personas see" }
+        placement: { $ref: "#/components/schemas/ApiSecretPlacement" }
+        placement_key: { type: string, description: "Header or query parameter name; empty for bearer and basic" }
+        allowed_hosts: { type: array, items: { type: string } }
+        read_policy: { $ref: "#/components/schemas/ApiSecretPolicy" }
+        write_policy: { $ref: "#/components/schemas/ApiSecretPolicy" }
+        persona_ids: { type: array, items: { type: string, format: uuid } }
+        expires_at: { type: string, format: date-time, description: "From the value's JWT exp claim" }
+        last_used_at: { type: string, format: date-time }
+        revision: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ApiSecretList:
+      type: object
+      required: [secrets, key_configured]
+      properties:
+        secrets: { type: array, items: { $ref: "#/components/schemas/ApiSecret" } }
+        key_configured: { type: boolean, description: "False until SECRETS_KEY is set; nothing can be stored until then" }
+    NewApiSecret:
+      type: object
+      required: [name, value, placement, allowed_hosts]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        value: { type: string, description: "Stored encrypted and never returned" }
+        placement: { $ref: "#/components/schemas/ApiSecretPlacement" }
+        placement_key: { type: string }
+        allowed_hosts: { type: array, items: { type: string } }
+        read_policy: { $ref: "#/components/schemas/ApiSecretPolicy" }
+        write_policy: { $ref: "#/components/schemas/ApiSecretPolicy" }
+        persona_ids: { type: array, items: { type: string, format: uuid } }
+        proposal_id: { type: string, format: uuid, description: "The persona request this completes; that persona gets access" }
+    ApiSecretPatch:
+      type: object
+      required: [revision]
+      properties:
+        revision: { type: integer }
+        name: { type: string, minLength: 1, maxLength: 60 }
+        value: { type: string, description: "Replace the value; stored encrypted" }
+        placement: { $ref: "#/components/schemas/ApiSecretPlacement" }
+        placement_key: { type: string }
+        allowed_hosts: { type: array, items: { type: string } }
+        read_policy: { $ref: "#/components/schemas/ApiSecretPolicy" }
+        write_policy: { $ref: "#/components/schemas/ApiSecretPolicy" }
+        persona_ids: { type: array, items: { type: string, format: uuid } }
+    ApiSecretCall:
+      type: object
+      required: [id, method, host, path, decision, error, redactions, duration_ms, persona_name, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        method: { type: string }
+        host: { type: string }
+        path: { type: string }
+        decision: { type: string, enum: [auto, approved, denied, blocked] }
+        status: { type: integer, description: "The HTTP status, when the request was sent" }
+        error: { type: string }
+        redactions: { type: integer }
+        duration_ms: { type: integer }
+        persona_name: { type: string }
+        chat_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    ApiSecretCallList:
+      type: object
+      required: [calls]
+      properties:
+        calls: { type: array, items: { $ref: "#/components/schemas/ApiSecretCall" } }
+    ChatApiSecret:
+      type: object
+      required: [id, name, handle, calls, methods, last_used_at, enabled]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        handle: { type: string }
+        calls: { type: integer }
+        methods: { type: array, items: { type: string } }
+        last_used_at: { type: string, format: date-time }
+        enabled: { type: boolean, description: "False once turned off for this chat" }
+    ChatApiSecretList:
+      type: object
+      required: [secrets]
+      properties:
+        secrets: { type: array, items: { $ref: "#/components/schemas/ChatApiSecret" } }
+    ApiSecretApproval:
+      type: object
+      required: [id, secret_id, secret_name, secret_handle, placement, placement_key, method, url, headers, body, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        secret_id: { type: string, format: uuid }
+        secret_name: { type: string }
+        secret_handle: { type: string }
+        placement: { $ref: "#/components/schemas/ApiSecretPlacement" }
+        placement_key: { type: string }
+        method: { type: string }
+        url: { type: string }
+        headers: { type: object, additionalProperties: { type: string } }
+        body: { type: string, description: "The whole request body, exactly as it will be sent" }
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
+        created_at: { type: string, format: date-time }
+    ApiSecretApprovalList:
+      type: object
+      required: [approvals]
+      properties:
+        approvals: { type: array, items: { $ref: "#/components/schemas/ApiSecretApproval" } }
+    ApiSecretProposal:
+      type: object
+      required: [id, name, host, placement, placement_key, reason, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        host: { type: string }
+        placement: { $ref: "#/components/schemas/ApiSecretPlacement" }
+        placement_key: { type: string }
+        reason: { type: string }
+        proposed_by: { $ref: "#/components/schemas/PersonaSummary" }
+        created_at: { type: string, format: date-time }
+    ApiSecretProposalList:
+      type: object
+      required: [proposals]
+      properties:
+        proposals: { type: array, items: { $ref: "#/components/schemas/ApiSecretProposal" } }
     ScheduledTaskInput:
       type: object
       required: [name, kind, frequency, at_time, timezone, enabled]

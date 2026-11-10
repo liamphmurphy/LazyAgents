@@ -124,7 +124,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_workflows":   map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
-	needArgs := []string{"submit_research_report", "get_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "create_space", "create_scheduled_task", "create_learning_module"}
+	needArgs := []string{"submit_research_report", "get_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]
@@ -134,6 +134,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 			// This chat's persona lacks the capability, which is refused after the allowlist.
 			noCapability := tool.Name == "propose_workflow_edit" && strings.Contains(fmt.Sprint(out["message"]), "can't create workflows")
 			noCapability = noCapability || tool.Name == "propose_connector"
+			noCapability = noCapability || (tool.Name == "propose_secret" && strings.Contains(fmt.Sprint(out["message"]), "can't propose secrets"))
 			if code == 409 && !noCapability {
 				t.Errorf("%s: %d %v", tool.Name, code, out)
 			}

@@ -69,9 +69,9 @@ export function setupChecklist(s: SetupState): SetupStep[] {
     },
     {
       key: "secret",
-      label: "Add at least one provider secret",
+      label: "Add at least one provider credential",
       href: "/settings#secrets",
-      link: "Provider secrets",
+      link: "Provider credentials",
       done: secretDone,
       detail: secretDone ? "A harness can run agents" : s.harness.reasons.join(" · ") || "No harness is available.",
     },

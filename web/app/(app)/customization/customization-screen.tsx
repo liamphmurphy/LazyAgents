@@ -16,6 +16,7 @@ import { PersonaEditor } from "../chat/_components/persona-editor";
 import { ExportMenu, ImportView, MemorySection } from "./memory-section";
 import { DefaultBadge, DeleteDialog, PersonaProfile } from "./persona-profile";
 import { ProfileSection } from "./profile-section";
+import { ApiSecretsSection } from "./api-secrets-section";
 import { ConnectorsSection, PersonaConnectors } from "./connectors-section";
 import { useSpaces } from "@/lib/api/space-hooks";
 import { SpaceTile } from "../spaces/_components/space-parts";
@@ -107,7 +108,7 @@ export function CustomizationScreen() {
       <Content>
         <div className="flex gap-8 max-md:flex-col max-md:gap-4">
           <nav aria-label="Customize" className="flex w-52 flex-none flex-col gap-px max-md:w-full">
-            <RailButton on={!whose && who !== "connectors"} onClick={() => pick("")} lead={<Icon name="bookmark" size={16} />}>
+            <RailButton on={!whose && who !== "connectors" && who !== "secrets"} onClick={() => pick("")} lead={<Icon name="bookmark" size={16} />}>
               Everything
             </RailButton>
             <RailButton on={whose === "person"} onClick={() => pick("person")} lead={<HumanAvatar name={me?.name ?? "You"} initials={me?.initials} src={me?.avatar_url} size={20} label={false} />}>
@@ -115,6 +116,9 @@ export function CustomizationScreen() {
             </RailButton>
             <RailButton on={who === "connectors"} onClick={() => pick("connectors")} lead={<Icon name="plug" size={16} />}>
               Connectors
+            </RailButton>
+            <RailButton on={who === "secrets"} onClick={() => pick("secrets")} lead={<Icon name="key" size={16} />}>
+              Secrets
             </RailButton>
             <span className="px-2 pb-1 pt-3 text-xs font-medium text-fg-tertiary">Personas</span>
             {list.isError ? (
@@ -154,6 +158,8 @@ export function CustomizationScreen() {
           <div className="flex min-w-0 flex-1 flex-col gap-5">
             {who === "connectors" && !importing ? (
               <ConnectorsSection personas={personas} />
+            ) : who === "secrets" && !importing ? (
+              <ApiSecretsSection personas={personas} initialId={search.get("secret") ?? undefined} />
             ) : importing ? (
               <div className="mx-auto w-full max-w-2xl">
                 <ImportView onClose={() => setImporting(false)} />

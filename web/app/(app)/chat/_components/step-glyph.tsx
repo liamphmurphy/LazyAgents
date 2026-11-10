@@ -159,6 +159,14 @@ const GLYPHS: Record<ChatStatusKind, ReactNode> = {
       <circle className="glyph-a glyph-blink glyph-live" cx="8.7" cy="2.5" r=".9" fill="currentColor" />
     </>
   ),
+  // A key: the request carries one of the person's secrets, added by Vesper.
+  secret: (
+    <>
+      <circle className="glyph-s" cx="5" cy="8" r="3" />
+      <path className="glyph-s glyph-a glyph-plug" d="M8 8h6.5M12 8v2.5M14.5 8v2" />
+      <circle className="glyph-a glyph-blink glyph-live" cx="5" cy="8" r=".9" fill="currentColor" />
+    </>
+  ),
   video: (
     <>
       <rect className="glyph-s" x="1.5" y="2" width="13" height="9" rx="1.5" />

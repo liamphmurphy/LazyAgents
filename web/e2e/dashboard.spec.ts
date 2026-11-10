@@ -222,13 +222,13 @@ test("a new workspace sees the checklist and a health banner naming missing secr
   await page.goto("/");
   const banner = page.getByRole("status", { name: /Agents can’t run/ });
   await expect(banner).toContainText("No harness is available: add harness:anthropic or harness:openai.");
-  await expect(banner.getByRole("link", { name: "Fix in Provider secrets →" })).toHaveAttribute("href", "/settings#secrets");
+  await expect(banner.getByRole("link", { name: "Fix in Provider credentials →" })).toHaveAttribute("href", "/settings#secrets");
 
   const setup = page.getByRole("region", { name: "Get set up" });
   await expect(setup).toContainText("0 of 5 done");
   await expect(setup).toContainText("Claude Code: no harness:anthropic secret · Codex: no harness:openai secret");
   await expect(setup.getByRole("link", { name: "Projects →" })).toHaveAttribute("href", "/settings#projects");
-  await expect(setup.getByRole("link", { name: "Provider secrets →" })).toHaveAttribute("href", "/settings#secrets");
+  await expect(setup.getByRole("link", { name: "Provider credentials →" })).toHaveAttribute("href", "/settings#secrets");
   await expect(setup.getByRole("link", { name: "Runner backends →" })).toHaveAttribute("href", "/settings#runners");
   await expect(setup.getByRole("link", { name: "Agents →" })).toHaveAttribute("href", "/agents");
   await expect(setup.getByRole("button", { name: "Dismiss" })).toHaveCount(0);

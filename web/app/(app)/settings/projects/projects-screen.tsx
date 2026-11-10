@@ -341,7 +341,7 @@ export function ProjectsScreen() {
             repository.
           </p>
           <ButtonLink href="/settings#secrets" variant="outline">
-            Provider secrets
+            Provider credentials
           </ButtonLink>
           <ProjectsSection />
         </div>

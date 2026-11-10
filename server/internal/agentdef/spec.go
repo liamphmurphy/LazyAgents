@@ -151,6 +151,12 @@ func (o Override) Empty() bool {
 // can't remove or shadow it.
 const ReservedMCPName = "lazyagents"
 
+// SecretsMCPName is the server a chat reaches its person's API secrets
+// through. It's served like a connector (at <MCP URL>/connectors/<name>, with
+// the run's token), and connector slugs can't contain "_", so no connector
+// can take it.
+const SecretsMCPName = "vesper_secrets"
+
 var (
 	scopeRe = regexp.MustCompile(`^[a-z][a-z0-9-]*:([a-z0-9][a-z0-9-]*|\*)$`)
 	nameRe  = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
@@ -238,8 +244,8 @@ func validMCP(field string, servers []MCPServer) error {
 		if !nameRe.MatchString(s.Name) {
 			return invalid(field, "server name %q must be lowercase letters, digits, - or _", s.Name)
 		}
-		if s.Name == ReservedMCPName {
-			return invalid(field, "%q is reserved for the built-in server", s.Name)
+		if s.Name == ReservedMCPName || s.Name == SecretsMCPName {
+			return invalid(field, "%q is reserved for a built-in server", s.Name)
 		}
 		if seen[s.Name] {
 			return invalid(field, "duplicate server %q", s.Name)

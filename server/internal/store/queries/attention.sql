@@ -79,6 +79,17 @@ WITH items AS (
  FROM connector_approvals a JOIN connectors cn ON cn.id=a.connector_id
  WHERE a.workspace_id=sqlc.arg(workspace_id) AND a.user_id=sqlc.arg(user_id) AND a.state='pending'
  UNION ALL
+ -- A request with an API secret waiting for a yes or no, and a secret about to stop working; both private.
+ SELECT 'secret_approval:'||a.id,'secret_approval',us.name,'Wants to send '||a.method||' to '||coalesce(substring(a.url FROM '^[a-z]+://([^/?#]+)'),a.url),'/chat/'||a.chat_id,'','',a.created_at,a.state<>'pending',NULL,NULL,NULL
+ FROM user_secret_approvals a JOIN user_secrets us ON us.id=a.secret_id
+ WHERE a.workspace_id=sqlc.arg(workspace_id) AND a.user_id=sqlc.arg(user_id) AND a.state='pending'
+ UNION ALL
+ SELECT 'secret_expiring:'||us.id||':'||extract(epoch FROM us.expires_at)::bigint,'secret_expiring',us.name,
+ CASE WHEN us.expires_at<=now() THEN 'Expired. Replace it to keep using it.' ELSE 'Expires within a day. Replace it to keep using it.' END,
+ '/customization?who=secrets&secret='||us.id,'','',us.expires_at-interval '1 day',false,NULL,NULL,NULL
+ FROM user_secrets us
+ WHERE us.workspace_id=sqlc.arg(workspace_id) AND us.user_id=sqlc.arg(user_id) AND us.expires_at<now()+interval '1 day'
+ UNION ALL
  SELECT 'workflow_gate:'||s.id,'workflow_gate',wr.name,'A workflow step is waiting for your approval','/workflows/runs/'||wr.id,coalesce(p.key,''),'',s.created_at,s.state<>'waiting',NULL,NULL,NULL
  FROM workflow_steps s JOIN workflow_runs wr ON wr.id=s.run_id LEFT JOIN projects p ON p.id=wr.project_id
  WHERE wr.workspace_id=sqlc.arg(workspace_id) AND wr.user_id=sqlc.arg(user_id) AND (s.state='waiting' OR s.decision<>'')
