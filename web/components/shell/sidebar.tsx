@@ -295,8 +295,13 @@ function AppTiles({ counts, active, onNewSpace }: { counts: Record<NavBadge, num
   );
 }
 
-/** The bottom of the menu: the way to the other mode, then you, with Customization (personas, memory, profile) behind the gear. */
-function MenuFooter({ mode, href, active }: { mode: NavMode; href: string; active: (href: string) => boolean }) {
+const footerButton = "relative grid size-[28px] place-items-center rounded-md";
+
+/**
+ * The bottom of the menu: the way to the other mode, then you, with
+ * Customization (personas, agents, memory) and the workspace's Settings.
+ */
+function MenuFooter({ mode, href, active, settingsNeedYou }: { mode: NavMode; href: string; active: (href: string) => boolean; settingsNeedYou: boolean }) {
   const boot = useBootstrap();
   const me = boot.data?.me;
   const other = mode === "chat" ? { label: "Projects & tickets", icon: "briefcase" as const } : { label: "Chats & personas", icon: "msg" as const };
@@ -310,9 +315,14 @@ function MenuFooter({ mode, href, active }: { mode: NavMode; href: string; activ
       <div className="flex items-center gap-2.5 border-t border-border-subtle px-1 pt-2.5">
         {me && <HumanAvatar name={me.name} initials={me.initials} color={me.avatar_color} src={me.avatar_url} size={24} label={false} />}
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{me?.name ?? ""}</span>
-        <Link href="/customization" aria-label="Customization" title="Customization: personas, memory and your profile" aria-current={active("/customization") ? "page" : undefined}
-          className={cx("grid size-[28px] place-items-center rounded-md", active("/customization") ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover hover:text-fg")}>
+        <Link href="/customization" aria-label="Customization" title="Customization: personas, agents, memory and your profile" aria-current={active("/customization") ? "page" : undefined}
+          className={cx(footerButton, active("/customization") ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover hover:text-fg")}>
           <Icon name="sliders" size={15} />
+        </Link>
+        <Link href="/settings" aria-label={settingsNeedYou ? "Settings: a setting runs need is missing" : "Settings"} title="Settings: credentials, projects and runners" aria-current={active("/settings") ? "page" : undefined}
+          className={cx(footerButton, active("/settings") ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover hover:text-fg")}>
+          <Icon name="gear" size={15} />
+          {settingsNeedYou && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-state-human" />}
         </Link>
       </div>
     </div>
@@ -442,7 +452,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
           <SidebarSpaces viewed={viewed} hideWhenEmpty />
           <div className="flex flex-col gap-3 border-t border-border-subtle pt-3">
             <AppTiles counts={counts} active={navActive} onNewSpace={() => setCreatingSpace(true)} />
-            <MenuFooter mode="chat" href={otherHref} active={navActive} />
+            <MenuFooter mode="chat" href={otherHref} active={navActive} settingsNeedYou={counts.settings > 0} />
           </div>
         </nav>
       ) : (
@@ -466,7 +476,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
             ))}
           </nav>
           {pathname === "/dashboard" && <SidebarCapacity />}
-          <MenuFooter mode="work" href={otherHref} active={navActive} />
+          <MenuFooter mode="work" href={otherHref} active={navActive} settingsNeedYou={counts.settings > 0} />
         </>
       )}
       <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />

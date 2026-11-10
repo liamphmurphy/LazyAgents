@@ -19,6 +19,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/memory", destination: "/customization", permanent: false },
       { source: "/personas", destination: "/customization", permanent: false },
+      // Agents sit beside Personas in Customization; /agents/:handle stays the editor.
+      { source: "/agents", destination: "/customization?who=agents", permanent: false },
     ];
   },
   // In compose, Caddy routes these paths to the API before they reach Next.
