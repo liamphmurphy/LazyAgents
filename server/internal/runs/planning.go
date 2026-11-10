@@ -137,7 +137,7 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 				in.Goal = "Plan implementation of " + a.Title
 			}
 		}
-		docs, err := ResolveChatRefs(ctx, q, ws, p.ID, uuid.Nil, in.ContextRefs)
+		docs, err := ResolveChatRefs(ctx, q, ws, uuid.Nil, in.ContextRefs)
 		if err != nil {
 			return err
 		}

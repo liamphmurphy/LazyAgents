@@ -506,7 +506,7 @@ func TestChatEffort(t *testing.T) {
 	}
 }
 
-func TestChatContextRefsResolveInsideProject(t *testing.T) {
+func TestChatContextRefsResolveAcrossWorkspace(t *testing.T) {
 	e := newChatEnv(t)
 	id := e.newChat(nil)["id"].(string)
 	post := func(refs ...map[string]any) (int, map[string]any) {
@@ -517,14 +517,28 @@ func TestChatContextRefsResolveInsideProject(t *testing.T) {
 		_ = e.pool.QueryRow(context.Background(), "SELECT count(*) FROM chat_messages WHERE session_id=$1", id).Scan(&n)
 		return n
 	}
+	// The workspace is the boundary: an artifact in someone else's workspace
+	// resolves as unknown.
+	ctx := context.Background()
+	var foreignWS, foreignProject, foreignArt uuid.UUID
+	if err := e.pool.QueryRow(ctx, `INSERT INTO workspaces(name,slug) VALUES('Elsewhere','elsewhere') RETURNING id`).Scan(&foreignWS); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `INSERT INTO projects(workspace_id,key,name,color) VALUES($1,'ELSE','Elsewhere','green') RETURNING id`, foreignWS).Scan(&foreignProject); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `UPDATE artifacts SET workspace_id=$1, project_id=$2, epic_id=NULL
+		WHERE id=(SELECT a.id FROM artifacts a JOIN artifact_versions v ON v.id=a.current_version_id
+			WHERE a.type<>'note' AND v.body_md IS NOT NULL AND a.id NOT IN ($3,$4) LIMIT 1) RETURNING id`, foreignWS, foreignProject, e.payArt, e.otherAr).Scan(&foreignArt); err != nil {
+		t.Fatal(err)
+	}
 	missing := uuid.New().String()
 	for _, c := range []struct {
 		name, contains string
 		ref            map[string]any
 	}{
 		{"unknown artifact", missing, map[string]any{"kind": "artifact", "id": missing}},
-		{"artifact in another project", e.otherAr.String(), map[string]any{"kind": "artifact", "id": e.otherAr.String()}},
-		{"ticket in another project", e.otherTk, map[string]any{"kind": "ticket", "key": e.otherTk}},
+		{"artifact in another workspace", foreignArt.String(), map[string]any{"kind": "artifact", "id": foreignArt.String()}},
 		{"unknown ticket", "NOPE-1", map[string]any{"kind": "ticket", "key": "NOPE-1"}},
 		{"unknown wiki path", "no/such/note", map[string]any{"kind": "page", "key": "no/such/note"}},
 		{"section anchor not found", "nope-anchor", map[string]any{"kind": "section", "id": e.payArt.String(), "anchor": "nope-anchor"}},
@@ -537,7 +551,7 @@ func TestChatContextRefsResolveInsideProject(t *testing.T) {
 		}
 	}
 	// One bad ref among good ones queues nothing.
-	code, _ := post(map[string]any{"kind": "artifact", "id": e.payArt.String()}, map[string]any{"kind": "ticket", "key": e.otherTk})
+	code, _ := post(map[string]any{"kind": "artifact", "id": e.payArt.String()}, map[string]any{"kind": "ticket", "key": "NOPE-1"})
 	if code != http.StatusUnprocessableEntity || count() != 0 {
 		t.Fatalf("partial queue: %d, %d messages", code, count())
 	}
@@ -563,6 +577,14 @@ func TestChatContextRefsResolveInsideProject(t *testing.T) {
 	if len(refs) != 2 || refs[0].(map[string]any)["kind"] != "artifact" || refs[1].(map[string]any)["key"] != e.payKey {
 		t.Fatalf("stored refs %v", refs)
 	}
+
+	// The attached project doesn't limit what the person can attach: they can
+	// open any project's documents anyway, so a chat can read them too.
+	otherProject := []map[string]any{{"kind": "artifact", "id": e.otherAr.String()}, {"kind": "ticket", "key": e.otherTk}}
+	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "and these", "context_refs": otherProject}, http.StatusAccepted)
+	noProject := e.want("POST", "/chats", map[string]any{}, http.StatusCreated)["id"].(string)
+	payRefs := []map[string]any{{"kind": "artifact", "id": e.payArt.String()}, {"kind": "ticket", "key": e.payKey}}
+	e.want("POST", "/chats/"+noProject+"/messages", map[string]any{"body": "look", "context_refs": payRefs}, http.StatusAccepted)
 }
 
 // sseEvents streams /events payloads.

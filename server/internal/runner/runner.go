@@ -1106,7 +1106,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	if c.run.Purpose == "chat" {
 		// The files this turn's message attached, listed in its prompt.
-		refFiles, refPrompt, err := ChatTurnContext(ctx, q, c.run, c.project.ID, turn)
+		refFiles, refPrompt, err := ChatTurnContext(ctx, q, c.run, turn)
 		if err != nil {
 			r.failChat(ctx, c, "Could not load the message's attached context.")
 			return
