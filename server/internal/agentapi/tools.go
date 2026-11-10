@@ -404,6 +404,8 @@ type CommentIn struct {
 
 type NewTicketIn struct {
 	TicketArg
+	Project           string     `json:"project,omitempty" jsonschema:"Chats only: project key, e.g. PAY; default the chat's default project"`
+	Agent             string     `json:"agent,omitempty" jsonschema:"Chats only: assign a main agent by handle, e.g. pike, so the ticket can be started"`
 	EpicID            *uuid.UUID `json:"epic_id,omitempty"`
 	Title             string     `json:"title"`
 	Description       string     `json:"description,omitempty"`
@@ -959,7 +961,7 @@ var Tools = []Tool{
 	define("get_run", "One agent run in the current chat project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
 	define("list_epics", "List epics, in every project unless you name one.", listChatEpics),
 	define("create_epic", "Create an epic in the current chat project.", createChatEpic),
-	define("create_ticket", "Open a follow-up ticket in the same project (unassigned, in the backlog).",
+	define("create_ticket", "Open a ticket in the backlog. From a run it's a follow-up in the run's project; from a chat it goes to the chat's default project unless you pass project.",
 		func(ctx context.Context, d Deps, c agents.Caller, in NewTicketIn) (any, error) {
 			points, rationale, err := in.estimate()
 			if err != nil {
@@ -970,15 +972,23 @@ var Tools = []Tool{
 				return nil, err
 			}
 			if scope != nil {
-				if err := scope.requireProject(); err != nil {
+				p, err := scope.targetProject(ctx, d, c.Agent.WorkspaceID, in.Project)
+				if err != nil {
 					return nil, err
 				}
-				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: scope.ProjectKey, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID, RequiresMockup: in.RequiresMockup,
-					EstimatePoints: points, EstimateRationale: rationale})
+				assignee, err := mainAgent(ctx, d, c.Agent.WorkspaceID, in.Agent)
+				if err != nil {
+					return nil, err
+				}
+				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: p.Key, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID, RequiresMockup: in.RequiresMockup,
+					AssigneeAgentID: assignee, EstimatePoints: points, EstimateRationale: rationale})
 				if err != nil {
 					return nil, err
 				}
 				return ok(map[string]any{"ticket": nt.Key}), nil
+			}
+			if in.Project != "" || in.Agent != "" {
+				return nil, apperr.Invalid("project", "a run's follow-up tickets stay in its project, unassigned; project and agent are for chats")
 			}
 			_, t, err := d.Runs.Active(ctx, d.Q, c, in.Ticket)
 			if err != nil {

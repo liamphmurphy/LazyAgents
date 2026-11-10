@@ -87,25 +87,72 @@ func projectFilter(ctx context.Context, d Deps, ws uuid.UUID, key string) (*uuid
 	return &p.ID, nil
 }
 
-// where names the chat's reach for instructions and errors.
+// where names the chat for its instructions.
 func (s *chatScope) where() string {
 	if s.ProjectKey == "" {
-		return "this chat (no project attached)"
+		return "a chat with no default project"
 	}
-	return "project " + s.ProjectKey
+	return "a chat whose default project is " + s.ProjectKey
 }
 
-// requireProject refuses tracker writes in a chat with no project.
-func (s *chatScope) requireProject() error {
-	if s.ProjectKey == "" {
-		return apperr.Conflict("this chat has no project attached; ask the person to attach one from the chat header")
+// mainAgent resolves the optional handle a chat assigns a new ticket to.
+// Only main agents can be dispatched, so sub agents and the assistant are
+// refused up front rather than when the ticket is started.
+func mainAgent(ctx context.Context, d Deps, ws uuid.UUID, handle string) (*uuid.UUID, error) {
+	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
+	if handle == "" {
+		return nil, nil
 	}
-	return nil
+	a, err := d.Q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: handle})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.Invalid("agent", "no agent @%s", handle)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if a.Kind != agents.KindMain {
+		return nil, apperr.Invalid("agent", "@%s can't take tickets; assign a main agent, which can delegate to sub agents", a.Handle)
+	}
+	return &a.ID, nil
+}
+
+// targetProject is where a chat creates a ticket or epic: the project the
+// persona named, else the chat's default. With neither, the error lists the
+// projects so the persona can ask which one.
+func (s *chatScope) targetProject(ctx context.Context, d Deps, ws uuid.UUID, key string) (store.Project, error) {
+	key = strings.ToUpper(strings.TrimSpace(key))
+	if key == "" {
+		key = s.ProjectKey
+	}
+	if key == "" {
+		all, err := d.Q.ListProjects(ctx, ws)
+		if err != nil {
+			return store.Project{}, err
+		}
+		var keys []string
+		for _, p := range all {
+			if !p.Archived {
+				keys = append(keys, p.Key)
+			}
+		}
+		return store.Project{}, apperr.Invalid("project", "this chat has no default project; pass one of %s, or ask the person which", strings.Join(keys, ", "))
+	}
+	p, err := d.Q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: ws, Key: key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return p, apperr.Invalid("project", "no project %s", key)
+	}
+	if err != nil {
+		return p, err
+	}
+	if p.Archived {
+		return p, apperr.Conflict("project %s is archived; restore it first", p.Key)
+	}
+	return p, nil
 }
 
 const chatInstructions = `You are the person's Personal Assistant, chatting in %s (chat %s). Answer directly.
 Look things up with list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks; search first and open only what matters. Cite what you used with [[…]] links.
-Use create_ticket and create_epic when asked and return their identifiers. Never claim tickets, execute project work, or delegate.
+You can read every project. Use create_ticket and create_epic when asked and return their identifiers: they go to the chat's default project unless you pass project, and with no default, ask the person which project. Never claim tickets, execute project work, or delegate.
 You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this". In a persona chat, about: "persona" reaches the persona's own memory (its identity and shared moments) instead.
 set_chat_title names the conversation on its first message. When the person shares a YouTube link, read it with get_video_transcript before reacting to the video.
 Tools from other MCP servers are the person's connectors. A write tool may pause until the person approves it. If a tool says it was denied, don't retry it. To add a connector, use propose_connector when you're allowed to; never ask for a token in chat.
@@ -113,6 +160,7 @@ To call an API with the person's token or key, use http_request from vesper_secr
 When the person asks, set things up for them with create_space, create_scheduled_task and create_learning_module, then link what you made.`
 
 type NewEpicIn struct {
+	Project        string   `json:"project,omitempty" jsonschema:"Project key, e.g. PAY; default the chat's default project"`
 	Name           string   `json:"name"`
 	Objective      string   `json:"objective,omitempty"`
 	RequiresMockup bool     `json:"requires_mockup,omitempty" jsonschema:"Tickets in the epic need a person-approved UI mockup before they can be finished"`
@@ -188,25 +236,19 @@ func createChatEpic(ctx context.Context, d Deps, c agents.Caller, in NewEpicIn) 
 	if s == nil {
 		return nil, apperr.Conflict("this tool requires a chat")
 	}
-	if err := s.requireProject(); err != nil {
-		return nil, err
-	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" || len([]rune(name)) > 200 {
 		return nil, apperr.Invalid("name", "must be 1–200 characters")
 	}
-	p, err := d.Q.GetProject(ctx, store.GetProjectParams{ID: s.ProjectID, WorkspaceID: c.Agent.WorkspaceID})
+	p, err := s.targetProject(ctx, d, c.Agent.WorkspaceID, in.Project)
 	if err != nil {
 		return nil, err
 	}
-	if p.Archived {
-		return nil, apperr.Conflict("restore the archived project before creating an epic")
-	}
-	e, err := d.Tracker.CreateEpic(ctx, store.CreateEpicParams{WorkspaceID: c.Agent.WorkspaceID, ProjectID: s.ProjectID, Name: name, Objective: in.Objective, Health: "on_track", RequiresMockup: in.RequiresMockup}, in.Criteria)
+	e, err := d.Tracker.CreateEpic(ctx, store.CreateEpicParams{WorkspaceID: c.Agent.WorkspaceID, ProjectID: p.ID, Name: name, Objective: in.Objective, Health: "on_track", RequiresMockup: in.RequiresMockup}, in.Criteria)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"epic_id": e.ID, "name": e.Name, "criteria": len(in.Criteria)}, nil
+	return map[string]any{"epic_id": e.ID, "name": e.Name, "project": p.Key, "criteria": len(in.Criteria)}, nil
 }
 
 type GenerateImageIn struct {

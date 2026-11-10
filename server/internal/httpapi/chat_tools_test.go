@@ -176,6 +176,24 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	if code, out := call(token, "create_ticket", map[string]any{"title": "Wrong project", "epic_id": foreignEpic.ID}); code != 422 {
 		t.Fatalf("foreign epic = %d %v", code, out)
 	}
+	// Naming a project or an agent overrides the default and assigns the ticket.
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Mobile fix", "project": "mob", "agent": "@atlas"}); code != 200 || !strings.HasPrefix(fmt.Sprint(out["ticket"]), "MOB-") {
+		t.Fatalf("create_ticket in MOB = %d %v", code, out)
+	} else {
+		mobFix, err := tracker.Get(ctx, q, ws, fmt.Sprint(out["ticket"]))
+		if err != nil || mobFix.AssigneeAgentID == nil || *mobFix.AssigneeAgentID != atlas.ID {
+			t.Fatalf("assignee = %+v, %v", mobFix.AssigneeAgentID, err)
+		}
+	}
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Self-assigned", "agent": assistant.Handle}); code != 422 || !strings.Contains(fmt.Sprint(out), "can't take tickets") {
+		t.Fatalf("assign to the assistant = %d %v", code, out)
+	}
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Nowhere", "project": "NOPE"}); code != 422 {
+		t.Fatalf("unknown project = %d %v", code, out)
+	}
+	if code, out := call(token, "create_epic", map[string]any{"name": "Mobile epic", "project": "MOB"}); code != 200 || out["project"] != "MOB" {
+		t.Fatalf("create_epic in MOB = %d %v", code, out)
+	}
 	if code, out := call(token, "propose_workflow_edit", map[string]any{"summary": "Add a step", "name": "New", "ops": []any{}}); code != 409 || !strings.Contains(fmt.Sprint(out), "can't create workflows") {
 		t.Fatalf("propose_workflow_edit without the capability = %d %v", code, out)
 	}

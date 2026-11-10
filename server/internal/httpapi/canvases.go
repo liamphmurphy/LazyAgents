@@ -140,7 +140,7 @@ func (s *Server) PromoteChatCanvas(ctx context.Context, req api.PromoteChatCanva
 		return nil, err
 	}
 	if c.ProjectID == nil {
-		return nil, apperr.Conflict("attach a project to this chat to save a canvas as an artifact")
+		return nil, apperr.Conflict("set a default project on this chat to save a canvas as an artifact")
 	}
 	p, err := s.Q.GetProject(ctx, store.GetProjectParams{ID: *c.ProjectID, WorkspaceID: c.WorkspaceID})
 	if err != nil {

@@ -183,6 +183,11 @@ func TestMCPEstimateTicket(t *testing.T) {
 	// create_ticket validates and stores optional points.
 	code, body = e.tool(lead, "create_ticket", map[string]any{"title": "Follow-up", "points": 4})
 	e.expect("create_ticket off scale", code, body, 422, "off the scale")
+	// A run's follow-ups stay in its project, unassigned: the chat-only arguments are refused, not ignored.
+	code, body = e.tool(lead, "create_ticket", map[string]any{"title": "Follow-up", "project": "MOB"})
+	e.expect("create_ticket project from a run", code, body, 422, "project and agent are for chats")
+	code, body = e.tool(lead, "create_ticket", map[string]any{"title": "Follow-up", "agent": "atlas"})
+	e.expect("create_ticket agent from a run", code, body, 422, "project and agent are for chats")
 	code, body = e.tool(lead, "create_ticket", map[string]any{"title": "Follow-up", "points": 2, "estimate_rationale": "Copy change"})
 	e.expect("create_ticket points", code, body, 200, `"ticket"`)
 	var res struct{ Ticket string }

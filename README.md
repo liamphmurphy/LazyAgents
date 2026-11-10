@@ -47,7 +47,7 @@ projects, tickets, agents, runs, and the wiki.
 
 ![A chat where a persona explains refund failures with a chart and a table of linked tickets](docs/images/chat.png)
 
-Talk to any available harness and model, with or without a project attached.
+Talk to any available harness and model. Every chat can read every project.
 
 | | |
 | :--- | :--- |
@@ -55,7 +55,7 @@ Talk to any available harness and model, with or without a project attached.
 | **Memory** | Each persona remembers durable facts and tells you when it does. Browse, edit, import, or export everything under **Customization**. Memory is private to you, and secrets are never saved. |
 | **Rich replies** | Charts, diagrams, step-through SVGs, math, interactive apps that run in the chat, citations, and video previews. |
 | **Canvases** | Draft documents and SVG mockups next to the conversation. Comment on a passage and the persona revises it. |
-| **Project access** | Attach a project from the chat header and the persona can read its tickets, epics, runs, and wiki, and create tickets when you ask. |
+| **Projects** | The persona reads tickets, epics, runs, and wiki pages in any project, and creates tickets when you ask. Set a default project from the chat header to say where new tickets go. |
 | **Research and context** | Run a sourced research job from the message box, attach files, or link a wiki page, artifact, or ticket with `[[`. |
 | **Code changes** | A persona allowed to code gets its own branch in a repo you choose, so small jobs don't need a ticket. |
 | **Library** | Generated images, saved links, and keepsakes from your chats in one place. |

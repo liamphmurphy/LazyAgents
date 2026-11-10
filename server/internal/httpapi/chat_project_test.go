@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -18,8 +19,8 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
-// A chat with no project still reads every project; only creating tickets and
-// epics needs one.
+// A chat with no default project still reads every project, and creates
+// tickets and epics wherever the persona names.
 func TestChatWithoutProjectReadsEveryProject(t *testing.T) {
 	pool := testdb.New(t)
 	ctx := context.Background()
@@ -71,11 +72,15 @@ func TestChatWithoutProjectReadsEveryProject(t *testing.T) {
 	if code, out := call(token, "get_ticket", map[string]any{"ticket": "PAY-214"}); code != 200 || out["key"] != "PAY-214" {
 		t.Fatalf("get_ticket = %d %v", code, out)
 	}
-	if code, out := call(token, "create_ticket", map[string]any{"title": "Nowhere"}); code != 409 {
-		t.Fatalf("create_ticket = %d %v", code, out)
+	// With no default project, creating needs a project key; the error lists them.
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Nowhere"}); code != 422 || !strings.Contains(fmt.Sprint(out), "pass one of") || !strings.Contains(fmt.Sprint(out), "PAY") {
+		t.Fatalf("create_ticket without a project = %d %v", code, out)
 	}
-	if code, out := call(token, "create_epic", map[string]any{"name": "Nowhere"}); code != 409 {
-		t.Fatalf("create_epic = %d %v", code, out)
+	if code, out := call(token, "create_epic", map[string]any{"name": "Nowhere"}); code != 422 || !strings.Contains(fmt.Sprint(out), "pass one of") {
+		t.Fatalf("create_epic without a project = %d %v", code, out)
+	}
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Somewhere", "project": "PAY"}); code != 200 || !strings.HasPrefix(fmt.Sprint(out["ticket"]), "PAY-") {
+		t.Fatalf("create_ticket in PAY = %d %v", code, out)
 	}
 	code, out := call(token, "list_epics", map[string]any{})
 	if epics, _ := out["epics"].([]any); code != 200 || !strings.Contains(jsonString(epics), `"Project":"PAY"`) {
