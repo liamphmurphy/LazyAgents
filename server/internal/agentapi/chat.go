@@ -16,7 +16,7 @@ import (
 
 // chatTools is the whole MCP surface of a chat run: project context and tracker actions.
 // Everything else, including tools added later, is refused for chats.
-var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run", "reply_to_run",
+var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "update_ticket", "comment_ticket", "create_epic", "list_epics", "list_runs", "get_run", "reply_to_run",
 	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
 
 // chatScope is who a chat run acts for. A chat reads the whole workspace, like
@@ -153,7 +153,7 @@ func (s *chatScope) targetProject(ctx context.Context, d Deps, ws uuid.UUID, key
 
 const chatInstructions = `You are the person's Personal Assistant, chatting in %s (chat %s). Answer directly.
 Look things up with list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks; search first and open only what matters. Cite what you used with [[…]] links.
-You can read every project. Use create_ticket and create_epic when asked and return their identifiers: they go to the chat's default project unless you pass project, and with no default, ask the person which project. Never claim tickets, execute project work, or delegate.
+You can read every project. Use create_ticket and create_epic when asked and return their identifiers: they go to the chat's default project unless you pass project, and with no default, ask the person which project. Change existing tickets with update_ticket and comment_ticket when asked, or to keep a ticket you're working on in this chat current. Never claim tickets, execute project work, or delegate.
 You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this". In a persona chat, about: "persona" reaches the persona's own memory (its identity and shared moments) instead.
 set_chat_title names the conversation on its first message. When the person shares a YouTube link, read it with get_video_transcript before reacting to the video.
 Tools from other MCP servers are the person's connectors. A write tool may pause until the person approves it. If a tool says it was denied, don't retry it. To add a connector, use propose_connector when you're allowed to; never ask for a token in chat.

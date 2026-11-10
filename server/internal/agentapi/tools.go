@@ -972,6 +972,8 @@ var Tools = []Tool{
 	define("list_runs", "List ticket runs in every project, newest first: live runs by default, or finished/all. Filter by project, ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One ticket run, in any project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
 	define("list_epics", "List epics, in every project unless you name one.", listChatEpics),
+	define("update_ticket", "Edit an existing ticket from this chat: title, description, status, priority, estimate, epic, agent or mockup requirement, and link the pull request for work you did here (pr_url). Pass the revision from get_ticket. Only when the person asks, or to keep a ticket you're working on in this chat current.", updateChatTicket),
+	define("comment_ticket", "Comment on a ticket as yourself, linked back to this chat: findings, repro details, corrections. Only when the person asks, or to record what you learned working on it here.", commentChatTicket),
 	define("create_epic", "Create an epic in the chat's default project unless you pass project.", createChatEpic),
 	define("create_ticket", "Open a ticket in the backlog. From a run it's a follow-up in the run's project; from a chat it goes to the chat's default project unless you pass project.",
 		func(ctx context.Context, d Deps, c agents.Caller, in NewTicketIn) (any, error) {

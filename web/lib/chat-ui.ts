@@ -350,6 +350,9 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "create_ticket":
     case "create_epic":
       return status("tickets", "drafting a ticket");
+    case "update_ticket":
+    case "comment_ticket":
+      return status("tickets", "updating a ticket");
     case "list_runs":
     case "get_run":
       return status("runs", "checking on runs");
@@ -609,6 +612,10 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return named("Drafting", o.title);
     case "create_epic":
       return named("Drafting", o.name);
+    case "update_ticket":
+      return named("Updating", o.ticket);
+    case "comment_ticket":
+      return named("Commenting on", o.ticket);
     case "generate_image":
     case "image_generation":
     case "image_gen":

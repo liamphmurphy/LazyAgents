@@ -344,14 +344,29 @@ func Get(ctx context.Context, q *store.Queries, ws uuid.UUID, key string) (store
 
 // Update applies a patch to one ticket.
 func (s *Service) Update(ctx context.Context, ws uuid.UUID, actor Actor, key string, p Patch) (store.Ticket, error) {
+	return s.UpdateThen(ctx, ws, actor, key, p, nil)
+}
+
+// UpdateThen is Update with the caller's own checks and writes in the same
+// transaction: then sees the ticket before and after the patch, and an error
+// from it rolls the patch back.
+func (s *Service) UpdateThen(ctx context.Context, ws uuid.UUID, actor Actor, key string, p Patch, then func(q *store.Queries, before, after store.Ticket) error) (store.Ticket, error) {
 	var t store.Ticket
 	err := s.tx(ctx, func(q *store.Queries) error {
-		var err error
-		if err = LockTicketProjects(ctx, q, ws, []string{key}); err != nil {
+		if err := LockTicketProjects(ctx, q, ws, []string{key}); err != nil {
 			return err
 		}
-		t, err = applyPatch(ctx, q, ws, actor, key, p)
-		return err
+		before, err := Get(ctx, q, ws, key)
+		if err != nil {
+			return err
+		}
+		if t, err = applyPatch(ctx, q, ws, actor, key, p); err != nil {
+			return err
+		}
+		if then != nil {
+			return then(q, before, t)
+		}
+		return nil
 	})
 	return t, err
 }
