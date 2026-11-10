@@ -251,7 +251,7 @@ func TestResearchRunsQueueBehindOtherWork(t *testing.T) {
 	ids := e.researchRuns(t, job)
 	other := e.newChat(map[string]any{"message": map[string]any{"body": "hi"}})["current_run_id"].(string)
 	runner := "r1"
-	claimed, err := e.q.ClaimQueuedRun(ctx, &runner)
+	claimed, err := e.q.ClaimQueuedRun(ctx, store.ClaimQueuedRunParams{RunnerID: &runner})
 	if err != nil {
 		t.Fatal(err)
 	}

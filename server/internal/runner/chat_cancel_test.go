@@ -164,7 +164,7 @@ func TestChatCancelWaitsForClaimCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	turn, err := store.New(tx).ClaimPendingTurn(ctx)
+	turn, err := store.New(tx).ClaimPendingTurn(ctx, store.ClaimPendingTurnParams{})
 	if err != nil {
 		t.Fatal(err)
 	}

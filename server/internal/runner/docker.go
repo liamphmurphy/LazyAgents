@@ -44,6 +44,9 @@ type Docker struct {
 	// (the dev stack and the full compose stack) must differ, or each runner's
 	// startup Cleanup kills the other's running turns. "" means "default".
 	Stack string
+	// RequestTimeout bounds finite Engine calls and the attach handshake.
+	// Running containers and their output streams are bounded by their context.
+	RequestTimeout time.Duration
 	// UsageTimeout bounds one usage check; 0 means probeUsageTimeout.
 	UsageTimeout time.Duration
 	// MemoryMB and PidsLimit cap each container; 0 leaves that limit off.
@@ -71,6 +74,7 @@ type Docker struct {
 	// nixUnhealthy is set when CheckNixDaemon found the daemon unresponsive.
 	nixUnhealthy atomic.Bool
 	client       *http.Client
+	clientMu     sync.Mutex
 	// self is the runner's own container, once selfID has found it.
 	selfMu sync.Mutex
 	self   string
@@ -103,6 +107,8 @@ func (d *Docker) labels(runID string) map[string]string {
 }
 
 func (d *Docker) http() *http.Client {
+	d.clientMu.Lock()
+	defer d.clientMu.Unlock()
 	if d.client == nil {
 		d.client = &http.Client{Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -113,9 +119,35 @@ func (d *Docker) http() *http.Client {
 	return d.client
 }
 
+type cancelBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b cancelBody) Close() error { defer b.cancel(); return b.ReadCloser.Close() }
+
 func (d *Docker) do(ctx context.Context, method, path string, body io.Reader, ctype string, out any) (*http.Response, error) {
+	timeout := d.RequestTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	cancel := context.CancelFunc(func() {})
+	switch {
+	case strings.Contains(path, "/attach?"):
+		// Limit the handshake without imposing that limit on the subsequent
+		// event stream. Its lifetime remains tied to the process context.
+		ctx, cancel = context.WithCancel(ctx)
+		timer := time.AfterFunc(timeout, cancel)
+		defer timer.Stop()
+	case strings.HasSuffix(path, "/wait"), strings.HasPrefix(path, "/images/create?"),
+		strings.HasPrefix(path, "/exec/") && strings.HasSuffix(path, "/start"):
+		// Long polls, pulls and streamed execs have caller-owned deadlines.
+	default:
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	}
 	req, err := http.NewRequestWithContext(ctx, method, dockerAPI+path, body)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	if ctype != "" {
@@ -123,8 +155,10 @@ func (d *Docker) do(ctx context.Context, method, path string, body io.Reader, ct
 	}
 	res, err := d.http().Do(req)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("docker %s %s: %w", method, path, err)
 	}
+	res.Body = cancelBody{ReadCloser: res.Body, cancel: cancel}
 	if res.StatusCode >= 300 {
 		defer res.Body.Close()
 		b, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
@@ -138,6 +172,9 @@ func (d *Docker) do(ctx context.Context, method, path string, body io.Reader, ct
 	if out != nil {
 		defer res.Body.Close()
 		return res, json.NewDecoder(res.Body).Decode(out)
+	}
+	if res.ContentLength == 0 {
+		_ = res.Body.Close()
 	}
 	return res, nil
 }
@@ -491,7 +528,7 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 			return nil, err
 		}
 	}
-	p := &dockerProc{d: d, id: created.ID, codexAuth: spec.Env[CodexAuthEnv], codexScope: spec.Env[CodexAuthScopeEnv]}
+	p := &dockerProc{d: d, id: created.ID, parent: ctx, codexAuth: spec.Env[CodexAuthEnv], codexScope: spec.Env[CodexAuthScopeEnv]}
 	if p.codexAuth != "" {
 		tb, err := codexAuthTar(p.codexAuth)
 		if err != nil {
@@ -521,7 +558,7 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 		}
 	}
 	// Attach before start so no output is lost.
-	logs, err := d.do(context.Background(), "POST", "/containers/"+created.ID+"/attach?stream=1&stdout=1&stderr=1", nil, "", nil)
+	logs, err := d.do(p.context(), "POST", "/containers/"+created.ID+"/attach?stream=1&stdout=1&stderr=1", nil, "", nil)
 	if err != nil {
 		p.remove()
 		return nil, err
@@ -534,6 +571,7 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	outR, outW := io.Pipe()
 	errR, errW := io.Pipe()
 	p.out, p.err = outR, errR
+	p.logs = logs.Body
 	go func() {
 		defer logs.Body.Close()
 		e := demux(logs.Body, outW, errW)
@@ -565,14 +603,44 @@ func demux(r io.Reader, stdout, stderr io.Writer) error {
 }
 
 type dockerProc struct {
-	d   *Docker
-	id  string
-	out io.Reader
-	err io.Reader
+	d           *Docker
+	id          string
+	out         io.Reader
+	err         io.Reader
+	parent      context.Context
+	ctx         context.Context
+	cancel      context.CancelFunc
+	contextOnce sync.Once
+	logs        io.Closer
 	// The ChatGPT login this process was given, and where it is stored.
 	codexAuth, codexScope string
 	// nixManifest is the run's Nix profile as the turn left it.
 	nixManifest []byte
+}
+
+func (p *dockerProc) context() context.Context {
+	p.contextOnce.Do(func() {
+		parent := p.parent
+		if parent == nil {
+			parent = context.Background()
+		}
+		p.ctx, p.cancel = context.WithCancel(parent)
+	})
+	return p.ctx
+}
+
+func (p *dockerProc) Close() error {
+	p.context()
+	p.cancel()
+	if p.logs != nil {
+		_ = p.logs.Close()
+	}
+	for _, rd := range []io.Reader{p.out, p.err} {
+		if c, ok := rd.(io.Closer); ok {
+			_ = c.Close()
+		}
+	}
+	return nil
 }
 
 // NixManifest implements NixManifestProcess.
@@ -582,7 +650,9 @@ func (p *dockerProc) Stdout() io.Reader { return p.out }
 func (p *dockerProc) Stderr() io.Reader { return p.err }
 
 func (p *dockerProc) signal(sig string) error {
-	_, err := p.d.do(context.Background(), "POST", "/containers/"+p.id+"/kill?signal="+sig, nil, "", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), controlTimeout)
+	defer cancel()
+	_, err := p.d.do(ctx, "POST", "/containers/"+p.id+"/kill?signal="+sig, nil, "", nil)
 	if isStatus(err, 409) { // not running any more
 		return nil
 	}
@@ -590,10 +660,20 @@ func (p *dockerProc) signal(sig string) error {
 }
 
 func (p *dockerProc) Interrupt() error { return p.signal("SIGINT") }
-func (p *dockerProc) Kill() error      { return p.signal("SIGKILL") }
+func (p *dockerProc) Kill() error {
+	err := p.signal("SIGKILL")
+	p.context()
+	p.cancel() // A lost /wait or attach connection must also be released.
+	return err
+}
 
 func (p *dockerProc) remove() {
-	_, _ = p.d.do(context.Background(), "DELETE", "/containers/"+p.id+"?force=1", nil, "", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), controlTimeout)
+	defer cancel()
+	_, _ = p.d.do(ctx, "DELETE", "/containers/"+p.id+"?force=1", nil, "", nil)
+	if p.logs == nil {
+		_ = p.Close()
+	}
 }
 
 // waitRetries is how many times Wait re-attaches to a container after the
@@ -608,13 +688,18 @@ func (p *dockerProc) Wait() (int, error) {
 	var res struct{ StatusCode int }
 	var err error
 	for attempt := 0; ; attempt++ {
-		_, err = p.d.do(context.Background(), "POST", "/containers/"+p.id+"/wait", nil, "", &res)
+		_, err = p.d.do(p.context(), "POST", "/containers/"+p.id+"/wait", nil, "", &res)
 		var de *dockerError
-		if err == nil || errors.As(err, &de) || attempt >= waitRetries {
+		if err == nil || errors.As(err, &de) || p.context().Err() != nil || attempt >= waitRetries {
 			break // done, or the engine answered with an error retrying won't change
 		}
 		slog.Warn("docker wait failed; retrying", "container", p.id, "err", err)
-		time.Sleep(waitBackoff << attempt)
+		timer := time.NewTimer(waitBackoff << attempt)
+		select {
+		case <-timer.C:
+		case <-p.context().Done():
+		}
+		timer.Stop()
 	}
 	if err != nil {
 		return -1, err
