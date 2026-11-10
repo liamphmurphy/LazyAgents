@@ -706,7 +706,11 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: state}); err != nil {
 		return chat, run, turn, err
 	}
-	turn, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "comment", InputMessage: prompt})
+	params := store.StartTurnParams{RunID: run.ID, Trigger: "comment", InputMessage: prompt}
+	if chat.Effort == "" {
+		params.EffortLevel = &level
+	}
+	turn, err := q.StartTurn(ctx, params)
 	if err != nil {
 		return chat, run, turn, err
 	}

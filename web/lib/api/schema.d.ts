@@ -7096,6 +7096,14 @@ export interface components {
              */
             unreported_input_tokens?: number;
             cost_usd?: number;
+            effort?: components["schemas"]["ChatEffort"];
+            /**
+             * @description Set when Vesper picked the effort (the chat's effort is automatic): the level the message called for. effort is the highest the model offers at or below it.
+             * @enum {string}
+             */
+            effort_level?: "low" | "medium" | "high" | "xhigh";
+            /** @description Rules that raised effort_level above the message's own: confirmation (a go-ahead takes the weight of what it approves), effort_mismatch (a retry or edit steps it up) */
+            effort_reasons?: ("confirmation" | "effort_mismatch")[];
             /** Format: date-time */
             created_at: string;
         };

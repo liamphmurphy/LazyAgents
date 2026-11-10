@@ -1386,7 +1386,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 }
 
 const listTurns = `-- name: ListTurns :many
-SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage FROM run_turns WHERE run_id = $1 ORDER BY seq
+SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons FROM run_turns WHERE run_id = $1 ORDER BY seq
 `
 
 func (q *Queries) ListTurns(ctx context.Context, runID uuid.UUID) ([]RunTurn, error) {
@@ -1411,6 +1411,9 @@ func (q *Queries) ListTurns(ctx context.Context, runID uuid.UUID) ([]RunTurn, er
 			&i.ProcessStartedAt,
 			&i.LogKey,
 			&i.Usage,
+			&i.Effort,
+			&i.EffortLevel,
+			&i.EffortReasons,
 		); err != nil {
 			return nil, err
 		}
@@ -1863,22 +1866,48 @@ func (q *Queries) SetTicketPR(ctx context.Context, arg SetTicketPRParams) error 
 	return err
 }
 
+const setTurnEffortReasons = `-- name: SetTurnEffortReasons :exec
+UPDATE run_turns SET effort_reasons = $2::text[] WHERE id = $1
+`
+
+type SetTurnEffortReasonsParams struct {
+	ID      uuid.UUID
+	Reasons []string
+}
+
+func (q *Queries) SetTurnEffortReasons(ctx context.Context, arg SetTurnEffortReasonsParams) error {
+	_, err := q.db.Exec(ctx, setTurnEffortReasons, arg.ID, arg.Reasons)
+	return err
+}
+
 const startTurn = `-- name: StartTurn :one
-INSERT INTO run_turns (run_id, seq, trigger, input_message, status)
+INSERT INTO run_turns (run_id, seq, trigger, input_message, status, effort, effort_level)
 VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM run_turns WHERE run_id = $1), $2, $3,
-  CASE WHEN (SELECT mode FROM runs WHERE id = $1) = 'managed' THEN 'pending' ELSE 'done' END)
-RETURNING id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage
+  CASE WHEN (SELECT mode FROM runs WHERE id = $1) = 'managed' THEN 'pending' ELSE 'done' END,
+  (SELECT resolved_spec->'harness_options'->>'effort' FROM runs WHERE id = $1),
+  CASE WHEN $2 = 'comment' THEN $4::text
+    ELSE coalesce($4::text, (SELECT effort_level FROM run_turns WHERE run_id = $1 ORDER BY seq DESC LIMIT 1)) END)
+RETURNING id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons
 `
 
 type StartTurnParams struct {
 	RunID        uuid.UUID
 	Trigger      string
 	InputMessage string
+	EffortLevel  *string
 }
 
 // Managed turns wait for the runner (pending); unmanaged turns are records.
+// The turn keeps the run's current effort: a later turn may change the spec's.
+// effort_level is the level an automatic chat aimed for. A message ('comment')
+// turn sets its own; a resume or follow-up runs on at the previous turn's.
 func (q *Queries) StartTurn(ctx context.Context, arg StartTurnParams) (RunTurn, error) {
-	row := q.db.QueryRow(ctx, startTurn, arg.RunID, arg.Trigger, arg.InputMessage)
+	row := q.db.QueryRow(ctx, startTurn,
+		arg.RunID,
+		arg.Trigger,
+		arg.InputMessage,
+		arg.EffortLevel,
+	)
 	var i RunTurn
 	err := row.Scan(
 		&i.ID,
@@ -1893,6 +1922,9 @@ func (q *Queries) StartTurn(ctx context.Context, arg StartTurnParams) (RunTurn, 
 		&i.ProcessStartedAt,
 		&i.LogKey,
 		&i.Usage,
+		&i.Effort,
+		&i.EffortLevel,
+		&i.EffortReasons,
 	)
 	return i, err
 }

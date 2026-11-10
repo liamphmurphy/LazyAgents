@@ -211,10 +211,10 @@ func (s *Server) toChat(ctx context.Context, c store.ChatSession) (api.ChatSessi
 	return out[0], nil
 }
 
-// toMessages renders messages; turn numbers come from the few runs involved.
+// toMessages renders messages; turn numbers and efforts come from the few runs involved.
 func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]api.ChatMessage, error) {
 	u, _, _ := me(ctx)
-	turnSeq := map[uuid.UUID]int{}
+	turnsByID := map[uuid.UUID]store.RunTurn{}
 	seenRuns := map[uuid.UUID]bool{}
 	for _, m := range msgs {
 		if m.RunID == nil || m.RunTurnID == nil || seenRuns[*m.RunID] {
@@ -226,7 +226,7 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 			return nil, err
 		}
 		for _, t := range turns {
-			turnSeq[t.ID] = int(t.Seq)
+			turnsByID[t.ID] = t
 		}
 	}
 	files, err := s.messageAttachments(ctx, msgs)
@@ -258,8 +258,10 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 			item.Harness = &h
 		}
 		if m.RunTurnID != nil && m.Role == "assistant" {
-			if n, ok := turnSeq[*m.RunTurnID]; ok {
+			if t, ok := turnsByID[*m.RunTurnID]; ok {
+				n := int(t.Seq)
 				item.TurnSeq = &n
+				setTurnEffort(&item, t)
 			}
 		}
 		refs, _ := recode[[]api.ChatContextRef](jsonOrEmpty(m.ContextRefs))
@@ -304,6 +306,27 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 		out = append(out, item)
 	}
 	return out, nil
+}
+
+// setTurnEffort shows the effort the reply's turn ran at and, when Vesper
+// picked it, the level it aimed for and the rules that raised it.
+func setTurnEffort(item *api.ChatMessage, t store.RunTurn) {
+	if t.Effort != nil {
+		e := api.ChatEffort(*t.Effort)
+		item.Effort = &e
+	}
+	if t.EffortLevel == nil {
+		return
+	}
+	level := api.ChatMessageEffortLevel(*t.EffortLevel)
+	item.EffortLevel = &level
+	if len(t.EffortReasons) > 0 {
+		reasons := make([]api.ChatMessageEffortReasons, len(t.EffortReasons))
+		for i, r := range t.EffortReasons {
+			reasons[i] = api.ChatMessageEffortReasons(r)
+		}
+		item.EffortReasons = &reasons
+	}
 }
 
 // jsonOrEmpty keeps recode working on a NULL-ish column.
