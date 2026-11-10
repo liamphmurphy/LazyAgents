@@ -417,3 +417,29 @@ func TestDockerStartMountsNixStore(t *testing.T) {
 	}
 	t.Fatal("turn doesn't mount the shared Nix store")
 }
+
+// The docker CLI names the network it wants "default" both in NetworkMode and
+// as the endpoint key; plain `docker run` must land on the turn's network.
+func TestDockerProxyMapsTheCLIsDefaultNetwork(t *testing.T) {
+	f := &proxyEngine{}
+	d, td := startProxyEngine(t, f)
+	c := turnClient(d, td)
+	for _, mode := range []string{"default", "bridge"} {
+		code, out := call(t, c, "POST", "/containers/create", map[string]any{
+			"Image":            "alpine:3",
+			"HostConfig":       map[string]any{"NetworkMode": mode},
+			"NetworkingConfig": map[string]any{"EndpointsConfig": map[string]any{mode: map[string]any{"Aliases": []any{"db"}}}},
+		})
+		if code != 201 {
+			t.Fatalf("%s: %d %s", mode, code, out)
+		}
+		got := f.creates[len(f.creates)-1]
+		endpoints := asMap(asMap(got["NetworkingConfig"])["EndpointsConfig"])
+		if len(endpoints) != 1 || endpoints[td.Network] == nil || asMap(got["HostConfig"])["NetworkMode"] != td.Network {
+			t.Fatalf("%s: networking = %v / %v", mode, got["NetworkingConfig"], asMap(got["HostConfig"])["NetworkMode"])
+		}
+		if fmt.Sprint(asMap(endpoints[td.Network])["Aliases"]) != "[db]" {
+			t.Fatalf("%s: aliases lost: %v", mode, endpoints)
+		}
+	}
+}
