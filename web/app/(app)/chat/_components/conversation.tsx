@@ -51,7 +51,7 @@ import { CiteContext } from "@/components/domain/cite-marker";
 import { summaryRequestUrl } from "@/lib/chat-recommend";
 import { hostOf } from "@/lib/web-search";
 import { timelineTime } from "@/lib/format";
-import { EffortPicker, ModelPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
+import { ModelEffortPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { AttachButton, AttachmentChips, DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
@@ -1072,13 +1072,17 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
                 </div>
                 <div className="flex flex-none items-center gap-1">
-                {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked || running} />}
-                <EffortPicker
-                  efforts={offered.efforts}
-                  value={effort}
-                  onChange={(e) => setPickedEffort(e ?? "default")}
-                  disabled={locked || running}
-                />
+                {selection && (
+                  <ModelEffortPicker
+                    groups={groups}
+                    value={selection}
+                    onChange={pick}
+                    efforts={offered.efforts}
+                    effort={effort}
+                    onEffort={(e) => setPickedEffort(e ?? "default")}
+                    disabled={locked || running}
+                  />
+                )}
                 {running && (
                   <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
                     {stopping ? "Stopping…" : "Stop"}

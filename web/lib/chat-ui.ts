@@ -884,3 +884,31 @@ export function turnTrace(events: RunEventLike[] | undefined, since?: string, un
   }
   return [...(prelude.calls.length || prelude.thinking.length ? [prelude] : []), ...trace, ...(reply.thinking.length ? [reply] : [])];
 }
+
+// ---- model names: a chat's model may be its agent definition's alias ("opus-5.5"), which the live catalog doesn't list ----
+
+const modelKey = (id: string) => id.toLowerCase().replace(/^claude-/, "").replace(/[._]/g, "-");
+
+/** An id made readable when nothing better is known: "opus-5.5" → "Opus 5.5", "gpt-5-codex" → "GPT-5 Codex". */
+export function readableModelId(id: string): string {
+  if (/^gpt-/i.test(id)) {
+    const [, version, ...rest] = id.split("-");
+    return [`GPT-${version}`, ...rest.map((w) => w[0].toUpperCase() + w.slice(1))].join(" ");
+  }
+  // Consecutive number parts are one version: "haiku-5-5" is Haiku 5.5.
+  const words: string[] = [];
+  for (const w of id.replace(/^claude-/i, "").split("-")) {
+    const prev = words.at(-1);
+    if (/^\d+$/.test(w) && prev && /^\d+(\.\d+)*$/.test(prev)) words[words.length - 1] = `${prev}.${w}`;
+    else words.push(/^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w);
+  }
+  return words.join(" ");
+}
+
+/** The catalog's label for a model id, matching an alias to the catalog model it names ("opus-5.5" ↔ "claude-opus-5-5"). */
+export function catalogModelLabel(models: readonly { id: string; label: string }[], id: string): string {
+  const exact = models.find((m) => m.id === id);
+  if (exact) return exact.label;
+  const key = modelKey(id);
+  return models.find((m) => modelKey(m.id) === key || modelKey(m.label.replace(/\s+/g, "-")) === key)?.label ?? readableModelId(id);
+}
