@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/liamphmurphy/vesper/server/internal/auth"
@@ -123,5 +124,39 @@ func TestSignInLinkWorksOnce(t *testing.T) {
 		if len(rec.Result().Cookies()) > 0 {
 			t.Errorf("GET %s set a cookie", path)
 		}
+	}
+}
+
+// A playground is served from Vesper's own host on another port, so the
+// browser sends it the session cookie (SameSite counts sites, not ports) and
+// its scripts could otherwise write through the API as the person.
+func TestPersonFacingAPIRefusesCrossOriginWrites(t *testing.T) {
+	q, h := newSignedInServer(t)
+	cookie := signIn(t, q, h)
+	send := func(method, site string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, "/api/v1/runner/test-environments", strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		if site != "" {
+			req.Header.Set("Sec-Fetch-Site", site)
+		}
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	for _, site := range []string{"same-site", "cross-site"} {
+		if rec := send(http.MethodPut, site); rec.Code != http.StatusForbidden {
+			t.Errorf("PUT from a %s page = %d %s, want 403", site, rec.Code, rec.Body)
+		}
+	}
+	// The app itself, a typed URL, and clients that aren't browsers.
+	for _, site := range []string{"same-origin", "none", ""} {
+		if rec := send(http.MethodPut, site); rec.Code == http.StatusForbidden {
+			t.Errorf("PUT with Sec-Fetch-Site %q = 403, want it through", site)
+		}
+	}
+	// Reads stay readable only by the origin, which CORS already enforces.
+	if rec := send(http.MethodGet, "same-site"); rec.Code == http.StatusForbidden {
+		t.Errorf("GET from a same-site page = 403; reads aren't writes")
 	}
 }

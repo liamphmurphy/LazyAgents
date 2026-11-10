@@ -13,10 +13,12 @@ import { headingAnchors } from "@/lib/slug";
 import { linkify, parseWikiLinks, WIKILINK_SCHEME } from "@/lib/wikilinks";
 import { isAppFence } from "@/lib/chat-app";
 import { isCanvasFence } from "@/lib/chat-canvas";
+import { isPlaygroundFence } from "@/lib/playground";
 import { rehypeSlots, rehypeSourceSpans, SLOT_CLASS, type Slot } from "@/lib/canvas-source";
 import { groupRecommendFences, isRecommendFence, RECOMMEND_ROW } from "@/lib/chat-recommend";
 import { AppFence } from "./app-fence";
 import { CanvasFence } from "./canvas-fence";
+import { PlaygroundFence } from "./playground";
 import { CITE_SCHEME } from "@/lib/chat-sources";
 import { isChoicesFence } from "@/lib/chat-choices";
 import { youtubeMoment } from "@/lib/chat-recommend";
@@ -116,6 +118,7 @@ export function Markdown({ children, className, anchors, codeBlocks, visualBlock
             // ```app fences run as sandboxed interactive apps.
             if (isAppFence(info)) return <AppFence code={code.children} info={info} />;
             if (isCanvasFence(info)) return <CanvasFence code={code.children} info={info} />;
+            if (isPlaygroundFence(info)) return <PlaygroundFence code={code.children} info={info} />;
             if (isChoicesFence(info)) return <ChoicesFence code={code.children} info={info} />;
             if (isResearchPlanFence(info)) return <ResearchFence code={code.children} info={info} />;
             if (isWorkflowRunFence(info)) return <WorkflowRunFence code={code.children} info={info} />;

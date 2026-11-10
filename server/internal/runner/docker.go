@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -70,6 +71,9 @@ type Docker struct {
 	// nixUnhealthy is set when CheckNixDaemon found the daemon unresponsive.
 	nixUnhealthy atomic.Bool
 	client       *http.Client
+	// self is the runner's own container, once selfID has found it.
+	selfMu sync.Mutex
+	self   string
 }
 
 const (
@@ -328,7 +332,12 @@ func (d *Docker) Cleanup(ctx context.Context) error {
 	if _, err := d.do(ctx, "GET", "/networks?filters="+url.QueryEscape(string(filters)), nil, "", &nets); err != nil {
 		return err
 	}
+	self, selfErr := d.selfID(ctx)
 	for _, n := range nets {
+		// A restarted runner container is still on its playgrounds' networks.
+		if selfErr == nil {
+			_, _ = d.do(ctx, "POST", "/networks/"+n.ID+"/disconnect", jsonBody(map[string]any{"Container": self, "Force": true}), "application/json", nil)
+		}
 		_, _ = d.do(ctx, "DELETE", "/networks/"+n.ID, nil, "", nil)
 	}
 	// And the volumes their tests created through the Docker proxy. Run

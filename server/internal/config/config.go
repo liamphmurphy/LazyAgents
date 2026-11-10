@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -78,6 +79,14 @@ type Runner struct {
 	// through the runner's nix-daemon (RUNNER_NIX_VOLUME, docker only).
 	// Unset, turns have no Nix.
 	NixVolume string
+	// PlaygroundPorts are where the runner serves chats' playgrounds, one
+	// each (RUNNER_PLAYGROUND_PORTS, e.g. 8090-8094; docker only). The
+	// browser reaches them on Vesper's host, so publish them there. Unset,
+	// chats can't start playgrounds on this runner.
+	PlaygroundPorts []int
+	// PlaygroundIdleTTL stops a playground unused this long
+	// (RUNNER_PLAYGROUND_IDLE_S).
+	PlaygroundIdleTTL time.Duration
 }
 
 type S3 struct {
@@ -199,6 +208,17 @@ func Load() (Config, error) {
 		return c, fmt.Errorf("config: RUNNER_MAX_HOLD_S must be at least 60")
 	}
 	r.MaxHold = time.Duration(hold) * time.Second
+	if r.PlaygroundPorts, err = portList(env("RUNNER_PLAYGROUND_PORTS", "")); err != nil {
+		return c, err
+	}
+	idle, err := intEnv("RUNNER_PLAYGROUND_IDLE_S", 30*60)
+	if err != nil {
+		return c, err
+	}
+	if idle < 60 {
+		return c, fmt.Errorf("config: RUNNER_PLAYGROUND_IDLE_S must be at least 60")
+	}
+	r.PlaygroundIdleTTL = time.Duration(idle) * time.Second
 	if r.MaxHoldAttempts, err = intEnv("RUNNER_MAX_HOLD_ATTEMPTS", 12); err != nil {
 		return c, err
 	}
@@ -213,6 +233,35 @@ func Load() (Config, error) {
 		return c, err
 	}
 	return c, nil
+}
+
+// maxPlaygroundPorts bounds RUNNER_PLAYGROUND_PORTS: each is a running app.
+const maxPlaygroundPorts = 20
+
+// portList parses "8090-8094" or "8090,8091" into ports.
+func portList(v string) ([]int, error) {
+	var ports []int
+	bad := fmt.Errorf("config: RUNNER_PLAYGROUND_PORTS=%q must be ports or ranges like 8090-8094, at most %d", v, maxPlaygroundPorts)
+	for _, part := range splitList(v) {
+		lo, hi, isRange := strings.Cut(part, "-")
+		if !isRange {
+			hi = lo
+		}
+		a, errA := strconv.Atoi(strings.TrimSpace(lo))
+		b, errB := strconv.Atoi(strings.TrimSpace(hi))
+		if errA != nil || errB != nil || a < 1 || b > 65535 || a > b || b-a >= maxPlaygroundPorts {
+			return nil, bad
+		}
+		for p := a; p <= b; p++ {
+			if !slices.Contains(ports, p) {
+				ports = append(ports, p)
+			}
+		}
+	}
+	if len(ports) > maxPlaygroundPorts {
+		return nil, bad
+	}
+	return ports, nil
 }
 
 func intEnv(key string, def int) (int, error) {

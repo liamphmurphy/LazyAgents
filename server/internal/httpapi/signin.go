@@ -22,7 +22,15 @@ const signInMessage = "Sign in with the link from `make signin`."
 // through host.docker.internal), so arriving isn't proof of being the person.
 func (s *Server) signedIn(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.AnonymousAPI || !personFacing(r.URL.Path) {
+		if !personFacing(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if crossOriginWrite(r) {
+			writeError(w, http.StatusForbidden, api.Forbidden, "cross-origin writes are refused", "")
+			return
+		}
+		if s.AnonymousAPI {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -42,6 +50,21 @@ func (s *Server) signedIn(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// crossOriginWrite reports a state-changing request a browser made for
+// another origin. SameSite=Strict stops other sites, but not other origins on
+// the same site: a playground is served from this host on another port, runs
+// code an agent wrote, and the browser sends it the session cookie. Browsers
+// mark the request's origin in Sec-Fetch-Site; callers that don't send it
+// (curl, the CLI, agents) aren't browsers being driven by a page.
+func crossOriginWrite(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	site := r.Header.Get("Sec-Fetch-Site")
+	return site != "" && site != "same-origin" && site != "none"
 }
 
 // signIn spends a sign-in link's code on a session cookie and sends the

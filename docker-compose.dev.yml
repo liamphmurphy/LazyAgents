@@ -61,6 +61,12 @@ services:
       # through this runner's nix-daemon. One daemon per store: the stacks
       # must not share it.
       RUNNER_NIX_VOLUME: lazyagents-dev-nix
+      # Chats' playgrounds, one per port, on Vesper's host. WEB_URL is the page
+      # that may read them across origins (the API and Logs tabs).
+      RUNNER_PLAYGROUND_PORTS: ${PLAYGROUND_PORTS:-8090-8094}
+      WEB_URL: http://localhost:${WEB_PORT:-3000}
+    ports:
+      - "127.0.0.1:${PLAYGROUND_PORTS:-8090-8094}:${PLAYGROUND_PORTS:-8090-8094}"
     networks: [default, agents]
     extra_hosts:
       - host.docker.internal:host-gateway

@@ -114,6 +114,16 @@ const assistantVideoSection = `
 - A render that takes more than a few minutes: start it in the background and poll its progress file until it ends, since the card ends with your reply.
 - Write the finished MP4 (H.264) to the output path and call finish_video. If a stage can't be done (a missing tool such as ffmpeg, a crash), call fail_video with what went wrong and the log tail, then tell the person.`
 
+// assistantPlaygroundSection teaches a coding chat to hand the person a
+// running app instead of instructions for running it.
+const assistantPlaygroundSection = `
+
+## Playground
+- When the person wants to try what you built in a browser (a web UI, an API), start a playground with start_playground instead of telling them how to run it. It runs from this workspace with fresh services, keeps running after your reply, and the person opens it beside the chat. An app that reloads on change picks up your later edits.
+- Declare each process with its command, directory and port; it must listen on 0.0.0.0, not localhost. Put installs, migrations and seed data in setup. When the UI and API are separate processes, add routes such as {"path": "/api", "process": "api"} so both are served from one address. Services default to this repository's test environment; declare them to use others. Processes reach services and each other by name (postgres:5432, api:8000), and get none of your credentials.
+- When the repository has an OpenAPI document, pass its path as openapi: the person's API tab reads it.
+- Call playground_status until it's running or failed. If it failed, read its error and log, fix the cause, and call start_playground again. Once it runs, write a fenced code block tagged playground holding only its playground_id; the chat shows it as a card that opens it. Never paste a URL for it.`
+
 // assistantBranchesNote lists, at the start of a later segment, the branches
 // the chat already pushed (the workspace is a fresh clone by then).
 const assistantBranchesNote = `
@@ -218,13 +228,13 @@ const AssistantWorkflowBuildSection = `
 func AssistantInstructionsFor(coding, repo bool, branches []string, images, codex bool) string {
 	out := AssistantInstructions
 	if coding && !repo {
-		out = strings.Replace(out, assistantNeverBullet, assistantScratchBullet, 1) + assistantScratchSection + assistantVideoSection
+		out = strings.Replace(out, assistantNeverBullet, assistantScratchBullet, 1) + assistantScratchSection + assistantVideoSection + assistantPlaygroundSection
 	} else if coding {
 		out = strings.Replace(out, assistantNeverBullet, assistantCoderBullet, 1) + assistantCodeSection
 		if len(branches) > 0 {
 			out += fmt.Sprintf(assistantBranchesNote, strings.Join(branches, ", "))
 		}
-		out += assistantVideoSection
+		out += assistantVideoSection + assistantPlaygroundSection
 	}
 	switch {
 	case images && codex:

@@ -455,6 +455,42 @@ Go integration tests need a Postgres they can create databases on:
 TEST_DATABASE_URL=postgres://lazyagents:lazyagents@localhost:5432/lazyagents?sslmode=disable make test
 ```
 
+### Playgrounds
+
+A coding chat can hand you the app it's building, running, instead of steps to
+run it. The agent calls `start_playground` with the app's processes (command,
+directory, port), setup commands (install, migrate, seed), routes when the UI
+and API are separate processes, and optionally an OpenAPI document. Services
+default to the repository's test environment and always start empty. The chat
+shows a card; **Open** puts the playground beside the chat, and it goes full
+screen like a canvas.
+
+- **Preview** frames the app. Log in to it as you would anywhere: its cookies
+  work in the frame.
+- **API** reads the OpenAPI document the agent named (Vesper's own is
+  `api/openapi.yaml`), lists its operations by tag, fills a request body from
+  the schema, warns where a body doesn't match it (without stopping you sending
+  it), and sends from the app's own origin with your Preview session. The log
+  lines written while a request ran show under its response.
+- **Logs** streams every container's output: setup, each process and each
+  service.
+- **Reset data** starts every service empty and runs setup again; the code is
+  untouched. **Stop** removes it all; **Start again** reruns the last spec in
+  the chat's current workspace.
+
+The runner serves each playground on a port of its own on Vesper's host
+(`RUNNER_PLAYGROUND_PORTS`, `8090-8094` in both compose files; one playground
+per port) and admits only a browser signed in to Vesper there: same host, so
+the browser sends the Vesper session, which the runner checks and never passes
+on to the app. A playground stops after `RUNNER_PLAYGROUND_IDLE_S` unused (30
+minutes by default), when its chat's workspace is cleaned up, and when the
+runner restarts. Its processes run in the turn's sandbox from the chat's
+workspace, so they reload on the agent's edits if the app watches for changes,
+but they don't get the agent's credentials, home directory or tools it
+installed with Nix during the chat. The local runner has no playgrounds.
+[docs/dev/playgrounds.md](dev/playgrounds.md) has the design and its
+trade-offs.
+
 ## Layout
 
 | Path | What |

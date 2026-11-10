@@ -13,8 +13,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -367,6 +369,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 			ID:          fmt.Sprintf("%s-%d", host, os.Getpid()), MaxConcurrent: rc.MaxConcurrent, MCPURL: rc.MCPURL,
 			Grace: 30 * time.Second, LogBucket: "run-logs", AttachmentBucket: cfg.S3.ArtifactBucket, Version: cfg.Version, RequireHarnessKey: rc.Backend == "docker",
 			ChatIdleTTL: rc.ChatIdleTTL, MaxHold: rc.MaxHold, MaxHoldAttempts: rc.MaxHoldAttempts,
+			Playgrounds: runner.PlaygroundConfig{Ports: rc.PlaygroundPorts, IdleTTL: rc.PlaygroundIdleTTL, Origins: origins(cfg.WebURL, cfg.PublicURL)},
 		},
 		Pool: pool, Backend: backend, Secrets: secretStore,
 		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
@@ -379,6 +382,21 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	}
 	log.Info("runner started", "backend", rc.Backend, "slots", rc.MaxConcurrent, "mcp", rc.MCPURL)
 	return r.Run(ctx)
+}
+
+// origins are the browser origins of Vesper's own URLs, deduplicated.
+func origins(urls ...string) []string {
+	var out []string
+	for _, raw := range urls {
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			continue
+		}
+		if o := u.Scheme + "://" + u.Host; !slices.Contains(out, o) {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // planModels lists plan-login models through a runner in Docker mode, where

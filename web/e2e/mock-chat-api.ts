@@ -319,6 +319,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "playground: <id>" replies with a card for the chat's playground.
+    if (prompt.startsWith("playground:")) {
+      add(c, "assistant", `It's running.\n\n\`\`\`playground\n${prompt.slice(11).trim()}\n\`\`\``, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     // "canvas: <id>" replies with a card for that canvas.
     if (prompt.startsWith("canvas:")) {
       add(c, "assistant", `Drafted it.\n\n\`\`\`canvas\n${prompt.slice(7).trim()}\n\`\`\``, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
@@ -387,6 +393,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     const fail = (e: ReturnType<typeof err>) => json(e.body, e.status);
 
     if (/^\/chats\/[^/]+\/canvases$/.test(path)) return json({ canvases: [] });
+    if (/^\/chats\/[^/]+\/playground$/.test(path)) return json({ playground: null });
     const videoList = /^\/chats\/([^/]+)\/videos$/.exec(path);
     if (videoList) return json({ videos: videos.get(videoList[1]) ?? [] });
     const frame = /^\/chats\/[^/]+\/videos\/[^/]+\/frames\/([a-z]+)\/(\d+)$/.exec(path);
@@ -921,11 +928,14 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     await page.addInitScript(() => {
       const w = window as unknown as { __sse: Array<{ onmessage?: (e: { data: string }) => void }> };
       w.__sse = [];
+      // Other streams (a playground's logs, which the spec routes) stay real.
+      const Real = window.EventSource;
       class FakeEventSource {
         onopen?: () => void;
         onerror?: () => void;
         onmessage?: (e: { data: string }) => void;
-        constructor() {
+        constructor(url?: string | URL, init?: EventSourceInit) {
+          if (url !== undefined && String(url) !== "/events") return new Real(url, init) as unknown as FakeEventSource;
           w.__sse.push(this);
           setTimeout(() => this.onopen?.(), 0);
         }
