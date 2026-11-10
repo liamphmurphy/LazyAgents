@@ -214,18 +214,20 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0 }: SidebarPr
             <Icon name="search" size={14} strokeWidth={1.6} />
           </button>
         </div>
-        <nav aria-label="Primary" className="flex w-full flex-col gap-px">
-          {WORK_ITEMS.map((n) => (
-            <NavLink key={n.href} label={railLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
-              <Icon name={n.icon} />
-              {n.badge && counts[n.badge] > 0 && <span aria-hidden className={cx("absolute right-1 top-1 size-1.5 rounded-full", n.badge === "inbox" ? "bg-state-human" : "bg-accent")} />}
-            </NavLink>
-          ))}
-          <AppsMenu rail counts={counts} onNewSpace={newSpace} />
+        <nav aria-label="Primary" className="flex min-h-0 w-full flex-1 flex-col items-center gap-4">
+          <div className="flex w-full flex-col gap-px">
+            {WORK_ITEMS.map((n) => (
+              <NavLink key={n.href} label={railLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
+                <Icon name={n.icon} />
+                {n.badge && counts[n.badge] > 0 && <span aria-hidden className={cx("absolute right-1 top-1 size-1.5 rounded-full", n.badge === "inbox" ? "bg-state-human" : "bg-accent")} />}
+              </NavLink>
+            ))}
+            <AppsMenu rail counts={counts} onNewSpace={newSpace} />
+          </div>
+          <SpaceRail viewed={viewed} />
+          <PersonaRail id={viewed ?? undefined} viewed={viewed} />
+          <FooterLinks rail active={navActive} settingsNeedYou={settingsNeedYou} />
         </nav>
-        <SpaceRail viewed={viewed} />
-        <PersonaRail id={viewed ?? undefined} viewed={viewed} />
-        <FooterLinks rail active={navActive} settingsNeedYou={settingsNeedYou} />
         <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
       </aside>
     );
