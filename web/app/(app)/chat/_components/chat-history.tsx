@@ -314,7 +314,6 @@ export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null
   const list = chats.data?.chats;
   // An empty filter on a persona other than the default offers to start a conversation with it.
   const picked = filter.value !== "default" && !all ? filter.personas.find((p) => p.id === filter.value) : undefined;
-  const heading = all ? "All personas" : (picked?.name ?? filter.defaultLook.name);
   // Archiving or deleting the open conversation goes back to /chat, which resumes the newest one.
   const leave = (chatId: string) => chatId === id && router.push("/chat");
   const [query, setQuery] = useState("");
@@ -324,16 +323,27 @@ export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null
     setQuery("");
     setFinding(false);
   };
+  // Find and Archived sit at the end of the list's first heading ("Today", "Archived"), and
+  // finding turns that heading into the search box, so the two stay in one row.
+  const headingRow = (label: string) => (
+    <div className="flex items-center gap-0.5 pb-1 pl-2">
+      {finding ? (
+        <TextInput aria-label="Find in chats" placeholder="Find in chats" autoFocus className="h-[26px] min-w-0 flex-1 text-xs" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && stopFinding()} />
+      ) : (
+        <h3 className="min-w-0 flex-1 truncate text-xs font-medium text-fg-tertiary">{label}</h3>
+      )}
+      <IconButton icon="search" size={24} label="Find in chats" aria-pressed={finding} onClick={() => (finding ? stopFinding() : setFinding(true))} />
+      <IconButton icon="folder" size={24} label="Archived conversations" aria-pressed={view === "archived"} onClick={() => setView(view === "archived" ? "active" : "archived")} />
+    </div>
+  );
+  const groups = list && view === "active" && !query ? groupByDay(list) : [];
+  // While finding, the row stays on top, so the box keeps focus as results replace the days.
+  const onTop = finding || groups.length === 0;
   return (
     <aside aria-label="Chat history" className="flex min-h-0 flex-1 flex-col gap-1.5 max-[799px]:max-h-64">
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
-      <div className="mt-2 flex items-center gap-0.5 pl-2">
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-tertiary">{view === "archived" ? `${heading} · Archived` : heading}</span>
-        <IconButton icon="search" size={24} label="Find in chats" aria-pressed={finding} onClick={() => (finding ? stopFinding() : setFinding(true))} />
-        <IconButton icon="folder" size={24} label="Archived conversations" aria-pressed={view === "archived"} onClick={() => setView(view === "archived" ? "active" : "archived")} />
-      </div>
-      {finding && <TextInput aria-label="Find in chats" placeholder="Find in chats" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && stopFinding()} />}
-      <nav aria-label="Chats" className="min-h-0 flex-1 overflow-y-auto">
+      <nav aria-label="Chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
+        {onTop && headingRow(view === "archived" ? "Archived" : "Chats")}
         {query ? (
           <ChatSearchResults query={deferredQuery} onPick={() => undefined} />
         ) : chats.isError ? (
@@ -369,9 +379,9 @@ export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null
           </>
         ) : (
           <div className="flex flex-col gap-3">
-            {groupByDay(list).map((g) => (
+            {groups.map((g, i) => (
               <section key={g.label} aria-label={g.label} className="flex flex-col gap-px">
-                <h3 className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</h3>
+                {i === 0 && !onTop ? headingRow(g.label) : <h3 className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</h3>}
                 <ul className="flex flex-col gap-px">
                   {g.chats.map((c) => (
                     <ChatRow key={c.id} chat={c} active={c.id === id} all={all} onLeave={() => leave(c.id)} />

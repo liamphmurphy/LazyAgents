@@ -255,11 +255,11 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0 }: SidebarPr
           </button>
         </div>
       </div>
-      {/* History first: it's what the menu is for. Work, Spaces and you sit under it. */}
+      {/* Work and Spaces on top, as in other chat apps; the history fills the rest and scrolls. */}
       <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col gap-4">
-        <ChatHistory id={viewed ?? undefined} viewed={viewed} />
         <WorkGroup counts={counts} active={navActive} onNewSpace={newSpace} />
         <SidebarSpaces viewed={viewed} hideWhenEmpty />
+        <ChatHistory id={viewed ?? undefined} viewed={viewed} />
         <MenuFooter active={navActive} settingsNeedYou={settingsNeedYou} />
       </nav>
       <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
