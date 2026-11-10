@@ -57,6 +57,10 @@ services:
       # Each turn's sandboxed Docker API socket; turns mount the volume read-only.
       RUNNER_DOCKER_PROXY_DIR: /run/lazyagents-docker
       RUNNER_DOCKER_PROXY_VOLUME: lazyagents-dev-docker-proxy
+      # The volume (created on first use) holding the Nix store turns share
+      # through this runner's nix-daemon. One daemon per store: the stacks
+      # must not share it.
+      RUNNER_NIX_VOLUME: lazyagents-dev-nix
     networks: [default, agents]
     extra_hosts:
       - host.docker.internal:host-gateway

@@ -63,7 +63,10 @@ type Docker struct {
 	// proxyMountPath (RUNNER_DOCKER_PROXY_DIR, RUNNER_DOCKER_PROXY_VOLUME).
 	// Either empty turns the per-turn Docker API off.
 	ProxyDir, ProxyVolume string
-	client                *http.Client
+	// NixVolume is the Nix store every turn shares through the runner's
+	// nix-daemon (RUNNER_NIX_VOLUME); "" leaves turns without Nix.
+	NixVolume string
+	client    *http.Client
 }
 
 const (
@@ -432,6 +435,9 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	// label, so workspace cleanup never removes downloaded dependencies.
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": homeVolumeName(runID), "Target": homePath})
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": "lazyagents-dependency-cache", "Target": "/cache"})
+	if m := d.nixMount(); m != nil {
+		mounts = append(mounts, m)
+	}
 	if d.ProxyDir != "" && d.ProxyVolume != "" {
 		// Read-only, and turns can't list it: a turn reaches only the socket
 		// whose name its DOCKER_HOST carries.

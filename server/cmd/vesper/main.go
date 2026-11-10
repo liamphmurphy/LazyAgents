@@ -314,7 +314,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	switch rc.Backend {
 	case "docker":
 		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network, Stack: rc.Stack, MemoryMB: rc.MemoryMB, PidsLimit: rc.PidsLimit, HostWorkspaces: rc.HostWorkspaces,
-			ProxyDir: rc.DockerProxyDir, ProxyVolume: rc.DockerProxyVolume}
+			ProxyDir: rc.DockerProxyDir, ProxyVolume: rc.DockerProxyVolume, NixVolume: rc.NixVolume}
 		if err := d.PrepareDockerProxy(); err != nil {
 			return fmt.Errorf("runner: %w", err)
 		}
@@ -324,6 +324,13 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("runner: docker: %w", err)
 		}
+		// Without the daemon turns still run; nix commands in them say they
+		// can't reach it.
+		nctx, cancel := context.WithTimeout(ctx, time.Minute)
+		if err := d.EnsureNixDaemon(nctx); err != nil {
+			log.Warn("runner: turns won't have Nix", "err", err)
+		}
+		cancel()
 		backend = d
 	case "local":
 		log.Warn("RUNNER_BACKEND=local runs harnesses on this machine with no isolation, using its own CLI logins")

@@ -376,3 +376,44 @@ func TestDockerStartMountsProxyReadOnly(t *testing.T) {
 	}
 	t.Fatal("turn doesn't mount the proxy sockets directory")
 }
+
+func TestEnsureNixDaemon(t *testing.T) {
+	f := &proxyEngine{}
+	d, _ := startProxyEngine(t, f)
+	d.Image, d.NixVolume = "vesper/agent-base:latest", "lazyagents-nix"
+	if err := d.EnsureNixDaemon(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.creates) != 1 {
+		t.Fatalf("creates = %d", len(f.creates))
+	}
+	body := f.creates[0]
+	host := asMap(body["HostConfig"])
+	mount := asMap(asList(host["Mounts"])[0])
+	if mount["Source"] != "lazyagents-nix" || mount["Target"] != "/nix" || fmt.Sprint(body["Cmd"]) != "["+nixDaemonBin+"]" {
+		t.Fatalf("daemon = %v", body)
+	}
+	if _, ok := asMap(body["Labels"])[labelKey]; ok {
+		t.Fatal("the daemon must not carry a run label, or startup cleanup removes it")
+	}
+	if host["NetworkMode"] != nil {
+		t.Fatalf("the daemon must stay off the agents network: %v", host["NetworkMode"])
+	}
+	if !f.reachedEngine("POST /containers/lazyagents-nix-daemon-test/start") {
+		t.Fatal("daemon not started")
+	}
+}
+
+func TestDockerStartMountsNixStore(t *testing.T) {
+	f, d := startFakeEngine(t)
+	d.NixVolume = "lazyagents-nix"
+	if _, err := d.Start(context.Background(), "run-1", ExecSpec{Name: "t", Argv: []string{"true"}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range asList(asMap(f.created["HostConfig"])["Mounts"]) {
+		if mount := asMap(m); mount["Target"] == "/nix" && mount["Source"] == "lazyagents-nix" {
+			return
+		}
+	}
+	t.Fatal("turn doesn't mount the shared Nix store")
+}

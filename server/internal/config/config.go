@@ -74,6 +74,10 @@ type Runner struct {
 	// turns mount read-only (RUNNER_DOCKER_PROXY_DIR and
 	// RUNNER_DOCKER_PROXY_VOLUME, docker only). Unset, turns get no Docker.
 	DockerProxyDir, DockerProxyVolume string
+	// NixVolume is the Docker volume holding the Nix store turns share
+	// through the runner's nix-daemon (RUNNER_NIX_VOLUME, docker only).
+	// Unset, turns have no Nix.
+	NixVolume string
 }
 
 type S3 struct {
@@ -124,6 +128,7 @@ func Load() (Config, error) {
 
 		DockerProxyDir:    env("RUNNER_DOCKER_PROXY_DIR", ""),
 		DockerProxyVolume: env("RUNNER_DOCKER_PROXY_VOLUME", ""),
+		NixVolume:         env("RUNNER_NIX_VOLUME", ""),
 	}
 	if (r.DockerProxyDir == "") != (r.DockerProxyVolume == "") {
 		return c, fmt.Errorf("config: set both RUNNER_DOCKER_PROXY_DIR and RUNNER_DOCKER_PROXY_VOLUME, or neither")
