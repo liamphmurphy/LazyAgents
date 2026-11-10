@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { TicketsScreen } from "./_components/tickets-screen";
+import { TicketsLayouts } from "./_components/tickets-layouts";
 
 export default function TicketsPage() {
   return (
     <Suspense>
-      <TicketsScreen />
+      <TicketsLayouts />
     </Suspense>
   );
 }

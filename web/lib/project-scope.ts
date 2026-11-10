@@ -31,9 +31,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Project",
     items: [
-      { href: "/board", label: "Board", icon: "board" },
       { href: "/tickets", label: "Tickets", icon: "tickets" },
-      { href: "/epics", label: "Epics", icon: "epics" },
       { href: "/plans", label: "Plans", icon: "edit" },
       { href: "/artifacts", label: "Artifacts", icon: "artifacts" },
     ],
@@ -88,15 +86,13 @@ export function navGroupsFor(mode: NavMode): NavGroup[] {
 
 /** Where the Chat/Work toggle goes: Chat resumes the newest conversation, Work the last Work page. */
 export function modeHref(mode: NavMode, project: string | null | undefined, lastWork: string | null | undefined): string {
-  return mode === "chat" ? "/chat" : withProject(lastWork ?? "/board", project);
+  return mode === "chat" ? "/chat" : withProject(lastWork ?? "/tickets", project);
 }
 
 /** Routes whose content belongs to one project, read from ?project=. */
 export const PROJECT_ROUTES: Record<string, ProjectMode> = {
-  "/board": "required",
   "/plans": "required",
   "/tickets": "optional",
-  "/epics": "optional",
   "/artifacts": "optional",
   "/costs": "optional",
 };
@@ -136,12 +132,17 @@ export function switchHref(pathname: string, search: URLSearchParams, key: strin
 }
 
 /**
- * A URL with filters but no project (/tickets?assignee=…, /epics?epic=…) is a
+ * A URL with filters but no project (/tickets?assignee=…) is a
  * deliberate cross-project link: optional routes honor it instead of narrowing
- * it to the remembered project.
+ * it to the remembered project. ?layout= only picks how Tickets shows them.
  */
 export function hasFilters(search: URLSearchParams): boolean {
-  return [...search.keys()].some((k) => k !== "project");
+  return [...search.keys()].some((k) => k !== "project" && k !== "layout");
+}
+
+/** The board is a Tickets layout that, unlike the list, needs one project. */
+function needsOneProject(section: string, search: URLSearchParams): boolean {
+  return PROJECT_ROUTES[section] === "required" || (section === "/tickets" && search.get("layout") === "board");
 }
 
 export type ProjectResolution<P extends ScopedProject = ScopedProject> =
@@ -185,6 +186,6 @@ export function currentProject<P extends ScopedProject>(
   const section = projectSection(pathname);
   const requested = search.get("project");
   if (section && requested) return active.find((p) => p.key === requested);
-  if (section === pathname && PROJECT_ROUTES[section] === "optional" && hasFilters(search)) return undefined;
+  if (section === pathname && !needsOneProject(section, search) && hasFilters(search)) return undefined;
   return remembered ? active.find((p) => p.key === remembered) : undefined;
 }

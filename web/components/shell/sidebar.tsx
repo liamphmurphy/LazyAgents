@@ -17,7 +17,6 @@ import { Segmented } from "@/components/ui/controls";
 import { Kbd } from "@/components/ui/primitives";
 import { floatPanel } from "@/components/domain/pickers";
 import { SidebarCapacity } from "@/components/domain/runner-capacity";
-import { SidebarSavedViews } from "@/components/domain/saved-views";
 import { ChatHistory, NewConversationButton, PersonaRail } from "@/app/(app)/chat/_components/chat-history";
 import { SidebarSpaces, SpaceRail } from "@/app/(app)/spaces/_components/spaces-nav";
 import { NewSpaceDialog } from "@/app/(app)/spaces/_components/new-space-dialog";
@@ -463,14 +462,11 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
                 {/* Work's pinned items sit above the labelled groups without a heading of their own. */}
                 {g.label !== "Personal" && <span aria-hidden className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</span>}
                 {g.items.map((n) => (
-                  <div key={n.href} className="contents">
-                    <NavLink href={withProject(n.href, current?.key)} active={navActive(n.href)}>
-                      <Icon name={n.icon} />
-                      <span className="flex-1">{n.label}</span>
-                      <Badge kind={n.badge} counts={counts} />
-                    </NavLink>
-                    {n.href === "/tickets" && <SidebarSavedViews project={current?.key} />}
-                  </div>
+                  <NavLink key={n.href} href={withProject(n.href, current?.key)} active={navActive(n.href)}>
+                    <Icon name={n.icon} />
+                    <span className="flex-1">{n.label}</span>
+                    <Badge kind={n.badge} counts={counts} />
+                  </NavLink>
                 ))}
               </div>
             ))}

@@ -12,18 +12,18 @@ test("nav is three groups with unique hrefs", () => {
   const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
   assert.equal(new Set(hrefs).size, hrefs.length);
   assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Library", "Workflows", "Scheduled", "Learn", "Customization"]);
-  assert.deepEqual(NAV_GROUPS[1].items.map((i) => i.label), ["Board", "Tickets", "Epics", "Plans", "Artifacts"]);
+  assert.deepEqual(NAV_GROUPS[1].items.map((i) => i.label), ["Tickets", "Plans", "Artifacts"]);
 });
 
 test("isActive matches the section, Dashboard only on /", () => {
   assert.equal(isActive("/", "/"), true);
-  assert.equal(isActive("/board", "/"), false);
+  assert.equal(isActive("/tickets", "/"), false);
   assert.equal(isActive("/runs/abc", "/runs"), true);
   assert.equal(isActive("/runsx", "/runs"), false);
 });
 
 test("projectSection finds the project route of detail pages", () => {
-  assert.equal(projectSection("/board"), "/board");
+  assert.equal(projectSection("/tickets"), "/tickets");
   assert.equal(projectSection("/chat/123"), undefined);
   assert.equal(projectSection("/tickets/WEB-1"), "/tickets");
   assert.equal(projectSection("/inbox"), undefined);
@@ -31,8 +31,8 @@ test("projectSection finds the project route of detail pages", () => {
 });
 
 test("withProject only scopes project routes", () => {
-  assert.equal(withProject("/board", "WEB"), "/board?project=WEB");
-  assert.equal(withProject("/board", null), "/board");
+  assert.equal(withProject("/tickets", "WEB"), "/tickets?project=WEB");
+  assert.equal(withProject("/tickets", null), "/tickets");
   assert.equal(withProject("/runs", "WEB"), "/runs");
 });
 
@@ -51,7 +51,7 @@ test("resolveProject never resolves archived or unknown projects", () => {
 
 test("switchHref rewrites the current project route and drops project-bound params", () => {
   const q = (s) => new URLSearchParams(s);
-  assert.equal(switchHref("/board", q("project=WEB&epic=e1&assignee=builder&ticket=WEB-1"), "OPS"), "/board?assignee=builder&project=OPS");
+  assert.equal(switchHref("/tickets", q("layout=board&project=WEB&epic=e1&assignee=builder&ticket=WEB-1"), "OPS"), "/tickets?layout=board&assignee=builder&project=OPS");
   assert.equal(switchHref("/tickets", q("project=WEB&view=all"), null), "/tickets?view=all");
   assert.equal(switchHref("/plans", q("id=p1&project=WEB"), "OPS"), "/plans?project=OPS");
   assert.equal(switchHref("/chat/123", q("project=WEB"), "OPS"), null);
@@ -62,9 +62,9 @@ test("switchHref rewrites the current project route and drops project-bound para
 
 test("currentProject prefers the URL on project routes and hides archived projects", () => {
   const q = (s) => new URLSearchParams(s);
-  assert.equal(currentProject("/board", q("project=OPS"), "WEB", projects), ops);
+  assert.equal(currentProject("/tickets", q("layout=board&project=OPS"), "WEB", projects), ops);
   assert.equal(currentProject("/inbox", q("project=OPS"), "WEB", projects), web);
-  assert.equal(currentProject("/board", q("project=OLD"), "WEB", projects), undefined);
+  assert.equal(currentProject("/tickets", q("project=OLD"), "WEB", projects), undefined);
   assert.equal(currentProject("/inbox", q(""), "OLD", projects), undefined);
   assert.equal(currentProject("/inbox", q(""), null, projects), undefined);
   assert.equal(currentProject("/tickets/WEB-1", q(""), "WEB", projects), web);
@@ -75,18 +75,21 @@ test("cross-project links on optional routes show All projects, bare routes the 
   assert.equal(hasFilters(q("project=WEB")), false);
   assert.equal(hasFilters(q("view=all&assignee=builder")), true);
   assert.equal(currentProject("/tickets", q("view=all&assignee=builder"), "WEB", projects), undefined);
-  assert.equal(currentProject("/epics", q("epic=e1"), "WEB", projects), undefined);
+  assert.equal(currentProject("/tickets", q("layout=epics&status=done"), "WEB", projects), undefined);
   assert.equal(currentProject("/tickets", q(""), "WEB", projects), web);
-  // Required routes always need one project.
-  assert.equal(currentProject("/board", q("epic=e1"), "WEB", projects), web);
+  // Picking a layout isn't a filter: /epics and /board redirect here without a project.
+  assert.equal(hasFilters(q("layout=epics")), false);
+  assert.equal(currentProject("/tickets", q("layout=epics"), "WEB", projects), web);
+  // The board always needs one project.
+  assert.equal(currentProject("/tickets", q("layout=board&epic=e1"), "WEB", projects), web);
 });
 
 
 test("each page belongs to a mode, and pinned pages keep the last one", () => {
   for (const p of ["/", "/chat", "/chat/1", "/customization", "/library", "/workflows", "/learn/2"]) assert.equal(routeMode(p), "chat", p);
-  for (const p of ["/dashboard", "/board", "/tickets/WEB-1", "/runs/1", "/settings/projects", "/wiki"]) assert.equal(routeMode(p), "work", p);
+  for (const p of ["/dashboard", "/tickets", "/tickets/WEB-1", "/runs/1", "/settings/projects", "/wiki"]) assert.equal(routeMode(p), "work", p);
   assert.equal(routeMode("/inbox"), undefined);
-  assert.equal(navMode("/board", "chat"), "work");
+  assert.equal(navMode("/tickets", "chat"), "work");
   assert.equal(navMode("/inbox", "chat"), "chat");
   assert.equal(routeMode("/apps/finance"), "chat");
   assert.equal(navMode("/inbox", null), "work");
@@ -103,6 +106,6 @@ test("the toggle resumes chat and returns to the last Work page in the current p
   assert.equal(modeHref("chat", "WEB", "/runs"), "/chat");
   assert.equal(modeHref("work", "WEB", "/tickets"), "/tickets?project=WEB");
   assert.equal(modeHref("work", "WEB", "/runs/1"), "/runs/1");
-  assert.equal(modeHref("work", "WEB", null), "/board?project=WEB");
-  assert.equal(modeHref("work", undefined, null), "/board");
+  assert.equal(modeHref("work", "WEB", null), "/tickets?project=WEB");
+  assert.equal(modeHref("work", undefined, null), "/tickets");
 });

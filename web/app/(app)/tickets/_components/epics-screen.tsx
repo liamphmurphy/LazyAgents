@@ -19,6 +19,8 @@ import { HumanAvatar } from "@/components/domain/avatars";
 import { SmallPill } from "@/components/domain/labels";
 import { cx } from "@/lib/cx";
 import { FilterMenu } from "@/components/domain/pickers";
+import { ticketsHref } from "@/lib/tickets-layout";
+import { TicketsLayoutBar } from "./layout-bar";
 
 function Timeline({
   epics,
@@ -238,7 +240,7 @@ export function EpicsScreen() {
   const query = useEpicOverviews();
   const params = useSearchParams(),
     router = useRouter();
-  // The sidebar switcher sets ?project=; none (All projects) lists every epic.
+  // The layout bar's picker sets ?project=; none (All projects) lists every epic.
   const scope = useProjectScope("optional");
   const current = scope.status === "ready" ? scope.project : undefined;
   const project = current?.key ?? "";
@@ -249,7 +251,7 @@ export function EpicsScreen() {
   }, [legacy, router]);
   const filters = parseEpicFilters(params);
   const setFilters = (patch: Partial<EpicFilters>) =>
-    router.replace(`/epics${epicFilterQuery({ ...filters, ...patch }, project)}`, { scroll: false });
+    router.replace(ticketsHref("epics", new URLSearchParams(epicFilterQuery({ ...filters, ...patch }, project))), { scroll: false });
   const inProject = (query.data ?? []).filter((e) => !project || e.project.key === project);
   const counts = statusCounts(inProject);
   const shown = sortEpics(filterEpics(inProject, filters), filters.sort);
@@ -257,23 +259,18 @@ export function EpicsScreen() {
   return (
     <>
       <TopBar
-        crumbs={projectCrumbs(current, "Epics")}
+        crumbs={projectCrumbs(current, "Tickets")}
         actions={
           <ButtonLink href={project ? `/tickets/new?project=${encodeURIComponent(project)}` : "/tickets/new"} variant="primary" icon="plus">
             New ticket
           </ButtonLink>
         }
       />
+      <TicketsLayoutBar layout="epics" />
       <Content>
         <div className="space-y-6">
-          <div className="space-y-1">
-            <h1 className="type-display">Epics</h1>
-            <p className="text-sm text-fg-secondary">
-              Objectives, progress and the done gate for every epic in this project.
-            </p>
-          </div>
           {scope.status !== "ready" ? (
-            <ProjectScopeState base="/epics" scope={scope} />
+            <ProjectScopeState base="/tickets" scope={scope} />
           ) : query.isError ? (
             <Banner
               tone="blocked"

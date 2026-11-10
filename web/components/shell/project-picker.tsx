@@ -1,0 +1,93 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { DropdownMenu } from "radix-ui";
+import { useBootstrap } from "@/lib/api/hooks";
+import { cx } from "@/lib/cx";
+import { currentProject, switchHref } from "@/lib/project-scope";
+import { Icon } from "@/components/ui/icon";
+import { floatPanel } from "@/components/domain/pickers";
+import { rememberProject, useRememberedProject } from "./project-scope";
+
+const menuItem =
+  "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 outline-none data-[highlighted]:bg-hover";
+
+/**
+ * The project a page shows, in its header: projects are context, not a
+ * place, so each page that lists one project's work picks it here.
+ * allowAll: offer "All projects" (pages that list every project's work).
+ */
+export function ProjectPicker({ allowAll = true }: { allowAll?: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const remembered = useRememberedProject();
+  const projects = useBootstrap().data?.projects ?? [];
+  const active = projects.filter((p) => !p.archived);
+  const current = currentProject(pathname, search, remembered, projects);
+  function pick(value: string) {
+    const key = value || null;
+    const href = switchHref(pathname, new URLSearchParams(search.toString()), key);
+    // A chosen project is remembered when its route opens (useProjectScope);
+    // remembering first would also fire the chooser page's own redirect.
+    // "All projects" must be forgotten before navigating, or the bare route
+    // would redirect back to the old project.
+    if (!href || !key) rememberProject(key);
+    if (href) router.push(href);
+  }
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`Switch project, current: ${current?.name ?? "All projects"}`}
+          className="flex h-[30px] max-w-[240px] items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-left hover:bg-hover data-[state=open]:border-accent"
+        >
+          {current ? (
+            <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: current.color }} />
+          ) : (
+            <Icon name="folder" size={12} className="flex-none text-fg-tertiary" />
+          )}
+          <span className="truncate text-[13px] font-medium">{current?.name ?? "All projects"}</span>
+          <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-none text-fg-tertiary">
+            <path d="m3 4.5 3-3 3 3M3 7.5l3 3 3-3" />
+          </svg>
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-[260px]")}>
+          <DropdownMenu.RadioGroup value={current?.key ?? ""} onValueChange={pick}>
+            {allowAll && (
+              <>
+                <DropdownMenu.RadioItem value="" className={menuItem}>
+                  <Icon name="folder" size={12} className="text-fg-secondary" />
+                  <span className="flex-1">All projects</span>
+                  <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
+                </DropdownMenu.RadioItem>
+                <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
+              </>
+            )}
+            {active.map((p) => (
+              <DropdownMenu.RadioItem key={p.key} value={p.key} className={menuItem}>
+                <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: p.color }} />
+                <span className="flex-1 truncate">{p.name}</span>
+                <span className="font-mono text-xs text-fg-tertiary">{p.key}</span>
+                <span className="grid w-3.5 place-items-center">
+                  <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
+                </span>
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+          <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
+          <DropdownMenu.Item asChild className={menuItem}>
+            <Link href="/settings/projects">
+              <Icon name="gear" size={12} className="text-fg-secondary" />
+              Manage projects
+            </Link>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}

@@ -21,6 +21,9 @@ const nextConfig: NextConfig = {
       { source: "/personas", destination: "/customization", permanent: false },
       // Agents sit beside Personas in Customization; /agents/:handle stays the editor.
       { source: "/agents", destination: "/customization?who=agents", permanent: false },
+      // Board and Epics are layouts of Tickets; their filters (?project=, ?epic=) carry over.
+      { source: "/board", destination: "/tickets?layout=board", permanent: false },
+      { source: "/epics", destination: "/tickets?layout=epics", permanent: false },
     ];
   },
   // In compose, Caddy routes these paths to the API before they reach Next.

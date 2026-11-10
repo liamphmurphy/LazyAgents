@@ -118,7 +118,7 @@ function AllClear({ project, done, onShowDone }: { project: string; done: number
         ) : running.length === 0 ? (
           <p className="px-5 py-4 text-[13px] text-fg-tertiary">
             No runs in progress.{" "}
-            <Link href="/board" className="text-accent hover:underline">
+            <Link href="/tickets?layout=board" className="text-accent hover:underline">
               Dispatch a ready ticket from the Board.
             </Link>
           </p>
