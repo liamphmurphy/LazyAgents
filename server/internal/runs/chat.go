@@ -200,7 +200,7 @@ type ChatInput struct {
 // ChatMessageInput is a single human prompt. A non-empty Harness/Model is
 // validated against the catalog and stored on the chat; the runner applies it
 // in LAZYAGENTS-10, so an existing segment keeps running its own harness/model.
-// ContextRefs are resolved inside the chat's project and delivered to the turn.
+// ContextRefs are resolved inside the workspace and delivered to the turn.
 type ChatMessageInput struct {
 	Body    string
 	Harness string

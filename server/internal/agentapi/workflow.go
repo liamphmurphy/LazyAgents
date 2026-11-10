@@ -33,7 +33,8 @@ func workflowToolsFor(run store.Run) []string {
 	return workflowTools
 }
 
-// workflowScope limits a step's reads to its chat's project, like the chat itself.
+// workflowScope is a workflow step's chat scope: like the chat itself, it reads
+// every project, and its chat's project is the default for anything it creates.
 func workflowScope(ctx context.Context, d Deps, run store.Run) (*chatScope, error) {
 	wf, err := d.Q.WorkflowRunForAgentRun(ctx, &run.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
