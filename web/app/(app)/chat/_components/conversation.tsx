@@ -578,6 +578,16 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     },
   };
   const published = (workflows.data?.workflows ?? []).filter((w) => w.published_version > 0);
+  // /workflow on the welcome makes the chat first, then opens it with ?workflow= to show the start card.
+  const workflowCard = startingWorkflow ?? published.find((w) => w.id === search.get("workflow")) ?? null;
+  const closeWorkflow = () => {
+    setStartingWorkflow(null);
+    if (!search.has("workflow")) return;
+    const q = new URLSearchParams(search.toString());
+    q.delete("workflow");
+    const qs = q.toString();
+    router.replace(qs ? `/chat/${id}?${qs}` : `/chat/${id}`);
+  };
   const commandOptions = (name: string): { name: string; run: CommandRun }[] => {
     switch (name) {
       case "workflow":
@@ -847,9 +857,9 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             )}
             <ChatWorkflowTray chatId={c.id} />
             <ChatTicketRunTray chatId={c.id} scene={(kind) => <ActivityScene current={kind} />} />
-            {startingWorkflow && (
+            {workflowCard && (
               <div className="mb-2">
-                <WorkflowStartCard workflow={startingWorkflow} chatId={c.id} onDone={() => setStartingWorkflow(null)} onDismiss={() => setStartingWorkflow(null)} />
+                <WorkflowStartCard workflow={workflowCard} chatId={c.id} onDone={closeWorkflow} onDismiss={closeWorkflow} />
               </div>
             )}
             <Composer

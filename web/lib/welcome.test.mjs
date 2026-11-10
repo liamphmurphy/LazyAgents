@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { carouselOrder, carouselWindow, personaTagline, pickUpCards } from "./welcome.ts";
+import { carouselOrder, carouselWindow, newChatSelection, personaTagline, pickUpCards } from "./welcome.ts";
 
 const p = (id, chat_count) => ({ id, chat_count });
 
@@ -53,4 +53,17 @@ test("pick-up cards skip empty and archived chats and read replies", () => {
   const chats = [chat("c1", "2026-11-10T08:00:00Z"), chat("c2", "2026-11-10T09:00:00Z", { message_count: 0 }), chat("c3", "2026-11-10T10:00:00Z", { archived: true })];
   assert.deepEqual(pickUpCards([], dock, chats, ago).map((c) => [c.label, c.href]), [["Needs you", "/chat/c4"], ["Continue", "/chat/c1"]]);
   assert.deepEqual(pickUpCards([], [], [], ago), []);
+});
+
+test("a new chat shows the Personal Assistant's model, on the harness that lists it", () => {
+  const groups = [
+    { harness: "claude-code", available: true, models: [{ id: "opus-5.5", default: true }, { id: "sonnet-5.5", default: false }] },
+    { harness: "codex", available: true, models: [{ id: "gpt-5-codex", default: true }] },
+  ];
+  const main = { kind: "main", model: "opus-5.5" };
+  assert.deepEqual(newChatSelection(groups, [main, { kind: "assistant", model: "gpt-5-codex" }]), { harness: "codex", model: "gpt-5-codex" });
+  assert.deepEqual(newChatSelection(groups, [{ kind: "main", model: "sonnet-5.5" }]), { harness: "claude-code", model: "sonnet-5.5" }, "no assistant yet: a main agent's");
+  assert.deepEqual(newChatSelection(groups, [{ kind: "assistant", model: "some-alias" }]), { harness: "claude-code", model: "opus-5.5" }, "an unlisted model: the first available default");
+  assert.deepEqual(newChatSelection([{ ...groups[0], available: false }, groups[1]], []), { harness: "codex", model: "gpt-5-codex" });
+  assert.equal(newChatSelection(undefined, [main]), undefined);
 });

@@ -1,23 +1,26 @@
 "use client";
 
 import { useCanvasPanel } from "@/lib/use-canvas-panel";
-import { composerFrame, composerInput, ResearchToggle, SendButton, TemporaryToggle } from "./reply-tools";
+import { ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useBootstrap, useChat, useChatSuggestions, useChats, useInbox, usePersonaDock, useStartChat } from "@/lib/api/hooks";
+import { useBootstrap, useChat, useChatModels, useChatSuggestions, useChats, useCreateChat, useInbox, usePersonaDock, useStartChat } from "@/lib/api/hooks";
+import { useWorkflows } from "@/lib/api/workflow-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { newestChat } from "@/lib/chat-ui";
-import { codesInRepos, toneLabel } from "@/lib/persona-ui";
-import { carouselOrder, carouselWindow, FALLBACK_STARTERS, personaTagline, pickUpCards, type PickUpTone } from "@/lib/welcome";
+import { codesInRepos, repoShortName, toneLabel } from "@/lib/persona-ui";
+import { unavailableReason } from "@/lib/setup";
+import { carouselOrder, carouselWindow, FALLBACK_STARTERS, newChatSelection, personaTagline, pickUpCards, type PickUpTone } from "@/lib/welcome";
 import { timelineTime } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import Link from "next/link";
-import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
-import { Banner, Skeleton, TextArea } from "@/components/ui/primitives";
+import { parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
+import { Banner, Skeleton } from "@/components/ui/primitives";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
-import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
-import { ChipList } from "./context-chips";
+import { DropOverlay, useAttachments, useFileDrop } from "./attachments";
+import { Composer, type CommandRun, type ComposerCommands } from "./composer";
+import { ModelEffortPicker, effortLabel, modelEfforts, type Effort, type Selection } from "./model-picker";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
 import { PersonaCarousel, personaLook, useOpenPersonaManager } from "./persona";
@@ -89,11 +92,14 @@ function PickUp() {
 }
 
 /** A first conversation (the persona-led welcome): pick who to talk to, write, or pick up where you left off. */
-function Welcome({ disabled }: { disabled: boolean }) {
+function Welcome({ disabled, onNew }: { disabled: boolean; onNew: () => void }) {
   const router = useRouter();
   const search = useSearchParams();
   const boot = useBootstrap();
   const start = useStartChat();
+  const create = useCreateChat();
+  const models = useChatModels();
+  const workflows = useWorkflows();
   const personas = usePersonas();
   // Undefined until picked: the chat gets the persona the link named (the landing page's most used), else the default.
   const [picked, setPicked] = useState<string>();
@@ -105,9 +111,10 @@ function Welcome({ disabled }: { disabled: boolean }) {
   const persona = personaLook(fullPersona);
   const ordered = carouselOrder(personas.data?.personas ?? [], defaultId);
   const around = carouselWindow(ordered, ordered.findIndex((p) => p.id === personaId));
-  // A coding persona works in its first repo; /repo in the chat switches to another.
+  // A coding persona works in its first repo unless /repo picks another.
+  const [repoPicked, setRepoPicked] = useState<string>();
   const repos = fullPersona?.repos ?? [];
-  const repo = codesInRepos(fullPersona) ? repos[0] : undefined;
+  const repo = codesInRepos(fullPersona) ? (repoPicked && repos.includes(repoPicked) ? repoPicked : repos[0]) : undefined;
   // With several addresses, a coding chat's first message waits for which one its commits use.
   const emails = boot.data?.me.emails ?? [];
   const [commitEmail, setCommitEmail] = useState<string>();
@@ -121,18 +128,79 @@ function Welcome({ disabled }: { disabled: boolean }) {
   const files = useAttachments();
   const area = useRef<HTMLTextAreaElement>(null);
   const name = boot.data?.me.name?.split(" ")[0];
-  const locked = disabled || start.isPending;
+  const locked = disabled || start.isPending || create.isPending;
   const drop = useFileDrop(files.add, !locked);
 
-  function submit() {
-    const body = text.trim();
-    if (!body || locked || files.pending || askCommitEmail) return;
+  // The model and effort, as in a chat: what the chat would start on until the person picks, and
+  // only a pick is sent, so the server's choice stands when the picker's guess is off.
+  const groups = models.data;
+  const [pickedModel, setPickedModel] = useState<Selection | null>(null);
+  const [pickedEffort, setPickedEffort] = useState<Effort | null>(null);
+  const selection = pickedModel ?? newChatSelection(groups, boot.data?.agents ?? []);
+  const offered = selection ? modelEfforts(groups, selection) : { efforts: [] };
+  const effort = pickedEffort && offered.efforts.includes(pickedEffort) ? pickedEffort : undefined;
+  const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
+  const published = (workflows.data?.workflows ?? []).filter((w) => w.published_version > 0);
+
+  const newChat = () => ({
+    persona_id: personaId,
+    ...(temporary ? { temporary } : {}),
+    ...(repo ? { repo_url: repo, ...(commitEmail ? { commit_email: commitEmail } : {}) } : {}),
+  });
+  function submit(body: string) {
+    if (!body.trim() || locked || unavailable || files.pending || askCommitEmail) return;
     const context_refs = toContextRefs(chips);
     start.mutate(
-      { persona_id: personaId, ...(temporary ? { temporary } : {}), ...(repo ? { repo_url: repo, ...(commitEmail ? { commit_email: commitEmail } : {}) } : {}), message: { body, ...(research ? { research: true } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
+      {
+        ...newChat(),
+        message: {
+          body,
+          ...(research ? { research: true } : {}),
+          ...(pickedModel ? { harness: pickedModel.harness, model: pickedModel.model } : {}),
+          ...(effort ? { effort } : {}),
+          ...(context_refs ? { context_refs } : {}),
+          ...(files.ids.length ? { attachment_ids: files.ids } : {}),
+        },
+      },
       { onSuccess: (c) => router.push(`/chat/${c.id}`) },
     );
   }
+  const commands: ComposerCommands = {
+    plain: {
+      new: onNew,
+      memory: () => router.push("/customization"),
+      stop: () => "There’s no reply to stop.",
+    },
+    options: (command): { name: string; run: CommandRun }[] => {
+      switch (command) {
+        case "workflow":
+          // A workflow runs in a chat: make it, then show the start card there.
+          return published.map((w) => ({
+            name: w.name,
+            run: () => {
+              if (locked) return "Wait for the current message to finish sending.";
+              create.mutate(newChat(), { onSuccess: (c) => router.push(`/chat/${c.id}?workflow=${encodeURIComponent(w.id)}`) });
+            },
+          }));
+        case "model":
+          return (groups ?? [])
+            .filter((g) => g.available)
+            .flatMap((g) => g.models.map((m) => ({ name: `${g.label} ${m.label}`, run: () => setPickedModel({ harness: g.harness, model: m.id }) })));
+        case "effort":
+          return [undefined, ...offered.efforts].map((e) => ({ name: effortLabel(e).toLowerCase(), run: () => setPickedEffort(e ?? null) }));
+        case "persona":
+          return (personas.data?.personas ?? []).map((p) => ({ name: p.name, run: () => (p.id === personaId ? `You’re already talking to ${p.name}.` : setPicked(p.id)) }));
+        case "repo":
+          return codesInRepos(fullPersona)
+            ? repos.map((r) => ({ name: repoShortName(r), run: () => (r === repo ? "This chat is already in that repository." : setRepoPicked(r)) }))
+            : [];
+        default:
+          return [];
+      }
+    },
+    hasWorkflows: published.length > 0,
+  };
+  const actionError = start.error ?? create.error;
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto" {...drop.props}>
       <DropOverlay over={drop.over} />
@@ -143,16 +211,22 @@ function Welcome({ disabled }: { disabled: boolean }) {
           <h1 className="mt-5 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg">{persona.name}</h1>
           <p className="mt-2 text-center text-[14px] text-fg-secondary">{personaTagline(fullPersona, toneLabel, !!fullPersona && fullPersona.id === defaultId)}</p>
         </div>
-        <form
-          className="mt-7 flex w-full flex-col gap-2"
-          onPaste={files.onPaste}
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          {start.isError && (
-            <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(start.error)}</p>
+        <div className="mt-7 flex w-full flex-col gap-2">
+          {actionError && (
+            <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(actionError)}</p>
+          )}
+          {unavailable && (
+            <Banner
+              tone="human"
+              title={`${unavailable.label} is unavailable`}
+              actions={
+                <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
+                  Add the key →
+                </Link>
+              }
+            >
+              {unavailableReason(unavailable)}. Pick another model or add the key.
+            </Banner>
           )}
           {fullPersona?.capabilities.code && !repos.length && (
             <p className="text-[12.5px] text-fg-secondary" data-testid="no-repos-hint">
@@ -162,42 +236,54 @@ function Welcome({ disabled }: { disabled: boolean }) {
               </button>
             </p>
           )}
+          {repo && repos.length > 1 && (
+            <p className="text-xs text-fg-tertiary" data-testid="welcome-repo" title={repo}>
+              Works in <span className="font-mono text-fg-secondary">{repoShortName(repo)}</span> · /repo to change
+            </p>
+          )}
           {repo && emails.length > 1 && (
             <CommitEmailPicker emails={emails} name={boot.data?.me.name ?? ""} repo={repo} value={commitEmail} onPick={setCommitEmail} disabled={locked} required />
           )}
-          <AttachmentChips attachments={files} />
-          <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
-          <div className={composerFrame}>
-            <TextArea
-              ref={area}
-              aria-label="Message"
-              className={composerInput}
-              rows={2}
-              value={text}
-              disabled={locked}
-              placeholder={name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-            />
-            <div className="flex items-end gap-2">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                <AttachButton onFiles={files.add} disabled={locked} compact />
+          <Composer
+            text={text}
+            onText={setText}
+            inputRef={area}
+            files={files}
+            chips={chips}
+            onChips={setChips}
+            onSubmit={submit}
+            commands={commands}
+            personas={personas.data?.personas ?? []}
+            inChat={(id) => id === personaId}
+            rows={2}
+            disabled={locked}
+            placeholder={name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
+            options={
+              <>
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                 <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
-              </div>
-              <SendButton
-                label={start.isPending ? "Starting…" : research ? "Plan it" : "Send"}
-                disabled={locked || files.pending || !text.trim() || askCommitEmail}
-                title={askCommitEmail ? "Pick which email commits use first" : undefined}
-              />
-            </div>
-          </div>
-        </form>
+              </>
+            }
+            actions={
+              selection && (
+                <ModelEffortPicker
+                  groups={groups}
+                  value={selection}
+                  onChange={setPickedModel}
+                  efforts={offered.efforts}
+                  effort={effort}
+                  onEffort={(e) => setPickedEffort(e ?? null)}
+                  disabled={locked}
+                />
+              )
+            }
+            send={{
+              label: start.isPending ? "Starting…" : research ? "Plan it" : "Send",
+              disabled: locked || !!unavailable || files.pending || !text.trim() || askCommitEmail,
+              title: askCommitEmail ? "Pick which email commits use first" : undefined,
+            }}
+          />
+        </div>
         <div className="mt-5">
           <Starters
             disabled={locked}
@@ -272,7 +358,7 @@ export function ChatScreen({ id }: { id?: string }) {
                   </div>
                 ) : (
                   // Keyed by the linked persona so New chat from the welcome starts over on the one it names.
-                  <Welcome key={search.get("persona") ?? ""} disabled={noHarness} />
+                  <Welcome key={search.get("persona") ?? ""} disabled={noHarness} onNew={conversation.start} />
                 )}
               </>
             )}

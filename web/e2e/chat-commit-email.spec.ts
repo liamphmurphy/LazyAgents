@@ -18,7 +18,7 @@ test("a new coding chat waits for an address, starts with it, and can switch fro
   await expect(options.first()).toContainText("primary");
   await expect(options.first()).toHaveAttribute("aria-checked", "false");
 
-  await page.getByLabel("Message").fill("fix the build");
+  await page.getByRole("combobox", { name: "Message" }).fill("fix the build");
   const send = page.getByRole("button", { name: "Send" });
   await expect(send).toBeDisabled();
   await picker(page).getByRole("radio", { name: /liam@phmurphy\.com/ }).click();
@@ -43,7 +43,7 @@ test("an existing coding chat with nothing picked asks above the composer withou
   const mock = await installChatApi(page, { personas: [coder()], emails: ["liam@example.com", "liam@phmurphy.com"] });
   await page.goto("/chat?project=WEB");
   await page.getByRole("radio", { name: /liam@example\.com/ }).click();
-  await page.getByLabel("Message").fill("hello");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[^/]+/);
   // The address leaves the chat (as when it's removed from the profile): it asks again.
@@ -61,7 +61,7 @@ test("an existing coding chat with nothing picked asks above the composer withou
 test("with one address there's nothing to ask", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [coder()] });
   await page.goto("/chat?project=WEB");
-  await page.getByLabel("Message").fill("fix the build");
+  await page.getByRole("combobox", { name: "Message" }).fill("fix the build");
   await expect(picker(page)).toHaveCount(0);
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[^/]+/);

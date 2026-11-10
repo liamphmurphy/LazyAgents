@@ -266,7 +266,7 @@ test("a coding persona's new chat works in its first repo and shows it in the he
   await page.goto("/chat?project=WEB");
   // No repository picker: /repo in the chat switches to another of the persona's repos.
   await expect(page.getByRole("button", { name: /^Repository for this conversation/ })).toHaveCount(0);
-  await page.getByLabel("Message").fill("fix the build");
+  await page.getByRole("combobox", { name: "Message" }).fill("fix the build");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[^/]+/);
   const chip = page.getByTestId("repo-chip").first();
@@ -284,7 +284,7 @@ test("a chat whose checkout is a host folder shows the folder with a copy button
     personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: true }, repos: ["https://github.com/acme/app"] })],
   });
   await page.goto("/chat?project=WEB");
-  await page.getByLabel("Message").fill("fix the build");
+  await page.getByRole("combobox", { name: "Message" }).fill("fix the build");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[^/]+/);
   await expect(page.getByTestId("repo-chip").first()).toBeVisible();

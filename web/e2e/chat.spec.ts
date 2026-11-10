@@ -37,7 +37,7 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
   // First visit: the welcome leads with who you're talking to (no personas yet: the built-in Assistant).
   await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Suggestions" }).getByRole("button")).toHaveCount(3);
-  await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Message" })).toBeVisible();
 
   await newChat(page);
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
@@ -333,10 +333,10 @@ test("sending from the Welcome creates the chat, posts the message and opens it"
   await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
   // A suggestion fills the composer; it is not sent.
   await page.getByRole("list", { name: "Suggestions" }).getByRole("button", { name: "Draft tickets from a spec" }).click();
-  await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("Draft tickets from a spec");
+  await expect(page.getByRole("combobox", { name: "Message" })).toHaveValue("Draft tickets from a spec");
   expect(mock.posted).toEqual([]);
 
-  await page.getByRole("textbox", { name: "Message" }).fill("first words");
+  await page.getByRole("combobox", { name: "Message" }).fill("first words");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   await expect(page.getByTestId("user-message")).toContainText("first words");
@@ -352,10 +352,46 @@ test("Temporary on the Welcome makes the chat temporary", async ({ page }) => {
   await page.goto("/chat?new");
   await page.getByRole("button", { name: "Temporary", exact: true }).click();
   await expect(page.getByRole("button", { name: "Temporary", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("textbox", { name: "Message" }).fill("off the record");
+  await page.getByRole("combobox", { name: "Message" }).fill("off the record");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   expect(mock.created).toEqual([{ temporary: true }]);
+  expect(mock.unhandled).toEqual([]);
+});
+
+test("the Welcome's box is a chat's: model and effort, / commands, @ mentions and context", async ({ page }) => {
+  const mock = await installChatApi(page, { personas: [persona(1, { name: "Atlas", is_default: true }), persona(2, { name: "Nova" })] });
+  await page.goto("/chat?new");
+  const box = composer(page);
+  // Before a pick it shows what the chat would start on: the agents' model, automatic effort.
+  await expect(picker(page)).toHaveAccessibleName("Model and effort for the next message: Claude Code, Opus 5.5, Automatic effort");
+  await expect(page.getByRole("button", { name: "Add context" })).toBeVisible();
+  await expect(page.getByTestId("composer-hints")).toContainText("/ commands");
+
+  await box.pressSequentially("/");
+  await expect(page.getByTestId("command-suggestions").getByRole("option")).toHaveCount(8);
+  await box.fill("/model sonnet");
+  await box.press("Enter");
+  await expect(picker(page)).toHaveAccessibleName(/Sonnet 5\.5, Automatic effort/);
+  await box.fill("/effort high");
+  await box.press("Enter");
+  await expect(picker(page)).toHaveAccessibleName(/Sonnet 5\.5, High effort/);
+  await box.fill("/persona nova");
+  await box.press("Enter");
+  await expect(page.getByRole("heading", { level: 1, name: "Nova" })).toBeVisible();
+  await box.fill("/stop");
+  await box.press("Enter");
+  await expect(page.getByTestId("command-error")).toHaveText("There’s no reply to stop.");
+
+  await box.fill("");
+  await box.pressSequentially("ask @at");
+  await page.getByTestId("mention-suggestions").getByRole("option", { name: /Atlas/ }).click();
+  await expect(box).toHaveValue("ask @Atlas ");
+  await box.pressSequentially("too");
+  await box.press("Enter");
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
+  expect(mock.created).toEqual([{ persona_id: mock.personas[1].id }]);
+  expect(mock.posted[0].body).toEqual({ body: "ask @Atlas too", harness: "claude-code", model: "sonnet-5.5", effort: "high" });
   expect(mock.unhandled).toEqual([]);
 });
 
@@ -371,7 +407,7 @@ test("Start chat ?attach= on /chat shows chips in the Welcome and sends them wit
   await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
   await expect(chips(page)).toHaveCount(1);
   await expect(chips(page).first()).toContainText("Plan");
-  await page.getByRole("textbox", { name: "Message" }).fill("summarise");
+  await page.getByRole("combobox", { name: "Message" }).fill("summarise");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: summarise");

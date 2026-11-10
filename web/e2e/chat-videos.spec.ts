@@ -6,8 +6,8 @@ import { installChatApi } from "./mock-chat-api";
 
 async function ask(page: Page, prompt: string) {
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill(prompt);
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill(prompt);
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
 }
 
 // The mockup the card follows is dark; the screenshots match it.

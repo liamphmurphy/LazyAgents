@@ -121,6 +121,23 @@ test("/workflow lists published workflows, confirms, then the gate appears above
   expect(start.body).toMatchObject({ workflow_id: WF, input: "Compare queues" });
 });
 
+test("/workflow on the welcome makes the chat and opens it on the start card", async ({ page }) => {
+  const mock = await installChatApi(page, { replyDelayMs: 10 });
+  await serveWorkflows(page, { wf: workflow(), posts: [], runs: [] });
+  await page.goto("/chat?new");
+  const box = page.getByRole("combobox", { name: "Message" });
+  await box.pressSequentially("/workflow ");
+  await page.getByTestId("command-suggestions").getByRole("option", { name: "Research to wiki" }).click();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+\?workflow=/);
+  await expect(page.getByTestId("workflow-start")).toContainText("Run Research to wiki?");
+  expect(mock.created).toHaveLength(1);
+  expect(mock.posted).toEqual([]);
+  // Dismissing it drops the link, so a reload doesn't bring the card back.
+  await page.getByTestId("workflow-start").getByRole("button", { name: "Not now" }).click();
+  await expect(page.getByTestId("workflow-start")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
+});
+
 test("the run page shows step status and the gate", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   const state = { wf: workflow(), posts: [] as { url: string; body: unknown }[], runs: [] as unknown[] };

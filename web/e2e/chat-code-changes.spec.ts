@@ -6,8 +6,8 @@ import { installChatApi } from "./mock-chat-api";
 test("changes block is collapsed, expands to file diffs; long fences collapse", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("code: add the thing");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("code: add the thing");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
 
   const block = page.getByTestId("code-changes");
   const toggle = block.getByRole("button", { name: /Changed 3 files/ });

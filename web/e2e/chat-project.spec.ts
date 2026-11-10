@@ -8,8 +8,8 @@ test("chat lives above projects: no switcher, and a default project can be set a
   await page.goto("/chat");
   await expect(page.getByRole("button", { name: /^Switch project/ })).toHaveCount(0);
 
-  await page.getByRole("textbox", { name: "Message" }).fill("hello");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   await expect(page.getByTestId("assistant-message").first()).toBeVisible();
   expect(mock.created.at(-1)?.project).toBeUndefined();

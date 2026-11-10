@@ -9,7 +9,7 @@ const task = (label: string, state: string, extra = {}) => ({ label, question: "
 async function open(page: Page) {
   const mock = await installChatApi(page, { replyDelayMs: 10 });
   await page.goto("/chat?project=WEB");
-  const box = page.getByRole("textbox", { name: "Message" });
+  const box = page.getByRole("combobox", { name: "Message" });
   await box.fill("research: local tts");
   await page.getByRole("button", { name: "Research", exact: true }).click();
   await expect(page.getByRole("button", { name: "Plan it" })).toBeVisible();

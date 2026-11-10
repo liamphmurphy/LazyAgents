@@ -11,8 +11,8 @@ const composer = (page: Page) => page.getByRole("combobox", { name: "Message" })
 
 async function openChat(page: Page) {
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("hello");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   await expect(page.getByTestId("assistant-message").first()).toBeVisible();
   return page.url().match(/\/chat\/([0-9a-f-]+)/)![1];

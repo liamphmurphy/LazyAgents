@@ -13,7 +13,7 @@ const picked = (page: Page) => strip(page).getByRole("button", { pressed: true }
 const pick = (page: Page, name: string | RegExp) => strip(page).getByRole("button", { name }).click();
 const switcher = (page: Page) => page.getByRole("button", { name: /^Persona for this conversation:/ });
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
-const welcomeBox = (page: Page) => page.getByRole("textbox", { name: "Message" });
+const welcomeBox = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const onCarousel = (page: Page) => page.getByRole("radiogroup", { name: "Who to talk to" }).getByRole("radio", { checked: true });
 // The menu's New chat opens the welcome; the chat is made with its first message.
 async function newChat(page: Page) {
@@ -32,8 +32,8 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   // Welcome: the first conversation goes to the default persona.
   await expect(page.getByRole("heading", { level: 1, name: "Atlas" })).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Who to talk to" }).getByRole("radio", { checked: true })).toHaveAccessibleName("Atlas");
-  await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello atlas");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   expect(mock.created[0].persona_id).toBe(ATLAS.id);
 
@@ -100,8 +100,8 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
 test("picking a persona in the sidebar opens its newest conversation", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello atlas");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   const atlasChat = new URL(page.url()).pathname;
 
@@ -148,8 +148,8 @@ test("the collapsed menu lists personas and opens each one's newest conversation
   await page.addInitScript(() => localStorage.removeItem("lazyagents.sidebar-expanded"));
   const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello atlas");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   const atlasChat = new URL(page.url()).pathname;
 
@@ -168,8 +168,8 @@ test("the collapsed menu lists personas and opens each one's newest conversation
 test("a new conversation opens at once, without waiting for the lists to refresh", async ({ page }) => {
   await installChatApi(page, { personas: [ATLAS, NOVA] });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello atlas");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   await expect(page.getByTestId("assistant-identity").first()).toContainText("Atlas");
 
@@ -184,8 +184,8 @@ test("a new conversation opens at once, without waiting for the lists to refresh
 test("the menu keeps its width whatever the titles and persona filter", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
-  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello atlas");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   await expect(page.getByTestId("assistant-identity").first()).toContainText("Atlas");
   mock.chats[0].title = "A title still being generated that keeps going and going well past the width of the menu";
