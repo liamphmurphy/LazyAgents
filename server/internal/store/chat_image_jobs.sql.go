@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -265,6 +266,44 @@ func (q *Queries) QueuedChatImageJobs(ctx context.Context, arg QueuedChatImageJo
 			&i.FollowupTurnID,
 			&i.ReferenceRoles,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recentChatImagePrompts = `-- name: RecentChatImagePrompts :many
+SELECT prompt, created_at FROM chat_image_jobs
+WHERE chat_id = $1 AND state = 'done'
+ORDER BY created_at DESC, id DESC LIMIT $2
+`
+
+type RecentChatImagePromptsParams struct {
+	ChatID   uuid.UUID
+	RowLimit int32
+}
+
+type RecentChatImagePromptsRow struct {
+	Prompt    string
+	CreatedAt time.Time
+}
+
+// The prompts behind a chat's newest generated images, newest first, so a
+// fresh segment can revise an image it made in an earlier one.
+func (q *Queries) RecentChatImagePrompts(ctx context.Context, arg RecentChatImagePromptsParams) ([]RecentChatImagePromptsRow, error) {
+	rows, err := q.db.Query(ctx, recentChatImagePrompts, arg.ChatID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecentChatImagePromptsRow{}
+	for rows.Next() {
+		var i RecentChatImagePromptsRow
+		if err := rows.Scan(&i.Prompt, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

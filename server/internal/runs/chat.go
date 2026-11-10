@@ -680,7 +680,7 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 			prompt += firstTurnNote
 		}
 		if total > 0 {
-			rows, err := q.ListRecentChatMessages(ctx, store.ListRecentChatMessagesParams{SessionID: chat.ID, RowLimit: handoffRows, MaxChars: handoffRowChars})
+			rows, err := q.ListRecentChatMessages(ctx, store.ListRecentChatMessagesParams{SessionID: chat.ID, RowLimit: handoffRows, MaxChars: handoffFetchChars})
 			if err != nil {
 				return chat, run, turn, err
 			}
@@ -688,11 +688,15 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 			for i, r := range rows {
 				hist[i] = HandoffMessage{Seq: r.Seq, Role: r.Role, Harness: deref(r.Harness), Model: deref(r.Model), Persona: r.PersonaName, Body: r.BodyMd}
 			}
+			hc, err := loadHandoffContext(ctx, q, chat.ID)
+			if err != nil {
+				return chat, run, turn, err
+			}
 			footer := handoffFooter
 			if relay {
 				footer = relayFooter
 			}
-			prompt = renderHandoff(hist, int(total), handoffChars, footer, prompt)
+			prompt = renderHandoff(hist, int(total), handoffChars, hc, footer, prompt)
 		}
 	}
 	state := "running"
