@@ -43,7 +43,7 @@ test("switching projects from the board rescopes the board and project nav, and 
   for (const [label, href] of [
     ["Board", "/board?project=OPS"], ["Tickets", "/tickets?project=OPS"], ["Epics", "/epics?project=OPS"],
     ["Plans", "/plans?project=OPS"], ["Artifacts", "/artifacts?project=OPS"],
-    ["Dashboard", "/"], ["Agents", "/agents"], ["Wiki", "/wiki"], ["Settings", "/settings"],
+    ["Dashboard", "/dashboard"], ["Agents", "/agents"], ["Wiki", "/wiki"], ["Settings", "/settings"],
   ]) await expect(nav(page).getByRole("link", { name: label, exact: true })).toHaveAttribute("href", href);
 
   // No project in the URL resolves to the remembered one.

@@ -83,8 +83,8 @@ test("cross-project links on optional routes show All projects, bare routes the 
 
 
 test("each page belongs to a mode, and pinned pages keep the last one", () => {
-  for (const p of ["/chat", "/chat/1", "/customization", "/library", "/workflows", "/learn/2"]) assert.equal(routeMode(p), "chat", p);
-  for (const p of ["/", "/board", "/tickets/WEB-1", "/runs/1", "/settings/projects", "/wiki"]) assert.equal(routeMode(p), "work", p);
+  for (const p of ["/", "/chat", "/chat/1", "/customization", "/library", "/workflows", "/learn/2"]) assert.equal(routeMode(p), "chat", p);
+  for (const p of ["/dashboard", "/board", "/tickets/WEB-1", "/runs/1", "/settings/projects", "/wiki"]) assert.equal(routeMode(p), "work", p);
   assert.equal(routeMode("/inbox"), undefined);
   assert.equal(navMode("/board", "chat"), "work");
   assert.equal(navMode("/inbox", "chat"), "chat");

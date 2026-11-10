@@ -345,7 +345,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0, projects }:
 
       {chatting && <SidebarSpaces viewed={viewed} />}
       {chatting && <ChatHistory id={viewed ?? undefined} viewed={viewed} />}
-      {pathname === "/" && <SidebarCapacity />}
+      {pathname === "/dashboard" && <SidebarCapacity />}
     </aside>
   );
 }
