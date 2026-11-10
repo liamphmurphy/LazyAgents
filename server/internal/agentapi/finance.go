@@ -252,7 +252,7 @@ type FinanceMapCSVIn struct {
 	Delimiter    string   `json:"delimiter" jsonschema:"One character: , ; | or a tab"`
 	HeaderRow    int      `json:"header_row" jsonschema:"1-based row holding the column names (blank lines aren't rows); 0 if there is none"`
 	Date         int      `json:"date" jsonschema:"0-based date column"`
-	DateFormat   string   `json:"date_format" jsonschema:"MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, MM/DD/YY, DD/MM/YY, DD.MM.YYYY, YYYYMMDD, MMM D, YYYY or D MMM YYYY"`
+	DateFormat   string   `json:"date_format" jsonschema:"MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, MM/DD/YY, DD/MM/YY, DD.MM.YYYY, YYYYMMDD, MMM D, YYYY, MMM-DD-YYYY or D MMM YYYY"`
 	Description  []int    `json:"description" jsonschema:"1–3 columns joined into the description"`
 	Amount       *int     `json:"amount,omitempty" jsonschema:"Signed amount column, or unsigned with direction"`
 	Direction    *int     `json:"direction,omitempty" jsonschema:"Column saying which way the money went, with an unsigned amount"`

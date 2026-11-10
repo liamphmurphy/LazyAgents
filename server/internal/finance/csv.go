@@ -59,12 +59,13 @@ var DateFormats = map[string][]string{
 	"DD.MM.YYYY":  {"02.01.2006", "2.1.2006"},
 	"YYYYMMDD":    {"20060102"},
 	"MMM D, YYYY": {"Jan 2, 2006", "January 2, 2006", "Jan 2 2006"},
+	"MMM-DD-YYYY": {"Jan-02-2006", "Jan-2-2006"},
 	"D MMM YYYY":  {"2 Jan 2006", "02 Jan 2006", "2-Jan-2006", "02-Jan-2006", "2 January 2006"},
 }
 
 // dateFormatOrder is how detection tries them: unambiguous first, then US
 // month-first ahead of day-first (it only wins when no day is over 12).
-var dateFormatOrder = []string{"YYYY-MM-DD", "YYYYMMDD", "MM/DD/YYYY", "DD/MM/YYYY", "MM/DD/YY", "DD/MM/YY", "DD.MM.YYYY", "MMM D, YYYY", "D MMM YYYY"}
+var dateFormatOrder = []string{"YYYY-MM-DD", "YYYYMMDD", "MM/DD/YYYY", "DD/MM/YYYY", "MM/DD/YY", "DD/MM/YY", "DD.MM.YYYY", "MMM D, YYYY", "MMM-DD-YYYY", "D MMM YYYY"}
 
 var delimiters = []string{",", ";", "\t", "|"}
 
