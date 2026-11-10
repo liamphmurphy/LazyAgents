@@ -292,6 +292,9 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 			spec.Env[k] = v
 		}
 	}
+	if _, exists := spec.Env[SSHDirEnv]; !exists {
+		spec.Env[SSHDirEnv] = path.Join(homePath, ".lazyagents", "ssh")
+	}
 	mounts := []map[string]any{{"Type": "volume", "Source": volumeName(runID), "Target": workspacePath}}
 	// A persistent volume is shared by all runs and deliberately has no run
 	// label, so workspace cleanup never removes downloaded dependencies.

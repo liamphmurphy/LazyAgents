@@ -136,3 +136,29 @@ func TestSetupScriptStacksOnEpicBranch(t *testing.T) {
 		t.Fatal("local base branch must not move")
 	}
 }
+
+// With LAZYAGENTS_SSH_DIR set (the Docker backend's home volume), nothing of
+// the key lands in the checkout, which may be a folder on the person's machine.
+func TestSetupScriptSSHDirKeepsKeyOutOfCheckout(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sshDir := filepath.Join(t.TempDir(), "ssh")
+	cmd := exec.Command("sh", "-c", SetupScriptForBranch("", "", "feat", "A", "a@x", nil))
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), SSHKeyEnv+"=KEYDATA", SSHDirEnv+"="+sshDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if b, err := os.ReadFile(sshDir + "/id"); err != nil || strings.TrimSpace(string(b)) != "KEYDATA" {
+		t.Fatalf("key in ssh dir: %q %v", b, err)
+	}
+	if _, err := os.Stat(dir + "/.lazyagents/ssh"); !os.IsNotExist(err) {
+		t.Fatalf(".lazyagents/ssh in the checkout: %v", err)
+	}
+	cfg, _ := exec.Command("git", "-C", dir, "config", "core.sshCommand").Output()
+	if !strings.Contains(string(cfg), "-i "+sshDir+"/id") || !strings.Contains(string(cfg), "UserKnownHostsFile="+sshDir+"/known_hosts") {
+		t.Fatalf("core.sshCommand = %q", cfg)
+	}
+}

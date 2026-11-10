@@ -56,18 +56,25 @@ const githubHostKeys = `github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVz
 github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
 `
 
+// SSHDirEnv overrides where sshSetup keeps the key and known_hosts. The
+// Docker backend points it at the run's home volume, so a key never lands in
+// a checkout that may be a folder on the person's machine; the local backend
+// leaves it unset, since its $HOME is the person's own.
+const SSHDirEnv = "LAZYAGENTS_SSH_DIR"
+
 // sshSetup writes the pinned known_hosts (and the key when injected) under
-// .lazyagents/ssh, which stays out of git, and points git at them. Without an
-// injected key ssh falls back to the machine's own keys or agent, so a local
-// runner keeps working with the user's login.
-var sshSetup = `mkdir -p .lazyagents/ssh
-chmod 700 .lazyagents/ssh
-cat > .lazyagents/ssh/known_hosts <<'LAZYAGENTS_KNOWN_HOSTS'
+// $LAZYAGENTS_SSH_DIR, or .lazyagents/ssh, which stays out of git, and points
+// git at them. Without an injected key ssh falls back to the machine's own
+// keys or agent, so a local runner keeps working with the user's login.
+var sshSetup = `sshdir="${` + SSHDirEnv + `:-$PWD/.lazyagents/ssh}"
+mkdir -p "$sshdir"
+chmod 700 "$sshdir"
+cat > "$sshdir/known_hosts" <<'LAZYAGENTS_KNOWN_HOSTS'
 ` + githubHostKeys + `LAZYAGENTS_KNOWN_HOSTS
-sshopts="-o UserKnownHostsFile=$PWD/.lazyagents/ssh/known_hosts -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519,ecdsa-sha2-nistp256 -o BatchMode=yes"
+sshopts="-o UserKnownHostsFile=$sshdir/known_hosts -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519,ecdsa-sha2-nistp256 -o BatchMode=yes"
 if [ -n "${` + SSHKeyEnv + `:-}" ]; then
-  (umask 077; printf '%s\n' "$` + SSHKeyEnv + `" > .lazyagents/ssh/id)
-  sshopts="$sshopts -i $PWD/.lazyagents/ssh/id -o IdentitiesOnly=yes"
+  (umask 077; printf '%s\n' "$` + SSHKeyEnv + `" > "$sshdir/id")
+  sshopts="$sshopts -i $sshdir/id -o IdentitiesOnly=yes"
 fi
 export GIT_SSH_COMMAND="ssh $sshopts"
 `
@@ -121,7 +128,8 @@ func SetupScriptWithCheckpoint(repoURL, baseBranch, epicBranch, checkpoint, bran
 		if baseBranch != "" {
 			cloneBranch = "--branch " + shellQuote(baseBranch) + " -- "
 		}
-		// .lazyagents/ already exists (ssh setup), so clone beside it and move .git in.
+		// .lazyagents/ may already exist (ssh setup on the local backend, context
+		// files), so clone beside it and move .git in.
 		const dest = ".lazyagents/clone"
 		q := shellQuote(repoURL)
 		b.WriteString("  rm -rf " + dest + "\n")

@@ -207,3 +207,15 @@ func TestDockerStartJoinsServiceNetworks(t *testing.T) {
 		t.Fatalf("calls %v: want the network joined before start", f.calls)
 	}
 }
+
+// A Docker turn keeps its SSH key in the run's home volume, not the checkout.
+func TestDockerStartPutsSSHDirInHome(t *testing.T) {
+	f, d := startFakeEngine(t)
+	if _, err := d.Start(context.Background(), "run-1", ExecSpec{Name: "t", Argv: []string{"true"}}); err != nil {
+		t.Fatal(err)
+	}
+	env, _ := f.created["Env"].([]any)
+	if !slices.Contains(env, any(SSHDirEnv+"=/home/node/.lazyagents/ssh")) {
+		t.Fatalf("env %v", env)
+	}
+}
