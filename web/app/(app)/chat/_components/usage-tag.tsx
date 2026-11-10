@@ -8,6 +8,7 @@ import { replyCost } from "@/lib/chat-ui";
 import { tokenBreakdown } from "@/lib/token-usage";
 import { cx } from "@/lib/cx";
 import { floatPanel } from "@/components/domain/pickers";
+import { effortLabel } from "./model-picker";
 
 type Message = Schemas["ChatMessage"];
 
@@ -21,9 +22,22 @@ function Row({ label, value, note }: { label: string; value: string; note?: stri
   );
 }
 
+const REASONS: Record<NonNullable<Message["effort_reasons"]>[number], string> = {
+  confirmation: "raised for a go-ahead",
+  effort_mismatch: "raised after a retry or edit",
+};
+
+/** How the reply's effort was chosen: by the person, or by Vesper and why. */
+function effortNote(m: Message): string | undefined {
+  if (!m.effort_level) return m.effort && "chosen";
+  const aimed = m.effort_level !== m.effort && `aimed for ${effortLabel(m.effort_level).toLowerCase()}`;
+  return ["automatic", aimed, ...(m.effort_reasons ?? []).map((r) => REASONS[r])].filter(Boolean).join(" · ");
+}
+
 /**
- * The reply's harness · model tag. When the turn reported usage, the tag is a
- * button whose tooltip (hover or keyboard focus) shows tokens and cost.
+ * The reply's harness · model · effort tag. When the turn reported usage, the
+ * tag is a button whose tooltip (hover or keyboard focus) shows tokens, cost
+ * and how the effort was chosen.
  */
 export function UsageTag({ m, children }: { m: Message; children: ReactNode }) {
   const tagClass = "font-mono text-[11.5px] text-fg-tertiary";
@@ -67,6 +81,7 @@ export function UsageTag({ m, children }: { m: Message; children: ReactNode }) {
             <Row label="Input" value={compact(t.input)} note={cache || undefined} />
             <Row label="Output" value={compact(t.output)} />
             <Row label="Cost" value={cost ?? "not reported"} />
+            {(m.effort || m.effort_level) && <Row label="Effort" value={m.effort ? effortLabel(m.effort) : "Model default"} note={effortNote(m)} />}
           </Tooltip.Content>
         </Tooltip.Portal>
       </Tooltip.Root>
