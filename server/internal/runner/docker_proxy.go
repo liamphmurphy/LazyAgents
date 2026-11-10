@@ -14,6 +14,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -46,7 +47,8 @@ type ProxyBackend interface {
 	// StartDockerProxy serves a Docker API for one turn. The turn joins
 	// Network and gets Env; Stop removes everything the turn created and is
 	// safe to call more than once.
-	StartDockerProxy(ctx context.Context, runID, key string) (*TurnDocker, error)
+	// workspaceID names the run's checkout, which containers may bind from.
+	StartDockerProxy(ctx context.Context, runID, workspaceID, key string) (*TurnDocker, error)
 }
 
 // TurnDocker is a turn's Docker API.
@@ -73,14 +75,18 @@ func (d *Docker) PrepareDockerProxy() error {
 	return os.Chmod(d.ProxyDir, 0o711)
 }
 
-func (d *Docker) StartDockerProxy(ctx context.Context, runID, key string) (*TurnDocker, error) {
+func (d *Docker) StartDockerProxy(ctx context.Context, runID, workspaceID, key string) (*TurnDocker, error) {
 	if d.ProxyDir == "" || d.ProxyVolume == "" {
 		return nil, errProxyOff
 	}
-	p := &turnProxy{d: d, runID: runID, key: key, network: proxyNetworkName(key)}
+	ws, err := d.workspaceMount(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	p := &turnProxy{d: d, runID: runID, key: key, network: proxyNetworkName(key), workspace: ws}
 	// Not internal: what tests start may need the internet (a cloud emulator
 	// fetching its runtime), and published ports need a bridge with a gateway.
-	_, err := d.do(ctx, "POST", "/networks/create", jsonBody(map[string]any{
+	_, err = d.do(ctx, "POST", "/networks/create", jsonBody(map[string]any{
 		"Name": p.network, "Labels": p.labels(nil),
 	}), "application/json", nil)
 	if err != nil && !isStatus(err, 409) { // 409: left by a turn that died; reuse it
@@ -141,6 +147,9 @@ func (d *Docker) StartDockerProxy(ctx context.Context, runID, key string) (*Turn
 			"TESTCONTAINERS_RYUK_DISABLED": "true",
 			// Published ports listen on the turn network's gateway only.
 			"TESTCONTAINERS_HOST_OVERRIDE": p.gateway,
+			// Builds go through the classic builder (see build): BuildKit's
+			// session and gRPC streams can't be inspected.
+			"DOCKER_BUILDKIT": "0",
 		},
 		Stop: stop,
 	}, nil
@@ -152,8 +161,11 @@ type turnProxy struct {
 	key     string
 	network string
 	gateway string
-	fwd     *httputil.ReverseProxy
-	once    sync.Once
+	// workspace is the run's checkout as a mount (its volume, or its host
+	// folder): what binds under /workspace are rewritten to.
+	workspace map[string]any
+	fwd       *httputil.ReverseProxy
+	once      sync.Once
 	// created serializes container creation so the per-turn cap holds.
 	created sync.Mutex
 }
@@ -217,8 +229,12 @@ func (p *turnProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case get && slices.Contains([]string{"/_ping", "/version", "/info", "/images/json"}, path):
 		p.forward(w, r)
-	case post && path == "/images/create", post && path == "/auth":
+	case post && path == "/images/create":
+		p.pullImage(w, r)
+	case post && path == "/auth":
 		p.forward(w, r)
+	case post && path == "/build":
+		p.build(w, r)
 	case get && len(parts) >= 3 && parts[0] == "images" && (parts[len(parts)-1] == "json" || parts[len(parts)-1] == "history"):
 		p.forward(w, r) // /images/{name}/json; names may contain slashes
 	case get && len(parts) >= 3 && parts[0] == "distribution" && parts[len(parts)-1] == "json":
@@ -252,7 +268,7 @@ func (p *turnProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.forward(w, r)
 
 	default:
-		proxyError(w, http.StatusForbidden, "%s %s isn't available to agents (builds, swarm, plugins, system and image removal are host-wide)", r.Method, path)
+		proxyError(w, http.StatusForbidden, "%s %s isn't available to agents (BuildKit sessions, swarm, plugins, system and image removal are host-wide)", r.Method, path)
 	}
 }
 
@@ -267,6 +283,14 @@ func (p *turnProxy) forward(w http.ResponseWriter, r *http.Request) {
 			},
 			Transport:     p.d.http().Transport,
 			FlushInterval: -1, // logs, pulls and waits stream
+			ModifyResponse: func(res *http.Response) error {
+				// Clients pick BuildKit when the daemon offers it; this one
+				// only accepts classic builds.
+				if res.Header.Get("Builder-Version") != "" {
+					res.Header.Set("Builder-Version", "1")
+				}
+				return nil
+			},
 		}
 	})
 	p.fwd.ServeHTTP(w, r)
@@ -464,18 +488,27 @@ func (p *turnProxy) sandbox(body map[string]any, ownVolume, ownNetwork func(stri
 	}
 
 	var binds []string
+	var mounts []any
 	for _, b := range asList(in["Binds"]) {
-		s, _ := b.(string)
-		src, _, _ := strings.Cut(s, ":")
-		if src == "" || strings.HasPrefix(src, "/") || strings.HasPrefix(src, ".") || !ownVolume(src) {
-			return nil, refuse("Binds", fmt.Sprintf("%q: only volumes this turn created can be mounted, never host paths", s))
+		spec, _ := b.(string)
+		parts := strings.Split(spec, ":")
+		src := parts[0]
+		if strings.HasPrefix(src, "/") && len(parts) >= 2 {
+			m, err := p.workspaceBind(src, parts[1], len(parts) > 2 && slices.Contains(strings.Split(parts[2], ","), "ro"))
+			if err != nil {
+				return nil, refuse("Binds", fmt.Sprintf("%q: %v", spec, err))
+			}
+			mounts = append(mounts, m)
+			continue
 		}
-		binds = append(binds, s)
+		if src == "" || strings.HasPrefix(src, ".") || !ownVolume(src) {
+			return nil, refuse("Binds", fmt.Sprintf("%q: only this run's checkout (under /workspace) and volumes this turn created can be mounted", spec))
+		}
+		binds = append(binds, spec)
 	}
 	if len(binds) > 0 {
 		host["Binds"] = binds
 	}
-	var mounts []any
 	for _, m := range asList(in["Mounts"]) {
 		mount := asMap(m)
 		switch t, _ := mount["Type"].(string); t {
@@ -488,6 +521,15 @@ func (p *turnProxy) sandbox(body map[string]any, ownVolume, ownNetwork func(stri
 			if opts := asMap(mount["VolumeOptions"]); len(asMap(opts["DriverConfig"])) > 0 {
 				return nil, refuse("Mounts", "volume driver options can mount host paths")
 			}
+		case "bind":
+			src, _ := mount["Source"].(string)
+			dst, _ := mount["Target"].(string)
+			ro, _ := mount["ReadOnly"].(bool)
+			translated, err := p.workspaceBind(src, dst, ro)
+			if err != nil {
+				return nil, refuse("Mounts", fmt.Sprintf("bind %q: %v", src, err))
+			}
+			mount = translated
 		default:
 			return nil, refuse("Mounts", fmt.Sprintf("%q mounts reach the host; use a volume or tmpfs", t))
 		}
@@ -560,6 +602,126 @@ func (p *turnProxy) sandbox(body map[string]any, ownVolume, ownNetwork func(stri
 	out["HostConfig"] = host
 	out["Labels"] = p.labels(asMap(body["Labels"]))
 	return out, nil
+}
+
+// workspaceBind turns a bind of a path in the turn's checkout (compose's
+// ./server, resolved by the client to /workspace/server) into a mount of the
+// run's own checkout at that subpath. Anything else on the host is refused.
+func (p *turnProxy) workspaceBind(src, dst string, readOnly bool) (map[string]any, error) {
+	clean := path.Clean(src)
+	if clean != workspacePath && !strings.HasPrefix(clean, workspacePath+"/") {
+		return nil, errors.New("only this run's checkout (under /workspace) can be bind-mounted, never other host paths")
+	}
+	if dst == "" || !strings.HasPrefix(dst, "/") {
+		return nil, errors.New("the target must be an absolute path")
+	}
+	rel := strings.TrimPrefix(strings.TrimPrefix(clean, workspacePath), "/")
+	mount := map[string]any{"Target": dst, "ReadOnly": readOnly}
+	switch p.workspace["Type"] {
+	case "volume":
+		// The Engine resolves a subpath inside the volume and refuses one that
+		// escapes it through a symlink.
+		mount["Type"], mount["Source"] = "volume", p.workspace["Source"]
+		if rel != "" {
+			mount["VolumeOptions"] = map[string]any{"Subpath": rel}
+		}
+	case "bind":
+		// A host folder: a bind follows symlinks on the host, so resolve the
+		// path here (the runner sees the folder at the same path) and keep it
+		// inside the run's folder.
+		folder, _ := p.workspace["Source"].(string)
+		real, err := filepath.EvalSymlinks(filepath.Join(folder, filepath.FromSlash(rel)))
+		if err != nil {
+			return nil, fmt.Errorf("resolve it in the checkout: %w", err)
+		}
+		root, err := filepath.EvalSymlinks(folder)
+		if err != nil {
+			return nil, err
+		}
+		if real != root && !strings.HasPrefix(real, root+string(filepath.Separator)) {
+			return nil, errors.New("it leads outside the run's checkout")
+		}
+		mount["Type"], mount["Source"] = "bind", real
+	default:
+		return nil, errors.New("this run has no checkout to mount")
+	}
+	return mount, nil
+}
+
+// imageReplaceable reports whether a pull or build may (re)write ref: a new
+// name; an image a turn made; or, for a pull, one that came from a registry
+// (re-pulling it changes nothing a registry couldn't). Locally built images,
+// such as the agent image every turn runs in, are never replaced.
+func (p *turnProxy) imageReplaceable(ctx context.Context, ref string, pull bool) bool {
+	var info struct {
+		RepoDigests []string
+		Config      struct{ Labels map[string]string }
+	}
+	_, err := p.d.do(ctx, "GET", "/images/"+url.PathEscape(ref)+"/json", nil, "", &info)
+	switch {
+	case isStatus(err, 404):
+		return true
+	case err != nil:
+		return false
+	case info.Config.Labels[proxyLabelKey] != "" && info.Config.Labels[stackLabelKey] == p.d.stack():
+		return true
+	}
+	return pull && len(info.RepoDigests) > 0
+}
+
+func (p *turnProxy) pullImage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	ref := q.Get("fromImage")
+	if tag := q.Get("tag"); tag != "" && !strings.Contains(ref, "@") {
+		ref += ":" + tag
+	}
+	if q.Get("fromSrc") != "" || q.Get("repo") != "" {
+		proxyError(w, http.StatusForbidden, "image import isn't available to agents; pull from a registry")
+		return
+	}
+	if !p.imageReplaceable(r.Context(), ref, true) {
+		proxyError(w, http.StatusForbidden, "%s is a locally built image; pulling would replace it for every run", ref)
+		return
+	}
+	p.forward(w, r)
+}
+
+// build runs a classic (non-BuildKit) build: its RUN steps are containers on
+// the turn's network with the daemon's defaults (no privileges, no mounts).
+// BuildKit is refused because its session and gRPC streams carry requests,
+// host networking among them, that the proxy can't read.
+func (p *turnProxy) build(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	if v := q.Get("version"); v != "" && v != "1" {
+		proxyError(w, http.StatusForbidden, "BuildKit isn't available to agents; build with DOCKER_BUILDKIT=0")
+		return
+	}
+	switch mode := q.Get("networkmode"); mode {
+	case "", "default", "bridge", p.network:
+	case "none":
+	default:
+		proxyError(w, http.StatusForbidden, "builds run on the turn's network, not %q", mode)
+		return
+	}
+	for _, tag := range q["t"] {
+		if !p.imageReplaceable(r.Context(), tag, false) {
+			proxyError(w, http.StatusForbidden, "tag %s names an image this turn didn't build; pick another tag", tag)
+			return
+		}
+	}
+	labels := map[string]any{}
+	if raw := q.Get("labels"); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &labels)
+	}
+	b, _ := json.Marshal(p.labels(labels))
+	q.Set("labels", string(b))
+	q.Set("version", "1")
+	if q.Get("networkmode") != "none" {
+		q.Set("networkmode", p.network)
+	}
+	q.Del("extrahosts")
+	r.URL.RawQuery = q.Encode()
+	p.forward(w, r)
 }
 
 func (p *turnProxy) createNetwork(w http.ResponseWriter, r *http.Request) {

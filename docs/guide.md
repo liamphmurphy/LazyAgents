@@ -342,8 +342,16 @@ default capabilities, `no-new-privileges` and the turn's memory and process
 limits; published ports listen only on the turn network's gateway, which turns
 reach as `$TESTCONTAINERS_HOST_OVERRIDE` and your LAN doesn't. A turn sees and
 acts on only what it created, and all of it is removed when the turn ends.
-Builds, swarm, plugins and image removal aren't available. Ryuk is turned off
-(`TESTCONTAINERS_RYUK_DISABLED`), because cleanup is the runner's job.
+`docker compose` works too. Binds under `/workspace` (compose's `./server`)
+become mounts of the run's own checkout at that path; any other host path is
+refused, and with host-folder workspaces a symlink out of the checkout is too.
+Builds use the classic builder (`DOCKER_BUILDKIT=0` in turns): `RUN` steps run
+on the turn's network with the daemon's defaults. BuildKit is refused because
+its session and gRPC streams can't be inspected. Neither a build tag nor a pull
+can replace a locally built image a turn didn't make, such as the agent image.
+Swarm, plugins and image removal aren't available. Ryuk is turned off
+(`TESTCONTAINERS_RYUK_DISABLED`), because cleanup is the runner's job. A stack
+lasts one turn; one that stays up between messages is still to come.
 
 **Nix, without root.** The agent image ships Nix pointed at the runner's
 `nix-daemon`, which owns a store every turn shares (`RUNNER_NIX_VOLUME`). An

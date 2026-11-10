@@ -64,9 +64,15 @@ with nothing added to the repository, while damage stays inside containers.
   emulators fetch runtimes); declared services still can't.
 - Proxy containers, like services, last one turn. A chat's next message
   starts them again.
-- Not supported through the proxy: image builds, swarm, plugins, image
+- Compose works: checkout binds are rewritten to the run's own checkout
+  (volume subpath, or a symlink-checked host-folder path), and builds use the
+  classic builder on the turn's network. Not supported: BuildKit (opaque
+  session/gRPC streams that can grant host networking), swarm, plugins, image
   removal, `update` (it would lift limits), Ryuk, and non-upgraded attach
-  streams.
+  streams. Pulls and build tags can't replace locally built images, closing a
+  path to swapping the agent image every turn runs in.
+- Images built by turns stay in the daemon's store (a build cache for the next
+  turn); nothing removes them yet.
 - A recipe never drops a package on its own: one turn not using a tool isn't
   evidence the tests don't need it. Forget resets it.
 - The local runner gets none of this; it shares the host.
