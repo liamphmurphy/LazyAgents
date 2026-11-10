@@ -13,6 +13,7 @@ export type HarnessActivity = {
   plan?: string;
   usage_available: boolean;
   usage_checked_at?: string;
+  usage_checking?: boolean;
   windows: UsageWindow[];
 };
 
@@ -40,6 +41,18 @@ export function sessionPercent(h: HarnessActivity | undefined): number | null {
   if (!h.usage_available) return null;
   const w = h.windows.find((x) => x.kind === "session") ?? h.windows[0];
   return w ? Math.round(w.used_percent) : null;
+}
+
+/** Used percentage from which a session ring warns that the limit is near. */
+export const WARN_AT = 80;
+
+export type RingTone = "ok" | "warn" | "limited";
+
+/** How worried a harness's ring looks: amber near the limit, red once it's hit. */
+export function ringTone(h: HarnessActivity | undefined): RingTone {
+  if (h?.limited_until) return "limited";
+  const pct = sessionPercent(h);
+  return pct !== null && pct >= WARN_AT ? "warn" : "ok";
 }
 
 export function weeklyWindow(h: HarnessActivity): UsageWindow | undefined {
@@ -78,15 +91,19 @@ export function usageSub(h: HarnessActivity, all: HarnessActivity[], now: Date =
     const other = all.find((x) => x.harness !== h.harness && !x.limited_until);
     return `Limited until ${resetLabel(h.limited_until, now)}${other ? ` · falls back to ${other.label}` : ""}`;
   }
-  if (!h.usage_available) return h.usage_checked_at ? "No plan limits to show (API key or signed out)" : "Not read yet";
+  if (!h.usage_available) {
+    if (h.usage_checking && !h.usage_checked_at) return "Checking…";
+    return h.usage_checked_at ? "No plan limits to show (API key or signed out)" : "Not read yet";
+  }
   const session = h.windows.find((w) => w.kind === "session");
   const weekly = weeklyWindow(h);
   const parts = [session ? (session.resets_at ? `5h · resets ${resetLabel(session.resets_at, now)}` : "5h") : "", weekly ? `weekly ${Math.round(weekly.used_percent)}%` : ""];
   return parts.filter(Boolean).join(" · ");
 }
 
-/** "checked 40s ago", from the newest reading. */
+/** "checked 40s ago", from the newest reading, or "checking…" while a check is in flight. */
 export function checkedAgo(harnesses: HarnessActivity[], now: number = Date.now()): string {
+  if (harnesses.some((h) => h.usage_checking)) return "checking…";
   const at = harnesses.map((h) => (h.usage_checked_at ? Date.parse(h.usage_checked_at) : 0)).reduce((a, b) => Math.max(a, b), 0);
   if (!at) return "not checked yet";
   const s = Math.max(0, Math.round((now - at) / 1000));

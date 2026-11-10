@@ -38,6 +38,8 @@ type Docker struct {
 	// (the dev stack and the full compose stack) must differ, or each runner's
 	// startup Cleanup kills the other's running turns. "" means "default".
 	Stack string
+	// UsageTimeout bounds one usage check; 0 means probeUsageTimeout.
+	UsageTimeout time.Duration
 	// MemoryMB and PidsLimit cap each container; 0 leaves that limit off.
 	// ModelsTimeout bounds one model listing; 0 means listModelsTimeout.
 	ModelsTimeout time.Duration

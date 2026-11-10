@@ -30,29 +30,41 @@ var claudeArgs = []string{"-p", "--input-format", "stream-json", "--output-forma
 	"--no-session-persistence", "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`,
 	"--setting-sources", "", "--settings", `{"disableAllHooks":true}`}
 
+// Argv is the command that answers a harness's usage check, by binary name.
+func Argv(harness string) ([]string, error) {
+	switch harness {
+	case agentdef.HarnessClaudeCode:
+		return append([]string{"claude"}, claudeArgs...), nil
+	case agentdef.HarnessCodex:
+		return []string{"codex", "app-server", "-c", "features.plugins=false"}, nil
+	}
+	return nil, fmt.Errorf("unsupported harness")
+}
+
+// Converse asks a running Argv process for its allowance over its stdin and
+// stdout.
+func Converse(harness string, in io.Writer, out io.Reader) (Snapshot, error) {
+	if harness == agentdef.HarnessClaudeCode {
+		return converseClaude(in, out, time.Now)
+	}
+	return converseCodex(in, out, time.Now)
+}
+
 // Probe reads a harness's allowance through its CLI's control protocol, with
 // the same binary overrides and login as the local runner. It never sends a
 // prompt, starts inference, or reads or exports credentials.
 func Probe(ctx context.Context, harness string) (Snapshot, error) {
-	var bin string
-	var args []string
-	switch harness {
-	case agentdef.HarnessClaudeCode:
-		bin, args = os.Getenv("RUNNER_CLAUDE_BIN"), claudeArgs
-		if bin == "" {
-			bin = "claude"
-		}
-	case agentdef.HarnessCodex:
-		bin, args = os.Getenv("RUNNER_CODEX_BIN"), []string{"app-server", "-c", "features.plugins=false"}
-		if bin == "" {
-			bin = "codex"
-		}
-	default:
-		return Snapshot{}, fmt.Errorf("unsupported harness")
+	argv, err := Argv(harness)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	override := map[string]string{agentdef.HarnessClaudeCode: "RUNNER_CLAUDE_BIN", agentdef.HarnessCodex: "RUNNER_CODEX_BIN"}[harness]
+	if bin := os.Getenv(override); bin != "" {
+		argv[0] = bin
 	}
 	ctx, cancel := context.WithTimeout(ctx, ProbeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	// Keep repository instructions, hooks and MCP configs out of the check.
 	cmd.Dir = os.TempDir()
 	cmd.Stderr = io.Discard
@@ -71,10 +83,7 @@ func Probe(ctx context.Context, harness string) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("harness CLI could not start")
 	}
 	defer func() { stdin.Close(); cmd.Process.Kill(); cmd.Wait() }()
-	if harness == agentdef.HarnessClaudeCode {
-		return converseClaude(stdin, stdout, time.Now)
-	}
-	return converseCodex(stdin, stdout, time.Now)
+	return Converse(harness, stdin, stdout)
 }
 
 // probeEnv keeps a parent agent session's variables from steering the check

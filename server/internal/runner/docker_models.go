@@ -46,20 +46,38 @@ func (d *Docker) ListModels(ctx context.Context, claim, harness, login, codexSco
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	var models []chatmodels.Model
+	err = d.converseCLI(ctx, "models", claim, harness, login, codexScope, argv, func(in io.Writer, out io.Reader) error {
+		var err error
+		models, err = chatmodels.ListOverStdio(harness, in, out)
+		return err
+	})
+	return models, err
+}
+
+// converseCLI runs argv in a throwaway container named for kind and claim,
+// with the sign-in sandbox (no volumes) and the saved login: Claude's token in
+// the environment, Codex's auth.json as a file. converse talks to the CLI over
+// its stdin and stdout; ctx's deadline bounds the whole exchange. A login
+// Codex refreshed meanwhile is saved under codexScope.
+func (d *Docker) converseCLI(ctx context.Context, kind, claim, harness, login, codexScope string, argv []string, converse func(in io.Writer, out io.Reader) error) error {
+	// Ends the stream watcher below when the exchange is over, whatever ctx is.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	env := []string{}
 	if harness == agentdef.HarnessClaudeCode {
 		env = append(env, ClaudeOAuthEnv+"="+login)
 	}
 	body := map[string]any{
 		"Image": d.Image, "Cmd": argv, "Env": env, "WorkingDir": homePath,
-		"Labels": d.labels("models-" + harness),
+		"Labels": d.labels(kind + "-" + harness),
 		"Tty":    false, "OpenStdin": true, "StdinOnce": true, "AttachStdin": true, "AttachStdout": true, "AttachStderr": true,
 		"HostConfig": d.hostConfig([]map[string]any{}),
 	}
 	var created struct{ ID string }
-	name := url.QueryEscape("vesper-models-" + claim)
+	name := url.QueryEscape("vesper-" + kind + "-" + claim)
 	if _, err := d.do(ctx, "POST", "/containers/create?name="+name, jsonBody(body), "application/json", &created); err != nil {
-		return nil, err
+		return err
 	}
 	started := false
 	var stream io.ReadWriteCloser
@@ -90,20 +108,20 @@ func (d *Docker) ListModels(ctx context.Context, claim, harness, login, codexSco
 		// A login never travels in the environment: it is a file, as in turns.
 		tb, err := codexAuthTar(login)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(homePath), tb, "application/x-tar", nil); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	st, err := d.attachLogin(created.ID, true)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	stream = st
 	defer st.Close()
 	if _, err := d.do(ctx, "POST", "/containers/"+created.ID+"/start", nil, "", nil); err != nil {
-		return nil, err
+		return err
 	}
 	started = true
 	// Closing the stream is what unblocks a read when the time runs out.
@@ -111,7 +129,7 @@ func (d *Docker) ListModels(ctx context.Context, claim, harness, login, codexSco
 	r, w := io.Pipe()
 	go func() { w.CloseWithError(demux(st, w, io.Discard)) }()
 	defer r.Close()
-	return chatmodels.ListOverStdio(harness, st, r)
+	return converse(st, r)
 }
 
 // tickModelListings answers the model-listing requests the API queued for plan
