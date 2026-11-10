@@ -28,7 +28,7 @@ func TestListRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr := &tracker.Service{Pool: pool}
-	s := &Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}
+	s := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}
 	handler := s.Handler()
 	list := func(query string, intended int) api.ListRuns200JSONResponse {
 		t.Helper()

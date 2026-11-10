@@ -26,7 +26,7 @@ func TestSecretResponsesNeverIncludeValues(t *testing.T) {
 	k := make([]byte, 32)
 	_, _ = rand.Read(k)
 	box, _ := secrets.NewBox(base64.StdEncoding.EncodeToString(k))
-	h := (&Server{Pool: pool, Q: q, Secrets: &secrets.Service{Q: q, Box: box}}).Handler()
+	h := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Secrets: &secrets.Service{Q: q, Box: box}}).Handler()
 	const value = "sk-ant-very-secret-value-WXYZ"
 	do := func(method, body string) string {
 		t.Helper()

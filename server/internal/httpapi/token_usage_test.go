@@ -50,7 +50,7 @@ func TestRunCacheBreakdownIncludesLegacyAndUnknownInput(t *testing.T) {
 	if rows[0].ReportedInputTokens != 2000 || rows[0].CachedInputTokens != 1880 {
 		t.Fatal(rows)
 	}
-	got, err := (&Server{Pool: pool, Q: q}).toRun(ctx, run)
+	got, err := (&Server{AnonymousAPI: true, Pool: pool, Q: q}).toRun(ctx, run)
 	if err != nil {
 		t.Fatal(err)
 	}

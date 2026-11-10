@@ -4,6 +4,7 @@
 //	vesper migrate      run migrations and exit
 //	vesper runner       execute dispatched runs (docker or local backend)
 //	vesper healthcheck  exit 0 if the local API reports healthy (for container probes)
+//	vesper sign-in-link print a one-time link that signs a browser in (-code: just the code)
 package main
 
 import (
@@ -25,6 +26,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/config"
@@ -64,8 +66,10 @@ func main() {
 		err = runRunner(ctx, log)
 	case "healthcheck":
 		err = healthcheck(ctx)
+	case "sign-in-link":
+		err = printSignInLink(ctx, len(os.Args) > 2 && os.Args[2] == "-code")
 	default:
-		err = fmt.Errorf("unknown command %q (want serve|migrate|runner|healthcheck)", cmd)
+		err = fmt.Errorf("unknown command %q (want serve|migrate|runner|healthcheck|sign-in-link)", cmd)
 	}
 	if err != nil {
 		log.Error("exit", "err", err)
@@ -196,6 +200,9 @@ func serve(ctx context.Context, log *slog.Logger) error {
 	errc := make(chan error, 1)
 	go func() { errc <- hs.ListenAndServe() }()
 	log.Info("listening", "addr", cfg.Addr, "version", cfg.Version)
+	if err := logFirstSignInLink(ctx, q, cfg, log); err != nil {
+		return err
+	}
 
 	select {
 	case err := <-errc:
@@ -208,6 +215,52 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		defer cancel()
 		return hs.Shutdown(sctx)
 	}
+}
+
+// signInLink is the browser link that spends code (see auth.RedeemSignInCode).
+func signInLink(cfg config.Config, code string) string {
+	return cfg.WebURL + httpapi.SignInPath + "?code=" + code
+}
+
+// logFirstSignInLink prints a sign-in link while no browser is signed in, so
+// a fresh install can be opened straight from the API's output. The link is
+// one-time and short-lived; `vesper sign-in-link` makes more.
+func logFirstSignInLink(ctx context.Context, q *store.Queries, cfg config.Config, log *slog.Logger) error {
+	n, err := q.CountBrowserSessions(ctx)
+	if err != nil || n > 0 {
+		return err
+	}
+	code, err := auth.NewSignInCode(ctx, q)
+	if err != nil {
+		return err
+	}
+	log.Info("no browser is signed in yet: open this link to sign in", "url", signInLink(cfg, code), "expires_in", auth.SignInCodeTTL.String())
+	return nil
+}
+
+// printSignInLink writes a one-time sign-in link (or only its code) to stdout.
+// It talks to the database directly: whoever can run it already holds the
+// database credentials, and no agent container can.
+func printSignInLink(ctx context.Context, codeOnly bool) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	pool, err := connect(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	code, err := auth.NewSignInCode(ctx, store.New(pool))
+	if err != nil {
+		return err
+	}
+	if codeOnly {
+		fmt.Println(code)
+		return nil
+	}
+	fmt.Println(signInLink(cfg, code))
+	return nil
 }
 
 // healthcheck probes the running server. Distroless images have no curl.

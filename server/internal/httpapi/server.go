@@ -59,6 +59,10 @@ type Server struct {
 	// Usage keeps harness plan-usage readings for the activity orb; nil
 	// leaves the orb without usage.
 	Usage *usage.Service
+	// AnonymousAPI serves the person-facing API without a browser session.
+	// Tests only: agent containers can reach the API, so a real server must
+	// never trust a request just because it arrived.
+	AnonymousAPI bool
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)
@@ -93,11 +97,29 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/mcp/connectors/"+agentdef.SecretsMCPName, agentapi.SecretsHandler(deps, s.Version))
 	mux.HandleFunc("GET "+connectors.CallbackPath, s.connectorCallback)
 	mux.Handle("/api/v1/agent/", agentapi.RESTHandler(deps))
-	return requestLog(s.Log, s.localUser(mux))
+	mux.HandleFunc("GET "+SignInPath, s.signIn)
+	return requestLog(s.Log, s.signedIn(s.localUser(mux)))
 }
 
-// localUser attaches the acting user to every API request. There is no
-// login for now (docs/dev/plan.md §5.4): everyone acts as the workspace's first user.
+// personFacing reports whether a path serves the person's browser, as opposed
+// to agents (bearer tokens on /mcp and /api/v1/agent/), probes, the sign-in
+// link itself and the connector OAuth callback (a cross-site redirect, so it
+// arrives without the SameSite=Strict cookie; its one-time state protects it).
+func personFacing(path string) bool {
+	switch {
+	case path == "/events":
+		return true
+	case !strings.HasPrefix(path, "/api/"):
+		return false
+	case path == "/api/v1/health", path == SignInPath, path == connectors.CallbackPath, strings.HasPrefix(path, "/api/v1/agent/"):
+		return false
+	}
+	return true
+}
+
+// localUser attaches the acting user to every API request. There is one
+// person for now (docs/dev/plan.md §5.4): a signed-in browser acts as the
+// workspace's first user.
 func (s *Server) localUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/health" || !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/agent/") {

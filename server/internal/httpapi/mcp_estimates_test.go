@@ -46,7 +46,7 @@ func newEstimateEnv(t *testing.T) *estimateEnv {
 	atlas, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: me.WorkspaceID, Handle: "atlas"})
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
-	h := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}}).Handler()
+	h := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}}).Handler()
 	return &estimateEnv{t: t, ctx: ctx, q: q, tr: tr, handler: h, ws: me.WorkspaceID, me: me, atlas: atlas}
 }
 

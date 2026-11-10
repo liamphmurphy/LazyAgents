@@ -74,7 +74,7 @@ func newChatEnvServer(t *testing.T, tweak func(*runs.Service), tweakServer func(
 	if tweak != nil {
 		tweak(rs)
 	}
-	s := &Server{Events: hub, Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Agents: &agents.Service{Pool: pool}, Runs: rs,
+	s := &Server{AnonymousAPI: true, Events: hub, Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Agents: &agents.Service{Pool: pool}, Runs: rs,
 		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	if tweakServer != nil {
 		tweakServer(s)

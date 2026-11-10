@@ -32,7 +32,7 @@ func TestChatWithoutProjectIsDeniedProjectTools(t *testing.T) {
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
 	wk := &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}
-	handler := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: wk}).Handler()
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts, Wiki: wk}).Handler()
 	call := func(token, name string, args any) (int, map[string]any) {
 		t.Helper()
 		raw, _ := json.Marshal(args)

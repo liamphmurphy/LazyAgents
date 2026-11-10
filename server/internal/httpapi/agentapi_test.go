@@ -62,7 +62,8 @@ func TestAgentAPIOverMCP(t *testing.T) {
 	tr := &tracker.Service{Pool: pool}
 	arts := &artifacts.Service{Pool: pool}
 	srv := &Server{
-		Version: "test", Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Secrets: sec,
+		AnonymousAPI: true,
+		Version:      "test", Pool: pool, Q: q, Tracker: tr, Artifacts: arts, Secrets: sec,
 		Agents: &agents.Service{Pool: pool}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Runs: &runs.Service{Pool: pool, Secrets: sec, Tracker: tr, Artifacts: arts, Poll: 20 * time.Millisecond},
 		Wiki: &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr},

@@ -17,7 +17,7 @@ import (
 
 func newServer(t *testing.T) (*Server, http.Handler) {
 	pool := testdb.New(t)
-	s := &Server{Pool: pool, Q: store.New(pool), Tracker: &tracker.Service{Pool: pool}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	s := &Server{AnonymousAPI: true, Pool: pool, Q: store.New(pool), Tracker: &tracker.Service{Pool: pool}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	return s, s.Handler()
 }
 

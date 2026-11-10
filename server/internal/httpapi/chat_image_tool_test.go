@@ -41,7 +41,7 @@ func TestGenerateImageTool(t *testing.T) {
 		}
 		return []chatmodels.Model{{ID: h + "-m1"}, {ID: h + "-m2", Default: true}}, nil
 	}}
-	handler := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
 	call := func(token string, args any) (int, map[string]any) {
 		t.Helper()
 		raw, _ := json.Marshal(args)

@@ -31,7 +31,7 @@ func TestMockupHTTP(t *testing.T) {
 	}
 	q := store.New(pool)
 	tr := &tracker.Service{Pool: pool}
-	srv := &Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}, Artifacts: arts}
+	srv := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}, Artifacts: arts}
 	h := srv.Handler()
 	do := func(method, path string, body any) *httptest.ResponseRecorder {
 		var rd bytes.Buffer
@@ -208,7 +208,7 @@ func TestMockupAgentTools(t *testing.T) {
 	ws := me.WorkspaceID
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}
-	handler := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: rs, Artifacts: arts}).Handler()
 	a, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "atlas"})
 	token, _, err := agents.IssueToken(ctx, q, a.ID, "unmanaged", "test", nil, nil, nil)
 	if err != nil {
@@ -280,7 +280,7 @@ func TestCreateArtifactWithTicketKey(t *testing.T) {
 	}
 	q := store.New(pool)
 	tr := &tracker.Service{Pool: pool}
-	h := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}, Artifacts: arts}).Handler()
+	h := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts}, Artifacts: arts}).Handler()
 	create := func(project, ticket string) *httptest.ResponseRecorder {
 		var buf bytes.Buffer
 		mw := multipart.NewWriter(&buf)

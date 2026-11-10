@@ -25,7 +25,7 @@ func TestBoardErrorContractsAndWorkspaceIsolation(t *testing.T) {
 	}
 	q := store.New(pool)
 	tr := &tracker.Service{Pool: pool}
-	h := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}).Handler()
+	h := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}).Handler()
 	call := func(method, path, body string, want int) []byte {
 		t.Helper()
 		w := httptest.NewRecorder()

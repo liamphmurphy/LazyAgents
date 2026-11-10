@@ -33,7 +33,7 @@ func TestGetCosts(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr := &tracker.Service{Pool: pool}
-	handler := (&Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}).Handler()
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}).Handler()
 	get := func(query string, intended int) api.CostReport {
 		t.Helper()
 		r := httptest.NewRecorder()

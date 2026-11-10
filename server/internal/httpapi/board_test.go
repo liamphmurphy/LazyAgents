@@ -26,7 +26,7 @@ func TestBoardAndEpicCriteriaHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr := &tracker.Service{Pool: pool}
-	s := &Server{Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}
+	s := &Server{AnonymousAPI: true, Pool: pool, Q: q, Tracker: tr, Runs: &runs.Service{Pool: pool, Tracker: tr}}
 	handler := s.Handler()
 	call := func(method, path, body string, want int, dst any) {
 		t.Helper()
