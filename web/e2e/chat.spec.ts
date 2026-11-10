@@ -40,7 +40,8 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
 
   await newChat(page);
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
-  await expect(page.getByText("A new conversation")).toBeVisible();
+  // An empty chat is the persona-led welcome: no personas yet, so the built-in Assistant.
+  await expect(page.getByRole("heading", { level: 2, name: "Assistant" })).toBeVisible();
   await expect(composer(page)).toBeFocused();
 
   // Enter sends, Shift+Enter adds a line.

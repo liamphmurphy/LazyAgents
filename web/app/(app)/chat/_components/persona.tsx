@@ -44,22 +44,6 @@ export const CAPABILITIES: { key: "code" | "images" | "svg" | "personas" | "work
   { key: "workflows", icon: "graph", label: "Create workflows", title: "Can propose workflows" },
 ];
 
-/** Small icons for what a persona can do (code, images, SVG images, create personas, create workflows); nothing when it can't do any. */
-export function CapabilityBadges({ capabilities, className }: { capabilities?: Schemas["PersonaCapabilities"]; className?: string }) {
-  const granted = CAPABILITIES.filter((c) => capabilities?.[c.key]);
-  if (!granted.length) return null;
-  return (
-    <span className={cx("inline-flex flex-none items-center gap-1 text-fg-tertiary", className)} data-testid="capability-badges">
-      {granted.map((c) => (
-        <span key={c.key} title={c.title} className="inline-flex items-center rounded bg-selected p-0.5">
-          <Icon name={c.icon} size={12} />
-          <span className="sr-only">{c.title}</span>
-        </span>
-      ))}
-    </span>
-  );
-}
-
 /** Which of the persona's repositories a new conversation works in: a pill that opens upwards, like the persona's. */
 export function RepoSelect({ repos, value, onChange, disabled }: { repos: string[]; value: string; onChange: (url: string) => void; disabled?: boolean }) {
   return (
@@ -325,70 +309,6 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
   );
 }
 
-/**
- * The persona for a conversation that has no messages yet (mockup frame C): a
- * pill in the composer that opens upwards. Hidden when there's nothing to pick.
- */
-export function PersonaSwitcher({
-  value,
-  onChange,
-  disabled,
-}: {
-  /** The persona id in use, or undefined for the built-in Assistant. */
-  value?: string;
-  onChange: (id: string) => void;
-  disabled?: boolean;
-}) {
-  const manage = useOpenPersonaManager();
-  const q = usePersonas();
-  const personas = q.data?.personas ?? [];
-  if (!personas.length) return null;
-  const defaultId = q.data?.default_persona_id;
-  const current = personaLook(personas.find((p) => p.id === value));
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          disabled={disabled}
-          aria-label={`Persona for this conversation: ${current.name}`}
-          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-full bg-selected pl-1.5 pr-2.5 text-[12.5px] font-medium text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <PersonaAvatar persona={current} size={18} />
-          <span className="truncate">{current.name}</span>
-          <Icon name="chev" size={12} strokeWidth={1.6} className="rotate-180 text-fg-tertiary" />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" side="top" sideOffset={6} className={cx(floatPanel, "w-[290px]")}>
-          <DropdownMenu.Label className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
-            Persona for this conversation
-          </DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={value ?? ""} onValueChange={onChange}>
-            {personas.map((p) => (
-              <DropdownMenu.RadioItem key={p.id} value={p.id} className={item}>
-                <PersonaAvatar persona={p} />
-                <PersonaName persona={p} className="truncate" />
-                <CapabilityBadges capabilities={p.capabilities} />
-                <span className="truncate text-[11px] text-fg-tertiary">
-                  {p.id === defaultId ? "(default) · " : ""}
-                  {toneLabel(p.tone)}
-                </span>
-                <span className="ml-auto" />
-                <Check on={p.id === value} />
-              </DropdownMenu.RadioItem>
-            ))}
-          </DropdownMenu.RadioGroup>
-          <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
-          <DropdownMenu.Item className={item} onSelect={manage}>
-            <span className="text-xs text-fg-secondary">Manage personas…</span>
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
 /** A persona's portrait on a soft glow of its color: the welcome's centrepiece and an empty chat's greeting. */
 export function PersonaPortrait({ persona, size = 92 }: { persona: PersonaLook; size?: number }) {
   const glow = Math.round(size * 1.9);
@@ -458,40 +378,6 @@ export function PersonaCarousel({
       </button>
       {many && arrow(1)}
       {right.map(side)}
-    </div>
-  );
-}
-
-/** "Hi Liam, I'm Atlas." over the persona's portrait, for a conversation before its first message. */
-export function PersonaGreeting({
-  persona,
-  tone,
-  isDefault,
-  firstName,
-  canSwitch,
-}: {
-  persona: PersonaLook;
-  tone?: Schemas["PersonaTone"];
-  isDefault: boolean;
-  firstName?: string;
-  canSwitch: boolean;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-2 py-10 text-center">
-      <PersonaPortrait persona={persona} size={72} />
-      <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-fg">
-        {firstName ? `Hi ${firstName}, I’m ` : "I’m "}
-        {persona.id ? persona.name : "your assistant"}.
-      </h2>
-      <p className="text-sm text-fg-secondary">
-        A new conversation{isDefault ? " with your default persona" : ""}
-        {persona.id ? ` · ${toneLabel(tone)} tone` : ""}
-      </p>
-      <p className="max-w-[520px] text-sm text-fg-secondary">
-        {canSwitch
-          ? "Pick another persona below before you send your first message."
-          : "Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do."}
-      </p>
     </div>
   );
 }

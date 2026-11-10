@@ -43,6 +43,7 @@ import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
 import { AskAboutSelection, ComposerHints, composerFrame, composerInput, CopyButton, quoteForComposer, ResearchToggle, SendButton, TemporaryBadge, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
+import { PersonaHero, PickUp } from "./welcome-parts";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { VideoCards, VideoRendererNotes } from "@/components/domain/video-card";
 import { useChatVideos } from "@/lib/api/video-hooks";
@@ -59,7 +60,7 @@ import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
-import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, RepoSelect, personaLook, type PersonaLook } from "./persona";
+import { PersonaAvatar, PersonaName, PersonaStack, RepoSelect, personaLook, type PersonaLook } from "./persona";
 import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
@@ -491,6 +492,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // Before the first message the persona can still change: a chat keeps its persona for life,
   // so switching starts a fresh chat with the other persona and drops this empty one.
   const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
+  const welcoming = !!c && !c.archived && !!list && list.length === 0 && !running;
   // With several addresses, a coding chat asks which one its commits use; the
   // first message waits for the answer, later ones don't.
   const myEmails = boot.data?.me.emails ?? [];
@@ -748,12 +750,14 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           </div>
           <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={since} focus={traceFocus} />
         </div>
+        {/* An empty chat is the persona-led welcome: who you're talking to, the composer centred under it, then starters and what to pick up. */}
+        {welcoming && tab === "chat" && <div aria-hidden className="min-h-6 flex-1" />}
         <div
           ref={scroller}
           role="tabpanel"
           aria-label="Chat"
           hidden={tab !== "chat"}
-          className="relative flex-1 overflow-y-auto px-6 py-5"
+          className={welcoming ? "relative flex-none px-6 pb-6 pt-2" : "relative flex-1 overflow-y-auto px-6 py-5"}
           // Only the person's input lets go of the end. A scroll event alone can't tell: the one for our
           // own scroll, or for the browser clamping it as content shrinks, may land after the content grew
           // again, far from the end without anyone having moved.
@@ -792,17 +796,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do.
               </EmptyState>
             ) : (
-              <>
-              <PersonaGreeting
-                persona={persona}
-                tone={full?.tone}
-                isDefault={!!c.persona && c.persona.id === personas.data?.default_persona_id}
-                firstName={boot.data?.me.name?.split(" ")[0]}
-                canSwitch={!!personas.data?.personas.length}
-              />
-              {/* Picking one sends it, which would drop a half-written message. */}
-              {!text.trim() && <ChatSuggestions onPick={submit} disabled={locked || !!unavailable} />}
-              </>
+              // Before the first message the carousel switches persona (a fresh chat with the pick).
+              <PersonaHero personaId={c.persona?.id} onPick={fresh && personas.data?.personas.length ? (pid) => switchPersona(pid) : undefined} disabled={locked || create.isPending} level={2} />
             )
           ) : (
             <>
@@ -1064,7 +1059,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} compact />
                 <AttachButton onFiles={files.add} disabled={locked} compact />
-                {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
                 {fresh && c.persona && c.repo_url && (full?.repos.length ?? 0) > 1 && codesInRepos(full) && (
                   <RepoSelect repos={full!.repos} value={c.repo_url} onChange={(r) => switchPersona(c.persona!.id, r)} disabled={locked || create.isPending} />
                 )}
@@ -1103,6 +1097,15 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             </>
           )}
         </div>
+        {welcoming && tab === "chat" && (
+          <div className="flex flex-1 flex-col items-center gap-10 px-6 pb-8 pt-2">
+            {/* Picking one sends it, which would drop a half-written message. */}
+            {!text.trim() && <ChatSuggestions onPick={submit} disabled={locked || !!unavailable} color={persona.color} />}
+            <div className="w-full max-w-[768px]">
+              <PickUp />
+            </div>
+          </div>
+        )}
         {current && (
           <HarnessSwitchDialog
             from={modelLabel(groups, current)}

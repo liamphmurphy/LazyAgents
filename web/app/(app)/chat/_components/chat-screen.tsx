@@ -4,14 +4,12 @@ import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { composerFrame, composerInput, ResearchToggle, SendButton, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useBootstrap, useChat, useChatSuggestions, useChats, useInbox, usePersonaDock, useStartChat } from "@/lib/api/hooks";
+import { useBootstrap, useChat, useChatSuggestions, useChats, useStartChat } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { newestChat } from "@/lib/chat-ui";
-import { codesInRepos, toneLabel } from "@/lib/persona-ui";
-import { carouselOrder, carouselWindow, FALLBACK_STARTERS, personaTagline, pickUpCards, type PickUpTone } from "@/lib/welcome";
-import { timelineTime } from "@/lib/format";
-import { cx } from "@/lib/cx";
-import Link from "next/link";
+import { codesInRepos } from "@/lib/persona-ui";
+import { FALLBACK_STARTERS } from "@/lib/welcome";
+import { PersonaHero, PickUp } from "./welcome-parts";
 import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { Banner, Skeleton, TextArea } from "@/components/ui/primitives";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
@@ -20,7 +18,7 @@ import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop
 import { ChipList } from "./context-chips";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
-import { PersonaCarousel, RepoSelect, personaLook, useOpenPersonaManager } from "./persona";
+import { RepoSelect, personaLook, useOpenPersonaManager } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
 
@@ -52,42 +50,6 @@ function Starters({ onPick, disabled, color }: { onPick: (prompt: string) => voi
   );
 }
 
-const PICK_UP_PILL: Record<PickUpTone, string> = {
-  human: "bg-pill-human-bg text-pill-human-fg",
-  persona: "",
-  neutral: "bg-pill-neutral-bg text-pill-neutral-fg",
-};
-
-/** "Pick up where you left off": what needs you, unread replies, then your latest chats. Nothing until there's something. */
-function PickUp() {
-  const inbox = useInbox();
-  const dock = usePersonaDock();
-  const chats = useChats(false, "all");
-  const cards = pickUpCards(inbox.data ?? [], dock.data?.personas ?? [], chats.data?.chats ?? [], (iso) => timelineTime(iso));
-  if (!cards.length) return null;
-  return (
-    <section aria-label="Pick up where you left off" className="flex w-full flex-col gap-3">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.04em] text-fg-tertiary">Pick up where you left off</h2>
-      <ul className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-        {cards.map((c) => (
-          <li key={c.key} className="min-w-0">
-            <Link href={c.href} className="flex h-full flex-col items-start gap-2 rounded-xl border border-border bg-surface p-3.5 text-left hover:border-border-hover hover:bg-hover">
-              <span
-                className={cx("rounded-full px-2.5 py-0.5 text-xs font-semibold", PICK_UP_PILL[c.tone])}
-                style={c.tone === "persona" && c.color ? { color: c.color, background: `color-mix(in srgb, ${c.color} 15%, transparent)` } : undefined}
-              >
-                {c.label}
-              </span>
-              <span className="line-clamp-2 text-[13.5px] font-medium text-fg">{c.title}</span>
-              <span className="truncate text-xs text-fg-tertiary">{c.meta}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 /** A first conversation (the persona-led welcome): pick who to talk to, write, or pick up where you left off. */
 function Welcome({ disabled }: { disabled: boolean }) {
   const router = useRouter();
@@ -103,8 +65,6 @@ function Welcome({ disabled }: { disabled: boolean }) {
   const personaId = picked ?? linkedKnown ?? defaultId;
   const fullPersona = personas.data?.personas.find((p) => p.id === personaId);
   const persona = personaLook(fullPersona);
-  const ordered = carouselOrder(personas.data?.personas ?? [], defaultId);
-  const around = carouselWindow(ordered, ordered.findIndex((p) => p.id === personaId));
   // A coding persona works in one of its repos: the first unless another is picked.
   const [repoPicked, setRepoPicked] = useState<string>();
   const repos = fullPersona?.repos ?? [];
@@ -138,9 +98,7 @@ function Welcome({ disabled }: { disabled: boolean }) {
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto" {...drop.props}>
       <DropOverlay over={drop.over} />
       <div className="mx-auto flex w-full max-w-[768px] flex-1 flex-col items-center justify-center px-6 py-10">
-        <PersonaCarousel ordered={ordered} current={persona} left={around.left} right={around.right} onPick={setPicked} disabled={locked} />
-        <h1 className="mt-5 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg">{persona.name}</h1>
-        <p className="mt-2 text-center text-[14px] text-fg-secondary">{personaTagline(fullPersona, toneLabel, !!fullPersona && fullPersona.id === defaultId)}</p>
+        <PersonaHero personaId={personaId} onPick={setPicked} disabled={locked} level={1} />
         <form
           className="mt-7 flex w-full flex-col gap-2"
           onPaste={files.onPaste}
