@@ -439,3 +439,23 @@ JOIN chat_sessions c ON c.id = h.session_id
 LEFT JOIN projects pr ON pr.id = c.project_id
 LEFT JOIN personas p ON p.id = COALESCE(h.persona_id, c.persona_id)
 ORDER BY h.rank DESC, h.created_at DESC;
+
+-- name: AddChatTicketRun :exec
+INSERT INTO chat_ticket_runs (chat_id, run_id, message_id) VALUES ($1, $2, $3);
+
+-- name: ChatTicketRunForMessage :one
+SELECT * FROM chat_ticket_runs WHERE message_id = $1;
+
+-- name: ListChatTicketRuns :many
+-- The ticket runs a chat started, oldest first, with what the tray shows.
+SELECT r.id AS run_id, ctr.message_id, r.state, r.wait_reason, r.started_at, r.ended_at, r.cost_usd_micros,
+  t.key AS ticket_key, t.title AS ticket_title, t.pr_url, a.handle AS agent_handle,
+  (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id)::int AS steps_total,
+  (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state = 'done')::int AS steps_done,
+  COALESCE((SELECT ps.text FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state <> 'done' ORDER BY ps.position LIMIT 1), '')::text AS current_step
+FROM chat_ticket_runs ctr
+JOIN runs r ON r.id = ctr.run_id
+JOIN tickets t ON t.id = r.ticket_id
+JOIN agents a ON a.id = r.agent_id
+WHERE ctr.chat_id = $1
+ORDER BY ctr.created_at, r.id;

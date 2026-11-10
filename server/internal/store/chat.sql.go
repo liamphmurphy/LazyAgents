@@ -27,6 +27,21 @@ func (q *Queries) AddChatParticipant(ctx context.Context, arg AddChatParticipant
 	return err
 }
 
+const addChatTicketRun = `-- name: AddChatTicketRun :exec
+INSERT INTO chat_ticket_runs (chat_id, run_id, message_id) VALUES ($1, $2, $3)
+`
+
+type AddChatTicketRunParams struct {
+	ChatID    uuid.UUID
+	RunID     uuid.UUID
+	MessageID *uuid.UUID
+}
+
+func (q *Queries) AddChatTicketRun(ctx context.Context, arg AddChatTicketRunParams) error {
+	_, err := q.db.Exec(ctx, addChatTicketRun, arg.ChatID, arg.RunID, arg.MessageID)
+	return err
+}
+
 const addChatWorkBranches = `-- name: AddChatWorkBranches :exec
 UPDATE chat_sessions SET work_branches = (
   SELECT COALESCE(array_agg(b ORDER BY first), '{}') FROM (
@@ -549,6 +564,22 @@ func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID
 		&i.WorkBranches,
 		&i.CommitEmail,
 		&i.SecretIds,
+	)
+	return i, err
+}
+
+const chatTicketRunForMessage = `-- name: ChatTicketRunForMessage :one
+SELECT chat_id, run_id, message_id, created_at FROM chat_ticket_runs WHERE message_id = $1
+`
+
+func (q *Queries) ChatTicketRunForMessage(ctx context.Context, messageID *uuid.UUID) (ChatTicketRun, error) {
+	row := q.db.QueryRow(ctx, chatTicketRunForMessage, messageID)
+	var i ChatTicketRun
+	err := row.Scan(
+		&i.ChatID,
+		&i.RunID,
+		&i.MessageID,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -1379,6 +1410,73 @@ func (q *Queries) ListChatSessions(ctx context.Context, arg ListChatSessionsPara
 			&i.WorkBranches,
 			&i.CommitEmail,
 			&i.SecretIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChatTicketRuns = `-- name: ListChatTicketRuns :many
+SELECT r.id AS run_id, ctr.message_id, r.state, r.wait_reason, r.started_at, r.ended_at, r.cost_usd_micros,
+  t.key AS ticket_key, t.title AS ticket_title, t.pr_url, a.handle AS agent_handle,
+  (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id)::int AS steps_total,
+  (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state = 'done')::int AS steps_done,
+  COALESCE((SELECT ps.text FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state <> 'done' ORDER BY ps.position LIMIT 1), '')::text AS current_step
+FROM chat_ticket_runs ctr
+JOIN runs r ON r.id = ctr.run_id
+JOIN tickets t ON t.id = r.ticket_id
+JOIN agents a ON a.id = r.agent_id
+WHERE ctr.chat_id = $1
+ORDER BY ctr.created_at, r.id
+`
+
+type ListChatTicketRunsRow struct {
+	RunID         uuid.UUID
+	MessageID     *uuid.UUID
+	State         string
+	WaitReason    *string
+	StartedAt     time.Time
+	EndedAt       *time.Time
+	CostUsdMicros int64
+	TicketKey     string
+	TicketTitle   string
+	PrUrl         *string
+	AgentHandle   string
+	StepsTotal    int32
+	StepsDone     int32
+	CurrentStep   string
+}
+
+// The ticket runs a chat started, oldest first, with what the tray shows.
+func (q *Queries) ListChatTicketRuns(ctx context.Context, chatID uuid.UUID) ([]ListChatTicketRunsRow, error) {
+	rows, err := q.db.Query(ctx, listChatTicketRuns, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChatTicketRunsRow{}
+	for rows.Next() {
+		var i ListChatTicketRunsRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.MessageID,
+			&i.State,
+			&i.WaitReason,
+			&i.StartedAt,
+			&i.EndedAt,
+			&i.CostUsdMicros,
+			&i.TicketKey,
+			&i.TicketTitle,
+			&i.PrUrl,
+			&i.AgentHandle,
+			&i.StepsTotal,
+			&i.StepsDone,
+			&i.CurrentStep,
 		); err != nil {
 			return nil, err
 		}
