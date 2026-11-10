@@ -46,6 +46,16 @@ const spec = {
   },
 };
 
+// What the gateway's probe sends from the app's page (playground/probe.go), as
+// that page's own script would: where it is, a console error, a failed fetch.
+const PROBE = `<script>
+  const send = (m) => parent.postMessage(Object.assign({ vesperProbe: 1 }, m), "*");
+  history.replaceState(null, "", "/orders?page=2");
+  send({ type: "location", path: "/orders?page=2", title: "Orders" });
+  send({ type: "console", text: "TypeError: cannot read properties of undefined (reading 'total')" });
+  send({ type: "request", method: "GET", url: "/api/orders", status: 500, id: "req-42", error: "" });
+</script>`;
+
 type Calls = { actions: string[]; sent: { method: string; body: string | null; cookie: string }[] };
 
 async function open(page: Page, initial = playground()) {
@@ -80,7 +90,7 @@ async function open(page: Page, initial = playground()) {
       calls.sent.push({ method: req.method(), body: req.postData(), cookie: (await req.allHeaders()).cookie ?? "" });
       return route.fulfill({ status: 500, headers: cors(route), contentType: "application/json", body: JSON.stringify({ code: "internal", message: "internal error" }) });
     }
-    return route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Acme</title><h1>Acme Admin</h1>" });
+    return route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Acme</title><h1>Acme Admin</h1>" + PROBE });
   });
   await page.goto("/chat?project=WEB");
   await page.getByRole("combobox", { name: "Message" }).fill(`playground: ${ID}`);
@@ -130,7 +140,7 @@ test("the API tab reads the OpenAPI document and sends from the playground's ori
   await expect(body).toHaveValue(/github.com\/liamphmurphy\/vesper/);
   await body.fill('{"repo":"x","recipe":{"nix_packages":null}}');
   await expect(full).toContainText("recipe.nix_packages expected array, got null");
-  await full.getByRole("button", { name: "Send" }).click();
+  await full.getByRole("button", { name: "Send", exact: true }).click();
   const res = full.getByTestId("playground-response");
   await expect(res).toContainText("500");
   await expect(res).toContainText('"message": "internal error"');
@@ -153,4 +163,68 @@ test("a failed playground shows why, and starts again", async ({ page }) => {
   await panel.getByRole("button", { name: "Start again" }).click();
   await expect(panel.getByTestId("playground-step")).toContainText("Starting postgres");
   expect(calls.actions).toEqual(["start"]);
+});
+
+test("Send to chat attaches a report and a screenshot of the frame to the next message", async ({ page }) => {
+  // Tab capture needs a person to pick the tab; a canvas stream stands in for it.
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getDisplayMedia = async () => {
+      const c = Object.assign(document.createElement("canvas"), { width: 1280, height: 720 });
+      const g = c.getContext("2d")!;
+      const paint = () => { g.fillStyle = "#3a6"; g.fillRect(0, 0, c.width, c.height); requestAnimationFrame(paint); };
+      paint();
+      return c.captureStream(30);
+    };
+  });
+  await open(page);
+  // After open(): the chat mock's catch-all would otherwise answer first.
+  const uploads: { name: string; body: string; bytes: string }[] = [];
+  await page.route("**/api/v1/chat-attachments", (route) => {
+    const buf = route.request().postDataBuffer() ?? Buffer.alloc(0);
+    const raw = buf.toString("utf8");
+    const name = /filename="([^"]+)"/.exec(raw)?.[1] ?? "";
+    uploads.push({ name, body: raw, bytes: buf.toString("latin1") });
+    return route.fulfill({ status: 201, json: { id: `att-${uploads.length}`, filename: name, content_type: name.endsWith(".png") ? "image/png" : "text/markdown", size_bytes: raw.length } });
+  });
+  await page.getByTestId("playground-card").getByRole("button", { name: "Open" }).click();
+  const panel = page.getByTestId("playground-panel");
+  // The address bar follows the app's own navigation, which the frame can't tell Vesper.
+  await expect(panel.getByRole("textbox", { name: "Path" })).toHaveValue("/orders?page=2");
+
+  await panel.getByRole("button", { name: "Send to chat" }).click();
+  const chips = page.getByTestId("attachment-chip");
+  await expect(chips).toHaveCount(2);
+  await expect(chips.nth(0)).toHaveAttribute("data-status", "done");
+  await expect(chips.nth(1)).toHaveAttribute("data-status", "done");
+  await expect(page.getByTestId("attachment-preview")).toHaveCount(1);
+  await expect(page.getByRole("combobox", { name: "Message" })).toBeFocused();
+
+  const report = uploads.find((u) => u.name.endsWith(".md"))!;
+  expect(report.name).toMatch(/^playground-\d{8}-\d{6}\.md$/);
+  expect(report.body).toContain("- Page: `/orders?page=2` (Orders)");
+  expect(report.body).toContain("- Screenshot: attached");
+  expect(report.body).toContain("reading 'total'");
+  expect(report.body).toContain("### GET /api/orders → 500");
+  expect(report.body).toContain("request id `req-42`");
+  expect(uploads.find((u) => u.name.endsWith(".png"))?.bytes).toContain("\x89PNG");
+});
+
+test("Send to chat still sends the report when sharing is declined", async ({ page }) => {
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getDisplayMedia = async () => { throw new DOMException("denied", "NotAllowedError"); };
+  });
+  await open(page);
+  // After open(): the chat mock's catch-all would otherwise answer first.
+  const uploads: string[] = [];
+  await page.route("**/api/v1/chat-attachments", (route) => {
+    const raw = route.request().postDataBuffer()?.toString("latin1") ?? "";
+    uploads.push(raw);
+    return route.fulfill({ status: 201, json: { id: `att-${uploads.length}`, filename: "r.md", content_type: "text/markdown", size_bytes: 3 } });
+  });
+  await page.getByTestId("playground-card").getByRole("button", { name: "Open" }).click();
+  await expect(page.frameLocator("[data-testid=playground-preview]").getByRole("heading", { name: "Acme Admin" })).toBeVisible();
+  await page.getByTestId("playground-panel").getByRole("button", { name: "Send to chat" }).click();
+  await expect(page.getByTestId("attachment-chip")).toHaveCount(1);
+  expect(uploads).toHaveLength(1);
+  expect(uploads[0]).toContain("- Screenshot: none (sharing was cancelled)");
 });

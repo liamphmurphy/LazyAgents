@@ -4,7 +4,9 @@ import { useContext, useEffect, useRef, useState, useSyncExternalStore } from "r
 import { createPortal } from "react-dom";
 import { useChatPlayground, usePlaygroundAction, type Playground } from "@/lib/api/playground-hooks";
 import { cx } from "@/lib/cx";
-import { ago, idleRule, isErrorLine, parsePlaygroundFence, playgroundOrigin } from "@/lib/playground";
+import { CaptureError, captureElement } from "@/lib/frame-capture";
+import { ago, idleRule, isErrorLine, parsePlaygroundFence, playgroundOrigin, type LogLine } from "@/lib/playground";
+import { applyProbe, emptyProbe, playgroundReport, reportNames, sendToComposer, type ProbeState } from "@/lib/playground-report";
 import { usePlaygroundPanel, type PlaygroundTab } from "@/lib/use-playground-panel";
 import { Button, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -34,6 +36,69 @@ function useOrigin(pg: Playground | null | undefined) {
   return loc && pg?.port && (pg.state === "running" || pg.state === "starting") ? playgroundOrigin(loc, pg.port) : null;
 }
 
+/** What the gateway's probe in the Preview frame reports; only messages from the playground's own origin count. */
+function usePlaygroundProbe(origin: string | null) {
+  const [probe, setProbe] = useState<ProbeState>(emptyProbe);
+  useEffect(() => {
+    if (!origin) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin === origin) setProbe((s) => applyProbe(s, e.data, Date.now()));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [origin]);
+  return { probe, reset: () => setProbe(emptyProbe()) };
+}
+
+/**
+ * "Send to chat": a report of the page, console errors and failed requests,
+ * and a screenshot of the frame, attached to the next message. The browser
+ * asks to share the tab for each screenshot; declining still sends the report.
+ */
+function SendToChat({ chatId, origin, branch, probe, logs, frame, onSent }: {
+  chatId: string;
+  origin: string;
+  branch?: string | null;
+  probe: ProbeState;
+  logs: LogLine[];
+  frame: HTMLIFrameElement | null;
+  onSent: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string>();
+  const send = async () => {
+    setBusy(true);
+    setProblem(undefined);
+    const at = Date.now();
+    const names = reportNames(at);
+    const files: File[] = [];
+    let noScreenshot: string | undefined = frame ? undefined : "the Preview tab wasn’t open";
+    if (frame) {
+      try {
+        files.push(new File([await captureElement(frame)], names.screenshot, { type: "image/png" }));
+      } catch (e) {
+        noScreenshot = e instanceof CaptureError ? e.message : "the screen couldn’t be captured";
+      }
+    }
+    const report = playgroundReport({ origin, probe, logs, branch, at, noScreenshot });
+    files.unshift(new File([report], names.report, { type: "text/markdown" }));
+    setBusy(false);
+    if (!sendToComposer(chatId, files)) {
+      setProblem("Open the chat to attach it.");
+      return;
+    }
+    onSent();
+  };
+  return (
+    <>
+      {problem && <span role="alert" className="text-xs text-pill-blocked-fg">{problem}</span>}
+      <Button variant="secondary" disabled={busy} onClick={send} title="Attach the page, console errors, failed requests and a screenshot to your next message">
+        {busy ? "Capturing…" : "Send to chat"}
+      </Button>
+    </>
+  );
+}
+
 function StatusPill({ pg }: { pg: Playground }) {
   const [label, tone] =
     pg.action === "reset" ? ["Resetting", "review"] : pg.action === "stop" ? ["Stopping", "neutral"] :
@@ -56,6 +121,8 @@ function PlaygroundView({ chatId, pg, full }: { chatId: string; pg: Playground; 
   const running = pg.state === "running" && !pg.action;
   const logs = usePlaygroundLogs(running || pg.action === "reset" ? origin : null);
   const errors = logs.lines.slice(-200).filter(isErrorLine).length;
+  const { probe, reset: resetProbe } = usePlaygroundProbe(running ? origin : null);
+  const [frame, setFrame] = useState<HTMLIFrameElement | null>(null);
   const now = useNow();
   const tab = (t: PlaygroundTab, label: string, badge?: number) => (
     <button type="button" role="tab" aria-selected={panel.tab === t} onClick={() => panel.setTab(t)} className={cx("flex items-center gap-1.5 border-b-2 px-0.5 pb-2 pt-2.5 text-[13px]", panel.tab === t ? "border-accent font-semibold text-fg" : "border-transparent text-fg-secondary hover:text-fg")}>
@@ -87,6 +154,9 @@ function PlaygroundView({ chatId, pg, full }: { chatId: string; pg: Playground; 
         <span className="ml-auto flex items-center gap-2 py-1.5">
           {(pg.state === "running" || pg.state === "starting") && (
             <>
+              {running && origin && (
+                <SendToChat chatId={chatId} origin={origin} branch={pg.branch} probe={probe} logs={logs.lines} frame={panel.tab === "preview" ? frame : null} onSent={full ? panel.exitFull : () => {}} />
+              )}
               <Button variant="secondary" disabled={!running || act.isPending} onClick={() => act.mutate("reset")}>↺ Reset data</Button>
               <Button variant="secondary" disabled={pg.action === "stop" || act.isPending} onClick={() => act.mutate("stop")}>■ Stop</Button>
             </>
@@ -101,7 +171,7 @@ function PlaygroundView({ chatId, pg, full }: { chatId: string; pg: Playground; 
         ) : panel.tab === "logs" ? (
           <LogsTab logs={logs} />
         ) : (
-          <PreviewTab origin={origin} />
+          <PreviewTab origin={origin} frameRef={setFrame} livePath={probe.path} onReload={resetProbe} />
         )
       ) : (
         <NotRunning pg={pg} />
