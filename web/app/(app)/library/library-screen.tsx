@@ -104,6 +104,63 @@ function ReferenceBadge({ item }: { item: LibraryItem }) {
   );
 }
 
+/** The dialog a Library tile opens: the item's header with Download and Remove, over the item itself. */
+function ItemDialog({ item, trigger, extra, children }: { item: LibraryItem; trigger: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode }) {
+  const del = useDeleteLibraryItem();
+  const noun = item.kind === "diagram" ? "diagram" : "image";
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          className="motion-dialog fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[min(1100px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-xl border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)] outline-none"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Dialog.Title className="truncate text-[13px] text-fg">{item.title}</Dialog.Title>
+              <span className="truncate text-xs text-fg-tertiary">
+                {item.filename} · {formatBytes(item.size_bytes)} · {timelineTime(item.created_at)}
+                {referenceCaption(item) && ` · ${referenceCaption(item)}`}
+              </span>
+            </div>
+            {extra}
+            <a
+              href={libraryItemUrl(item.id, true)}
+              download={item.filename}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-xs text-fg hover:bg-hover"
+            >
+              <Icon name="download" size={14} />
+              Download
+            </a>
+            <Button
+              variant="ghost"
+              icon="trash"
+              disabled={del.isPending}
+              onClick={() => {
+                const msg =
+                  item.source === "upload"
+                    ? `Remove this ${noun} from your Library?`
+                    : `Remove this ${noun} from your Library? It stays in its chat while that chat exists.`;
+                if (window.confirm(msg)) del.mutate(item.id);
+              }}
+            >
+              Remove
+            </Button>
+            <Dialog.Close asChild>
+              <button type="button" aria-label="Close" className="text-fg-tertiary hover:text-fg">
+                <Icon name="x" size={15} />
+              </button>
+            </Dialog.Close>
+          </div>
+          {children}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 /** One tile; a click opens the full item with Download, Remove and, for an image, the reference actions. */
 function ItemTile({ item }: { item: LibraryItem }) {
   const del = useDeleteLibraryItem();
@@ -120,11 +177,12 @@ function ItemTile({ item }: { item: LibraryItem }) {
     );
   }
   const diagram = item.kind === "diagram";
-  const noun = diagram ? "diagram" : "image";
   return (
     <li className="flex min-w-0 flex-col gap-1.5" data-testid="library-item">
-      <Dialog.Root>
-        <Dialog.Trigger asChild>
+      <ItemDialog
+        item={item}
+        extra={!diagram && <ReferenceActions item={item} />}
+        trigger={
           <button
             type="button"
             aria-label={`Open ${item.title}`}
@@ -135,55 +193,11 @@ function ItemTile({ item }: { item: LibraryItem }) {
             <img src={url} alt={item.title} loading="lazy" className={cx("size-full", diagram ? "bg-white object-contain p-2" : "object-cover")} />
             <ReferenceBadge item={item} />
           </button>
-        </Dialog.Trigger>
-        <Dialog.Portal>
-          <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
-          <Dialog.Content
-            aria-describedby={undefined}
-            className="motion-dialog fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[min(1100px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-xl border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)] outline-none"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex min-w-0 flex-1 flex-col">
-                <Dialog.Title className="truncate text-[13px] text-fg">{item.title}</Dialog.Title>
-                <span className="truncate text-xs text-fg-tertiary">
-                  {item.filename} · {formatBytes(item.size_bytes)} · {timelineTime(item.created_at)}
-                  {referenceCaption(item) && ` · ${referenceCaption(item)}`}
-                </span>
-              </div>
-              {!diagram && <ReferenceActions item={item} />}
-              <a
-                href={libraryItemUrl(item.id, true)}
-                download={item.filename}
-                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-xs text-fg hover:bg-hover"
-              >
-                <Icon name="download" size={14} />
-                Download
-              </a>
-              <Button
-                variant="ghost"
-                icon="trash"
-                disabled={del.isPending}
-                onClick={() => {
-                  const msg =
-                    item.source === "upload"
-                      ? `Remove this ${noun} from your Library?`
-                      : `Remove this ${noun} from your Library? It stays in its chat while that chat exists.`;
-                  if (window.confirm(msg)) del.mutate(item.id);
-                }}
-              >
-                Remove
-              </Button>
-              <Dialog.Close asChild>
-                <button type="button" aria-label="Close" className="text-fg-tertiary hover:text-fg">
-                  <Icon name="x" size={15} />
-                </button>
-              </Dialog.Close>
-            </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={item.title} className={cx("min-h-0 max-h-[80vh] w-full object-contain", diagram && "bg-white")} />
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+        }
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={item.title} className={cx("min-h-0 max-h-[80vh] w-full object-contain", diagram && "bg-white")} />
+      </ItemDialog>
       <span className="truncate text-[13px] text-fg">{item.title}</span>
       <Source item={item} />
     </li>
