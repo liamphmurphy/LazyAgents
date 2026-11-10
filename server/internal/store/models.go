@@ -873,6 +873,31 @@ type PlanningSession struct {
 	ProposalCount   int32
 }
 
+type Playground struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	ChatID      uuid.UUID
+	RunID       *uuid.UUID
+	Spec        json.RawMessage
+	State       string
+	Action      *string
+	Stack       *string
+	RunnerID    *string
+	Port        *int32
+	IdleTtlS    *int32
+	Branch      string
+	Step        string
+	Error       *string
+	ErrorLog    string
+	StopReason  string
+	StartedAt   *time.Time
+	DataResetAt *time.Time
+	LastUsedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type Project struct {
 	ID            uuid.UUID
 	WorkspaceID   uuid.UUID
