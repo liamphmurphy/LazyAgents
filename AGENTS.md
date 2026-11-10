@@ -30,12 +30,15 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
   "routes": [
     { "path": "/api", "process": "api" },
     { "path": "/events", "process": "api" },
-    { "path": "/mcp", "process": "api" }
+    { "path": "/mcp", "process": "api" },
+    { "path": "/", "process": "web" }
   ],
   "openapi": "api/openapi.yaml"
 }
 ```
 
+- Keep the `/` route: a path no route matches goes to the first process,
+  which is `api`, so without it the pages come from the Go API.
 - `VESPER_NO_SIGNIN=1` serves the API as the seeded local user with no
   session. The API refuses to start with it unless `PUBLIC_URL` is a
   loopback address, which the default (`http://localhost:8080`) is. Never set
