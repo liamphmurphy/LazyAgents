@@ -28,7 +28,7 @@ WHERE id = (
   FOR UPDATE OF t SKIP LOCKED
   LIMIT 1
 )
-RETURNING id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage
+RETURNING id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons
 `
 
 // The next turn to execute: a pending turn of a running managed run whose
@@ -50,6 +50,9 @@ func (q *Queries) ClaimPendingTurn(ctx context.Context) (RunTurn, error) {
 		&i.ProcessStartedAt,
 		&i.LogKey,
 		&i.Usage,
+		&i.Effort,
+		&i.EffortLevel,
+		&i.EffortReasons,
 	)
 	return i, err
 }
@@ -241,7 +244,7 @@ func (q *Queries) FinishTurn(ctx context.Context, arg FinishTurnParams) error {
 }
 
 const getTurn = `-- name: GetTurn :one
-SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage FROM run_turns WHERE id = $1
+SELECT id, run_id, seq, trigger, input_message, started_at, ended_at, exit_code, status, process_started_at, log_key, usage, effort, effort_level, effort_reasons FROM run_turns WHERE id = $1
 `
 
 func (q *Queries) GetTurn(ctx context.Context, id uuid.UUID) (RunTurn, error) {
@@ -260,6 +263,9 @@ func (q *Queries) GetTurn(ctx context.Context, id uuid.UUID) (RunTurn, error) {
 		&i.ProcessStartedAt,
 		&i.LogKey,
 		&i.Usage,
+		&i.Effort,
+		&i.EffortLevel,
+		&i.EffortReasons,
 	)
 	return i, err
 }

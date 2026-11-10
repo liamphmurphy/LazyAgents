@@ -341,7 +341,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
-    add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE, ...(citations ? { citations } : {}) });
+    // "effort:" prompts run at an effort Vesper picked: it aimed for extra high, which the model lacks, after a retry.
+    const effort = prompt.startsWith("effort:") ? { effort: "high" as const, effort_level: "xhigh" as const, effort_reasons: ["effort_mismatch" as const] } : {};
+    add(c, "assistant", `Echo: ${prompt}`, { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE, ...effort, ...(citations ? { citations } : {}) });
     void emit(c);
   }
   function ref(c: Chat) {

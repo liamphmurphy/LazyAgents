@@ -23,7 +23,7 @@ func (q *Queries) ClearChatCanvasCommentSuggestion(ctx context.Context, id uuid.
 }
 
 const createChatCanvas = `-- name: CreateChatCanvas :one
-INSERT INTO chat_canvases (session_id, kind, title) VALUES ($1, $2, $3) RETURNING id, session_id, kind, title, created_at, updated_at, promoted_artifact_id
+INSERT INTO chat_canvases (session_id, kind, title) VALUES ($1, $2, $3) RETURNING id, session_id, kind, title, created_at, updated_at, promoted_artifact_id, reviewed_seq
 `
 
 type CreateChatCanvasParams struct {
@@ -43,6 +43,7 @@ func (q *Queries) CreateChatCanvas(ctx context.Context, arg CreateChatCanvasPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PromotedArtifactID,
+		&i.ReviewedSeq,
 	)
 	return i, err
 }
@@ -151,7 +152,7 @@ func (q *Queries) DeleteChatCanvasDraftComment(ctx context.Context, arg DeleteCh
 }
 
 const getChatCanvas = `-- name: GetChatCanvas :one
-SELECT id, session_id, kind, title, created_at, updated_at, promoted_artifact_id FROM chat_canvases WHERE id = $1 AND session_id = $2
+SELECT id, session_id, kind, title, created_at, updated_at, promoted_artifact_id, reviewed_seq FROM chat_canvases WHERE id = $1 AND session_id = $2
 `
 
 type GetChatCanvasParams struct {
@@ -170,6 +171,7 @@ func (q *Queries) GetChatCanvas(ctx context.Context, arg GetChatCanvasParams) (C
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PromotedArtifactID,
+		&i.ReviewedSeq,
 	)
 	return i, err
 }
@@ -329,7 +331,7 @@ func (q *Queries) ListChatCanvasVersions(ctx context.Context, canvasID uuid.UUID
 }
 
 const listChatCanvases = `-- name: ListChatCanvases :many
-SELECT c.id, c.session_id, c.kind, c.title, c.created_at, c.updated_at, c.promoted_artifact_id, (SELECT max(v.seq) FROM chat_canvas_versions v WHERE v.canvas_id = c.id)::int AS seq
+SELECT c.id, c.session_id, c.kind, c.title, c.created_at, c.updated_at, c.promoted_artifact_id, c.reviewed_seq, (SELECT max(v.seq) FROM chat_canvas_versions v WHERE v.canvas_id = c.id)::int AS seq
 FROM chat_canvases c WHERE c.session_id = $1 ORDER BY c.created_at, c.id
 `
 
@@ -341,6 +343,7 @@ type ListChatCanvasesRow struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	PromotedArtifactID *uuid.UUID
+	ReviewedSeq        int32
 	Seq                int32
 }
 
@@ -362,6 +365,7 @@ func (q *Queries) ListChatCanvases(ctx context.Context, sessionID uuid.UUID) ([]
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PromotedArtifactID,
+			&i.ReviewedSeq,
 			&i.Seq,
 		); err != nil {
 			return nil, err
@@ -375,7 +379,7 @@ func (q *Queries) ListChatCanvases(ctx context.Context, sessionID uuid.UUID) ([]
 }
 
 const lockChatCanvas = `-- name: LockChatCanvas :one
-SELECT id, session_id, kind, title, created_at, updated_at, promoted_artifact_id FROM chat_canvases WHERE id = $1 AND session_id = $2 FOR UPDATE
+SELECT id, session_id, kind, title, created_at, updated_at, promoted_artifact_id, reviewed_seq FROM chat_canvases WHERE id = $1 AND session_id = $2 FOR UPDATE
 `
 
 type LockChatCanvasParams struct {
@@ -394,6 +398,7 @@ func (q *Queries) LockChatCanvas(ctx context.Context, arg LockChatCanvasParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PromotedArtifactID,
+		&i.ReviewedSeq,
 	)
 	return i, err
 }

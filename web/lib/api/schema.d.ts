@@ -3477,6 +3477,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/docs/{canvasId}/reviewed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that the person reviewed a document up to a version
+         * @description The Docs app shows a persona's versions after the person's last edit
+         *     and after this mark as changes to accept or reject. Accepting all of
+         *     them changes nothing in the text, so this records it. The mark never
+         *     moves back. 404 for anyone else's document; 422 for a version it
+         *     doesn't have.
+         */
+        post: operations["markDocReviewed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/docs/{canvasId}/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a document's current version to the Library as Markdown
+         * @description Keeps a copy of the text as it is now; later edits don't change it.
+         *     Saving the same text again returns the existing item. It counts
+         *     against the Library's storage cap. 404 for anyone else's canvas; 422
+         *     for an SVG canvas or a full Library.
+         */
+        post: operations["saveDocToLibrary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -4433,6 +4484,11 @@ export interface components {
             chat_title: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: int32
+             * @description The last version the person reviewed; 0 before any review
+             */
+            reviewed_seq?: number;
         };
         /**
          * @default all
@@ -7096,6 +7152,14 @@ export interface components {
              */
             unreported_input_tokens?: number;
             cost_usd?: number;
+            effort?: components["schemas"]["ChatEffort"];
+            /**
+             * @description Set when Vesper picked the effort (the chat's effort is automatic): the level the message called for. effort is the highest the model offers at or below it.
+             * @enum {string}
+             */
+            effort_level?: "low" | "medium" | "high" | "xhigh";
+            /** @description Rules that raised effort_level above the message's own: confirmation (a go-ahead takes the weight of what it approves), effort_mismatch (a retry or edit steps it up) */
+            effort_reasons?: ("confirmation" | "effort_mismatch")[];
             /** Format: date-time */
             created_at: string;
         };
@@ -13479,6 +13543,66 @@ export interface operations {
                     "application/json": components["schemas"]["MyCanvas"];
                 };
             };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    markDocReviewed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int32 */
+                    seq: number;
+                };
+            };
+        };
+        responses: {
+            /** @description The document's reviewed version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int32 */
+                        reviewed_seq: number;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveDocToLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved, or already in the Library */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };

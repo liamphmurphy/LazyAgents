@@ -18,6 +18,10 @@ RETURNING *;
 -- The caller's saved diagram with this content, if any.
 SELECT * FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'diagram';
 
+-- name: GetLibraryDocumentByBlob :one
+-- The caller's saved document with this content, if any.
+SELECT * FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'document';
+
 -- name: ListLibraryItems :many
 -- The caller's own items, newest first, with where each came from (the chat's
 -- title and the persona's name, while they still exist).

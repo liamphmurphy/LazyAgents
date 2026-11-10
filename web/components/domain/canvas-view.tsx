@@ -25,7 +25,7 @@ type Comment = Schemas["ChatCanvasComment"];
 type Actions = ReturnType<typeof useCanvasActions>;
 type View = "preview" | "changes" | "source" | "edit";
 /** What a new comment will be on. */
-type Target = { kind: "text"; start: number; end: number; quote: string } | { kind: "svg"; vid: string; point: { x: number; y: number }; label: string };
+export type Target = { kind: "text"; start: number; end: number; quote: string } | { kind: "svg"; vid: string; point: { x: number; y: number }; label: string };
 type Toolbar = { start: number; end: number; quote: string; top: number; left: number };
 
 /** Width of a document page on the fullscreen board. */
@@ -318,7 +318,7 @@ function Composer({ target, readOnly, actions, seq, onDone }: { target: Target; 
   );
 }
 
-function Rail({ inline, threads, replies, resolved, target, activeId, setActive, agent, readOnly, actions, seq, onComposerDone, numberOf }: {
+export function Rail({ inline, threads, replies, resolved, target, activeId, setActive, agent, readOnly, actions, seq, onComposerDone, numberOf }: {
   inline: boolean;
   threads: Comment[];
   replies: Map<string, Comment[]>;

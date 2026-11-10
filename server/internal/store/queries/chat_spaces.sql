@@ -95,9 +95,18 @@ LIMIT 100;
 
 -- name: GetMyCanvas :one
 -- One of the person's canvases, with the chat it lives in.
-SELECT cv.id, cv.kind, cv.title, cv.updated_at, c.id AS chat_id, c.title AS chat_title
+SELECT cv.id, cv.kind, cv.title, cv.updated_at, cv.reviewed_seq, c.id AS chat_id, c.title AS chat_title
 FROM chat_canvases cv JOIN chat_sessions c ON c.id = cv.session_id
 WHERE cv.id = @id AND c.workspace_id = @workspace_id AND c.created_by = @user_id AND NOT c.hidden;
+
+-- name: MarkMyCanvasReviewed :one
+-- Records that the person has reviewed one of their canvases up to a version
+-- it has. Never moves back, so a stale tab can't reopen a finished review.
+UPDATE chat_canvases cv SET reviewed_seq = GREATEST(cv.reviewed_seq, @seq::int)
+FROM chat_sessions c
+WHERE cv.id = @id AND c.id = cv.session_id AND c.workspace_id = @workspace_id AND c.created_by = @user_id AND NOT c.hidden
+  AND @seq::int <= (SELECT max(seq) FROM chat_canvas_versions WHERE canvas_id = cv.id)
+RETURNING cv.reviewed_seq;
 
 -- name: GetUserCanvas :one
 -- One of the person's canvases with its current text.

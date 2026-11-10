@@ -200,6 +200,7 @@ type ChatCanvas struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	PromotedArtifactID *uuid.UUID
+	ReviewedSeq        int32
 }
 
 type ChatCanvasComment struct {
@@ -1002,6 +1003,9 @@ type RunTurn struct {
 	ProcessStartedAt *time.Time
 	LogKey           *string
 	Usage            json.RawMessage
+	Effort           *string
+	EffortLevel      *string
+	EffortReasons    []string
 }
 
 type Runner struct {

@@ -84,6 +84,7 @@ function Tag({ groups, m }: { groups: Groups; m: Message }) {
   return (
     <UsageTag m={m}>
       {l.harness} · {l.model}
+      {m.effort && ` · ${effortLabel(m.effort)}${m.effort_level ? " (auto)" : ""}`}
     </UsageTag>
   );
 }

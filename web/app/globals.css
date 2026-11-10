@@ -820,3 +820,39 @@
   .fin-row { transition-duration: 1ms !important; }
   .fin-progress { animation: none; transform: none; width: 100%; opacity: 0.6; }
 }
+
+/* The Docs app's page: the editor's content, styled like a written document. */
+@layer components {
+  .doc-page .ProseMirror { outline: none; color: var(--text-2); font-size: 15.5px; line-height: 1.7; min-height: 50vh; }
+  .doc-page .ProseMirror > * + * { margin-top: 0.75em; }
+  .doc-page .ProseMirror h1 { font: 600 30px/1.2 Georgia, "Times New Roman", serif; letter-spacing: -0.01em; color: var(--text); margin: 0 0 0.5em; }
+  .doc-page .ProseMirror h2 { font-size: 20px; font-weight: 600; color: var(--text); margin-top: 1.4em; }
+  .doc-page .ProseMirror h3 { font-size: 16.5px; font-weight: 600; color: var(--text); margin-top: 1.2em; }
+  .doc-page .ProseMirror h4, .doc-page .ProseMirror h5, .doc-page .ProseMirror h6 { font-weight: 600; color: var(--text); }
+  .doc-page .ProseMirror ul { list-style: disc; padding-left: 1.4em; }
+  .doc-page .ProseMirror ol { list-style: decimal; padding-left: 1.4em; }
+  .doc-page .ProseMirror li > p { margin: 0; }
+  .doc-page .ProseMirror ul[data-type="taskList"] { list-style: none; padding-left: 0.2em; }
+  .doc-page .ProseMirror ul[data-type="taskList"] li { display: flex; gap: 0.5em; align-items: flex-start; }
+  .doc-page .ProseMirror ul[data-type="taskList"] li > label { margin-top: 0.3em; }
+  .doc-page .ProseMirror ul[data-type="taskList"] li > div { flex: 1; }
+  .doc-page .ProseMirror blockquote { border-left: 3px solid var(--border-strong); padding-left: 1em; color: var(--text-secondary); }
+  .doc-page .ProseMirror a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .doc-page .ProseMirror code { font-family: var(--font-mono); font-size: 0.86em; padding: 1px 5px; border-radius: 4px; background: var(--selected); border: 1px solid var(--border-strong); }
+  .doc-page .ProseMirror pre { font-family: var(--font-mono); font-size: 13px; line-height: 1.55; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+  .doc-page .ProseMirror pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+  .doc-page .ProseMirror hr { border: 0; border-top: 1px solid var(--border-strong); margin: 1.6em 0; }
+  .doc-page .ProseMirror hr.ProseMirror-selectednode { border-top-color: var(--accent); }
+  .doc-page .ProseMirror table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  .doc-page .ProseMirror th, .doc-page .ProseMirror td { border: 1px solid var(--border-strong); padding: 6px 10px; vertical-align: top; text-align: left; }
+  .doc-page .ProseMirror th { background: var(--surface-sunken); font-weight: 600; color: var(--text); }
+  .doc-page .ProseMirror .selectedCell { background: var(--accent-soft); }
+  .doc-page .ProseMirror p.is-empty:first-child:last-child::before,
+  .doc-page .ProseMirror .is-empty.has-placeholder::before { content: attr(data-placeholder); color: var(--text-tertiary); float: left; height: 0; pointer-events: none; }
+  /* A persona's change waiting on the person: what goes and what comes in. */
+  .doc-change-before { background: color-mix(in srgb, var(--pill-blocked-fg) 12%, transparent); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--pill-blocked-fg) 60%, transparent); color: var(--text-tertiary); }
+  .doc-change-after { background: color-mix(in srgb, var(--pill-done-fg) 14%, transparent); box-shadow: inset 2px 0 0 var(--pill-done-fg); }
+}
+
+/* Unlayered, to beat the global ring: the page itself is the focus cue, and a ring around the whole document is noise. */
+.doc-page .ProseMirror:focus-visible { outline: none; }
