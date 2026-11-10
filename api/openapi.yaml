@@ -3241,7 +3241,8 @@ paths:
       summary: Start an ended playground again, reset its data, or stop it
       description: |
         start runs its last spec again in the chat's current workspace (refused
-        once that workspace was cleaned up). reset starts every service empty
+        once that workspace was cleaned up); a chat with no playground yet
+        starts one from its repository's saved spec (saved_spec). reset starts every service empty
         and runs setup again; the code is untouched. The runner carries each
         out shortly after; the playground's action shows it pending until then.
       tags: [chats]
@@ -5585,14 +5586,17 @@ components:
         created_at: { type: string, format: date-time }
     ChatPlaygroundState:
       type: object
-      required: [playground]
+      required: [playground, saved_spec]
       properties:
         playground:
           nullable: true
           allOf: [{ $ref: "#/components/schemas/Playground" }]
+        saved_spec:
+          type: boolean
+          description: The chat's repository has a playground spec from an earlier start, so start works here without asking an agent
     Playground:
       type: object
-      required: [id, chat_id, state, step, branch, error_log, stop_reason, processes, services, routes, openapi, updated_at]
+      required: [id, chat_id, state, step, branch, error_log, stop_reason, processes, services, routes, openapi, openapi_inferred, openapi_commit, updated_at]
       properties:
         id: { type: string, format: uuid }
         chat_id: { type: string, format: uuid }
@@ -5633,7 +5637,9 @@ components:
             properties:
               path: { type: string }
               process: { type: string }
-        openapi: { type: string, description: "The app's OpenAPI document in the workspace; the gateway serves it as JSON at /__vesper/openapi. Empty when it has none." }
+        openapi: { type: string, description: "The app's OpenAPI document in the workspace, when it serves none itself; the gateway serves whichever applies as JSON at /__vesper/openapi. Empty when it names none." }
+        openapi_inferred: { type: boolean, description: The persona wrote the document from the code }
+        openapi_commit: { type: string, description: The commit an inferred document was read from }
     ChatCanvas:
       allOf:
         - { $ref: "#/components/schemas/ChatCanvasSummary" }

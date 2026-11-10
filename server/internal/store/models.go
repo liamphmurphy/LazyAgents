@@ -898,6 +898,14 @@ type Playground struct {
 	UpdatedAt   time.Time
 }
 
+type PlaygroundSpec struct {
+	WorkspaceID     uuid.UUID
+	Repo            string
+	Spec            json.RawMessage
+	SavedFromChatID *uuid.UUID
+	UpdatedAt       time.Time
+}
+
 type Project struct {
 	ID            uuid.UUID
 	WorkspaceID   uuid.UUID

@@ -158,10 +158,11 @@ func TestStartPlaygroundSandboxesEveryContainerAndReportsAProcessThatDies(t *tes
 		}
 	}
 	// A login shell would read /etc/profile, which resets PATH and loses Go.
-	if cmd := f.created[web]["Cmd"].([]any); len(cmd) != 3 || cmd[0] != "bash" || cmd[1] != "-c" || cmd[2] != processScript("web", "npm run dev") {
-		t.Errorf("web runs %v, want bash -c with the image's PATH", cmd)
+	// It starts at the root: Docker would create a missing WorkingDir as root.
+	cmd := f.created[web]["Cmd"].([]any)
+	if len(cmd) != 3 || cmd[0] != "bash" || cmd[1] != "-c" || cmd[2] != processScript("web", "npm run dev") {
+		t.Errorf("web runs %v, want bash -c with its process script", cmd)
 	}
-	// Docker would create a missing WorkingDir as root; the root always exists.
 	if wd := f.created[web]["WorkingDir"]; wd != workspacePath {
 		t.Errorf("web starts in %v, want the workspace root", wd)
 	}
@@ -253,20 +254,51 @@ func TestPlaygroundSetupCommandsStartFromTheRootAndStopOnFailure(t *testing.T) {
 	}
 }
 
-// Docker creates a missing WorkingDir as root before the process's user runs,
-// leaving a directory nothing in the playground can write to. A process's dir
-// is made by its own shell instead, as the agent user.
-func TestPlaygroundProcessMakesItsOwnDirectory(t *testing.T) {
+// A process's dir is made by the agent's user, not by Docker as root (which
+// left a directory nothing could write to), and the command runs inside it
+// with the playground's tools first on PATH.
+func TestProcessScriptMakesItsDirAndRunsThere(t *testing.T) {
 	root := t.TempDir()
-	cmd := exec.Command("bash", "-c", processScript("dist/it's new", "pwd > ../../where && touch here"))
+	script := strings.ReplaceAll(processScript(".lazyagents/pgbin", `pwd > here; echo "$PATH" > path`), workspacePath, root)
+	cmd := exec.Command("bash", "-c", script)
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if _, err := os.Stat(filepath.Join(root, "dist", "it's new", "here")); err != nil {
-		t.Fatalf("the process didn't run in its new directory: %v", err)
+	dir := filepath.Join(root, ".lazyagents/pgbin")
+	here, err := os.ReadFile(filepath.Join(dir, "here"))
+	if err != nil || strings.TrimSpace(string(here)) != dir {
+		t.Fatalf("ran in %q (%v), want %s", here, err, dir)
 	}
-	if got := processScript("", "npm run dev"); got != "npm run dev" {
-		t.Errorf("a process at the root runs %q, want its command as given", got)
+	if p, _ := os.ReadFile(filepath.Join(dir, "path")); !strings.HasPrefix(string(p), root+"/.lazyagents/playground-profile/bin:") {
+		t.Errorf("PATH %q doesn't start with the playground's tools", p)
+	}
+	// A dir that can't be made fails the process instead of running elsewhere.
+	if err := exec.Command("bash", "-c", strings.ReplaceAll(processScript("here/../../../../../proc/x", "touch ran"), workspacePath, root)).Run(); err == nil {
+		t.Error("a dir that can't be created didn't fail the process")
+	}
+}
+
+// A background process only has to keep running: one that exits on start
+// fails the playground with its output.
+func TestStartPlaygroundChecksABackgroundProcessStaysUp(t *testing.T) {
+	f, d := startPlaygroundEngine(t)
+	id := uuid.New()
+	worker := playgroundContainer(id, "runner")
+	f.exitCode[worker] = 2
+	f.logs[worker] = "2026-11-10T20:30:00Z runner: DATABASE_URL is unset\n"
+	spec := playground.Spec{Processes: []playground.Process{{Name: "runner", Command: "vesper runner"}, {Name: "web", Command: "npm start", Port: 3000}}}
+	if err := spec.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	d.dialPlayground = func(context.Context, string) (net.Conn, error) { // web listens
+		c, other := net.Pipe()
+		other.Close()
+		return c, nil
+	}
+	_, err := d.StartPlayground(context.Background(), PlaygroundRun{ID: id, RunID: "run-1", Spec: spec}, func(string) {})
+	var perr *PlaygroundError
+	if !errors.As(err, &perr) || perr.Msg != "runner exited with code 2" || !strings.Contains(perr.Log, "DATABASE_URL is unset") {
+		t.Fatalf("StartPlayground = %v", err)
 	}
 }

@@ -939,6 +939,7 @@ var Tools = []Tool{
 	define("start_playground", "Start the app you're building in a playground the person opens beside this chat: its processes run from this workspace with fresh services, and keep running after your reply. Calling it again restarts it with what you pass.", startPlayground),
 	define("playground_status", "Whether this chat's playground is starting, running, stopped or failed, with what it's doing and, when it failed, why and the end of the output.", playgroundStatus),
 	define("stop_playground", "Stop this chat's playground.", stopPlayground),
+	define("set_playground_openapi", "Point this chat's playground's API tab at an OpenAPI document in the workspace, such as one you inferred from the code (inferred, with the commit you read).", setPlaygroundOpenAPI),
 	define("canvas_create", "Open a canvas beside this chat: a Markdown document (kind text) or an SVG mockup (kind svg) you and the person work on together.", canvasCreate),
 	define("canvas_patch", "Change a canvas, as a list of small edits against the version you last read. Refused if the canvas has moved on: read it again and redo your edit.", canvasPatch),
 	define("canvas_read", "Read a canvas: its current version, or an earlier one. An SVG canvas comes with the data-vid of each element, which canvas_patch uses. The current version also lists its comment threads.", canvasRead),

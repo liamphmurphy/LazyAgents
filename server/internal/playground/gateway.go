@@ -3,11 +3,15 @@ package playground
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -57,8 +61,42 @@ type Live struct {
 	// ("lazyagents-play-…-web:3000").
 	Addrs map[string]string
 
+	// Token admits the agent's own requests, from a turn on the playground
+	// network, in place of a Vesper session. Serve sets one if it's empty.
+	Token string
+
 	lastUsed atomic.Int64
 	proxies  map[string]*httputil.ReverseProxy
+	openapi  atomic.Pointer[OpenAPIRef]
+	served   servedSpec
+}
+
+// OpenAPIRef is the document the API tab falls back to when the app serves
+// none: a file the repository keeps, or one the persona inferred.
+type OpenAPIRef struct {
+	Path     string
+	Inferred bool
+	Commit   string
+}
+
+// OpenAPI is the playground's declared document.
+func (p *Live) OpenAPI() OpenAPIRef {
+	if r := p.openapi.Load(); r != nil {
+		return *r
+	}
+	return OpenAPIRef{}
+}
+
+// SetOpenAPI points the API tab at another document without a restart,
+// such as one the persona just inferred.
+func (p *Live) SetOpenAPI(r OpenAPIRef) { p.openapi.Store(&r) }
+
+// servedSpec remembers which well-known path the app serves its document
+// on, so the API tab doesn't probe every path on each load.
+type servedSpec struct {
+	mu   sync.Mutex
+	at   time.Time
+	path string
 }
 
 // Gateway routes a port's requests to the playground served on it.
@@ -85,6 +123,10 @@ const MaxSpecBytes = 8 << 20
 
 // Serve starts routing port's requests to p, replacing what it served.
 func (g *Gateway) Serve(port int, p *Live) {
+	if p.Token == "" {
+		p.Token = randomHex(24)
+	}
+	p.SetOpenAPI(OpenAPIRef{Path: p.Spec.OpenAPI, Inferred: p.Spec.OpenAPIInferred, Commit: p.Spec.OpenAPICommit})
 	p.proxies = map[string]*httputil.ReverseProxy{}
 	for name, addr := range p.Addrs {
 		p.proxies[name] = g.proxy(addr)
@@ -123,6 +165,10 @@ func (g *Gateway) Handler(port int) http.Handler {
 			page(w, http.StatusServiceUnavailable, "No playground is running here", "Start it again from its chat in Vesper.")
 			return
 		}
+		if r.URL.Path == ReservedPrefix+"/enter" {
+			g.enter(w, r, p)
+			return
+		}
 		vesper := g.vesperOrigin(r)
 		if vesper {
 			setCORS(w.Header(), r.Header.Get("Origin"))
@@ -136,7 +182,10 @@ func (g *Gateway) Handler(port int) http.Handler {
 				return
 			}
 		}
-		ok, err := g.signedIn(r)
+		ok, err := p.agent(r), error(nil)
+		if !ok {
+			ok, err = g.signedIn(r)
+		}
 		if err != nil {
 			g.Log.Error("playground session check", "err", err)
 			page(w, http.StatusInternalServerError, "Couldn’t check your Vesper session", "Try again in a moment.")
@@ -157,8 +206,21 @@ func (g *Gateway) Handler(port int) http.Handler {
 			page(w, http.StatusNotFound, "No process serves this path", "")
 			return
 		}
-		r = r.WithContext(context.WithValue(r.Context(), routeKey{}, routeInfo{process: proc.Name, port: proc.Port, vesper: vesper}))
-		stripSessionCookie(r.Header)
+		// The app's answer carries its own CORS (ModifyResponse): one set
+		// here too would reach the browser twice, which it refuses.
+		clearCORS(w.Header())
+		// Each request gets an id the app can log, so the API tab can show
+		// exactly its lines; one the caller sent is kept.
+		rid := r.Header.Get("X-Request-Id")
+		if rid == "" {
+			rid = randomHex(8)
+			r.Header.Set("X-Request-Id", rid)
+		}
+		info := routeInfo{process: proc.Name, port: proc.Port, vesper: vesper, origin: r.Header.Get("Origin"), requestID: rid,
+			frame: r.Method == http.MethodGet && r.Header.Get("Sec-Fetch-Dest") == "iframe"}
+		r = r.WithContext(context.WithValue(r.Context(), routeKey{}, info))
+		stripCookies(r.Header, auth.SessionCookie, agentCookie)
+		r.Header.Del(agentHeader)
 		proxy.ServeHTTP(w, r)
 	})
 }
@@ -192,14 +254,14 @@ func (g *Gateway) signedIn(r *http.Request) (bool, error) {
 	return true, nil
 }
 
-// stripSessionCookie removes Vesper's session from what the app is sent.
-func stripSessionCookie(h http.Header) {
+// stripCookies removes Vesper's own cookies from what the app is sent.
+func stripCookies(h http.Header, names ...string) {
 	var kept []string
 	for _, line := range h.Values("Cookie") {
 		var parts []string
 		for _, part := range strings.Split(line, ";") {
 			name, _, _ := strings.Cut(strings.TrimSpace(part), "=")
-			if name != auth.SessionCookie && strings.TrimSpace(part) != "" {
+			if !slices.Contains(names, name) && strings.TrimSpace(part) != "" {
 				parts = append(parts, strings.TrimSpace(part))
 			}
 		}
@@ -216,9 +278,12 @@ func stripSessionCookie(h http.Header) {
 type routeKey struct{}
 
 type routeInfo struct {
-	process string
-	port    int
-	vesper  bool
+	process   string
+	port      int
+	vesper    bool   // from one of Vesper's own pages (the API tab)
+	origin    string // that page's origin, before the gateway rewrote it
+	requestID string
+	frame     bool // a page loaded in the Preview tab's frame
 }
 
 func (g *Gateway) proxy(addr string) *httputil.ReverseProxy {
@@ -233,7 +298,13 @@ func (g *Gateway) proxy(addr string) *httputil.ReverseProxy {
 			// A request from the API tab reaches the app as one from its own
 			// page would, so the app's Origin and fetch-metadata checks (such
 			// as Vesper's own) let it through.
-			if info, _ := pr.In.Context().Value(routeKey{}).(routeInfo); info.vesper {
+			info, _ := pr.In.Context().Value(routeKey{}).(routeInfo)
+			// A page for the Preview frame comes back uncompressed, so the
+			// probe can go into it.
+			if info.frame {
+				pr.Out.Header.Del("Accept-Encoding")
+			}
+			if info.vesper {
 				scheme := "http"
 				if pr.In.TLS != nil {
 					scheme = "https"
@@ -264,17 +335,21 @@ func (g *Gateway) proxy(addr string) *httputil.ReverseProxy {
 			if csp := h.Get("Content-Security-Policy"); csp != "" {
 				h.Set("Content-Security-Policy", withoutFrameAncestors(csp))
 			}
+			if h.Get("X-Request-Id") == "" {
+				h.Set("X-Request-Id", info.requestID)
+			}
+			if info.frame {
+				if err := injectProbe(res); err != nil {
+					return err
+				}
+			}
 			if info.vesper {
 				// The API tab reads responses from Vesper's page: the app's
-				// own CORS answer gives way to the gateway's, and every
-				// header the app sent is readable there.
-				origin := res.Request.Header.Get("Origin")
-				for k := range h {
-					if strings.HasPrefix(strings.ToLower(k), "access-control-") {
-						h.Del(k)
-					}
-				}
-				setCORS(h, origin)
+				// own CORS answer gives way to the gateway's, for Vesper's
+				// origin (the request's was rewritten to the app's own), and
+				// every header the app sent is readable there.
+				clearCORS(h)
+				setCORS(h, info.origin)
 				names := make([]string, 0, len(h))
 				for k := range h {
 					names = append(names, k)
@@ -313,30 +388,144 @@ func (g *Gateway) own(w http.ResponseWriter, r *http.Request, p *Live) {
 		g.openAPI(w, r, p)
 	case "/logs":
 		g.logs(w, r, p)
+	case "/meta":
+		g.meta(w, r, p)
+	case "/probe.js":
+		g.probe(w)
 	default:
 		page(w, http.StatusNotFound, "Not found", "")
 	}
 }
 
-// openAPI serves the app's OpenAPI document as JSON, read from the workspace
-// on each request so the API tab follows the agent's edits.
+// WellKnownSpecPaths are where apps commonly serve their OpenAPI document.
+var WellKnownSpecPaths = []string{"/openapi.json", "/openapi.yaml", "/swagger.json", "/v3/api-docs", "/api/openapi.json", "/docs/openapi.json", "/swagger/v1/swagger.json"}
+
+// servedSpecTTL is how long the gateway trusts what it found on the app.
+const servedSpecTTL = 30 * time.Second
+
+// openAPI serves the app's OpenAPI document as JSON: the one the running app
+// serves, which is what's deployed on this branch, else the declared file
+// (the repository's or an inferred one), read on each request so the API
+// tab follows the agent's edits. X-Vesper-Spec-Source says which.
 func (g *Gateway) openAPI(w http.ResponseWriter, r *http.Request, p *Live) {
-	if p.Spec.OpenAPI == "" {
-		writeJSONError(w, http.StatusNotFound, "This playground has no OpenAPI document.")
+	if path, doc := g.servedDocument(r.Context(), p); doc != nil {
+		w.Header().Set("X-Vesper-Spec-Source", "served:"+path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(doc)
 		return
 	}
-	b, err := g.Backend.ReadFile(r.Context(), p.ID, p.Spec.OpenAPI)
+	ref := p.OpenAPI()
+	if ref.Path == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": "The app serves no OpenAPI document and the playground names none.", "checked": WellKnownSpecPaths})
+		return
+	}
+	b, err := g.Backend.ReadFile(r.Context(), p.ID, ref.Path)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, fmt.Sprintf("Couldn’t read %s: %v", p.Spec.OpenAPI, err))
+		writeJSONError(w, http.StatusNotFound, fmt.Sprintf("Couldn’t read %s: %v", ref.Path, err))
 		return
 	}
 	doc, err := SpecJSON(b)
 	if err != nil {
-		writeJSONError(w, http.StatusUnprocessableEntity, fmt.Sprintf("%s isn’t valid YAML or JSON: %v", p.Spec.OpenAPI, err))
+		writeJSONError(w, http.StatusUnprocessableEntity, fmt.Sprintf("%s isn’t valid YAML or JSON: %v", ref.Path, err))
 		return
 	}
+	source := "file:" + ref.Path
+	if ref.Inferred {
+		source = "inferred:" + ref.Path + "@" + ref.Commit
+	}
+	w.Header().Set("X-Vesper-Spec-Source", source)
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(doc)
+}
+
+// servedDocument fetches the document the app serves on a well-known path,
+// as JSON, or nil. The path that worked is remembered for servedSpecTTL, and
+// so is finding none.
+func (g *Gateway) servedDocument(ctx context.Context, p *Live) (string, []byte) {
+	p.served.mu.Lock()
+	defer p.served.mu.Unlock()
+	paths := WellKnownSpecPaths
+	if time.Since(p.served.at) < servedSpecTTL {
+		if p.served.path == "" {
+			return "", nil
+		}
+		paths = []string{p.served.path}
+	}
+	p.served.at, p.served.path = time.Now(), ""
+	client := &http.Client{Timeout: 2 * time.Second}
+	for _, path := range paths {
+		proc, ok := p.Spec.Route(path)
+		addr := p.Addrs[proc.Name]
+		if !ok || addr == "" {
+			continue
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+path, nil)
+		if err != nil {
+			continue
+		}
+		res, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		b, err := io.ReadAll(io.LimitReader(res.Body, MaxSpecBytes+1))
+		res.Body.Close()
+		if err != nil || res.StatusCode != http.StatusOK {
+			continue
+		}
+		doc, err := SpecJSON(b)
+		if err != nil || !looksLikeSpec(doc) {
+			continue
+		}
+		p.served.path = path
+		return path, doc
+	}
+	return "", nil
+}
+
+// looksLikeSpec tells an OpenAPI or Swagger document from any other JSON a
+// path happens to serve.
+func looksLikeSpec(doc []byte) bool {
+	var head struct {
+		OpenAPI string          `json:"openapi"`
+		Swagger string          `json:"swagger"`
+		Paths   json.RawMessage `json:"paths"`
+	}
+	return json.Unmarshal(doc, &head) == nil && (head.OpenAPI != "" || head.Swagger != "") && len(head.Paths) > 0
+}
+
+// meta tells the API tab which commit the workspace has checked out, to
+// show whether an inferred document is out of date.
+func (g *Gateway) meta(w http.ResponseWriter, r *http.Request, p *Live) {
+	branch, commit := g.head(r.Context(), p)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"branch": branch, "commit": commit})
+}
+
+// head reads the checked-out branch and commit from the workspace's .git.
+func (g *Gateway) head(ctx context.Context, p *Live) (branch, commit string) {
+	b, err := g.Backend.ReadFile(ctx, p.ID, ".git/HEAD")
+	if err != nil {
+		return "", ""
+	}
+	h := strings.TrimSpace(string(b))
+	ref, isRef := strings.CutPrefix(h, "ref: ")
+	if !isRef {
+		return "", h // detached
+	}
+	branch = strings.TrimPrefix(ref, "refs/heads/")
+	if b, err := g.Backend.ReadFile(ctx, p.ID, ".git/"+ref); err == nil {
+		return branch, strings.TrimSpace(string(b))
+	}
+	if b, err := g.Backend.ReadFile(ctx, p.ID, ".git/packed-refs"); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if hash, name, ok := strings.Cut(line, " "); ok && name == ref {
+				return branch, hash
+			}
+		}
+	}
+	return branch, ""
 }
 
 // SpecJSON turns an OpenAPI document in YAML or JSON into JSON.
@@ -436,4 +625,49 @@ func page(w http.ResponseWriter, status int, title, detail string) {
 		`<body style="font:14px/1.5 system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#0E0D15;color:#EEEDF3">`+
 		`<div style="max-width:420px;padding:24px;text-align:center"><h1 style="font-size:16px;margin:0 0 8px">%[1]s</h1><p style="margin:0;color:#A4A1B3">%[2]s</p></div>`,
 		html.EscapeString(title), html.EscapeString(detail))
+}
+
+const (
+	// agentHeader and agentCookie carry a playground's Token.
+	agentHeader = "X-Vesper-Playground-Token"
+	agentCookie = "vesper_playground"
+)
+
+// agent reports a request carrying the playground's token.
+func (p *Live) agent(r *http.Request) bool {
+	tok := r.Header.Get(agentHeader)
+	if c, err := r.Cookie(agentCookie); tok == "" && err == nil {
+		tok = c.Value
+	}
+	return tok != "" && subtle.ConstantTimeCompare([]byte(tok), []byte(p.Token)) == 1
+}
+
+// enter trades the playground's token in the URL for a cookie, so a browser
+// the agent drives (Playwright) can then use the app like the person does.
+func (g *Gateway) enter(w http.ResponseWriter, r *http.Request, p *Live) {
+	tok := r.URL.Query().Get("token")
+	if tok == "" || subtle.ConstantTimeCompare([]byte(tok), []byte(p.Token)) != 1 {
+		page(w, http.StatusUnauthorized, "That playground token isn’t valid", "It changes every time the playground starts.")
+		return
+	}
+	next := r.URL.Query().Get("next")
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") {
+		next = "/"
+	}
+	http.SetCookie(w, &http.Cookie{Name: agentCookie, Value: p.Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+func clearCORS(h http.Header) {
+	for k := range h {
+		if strings.HasPrefix(strings.ToLower(k), "access-control-") {
+			h.Del(k)
+		}
+	}
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }

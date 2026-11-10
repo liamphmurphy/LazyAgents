@@ -19,14 +19,18 @@ func (s *Server) GetChatPlayground(ctx context.Context, req api.GetChatPlaygroun
 	if err != nil {
 		return nil, err
 	}
+	_, saved, err := s.Runs.SavedPlaygroundSpec(ctx, c)
+	if err != nil {
+		return nil, err
+	}
 	pg, err := s.Q.GetChatPlayground(ctx, store.GetChatPlaygroundParams{ChatID: c.ID, WorkspaceID: c.WorkspaceID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return api.GetChatPlayground200JSONResponse{Playground: nullable.NewNullNullable[api.Playground]()}, nil
+		return api.GetChatPlayground200JSONResponse{Playground: nullable.NewNullNullable[api.Playground](), SavedSpec: saved}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return api.GetChatPlayground200JSONResponse{Playground: nullable.NewNullableWithValue(playgroundOut(pg))}, nil
+	return api.GetChatPlayground200JSONResponse{Playground: nullable.NewNullableWithValue(playgroundOut(pg)), SavedSpec: saved}, nil
 }
 
 func (s *Server) ChatPlaygroundAction(ctx context.Context, req api.ChatPlaygroundActionRequestObject) (api.ChatPlaygroundActionResponseObject, error) {
@@ -59,7 +63,7 @@ func playgroundOut(pg store.Playground) api.Playground {
 	}
 	var spec playground.Spec
 	_ = json.Unmarshal(pg.Spec, &spec) // validated when it was stored
-	out.Openapi = spec.OpenAPI
+	out.Openapi, out.OpenapiInferred, out.OpenapiCommit = spec.OpenAPI, spec.OpenAPIInferred, spec.OpenAPICommit
 	for _, p := range spec.Processes {
 		out.Processes = append(out.Processes, struct {
 			Name string `json:"name"`

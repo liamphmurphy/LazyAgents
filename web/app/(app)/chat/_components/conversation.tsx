@@ -68,6 +68,7 @@ import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
 import { CommitEmailChip, CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
+import { onComposerFiles } from "@/lib/playground-report";
 import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
@@ -355,6 +356,18 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const since = runningSince(list) ?? lastUser?.created_at;
   const turns = turnWindows(list);
   const drop = useFileDrop(files.add, !!c && !c.archived && !locked);
+  // "Send to chat" from the playground: its report and screenshot join this message.
+  const addFiles = useRef(files.add);
+  useEffect(() => {
+    addFiles.current = files.add;
+  });
+  useEffect(() => {
+    if (!c?.id || c.archived) return;
+    return onComposerFiles(c.id, (f) => {
+      addFiles.current(f);
+      area.current?.focus();
+    });
+  }, [c?.id, c?.archived]);
 
   useEffect(() => {
     if (!search.has("attach")) return;

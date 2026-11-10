@@ -33,6 +33,12 @@ const (
 	playgroundLabelKey  = "dev.lazyagents.playground"
 	playgroundSourceKey = "dev.lazyagents.playground.source"
 	playgroundSetup     = "setup"
+	playgroundTools     = "tools"
+	// PlaygroundHost is the runner's name on each playground network.
+	PlaygroundHost = "playground"
+	// playgroundProfile holds the Nix packages a playground installs, in the
+	// workspace (git-excluded) so every one of its containers sees them.
+	playgroundProfile = workspacePath + "/.lazyagents/playground-profile"
 )
 
 var (
@@ -41,7 +47,10 @@ var (
 	// PlaygroundReadyTimeout bounds how long a process may take to listen on
 	// its port (a first `go run` compiles).
 	PlaygroundReadyTimeout = 5 * time.Minute
-	playgroundPoll         = 500 * time.Millisecond
+	// PlaygroundBackgroundGrace is how long a background process must keep
+	// running after start before the playground counts as up.
+	PlaygroundBackgroundGrace = 3 * time.Second
+	playgroundPoll            = 500 * time.Millisecond
 )
 
 // PlaygroundRun is a playground as the backend starts it.
@@ -71,10 +80,14 @@ type PlaygroundBackend interface {
 	RunningPlaygrounds(ctx context.Context) ([]uuid.UUID, error)
 	// StackName is the install whose containers this backend owns.
 	StackName() string
+	// PlaygroundNetwork is the network a turn joins to reach a playground.
+	PlaygroundNetwork(id uuid.UUID) string
 	playground.Backend
 }
 
 func (d *Docker) StackName() string { return d.stack() }
+
+func (d *Docker) PlaygroundNetwork(id uuid.UUID) string { return playgroundNetwork(id) }
 
 func playgroundKey(id uuid.UUID) string {
 	h := strings.ReplaceAll(id.String(), "-", "")
@@ -133,7 +146,10 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 	if err != nil && !isStatus(err, 409) {
 		return nil, fmt.Errorf("create the playground network: %w", err)
 	}
-	if _, err := d.do(ctx, "POST", "/networks/"+url.PathEscape(network)+"/connect", jsonBody(map[string]any{"Container": self}), "application/json", nil); err != nil && !isStatus(err, 403) && !isStatus(err, 409) {
+	// As "playground" there: a turn on the network reaches the gateway, and
+	// with it the app as the person sees it, routes included.
+	join := map[string]any{"Container": self, "EndpointConfig": map[string]any{"Aliases": []string{PlaygroundHost}}}
+	if _, err := d.do(ctx, "POST", "/networks/"+url.PathEscape(network)+"/connect", jsonBody(join), "application/json", nil); err != nil && !isStatus(err, 403) && !isStatus(err, 409) {
 		return nil, fmt.Errorf("join the playground network: %w", err)
 	}
 
@@ -148,6 +164,25 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 		}
 		if err := d.waitReady(ctx, id, s); err != nil {
 			return nil, &PlaygroundError{Msg: fmt.Sprintf("service %s isn't ready", s.Name), Log: err.Error()}
+		}
+	}
+
+	if len(spec.NixPackages) > 0 {
+		if d.nixMount() == nil {
+			return nil, &PlaygroundError{Msg: "the spec asks for Nix packages, but this runner has no Nix (RUNNER_NIX_VOLUME)"}
+		}
+		step("Installing tools")
+		script := "nix profile install --profile " + playgroundProfile + " " + strings.Join(quoteAll(spec.NixPackages), " ")
+		body, err := d.playgroundBody(pg, network, playgroundTools, script, "", nil)
+		if err != nil {
+			return nil, err
+		}
+		id, err := d.createAndStart(ctx, playgroundContainer(pg.ID, playgroundTools), body, "")
+		if err != nil {
+			return nil, fmt.Errorf("start the tools install: %w", err)
+		}
+		if err := d.waitExit(ctx, id, PlaygroundSetupTimeout); err != nil {
+			return nil, &PlaygroundError{Msg: "installing " + strings.Join(spec.NixPackages, ", ") + " " + err.Error(), Log: d.playgroundLogTail(id)}
 		}
 	}
 
@@ -179,15 +214,77 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 			return nil, fmt.Errorf("start %s: %w", p.Name, err)
 		}
 		ids[p.Name] = id
-		addrs[p.Name] = net.JoinHostPort(playgroundContainer(pg.ID, p.Name), strconv.Itoa(p.Port))
+		if !p.Background() {
+			addrs[p.Name] = net.JoinHostPort(playgroundContainer(pg.ID, p.Name), strconv.Itoa(p.Port))
+		}
 	}
 	for _, p := range spec.Processes {
+		if p.Background() {
+			continue
+		}
 		step(fmt.Sprintf("Waiting for %s on :%d", p.Name, p.Port))
 		if err := d.waitListening(ctx, ids[p.Name], addrs[p.Name]); err != nil {
 			return nil, &PlaygroundError{Msg: fmt.Sprintf("%s %v", p.Name, err), Log: d.playgroundLogTail(ids[p.Name])}
 		}
 	}
+	// A background process serves nothing to wait for; one that dies on
+	// start (a bad flag, a missing binary) has done so by the time the served
+	// ones listen, or within the grace after.
+	for _, p := range spec.Processes {
+		if !p.Background() {
+			continue
+		}
+		step("Checking " + p.Name)
+		if err := d.stillRunning(ctx, ids[p.Name], PlaygroundBackgroundGrace); err != nil {
+			return nil, &PlaygroundError{Msg: fmt.Sprintf("%s %v", p.Name, err), Log: d.playgroundLogTail(ids[p.Name])}
+		}
+	}
 	return addrs, nil
+}
+
+// stillRunning fails if a container exits within grace.
+func (d *Docker) stillRunning(ctx context.Context, id string, grace time.Duration) error {
+	deadline := time.Now().Add(grace)
+	for {
+		var info struct {
+			State struct {
+				Status   string
+				ExitCode int
+			}
+		}
+		if _, err := d.do(ctx, "GET", "/containers/"+id+"/json", nil, "", &info); err != nil {
+			return err
+		}
+		if info.State.Status == "exited" || info.State.Status == "dead" {
+			return fmt.Errorf("exited with code %d", info.State.ExitCode)
+		}
+		if time.Now().After(deadline) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(playgroundPoll):
+		}
+	}
+}
+
+// processScript runs command in dir, which it creates as the container's
+// user, with the playground's Nix tools first on PATH.
+func processScript(dir, command string) string {
+	script := "export PATH=" + playgroundProfile + "/bin:\"$PATH\"\n"
+	if dir != "" {
+		script += "mkdir -p -- " + shellQuote(dir) + " && cd -- " + shellQuote(dir) + " || exit 1\n"
+	}
+	return script + command
+}
+
+func quoteAll(ss []string) []string {
+	out := make([]string, len(ss))
+	for i, s := range ss {
+		out[i] = shellQuote(s)
+	}
+	return out
 }
 
 // setupScript runs each setup command from the workspace root, as the spec
@@ -201,17 +298,6 @@ func setupScript(cmds []string) string {
 		b.WriteString("(cd " + workspacePath + " && " + c + "\n)\n")
 	}
 	return b.String()
-}
-
-// processScript runs command in dir, relative to the workspace root, making
-// dir first. The container starts at the root rather than in dir because
-// Docker creates a missing WorkingDir as root, before the agent user runs,
-// and nothing in the playground could write there afterwards.
-func processScript(dir, command string) string {
-	if dir == "" {
-		return command
-	}
-	return "mkdir -p -- " + shellQuote(dir) + " && cd -- " + shellQuote(dir) + " || exit\n" + command
 }
 
 // playgroundBody is a setup or process container: the agent image in the
@@ -229,6 +315,10 @@ func (d *Docker) playgroundBody(pg PlaygroundRun, network, source, command, dir 
 	host := d.hostConfig(mounts)
 	host["NetworkMode"] = network
 	delete(host, "ExtraHosts")
+	// Docker would create a missing WorkingDir as root, which nothing in the
+	// sandbox can write to afterwards: start at the root and let the agent's
+	// user make it (processScript).
+	command = processScript(dir, command)
 	all := dependencyEnv(d.DependencyCacheDir(), workspacePath)
 	for k, v := range env {
 		all[k] = v
@@ -241,7 +331,7 @@ func (d *Docker) playgroundBody(pg PlaygroundRun, network, source, command, dir 
 	return map[string]any{
 		// Not a login shell: /etc/profile resets PATH, dropping the image's
 		// Go and Nix profile directories.
-		"Image": d.Image, "Cmd": []string{"bash", "-c", processScript(dir, command)}, "Env": list, "WorkingDir": workspacePath,
+		"Image": d.Image, "Cmd": []string{"bash", "-c", command}, "Env": list, "WorkingDir": workspacePath,
 		"Labels": d.playgroundLabels(pg, source), "HostConfig": host,
 		"NetworkingConfig": map[string]any{"EndpointsConfig": map[string]any{
 			network: map[string]any{"Aliases": []string{source}},
@@ -299,7 +389,13 @@ func (d *Docker) waitListening(ctx context.Context, id, addr string) error {
 	ctx, cancel := context.WithTimeout(ctx, PlaygroundReadyTimeout)
 	defer cancel()
 	for {
-		conn, err := (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "tcp", addr)
+		dial := d.dialPlayground
+		if dial == nil {
+			dial = func(ctx context.Context, addr string) (net.Conn, error) {
+				return (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "tcp", addr)
+			}
+		}
+		conn, err := dial(ctx, addr)
 		if err == nil {
 			conn.Close()
 			return nil

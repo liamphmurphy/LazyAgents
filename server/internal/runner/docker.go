@@ -74,6 +74,9 @@ type Docker struct {
 	// self is the runner's own container, once selfID has found it.
 	selfMu sync.Mutex
 	self   string
+	// dialPlayground reaches a playground process; nil dials TCP (tests
+	// stand in for the container network).
+	dialPlayground func(ctx context.Context, addr string) (net.Conn, error)
 }
 
 const (

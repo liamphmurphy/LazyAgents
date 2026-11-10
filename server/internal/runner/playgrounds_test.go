@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/playground"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -57,6 +59,7 @@ func (f *fakePlaygrounds) StopPlayground(_ context.Context, id uuid.UUID) error 
 
 func (f *fakePlaygrounds) RunningPlaygrounds(context.Context) ([]uuid.UUID, error) { return nil, nil }
 func (f *fakePlaygrounds) StackName() string                                       { return "test" }
+func (f *fakePlaygrounds) PlaygroundNetwork(id uuid.UUID) string                   { return "play-" + id.String() }
 func (f *fakePlaygrounds) ReadFile(context.Context, uuid.UUID, string) ([]byte, error) {
 	return nil, io.EOF
 }
@@ -251,3 +254,31 @@ func TestPlaygroundStopsWhenUnused(t *testing.T) {
 }
 
 func refOf[T any](v T) *T { return &v }
+
+// While a chat's playground runs, the chat's turns can reach it through the
+// gateway (PLAYGROUND_URL), admitted by its token.
+func TestChatTurnsReachTheirRunningPlayground(t *testing.T) {
+	rig := setupPlaygrounds(t, 1)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	p := rig.persona("Pair", true, false)
+	chat, err := rig.runs.StartChat(rig.ctx, rig.ws, rig.me.ID, runs.ChatInput{Project: "PAY", Title: "App", PersonaID: &p.ID, Message: &runs.ChatMessageInput{Body: "hi"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rig.until("first reply", func() bool { return rig.chat(chat.ID).State == "idle" })
+	run := rig.chatRun(chat.ID)
+	spec, _ := json.Marshal(playground.Spec{Processes: []playground.Process{{Name: "web", Command: "npm run dev", Port: 3000}}})
+	if _, err := rig.q.StartChatPlayground(rig.ctx, store.StartChatPlaygroundParams{WorkspaceID: rig.ws, UserID: rig.me.ID, ChatID: chat.ID, RunID: &run.ID, Spec: spec}); err != nil {
+		t.Fatal(err)
+	}
+	rig.until("playground running", func() bool { return rig.playground(chat.ID).State == "running" })
+
+	reply := rig.postSh(chat.ID, `echo "url=$PLAYGROUND_URL len=${#PLAYGROUND_TOKEN} enter=$PLAYGROUND_ENTER_URL"`)
+	want := "url=http://playground:" + strconv.Itoa(rig.ports[0])
+	if !strings.Contains(reply, want) || !strings.Contains(reply, "len=48") {
+		t.Fatalf("turn saw %q, want %s and a 48-character token", reply, want)
+	}
+	if !regexp.MustCompile(`enter=http://playground:\d+/__vesper/enter\?token=[0-9a-f]{48}`).MatchString(reply) {
+		t.Errorf("turn saw no enter URL: %q", reply)
+	}
+}

@@ -1359,6 +1359,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	dockerNetworks, stopDocker := r.startDockerProxy(ctx, c, turn, env)
 	defer stopDocker()
 	networks = append(networks, dockerNetworks...)
+	networks = append(networks, r.turnPlayground(ctx, c, env, sensitive)...)
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{

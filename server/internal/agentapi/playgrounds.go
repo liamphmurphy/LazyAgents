@@ -15,9 +15,9 @@ import (
 
 type PlaygroundProcessIn struct {
 	Name    string            `json:"name" jsonschema:"Lowercase name, e.g. web or api; other processes reach it by this name"`
-	Command string            `json:"command" jsonschema:"Runs under bash -c and keeps running, e.g. npm run dev -- -H 0.0.0.0. It must listen on 0.0.0.0, not localhost"`
+	Command string            `json:"command" jsonschema:"Runs under bash -c and keeps running, e.g. npm run dev -- -H 0.0.0.0. With a port it must listen on 0.0.0.0, not localhost"`
 	Dir     string            `json:"dir,omitempty" jsonschema:"Where the command runs, relative to the workspace root"`
-	Port    int               `json:"port" jsonschema:"The port it listens on"`
+	Port    int               `json:"port,omitempty" jsonschema:"The port it serves HTTP on. Omit for a background process (a worker, a job runner): nothing routes to it, and it only has to keep running"`
 	Env     map[string]string `json:"env,omitempty" jsonschema:"Environment for this process only"`
 }
 
@@ -27,12 +27,31 @@ type PlaygroundRouteIn struct {
 }
 
 type StartPlaygroundIn struct {
-	Processes []PlaygroundProcessIn `json:"processes" jsonschema:"The app's long-running parts, 1 to 4"`
-	Setup     []string              `json:"setup,omitempty" jsonschema:"Commands run in order from the workspace root once services are up, before the processes: install, migrate, seed"`
-	Routes    []PlaygroundRouteIn   `json:"routes,omitempty" jsonschema:"Which process serves which paths when there are several; everything else goes to the first process"`
-	Services  []agentdef.Service    `json:"services,omitempty" jsonschema:"Services that start empty next to the app (name, image, env, healthcheck, expose). Omit to use this repository's test environment"`
-	Env       map[string]string     `json:"env,omitempty" jsonschema:"Environment for setup and every process"`
-	OpenAPI   string                `json:"openapi,omitempty" jsonschema:"The app's OpenAPI document, relative to the workspace root, e.g. api/openapi.yaml; the person's API tab reads it"`
+	Processes   []PlaygroundProcessIn `json:"processes" jsonschema:"The app's long-running parts, 1 to 4"`
+	Setup       []string              `json:"setup,omitempty" jsonschema:"Commands run in order from the workspace root once services are up, before the processes: install, migrate, seed"`
+	Routes      []PlaygroundRouteIn   `json:"routes,omitempty" jsonschema:"Which process serves which paths when there are several; everything else goes to the first process"`
+	Services    []agentdef.Service    `json:"services,omitempty" jsonschema:"Services that start empty next to the app (name, image, env, healthcheck, expose). Omit to use this repository's test environment"`
+	Env         map[string]string     `json:"env,omitempty" jsonschema:"Environment for setup and every process"`
+	OpenAPI     string                `json:"openapi,omitempty" jsonschema:"The app's OpenAPI document, relative to the workspace root, e.g. api/openapi.yaml; the person's API tab reads it when the app doesn't serve one"`
+	NixPackages []string              `json:"nix_packages,omitempty" jsonschema:"Tools setup and the processes need, as Nix installables like nixpkgs#protobuf. Omit to use this repository's test environment's"`
+}
+
+type SetPlaygroundOpenAPIIn struct {
+	Path     string `json:"path" jsonschema:"The OpenAPI document, relative to the workspace root (.yaml, .yml or .json)"`
+	Inferred bool   `json:"inferred,omitempty" jsonschema:"true when you wrote it from the code rather than it being the repository's own"`
+	Commit   string `json:"commit,omitempty" jsonschema:"The commit you read when you inferred it (git rev-parse HEAD), so the person sees when the code moved on"`
+}
+
+func setPlaygroundOpenAPI(ctx context.Context, d Deps, c agents.Caller, in SetPlaygroundOpenAPIIn) (any, error) {
+	if err := playgroundChat(ctx, d, c); err != nil {
+		return nil, err
+	}
+	pg, err := d.Runs.SetPlaygroundOpenAPI(ctx, c.Agent.WorkspaceID, *c.RunID, in.Path, in.Inferred, in.Commit)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"playground_id": pg.ID, "openapi": in.Path,
+		"tell_the_person": "The playground's API tab reads it within a few seconds, without a restart. A document the app itself serves still comes first."}, nil
 }
 
 func playgroundChat(ctx context.Context, d Deps, c agents.Caller) error {
@@ -50,7 +69,7 @@ func startPlayground(ctx context.Context, d Deps, c agents.Caller, in StartPlayg
 	if err := playgroundChat(ctx, d, c); err != nil {
 		return nil, err
 	}
-	spec := playground.Spec{Setup: in.Setup, Services: in.Services, Env: in.Env, OpenAPI: in.OpenAPI}
+	spec := playground.Spec{Setup: in.Setup, Services: in.Services, Env: in.Env, OpenAPI: in.OpenAPI, NixPackages: in.NixPackages}
 	for _, p := range in.Processes {
 		spec.Processes = append(spec.Processes, playground.Process{Name: p.Name, Command: p.Command, Dir: p.Dir, Port: p.Port, Env: p.Env})
 	}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Playground } from "@/lib/api/playground-hooks";
 import { cx } from "@/lib/cx";
@@ -63,11 +63,25 @@ export function usePlaygroundLogs(origin: string | null) {
   return { lines, error, clear: () => setLines([]) };
 }
 
-/** The app, framed, with the path the person wants to load. */
-export function PreviewTab({ origin }: { origin: string }) {
+/**
+ * The running app in a frame. livePath is where the app says it is (the
+ * gateway's probe): the address bar follows it, since the frame's own
+ * location can't be read across origins. onReload fires when the frame is
+ * loaded afresh from here.
+ */
+export function PreviewTab({ origin, frameRef, livePath, onReload }: { origin: string; frameRef?: Ref<HTMLIFrameElement>; livePath?: string | null; onReload?: () => void }) {
   const [path, setPath] = useState("/");
   const [draft, setDraft] = useState("/");
   const [reloads, setReloads] = useState(0);
+  const [shownLive, setShownLive] = useState(livePath);
+  if (livePath !== shownLive) {
+    setShownLive(livePath);
+    if (livePath) setDraft(livePath);
+  }
+  const reload = () => {
+    setReloads((n) => n + 1);
+    onReload?.();
+  };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <form
@@ -77,10 +91,10 @@ export function PreviewTab({ origin }: { origin: string }) {
           const p = normalizePath(draft);
           setDraft(p);
           setPath(p);
-          setReloads((n) => n + 1);
+          reload();
         }}
       >
-        <IconButton icon="refresh" label="Reload" onClick={() => setReloads((n) => n + 1)} />
+        <IconButton icon="refresh" label="Reload" onClick={reload} />
         <label className="flex min-w-0 flex-1 items-center rounded-md border border-border-strong bg-surface-sunken px-2 font-mono text-xs">
           <span className="flex-none text-fg-tertiary">{origin.replace(/^https?:\/\//, "")}</span>
           <input aria-label="Path" value={draft} onChange={(e) => setDraft(e.target.value)} className="min-w-0 flex-1 bg-transparent py-1.5 text-fg focus:outline-none" />
@@ -90,6 +104,7 @@ export function PreviewTab({ origin }: { origin: string }) {
         {/* Its own origin; no allow-top-navigation, so the app can't navigate Vesper away. */}
         <iframe
           key={reloads}
+          ref={frameRef}
           title="Playground preview"
           data-testid="playground-preview"
           src={origin + path}
