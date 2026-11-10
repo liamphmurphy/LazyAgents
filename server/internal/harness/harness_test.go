@@ -601,7 +601,7 @@ func TestAgentsMDTestsSection(t *testing.T) {
 		"managed":   string(AgentsMD("", spec(), nil, "PAY-1")),
 		"delegated": string(SubagentAgentsMD("", spec(), nil, "PAY-1")),
 	} {
-		if !strings.Contains(md, want) || !strings.Contains(md, "don't start your own database") {
+		if !strings.Contains(md, want) || !strings.Contains(md, "don't start your own database") || !strings.Contains(md, "`DOCKER_HOST`") {
 			t.Fatalf("%s AGENTS.md lacks the Tests section:\n%s", name, md)
 		}
 	}

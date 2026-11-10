@@ -24,6 +24,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && apt-get update && apt-get install -y --no-install-recommends gh \
  && rm -rf /var/lib/apt/lists/*
 
+# The docker CLI only: turns get a Docker API through the runner's sandboxing
+# proxy (DOCKER_HOST), never the host's daemon or socket.
+ARG DOCKER_CLI_VERSION=27.5.1
+RUN arch="$(uname -m)" \
+ && curl -fsSL "https://download.docker.com/linux/static/stable/${arch}/docker-${DOCKER_CLI_VERSION}.tgz" \
+    | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
+
 # Versions the adapters were checked against (server/internal/harness).
 ARG CLAUDE_CODE_VERSION=2.1.316
 ARG CODEX_VERSION=0.167.0

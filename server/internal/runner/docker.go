@@ -58,7 +58,12 @@ type Docker struct {
 	// creates and removes the run folders itself, then hands the path to
 	// Docker as a bind source.
 	HostWorkspaces string
-	client         *http.Client
+	// ProxyDir is where this runner serves each turn's Docker API socket, and
+	// ProxyVolume is the volume holding it, mounted read-only into turns at
+	// proxyMountPath (RUNNER_DOCKER_PROXY_DIR, RUNNER_DOCKER_PROXY_VOLUME).
+	// Either empty turns the per-turn Docker API off.
+	ProxyDir, ProxyVolume string
+	client                *http.Client
 }
 
 const (
@@ -320,6 +325,16 @@ func (d *Docker) Cleanup(ctx context.Context) error {
 	for _, n := range nets {
 		_, _ = d.do(ctx, "DELETE", "/networks/"+n.ID, nil, "", nil)
 	}
+	// And the volumes their tests created through the Docker proxy. Run
+	// checkouts are volumes too, but they carry no proxy label.
+	proxyFilters, _ := json.Marshal(map[string][]string{"label": {proxyLabelKey, stackLabelKey + "=" + d.stack()}})
+	var vols struct{ Volumes []struct{ Name string } }
+	if _, err := d.do(ctx, "GET", "/volumes?filters="+url.QueryEscape(string(proxyFilters)), nil, "", &vols); err != nil {
+		return err
+	}
+	for _, v := range vols.Volumes {
+		_, _ = d.do(ctx, "DELETE", "/volumes/"+url.PathEscape(v.Name)+"?force=1", nil, "", nil)
+	}
 	return nil
 }
 
@@ -417,6 +432,11 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	// label, so workspace cleanup never removes downloaded dependencies.
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": homeVolumeName(runID), "Target": homePath})
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": "lazyagents-dependency-cache", "Target": "/cache"})
+	if d.ProxyDir != "" && d.ProxyVolume != "" {
+		// Read-only, and turns can't list it: a turn reaches only the socket
+		// whose name its DOCKER_HOST carries.
+		mounts = append(mounts, map[string]any{"Type": "volume", "Source": d.ProxyVolume, "Target": proxyMountPath, "ReadOnly": true})
+	}
 	env := make([]string, 0, len(spec.Env))
 	for k, v := range spec.Env {
 		if k == CodexAuthEnv || k == CodexAuthScopeEnv {

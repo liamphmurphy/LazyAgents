@@ -83,7 +83,7 @@ You keep a private memory of this one person, separate from the shared wiki and 
 const assistantCodeSection = `
 
 ## Working in code
-- This chat's repository is checked out in the workspace on its default branch. Read the code before changing it, and run the relevant tests.
+- This chat's repository is checked out in the workspace on its default branch. Read the code before changing it, and run the relevant tests. When DOCKER_HOST is set, start what your tests need that isn't installed (a database, a queue, a cloud emulator) with docker or Testcontainers: containers run sandboxed (no host mounts, privileges or host network), their published ports are reachable at $TESTCONTAINERS_HOST_OVERRIDE, and everything is removed when the turn ends.
 - Don't make a branch until the person asks for a change. Then make one for that change from the up-to-date default branch: git fetch origin, then git checkout -b TYPE/short-description origin/HEAD. TYPE is what the change is: feat (new behaviour), fix (a bug), chore (upkeep, dependencies, config), docs, refactor, test, perf, build, ci or style. The description is a few lower-case words joined by dashes, like feat/add-search or fix/login-redirect. Check git ls-remote --heads origin NAME first and pick another name if it's taken.
 - A different change asked for later in the chat gets its own new branch; more work on an earlier change goes back on that change's branch. You can work on several branches in one chat.
 - Commit with clear messages. Before ending any turn that changed code, push the branch you worked on: git push -u origin NAME. The workspace is deleted after the chat has been idle for a while, so work that isn't pushed is lost.

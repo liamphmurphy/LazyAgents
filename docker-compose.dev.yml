@@ -54,6 +54,9 @@ services:
       RUNNER_MCP_URL: http://host.docker.internal:${API_PORT:-8000}/mcp
       RUNNER_IMAGE: ${RUNNER_IMAGE:-vesper/agent-base:latest}
       RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-4}
+      # Each turn's sandboxed Docker API socket; turns mount the volume read-only.
+      RUNNER_DOCKER_PROXY_DIR: /run/lazyagents-docker
+      RUNNER_DOCKER_PROXY_VOLUME: lazyagents-dev-docker-proxy
     networks: [default, agents]
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -62,6 +65,7 @@ services:
       - go-mod:/go/pkg/mod
       - go-build:/root/.cache/go-build
       - /var/run/docker.sock:/var/run/docker.sock
+      - docker-proxy:/run/lazyagents-docker
     depends_on:
       postgres: { condition: service_healthy }
     restart: "no"
@@ -76,3 +80,6 @@ volumes:
   seaweed:
   go-mod:
   go-build:
+  docker-proxy:
+    # Fixed name: the runner mounts it into turns as RUNNER_DOCKER_PROXY_VOLUME.
+    name: lazyagents-dev-docker-proxy

@@ -313,7 +313,11 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	var backend runner.Backend
 	switch rc.Backend {
 	case "docker":
-		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network, Stack: rc.Stack, MemoryMB: rc.MemoryMB, PidsLimit: rc.PidsLimit, HostWorkspaces: rc.HostWorkspaces}
+		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network, Stack: rc.Stack, MemoryMB: rc.MemoryMB, PidsLimit: rc.PidsLimit, HostWorkspaces: rc.HostWorkspaces,
+			ProxyDir: rc.DockerProxyDir, ProxyVolume: rc.DockerProxyVolume}
+		if err := d.PrepareDockerProxy(); err != nil {
+			return fmt.Errorf("runner: %w", err)
+		}
 		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := d.Ping(pctx)
 		cancel()
