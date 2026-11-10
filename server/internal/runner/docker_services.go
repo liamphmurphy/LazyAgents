@@ -76,8 +76,9 @@ func (d *Docker) StartServices(ctx context.Context, runID, key string, services 
 	return network, stop, nil
 }
 
-// serviceBody is the create request for one service: the turn's sandbox, on
-// the service network only, reachable there by its name.
+// serviceBody is the create request for one service: the turn's sandbox
+// with Docker's default capabilities, on the service network only, reachable
+// there by its name.
 func (d *Docker) serviceBody(runID, network string, s agentdef.Service) map[string]any {
 	env := make([]string, 0, len(s.Env))
 	for k, v := range s.Env {
@@ -93,6 +94,11 @@ func (d *Docker) serviceBody(runID, network string, s agentdef.Service) map[stri
 	host := d.hostConfig(mounts)
 	host["NetworkMode"] = network
 	delete(host, "ExtraHosts") // nothing on the host is a service's business
+	// Docker's default capabilities, unlike the turn: official database
+	// images start as root and switch to their own user, and a recipe
+	// inferred from CI names no user. The line held is the container's own
+	// boundary, as for what turns start through their Docker proxy.
+	delete(host, "CapDrop")
 	body := map[string]any{
 		"Image": s.Image, "Env": env, "Labels": d.labels(runID),
 		"HostConfig": host,

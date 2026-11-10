@@ -135,7 +135,7 @@ func TestStartServicesIsSandboxedAndCleansUp(t *testing.T) {
 		t.Fatalf("service not created: %v", f.calls)
 	}
 	host := body["HostConfig"].(map[string]any)
-	if fmt.Sprint(host["CapDrop"]) != "[ALL]" || fmt.Sprint(host["SecurityOpt"]) != "[no-new-privileges]" ||
+	if host["CapDrop"] != nil || host["CapAdd"] != nil || fmt.Sprint(host["SecurityOpt"]) != "[no-new-privileges]" ||
 		host["Memory"] == nil || host["PidsLimit"] == nil || host["Privileged"] != nil || host["ExtraHosts"] != nil {
 		t.Fatalf("service sandbox %v", host)
 	}

@@ -554,7 +554,12 @@ type dockerProc struct {
 	err io.Reader
 	// The ChatGPT login this process was given, and where it is stored.
 	codexAuth, codexScope string
+	// nixManifest is the run's Nix profile as the turn left it.
+	nixManifest []byte
 }
+
+// NixManifest implements NixManifestProcess.
+func (p *dockerProc) NixManifest() []byte { return p.nixManifest }
 
 func (p *dockerProc) Stdout() io.Reader { return p.out }
 func (p *dockerProc) Stderr() io.Reader { return p.err }
@@ -599,6 +604,7 @@ func (p *dockerProc) Wait() (int, error) {
 	}
 	// Even a failed turn may have rotated the Codex login: keep it first.
 	p.keepRefreshedCodexAuth()
+	p.readNixManifest()
 	if res.StatusCode != 0 && p.oomKilled() {
 		return res.StatusCode, fmt.Errorf("the container ran out of memory (exit %d); raise RUNNER_MEMORY_MB or reduce what the run builds at once", res.StatusCode)
 	}
@@ -633,6 +639,32 @@ func (p *dockerProc) keepRefreshedCodexAuth() {
 	}
 	if err := p.d.SaveCodexAuth(ctx, p.codexScope, next); err != nil {
 		slog.Warn("save refreshed codex login", "err", err)
+	}
+}
+
+// readNixManifest keeps what the run's Nix profile holds, read from the
+// stopped container like the Codex login, so the runner can add the tools the
+// agent installed to the repository's test environment.
+func (p *dockerProc) readNixManifest() {
+	if p.d.NixVolume == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	// ~/.nix-profile is a symlink into the store; the Engine resolves every
+	// path element but the last inside the container's mounts.
+	res, err := p.d.do(ctx, "GET", "/containers/"+p.id+"/archive?path="+url.QueryEscape(path.Join(homePath, ".nix-profile", "manifest.json")), nil, "", nil)
+	if err != nil {
+		return // no profile: the agent installed nothing
+	}
+	defer res.Body.Close()
+	tr := tar.NewReader(res.Body)
+	if _, err := tr.Next(); err != nil {
+		return
+	}
+	b, err := io.ReadAll(io.LimitReader(tr, 1<<20))
+	if err == nil {
+		p.nixManifest = b
 	}
 }
 

@@ -8,9 +8,9 @@ import (
 
 // Service is a container a run's turns can reach by Name, such as the
 // database a repository's tests need. The runner starts it next to each turn
-// on a network of that turn's own, with the same sandbox as the turn (no
-// capabilities, no-new-privileges, resource limits, no host mounts or
-// published ports), and removes it when the turn ends: nothing persists
+// on a network of that turn's own, sandboxed like the turn (no-new-privileges,
+// resource limits, no host mounts or published ports) but with Docker's
+// default capabilities, and removes it when the turn ends: nothing persists
 // between turns.
 //
 // Services are declared on a project by a person and frozen into the run's
@@ -20,9 +20,7 @@ type Service struct {
 	Image string `json:"image"` // pulled if missing
 	// Command replaces the image's default command.
 	Command []string `json:"command,omitempty"`
-	// User runs the container as this user. Services get no capabilities, so
-	// an image whose entrypoint starts as root and switches user (most
-	// database images) needs its unprivileged user here.
+	// User runs the container as this user; empty keeps the image's.
 	User string            `json:"user,omitempty"`
 	Env  map[string]string `json:"env,omitempty"`
 	// Tmpfs are writable scratch directories (data directories, sockets).
@@ -93,3 +91,7 @@ func validServices(field string, services []Service) error {
 	}
 	return nil
 }
+
+// ValidateServices checks services declared outside a project override, such
+// as a repository's learned test environment, by the same rules.
+func ValidateServices(services []Service) error { return validServices("services", services) }

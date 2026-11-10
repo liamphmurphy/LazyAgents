@@ -24,11 +24,12 @@ type ServiceBackend interface {
 // puts what they expose into env. It returns the networks the turn joins and
 // a stop to call when the turn ends, or a failure for the run's outcome.
 func (r *Runner) startServices(ctx context.Context, c runCtx, turn store.RunTurn, env map[string]string) ([]string, func(), string) {
-	if len(c.spec.Services) == 0 {
+	services := r.testEnvServices(ctx, c)
+	if len(services) == 0 {
 		return nil, func() {}, ""
 	}
-	names := make([]string, len(c.spec.Services))
-	for i, s := range c.spec.Services {
+	names := make([]string, len(services))
+	for i, s := range services {
 		names[i] = s.Name
 	}
 	sb, ok := r.Backend.(ServiceBackend)
@@ -40,11 +41,11 @@ func (r *Runner) startServices(ctx context.Context, c runCtx, turn store.RunTurn
 		return nil, func() {}, ""
 	}
 	started := time.Now()
-	network, stop, err := sb.StartServices(ctx, c.run.ID.String(), fmt.Sprintf("%s-%d", c.run.ID, turn.Seq), c.spec.Services)
+	network, stop, err := sb.StartServices(ctx, c.run.ID.String(), fmt.Sprintf("%s-%d", c.run.ID, turn.Seq), services)
 	if err != nil {
 		return nil, nil, "Couldn't start the run's services: " + err.Error()
 	}
-	for _, s := range c.spec.Services {
+	for _, s := range services {
 		for k, v := range s.Expose {
 			env[k] = v
 		}

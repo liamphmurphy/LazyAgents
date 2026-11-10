@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/testenv"
 )
 
 // svcBackend is the local backend plus fake services, recording what the
@@ -95,5 +100,83 @@ func TestLocalRunnerSkipsServices(t *testing.T) {
 	e.until("waiting for approval", e.state("PAY-214=waiting"))
 	if evs := e.eventTypes(e.run("PAY-214").ID); !strings.Contains(evs, "lifecycle:services_skipped") {
 		t.Fatalf("no services_skipped event: %s", evs)
+	}
+}
+
+// learnBackend is svcBackend whose turns report a Nix profile, as Docker
+// turns do once the agent installs something.
+type learnBackend struct {
+	*svcBackend
+	manifest []byte
+}
+
+type nixProc struct {
+	runner.Process
+	manifest []byte
+}
+
+func (p nixProc) NixManifest() []byte { return p.manifest }
+
+func (b *learnBackend) Start(ctx context.Context, runID string, spec runner.ExecSpec) (runner.Process, error) {
+	p, err := b.svcBackend.Start(ctx, runID, spec)
+	if err != nil || !strings.HasPrefix(spec.Name, "lazyagents-turn-") {
+		return p, err
+	}
+	return nixProc{Process: p, manifest: b.manifest}, nil
+}
+
+// A repository nobody configured for Vesper: its CI Postgres becomes the
+// turn's service before the first turn, and a tool the agent installs is
+// remembered for the next run.
+func TestTestEnvironmentIsInferredUsedAndLearned(t *testing.T) {
+	e := setup(t)
+	repo := t.TempDir()
+	ci := "jobs:\n  test:\n    services:\n      postgres:\n        image: postgres:17-alpine\n        ports: [\"5432:5432\"]\n" +
+		"    env:\n      TEST_DATABASE_URL: postgres://postgres:pw@localhost:5432/postgres\n"
+	if err := os.MkdirAll(filepath.Join(repo, ".github", "workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".github", "workflows", "ci.yml"), []byte(ci), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", "."}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "ci"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url = $1, default_branch = 'main'", repo); err != nil {
+		t.Fatal(err)
+	}
+	b := &learnBackend{svcBackend: &svcBackend{Local: e.runner.Backend.(*runner.Local)},
+		manifest: []byte(`{"version":2,"elements":[{"attrPath":"legacyPackages.x86_64-linux.protobuf","originalUrl":"flake:nixpkgs"}]}`)}
+	e.runner.Backend = b
+	e.dispatch("PAY-214")
+	e.until("waiting for approval", e.state("PAY-214=waiting"))
+
+	b.mu.Lock()
+	dbURL := b.turnEnv["TEST_DATABASE_URL"]
+	b.mu.Unlock()
+	if dbURL != "postgres://postgres:pw@postgres:5432/postgres" {
+		t.Fatalf("turn TEST_DATABASE_URL = %q, want the inferred service by name", dbURL)
+	}
+	row, err := e.q.GetTestEnvironment(e.ctx, store.GetTestEnvironmentParams{WorkspaceID: e.ws, Repo: testenv.RepoKey(repo)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec testenv.Recipe
+	if err := json.Unmarshal(row.Recipe, &rec); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.Services) != 1 || rec.Services[0].Name != "postgres" || strings.Join(rec.NixPackages, ",") != "nixpkgs#protobuf" {
+		t.Fatalf("recipe = %+v", rec)
+	}
+	if len(row.InferredFrom) != 1 || row.LearnedFromRunID == nil || *row.LearnedFromRunID != e.run("PAY-214").ID {
+		t.Fatalf("provenance: inferred from %v, learned from %v", row.InferredFrom, row.LearnedFromRunID)
+	}
+	evs := e.eventTypes(e.run("PAY-214").ID)
+	for _, want := range []string{"lifecycle:test_environment_inferred", "lifecycle:test_environment_learned"} {
+		if !strings.Contains(evs, want) {
+			t.Fatalf("no %s event: %s", want, evs)
+		}
 	}
 }
