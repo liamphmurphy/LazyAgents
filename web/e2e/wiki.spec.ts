@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import type { components } from "../lib/api/schema";
+import { menuResponse } from "./mock-menu";
 
 // LAZYAGENTS-59: namespace tree, page rail, version diff, Pattern and ADR indexes.
 type S = components["schemas"];
@@ -117,6 +118,8 @@ async function installWikiApi(p: Page) {
     if (path === "/persona-dock") return json({ personas: [], harnesses: [] });
     if (path === "/chat-models") return json([]);
     if (path === "/secrets") return json({ key_configured: true, known: [], secrets: [] });
+    const menu = menuResponse(request.method(), path);
+    if (menu) return json(menu);
     unhandled.push(`${request.method()} ${path}`);
     return json({ code: "not_found", message: `mock: no handler for ${path}` }, 404);
   }
@@ -153,7 +156,7 @@ test("the tree shows namespaces with counts, remembers open folders and highligh
   await expect(tree(p).getByRole("link", { name: /Pattern index/ })).toHaveAttribute("href", "/wiki?index=patterns");
   await folder(p, "Reports").click();
   await expect(tree(p).getByRole("link", { name: /^Report \d/ })).toHaveCount(5);
-  await expect(tree(p).getByRole("link", { name: "All 7 reports →" })).toHaveAttribute("href", "/artifacts?type=report");
+  await expect(tree(p).getByRole("link", { name: "All 7 reports →" })).toHaveAttribute("href", "/library?source=projects&type=report");
   await p.reload();
   await expect(folder(p, "Patterns")).toHaveAttribute("aria-expanded", "true");
   await expect(folder(p, "Architecture")).toHaveAttribute("aria-expanded", "false");

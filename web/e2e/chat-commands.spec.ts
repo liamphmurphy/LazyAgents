@@ -110,7 +110,8 @@ test("Customization replaces Assistant, Memory and Personas in the main menu", a
   await nav.getByRole("link", { name: "Customization", exact: true }).click();
   await expect(page.getByRole("region", { name: "Customization", exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/customization$/);
-  await expect(page.getByRole("radio", { name: "Chat" })).toBeChecked();
+  // One menu, no modes: Customization is the footer link, current here.
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Customization", exact: true })).toHaveAttribute("aria-current", "page");
   // Old links land on the combined page, with their query.
   await page.goto("/personas");
   await expect(page).toHaveURL(/\/customization$/);

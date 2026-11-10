@@ -1,5 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import type { components } from "../lib/api/schema";
+import { menuResponse } from "./mock-menu";
 
 type S = components["schemas"];
 const project: S["Project"] = { id: "project-web", key: "WEB", name: "Web app", color: "#6e56cf", default_branch: "main", archived: false, revision: 1 };
@@ -248,13 +249,8 @@ export async function installBoardApi(page: Page) {
       crit.t.criteria = crit.t.criteria.filter((c) => c !== crit.c).map((c, i) => ({ ...c, position: i + 1 }));
       return route.fulfill({ status: 204 });
     }
-    // The menu is on every page: its history, personas, spaces and scheduled tasks start empty.
-    if (request.method() === "GET") {
-      if (path === "/chats") return json({ chats: [], has_more: false });
-      if (path === "/personas") return json({ personas: [] });
-      if (path === "/chat-spaces") return json({ spaces: [] });
-      if (path === "/scheduled-tasks") return json({ tasks: [] });
-    }
+    const menu = menuResponse(request.method(), path);
+    if (menu) return json(menu);
     // Runs' header shows the last 7 days' spend.
     if (path === "/costs" && request.method() === "GET") {
       const none = { key: "", label: "", runs: 0, tokens: 0, cost_micros: 0, unpriced_runs: 0 };

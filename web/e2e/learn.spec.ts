@@ -113,7 +113,8 @@ test("a topic becomes an outline to approve", async ({ page }) => {
   const posts: { url: string; body: unknown }[] = [];
   await mock(page, course, posts);
   await page.goto("/learn");
-  await expect(page.getByRole("link", { name: "Learn", exact: true })).toHaveAttribute("aria-current", "page");
+  // Learn is in the menu's Apps flyout, so the Apps row reads as current.
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: /^Apps/ })).toHaveAttribute("aria-current", "page");
   await page.screenshot({ path: "test-results/learn-home.png" });
 
   await page.getByRole("button", { name: "New Learning Module" }).click();

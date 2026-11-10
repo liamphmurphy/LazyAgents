@@ -107,18 +107,18 @@ test("free text returns grouped results from the server with keyboard navigation
 
 test("Enter waits for results instead of falling through to an action", async ({ page }) => {
   await install(page);
-  await page.goto("/board?project=WEB");
+  await page.goto("/tickets?layout=board&project=WEB");
   await openPalette(page);
   await input(page).fill("deploy");
   await page.keyboard.press("Enter");
   await expect(palette(page)).toBeVisible();
-  await expect(page).toHaveURL(/\/board\?project=WEB$/);
+  await expect(page).toHaveURL(/\/tickets\?layout=board&project=WEB$/);
   await expect(results(page).getByRole("option").first()).toHaveText(/Deploy staging/);
 });
 
 test("actions: new ticket, start planning, new chat and switch project", async ({ page }) => {
   const { chats } = await install(page);
-  await page.goto("/board?project=WEB");
+  await page.goto("/tickets?layout=board&project=WEB");
   const run = async (query: string, option: RegExp) => {
     await openPalette(page);
     await input(page).fill(query);
@@ -128,7 +128,7 @@ test("actions: new ticket, start planning, new chat and switch project", async (
   await run("deploy", /^New ticket: deploy/);
   await expect(page).toHaveURL(/\/tickets\/new\?title=deploy&project=WEB$/);
 
-  await page.goto("/board?project=WEB");
+  await page.goto("/tickets?layout=board&project=WEB");
   await run("deploy", /Start planning: deploy/);
   await expect(page).toHaveURL(/\/plans\?project=WEB&goal=deploy$/);
 
@@ -141,12 +141,12 @@ test("actions: new ticket, start planning, new chat and switch project", async (
   expect(visited.some((u) => /\/chat\/chat-new\?project=WEB&attach=ticket%3AWEB-1/.test(u))).toBe(true);
   expect(chats).toEqual([{ project: "WEB" }]);
 
-  await page.goto("/board?project=WEB");
+  await page.goto("/tickets?layout=board&project=WEB");
   await run("> switch", /Switch project…/);
   await expect(page.getByRole("combobox", { name: "Switch to project" })).toBeFocused();
   await page.keyboard.type("oper");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/board\?project=OPS$/);
+  await expect(page).toHaveURL(/\/tickets\?layout=board&project=OPS$/);
 });
 
 test("? opens the keyboard shortcut reference, but not while typing", async ({ page }) => {
