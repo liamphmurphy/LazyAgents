@@ -15,7 +15,7 @@ const preview = (blockers: string[] = []) => ({
   blockers, queued_behind: [],
 });
 
-type State = { runs: Record<string, unknown>[]; starts: unknown[]; cancels: number; blockers: string[] };
+type State = { runs: Record<string, unknown>[]; starts: unknown[]; cancels: number; blockers: string[]; decisions?: string[] };
 
 const run = (over: Record<string, unknown> = {}) => ({
   run_id: RUN, ticket: "WEB-3", ticket_title: "Fix payouts", agent: "pike", state: "running", started_at: now(),
@@ -25,6 +25,11 @@ const run = (over: Record<string, unknown> = {}) => ({
 async function serve(page: Page, state: State) {
   await page.route(/\/api\/v1\/tickets\/WEB-3\/dispatch$/, (route: Route) => route.fulfill({ json: preview(state.blockers) }));
   await page.route(/\/api\/v1\/tickets\/WEB-3$/, (route: Route) => route.fulfill({ json: { key: "WEB-3", title: "Fix payouts", status: "todo" } }));
+  await page.route(/\/api\/v1\/approvals\/[^/]+\/(approve|deny)$/, (route: Route) => {
+    (state.decisions ??= []).push(route.request().url().split("/approvals/")[1]);
+    state.runs = state.runs.map((r) => ({ ...r, state: "running", wait_reason: undefined, approval: undefined }));
+    return route.fulfill({ json: {} });
+  });
   await page.route(/\/api\/v1\/runs\/[^/]+\/cancel$/, (route: Route) => {
     state.cancels++;
     state.runs = state.runs.map((r) => ({ ...r, state: "cancelled", ended_at: now() }));
@@ -44,7 +49,7 @@ async function serve(page: Page, state: State) {
 }
 
 async function offer(page: Page, state: State) {
-  await installChatApi(page, { replyDelayMs: 10 });
+  const mock = await installChatApi(page, { replyDelayMs: 10 });
   await serve(page, state);
   await page.goto("/chat");
   const box = page.getByRole("textbox", { name: "Message" });
@@ -52,7 +57,7 @@ async function offer(page: Page, state: State) {
   await box.press("Enter");
   const card = page.getByTestId("dispatch-card");
   await expect(card).toBeVisible();
-  return card;
+  return Object.assign(card, { mock });
 }
 
 test("a dispatch card starts the run as you, then the tray follows it", async ({ page }) => {
@@ -73,10 +78,27 @@ test("a dispatch card starts the run as you, then the tray follows it", async ({
   const tray = page.getByTestId("ticket-run-tray");
   await expect(tray).toContainText("Queued");
   // The agent posts its plan and gets going; the tray follows by polling.
-  state.runs = [run({ message_id: (state.starts[0] as { message_id: string }).message_id })];
+  const messageId = (state.starts[0] as { message_id: string }).message_id;
+  state.runs = [run({ message_id: messageId, activity: { tool: "Bash", command: "go test ./internal/payouts" } })];
   await expect(tray).toContainText("Running", { timeout: 10000 });
   await expect(tray).toContainText("Step 2 of 4 · Fix Round()");
+  // What it's doing, in the chat's words: never the command itself.
+  await expect(page.getByTestId("ticket-run-doing")).toHaveText("Running tests");
+  await expect(tray).not.toContainText("go test");
   await page.screenshot({ path: "/tmp/chat-dispatch-tray.png" });
+
+  // It asks for approval: the decision is right in the tray.
+  state.runs = [run({ message_id: messageId, state: "waiting", wait_reason: "approval", approval: { id: "99999999-9999-4999-8999-999999999999", scope: "db:migrate", action: "Run migrations on staging", detail: '{"env":"staging"}', risk: "Reversible" } })];
+  const approval = page.getByTestId("ticket-run-approval");
+  await expect(approval).toContainText("Run migrations on staging", { timeout: 10000 });
+  await expect(tray).toContainText("Waiting · approval");
+  await page.screenshot({ path: "/tmp/chat-dispatch-approval.png" });
+  await approval.getByRole("button", { name: "Approve" }).click();
+  await expect.poll(() => state.decisions).toEqual(["99999999-9999-4999-8999-999999999999/approve"]);
+
+  // It asks a question: the tray says to answer here.
+  state.runs = [run({ message_id: messageId, state: "waiting", wait_reason: "human_reply" })];
+  await expect(tray).toContainText("asked you something. Answer in this chat", { timeout: 10000 });
 
   // Once it ends it leaves the tray, and the card becomes its summary with the PR.
   state.runs = [run({ message_id: (state.starts[0] as { message_id: string }).message_id, state: "completed", ended_at: now(), steps_done: 4, current_step: undefined, pr_url: "https://github.com/acme/web/pull/412" })];
@@ -84,6 +106,10 @@ test("a dispatch card starts the run as you, then the tray follows it", async ({
   const summary = page.getByTestId("ticket-run");
   await expect(summary).toContainText("Completed");
   await expect(summary.getByRole("link", { name: "Open PR" })).toHaveAttribute("href", "https://github.com/acme/web/pull/412");
+
+  // Review it with me hands the PR to this chat's persona as the person's message.
+  await summary.getByRole("button", { name: "Review it with me" }).click();
+  await expect.poll(() => card.mock.posted.map((p) => JSON.stringify(p.body))).toContainEqual(expect.stringContaining("Review the pull request for WEB-3: https://github.com/acme/web/pull/412"));
 });
 
 test("a card that dispatch would refuse says why and can't start", async ({ page }) => {

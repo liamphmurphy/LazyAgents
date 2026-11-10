@@ -6703,6 +6703,25 @@ components:
         steps_done: { type: integer }
         current_step: { type: string, description: The first plan step not done yet }
         pr_url: { type: string, description: "The ticket's pull request, once recorded" }
+        activity: { $ref: "#/components/schemas/ChatTicketRunActivity" }
+        approval: { $ref: "#/components/schemas/ChatTicketRunApproval" }
+    ChatTicketRunActivity:
+      type: object
+      description: "The agent's latest tool call, for the tray's activity label: only the tool and, for a shell, its command (capped)"
+      required: [tool]
+      properties:
+        tool: { type: string }
+        command: { type: string }
+    ChatTicketRunApproval:
+      type: object
+      description: "A request the run is waiting on; decide it with POST /approvals/{id}/{decision}"
+      required: [id, scope, action, detail, risk]
+      properties:
+        id: { type: string, format: uuid }
+        scope: { type: string }
+        action: { type: string }
+        detail: { type: string, description: "The request's details as JSON text, capped" }
+        risk: { type: string }
     ChatTicketRuns:
       type: object
       required: [runs]

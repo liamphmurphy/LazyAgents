@@ -111,6 +111,10 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &listed); err != nil || len(listed.Tools) < 20 {
 		t.Fatalf("tool list: %s %v", w.Body.String(), err)
 	}
+	// Chats read every project, so no tool may tell the persona it's confined to one.
+	if strings.Contains(w.Body.String(), "current chat project") {
+		t.Fatalf("a tool description still confines chats to their project: %s", w.Body.String())
+	}
 	allowed := map[string]any{
 		"whoami": map[string]any{}, "search_knowledge": map[string]any{"q": word}, "read_page": map[string]any{"ref": *note.Note.Path},
 		"read_artifact": map[string]any{"artifact": payDoc.ID.String()}, "get_ticket": map[string]any{"ticket": "PAY-214"},
@@ -124,7 +128,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_workflows":   map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
-	needArgs := []string{"submit_research_report", "get_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
+	needArgs := []string{"submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]

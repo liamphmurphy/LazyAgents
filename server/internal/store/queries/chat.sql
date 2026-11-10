@@ -400,7 +400,10 @@ SELECT c.id, c.title, c.state, c.persona_id, c.speaker_persona_id,
   u.unread, p.waiting_approval, l.persona_id AS last_persona_id, coalesce(l.body_md, '')::text AS last_body, coalesce(l.seq, 0)::bigint AS last_seq
 FROM chat_sessions c
 CROSS JOIN LATERAL (SELECT count(*)::int AS unread FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' AND m.seq > c.last_read_seq) u
-CROSS JOIN LATERAL (SELECT EXISTS(SELECT 1 FROM persona_proposals pp WHERE pp.chat_id = c.id AND pp.state = 'pending') AS waiting_approval) p
+-- waiting_approval: a persona proposal to decide, or a run this chat started waiting on the person.
+CROSS JOIN LATERAL (SELECT coalesce(EXISTS(SELECT 1 FROM persona_proposals pp WHERE pp.chat_id = c.id AND pp.state = 'pending')
+  OR EXISTS(SELECT 1 FROM chat_ticket_runs ctr JOIN runs r ON r.id = ctr.run_id
+    WHERE ctr.chat_id = c.id AND r.state = 'waiting' AND r.wait_reason IN ('human_reply', 'approval')), false)::bool AS waiting_approval) p
 LEFT JOIN LATERAL (SELECT m.persona_id, m.body_md, m.seq FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' ORDER BY m.seq DESC LIMIT 1) l ON true
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND NOT c.archived AND NOT c.hidden
   AND (c.state = 'running' OR u.unread > 0 OR p.waiting_approval)
@@ -452,10 +455,44 @@ SELECT r.id AS run_id, ctr.message_id, r.state, r.wait_reason, r.started_at, r.e
   t.key AS ticket_key, t.title AS ticket_title, t.pr_url, a.handle AS agent_handle,
   (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id)::int AS steps_total,
   (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state = 'done')::int AS steps_done,
-  COALESCE((SELECT ps.text FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state <> 'done' ORDER BY ps.position LIMIT 1), '')::text AS current_step
+  COALESCE((SELECT ps.text FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state <> 'done' ORDER BY ps.position LIMIT 1), '')::text AS current_step,
+  -- What the agent is doing: its latest tool call, with only the shell command
+  -- (capped), which is all the tray's activity label reads.
+  coalesce(tc.tool, '')::text AS activity_tool, coalesce(tc.command, '')::text AS activity_command,
+  coalesce(ap.id::text, '')::text AS approval_id, coalesce(ap.scope, '')::text AS approval_scope, coalesce(ap.action_summary, '')::text AS approval_action,
+  coalesce(ap.risk_summary, '')::text AS approval_risk, coalesce(left(ap.action_detail::text, 2000), '')::text AS approval_detail
 FROM chat_ticket_runs ctr
 JOIN runs r ON r.id = ctr.run_id
 JOIN tickets t ON t.id = r.ticket_id
 JOIN agents a ON a.id = r.agent_id
+LEFT JOIN LATERAL (SELECT e.payload->>'tool' AS tool, left(e.payload->'input'->>'command', 300) AS command
+  FROM run_events e WHERE e.run_id = r.id AND e.type = 'tool_call' ORDER BY e.seq DESC LIMIT 1) tc ON true
+LEFT JOIN LATERAL (SELECT * FROM approval_requests x WHERE x.run_id = r.id AND x.state = 'pending' ORDER BY x.created_at DESC LIMIT 1) ap ON true
 WHERE ctr.chat_id = $1
 ORDER BY ctr.created_at, r.id;
+
+-- name: ChatTicketRunsToReport :many
+-- Chat-started runs whose news the chat hasn't heard yet: waiting on the
+-- person (each wait is keyed by the turn that asked), or ended. A cancelled
+-- run isn't news: the person stopped it.
+SELECT ctr.chat_id, ctr.run_id, ctr.reported, r.state, coalesce(r.wait_reason, '')::text AS wait_reason,
+  coalesce((SELECT rt.id::text FROM run_turns rt WHERE rt.run_id = r.id ORDER BY rt.seq DESC LIMIT 1), '')::text AS last_turn
+FROM chat_ticket_runs ctr JOIN runs r ON r.id = ctr.run_id
+WHERE ((r.state = 'waiting' AND r.wait_reason IN ('human_reply', 'approval'))
+    OR (r.state IN ('completed', 'failed', 'blocked') AND ctr.reported <> r.state))
+ORDER BY ctr.created_at;
+
+-- name: LockChatTicketRun :one
+SELECT * FROM chat_ticket_runs WHERE chat_id = $1 AND run_id = $2 FOR UPDATE;
+
+-- name: SetChatTicketRunReported :exec
+UPDATE chat_ticket_runs SET reported = $3, reported_at = now() WHERE chat_id = $1 AND run_id = $2;
+
+-- name: RunWaitQuestion :one
+-- What a run's agent asked when it last called await_human ('' if it said nothing).
+SELECT coalesce((SELECT nullif(trim(e.payload->>'reason'), '') FROM activity_events e
+  WHERE e.ticket_id = sqlc.arg(ticket_id) AND e.verb = 'waiting_for_human' AND e.payload->>'run_id' = sqlc.arg(run_id)::text
+  ORDER BY e.created_at DESC LIMIT 1), '')::text AS question;
+
+-- name: PendingApprovalForRun :one
+SELECT * FROM approval_requests WHERE run_id = $1 AND state = 'pending' ORDER BY created_at DESC LIMIT 1;

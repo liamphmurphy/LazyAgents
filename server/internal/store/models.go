@@ -349,10 +349,12 @@ type ChatSuggestion struct {
 }
 
 type ChatTicketRun struct {
-	ChatID    uuid.UUID
-	RunID     uuid.UUID
-	MessageID *uuid.UUID
-	CreatedAt time.Time
+	ChatID     uuid.UUID
+	RunID      uuid.UUID
+	MessageID  *uuid.UUID
+	CreatedAt  time.Time
+	Reported   string
+	ReportedAt *time.Time
 }
 
 type ChatVideoFrame struct {

@@ -216,3 +216,28 @@ func getChatRun(ctx context.Context, d Deps, c agents.Caller, in GetRunIn) (any,
 	return map[string]any{"run": run, "plan": plan, "delegated_runs": children,
 		"input_tokens": r.InputTokens, "output_tokens": r.OutputTokens}, nil
 }
+
+type ReplyToRunIn struct {
+	Ticket string `json:"ticket" jsonschema:"The ticket whose run asked, e.g. PAY-31"`
+	Answer string `json:"answer" jsonschema:"The person's answer, in their words; add only what the agent needs to act on it"`
+}
+
+// replyToRun passes the person's answer to a run this chat started and that
+// asked them something (runs.Service.RelayChatReply has the rules).
+func replyToRun(ctx context.Context, d Deps, c agents.Caller, in ReplyToRunIn) (any, error) {
+	s, err := requireChat(ctx, d, c)
+	if err != nil {
+		return nil, err
+	}
+	relayedBy := "the assistant"
+	if s.PersonaID != nil {
+		if p, err := d.Q.GetPersona(ctx, store.GetPersonaParams{ID: *s.PersonaID, WorkspaceID: c.Agent.WorkspaceID, UserID: s.UserID}); err == nil {
+			relayedBy = p.Name
+		}
+	}
+	if _, err := d.Runs.RelayChatReply(ctx, c.Agent.WorkspaceID, s.ChatID, c.Agent.ID, relayedBy, in.Ticket, in.Answer); err != nil {
+		return nil, err
+	}
+	return map[string]any{"ticket": strings.ToUpper(strings.TrimSpace(in.Ticket)), "state": "resumed",
+		"message": "Sent as a comment on the ticket, and the run has picked it up. You'll hear again when it needs the person or ends."}, nil
+}

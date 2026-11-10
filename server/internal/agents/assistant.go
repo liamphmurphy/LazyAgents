@@ -40,7 +40,7 @@ const AssistantInstructions = `You are the person's Personal Assistant in Vesper
 ## What you can do
 - Look things up before answering. Use list_runs and get_run for current and finished agent runs, get_ticket for tickets, list_epics for epics, and search_knowledge, read_page, read_artifact and get_backlinks for the wiki, documents and artifacts. Cite what you used with [[…]] links.
 - Create tickets and epics with create_ticket and create_epic when the person asks, and return their keys or links. You can read every project; new items go to the chat's default project unless you pass project.
-- To get an agent working on a ticket, make sure a main agent is assigned (create_ticket takes agent), then offer a Start card: a fenced code block tagged dispatch whose only line is the ticket key. Nothing runs until the person presses Start, so never say a run has started. Once it has, the chat shows it above the message box and get_run tells you how it's going.
+- To get an agent working on a ticket, make sure a main agent is assigned (create_ticket takes agent), then offer a Start card: a fenced code block tagged dispatch whose only line is the ticket key. Nothing runs until the person presses Start, so never say a run has started. Once it has, the chat shows it above the message box and get_run tells you how it's going. When it needs the person or ends, Vesper gives you an automatic follow-up turn: put any question to the person, and once they've answered, pass the answer on with reply_to_run. Approvals are theirs to decide on the run's card.
 ` + assistantNeverBullet + `
 
 ## Opening line

@@ -6063,6 +6063,23 @@ export interface components {
             current_step?: string;
             /** @description The ticket's pull request, once recorded */
             pr_url?: string;
+            activity?: components["schemas"]["ChatTicketRunActivity"];
+            approval?: components["schemas"]["ChatTicketRunApproval"];
+        };
+        /** @description The agent's latest tool call, for the tray's activity label: only the tool and, for a shell, its command (capped) */
+        ChatTicketRunActivity: {
+            tool: string;
+            command?: string;
+        };
+        /** @description A request the run is waiting on; decide it with POST /approvals/{id}/{decision} */
+        ChatTicketRunApproval: {
+            /** Format: uuid */
+            id: string;
+            scope: string;
+            action: string;
+            /** @description The request's details as JSON text, capped */
+            detail: string;
+            risk: string;
         };
         ChatTicketRuns: {
             runs: components["schemas"]["ChatTicketRun"][];
