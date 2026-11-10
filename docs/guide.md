@@ -351,7 +351,11 @@ agent installs a missing tool with `nix profile install nixpkgs#protobuf`; it's
 on `PATH` for the rest of the run and a cache hit for every later run. To move
 to a newer Nix, remove the store volume and the
 `lazyagents-nix-daemon-<stack>` container; the next runner start recreates
-both from the image.
+both from the image. At startup the runner checks the daemon with a real
+store query, restarting it once if it doesn't answer. If it still doesn't,
+turns run without the store, so `nix` fails at once instead of hanging, and
+the probe, the daemon's log tail and diagnostics are in
+`/run/lazyagents-docker/nix-status.json`, which any turn can read.
 
 **A remembered recipe per repository.** On a repository's first run the runner
 reads its CI workflows and compose files: GitHub Actions service containers
