@@ -86,7 +86,7 @@ func (q *Queries) ChatSpaceStats(ctx context.Context, ids []uuid.UUID) ([]ChatSp
 }
 
 const chatSpacesByIDs = `-- name: ChatSpacesByIDs :many
-SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at FROM chat_spaces WHERE id = ANY($1::uuid[]) AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at, app FROM chat_spaces WHERE id = ANY($1::uuid[]) AND workspace_id = $2 AND user_id = $3
 `
 
 type ChatSpacesByIDsParams struct {
@@ -118,6 +118,7 @@ func (q *Queries) ChatSpacesByIDs(ctx context.Context, arg ChatSpacesByIDsParams
 			&i.SpaceMemory,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.App,
 		); err != nil {
 			return nil, err
 		}
@@ -144,7 +145,7 @@ const createChatSpace = `-- name: CreateChatSpace :one
 
 INSERT INTO chat_spaces (workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::uuid[], $10)
-RETURNING id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at
+RETURNING id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at, app
 `
 
 type CreateChatSpaceParams struct {
@@ -190,6 +191,7 @@ func (q *Queries) CreateChatSpace(ctx context.Context, arg CreateChatSpaceParams
 		&i.SpaceMemory,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.App,
 	)
 	return i, err
 }
@@ -361,7 +363,7 @@ func (q *Queries) DeleteChatSpaceSource(ctx context.Context, arg DeleteChatSpace
 }
 
 const getChatSpace = `-- name: GetChatSpace :one
-SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at FROM chat_spaces WHERE id = $1 AND workspace_id = $2 AND user_id = $3
+SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at, app FROM chat_spaces WHERE id = $1 AND workspace_id = $2 AND user_id = $3
 `
 
 type GetChatSpaceParams struct {
@@ -387,12 +389,13 @@ func (q *Queries) GetChatSpace(ctx context.Context, arg GetChatSpaceParams) (Cha
 		&i.SpaceMemory,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.App,
 	)
 	return i, err
 }
 
 const getChatSpaceByID = `-- name: GetChatSpaceByID :one
-SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at FROM chat_spaces WHERE id = $1
+SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at, app FROM chat_spaces WHERE id = $1
 `
 
 // For a chat's own space, whose owner is the chat's creator.
@@ -413,6 +416,7 @@ func (q *Queries) GetChatSpaceByID(ctx context.Context, id uuid.UUID) (ChatSpace
 		&i.SpaceMemory,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.App,
 	)
 	return i, err
 }
@@ -491,7 +495,7 @@ func (q *Queries) ListChatSpaceSources(ctx context.Context, spaceID uuid.UUID) (
 }
 
 const listChatSpaces = `-- name: ListChatSpaces :many
-SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at FROM chat_spaces WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at, id
+SELECT id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at, app FROM chat_spaces WHERE workspace_id = $1 AND user_id = $2 ORDER BY created_at, id
 `
 
 type ListChatSpacesParams struct {
@@ -523,6 +527,7 @@ func (q *Queries) ListChatSpaces(ctx context.Context, arg ListChatSpacesParams) 
 			&i.SpaceMemory,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.App,
 		); err != nil {
 			return nil, err
 		}
@@ -644,7 +649,7 @@ UPDATE chat_spaces SET
   space_memory = coalesce($10, space_memory),
   updated_at = now()
 WHERE id = $11 AND workspace_id = $12 AND user_id = $13
-RETURNING id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at
+RETURNING id, workspace_id, user_id, name, description, color, instructions, persona_id, project_id, connector_ids, space_memory, created_at, updated_at, app
 `
 
 type UpdateChatSpaceParams struct {
@@ -696,6 +701,7 @@ func (q *Queries) UpdateChatSpace(ctx context.Context, arg UpdateChatSpaceParams
 		&i.SpaceMemory,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.App,
 	)
 	return i, err
 }

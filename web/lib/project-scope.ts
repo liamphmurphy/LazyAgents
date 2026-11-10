@@ -12,7 +12,7 @@ export type ProjectMode = "required" | "optional";
 
 export type NavBadge = "inbox" | "runs" | "wiki" | "settings" | "scheduled";
 export type NavItem = { href: string; label: string; icon: IconName; badge?: NavBadge };
-export type NavGroup = { label: "Personal" | "Project" | "Workspace"; items: NavItem[] };
+export type NavGroup = { label: "Personal" | "Project" | "Workspace" | "Apps"; items: NavItem[] };
 
 /** The one canonical item set: the sidebar and the command menu both read it. */
 export const NAV_GROUPS: NavGroup[] = [
@@ -50,6 +50,12 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+/** Apps: a full page of their own with an Ask drawer, each backed by one of the person's spaces. Chat mode lists them. */
+export const APP_GROUP: NavGroup = {
+  label: "Apps",
+  items: [{ href: "/apps/finance", label: "Finance", icon: "dollar" }],
+};
+
 export type NavMode = "chat" | "work";
 
 /** Shown in both modes, so opening them leaves the mode alone. */
@@ -57,7 +63,7 @@ const PINNED_ROUTES = ["/inbox"];
 /** Personal items Work keeps, above Project and Workspace. */
 const WORK_PERSONAL = [...PINNED_ROUTES, "/"];
 /** Everything else outside this list is Work. */
-const CHAT_ROUTES = ["/chat", "/spaces", "/customization", "/library", "/workflows", "/scheduled", "/learn"];
+const CHAT_ROUTES = ["/chat", "/spaces", "/customization", "/library", "/workflows", "/scheduled", "/learn", "/apps"];
 
 /** The mode a page belongs to; undefined for the pinned pages. */
 export function routeMode(pathname: string): NavMode | undefined {
@@ -70,10 +76,10 @@ export function navMode(pathname: string, remembered: NavMode | null | undefined
   return routeMode(pathname) ?? remembered ?? "work";
 }
 
-/** Chat keeps Personal minus the Dashboard; a conversation is opened from the history. Work keeps Inbox and Dashboard. */
+/** Chat keeps Personal minus the Dashboard, then Apps; a conversation is opened from the history. Work keeps Inbox and Dashboard. */
 export function navGroupsFor(mode: NavMode): NavGroup[] {
   const [personal, ...work] = NAV_GROUPS;
-  if (mode === "chat") return [{ ...personal, items: personal.items.filter((i) => !WORK_PERSONAL.includes(i.href) || PINNED_ROUTES.includes(i.href)) }];
+  if (mode === "chat") return [{ ...personal, items: personal.items.filter((i) => !WORK_PERSONAL.includes(i.href) || PINNED_ROUTES.includes(i.href)) }, APP_GROUP];
   return [{ ...personal, items: personal.items.filter((i) => WORK_PERSONAL.includes(i.href)) }, ...work];
 }
 
