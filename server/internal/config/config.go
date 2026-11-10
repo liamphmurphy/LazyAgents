@@ -7,6 +7,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -63,6 +64,11 @@ type Runner struct {
 	// limit (RUNNER_MAX_HOLD_S, RUNNER_MAX_HOLD_ATTEMPTS).
 	MaxHold         time.Duration
 	MaxHoldAttempts int
+
+	// HostWorkspaces is the absolute folder that checkouts go in when a person
+	// turns on host-folder workspaces (RUNNER_HOST_WORKSPACES_DIR, docker
+	// only). The runner and the Docker daemon must both see it at that path.
+	HostWorkspaces string
 }
 
 type S3 struct {
@@ -110,6 +116,9 @@ func Load() (Config, error) {
 		DataDir:      env("RUNNER_DATA_DIR", ".lazyagents/runs"),
 		ClaudeBin:    env("RUNNER_CLAUDE_BIN", ""),
 		CodexBin:     env("RUNNER_CODEX_BIN", ""),
+	}
+	if r.HostWorkspaces = env("RUNNER_HOST_WORKSPACES_DIR", ""); r.HostWorkspaces != "" && !filepath.IsAbs(r.HostWorkspaces) {
+		return c, fmt.Errorf("config: RUNNER_HOST_WORKSPACES_DIR=%q must be an absolute path: Docker resolves it on the host", r.HostWorkspaces)
 	}
 	if r.Backend != "docker" && r.Backend != "local" {
 		return c, fmt.Errorf("config: RUNNER_BACKEND=%q must be docker or local", r.Backend)

@@ -313,7 +313,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 	var backend runner.Backend
 	switch rc.Backend {
 	case "docker":
-		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network, Stack: rc.Stack, MemoryMB: rc.MemoryMB, PidsLimit: rc.PidsLimit}
+		d := &runner.Docker{Socket: rc.DockerSocket, Image: rc.Image, Network: rc.Network, Stack: rc.Stack, MemoryMB: rc.MemoryMB, PidsLimit: rc.PidsLimit, HostWorkspaces: rc.HostWorkspaces}
 		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := d.Ping(pctx)
 		cancel()

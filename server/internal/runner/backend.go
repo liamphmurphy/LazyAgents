@@ -65,6 +65,19 @@ type Backend interface {
 	Cleanup(ctx context.Context) error
 }
 
+// HostFolders is a backend that can keep a run's checkout in a folder on the
+// person's machine, so they can open it in their own editor while the agent
+// works (the Docker backend with RUNNER_HOST_WORKSPACES_DIR set). The local
+// backend doesn't need it: its workspaces are host folders already.
+type HostFolders interface {
+	// HostWorkspacesDir is where those folders go; "" when not configured.
+	HostWorkspacesDir() string
+	// EnsureHostWorkspace is EnsureWorkspace with the checkout in a host
+	// folder, which it returns. A run that already has its workspace
+	// elsewhere keeps it there, and gets "".
+	EnsureHostWorkspace(ctx context.Context, runID string) (string, error)
+}
+
 // ------------------------------------------------------------ local
 
 // Local runs harnesses as host processes in a directory per run. It's for
