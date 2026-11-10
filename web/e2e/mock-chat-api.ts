@@ -72,6 +72,7 @@ export type MockPersona = {
 export type MockProposal = {
   id: string; chat_id: string; name: string; tone: string; color: string; custom_instructions: string; reason: string;
   state: "pending" | "approved" | "declined"; proposed_by?: { id: string; name: string; color: string }; created_at: string;
+  avatar_state?: "pending" | "ready" | "failed"; avatar_attachment_id?: string;
 };
 export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }>; emails?: string[] };
 
@@ -398,6 +399,10 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return json(me);
     }
     if (/^\/users\/[^/]+\/avatar$/.test(path) && method === "GET") {
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+      return route.fulfill({ status: 200, contentType: "image/png", body: png });
+    }
+    if (/^\/chat-attachments\/[^/]+\/content$/.test(path) && method === "GET") {
       const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
       return route.fulfill({ status: 200, contentType: "image/png", body: png });
     }

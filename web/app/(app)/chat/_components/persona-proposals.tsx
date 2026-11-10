@@ -1,6 +1,6 @@
 "use client";
 
-import { ApiError, type Schemas } from "@/lib/api/client";
+import { ApiError, chatAttachmentUrl, type Schemas } from "@/lib/api/client";
 import { useDecidePersonaProposal, usePersonaProposals } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
 import { PersonaAvatar, PersonaName, personaLook, toneLabel } from "./persona";
@@ -31,9 +31,18 @@ export function PersonaProposals({ chatId, disabled }: { chatId: string; disable
   );
 }
 
+/** What the card says about the picture the proposing persona asked for. */
+const AVATAR_NOTE: Record<NonNullable<Proposal["avatar_state"]>, string | null> = {
+  pending: "Making its picture… You can approve once it's ready.",
+  ready: "Approving makes this picture its avatar and its reference image.",
+  failed: "Its picture couldn't be made; approving creates it without one.",
+};
+
 function ProposalCard({ p, busy, onDecide }: { p: Proposal; busy: boolean; onDecide: (d: "approve" | "decline") => void }) {
-  const look = personaLook({ id: p.id, name: p.name, color: p.color });
+  const picture = p.avatar_state === "ready" && p.avatar_attachment_id ? chatAttachmentUrl(p.avatar_attachment_id) : undefined;
+  const look = personaLook({ id: p.id, name: p.name, color: p.color, avatar_url: picture });
   const by = personaLook(p.proposed_by);
+  const pictureNote = p.avatar_state ? AVATAR_NOTE[p.avatar_state] : null;
   return (
     <div className="flex max-w-[min(720px,100%)] flex-col gap-2 rounded-xl border border-border bg-surface px-3.5 py-3" data-testid="persona-proposal">
       <p className="flex flex-wrap items-center gap-1.5 text-xs text-fg-tertiary">
@@ -42,7 +51,7 @@ function ProposalCard({ p, busy, onDecide }: { p: Proposal; busy: boolean; onDec
         <span>wants to create a new persona</span>
       </p>
       <div className="flex items-start gap-3">
-        <PersonaAvatar persona={look} size={36} />
+        <PersonaAvatar persona={look} size={picture ? 56 : 36} className={p.avatar_state === "pending" ? "animate-pulse" : undefined} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex items-center gap-2">
             <PersonaName persona={look} className="text-[14px]" />
@@ -50,6 +59,7 @@ function ProposalCard({ p, busy, onDecide }: { p: Proposal; busy: boolean; onDec
           </span>
           {p.reason && <p className="text-[13px] text-fg-secondary">{p.reason}</p>}
           {p.custom_instructions && <p className="whitespace-pre-wrap text-[12.5px] text-fg-tertiary">{p.custom_instructions}</p>}
+          {pictureNote && <p className="text-[11.5px] text-fg-tertiary" data-testid="proposal-avatar-note">{pictureNote}</p>}
           <p className="text-[11.5px] text-fg-tertiary">Starts with no abilities (code, images, creating personas). You can change it later in Manage personas.</p>
         </div>
       </div>
@@ -57,7 +67,7 @@ function ProposalCard({ p, busy, onDecide }: { p: Proposal; busy: boolean; onDec
         <Button variant="outline" disabled={busy} onClick={() => onDecide("decline")}>
           Decline
         </Button>
-        <Button variant="primary" disabled={busy} onClick={() => onDecide("approve")}>
+        <Button variant="primary" disabled={busy || p.avatar_state === "pending"} onClick={() => onDecide("approve")}>
           Approve {p.name}
         </Button>
       </div>
