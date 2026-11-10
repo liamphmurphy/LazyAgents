@@ -24,7 +24,7 @@ export function WebSearchPill({ runId, since, until }: { runId?: string; since?:
       <div className="flex flex-col gap-2 border-t border-border-subtle px-3 py-2">
         {r.queries.length > 0 && (
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary">Queries</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-tertiary">Queries</p>
             <ul className="flex flex-col gap-0.5">
               {r.queries.map((x) => (
                 <li key={x} data-testid="web-query" className="flex items-center gap-2 text-fg">
@@ -37,7 +37,7 @@ export function WebSearchPill({ runId, since, until }: { runId?: string; since?:
         )}
         {n > 0 && (
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary">Sources</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-tertiary">Sources</p>
             <ul className="flex flex-col gap-0.5">
               {r.sources.map((s) => (
                 <li key={s.url} data-testid="web-source" className="flex items-baseline gap-3">

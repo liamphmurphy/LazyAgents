@@ -53,7 +53,7 @@ function CardGroup({ label, cards, focused }: { label: string; cards: Card[]; fo
   if (cards.length === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary">{label}</h4>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-tertiary">{label}</h4>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(205px,1fr))] gap-2">
         {cards.map((c) => (
           <li key={c.key} data-testid="source" data-cite={c.n} className="min-w-0">
@@ -63,7 +63,7 @@ function CardGroup({ label, cards, focused }: { label: string; cards: Card[]; fo
                 <span className="truncate text-[13px] font-semibold text-fg">{c.title}</span>
                 <span className="truncate text-xs text-fg-tertiary">{c.meta}</span>
               </span>
-              {c.n !== undefined && <span aria-hidden className="ml-auto flex-none self-start rounded bg-accent-soft px-1 font-mono text-[11px] font-semibold text-accent">{c.n}</span>}
+              {c.n !== undefined && <span aria-hidden className="ml-auto flex-none self-start rounded bg-accent-soft px-1 font-mono text-xs font-semibold text-accent">{c.n}</span>}
             </SourceLink>
           </li>
         ))}

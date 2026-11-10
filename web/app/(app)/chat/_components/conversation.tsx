@@ -702,7 +702,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               <Icon name="branch" size={13} className="flex-none" />
               <span className="truncate text-fg">{repoShortName(c.repo_url)}</span>
               {!!c.work_branches?.length && (
-                <span className="truncate font-mono text-[11.5px]">
+                <span className="truncate font-mono text-xs">
                   {c.work_branches[c.work_branches.length - 1]}
                   {c.work_branches.length > 1 && ` +${c.work_branches.length - 1}`}
                 </span>
@@ -716,7 +716,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           )}
           {/* In a space the project sits with the space's context chips below. */}
           {!c.space && <ChatProjectPicker chat={c} disabled={running} />}
-          {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
+          {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-xs text-fg-secondary">Archived</span>}
           {c.temporary && <TemporaryBadge />}
           <span className="flex-1" />
           <ChatRunsPill chatId={c.id} />
@@ -740,7 +740,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           <div className="mx-auto mb-4 flex max-w-[860px] items-center gap-2">
             <ChatCostChip chatId={c.id} project={c.project} />
             {current && (
-              <span className="truncate font-mono text-[11.5px] text-fg-tertiary">
+              <span className="truncate font-mono text-xs text-fg-tertiary">
                 {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
                 {c.effort && ` · ${effortLabel(c.effort)} effort`}
               </span>
@@ -978,7 +978,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                         >
                           <PersonaAvatar persona={personaLook(p)} size={18} />
                           <PersonaName persona={personaLook(p)} />
-                          {participants.some((x) => x.id === p.id) && <span className="ml-auto text-[11px] text-fg-tertiary">in chat</span>}
+                          {participants.some((x) => x.id === p.id) && <span className="ml-auto text-xs text-fg-tertiary">in chat</span>}
                         </button>
                       </li>
                     ))}

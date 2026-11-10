@@ -40,7 +40,7 @@ function effortNote(m: Message): string | undefined {
  * and how the effort was chosen.
  */
 export function UsageTag({ m, children }: { m: Message; children: ReactNode }) {
-  const tagClass = "font-mono text-[11.5px] text-fg-tertiary";
+  const tagClass = "font-mono text-xs text-fg-tertiary";
   if (m.input_tokens === undefined) {
     return (
       <span className={tagClass} data-testid="model-tag">
@@ -77,7 +77,7 @@ export function UsageTag({ m, children }: { m: Message; children: ReactNode }) {
             data-testid="usage-tooltip"
             className={cx(floatPanel, "flex flex-col gap-1 px-3 py-2 text-xs")}
           >
-            <span className="text-[11.5px] text-fg-tertiary">This reply</span>
+            <span className="text-xs text-fg-tertiary">This reply</span>
             <Row label="Input" value={compact(t.input)} note={cache || undefined} />
             <Row label="Output" value={compact(t.output)} />
             <Row label="Cost" value={cost ?? "not reported"} />

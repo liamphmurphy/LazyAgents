@@ -39,7 +39,7 @@ export function CommitEmailPicker({
         <div className="min-w-0 flex-1">
           <h2 id="commit-email-title" className="text-[13px] font-semibold text-fg">Which email should commits use?</h2>
           <p className="text-[12px] text-fg-secondary">
-            Commits in <span className="font-mono text-[11.5px] text-fg">{repoShortName(repo)}</span> are authored as you.
+            Commits in <span className="font-mono text-xs text-fg">{repoShortName(repo)}</span> are authored as you.
             {required ? " Pick one to start; you can change it later." : " It applies from the next reply."}
           </p>
         </div>
@@ -66,7 +66,7 @@ export function CommitEmailPicker({
               )}
             >
               <GraphRail on={on} />
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5 font-mono text-[11.5px] leading-snug">
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 font-mono text-xs leading-snug">
                 <span className="flex items-center gap-1.5">
                   <span className={on ? "text-accent" : "text-pill-human-fg"}>commit {previewHash(email)}</span>
                   {i === 0 && <span className="rounded-full bg-hover px-1.5 font-sans text-[10.5px] text-fg-secondary">primary</span>}
@@ -104,7 +104,7 @@ export function CommitEmailChip({ email, onClick, open }: { email: string; onCli
       className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-fg-secondary hover:bg-hover max-md:hidden @max-[720px]:hidden"
     >
       <Icon name="at" size={12} className="flex-none" />
-      <span className="max-w-[180px] truncate font-mono text-[11.5px]">{email}</span>
+      <span className="max-w-[180px] truncate font-mono text-xs">{email}</span>
     </button>
   );
 }

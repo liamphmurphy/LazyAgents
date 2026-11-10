@@ -177,7 +177,7 @@ function StepRail({ steps, stopping, onOpenStep }: { steps: ChatStep[]; stopping
               {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
               {s.tag && <TagPill tag={s.tag} />}
               {onOpenStep && (s.reasoning || s.intent) && (
-                <button type="button" data-testid="view-reasoning" onClick={() => onOpenStep(s.key)} className="ml-auto flex-none text-[11px] text-fg-tertiary hover:text-fg-secondary">
+                <button type="button" data-testid="view-reasoning" onClick={() => onOpenStep(s.key)} className="ml-auto flex-none text-xs text-fg-tertiary hover:text-fg-secondary">
                   View reasoning ›
                 </button>
               )}

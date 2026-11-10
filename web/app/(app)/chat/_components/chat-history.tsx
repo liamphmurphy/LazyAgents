@@ -140,7 +140,7 @@ export function PersonaRail({ id, viewed }: { id?: string; viewed: string | null
 
 /** When the conversation was last active, right-aligned on its one-line row. */
 function RowAge({ chat }: { chat: Chat }) {
-  return <time dateTime={chat.last_message_at ?? chat.created_at} className="flex-none text-[11.5px] text-fg-tertiary">{shortAgo(chat.last_message_at ?? chat.created_at)}</time>;
+  return <time dateTime={chat.last_message_at ?? chat.created_at} className="flex-none text-xs text-fg-tertiary">{shortAgo(chat.last_message_at ?? chat.created_at)}</time>;
 }
 
 /** Trash button that asks first, inline in the row; deleting can't be undone. */
