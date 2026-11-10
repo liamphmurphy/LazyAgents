@@ -63,9 +63,11 @@ func TestUnknownLayoutGuessAndMapping(t *testing.T) {
 	if g.Delimiter != "|" || g.HeaderRow != 2 || g.Date != 0 || g.DateFormat != "YYYYMMDD" || g.Amount == nil || *g.Amount != 3 || len(g.Description) != 1 || g.Description[0] != 1 {
 		t.Fatalf("guess %+v amount %v", g, g.Amount)
 	}
-	m := g
-	m.Direction, m.DebitValues = ptr(4), []string{"D"}
-	p, err := ParseCSVWith([]byte(odd), m)
+	// The D/C column is recognized as the direction, so the guess already reads signs right.
+	if g.Direction == nil || *g.Direction != 4 || len(g.DebitValues) != 1 || g.DebitValues[0] != "D" {
+		t.Fatalf("guess direction %v %v", g.Direction, g.DebitValues)
+	}
+	p, err := ParseCSVWith([]byte(odd), g)
 	if err != nil || len(p.Txns) != 2 || p.Txns[0].AmountCents != -3418 || p.Txns[1].AmountCents != 120000 || p.Txns[0].Description != "SQ *POWELLS BOOKS" {
 		t.Fatalf("mapped %+v %v", p.Txns, err)
 	}

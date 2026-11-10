@@ -364,6 +364,7 @@ var (
 	balanceHeaders   = []string{"balance", "running balance", "running bal."}
 	directionHeaders = []string{"credit/debit", "debit/credit", "dr/cr", "cr/dr", "transaction type", "type"}
 	debitWords       = []string{"debit", "dr", "d", "withdrawal", "purchase", "sale"}
+	creditWords      = []string{"credit", "cr", "c", "deposit", "payment", "refund", "return"}
 )
 
 // DetectCSV is the mapping for a CSV whose header names Vesper knows. ok is
@@ -593,6 +594,32 @@ func GuessCSV(data []byte) CSVMapping {
 		}
 		for _, v := range vals {
 			textLen[j] += len(v)
+		}
+	}
+	// An unsigned amount beside a column of D/C-style markers: read it as the direction.
+	if m.Amount != nil && allNonNegative(column(body, *m.Amount), m.DecimalComma) {
+		for j := 0; j < width; j++ {
+			vals := distinct(column(body, j))
+			if j == *m.Amount || len(vals) == 0 || len(vals) > 4 {
+				continue
+			}
+			var debitValues []string
+			marker := true
+			for _, v := range vals {
+				lv := strings.ToLower(v)
+				switch {
+				case slices.Contains(debitWords, lv):
+					debitValues = append(debitValues, v)
+				case !slices.Contains(creditWords, lv):
+					marker = false
+				}
+			}
+			if marker && len(debitValues) > 0 {
+				jj := j
+				m.Direction, m.DebitValues = &jj, debitValues
+				delete(textLen, j)
+				break
+			}
 		}
 	}
 	best, bestLen := -1, 0
