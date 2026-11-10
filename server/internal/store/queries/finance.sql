@@ -78,12 +78,13 @@ WHERE transfer_id = @id AND category_source = 'match';
 
 -- name: FindFinanceTransferMatch :one
 -- The other side of a transfer: the opposite amount in another of the
--- person's accounts within five days, not already matched or set by hand.
+-- person's accounts within five days, not already matched, and not given
+-- another category by hand.
 SELECT t.* FROM finance_transactions t JOIN finance_accounts a ON a.id = t.account_id
 WHERE a.workspace_id = @workspace_id AND a.user_id = @user_id AND t.account_id <> @account_id
   AND t.amount_cents = -(@amount_cents::bigint) AND t.transfer_id IS NULL
   AND t.posted_on BETWEEN @earliest::date AND @latest::date
-  AND t.category_source IS DISTINCT FROM 'person'
+  AND (t.category_source IS DISTINCT FROM 'person' OR t.category = 'Transfer')
 ORDER BY abs(t.posted_on - @posted_on::date), t.created_at
 LIMIT 1;
 

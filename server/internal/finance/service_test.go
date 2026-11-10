@@ -42,7 +42,8 @@ const cardCSV = "Transaction Date,Description,Amount\n" +
 	"11/04/2026,PAYMENT THANK YOU,1200.00\n" +
 	"10/22/2026,SQ *POWELLS BOOKS,-12.00\n" +
 	"10/12/2026,NETFLIX.COM,-17.49\n" +
-	"09/12/2026,NETFLIX.COM,-15.49\n"
+	"09/12/2026,NETFLIX.COM,-15.49\n" +
+	"08/12/2026,NETFLIX.COM,-15.49\n"
 
 // The import path end to end: OFX makes its own account, CSV goes into a
 // chosen one, re-imports add nothing, card payments pair up as transfers,
@@ -62,7 +63,7 @@ func TestImportCategorizeOverview(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !chk.AccountCreated || chk.Account.Name != "Checking ••4417" || chk.Account.Kind != "checking" || chk.Import.Filename != "checking.ofx" ||
-		chk.Import.Inserted != 4 || chk.Import.Transfers != 0 || chk.NeedsReview != 2 {
+		chk.Import.Inserted != 4 || chk.Import.Transfers != 0 || chk.NeedsReview != 3 {
 		t.Fatalf("checking import %+v", chk)
 	}
 	// Again: the same account, nothing new.
@@ -86,7 +87,7 @@ func TestImportCategorizeOverview(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The $1,200 card payment pairs with checking's autopay.
-	if cc.Import.Inserted != 5 || cc.Import.Transfers != 1 || cc.NeedsReview != 2 {
+	if cc.Import.Inserted != 6 || cc.Import.Transfers != 1 || cc.NeedsReview != 2 {
 		t.Fatalf("card import %+v", cc.Import)
 	}
 	// An OFX names its account: putting it in another one is refused.

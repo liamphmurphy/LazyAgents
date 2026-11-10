@@ -35,14 +35,15 @@ func CanonicalCategory(s string) (string, bool) {
 
 // defaultKeywords categorize a transaction before the person has rules for
 // it: whole words (or phrases) found in its merchant. Checked in order, so
-// the more specific lists come first.
+// the more specific lists come first. Transfer is never a default: a card
+// payment whose other side isn't imported is the only trace of that card's
+// spending, so only a match or the person makes something a transfer.
 var defaultKeywords = []struct {
 	category string
 	inflow   bool // only money in
 	outflow  bool // only money out
 	words    []string
 }{
-	{Transfer, false, false, []string{"PAYMENT THANK YOU", "AUTOPAY", "AUTOMATIC PAYMENT", "ONLINE TRANSFER", "TRANSFER TO", "TRANSFER FROM", "XFER", "ONLINE PAYMENT", "CRD PMT", "CARD PAYMENT"}},
 	{Income, true, false, []string{"PAYROLL", "DIRECT DEP", "DIRECT DEPOSIT", "SALARY", "INTEREST PAID", "INTEREST PAYMENT", "DIVIDEND"}},
 	{"Subscriptions", false, true, []string{"NETFLIX", "SPOTIFY", "HULU", "DISNEY PLUS", "YOUTUBE PREMIUM", "ICLOUD", "APPLE COM BILL", "PATREON", "ADOBE", "OPENAI", "ANTHROPIC", "GITHUB", "FASTMAIL", "PROTON"}},
 	{"Groceries", false, true, []string{"SAFEWAY", "KROGER", "FRED MEYER", "NEW SEASONS", "TRADER JOE", "WHOLE FOODS", "WHOLEFDS", "COSTCO", "ALBERTSONS", "WINCO", "GROCERY", "MARKET OF CHOICE"}},
@@ -99,6 +100,9 @@ func Suggest(merchant string, amountCents int64, learned map[string][]string) []
 	first, _, _ := strings.Cut(merchant, " ")
 	for _, c := range learned[first] {
 		add(c)
+	}
+	if transferish(merchant) {
+		add(Transfer)
 	}
 	if c, ok := DefaultCategory(merchant, amountCents); ok {
 		add(c)

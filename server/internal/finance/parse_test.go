@@ -60,8 +60,8 @@ func TestDefaultCategoryAndSuggestions(t *testing.T) {
 		{"PAYROLL ACME INC", 680000, Income},
 		{"PAYROLL ACME INC", -100, ""}, // income words only categorize money in
 		{"NETFLIX COM CA", -1549, "Subscriptions"},
-		{"CHASE CREDIT CRD AUTOPAY", -120000, Transfer},
-		{"PAYMENT THANK YOU", 120000, Transfer},
+		{"CHASE CREDIT CRD AUTOPAY", -120000, ""}, // only a match or the person makes a transfer
+		{"PAYMENT THANK YOU", 120000, ""},
 		{"UBER TRIP", -1800, "Transport"},
 		{"UBER EATS", -2400, "Dining"},   // the more specific list comes first
 		{"SUBURBAN HARDWARE", -2400, ""}, // UBER isn't a whole word here
@@ -80,6 +80,9 @@ func TestDefaultCategoryAndSuggestions(t *testing.T) {
 	}
 	if got := Suggest("TRIMET TICKET", -250, nil); got[0] != "Transport" || len(got) != 3 {
 		t.Errorf("default first: %v", got)
+	}
+	if got := Suggest("CHASE CREDIT CRD AUTOPAY", -120000, nil); !slices.Equal(got, []string{Transfer, "Shopping", "Dining"}) {
+		t.Errorf("transfer-like: %v", got)
 	}
 }
 
@@ -205,15 +208,21 @@ func TestDetectRecurring(t *testing.T) {
 	add("NEW SEASONS", "NEW SEASONS", "2026-10-15", -7020)
 	add("OLD GYM", "OLD GYM", "2026-06-03", -4900) // stopped
 	add("OLD GYM", "OLD GYM", "2026-07-03", -4900)
+	add("POWER CO", "POWER CO", "2026-08-18", -8120) // a bill that varies: recurring, but no price-change news
+	add("POWER CO", "POWER CO", "2026-09-18", -7390)
+	add("POWER CO", "POWER CO", "2026-10-18", -6603)
 	add("BIG TICKET", "BIG TICKET", "2026-10-01", -1000) // too different to be one price
 	add("BIG TICKET", "BIG TICKET", "2026-10-31", -9000)
 	slices.SortStableFunc(in, func(a, b Outflow) int { return a.PostedOn.Compare(b.PostedOn) })
 
 	got := DetectRecurring(in, today)
-	if len(got) != 2 {
+	if len(got) != 3 {
 		t.Fatalf("got %+v", got)
 	}
-	adobe, netflix := got[0], got[1] // largest first
+	power, adobe, netflix := got[0], got[1], got[2] // largest first
+	if power.PreviousCents != nil || power.Count != 3 {
+		t.Errorf("power %+v", power)
+	}
 	if adobe.Label != "Adobe Creative" || adobe.AmountCents != 2299 || !adobe.New || adobe.PreviousCents != nil || adobe.DayOfMonth != 18 {
 		t.Errorf("adobe %+v", adobe)
 	}

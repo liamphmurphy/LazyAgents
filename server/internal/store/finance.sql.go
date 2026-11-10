@@ -482,7 +482,7 @@ SELECT t.id, t.account_id, t.import_id, t.posted_on, t.amount_cents, t.descripti
 WHERE a.workspace_id = $1 AND a.user_id = $2 AND t.account_id <> $3
   AND t.amount_cents = -($4::bigint) AND t.transfer_id IS NULL
   AND t.posted_on BETWEEN $5::date AND $6::date
-  AND t.category_source IS DISTINCT FROM 'person'
+  AND (t.category_source IS DISTINCT FROM 'person' OR t.category = 'Transfer')
 ORDER BY abs(t.posted_on - $7::date), t.created_at
 LIMIT 1
 `
@@ -498,7 +498,8 @@ type FindFinanceTransferMatchParams struct {
 }
 
 // The other side of a transfer: the opposite amount in another of the
-// person's accounts within five days, not already matched or set by hand.
+// person's accounts within five days, not already matched, and not given
+// another category by hand.
 func (q *Queries) FindFinanceTransferMatch(ctx context.Context, arg FindFinanceTransferMatchParams) (FinanceTransaction, error) {
 	row := q.db.QueryRow(ctx, findFinanceTransferMatch,
 		arg.WorkspaceID,

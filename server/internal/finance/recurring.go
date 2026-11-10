@@ -82,10 +82,15 @@ func DetectRecurring(outflows []Outflow, today time.Time) []Recurring {
 		}
 		r := Recurring{Merchant: m, Label: label(last.Description, m), AmountCents: -last.AmountCents, DayOfMonth: last.PostedOn.Day(),
 			FirstSeen: run[0].PostedOn, LastSeen: last.PostedOn, Count: len(run)}
-		for i := len(run) - 2; i >= 0; i-- {
+		// A price change is news for a fixed-price charge (a subscription
+		// going up), not for a bill that varies every month: report it only
+		// when the old price held for at least two charges.
+		for i := len(run) - 2; i >= 1; i-- {
 			if run[i].AmountCents != last.AmountCents {
-				p, at := -run[i].AmountCents, run[i+1].PostedOn
-				r.PreviousCents, r.ChangedOn = &p, &at
+				if run[i-1].AmountCents == run[i].AmountCents {
+					p, at := -run[i].AmountCents, run[i+1].PostedOn
+					r.PreviousCents, r.ChangedOn = &p, &at
+				}
 				break
 			}
 		}
