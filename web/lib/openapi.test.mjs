@@ -103,3 +103,20 @@ test("Vesper's own OpenAPI document parses", async (t) => {
   assert.equal(typeof body.repo, "string");
   assert.deepEqual(validate(real, put.body.schema, body), []);
 });
+
+test("an operation's x-source names its handler as file and line, and anything else is ignored", () => {
+  const api = parseOpenAPI({
+    openapi: "3.1.0",
+    paths: {
+      "/a": { get: { "x-source": "server/internal/httpapi/runs.go:142" } },
+      "/b": { get: { "x-source": "web/app/api/route.ts" } },
+      "/c": { get: { "x-source": { file: "x" } } },
+      "/d": { get: { "x-source": "x".repeat(400) } },
+    },
+  });
+  const by = Object.fromEntries(api.groups.flatMap((g) => g.ops).map((o) => [o.path, o.source]));
+  assert.deepEqual(by["/a"], { file: "server/internal/httpapi/runs.go", line: 142 });
+  assert.deepEqual(by["/b"], { file: "web/app/api/route.ts", line: null });
+  assert.equal(by["/c"], undefined);
+  assert.equal(by["/d"], undefined);
+});

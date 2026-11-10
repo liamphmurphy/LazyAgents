@@ -83,7 +83,7 @@ function SendToChat({ chatId, origin, branch, probe, logs, frame, onSent }: {
     const report = playgroundReport({ origin, probe, logs, branch, at, noScreenshot });
     files.unshift(new File([report], names.report, { type: "text/markdown" }));
     setBusy(false);
-    if (!sendToComposer(chatId, files)) {
+    if (!sendToComposer(chatId, { files })) {
       setProblem("Open the chat to attach it.");
       return;
     }

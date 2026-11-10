@@ -90,14 +90,17 @@ export function reportNames(at: number): { report: string; screenshot: string } 
   return { report: `playground-${stamp}.md`, screenshot: `playground-${stamp}.png` };
 }
 
+/** What the playground panel puts in the chat's composer: files to attach, text to send. */
+export type ComposerDrop = { files?: File[]; text?: string };
+
 /**
- * Hands files from the playground panel to the chat's composer, which sit in
+ * Hands things from the playground panel to the chat's composer, which sit in
  * different parts of the page. A composer listens for its chat; a send with
  * no composer listening reports false so the panel can say so.
  */
-const listeners = new Map<string, Set<(files: File[]) => void>>();
+const listeners = new Map<string, Set<(drop: ComposerDrop) => void>>();
 
-export function onComposerFiles(chatId: string, fn: (files: File[]) => void): () => void {
+export function onComposerDrop(chatId: string, fn: (drop: ComposerDrop) => void): () => void {
   const set = listeners.get(chatId) ?? new Set();
   set.add(fn);
   listeners.set(chatId, set);
@@ -107,9 +110,9 @@ export function onComposerFiles(chatId: string, fn: (files: File[]) => void): ()
   };
 }
 
-export function sendToComposer(chatId: string, files: File[]): boolean {
+export function sendToComposer(chatId: string, drop: ComposerDrop): boolean {
   const set = listeners.get(chatId);
   if (!set?.size) return false;
-  set.forEach((fn) => fn(files));
+  set.forEach((fn) => fn(drop));
   return true;
 }

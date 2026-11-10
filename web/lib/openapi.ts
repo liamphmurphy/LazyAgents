@@ -18,6 +18,8 @@ export type Operation = {
   tag: string;
   params: Param[];
   body?: { contentType: string; required: boolean; schema: Json };
+  /** The handler, from an inferred document's x-source ("path/file.go:142"). */
+  source?: { file: string; line: number | null };
 };
 
 export type ApiDoc = { title: string; base: string; groups: { tag: string; ops: Operation[] }[]; count: number };
@@ -57,6 +59,13 @@ export function basePath(doc: Json): string {
   return path && !path.startsWith("/") ? "/" + path : path;
 }
 
+/** An x-source of "file" or "file:line"; the document is the agent's, so anything else is dropped. */
+function sourceOf(v: unknown): Operation["source"] {
+  if (typeof v !== "string" || !v.trim() || v.length > 300) return undefined;
+  const m = /^(.+?):(\d+)$/.exec(v.trim());
+  return m ? { file: m[1], line: Number(m[2]) } : { file: v.trim(), line: null };
+}
+
 /** The document's operations, grouped by their first tag (in the document's tag order). */
 export function parseOpenAPI(doc: Json): ApiDoc {
   if (!doc || typeof doc !== "object" || typeof doc.paths !== "object") throw new Error("Not an OpenAPI document: it has no paths.");
@@ -94,6 +103,7 @@ export function parseOpenAPI(doc: Json): ApiDoc {
         tag,
         params: [...params.values()],
         body,
+        source: sourceOf(op["x-source"]),
       };
       if (!groups.has(tag)) groups.set(tag, []);
       groups.get(tag)!.push(operation);
