@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/personas"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -200,10 +201,12 @@ func GroupNote(ctx context.Context, q *store.Queries, chat store.ChatSession) (s
 		return "", err
 	}
 	speaker := ChatSpeakerID(chat)
-	canCreate := false
+	canCreate, canPicture := false, false
 	if speaker != nil {
 		if i := slices.IndexFunc(ps, func(p store.Persona) bool { return p.ID == *speaker }); i >= 0 {
 			canCreate = ps[i].CanCreatePersonas
+			// avatar_prompt queues a generate_image job, which a Codex chat can't.
+			canPicture = ps[i].CanGenerateImages && chat.Harness != agentdef.HarnessCodex
 		}
 	}
 	if len(ps) < 2 && !canCreate {
@@ -237,6 +240,9 @@ func GroupNote(ctx context.Context, q *store.Queries, chat store.ChatSession) (s
 	}
 	if canCreate {
 		b.WriteString("- You may propose a new persona with propose_persona when the person asks for one. Nothing is created until they approve it in the chat, and a new persona starts without coding or image permissions.\n")
+		if canPicture {
+			b.WriteString("- Give it a face: pass avatar_prompt, describing a portrait of it, and the image becomes its profile picture and reference likeness once the person approves.\n")
+		}
 	}
 	return b.String(), nil
 }
@@ -312,15 +318,40 @@ func RelayChat(ctx context.Context, q *store.Queries, chatID uuid.UUID, reply st
 	return err
 }
 
-// PersonaProposalInput is what propose_persona asks for: a voice only.
+// PersonaProposalInput is what propose_persona asks for: a voice, and
+// optionally a picture to make for it (AvatarPrompt).
 type PersonaProposalInput struct {
 	Name, Tone, Color, Instructions, Reason string
+	AvatarPrompt                            string
+}
+
+// Where a proposed persona's picture stands (PersonaProposalAvatars).
+const (
+	ProposalAvatarPending = "pending"
+	ProposalAvatarReady   = "ready"
+	ProposalAvatarFailed  = "failed"
+)
+
+// PersonaProposalAvatars reports the picture of each proposal that asked for
+// one, by proposal id. Proposals without a picture are absent.
+func PersonaProposalAvatars(ctx context.Context, q *store.Queries, ids []uuid.UUID) (map[uuid.UUID]store.PersonaProposalAvatarsRow, error) {
+	rows, err := q.PersonaProposalAvatars(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID]store.PersonaProposalAvatarsRow, len(rows))
+	for _, r := range rows {
+		out[r.ProposalID] = r
+	}
+	return out, nil
 }
 
 // ProposePersona records a persona the chat's current speaker wants to
 // create. Only a persona with can_create_personas may propose, read fresh so
 // turning it off applies at once; the person approves or declines it from
-// the chat (DecidePersonaProposal). Nothing is created until then.
+// the chat (DecidePersonaProposal). Nothing is created until then. An
+// AvatarPrompt queues an image job with the proposal, under the same checks
+// as generate_image; approving makes that image the persona's avatar.
 func (s *Service) ProposePersona(ctx context.Context, ws, runID uuid.UUID, in PersonaProposalInput) (store.PersonaProposal, error) {
 	var out store.PersonaProposal
 	d, err := personas.CheckDraft(personas.Draft{Name: in.Name, Tone: in.Tone, Color: in.Color, Instructions: in.Instructions})
@@ -330,6 +361,14 @@ func (s *Service) ProposePersona(ctx context.Context, ws, runID uuid.UUID, in Pe
 	reason := strings.TrimSpace(in.Reason)
 	if utf8.RuneCountInString(reason) > MaxProposalReasonRunes {
 		return out, apperr.Invalid("reason", "must be at most %d characters", MaxProposalReasonRunes)
+	}
+	var avatar *chatImageRequest
+	if strings.TrimSpace(in.AvatarPrompt) != "" {
+		req, err := s.prepareProposalAvatar(ctx, ws, runID, in.AvatarPrompt)
+		if err != nil {
+			return out, err
+		}
+		avatar = &req
 	}
 	err = s.tx(ctx, func(q *store.Queries) error {
 		run, err := q.GetRun(ctx, store.GetRunParams{ID: runID, WorkspaceID: ws})
@@ -375,7 +414,15 @@ func (s *Service) ProposePersona(ctx context.Context, ws, runID uuid.UUID, in Pe
 		if taken {
 			return apperr.Invalid("name", "the person already has a persona with this name; pick another")
 		}
-		out, err = q.CreatePersonaProposal(ctx, store.CreatePersonaProposalParams{ChatID: chat.ID, RunID: &run.ID, ProposedBy: &p.ID, Name: d.Name, Tone: d.Tone, Color: d.Color, CustomInstructions: d.Instructions, Reason: reason})
+		var jobID *uuid.UUID
+		if avatar != nil {
+			job, err := insertChatImageJob(ctx, q, *avatar)
+			if err != nil {
+				return err
+			}
+			jobID = &job.ID
+		}
+		out, err = q.CreatePersonaProposal(ctx, store.CreatePersonaProposalParams{ChatID: chat.ID, RunID: &run.ID, ProposedBy: &p.ID, Name: d.Name, Tone: d.Tone, Color: d.Color, CustomInstructions: d.Instructions, Reason: reason, AvatarJobID: jobID})
 		if err != nil {
 			return err
 		}
@@ -383,6 +430,26 @@ func (s *Service) ProposePersona(ctx context.Context, ws, runID uuid.UUID, in Pe
 		return err
 	})
 	return out, err
+}
+
+// prepareProposalAvatar checks an avatar_prompt like a generate_image call,
+// with errors that name the field the persona should drop.
+func (s *Service) prepareProposalAvatar(ctx context.Context, ws, runID uuid.UUID, prompt string) (chatImageRequest, error) {
+	run, err := store.New(s.Pool).GetRun(ctx, store.GetRunParams{ID: runID, WorkspaceID: ws})
+	if err != nil {
+		return chatImageRequest{}, err
+	}
+	// A Codex chat makes images itself, into its outbox, with no job to tie
+	// to the proposal.
+	if run.Harness == agentdef.HarnessCodex {
+		return chatImageRequest{}, apperr.Conflict("avatar_prompt isn't available in a Codex chat. Propose the persona without it; the person can give it a picture in Manage personas.")
+	}
+	req, err := s.prepareChatImage(ctx, ws, runID, prompt, nil)
+	var conflict *apperr.ConflictError
+	if errors.As(err, &conflict) {
+		return req, apperr.Conflict("avatar_prompt can't be used: %s Propose the persona without avatar_prompt instead.", conflict.Error())
+	}
+	return req, err
 }
 
 // ListPersonaProposals returns a chat's proposals, oldest first.
@@ -398,11 +465,21 @@ func (s *Service) ListPersonaProposals(ctx context.Context, ws, user, chatID uui
 	return q.ListPersonaProposals(ctx, chat.ID)
 }
 
+// PersonaDecision is a decided proposal and, when an approval came with a
+// picture, the generated image to make the new persona's avatar from.
+type PersonaDecision struct {
+	Proposal store.PersonaProposal
+	Avatar   *store.ChatAttachment
+}
+
 // DecidePersonaProposal approves or declines a pending proposal. Approving
 // creates the persona (voice only: every capability off), adds it to the
-// chat and, when the chat is idle, lets it introduce itself.
-func (s *Service) DecidePersonaProposal(ctx context.Context, ws, user, chatID, id uuid.UUID, approve bool) (store.PersonaProposal, error) {
-	var out store.PersonaProposal
+// chat and, when the chat is idle, lets it introduce itself. A proposal whose
+// picture is still being made can't be approved yet; a ready picture becomes
+// the persona's reference likeness in the Library, and is returned for the
+// caller to store as its avatar, which needs blob I/O outside this transaction.
+func (s *Service) DecidePersonaProposal(ctx context.Context, ws, user, chatID, id uuid.UUID, approve bool) (PersonaDecision, error) {
+	var out PersonaDecision
 	o := personas.Owner{WorkspaceID: ws, UserID: user}
 	err := s.tx(ctx, func(q *store.Queries) error {
 		// The owner's persona lock before the chat lock, the order a persona
@@ -433,7 +510,7 @@ func (s *Service) DecidePersonaProposal(ctx context.Context, ws, user, chatID, i
 			by = personaName(ps, prop.ProposedBy)
 		}
 		if !approve {
-			if out, err = q.DecidePersonaProposal(ctx, store.DecidePersonaProposalParams{ID: prop.ID, State: "declined"}); err != nil {
+			if out.Proposal, err = q.DecidePersonaProposal(ctx, store.DecidePersonaProposalParams{ID: prop.ID, State: "declined"}); err != nil {
 				return err
 			}
 			if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: fmt.Sprintf("You declined %s's proposed persona %s.", by, prop.Name), ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
@@ -442,14 +519,27 @@ func (s *Service) DecidePersonaProposal(ctx context.Context, ws, user, chatID, i
 			_, err = q.BumpChatRevision(ctx, chat.ID)
 			return err
 		}
+		avatars, err := PersonaProposalAvatars(ctx, q, []uuid.UUID{prop.ID})
+		if err != nil {
+			return err
+		}
+		avatar, hasAvatar := avatars[prop.ID]
+		if hasAvatar && avatar.AvatarState == ProposalAvatarPending {
+			return apperr.Conflict("%s's picture is still being made; approve again in a moment, or decline.", prop.Name)
+		}
 		created, err := personas.CreateLocked(ctx, q, o, personas.NewInput{Name: prop.Name, Tone: &prop.Tone, Color: &prop.Color, Instructions: &prop.CustomInstructions})
 		if err != nil {
 			return err
 		}
+		if hasAvatar && avatar.AttachmentID != nil {
+			if out.Avatar, err = useAsPersonaReference(ctx, q, o, *avatar.AttachmentID, created.ID); err != nil {
+				return err
+			}
+		}
 		if err = joinChat(ctx, q, chat, created.ID); err != nil {
 			return err
 		}
-		if out, err = q.DecidePersonaProposal(ctx, store.DecidePersonaProposalParams{ID: prop.ID, State: "approved", PersonaID: &created.ID}); err != nil {
+		if out.Proposal, err = q.DecidePersonaProposal(ctx, store.DecidePersonaProposalParams{ID: prop.ID, State: "approved", PersonaID: &created.ID}); err != nil {
 			return err
 		}
 		if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: fmt.Sprintf("You approved %s, proposed by %s. They joined the conversation.", created.Name, by), ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
@@ -461,6 +551,40 @@ func (s *Service) DecidePersonaProposal(ctx context.Context, ws, user, chatID, i
 		return introduce(ctx, q, chat, created, by)
 	})
 	return out, err
+}
+
+// useAsPersonaReference marks the Library copy of a generated chat image as
+// persona's reference likeness, so the images it makes later keep its face,
+// and returns the attachment. It returns nil when the person has since
+// deleted the image. A Library copy deleted on its own, or one the person
+// already uses as another reference, is left as it is.
+func useAsPersonaReference(ctx context.Context, q *store.Queries, o personas.Owner, attachmentID, persona uuid.UUID) (*store.ChatAttachment, error) {
+	att, err := q.GetChatAttachment(ctx, store.GetChatAttachmentParams{ID: attachmentID, WorkspaceID: o.WorkspaceID, UserID: o.UserID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := q.LockLibraryReferences(ctx, store.LockLibraryReferencesParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID}); err != nil {
+		return nil, err
+	}
+	item, err := q.LibraryItemByBlobKey(ctx, store.LibraryItemByBlobKeyParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, BlobKey: att.BlobKey})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return &att, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if item.Reference != nil {
+		return &att, nil
+	}
+	// The persona is new, so it has no reference to unmark first.
+	role := "persona"
+	if _, err := q.SetLibraryReference(ctx, store.SetLibraryReferenceParams{ID: item.ID, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Role: &role, PersonaID: &persona}); err != nil {
+		return nil, err
+	}
+	return &att, nil
 }
 
 // introduce gives a newly approved persona a first turn to say hello, when

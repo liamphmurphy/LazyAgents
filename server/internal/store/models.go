@@ -687,6 +687,7 @@ type PersonaProposal struct {
 	PersonaID          *uuid.UUID
 	CreatedAt          time.Time
 	DecidedAt          *time.Time
+	AvatarJobID        *uuid.UUID
 }
 
 type PlanStep struct {

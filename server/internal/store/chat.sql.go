@@ -862,8 +862,8 @@ func (q *Queries) CreateGeneratedChatAttachment(ctx context.Context, arg CreateG
 }
 
 const createPersonaProposal = `-- name: CreatePersonaProposal :one
-INSERT INTO persona_proposals (chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at
+INSERT INTO persona_proposals (chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, avatar_job_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at, avatar_job_id
 `
 
 type CreatePersonaProposalParams struct {
@@ -875,6 +875,7 @@ type CreatePersonaProposalParams struct {
 	Color              string
 	CustomInstructions string
 	Reason             string
+	AvatarJobID        *uuid.UUID
 }
 
 func (q *Queries) CreatePersonaProposal(ctx context.Context, arg CreatePersonaProposalParams) (PersonaProposal, error) {
@@ -887,6 +888,7 @@ func (q *Queries) CreatePersonaProposal(ctx context.Context, arg CreatePersonaPr
 		arg.Color,
 		arg.CustomInstructions,
 		arg.Reason,
+		arg.AvatarJobID,
 	)
 	var i PersonaProposal
 	err := row.Scan(
@@ -903,13 +905,14 @@ func (q *Queries) CreatePersonaProposal(ctx context.Context, arg CreatePersonaPr
 		&i.PersonaID,
 		&i.CreatedAt,
 		&i.DecidedAt,
+		&i.AvatarJobID,
 	)
 	return i, err
 }
 
 const decidePersonaProposal = `-- name: DecidePersonaProposal :one
 UPDATE persona_proposals SET state = $1, persona_id = $2, decided_at = now()
-WHERE id = $3 RETURNING id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at
+WHERE id = $3 RETURNING id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at, avatar_job_id
 `
 
 type DecidePersonaProposalParams struct {
@@ -935,6 +938,7 @@ func (q *Queries) DecidePersonaProposal(ctx context.Context, arg DecidePersonaPr
 		&i.PersonaID,
 		&i.CreatedAt,
 		&i.DecidedAt,
+		&i.AvatarJobID,
 	)
 	return i, err
 }
@@ -1504,7 +1508,7 @@ func (q *Queries) ListChatsForUser(ctx context.Context, arg ListChatsForUserPara
 }
 
 const listPersonaProposals = `-- name: ListPersonaProposals :many
-SELECT id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at FROM persona_proposals WHERE chat_id = $1 ORDER BY created_at, id
+SELECT id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at, avatar_job_id FROM persona_proposals WHERE chat_id = $1 ORDER BY created_at, id
 `
 
 func (q *Queries) ListPersonaProposals(ctx context.Context, chatID uuid.UUID) ([]PersonaProposal, error) {
@@ -1530,6 +1534,7 @@ func (q *Queries) ListPersonaProposals(ctx context.Context, chatID uuid.UUID) ([
 			&i.PersonaID,
 			&i.CreatedAt,
 			&i.DecidedAt,
+			&i.AvatarJobID,
 		); err != nil {
 			return nil, err
 		}
@@ -1683,7 +1688,7 @@ func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSe
 }
 
 const lockPersonaProposal = `-- name: LockPersonaProposal :one
-SELECT id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at FROM persona_proposals WHERE id = $1 AND chat_id = $2 FOR UPDATE
+SELECT id, chat_id, run_id, proposed_by, name, tone, color, custom_instructions, reason, state, persona_id, created_at, decided_at, avatar_job_id FROM persona_proposals WHERE id = $1 AND chat_id = $2 FOR UPDATE
 `
 
 type LockPersonaProposalParams struct {
@@ -1708,6 +1713,7 @@ func (q *Queries) LockPersonaProposal(ctx context.Context, arg LockPersonaPropos
 		&i.PersonaID,
 		&i.CreatedAt,
 		&i.DecidedAt,
+		&i.AvatarJobID,
 	)
 	return i, err
 }
@@ -1897,6 +1903,46 @@ func (q *Queries) PersonaDockChats(ctx context.Context, arg PersonaDockChatsPara
 			&i.LastBody,
 			&i.LastSeq,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const personaProposalAvatars = `-- name: PersonaProposalAvatars :many
+SELECT p.id AS proposal_id, j.attachment_id,
+  (CASE WHEN j.attachment_id IS NOT NULL THEN 'ready'
+        WHEN j.state = 'failed' OR t.ended_at IS NOT NULL THEN 'failed'
+        ELSE 'pending' END)::text AS avatar_state
+FROM persona_proposals p
+JOIN chat_image_jobs j ON j.id = p.avatar_job_id
+JOIN run_turns t ON t.id = j.turn_id
+WHERE p.id = ANY($1::uuid[])
+`
+
+type PersonaProposalAvatarsRow struct {
+	ProposalID   uuid.UUID
+	AttachmentID *uuid.UUID
+	AvatarState  string
+}
+
+// Where each proposal's picture stands. An image is linked to its job when
+// the turn that asked for it finishes, in the same transaction that ends the
+// turn; a turn that ended without one, or a failed job, made none.
+func (q *Queries) PersonaProposalAvatars(ctx context.Context, ids []uuid.UUID) ([]PersonaProposalAvatarsRow, error) {
+	rows, err := q.db.Query(ctx, personaProposalAvatars, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PersonaProposalAvatarsRow{}
+	for rows.Next() {
+		var i PersonaProposalAvatarsRow
+		if err := rows.Scan(&i.ProposalID, &i.AttachmentID, &i.AvatarState); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
