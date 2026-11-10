@@ -1,7 +1,7 @@
 "use client";
 
 import { useCanvasPanel } from "@/lib/use-canvas-panel";
-import { composerFrame, composerInput, ResearchToggle, TemporaryToggle } from "./reply-tools";
+import { ComposerHints, composerFrame, composerInput, ResearchToggle, SendButton, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useBootstrap, useChat, useChats, useStartChat } from "@/lib/api/hooks";
@@ -9,7 +9,6 @@ import { usePersonas } from "@/lib/api/persona-hooks";
 import { newestChat } from "@/lib/chat-ui";
 import { codesInRepos } from "@/lib/persona-ui";
 import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
-import { Button } from "@/components/ui/button";
 import { Banner, Skeleton, TextArea } from "@/components/ui/primitives";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
@@ -133,7 +132,7 @@ function Welcome({ disabled }: { disabled: boolean }) {
           rows={3}
           value={text}
           disabled={locked}
-          placeholder={`Message ${persona.id ? persona.name : "your assistant"}… Enter sends, Shift+Enter adds a line.`}
+          placeholder={`Message ${persona.id ? persona.name : "your assistant"}…`}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -144,23 +143,20 @@ function Welcome({ disabled }: { disabled: boolean }) {
         />
         <div className="flex items-end gap-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <AttachButton onFiles={files.add} disabled={locked} compact />
             <PersonaSwitcher value={personaId} onChange={setPicked} disabled={locked} />
             {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
-            <AttachButton onFiles={files.add} disabled={locked} compact />
             <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
             <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
           </div>
-          <Button
-            className="flex-none"
-            type="submit"
-            variant="primary"
+          <SendButton
+            label={start.isPending ? "Starting…" : research ? "Plan it" : "Send"}
             disabled={locked || files.pending || !text.trim() || askCommitEmail}
             title={askCommitEmail ? "Pick which email commits use first" : undefined}
-          >
-            {start.isPending ? "Starting…" : research ? "Plan it" : "Send"}
-          </Button>
+          />
         </div>
         </div>
+        <ComposerHints commands={false} />
       </form>
     </div>
   );

@@ -8,6 +8,7 @@ import { formatBytes } from "@/lib/files";
 import { cx } from "@/lib/cx";
 import { isImageType } from "@/lib/persona-ui";
 import { Icon } from "@/components/ui/icon";
+import { composerIconButton } from "./reply-tools";
 
 type Attachment = Schemas["ChatAttachment"];
 type Item = { key: number; name: string; size: number; status: "uploading" | "done" | "error"; id?: string; error?: string; preview?: string };
@@ -121,7 +122,7 @@ export function AttachButton({ onFiles, disabled, compact }: { onFiles: (f: File
         title="Attach or drop files"
         disabled={disabled}
         onClick={() => input.current?.click()}
-        className={cx("inline-flex h-8 items-center gap-1.5 rounded-md text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-50", compact ? "w-8 justify-center" : "px-2")}
+        className={compact ? composerIconButton : "inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-50"}
       >
         <svg aria-hidden viewBox="0 0 16 16" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="m13 7.5-4.8 4.8a3 3 0 0 1-4.2-4.2l5-5a2 2 0 0 1 2.8 2.8L6.8 10.9a1 1 0 0 1-1.4-1.4L9.7 5.2" />

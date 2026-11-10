@@ -5,9 +5,10 @@ import { useId, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useLinkSuggest } from "@/lib/api/hooks";
 import { chipFromTarget, type Chip } from "@/lib/chat-context";
-import { Button, IconButton } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { SuggestionList } from "@/components/domain/link-editor";
+import { composerIconButton } from "./reply-tools";
 
 /** Only these kinds can be attached to a chat message. */
 export const acceptTarget = (t: LinkTarget) => chipFromTarget(t) !== null;
@@ -88,7 +89,9 @@ export function AddContext({ onPick, onClosed, disabled, compact }: { onPick: (t
     >
       <Popover.Trigger asChild>
         {compact ? (
-          <IconButton icon="plus" label="Add context" size={32} disabled={disabled} className="disabled:opacity-50" />
+          <button type="button" aria-label="Add context" title="Add context: a page, ticket, run or file" disabled={disabled} className={composerIconButton}>
+            <Icon name="plus" size={15} strokeWidth={1.7} />
+          </button>
         ) : (
           <Button variant="outline" icon="plus" disabled={disabled}>
             Add context

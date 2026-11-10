@@ -41,7 +41,7 @@ import { acceptTarget, AddContext, ChipList, SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, composerFrame, composerInput, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
+import { AskAboutSelection, ComposerHints, composerFrame, composerInput, CopyButton, quoteForComposer, ResearchToggle, SendButton, TemporaryBadge, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { VideoCards, VideoRendererNotes } from "@/components/domain/video-card";
@@ -1013,7 +1013,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                       ? "Sending…"
                       : running
                         ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to steer it.`
-                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}${c.space ? ` in ${c.space.name}` : ""}…  / for commands, @ for a persona, [[ for context`
+                        : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}${c.space ? ` in ${c.space.name}` : ""}…`
                   }
                   onKeyDown={(e) => {
                     if (commandItems.length > 0) {
@@ -1057,17 +1057,19 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   }}
                 />
               </div>
-              {/* The options wrap within their own column so Stop and Send never drop to a line of their own. */}
+              {/* The options wrap within their own column so model, Stop and Send never drop to a line of their own. */}
               <div className="flex items-end gap-2">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} compact />
+                <AttachButton onFiles={files.add} disabled={locked} compact />
                 {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
                 {fresh && c.persona && c.repo_url && (full?.repos.length ?? 0) > 1 && codesInRepos(full) && (
                   <RepoSelect repos={full!.repos} value={c.repo_url} onChange={(r) => switchPersona(c.persona!.id, r)} disabled={locked || create.isPending} />
                 )}
-                <AttachButton onFiles={files.add} disabled={locked} compact />
-                <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={locked} compact />
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                 {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
+                </div>
+                <div className="flex flex-none items-center gap-1">
                 {selection && <ModelPicker groups={groups} value={selection} onChange={pick} disabled={locked || running} />}
                 <EffortPicker
                   efforts={offered.efforts}
@@ -1075,16 +1077,13 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   onChange={(e) => setPickedEffort(e ?? "default")}
                   disabled={locked || running}
                 />
-                </div>
-                <div className="flex flex-none items-center gap-2">
                 {running && (
                   <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
                     {stopping ? "Stopping…" : "Stop"}
                   </Button>
                 )}
-                <Button
-                  type="submit"
-                  variant="primary"
+                <SendButton
+                  label={running ? "Interrupt" : research ? "Plan it" : "Send"}
                   disabled={locked || !!unavailable || files.pending || !text.trim() || commitPickRequired}
                   title={
                     commitPickRequired
@@ -1093,13 +1092,12 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                         ? "Stop the reply and answer this together with your last message"
                         : undefined
                   }
-                >
-                  {running ? "Interrupt" : research ? "Plan it" : "Send"}
-                </Button>
+                />
                 </div>
               </div>
               </div>
             </form>
+            <ComposerHints />
             </>
           )}
         </div>

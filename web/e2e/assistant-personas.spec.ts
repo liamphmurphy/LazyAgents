@@ -257,7 +257,8 @@ test("a coding persona's new chat shows its repo and work branch in the header",
     personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: true }, repos })],
   });
   await page.goto("/chat?project=WEB");
-  await page.getByLabel("Repository for this conversation").selectOption(repos[1]);
+  await page.getByRole("button", { name: /^Repository for this conversation/ }).click();
+  await page.getByRole("menuitemradio", { name: "acme/api" }).click();
   await page.getByLabel("Message").fill("fix the build");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[^/]+/);

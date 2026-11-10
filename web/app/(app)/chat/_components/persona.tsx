@@ -11,6 +11,7 @@ import { DOCK_STATE_LABEL, dockEntries, type DockState } from "@/lib/persona-doc
 import { STRIP_PERSONAS, repoShortName, splitPersonaStrip } from "@/lib/persona-ui";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
+import { composerPill } from "./reply-tools";
 
 // Assistant personas in the Assistant view only (ADR: Assistant personas). Ticket,
 // epic and run views keep their agent identity and never render these.
@@ -59,26 +60,39 @@ export function CapabilityBadges({ capabilities, className }: { capabilities?: S
   );
 }
 
-/** Which of the persona's repositories a new conversation works in. */
+/** Which of the persona's repositories a new conversation works in: a pill that opens upwards, like the persona's. */
 export function RepoSelect({ repos, value, onChange, disabled }: { repos: string[]; value: string; onChange: (url: string) => void; disabled?: boolean }) {
   return (
-    <label className="inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-raised px-2.5 text-xs text-fg-secondary">
-      <Icon name="branch" size={13} className="flex-none" />
-      <select
-        aria-label="Repository for this conversation"
-        value={value}
-        disabled={disabled}
-        title={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="min-w-0 max-w-[220px] cursor-pointer truncate bg-transparent font-mono text-xs text-fg outline-none disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {repos.map((r) => (
-          <option key={r} value={r}>
-            {repoShortName(r)}
-          </option>
-        ))}
-      </select>
-    </label>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label={`Repository for this conversation: ${repoShortName(value)}`}
+          title={value}
+          className={composerPill()}
+        >
+          <Icon name="branch" size={13} className="flex-none" />
+          <span className="min-w-0 max-w-[220px] truncate font-mono text-xs text-fg">{repoShortName(value)}</span>
+          <Icon name="chev" size={12} strokeWidth={1.6} className="flex-none text-fg-tertiary" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" side="top" sideOffset={6} className={cx(floatPanel, "w-[300px]")}>
+          <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">Repository for this conversation</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
+            {repos.map((r) => (
+              <DropdownMenu.RadioItem key={r} value={r} title={r} className={item}>
+                <Icon name="branch" size={13} className="flex-none text-fg-tertiary" />
+                <span className="min-w-0 truncate font-mono text-xs">{repoShortName(r)}</span>
+                <span className="ml-auto" />
+                <Check on={r === value} />
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 
@@ -336,10 +350,10 @@ export function PersonaSwitcher({
           type="button"
           disabled={disabled}
           aria-label={`Persona for this conversation: ${current.name}`}
-          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-accent bg-surface-raised px-2.5 text-xs hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-full bg-selected pl-1.5 pr-2.5 text-[12.5px] font-medium text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           <PersonaAvatar persona={current} size={18} />
-          <PersonaName persona={current} className="truncate" />
+          <span className="truncate">{current.name}</span>
           <Icon name="chev" size={12} strokeWidth={1.6} className="rotate-180 text-fg-tertiary" />
         </button>
       </DropdownMenu.Trigger>
