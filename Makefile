@@ -20,8 +20,11 @@ API_PORT ?= 8000
 WEB_PORT ?= 3000
 # Agents run in hardened containers. `make local-dev` and `make local-runner` are the no-isolation fallback.
 RUNNER_BACKEND ?= docker
+# Host-folder workspaces (docs/guide.md, "Open a run's code"): set in the environment or .env.
+VESPER_WORKSPACES_DIR ?= $(shell sed -n 's/^VESPER_WORKSPACES_DIR=//p' .env 2>/dev/null)
+export VESPER_WORKSPACES_DIR
 # The hardened runner is a dev compose service (docker-compose.dev.yml).
-RUNNER_COMPOSE := $(COMPOSE_DEV) --profile runner
+RUNNER_COMPOSE := $(COMPOSE_DEV) $(if $(VESPER_WORKSPACES_DIR),-f docker-compose.workspaces.yml) --profile runner
 # A key in the environment wins over .env (`make setup` creates that one).
 SECRETS_KEY ?= $(shell sed -n 's/^SECRETS_KEY=//p' .env 2>/dev/null)
 export SECRETS_KEY

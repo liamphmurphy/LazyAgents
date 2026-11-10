@@ -198,7 +198,7 @@ function HostFoldersSetting({ status }: { status: Schemas["RunnerStatus"] }) {
           </>
         ) : (
           <>
-            No online runner has a folder for this. Set <code className="font-mono">VESPER_WORKSPACES_DIR</code> to an absolute path and restart the runner (see README, “Open a run’s code”).
+            No online runner has a folder for this. Set <code className="font-mono">VESPER_WORKSPACES_DIR</code> to an absolute path and restart the runner (see the guide, “Open a run’s code”).
           </>
         )}
       </span>

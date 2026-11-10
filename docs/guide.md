@@ -118,6 +118,42 @@ empty state. Failed dependency installs retain their error and any inventory
 collected before the failure. Refresh only reloads reports; it does not install
 packages or start agent work.
 
+### Open a run's code
+
+By default a run's checkout lives in a Docker volume, which you can't open from
+your machine. To work in it alongside the agent (in Neovim, an IDE, a second
+terminal), keep checkouts in a folder on your machine instead:
+
+1. Set `VESPER_WORKSPACES_DIR` in `.env` to an absolute path, such as
+   `/Users/you/vesper/workspaces`.
+2. Restart the runner. `make start` and `make runner` add
+   `docker-compose.workspaces.yml` on their own. For the full stack, also set
+   `COMPOSE_FILE=docker-compose.yml:docker-compose.workspaces.yml` in `.env`.
+3. Turn on **Settings → Runner backends → Host folders**.
+
+New runs then check out into `<folder>/<run id>`. The chat header and the run
+page show that folder with a button to copy the path. The agent still sees it at
+`/workspace` in its container, nothing else of your machine is mounted, and its
+home directory (harness sessions, the SSH key) stays in a volume.
+
+- **Only new runs change.** A run that already has a workspace keeps it, and
+  turning the setting off leaves existing folders where they are.
+- **The folder goes away with the workspace.** Completed runs and chats idle for
+  `RUNNER_CHAT_IDLE_TTL_S` are cleaned up as usual. Unpushed work is pushed to a
+  `vesper-checkpoint/...` branch first, so edits of yours that it hasn't pushed
+  are saved there.
+- **Edit between turns when you can.** While a turn runs, the agent writes to the
+  same files, so expect your editor's "file changed" prompts. Running git at
+  the same time as the agent can hit `index.lock`.
+- **Let the agent push.** The checkout's git config points push credentials at
+  paths inside the container, so `git push` from your machine fails. Reading,
+  editing and committing locally all work.
+- **File ownership.** Turns run as uid 1000. Docker Desktop and OrbStack map
+  that to you. On a Linux host, files belong to uid 1000, so give your user
+  write access if it's a different uid.
+- Don't remove `VESPER_WORKSPACES_DIR` while runs use their folders: the runner
+  then can't find those checkouts, and a chat starts over in a fresh one.
+
 ### Chat
 
 Select a project, open **Chat** in the sidebar, and choose **New chat**. Select
