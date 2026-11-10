@@ -112,11 +112,23 @@ echo ">> starting runner"
 stack_env "$TMP/vesper" runner >"$TMP/logs/runner.log" 2>&1 &
 PIDS+=($!)
 
+# The API serves only signed-in browsers. Sign in the way a person does (a
+# one-time code from the CLI, spent on a session cookie) and hand the cookie
+# to curl here and to Playwright's browser and request contexts.
+CODE="$(stack_env "$TMP/vesper" sign-in-link -code)"
+curl -fsS -o /dev/null -c "$TMP/session.jar" "$API_URL/api/v1/sign-in?code=$CODE"
+SESSION="$(awk '$6 == "vesper_session" { print $7 }' "$TMP/session.jar")"
+[ -n "$SESSION" ] || { echo "sign-in set no session cookie" >&2; exit 1; }
+SIGNED_IN=(-b "vesper_session=$SESSION")
+# Cookies ignore the port, so one cookie on 127.0.0.1 covers web and API.
+printf '{"cookies":[{"name":"vesper_session","value":"%s","domain":"127.0.0.1","path":"/","expires":-1,"httpOnly":true,"secure":false,"sameSite":"Strict"}],"origins":[]}\n' \
+  "$SESSION" >"$TMP/storage-state.json"
+
 # Chats are project-scoped and a fresh workspace has none.
-curl -fsS -X POST "$API_URL/api/v1/projects" -H 'content-type: application/json' \
+curl -fsS "${SIGNED_IN[@]}" -X POST "$API_URL/api/v1/projects" -H 'content-type: application/json' \
   -d '{"key":"E2E","name":"E2E stack","color":"#6366f1","repo_url":"git@github.com:example/e2e-stack.git","default_branch":"main"}' >/dev/null
 # ...and a main agent to chat with (SEED=false creates no agents).
-curl -fsS -X POST "$API_URL/api/v1/agents" -H 'content-type: application/json' \
+curl -fsS "${SIGNED_IN[@]}" -X POST "$API_URL/api/v1/agents" -H 'content-type: application/json' \
   -d '{"handle":"e2e-main","name":"E2E main","kind":"main"}' >/dev/null
 # Board flow (board-flow.spec.ts): one epic in E2E. There is no REST endpoint
 # that creates an epic (they come from accepted planning sessions or chat
@@ -129,7 +141,7 @@ psql_run() {
 }
 psql_run -c "INSERT INTO epics (workspace_id, project_id, name, objective, health)
   SELECT workspace_id, id, 'Board e2e epic', 'Verify the Kanban flow end to end', 'on_track' FROM projects WHERE key = 'E2E'" >/dev/null
-CATALOG="$(curl -fsS "$API_URL/api/v1/chat-models")"
+CATALOG="$(curl -fsS "${SIGNED_IN[@]}" "$API_URL/api/v1/chat-models")"
 for want in 'Claude Sonnet (fake)' 'GPT-5 Codex (fake)'; do
   grep -q "$want" <<<"$CATALOG" || { echo "chat-models catalog lacks '$want': $CATALOG" >&2; exit 1; }
 done
@@ -146,4 +158,4 @@ if [ -n "${E2E_STACK_SETUP_ONLY:-}" ]; then
   echo "setup only: Ctrl-C to tear down"; wait; exit 0
 fi
 cd "$WEB"
-E2E_STACK_BASE_URL="$WEB_URL" E2E_STACK_API_URL="$API_URL" npx playwright test -c playwright.stack.config.ts "$@"
+E2E_STACK_BASE_URL="$WEB_URL" E2E_STACK_API_URL="$API_URL" E2E_STACK_STORAGE_STATE="$TMP/storage-state.json" npx playwright test -c playwright.stack.config.ts "$@"

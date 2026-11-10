@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 
-.PHONY: help up down start setup login claude-login codex-login github-login stop-dev dev dev-infra api web web-deps runner stop-host-runners local-dev local-runner gen gen-check test lint build reset
+.PHONY: help up down start setup signin login claude-login codex-login github-login stop-dev dev dev-infra api web web-deps runner stop-host-runners local-dev local-runner gen gen-check test lint build reset
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -37,6 +37,10 @@ start: ## One command for everything: set up, sign in if needed, run the app and
 setup: ## Create .env with a SECRETS_KEY and build the agent image
 	@scripts/vesper-setup.sh setup
 
+signin: ## Print a one-time link that signs a browser in to Vesper (the full stack's API if it's up, else the dev database)
+	@if [ -n "$$(docker compose ps -q api 2>/dev/null)" ]; then docker compose exec -T api vesper sign-in-link; \
+	else cd server && WEB_URL=$${WEB_URL:-http://localhost:$(WEB_PORT)} go run ./cmd/vesper sign-in-link; fi
+
 login: claude-login codex-login github-login ## Sign Vesper in to Claude, Codex and GitHub (needs the API running)
 
 claude-login: ## Store a Claude plan login for agent containers (needs the API running)
@@ -65,7 +69,7 @@ dev: dev-infra stop-dev ## Infra in Docker, API (hot reload) + Next dev on the h
 	  wait
 
 api: ## Run the API (hot reload if air is installed: go install github.com/air-verse/air@latest)
-	cd server && export RUNNER_BACKEND=$(RUNNER_BACKEND) PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000}; \
+	cd server && export RUNNER_BACKEND=$(RUNNER_BACKEND) PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000} WEB_URL=$${WEB_URL:-http://localhost:$(WEB_PORT)}; \
 	  if command -v air >/dev/null; then air; else go run ./cmd/vesper serve; fi
 
 ifeq ($(RUNNER_BACKEND),docker)

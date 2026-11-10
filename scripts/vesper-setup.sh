@@ -6,6 +6,9 @@ cd "$(dirname "$0")/.."
 IMAGE=${RUNNER_IMAGE:-vesper/agent-base:latest}
 API_PORT=${API_PORT:-8000}
 API=http://localhost:$API_PORT/api/v1
+# The session cookie this script signs in with (see api_curl).
+SESSION_JAR=$(mktemp)
+trap 'rm -f "$SESSION_JAR"' EXIT
 
 need() {
   for tool in "$@"; do
@@ -29,12 +32,24 @@ open(".env", "w").write(s if sys.argv[1] in s else s + "\nSECRETS_KEY=" + sys.ar
   echo "vesper: agent image $IMAGE is ready"
 }
 
-has_secret() { curl -fsS "$API/secrets" | grep -q "\"name\":\"$1\""; }
+# curl for the person-facing API, which serves only signed-in browsers. The
+# script signs in the way a person does: a one-time code from the CLI (it
+# reads the dev database directly), spent on a session cookie.
+api_curl() {
+  if ! grep -q vesper_session "$SESSION_JAR"; then
+    code=$(cd server && go run ./cmd/vesper sign-in-link -code)
+    curl -fsS -o /dev/null -c "$SESSION_JAR" "$API/sign-in?code=$code"
+    grep -q vesper_session "$SESSION_JAR" || { echo "vesper: couldn't sign in to the API" >&2; return 1; }
+  fi
+  curl -b "$SESSION_JAR" "$@"
+}
+
+has_secret() { api_curl -fsS "$API/secrets" | grep -q "\"name\":\"$1\""; }
 
 # Reads the value on stdin so it never appears in a process list.
 store_secret() {
   python3 -c 'import json, sys; print(json.dumps({"name": sys.argv[1], "value": sys.stdin.read().strip()}))' "$1" |
-    curl -fsS -o /dev/null -X PUT -H 'Content-Type: application/json' --data-binary @- "$API/secrets"
+    api_curl -fsS -o /dev/null -X PUT -H 'Content-Type: application/json' --data-binary @- "$API/secrets"
   echo "vesper: stored $1"
 }
 
@@ -132,7 +147,7 @@ start() {
   setup
   make --no-print-directory dev-infra stop-dev
   # The runner is a container: stop it with everything else, not just its log tail.
-  trap 'docker compose -f docker-compose.dev.yml --profile runner stop runner >/dev/null 2>&1; kill 0' EXIT
+  trap 'docker compose -f docker-compose.dev.yml --profile runner stop runner >/dev/null 2>&1; rm -f "$SESSION_JAR"; kill 0' EXIT
   if [ -n "$(docker ps -q --filter label=com.docker.compose.project=lazyagents --filter label=com.docker.compose.service=runner)" ]; then
     warn "the full stack's runner (docker compose up) is also running." \
       "It serves a different database, so it won't take these runs, but it uses Docker resources." \
@@ -152,6 +167,8 @@ start() {
   make --no-print-directory web &
   make --no-print-directory runner &
   echo "vesper: running at http://localhost:${WEB_PORT:-3000}. Ctrl-C stops it all."
+  echo "vesper: to sign a browser in, open (once, within 15 minutes; make signin prints another):"
+  echo "  $(cd server && WEB_URL=http://localhost:${WEB_PORT:-3000} go run ./cmd/vesper sign-in-link)"
   wait
 }
 
