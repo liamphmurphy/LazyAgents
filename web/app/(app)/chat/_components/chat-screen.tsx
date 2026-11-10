@@ -11,7 +11,6 @@ import { codesInRepos } from "@/lib/persona-ui";
 import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton, TextArea } from "@/components/ui/primitives";
-import { TopBar } from "@/components/shell/topbar";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
@@ -200,7 +199,6 @@ export function ChatScreen({ id }: { id?: string }) {
   const resolving = !id && !fresh && (!chats.data || !!newest);
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar crumbs={[{ label: "Assistant" }]} />
       <div className="relative flex min-h-0 flex-1 max-md:flex-col">
           <div className="flex min-w-0 flex-1 flex-col">
             {(noHarness || conversation.error) && (

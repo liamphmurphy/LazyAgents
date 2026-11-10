@@ -513,7 +513,9 @@ test("a new chat has no agent picker and names no agent", async ({ page }) => {
   await newChat(page);
   expect(mock.created.at(-1)).toEqual({});
   await expect(page.getByTestId("chat-agent")).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByText("Assistant", { exact: true })).toBeVisible();
+  // The conversation header is the page's only header: no "Assistant" breadcrumb bar above it.
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   expect(mock.unhandled).toEqual([]);
 });
 

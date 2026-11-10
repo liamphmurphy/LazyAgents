@@ -50,6 +50,7 @@ import type { ChatVideo } from "@/lib/chat-video";
 import { CiteContext } from "@/components/domain/cite-marker";
 import { summaryRequestUrl } from "@/lib/chat-recommend";
 import { hostOf } from "@/lib/web-search";
+import { timelineTime } from "@/lib/format";
 import { EffortPicker, ModelPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
@@ -63,7 +64,6 @@ import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
 import { SecretsChip } from "./secrets-chip";
-import { HumanAvatar } from "@/components/domain/avatars";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
@@ -129,28 +129,25 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
   const author = m.persona ? personaLook(m.persona) : persona;
   return (
     <li ref={self} id={`msg-${m.id}`} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg flex scroll-mt-4 flex-col gap-1 rounded-xl transition-shadow", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-enter-key={m.id} data-enter={m.role} data-testid={`${m.role}-message`}>
-      {mine ? (
-        <span className="flex items-center gap-1.5 text-xs text-fg-tertiary">
-          {m.author?.avatar_url && <HumanAvatar name={m.author.name} initials={m.author.initials} color={m.author.avatar_color} src={m.author.avatar_url} size={18} label={false} />}
-          {m.author?.name ?? "You"}
-        </span>
-      ) : (
+      {/* Your messages need no name: the bubble on the right is you. */}
+      {mine ? null : (
         // Assistant replies carry the avatar of the persona that wrote them (the chat's host
         // when unset) and its name in its color, so a group chat reads like one.
         // The harness · model tag and usage live in the Activity tab, so the chat stays immersive.
-        <span className="flex items-center gap-1.5 text-xs text-fg-tertiary" data-testid="assistant-identity">
+        <span className="flex items-center gap-2 text-xs text-fg-tertiary" data-testid="assistant-identity">
           <PersonaAvatar persona={author} size={22} />
           <PersonaName persona={author} className="text-[13px]" />
+          <time dateTime={m.created_at}>{timelineTime(m.created_at)}</time>
         </span>
       )}
       {!mine && videos?.length ? <VideoCards chatId={chat.id} videos={videos} messageId={m.id} /> : null}
+      {/* Replies read as prose on the page; only real objects (canvases, runs, sources) get a card. */}
       <div
         className={cx(
-          "max-w-[min(720px,100%)] rounded-xl border px-3.5 py-2.5 text-[13.5px]",
-          // Replies share one column edge with what sits under them.
-          mine ? "border-border-strong bg-selected" : "w-full border-border bg-surface",
+          "type-chat max-w-[min(720px,100%)]",
+          mine ? "rounded-2xl bg-selected px-4 py-2.5" : "w-full text-fg-2",
         )}
-        style={mine || !m.persona ? undefined : { borderLeftColor: author.color, borderLeftWidth: 3 }}
+        data-testid={mine ? undefined : "reply-body"}
       >
         {editing ? (
           <form
@@ -672,10 +669,12 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
       <section aria-label={chatTitle(c)} className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
         <DropOverlay over={drop.over} />
         {/* Sized by its own width: a panel beside the chat can leave it narrow on a wide screen. */}
-        <div className="@container flex items-center gap-2 border-b border-border-subtle px-6 py-2.5">
+        {/* The page's only header: who you're talking to, the title, then the chat's context. */}
+        <div className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
+          {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
-          <h1 className="type-heading min-w-0 truncate">{chatTitle(c)}</h1>
-          {group ? (
+          <h1 className="min-w-0 truncate text-[14.5px] font-semibold">{chatTitle(c)}</h1>
+          {group && (
             <span
               className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden @max-[460px]:hidden"
               data-testid="chat-participants"
@@ -691,12 +690,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   </span>
                 ))}
               </span>
-            </span>
-          ) : (
-            <span className="flex flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden @max-[460px]:hidden">
-              <span className="sr-only">Persona: </span>
-              <PersonaAvatar persona={persona} size={16} />
-              <PersonaName persona={persona} />
             </span>
           )}
           {c.repo_url && (
@@ -813,7 +806,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             <>
             <VideoPlayers.Provider value={players}>
             <RecommendActions.Provider value={{ ask: askAuthor, disabled: running || locked || !!unavailable || c.archived, chatId: c.id, project: c.project, researchMore, canvas: canvasCards, nextMessage: (id) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md }}>
-            <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[860px] flex-col gap-4">
+            <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[768px] flex-col gap-6">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               {list.map((m, i) => (
                 <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} highlighted={highlight === m.id}
@@ -857,7 +850,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             </>
           )}
         </div>
-        <div className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5">
+        <div className="mx-auto flex w-full max-w-[816px] flex-col gap-2 px-6 pb-3">
           {c.state === "failed" && (
             <Banner
               tone="blocked"
