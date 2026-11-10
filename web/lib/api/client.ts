@@ -41,6 +41,25 @@ const baseUrl =
 
 export const api = createClient<paths>({ baseUrl });
 
+/** Where the browser goes when the API wants a signed-in browser. */
+export const SIGN_IN_PAGE = "/sign-in";
+
+/** Sends a browser the API refused (401) to the sign-in page. */
+function redirectIfSignedOut(response: Response) {
+  if (response.status === 401 && typeof window !== "undefined" && window.location.pathname !== SIGN_IN_PAGE) {
+    // A full load on purpose: this runs outside React, and the page needs
+    // nothing from the signed-out app.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign(SIGN_IN_PAGE);
+  }
+}
+
+api.use({
+  onResponse({ response }) {
+    redirectIfSignedOut(response);
+  },
+});
+
 /** Thrown by `unwrap` so TanStack Query sees failures. */
 export class ApiError extends Error {
   constructor(
@@ -69,6 +88,7 @@ export async function unwrap<T>(p: Promise<{ data?: T; error?: unknown; response
  */
 export async function postForm<T>(path: string, form: FormData, method: "POST" | "PUT" = "POST"): Promise<T> {
   const res = await fetch(`/api/v1${path}`, { method, body: form });
+  redirectIfSignedOut(res);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const e = body as Partial<Schemas["Error"]>;
