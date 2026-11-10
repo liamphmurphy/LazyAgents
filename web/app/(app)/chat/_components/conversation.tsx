@@ -23,7 +23,7 @@ import {
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
 import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflow-cards";
-import { ChatTicketRunTray } from "@/components/domain/dispatch-cards";
+import { ChatRunsPill, ChatTicketRunTray } from "@/components/domain/dispatch-cards";
 import { ActivityScene } from "./activity-scene";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
@@ -718,6 +718,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11.5px] text-fg-secondary">Archived</span>}
           {c.temporary && <TemporaryBadge />}
           <span className="flex-1" />
+          <ChatRunsPill chatId={c.id} />
           <span className="flex-none">
           <Tabs
             label="Chat view"
