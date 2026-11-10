@@ -161,6 +161,7 @@ func (r *Runner) tickPlaygrounds(ctx context.Context) {
 		return
 	}
 	for _, pg := range held {
+		r.refreshPlaygroundOpenAPI(pg)
 		if pg.Action != nil && h.claim(pg.ID) {
 			r.wg.Add(1)
 			go func() {
@@ -363,6 +364,61 @@ func (r *Runner) sweepPlaygrounds(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// refreshPlaygroundOpenAPI points a served playground's API tab at the
+// document its row now names (one the persona just inferred) without a
+// restart.
+func (r *Runner) refreshPlaygroundOpenAPI(pg store.Playground) {
+	port, ok := r.playgrounds.port(pg.ID)
+	if !ok {
+		return
+	}
+	live := r.playgrounds.gateway.Serving(port)
+	if live == nil || live.ID != pg.ID {
+		return
+	}
+	var spec playground.Spec
+	if json.Unmarshal(pg.Spec, &spec) != nil {
+		return
+	}
+	if ref := (playground.OpenAPIRef{Path: spec.OpenAPI, Inferred: spec.OpenAPIInferred, Commit: spec.OpenAPICommit}); ref != live.OpenAPI() {
+		live.SetOpenAPI(ref)
+	}
+}
+
+// turnPlayground puts a chat's turn on its running playground's network, so
+// the agent can use the app as the person does (curl, or a browser it
+// drives), through the gateway at PLAYGROUND_URL. The token admits it, and
+// is redacted from the run's events like its other secrets; the person can
+// open the playground anyway, so a reply that quotes it gives nothing away.
+func (r *Runner) turnPlayground(ctx context.Context, c runCtx, env, sensitive map[string]string) []string {
+	pb, ok := r.playgroundBackend()
+	if !ok || c.run.Purpose != "chat" {
+		return nil
+	}
+	pgs, err := r.q().PlaygroundsForRun(ctx, &c.run.ID)
+	if err != nil {
+		r.Log.Warn("playgrounds: for the turn", "run", c.run.ID, "err", err)
+		return nil
+	}
+	for _, pg := range pgs {
+		port, held := r.playgrounds.port(pg.ID)
+		if pg.State != "running" || !held {
+			continue
+		}
+		live := r.playgrounds.gateway.Serving(port)
+		if live == nil || live.ID != pg.ID {
+			continue
+		}
+		base := fmt.Sprintf("http://%s:%d", PlaygroundHost, port)
+		env["PLAYGROUND_URL"] = base
+		env["PLAYGROUND_TOKEN"] = live.Token
+		env["PLAYGROUND_ENTER_URL"] = base + playground.ReservedPrefix + "/enter?token=" + live.Token
+		sensitive["PLAYGROUND_TOKEN"] = live.Token
+		return []string{pb.PlaygroundNetwork(pg.ID)}
+	}
+	return nil
 }
 
 func (r *Runner) playgroundIdleTTL() time.Duration {
