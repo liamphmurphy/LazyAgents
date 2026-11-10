@@ -11,7 +11,7 @@ const (
 	DefaultHandoffChars = 24000
 	// handoffRows bounds the history query; older rows are only counted.
 	handoffRows = 40
-	// handoffRowChars clips one message body in SQL.
+	// handoffRowChars clips one message body once its artifacts are compacted.
 	handoffRowChars = 8000
 )
 
@@ -61,12 +61,15 @@ const relayFooter = "---\n"
 // history is newest first (as queried); total is the full count of prior
 // messages. Header and history together stay within budget characters; the
 // newest messages win and the header reports how many were omitted. The new
-// message follows the footer, outside the budget.
-func RenderHandoff(history []HandoffMessage, total int, budget int, body string) string {
-	return renderHandoff(history, total, budget, handoffFooter, body)
+// message follows the footer, outside the budget. The newest SVG and app
+// blocks, the chat's canvases and its image prompts follow the history, also
+// outside it.
+func RenderHandoff(history []HandoffMessage, total int, budget int, hc HandoffContext, body string) string {
+	return renderHandoff(history, total, budget, hc, handoffFooter, body)
 }
 
-func renderHandoff(history []HandoffMessage, total int, budget int, footer, body string) string {
+func renderHandoff(history []HandoffMessage, total int, budget int, hc HandoffContext, footer, body string) string {
+	history, pinned := compactArtifacts(history)
 	if budget <= 0 {
 		budget = DefaultHandoffChars
 	}
@@ -99,6 +102,7 @@ func renderHandoff(history []HandoffMessage, total int, budget int, footer, body
 	for i := len(kept) - 1; i >= 0; i-- {
 		b.WriteString(kept[i])
 	}
+	b.WriteString(renderArtifacts(pinned, hc))
 	b.WriteString(footer)
 	b.WriteString(body)
 	return b.String()

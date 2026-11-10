@@ -54,3 +54,10 @@ SELECT * FROM run_turns WHERE run_id = $1 AND status = 'running' ORDER BY seq DE
 -- granting the step's tool allowances.
 UPDATE chat_image_jobs SET state = 'failed', error = 'interrupted', failure_kind = 'error', finished_at = now()
 WHERE run_id = $1 AND state = 'running';
+
+-- name: RecentChatImagePrompts :many
+-- The prompts behind a chat's newest generated images, newest first, so a
+-- fresh segment can revise an image it made in an earlier one.
+SELECT prompt, created_at FROM chat_image_jobs
+WHERE chat_id = $1 AND state = 'done'
+ORDER BY created_at DESC, id DESC LIMIT sqlc.arg(row_limit);
