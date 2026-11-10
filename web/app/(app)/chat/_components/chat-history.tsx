@@ -224,6 +224,12 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
             <span className="flex min-w-0 flex-1 items-center gap-2">
               {chat.state === "running" && <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-done" />}
               <span className="truncate">{label}</span>
+              {chat.temporary && (
+                <span title="Temporary chat: deleted after a day without messages" className="flex-none text-fg-tertiary">
+                  <Icon name="clock" size={12} />
+                  <span className="sr-only"> (temporary)</span>
+                </span>
+              )}
               {chat.state === "running" && <span className="sr-only"> (running)</span>}
               {chat.state === "failed" && <span className="text-xs text-pill-blocked-fg">Failed</span>}
             </span>

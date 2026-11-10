@@ -246,7 +246,8 @@ export type ChatStatusKind =
   | "runs"
   | "workflow"
   | "memory"
-  | "memory-save";
+  | "memory-save"
+  | "chat-history";
 export type ChatStatusInfo = { kind: ChatStatusKind; phrase: string };
 
 const status = (kind: ChatStatusKind, phrase: string): ChatStatusInfo => ({ kind, phrase });
@@ -339,6 +340,10 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("memory-save", "making a note");
     case "forget_memory":
       return status("memory", "forgetting that");
+    case "search_chats":
+      return status("chat-history", "looking back through your past chats");
+    case "read_chat":
+      return status("chat-history", "rereading an earlier chat");
     case "set_chat_title":
       return status("thinking", "naming the conversation");
     case "WebSearch":

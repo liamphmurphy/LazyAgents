@@ -305,6 +305,7 @@ type ChatSession struct {
 	WorkBranches       []string
 	CommitEmail        *string
 	SecretIds          []uuid.UUID
+	Temporary          bool
 }
 
 type ChatSpace struct {

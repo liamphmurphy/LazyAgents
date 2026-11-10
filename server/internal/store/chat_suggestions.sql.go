@@ -75,7 +75,7 @@ const nextChatSuggestionsDue = `-- name: NextChatSuggestionsDue :one
 SELECT c.workspace_id, c.created_by, c.project_id, c.harness, c.model
 FROM chat_sessions c
 LEFT JOIN chat_suggestions s ON s.workspace_id = c.workspace_id AND s.user_id = c.created_by
-WHERE NOT c.hidden AND NOT c.archived
+WHERE NOT c.hidden AND NOT c.archived AND NOT c.temporary
   AND c.last_message_at < $1
   AND (s.generated_at IS NULL OR c.last_message_at > s.generated_at)
   AND (s.attempted_at IS NULL OR s.attempted_at < $2)

@@ -225,6 +225,10 @@ func chatSuggestionBackground(ctx context.Context, q *store.Queries, due store.N
 		return "", err
 	}
 	for _, c := range chats {
+		if c.Temporary {
+			// Nothing said in a temporary chat outlives it.
+			continue
+		}
 		messages, err := q.ListRecentChatMessages(ctx, store.ListRecentChatMessagesParams{MaxChars: chatSuggestionMessageSize, SessionID: c.ID, RowLimit: chatSuggestionMessages * 2})
 		if err != nil {
 			return "", err

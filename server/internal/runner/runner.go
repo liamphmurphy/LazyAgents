@@ -542,6 +542,7 @@ func (r *Runner) cleanup(ctx context.Context, runID uuid.UUID) {
 // between turns.
 func (r *Runner) Sweep(ctx context.Context) {
 	defer r.sweepChatAttachments(ctx)
+	defer r.sweepTemporaryChats(ctx)
 	defer r.sweepChatVideos(ctx)
 	defer r.sweepLinkPreviews(ctx)
 	defer r.advanceLearning(ctx)
@@ -561,6 +562,33 @@ func (r *Runner) Sweep(ctx context.Context) {
 			continue
 		}
 		r.cleanup(ctx, id)
+	}
+}
+
+// TemporaryChatTTL is how long a temporary chat may sit idle before the sweep
+// deletes it.
+const TemporaryChatTTL = 24 * time.Hour
+
+// sweepTemporaryChats deletes a batch of temporary chats idle for
+// TemporaryChatTTL. Deleting goes through runs.Service so a chat is removed
+// exactly as the person deleting it would.
+func (r *Runner) sweepTemporaryChats(ctx context.Context) {
+	if r.Scheduled == nil {
+		return
+	}
+	cutoff := time.Now().Add(-TemporaryChatTTL)
+	rows, err := r.q().ExpiredTemporaryChats(ctx, store.ExpiredTemporaryChatsParams{Cutoff: &cutoff, RowLimit: 50})
+	if err != nil {
+		r.Log.Warn("sweep temporary chats", "err", err)
+		return
+	}
+	for _, row := range rows {
+		if ctx.Err() != nil {
+			return
+		}
+		if _, err := r.Scheduled.DeleteIdleTemporaryChat(ctx, row.WorkspaceID, row.ID, cutoff); err != nil {
+			r.Log.Warn("delete temporary chat", "chat", row.ID, "err", err)
+		}
 	}
 }
 

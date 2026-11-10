@@ -1,7 +1,7 @@
 "use client";
 
 import { useCanvasPanel } from "@/lib/use-canvas-panel";
-import { ResearchToggle } from "./reply-tools";
+import { ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useBootstrap, useChat, useChats, useStartChat } from "@/lib/api/hooks";
@@ -54,6 +54,7 @@ function Welcome({ disabled }: { disabled: boolean }) {
   const managePersonas = useOpenPersonaManager();
   const [text, setText] = useState("");
   const [research, setResearch] = useState(false);
+  const [temporary, setTemporary] = useState(false);
   // A "Start chat" link with no chat yet (?attach=…) lands here; its chips go with the first message.
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
   const files = useAttachments();
@@ -67,7 +68,7 @@ function Welcome({ disabled }: { disabled: boolean }) {
     if (!body || locked || files.pending || askCommitEmail) return;
     const context_refs = toContextRefs(chips);
     start.mutate(
-      { persona_id: personaId, ...(repo ? { repo_url: repo, ...(commitEmail ? { commit_email: commitEmail } : {}) } : {}), message: { body, ...(research ? { research: true } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
+      { persona_id: personaId, ...(temporary ? { temporary } : {}), ...(repo ? { repo_url: repo, ...(commitEmail ? { commit_email: commitEmail } : {}) } : {}), message: { body, ...(research ? { research: true } : {}), ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) } },
       { onSuccess: (c) => router.push(`/chat/${c.id}`) },
     );
   }
@@ -143,6 +144,7 @@ function Welcome({ disabled }: { disabled: boolean }) {
           {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
           <AttachButton onFiles={files.add} disabled={locked} />
           <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
+          <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
           <span className="flex-1" />
           <Button
             type="submit"

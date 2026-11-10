@@ -6686,6 +6686,7 @@ components:
           description: "The branches the coding persona pushed in this chat, oldest first (feat/..., fix/..., chore/...). It makes them as changes are asked for, so a new chat has none. Absent when the chat has no repository."
         commit_email: { type: string, description: "The address picked for this chat's commits. Absent until one is picked, or once it is no longer one of the creator's emails; commits then use their primary email." }
         archived: { type: boolean }
+        temporary: { type: boolean, description: "A temporary chat: it doesn't use the person's memory or past chats, stays out of search, and is deleted after a day without messages" }
         revision: { type: integer }
         message_count: { type: integer }
         created_at: { type: string, format: date-time }
@@ -6705,6 +6706,7 @@ components:
         repo_url: { type: string, description: "One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise." }
         commit_email: { type: string, description: "One of the caller's emails for the chat's commits. Only with a repository; 422 otherwise." }
         hidden: { type: boolean, description: "Leave the chat out of chat lists, search and the dock; it stays reachable by id. For a chat that lives behind another screen, like the workflow editor. Fixed for the chat's life." }
+        temporary: { type: boolean, description: "Start a temporary chat: its persona neither reads nor writes the caller's memory and can't search their past chats; the chat stays out of search and suggestions and is deleted after a day without messages. Fixed for the chat's life." }
         space_id: { type: string, format: uuid, description: "Start the chat in one of the caller's spaces. Its default persona, project and connectors apply unless persona_id or project is given. 422 for an unknown space." }
         message: { $ref: "#/components/schemas/NewChatMessage" }
     ChatPatch:
