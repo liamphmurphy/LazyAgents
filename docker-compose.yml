@@ -93,6 +93,11 @@ services:
       # through this runner's nix-daemon. One daemon per store: the stacks
       # must not share it.
       RUNNER_NIX_VOLUME: lazyagents-nix
+      # Chats' playgrounds, one per port, on Vesper's host. The browser sends
+      # them the Vesper session (same host), which is how the runner admits it.
+      RUNNER_PLAYGROUND_PORTS: ${PLAYGROUND_PORTS:-8090-8094}
+    ports:
+      - "127.0.0.1:${PLAYGROUND_PORTS:-8090-8094}:${PLAYGROUND_PORTS:-8090-8094}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - docker-proxy:/run/lazyagents-docker
