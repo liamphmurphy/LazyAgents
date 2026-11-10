@@ -267,13 +267,13 @@ func ChatAgentsMDWithGroup(spec agentdef.Resolved, contextFiles []string, projec
 func ChatAgentsMDInSpace(spec agentdef.Resolved, contextFiles []string, project, memoryIndex string, persona *Persona, group, space string) []byte {
 	var b strings.Builder
 	if project == "" {
-		b.WriteString(sectionStart + "\n# Vesper chat\n\nNo project is attached to this chat, so tickets, epics, runs and project pages aren't available. If the person wants project work, ask them to attach a project from the chat header.\n\n")
+		b.WriteString(sectionStart + "\n# Vesper chat\n\nThis chat has no default project. To create a ticket or epic, pass its project key, and ask the person which project if it isn't clear.\n\n")
 	} else {
-		b.WriteString(sectionStart + "\n# Vesper chat: project " + project + "\n\n")
+		b.WriteString(sectionStart + "\n# Vesper chat: default project " + project + "\n\nNew tickets and epics go to " + project + " unless you pass another project key.\n\n")
 	}
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
-	b.WriteString("Use list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks to look up project context. Cite sources with [[…]].\n")
-	b.WriteString("Use create_ticket, create_epic and list_epics to manage this project when the person asks. Return identifiers for created items. Do not call claim_ticket, complete_run or propose_tickets. ")
+	b.WriteString("Use list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks to look things up in any project; list_runs, list_epics and search_knowledge take a project key to narrow. Cite sources with [[…]].\n")
+	b.WriteString("Use create_ticket and create_epic when the person asks. Return identifiers for created items. Do not call claim_ticket, complete_run or propose_tickets. ")
 	switch {
 	case allowed(spec, "repo:write"):
 		// A persona that can code (runs.ChatSpec): the instructions below say where.

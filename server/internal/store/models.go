@@ -348,6 +348,13 @@ type ChatSuggestion struct {
 	AttemptedAt time.Time
 }
 
+type ChatTicketRun struct {
+	ChatID    uuid.UUID
+	RunID     uuid.UUID
+	MessageID *uuid.UUID
+	CreatedAt time.Time
+}
+
 type ChatVideoFrame struct {
 	JobID       uuid.UUID
 	Kind        string

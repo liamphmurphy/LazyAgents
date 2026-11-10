@@ -22,7 +22,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
-// A chat run's token reaches context and tracker tools, and only for its own project.
+// A chat run's token reaches context and tracker tools across every project.
 func TestChatRunToolAuthorization(t *testing.T) {
 	pool := testdb.New(t)
 	ctx := context.Background()
@@ -176,6 +176,24 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	if code, out := call(token, "create_ticket", map[string]any{"title": "Wrong project", "epic_id": foreignEpic.ID}); code != 422 {
 		t.Fatalf("foreign epic = %d %v", code, out)
 	}
+	// Naming a project or an agent overrides the default and assigns the ticket.
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Mobile fix", "project": "mob", "agent": "@atlas"}); code != 200 || !strings.HasPrefix(fmt.Sprint(out["ticket"]), "MOB-") {
+		t.Fatalf("create_ticket in MOB = %d %v", code, out)
+	} else {
+		mobFix, err := tracker.Get(ctx, q, ws, fmt.Sprint(out["ticket"]))
+		if err != nil || mobFix.AssigneeAgentID == nil || *mobFix.AssigneeAgentID != atlas.ID {
+			t.Fatalf("assignee = %+v, %v", mobFix.AssigneeAgentID, err)
+		}
+	}
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Self-assigned", "agent": assistant.Handle}); code != 422 || !strings.Contains(fmt.Sprint(out), "can't take tickets") {
+		t.Fatalf("assign to the assistant = %d %v", code, out)
+	}
+	if code, out := call(token, "create_ticket", map[string]any{"title": "Nowhere", "project": "NOPE"}); code != 422 {
+		t.Fatalf("unknown project = %d %v", code, out)
+	}
+	if code, out := call(token, "create_epic", map[string]any{"name": "Mobile epic", "project": "MOB"}); code != 200 || out["project"] != "MOB" {
+		t.Fatalf("create_epic in MOB = %d %v", code, out)
+	}
 	if code, out := call(token, "propose_workflow_edit", map[string]any{"summary": "Add a step", "name": "New", "ops": []any{}}); code != 409 || !strings.Contains(fmt.Sprint(out), "can't create workflows") {
 		t.Fatalf("propose_workflow_edit without the capability = %d %v", code, out)
 	}
@@ -210,7 +228,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		t.Fatalf("chat whoami = %v", who)
 	}
 
-	// Search stays in the chat's project plus workspace-wide pages.
+	// Search covers every project; a project argument narrows it.
 	titles := func(args map[string]any) string {
 		code, out := call(token, "search_knowledge", args)
 		if code != 200 {
@@ -224,33 +242,30 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		return strings.Join(ts, "|")
 	}
 	got := titles(map[string]any{"q": word})
-	if !strings.Contains(got, "Pay "+word) || !strings.Contains(got, "Global "+word) || strings.Contains(got, "Mob") {
-		t.Fatalf("scoped search = %s", got)
+	if !strings.Contains(got, "Pay "+word) || !strings.Contains(got, "Global "+word) || !strings.Contains(got, "Mob "+word) {
+		t.Fatalf("workspace search = %s", got)
 	}
-	if narrowed := titles(map[string]any{"q": word, "project": "pay"}); narrowed != got {
-		t.Fatalf("explicit own project = %s, want %s", narrowed, got)
+	if narrowed := titles(map[string]any{"q": word, "project": "pay"}); !strings.Contains(narrowed, "Pay "+word) || strings.Contains(narrowed, "Mob") {
+		t.Fatalf("search narrowed to PAY = %s", narrowed)
 	}
-	if code, out := call(token, "search_knowledge", map[string]any{"q": word, "project": "MOB"}); code != 422 {
-		t.Fatalf("foreign project search = %d %v", code, out)
+	if code, out := call(token, "search_knowledge", map[string]any{"q": word, "project": "NOPE"}); code != 422 {
+		t.Fatalf("unknown project search = %d %v", code, out)
 	}
 
-	// Foreign content looks like it doesn't exist.
-	if code, out := call(token, "get_ticket", map[string]any{"ticket": mobTicket}); code != 422 || out["message"] != "ticket: no ticket "+mobTicket {
-		t.Fatalf("foreign ticket = %d %v", code, out)
+	// Another project's content reads like the chat's own.
+	if code, out := call(token, "get_ticket", map[string]any{"ticket": mobTicket}); code != 200 || out["key"] != mobTicket {
+		t.Fatalf("other project's ticket = %d %v", code, out)
 	}
-	if code, out := call(token, "read_artifact", map[string]any{"artifact": mobDoc.ID.String()}); code != 422 || !strings.Contains(fmt.Sprint(out["message"]), "no artifact") {
-		t.Fatalf("foreign artifact = %d %v", code, out)
+	if code, out := call(token, "read_artifact", map[string]any{"artifact": mobDoc.ID.String()}); code != 200 {
+		t.Fatalf("other project's artifact = %d %v", code, out)
 	}
-	if code, out := call(token, "read_page", map[string]any{"ref": mobDoc.ID.String()}); code != 422 {
-		t.Fatalf("foreign page = %d %v", code, out)
-	}
-	if code, out := call(token, "get_backlinks", map[string]any{"ref": mobDoc.ID.String()}); code != 422 {
-		t.Fatalf("foreign backlinks = %d %v", code, out)
+	if code, out := call(token, "read_page", map[string]any{"ref": mobDoc.ID.String()}); code != 200 {
+		t.Fatalf("other project's page = %d %v", code, out)
 	}
 	_, bl := call(token, "get_backlinks", map[string]any{"ref": payDoc.ID.String()})
 	linked := fmt.Sprint(bl["linked_from"])
-	if !strings.Contains(linked, "Pay links") || strings.Contains(linked, "Mob links") {
-		t.Fatalf("backlinks leak across projects: %v", bl)
+	if !strings.Contains(linked, "Pay links") || !strings.Contains(linked, "Mob links") {
+		t.Fatalf("backlinks from every project: %v", bl)
 	}
 
 	// Reads are attributed to the chat run, with the section read.
@@ -265,7 +280,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		t.Fatalf("reads attributed to chat run = %d, %v", n, err)
 	}
 
-	// Runs: only ticket runs of the chat's project; delegated runs show under their parent.
+	// Runs: ticket runs of every project, or one; delegated runs show under their parent.
 	payTicket, err := tracker.Get(ctx, q, ws, "PAY-214")
 	if err != nil {
 		t.Fatal(err)
@@ -307,7 +322,10 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		t.Fatalf("finished runs = %v", ids)
 	}
 	for _, ids := range [][]string{runIDs(map[string]any{"state": "all"}), runIDs(map[string]any{"state": "all", "agent": "atlas"})} {
-		for _, hidden := range []uuid.UUID{child.ID, mobRun.ID, planRun.ID, runID} {
+		if !slices.Contains(ids, mobRun.ID.String()) {
+			t.Fatalf("list_runs misses another project's run: %v", ids)
+		}
+		for _, hidden := range []uuid.UUID{child.ID, planRun.ID, runID} {
 			if slices.Contains(ids, hidden.String()) {
 				t.Fatalf("list_runs leaks %s: %v", hidden, ids)
 			}
@@ -316,14 +334,20 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	if ids := runIDs(map[string]any{"state": "all", "ticket": "pay-214"}); !slices.Contains(ids, child.ID.String()) {
 		t.Fatalf("a ticket's runs include delegated ones: %v", ids)
 	}
-	if code, out := call(token, "list_runs", map[string]any{"ticket": mobTicket}); code != 422 {
-		t.Fatalf("foreign ticket runs = %d %v", code, out)
+	if ids := runIDs(map[string]any{"state": "all", "project": "pay"}); !slices.Contains(ids, payRun.ID.String()) || slices.Contains(ids, mobRun.ID.String()) {
+		t.Fatalf("runs narrowed to PAY = %v", ids)
+	}
+	if ids := runIDs(map[string]any{"ticket": mobTicket}); !slices.Contains(ids, mobRun.ID.String()) {
+		t.Fatalf("other project's ticket runs = %v", ids)
 	}
 	code, got2 := call(token, "get_run", map[string]any{"id": payRun.ID.String()})
 	if code != 200 || got2["run"].(map[string]any)["ticket"] != "PAY-214" || len(got2["delegated_runs"].([]any)) != 1 {
 		t.Fatalf("get_run = %d %v", code, got2)
 	}
-	for _, hidden := range []uuid.UUID{mobRun.ID, planRun.ID, runID} {
+	if code, out := call(token, "get_run", map[string]any{"id": mobRun.ID.String()}); code != 200 {
+		t.Fatalf("get_run other project = %d %v", code, out)
+	}
+	for _, hidden := range []uuid.UUID{planRun.ID, runID} {
 		if code, out := call(token, "get_run", map[string]any{"id": hidden.String()}); code != 422 {
 			t.Fatalf("get_run %s = %d %v", hidden, code, out)
 		}

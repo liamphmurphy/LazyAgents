@@ -9,8 +9,8 @@ import { Icon } from "@/components/ui/icon";
 const item = "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-hover";
 
 /**
- * Gives this chat access to one project's tickets, epics and pages, or to none.
- * dashed: the "+ Project" chip among a space chat's context chips.
+ * The chat's default project: where new tickets and epics go unless the persona names another.
+ * The chat reads every project either way. dashed: the chip among a space chat's context chips.
  */
 export function ChatProjectPicker({ chat, disabled, dashed }: { chat: { id: string; project?: string; revision: number; archived: boolean }; disabled: boolean; dashed?: boolean }) {
   const boot = useBootstrap();
@@ -28,8 +28,8 @@ export function ChatProjectPicker({ chat, disabled, dashed }: { chat: { id: stri
           type="button"
           data-testid="chat-project"
           disabled={locked}
-          aria-label={current ? `Project access: ${current.name}` : "Attach a project"}
-          title={update.isError ? "Couldn’t change the project. Try again." : current ? "This chat can use this project" : "Give this chat access to a project"}
+          aria-label={current ? `Default project: ${current.name}` : "Set a default project"}
+          title={update.isError ? "Couldn’t change the project. Try again." : current ? "New tickets go here unless you say otherwise" : "Pick where new tickets go. The chat reads every project either way."}
           className={cx(
             "flex min-w-0 flex-none items-center gap-1.5 rounded-full border text-xs text-fg-secondary hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60",
             dashed ? "h-[26px] px-3" : "border-border bg-surface px-2.5 py-0.5",
@@ -38,14 +38,14 @@ export function ChatProjectPicker({ chat, disabled, dashed }: { chat: { id: stri
           )}
         >
           {current ? <span aria-hidden className="size-2 flex-none rounded-[3px]" style={{ background: current.color }} /> : <Icon name="plus" size={12} className="flex-none" />}
-          <span className="truncate">{current?.name ?? (dashed ? "Project" : "Add project")}</span>
+          <span className="truncate">{current?.name ?? "Default project"}</span>
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-[240px]")}>
           <DropdownMenu.RadioGroup value={chat.project ?? ""} onValueChange={pick}>
             <DropdownMenu.RadioItem value="" className={item}>
-              <span className="flex-1 text-fg-secondary">No project</span>
+              <span className="flex-1 text-fg-secondary">No default</span>
               <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
             </DropdownMenu.RadioItem>
             <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />

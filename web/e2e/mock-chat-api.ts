@@ -275,6 +275,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "dispatch:" offers to start WEB-3's run.
+    if (prompt.startsWith("dispatch:")) {
+      add(c, "assistant", "Filed WEB-3 and assigned it to @pike.\n\n```dispatch\nWEB-3\n```", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     // "research:" replies with a plan to approve.
     if (prompt.startsWith("research:")) {
       add(c, "assistant", "Here's a plan.\n\n```research-plan\nLocal TTS\n- Quality | Which sounds best?\n- Latency | How fast is it?\n```", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
@@ -428,6 +434,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return route.fulfill({ status: 200, contentType: "image/png", body: png });
     }
     if (/^\/chats\/[^/]+\/research$/.test(path) && method === "GET") return json({ jobs: [] });
+    if (/^\/chats\/[^/]+\/runs$/.test(path) && method === "GET") return json({ runs: [] });
     if (path === "/persona-dock") return json({ personas: [], harnesses: [] });
     if (path === "/workflows" && method === "GET") return json({ workflows: [] });
     if (path === "/connectors" && method === "GET") return json({ connectors });

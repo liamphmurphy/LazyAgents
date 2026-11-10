@@ -52,7 +52,7 @@ func TestChatPersonaAppliesPerTurn(t *testing.T) {
 		return string(md)
 	}
 	md := agentsMD()
-	for _, want := range []string{"Vesper chat: project PAY", "## Persona", "In this conversation you are Writing coach.", "Write in a formal, professional register", "Sign off as Coach."} {
+	for _, want := range []string{"Vesper chat: default project PAY", "## Persona", "In this conversation you are Writing coach.", "Write in a formal, professional register", "Sign off as Coach."} {
 		if !strings.Contains(md, want) {
 			t.Errorf("first turn missing %q in %s", want, md)
 		}

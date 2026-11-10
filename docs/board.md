@@ -84,9 +84,9 @@ an unmanaged session uses an agent token from the agent's page.
 | `get_ticket` | Returns `status`, `revision`, `estimate_points` and `estimate {points, rationale, by, at}`. When the ticket is in an epic, also `epic {id, name, status, points_total, points_done, tickets_open, criteria [{n, text, done}]}` | Every profile that has it |
 | `estimate_ticket` | `{ticket, points, rationale}`. Points must be on the scale; a rationale (up to 2000 characters) is required. Works on the run's own ticket or any other ticket in the same project | The main agent of a live ticket run (not chat, planning or delegated runs) |
 | `check_epic_criterion` | `{epic, n, done=true}`. `epic` is the id or exact name from `get_ticket`, `n` the criterion number. `done: false` unticks it | The main agent of a live ticket run whose `tracker:epics` scope is **allowed** (default denied; `requires_approval` counts as denied) |
-| `create_ticket` | Optional `points` and `estimate_rationale` on the new ticket | Lead and chat runs |
+| `create_ticket` | Optional `points` and `estimate_rationale` on the new ticket. Chats also take `project` (default: the chat's default project) and `agent`, a main agent's handle to assign it to; a run's follow-ups stay in its project, unassigned | Lead and chat runs |
 | `propose_tickets` | Each draft can carry `points` and `estimate_rationale`. On acceptance the estimate is credited to the planning agent, unless the reviewer changed it first | Planning runs |
-| `create_epic` | Creates an epic in the chat's project | Chat runs |
+| `create_epic` | Creates an epic in `project`, or the chat's default project | Chat runs |
 
 No MCP tool sets ticket or epic status directly. A typical lead run: call
 `claim_ticket` (which returns the ticket, including the epic's criteria), and

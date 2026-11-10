@@ -2419,6 +2419,42 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/WorkflowRun" }
 
+  /chats/{id}/runs:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listChatTicketRuns
+      summary: The ticket runs this chat started, oldest first
+      tags: [chats]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatTicketRuns" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: startChatTicketRun
+      summary: Start a ticket's run from a chat, as the signed-in person
+      description: |
+        The persona offers a ```dispatch card; nothing runs until the person
+        presses Start here. Runs the same checks as dispatching from the
+        ticket (an assigned main agent, no live run, no hard blockers) and
+        records the person as the dispatcher. The chat then follows the run.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatTicketRunStart" }
+      responses:
+        "201":
+          description: Started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatTicketRun" }
+        default: { $ref: "#/components/responses/Error" }
+
   /library:
     get:
       operationId: listLibraryItems
@@ -6643,6 +6679,35 @@ components:
         workflow_id: { type: string, format: uuid }
         input: { type: string }
         message_id: { type: string, format: uuid, description: "The reply that proposed this run; omit for /workflow" }
+    ChatTicketRunStart:
+      type: object
+      required: [ticket]
+      properties:
+        ticket: { type: string, description: "Ticket key, e.g. PAY-31" }
+        message_id: { type: string, format: uuid, description: "The reply whose dispatch card was pressed" }
+    ChatTicketRun:
+      type: object
+      required: [run_id, ticket, ticket_title, agent, state, started_at, cost_usd, steps_total, steps_done]
+      properties:
+        run_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid, description: The reply whose card started it }
+        ticket: { type: string }
+        ticket_title: { type: string }
+        agent: { type: string, description: The assigned agent's handle }
+        state: { type: string, description: "Run state: queued, starting, running, waiting, paused, blocked, completed, failed or cancelled" }
+        wait_reason: { type: string }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        cost_usd: { type: number }
+        steps_total: { type: integer, description: Steps in the agent's plan; 0 until it posts one }
+        steps_done: { type: integer }
+        current_step: { type: string, description: The first plan step not done yet }
+        pr_url: { type: string, description: "The ticket's pull request, once recorded" }
+    ChatTicketRuns:
+      type: object
+      required: [runs]
+      properties:
+        runs: { type: array, items: { $ref: "#/components/schemas/ChatTicketRun" } }
     WorkflowGateDecision:
       type: object
       required: [node_id, decision]

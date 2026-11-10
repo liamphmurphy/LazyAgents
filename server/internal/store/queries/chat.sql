@@ -131,15 +131,6 @@ WHERE r.run_id = sqlc.arg(run_id) AND r.read_at >= sqlc.arg(since)
 GROUP BY a.id, v.id, s.anchor
 ORDER BY min(r.read_at), a.id, s.anchor NULLS FIRST;
 
--- name: LinkSourceInProject :one
--- Whether a backlink source (artifact, ticket or comment) is visible to a chat on this project:
--- project-less artifacts are workspace-wide.
-SELECT CASE sqlc.arg(source_kind)::text
-  WHEN 'artifact' THEN EXISTS (SELECT 1 FROM artifacts x WHERE x.id = sqlc.arg(source_id) AND (x.project_id IS NULL OR x.project_id = sqlc.arg(project_id)))
-  WHEN 'ticket' THEN EXISTS (SELECT 1 FROM tickets x WHERE x.id = sqlc.arg(source_id) AND x.project_id = sqlc.arg(project_id))
-  WHEN 'comment' THEN EXISTS (SELECT 1 FROM comments c JOIN tickets t ON t.id = c.ticket_id WHERE c.id = sqlc.arg(source_id) AND t.project_id = sqlc.arg(project_id))
-  ELSE false END::bool AS visible;
-
 -- name: SetChatSelection :one
 -- Stores the harness/model/effort the next segment turn should use. Callers
 -- validate them and hold the chat row lock; the runner applies them on the next message.
@@ -448,3 +439,23 @@ JOIN chat_sessions c ON c.id = h.session_id
 LEFT JOIN projects pr ON pr.id = c.project_id
 LEFT JOIN personas p ON p.id = COALESCE(h.persona_id, c.persona_id)
 ORDER BY h.rank DESC, h.created_at DESC;
+
+-- name: AddChatTicketRun :exec
+INSERT INTO chat_ticket_runs (chat_id, run_id, message_id) VALUES ($1, $2, $3);
+
+-- name: ChatTicketRunForMessage :one
+SELECT * FROM chat_ticket_runs WHERE message_id = $1;
+
+-- name: ListChatTicketRuns :many
+-- The ticket runs a chat started, oldest first, with what the tray shows.
+SELECT r.id AS run_id, ctr.message_id, r.state, r.wait_reason, r.started_at, r.ended_at, r.cost_usd_micros,
+  t.key AS ticket_key, t.title AS ticket_title, t.pr_url, a.handle AS agent_handle,
+  (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id)::int AS steps_total,
+  (SELECT count(*) FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state = 'done')::int AS steps_done,
+  COALESCE((SELECT ps.text FROM plan_steps ps WHERE ps.run_id = r.id AND ps.state <> 'done' ORDER BY ps.position LIMIT 1), '')::text AS current_step
+FROM chat_ticket_runs ctr
+JOIN runs r ON r.id = ctr.run_id
+JOIN tickets t ON t.id = r.ticket_id
+JOIN agents a ON a.id = r.agent_id
+WHERE ctr.chat_id = $1
+ORDER BY ctr.created_at, r.id;

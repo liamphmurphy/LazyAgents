@@ -23,6 +23,7 @@ import {
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
 import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflow-cards";
+import { ChatTicketRunTray } from "@/components/domain/dispatch-cards";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
@@ -881,6 +882,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </div>
             )}
             <ChatWorkflowTray chatId={c.id} />
+            <ChatTicketRunTray chatId={c.id} />
             {startingWorkflow && (
               <div className="mb-2">
                 <WorkflowStartCard workflow={startingWorkflow} chatId={c.id} onDone={() => setStartingWorkflow(null)} onDismiss={() => setStartingWorkflow(null)} />

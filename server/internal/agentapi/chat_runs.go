@@ -25,10 +25,11 @@ var (
 )
 
 type ListRunsIn struct {
-	State  string `json:"state,omitempty" jsonschema:"live (default: queued, running, waiting, paused or blocked), finished (completed, failed or cancelled), all, or one exact state"`
-	Ticket string `json:"ticket,omitempty" jsonschema:"Only runs of this ticket, e.g. PAY-214 (includes delegated sub agent runs)"`
-	Agent  string `json:"agent,omitempty" jsonschema:"Only runs of this agent handle, e.g. implementer"`
-	Offset int    `json:"offset,omitempty" jsonschema:"Skip this many runs (pages of 50, newest first)"`
+	State   string `json:"state,omitempty" jsonschema:"live (default: queued, running, waiting, paused or blocked), finished (completed, failed or cancelled), all, or one exact state"`
+	Ticket  string `json:"ticket,omitempty" jsonschema:"Only runs of this ticket, e.g. PAY-214 (includes delegated sub agent runs)"`
+	Agent   string `json:"agent,omitempty" jsonschema:"Only runs of this agent handle, e.g. implementer"`
+	Project string `json:"project,omitempty" jsonschema:"Only runs of tickets in this project key, e.g. PAY; default every project"`
+	Offset  int    `json:"offset,omitempty" jsonschema:"Skip this many runs (pages of 50, newest first)"`
 }
 
 type GetRunIn struct {
@@ -107,16 +108,19 @@ func requireChat(ctx context.Context, d Deps, c agents.Caller) (*chatScope, erro
 }
 
 func listChatRuns(ctx context.Context, d Deps, c agents.Caller, in ListRunsIn) (any, error) {
-	s, err := requireChat(ctx, d, c)
-	if err != nil {
+	if _, err := requireChat(ctx, d, c); err != nil {
 		return nil, err
 	}
 	ws := c.Agent.WorkspaceID
 	if in.Offset < 0 || in.Offset > 100000 {
 		return nil, apperr.Invalid("offset", "must be between 0 and 100000")
 	}
+	project, err := projectFilter(ctx, d, ws, in.Project)
+	if err != nil {
+		return nil, err
+	}
 	purpose := "ticket"
-	arg := store.ListRunsParams{WorkspaceID: ws, Purpose: &purpose, ProjectID: &s.ProjectID, Skip: int32(in.Offset)}
+	arg := store.ListRunsParams{WorkspaceID: ws, Purpose: &purpose, ProjectID: project, Skip: int32(in.Offset)}
 	switch st := strings.ToLower(strings.TrimSpace(in.State)); st {
 	case "", "live":
 		arg.States = chatLiveRunStates
@@ -133,8 +137,8 @@ func listChatRuns(ctx context.Context, d Deps, c agents.Caller, in ListRunsIn) (
 	empty := map[string]any{"runs": []chatRun{}, "has_more": false}
 	if key := strings.ToUpper(strings.TrimSpace(in.Ticket)); key != "" {
 		t, err := d.Q.GetTicketByKey(ctx, store.GetTicketByKeyParams{WorkspaceID: ws, Key: key})
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !s.allowsTicket(t)) {
-			return nil, apperr.Invalid("ticket", "no ticket %s in %s", key, s.where())
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperr.Invalid("ticket", "no ticket %s", key)
 		} else if err != nil {
 			return nil, err
 		}
@@ -170,8 +174,7 @@ func listChatRuns(ctx context.Context, d Deps, c agents.Caller, in ListRunsIn) (
 }
 
 func getChatRun(ctx context.Context, d Deps, c agents.Caller, in GetRunIn) (any, error) {
-	s, err := requireChat(ctx, d, c)
-	if err != nil {
+	if _, err := requireChat(ctx, d, c); err != nil {
 		return nil, err
 	}
 	ws := c.Agent.WorkspaceID
@@ -181,7 +184,7 @@ func getChatRun(ctx context.Context, d Deps, c agents.Caller, in GetRunIn) (any,
 	}
 	r, err := d.Q.GetRun(ctx, store.GetRunParams{ID: id, WorkspaceID: ws})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && r.Purpose != "ticket") {
-		return nil, apperr.Invalid("id", "no run %s in %s", in.ID, s.where())
+		return nil, apperr.Invalid("id", "no run %s", in.ID)
 	} else if err != nil {
 		return nil, err
 	}
@@ -189,9 +192,6 @@ func getChatRun(ctx context.Context, d Deps, c agents.Caller, in GetRunIn) (any,
 	run, err := n.toChatRun(ctx, r)
 	if err != nil {
 		return nil, err
-	}
-	if !s.allowsTicket(n.tickets[*r.TicketID]) {
-		return nil, apperr.Invalid("id", "no run %s in %s", in.ID, s.where())
 	}
 	steps, err := d.Q.ListPlan(ctx, r.ID)
 	if err != nil {

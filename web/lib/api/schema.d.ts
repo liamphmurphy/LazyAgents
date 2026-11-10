@@ -1899,6 +1899,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** The ticket runs this chat started, oldest first */
+        get: operations["listChatTicketRuns"];
+        put?: never;
+        /**
+         * Start a ticket's run from a chat, as the signed-in person
+         * @description The persona offers a ```dispatch card; nothing runs until the person
+         *     presses Start here. Runs the same checks as dispatching from the
+         *     ticket (an assigned main agent, no live run, no hard blockers) and
+         *     records the person as the dispatcher. The chat then follows the run.
+         */
+        post: operations["startChatTicketRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library": {
         parameters: {
             query?: never;
@@ -6000,6 +6026,46 @@ export interface components {
              * @description The reply that proposed this run; omit for /workflow
              */
             message_id?: string;
+        };
+        ChatTicketRunStart: {
+            /** @description Ticket key, e.g. PAY-31 */
+            ticket: string;
+            /**
+             * Format: uuid
+             * @description The reply whose dispatch card was pressed
+             */
+            message_id?: string;
+        };
+        ChatTicketRun: {
+            /** Format: uuid */
+            run_id: string;
+            /**
+             * Format: uuid
+             * @description The reply whose card started it
+             */
+            message_id?: string;
+            ticket: string;
+            ticket_title: string;
+            /** @description The assigned agent's handle */
+            agent: string;
+            /** @description Run state: queued, starting, running, waiting, paused, blocked, completed, failed or cancelled */
+            state: string;
+            wait_reason?: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            ended_at?: string;
+            cost_usd: number;
+            /** @description Steps in the agent's plan; 0 until it posts one */
+            steps_total: number;
+            steps_done: number;
+            /** @description The first plan step not done yet */
+            current_step?: string;
+            /** @description The ticket's pull request, once recorded */
+            pr_url?: string;
+        };
+        ChatTicketRuns: {
+            runs: components["schemas"]["ChatTicketRun"][];
         };
         WorkflowGateDecision: {
             node_id: string;
@@ -10381,6 +10447,56 @@ export interface operations {
                     "application/json": components["schemas"]["WorkflowRun"];
                 };
             };
+        };
+    };
+    listChatTicketRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatTicketRuns"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    startChatTicketRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatTicketRunStart"];
+            };
+        };
+        responses: {
+            /** @description Started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatTicketRun"];
+                };
+            };
+            default: components["responses"]["Error"];
         };
     };
     listLibraryItems: {
