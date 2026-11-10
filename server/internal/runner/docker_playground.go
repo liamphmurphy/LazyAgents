@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path"
 	"slices"
 	"sort"
 	"strconv"
@@ -204,6 +203,17 @@ func setupScript(cmds []string) string {
 	return b.String()
 }
 
+// processScript runs command in dir, relative to the workspace root, making
+// dir first. The container starts at the root rather than in dir because
+// Docker creates a missing WorkingDir as root, before the agent user runs,
+// and nothing in the playground could write there afterwards.
+func processScript(dir, command string) string {
+	if dir == "" {
+		return command
+	}
+	return "mkdir -p -- " + shellQuote(dir) + " && cd -- " + shellQuote(dir) + " || exit\n" + command
+}
+
 // playgroundBody is a setup or process container: the agent image in the
 // turn's sandbox, with the workspace and shared caches but not the run's home
 // (it holds the harness logins), on the playground network only.
@@ -219,7 +229,6 @@ func (d *Docker) playgroundBody(pg PlaygroundRun, network, source, command, dir 
 	host := d.hostConfig(mounts)
 	host["NetworkMode"] = network
 	delete(host, "ExtraHosts")
-	workdir := path.Join(workspacePath, dir)
 	all := dependencyEnv(d.DependencyCacheDir(), workspacePath)
 	for k, v := range env {
 		all[k] = v
@@ -232,7 +241,7 @@ func (d *Docker) playgroundBody(pg PlaygroundRun, network, source, command, dir 
 	return map[string]any{
 		// Not a login shell: /etc/profile resets PATH, dropping the image's
 		// Go and Nix profile directories.
-		"Image": d.Image, "Cmd": []string{"bash", "-c", command}, "Env": list, "WorkingDir": workdir,
+		"Image": d.Image, "Cmd": []string{"bash", "-c", processScript(dir, command)}, "Env": list, "WorkingDir": workspacePath,
 		"Labels": d.playgroundLabels(pg, source), "HostConfig": host,
 		"NetworkingConfig": map[string]any{"EndpointsConfig": map[string]any{
 			network: map[string]any{"Aliases": []string{source}},
