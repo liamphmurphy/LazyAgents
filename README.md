@@ -51,7 +51,7 @@ Talk to any available harness and model, with or without a project attached.
 
 | | |
 | :--- | :--- |
-| **Personas** | Create as many as you like, each with its own voice, color, and instructions. Bring several into one conversation with `@`. What a persona may do beyond answering (write code in a repo, generate images, create SVGs, workflows, or connectors) is enforced in code, per persona. |
+| **Personas** | Create as many as you like, each with its own voice, color, and instructions. Bring several into one conversation with `@`. What a persona may do beyond answering (write and run code, in a repo or a scratch workspace, generate images, create SVGs, workflows, or connectors) is enforced in code, per persona. |
 | **Memory** | Each persona remembers durable facts and tells you when it does. Browse, edit, import, or export everything under **Customization**. Memory is private to you, and secrets are never saved. |
 | **Rich replies** | Charts, diagrams, step-through SVGs, math, interactive apps that run in the chat, citations, and video previews. |
 | **Canvases** | Draft documents and SVG mockups next to the conversation. Comment on a passage and the persona revises it. |

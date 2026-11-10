@@ -43,18 +43,20 @@ func TestChatSpecCapabilities(t *testing.T) {
 	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b", WorkBranches: []string{"feat/add-search"}}
 	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex} {
 		for _, tc := range []struct {
-			name   string
-			caps   ChatCaps
-			coding bool
-			images bool // image generation option reaches the spec
+			name    string
+			caps    ChatCaps
+			coding  bool
+			scratch bool // codes in an empty workspace: no repository instructions
+			images  bool // image generation option reaches the spec
 		}{
-			{"none", ChatCaps{}, false, false},
-			{"code", code, true, false},
-			{"images", ChatCaps{Images: true}, false, h == agentdef.HarnessCodex},
-			{"both", ChatCaps{Code: true, RepoURL: code.RepoURL, Images: true}, true, h == agentdef.HarnessCodex},
-			// Code needs a repository: without one nothing widens.
-			{"code without repo", ChatCaps{Code: true}, false, false},
-			{"repo without code", ChatCaps{RepoURL: code.RepoURL}, false, false},
+			{"none", ChatCaps{}, false, false, false},
+			{"code", code, true, false, false},
+			{"images", ChatCaps{Images: true}, false, false, h == agentdef.HarnessCodex},
+			{"both", ChatCaps{Code: true, RepoURL: code.RepoURL, Images: true}, true, false, h == agentdef.HarnessCodex},
+			// Without a repository a coding persona still writes and runs code,
+			// in a scratch workspace.
+			{"code without repo", ChatCaps{Code: true}, true, true, false},
+			{"repo without code", ChatCaps{RepoURL: code.RepoURL}, false, false, false},
 		} {
 			t.Run(h+"/"+tc.name, func(t *testing.T) {
 				got := ChatSpec(base(h), tc.caps)
@@ -98,8 +100,14 @@ func TestChatSpecCapabilities(t *testing.T) {
 					}
 				}
 				ins := got.Instructions
-				if coder := strings.Contains(ins, "## Working in code"); coder != tc.coding || (coder && !strings.Contains(ins, "git checkout -b TYPE/short-description")) {
+				if coder := strings.Contains(ins, "## Working in code"); coder != tc.coding {
 					t.Errorf("code instructions present=%v, want %v", coder, tc.coding)
+				}
+				if branching := strings.Contains(ins, "git checkout -b TYPE/short-description"); branching != (tc.coding && !tc.scratch) {
+					t.Errorf("branch and push instructions present=%v, want %v", branching, tc.coding && !tc.scratch)
+				}
+				if scratch := strings.Contains(ins, "This chat has no repository."); scratch != tc.scratch {
+					t.Errorf("scratch workspace instructions present=%v, want %v", scratch, tc.scratch)
 				}
 				// Branches the chat already pushed are listed for a new segment.
 				if listed := strings.Contains(ins, "Branches you already pushed in this chat, oldest first: feat/add-search."); listed != (tc.coding && len(tc.caps.WorkBranches) > 0) {

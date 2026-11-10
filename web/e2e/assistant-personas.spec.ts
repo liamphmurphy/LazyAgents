@@ -209,7 +209,7 @@ test("abilities: Write code reveals repositories; they validate, save with the c
 
   await expect(editor(page).getByLabel("Repositories")).toHaveCount(0);
   await editor(page).getByRole("switch", { name: "Write code" }).check();
-  await expect(editor(page)).toContainText("Add at least one repository to work in.");
+  await expect(editor(page)).toContainText("Optional. Without a repository, its chats code in an empty scratch workspace");
 
   const input = editor(page).getByLabel("Repositories", { exact: true }).and(page.locator("input"));
   await input.fill("https://user:token@github.com/acme/app");

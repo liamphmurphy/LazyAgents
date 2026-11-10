@@ -253,7 +253,7 @@ func (s *Service) videoTurn(ctx context.Context, q *store.Queries, ws, runID uui
 		return run, chat, store.RunTurn{}, err
 	}
 	if !caps.Code {
-		return run, chat, store.RunTurn{}, apperr.Conflict("Rendering a video needs a chat that can run code in a repository; tell the person this chat can't.")
+		return run, chat, store.RunTurn{}, apperr.Conflict("Rendering a video needs a chat that can run code; tell the person this chat can't.")
 	}
 	turn, err := q.RunningChatTurn(ctx, run.ID)
 	if errors.Is(err, pgx.ErrNoRows) {

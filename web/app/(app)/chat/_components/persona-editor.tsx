@@ -381,7 +381,7 @@ function Toggle({ id, checked, onChange, title, hint }: { id: string; checked: b
   );
 }
 
-/** The repositories a coding persona may work in: add by URL (Enter or Add), remove, up to MAX_REPOS. */
+/** The repositories a coding persona may check out: add by URL (Enter or Add), remove, up to MAX_REPOS. Optional: without one it codes in a scratch workspace. */
 function RepoList({ repos, setRepos, serverError }: { repos: string[]; setRepos: (r: string[]) => void; serverError?: string }) {
   const [text, setText] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
@@ -434,7 +434,7 @@ function RepoList({ repos, setRepos, serverError }: { repos: string[]; setRepos:
         </Button>
       </div>
       {shown && <p id="persona-repo-error" role="alert" className="text-xs text-pill-blocked-fg">{shown}</p>}
-      {repos.length === 0 && <p className="text-[11.5px] text-pill-human-fg">Add at least one repository to work in.</p>}
+      {repos.length === 0 && <p className="text-[11.5px] text-fg-secondary">Optional. Without a repository, its chats code in an empty scratch workspace with nothing to push to.</p>}
       <p className="text-[11.5px] text-fg-tertiary">{repos.length} / {MAX_REPOS}. Private repositories use a token from Settings → Connections &amp; secrets.</p>
     </div>
   );
@@ -677,7 +677,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     checked={draft.code}
                     onChange={(v) => set({ code: v })}
                     title="Write code"
-                    hint="Clones a repository into its workspace, edits and runs code, and commits and pushes to its own branch for each chat."
+                    hint="Writes and runs code in its chat's workspace. With a repository, it clones it and commits and pushes to its own branch for each chat."
                   />
                   {draft.code && <RepoList repos={draft.repos} setRepos={(repos) => set({ repos })} serverError={field?.field === "repos" ? field.message : undefined} />}
                   {!draft.code && field?.field === "repos" && <p role="alert" className="text-xs text-pill-blocked-fg">{field.message}</p>}
