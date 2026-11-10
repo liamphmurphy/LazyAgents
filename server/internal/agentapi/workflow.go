@@ -46,7 +46,7 @@ func workflowScope(ctx context.Context, d Deps, run store.Run) (*chatScope, erro
 	if err != nil {
 		return nil, err
 	}
-	return &chatScope{ChatID: wf.ChatID, ProjectID: runs.ProjectIDOrNil(wf.ProjectID), ProjectKey: p.Key, UserID: wf.UserID}, nil
+	return &chatScope{ChatID: wf.ChatID, ProjectKey: p.Key, UserID: wf.UserID}, nil
 }
 
 func workflowChatScope(ctx context.Context, d Deps, c agents.Caller, tool string) (*chatScope, error) {

@@ -21,12 +21,11 @@ var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifa
 
 // chatScope is who a chat run acts for. A chat reads the whole workspace, like
 // ticket agents do: the person can open every project, so a project boundary
-// here protected nothing and only got in the way. ProjectID is the chat's
-// default project (uuid.Nil when it has none): where new tickets and epics go
+// here protected nothing and only got in the way. ProjectKey is the chat's
+// default project ("" when it has none): where new tickets and epics go
 // unless the persona names another.
 type chatScope struct {
 	ChatID     uuid.UUID
-	ProjectID  uuid.UUID
 	ProjectKey string
 	// UserID is the person the chat belongs to: the owner of its memory.
 	UserID uuid.UUID
@@ -67,7 +66,7 @@ func chatScopeFor(ctx context.Context, d Deps, c agents.Caller) (*chatScope, err
 	if err != nil {
 		return nil, err
 	}
-	return &chatScope{ChatID: chat.ID, ProjectID: runs.ProjectIDOrNil(chat.ProjectID), ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: runs.ChatSpeakerID(chat), MemorySpaceID: memSpace}, nil
+	return &chatScope{ChatID: chat.ID, ProjectKey: p.Key, UserID: chat.CreatedBy, PersonaID: runs.ChatSpeakerID(chat), MemorySpaceID: memSpace}, nil
 }
 
 // projectFilter resolves the optional project key a listing or search is
