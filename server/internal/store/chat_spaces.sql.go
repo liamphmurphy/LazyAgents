@@ -421,6 +421,42 @@ func (q *Queries) GetChatSpaceByID(ctx context.Context, id uuid.UUID) (ChatSpace
 	return i, err
 }
 
+const getMyCanvas = `-- name: GetMyCanvas :one
+SELECT cv.id, cv.kind, cv.title, cv.updated_at, c.id AS chat_id, c.title AS chat_title
+FROM chat_canvases cv JOIN chat_sessions c ON c.id = cv.session_id
+WHERE cv.id = $1 AND c.workspace_id = $2 AND c.created_by = $3 AND NOT c.hidden
+`
+
+type GetMyCanvasParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+type GetMyCanvasRow struct {
+	ID        uuid.UUID
+	Kind      string
+	Title     string
+	UpdatedAt time.Time
+	ChatID    uuid.UUID
+	ChatTitle string
+}
+
+// One of the person's canvases, with the chat it lives in.
+func (q *Queries) GetMyCanvas(ctx context.Context, arg GetMyCanvasParams) (GetMyCanvasRow, error) {
+	row := q.db.QueryRow(ctx, getMyCanvas, arg.ID, arg.WorkspaceID, arg.UserID)
+	var i GetMyCanvasRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Title,
+		&i.UpdatedAt,
+		&i.ChatID,
+		&i.ChatTitle,
+	)
+	return i, err
+}
+
 const getUserCanvas = `-- name: GetUserCanvas :one
 SELECT cv.id, cv.kind, cv.title, v.body
 FROM chat_canvases cv JOIN chat_sessions c ON c.id = cv.session_id
