@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { AGENTS, catalog, installChatApi, persona } from "./mock-chat-api";
+import { AGENTS, catalog, installChatApi, openEmptyChat, persona } from "./mock-chat-api";
 
 // History lives in the expanded menu.
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -12,10 +12,9 @@ const effortItems = (page: Page) => page.getByRole("group", { name: "Reasoning e
 
 const chips = (page: Page) => page.getByTestId("context-chip");
 
-// Starts a conversation from the Welcome (or the conversation header).
+// An empty conversation, with the full composer.
 async function newChat(page: Page) {
-  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
-  // The route swap finishes once the composer of the new chat is there.
+  await openEmptyChat(page);
   await expect(composer(page)).toBeVisible();
 }
 

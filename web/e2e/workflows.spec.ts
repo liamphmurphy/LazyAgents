@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { installChatApi, persona } from "./mock-chat-api";
+import { installChatApi, openEmptyChat, persona } from "./mock-chat-api";
 
 // Workflows: build one on the canvas, review a persona's suggestion, start from /workflow, approve a gate.
 
@@ -106,7 +106,7 @@ test("/workflow lists published workflows, confirms, then the gate appears above
   const state = { wf: workflow(), posts: [] as { url: string; body: unknown }[], runs: [] as unknown[] };
   await serveWorkflows(page, state);
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
+  await openEmptyChat(page);
   const box = page.getByRole("combobox", { name: "Message" });
   await expect(box).toBeFocused();
   await box.pressSequentially("/workflow ");

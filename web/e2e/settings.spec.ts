@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { catalog, installChatApi } from "./mock-chat-api";
+import { catalog, installChatApi, openEmptyChat } from "./mock-chat-api";
 
 const at = "2026-11-04T12:00:00Z";
 const SECRET = "sk-proj-super-secret-value-WXYZ";
@@ -105,7 +105,7 @@ test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("laz
 test("provider credentials show status and unlocks, are write-only, and saving refreshes the model picker", async ({ page }) => {
   const mock = await installSettingsApi(page);
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: "New chat" }).first().click();
+  await openEmptyChat(page);
   await page.getByRole("button", { name: /^Model and effort for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Escape");
@@ -147,9 +147,8 @@ test("provider credentials show status and unlocks, are write-only, and saving r
   await expect(page.getByRole("button", { name: "Delete harness:anthropic" })).toBeVisible();
 
   // The chat model cache was invalidated, so back in chat Codex is selectable
-  // without a reload (the cache is otherwise fresh for a minute).
+  // without a reload (the cache is otherwise fresh for a minute). /chat resumes the empty chat from before.
   await page.getByRole("link", { name: "Chats & personas" }).click();
-  await page.getByRole("button", { name: "New chat" }).first().click();
   await page.getByRole("button", { name: /^Model and effort for the next message/ }).click();
   await expect(page.getByRole("menuitem", { name: /Codex gpt-5-codex/ })).not.toHaveAttribute("aria-disabled", "true");
   expect(mock.models()).toBeGreaterThan(before);

@@ -249,10 +249,9 @@ export function ChatScreen({ id }: { id?: string }) {
     <div className="flex h-dvh flex-col">
       <div className="relative flex min-h-0 flex-1 max-md:flex-col">
           <div className="flex min-w-0 flex-1 flex-col">
-            {(noHarness || conversation.error) && (
+            {noHarness && (
               <div className="flex flex-col gap-1 px-6 pt-3">
-                {noHarness && <NoHarnessNote health={health} />}
-                {conversation.error && <p role="alert" className="text-xs text-pill-blocked-fg">{conversation.error}</p>}
+                <NoHarnessNote health={health} />
               </div>
             )}
             {id ? (
@@ -269,7 +268,8 @@ export function ChatScreen({ id }: { id?: string }) {
                     <Skeleton className="h-16 w-2/3" />
                   </div>
                 ) : (
-                  <Welcome disabled={noHarness} />
+                  // Keyed by the linked persona so New chat from the welcome starts over on the one it names.
+                  <Welcome key={search.get("persona") ?? ""} disabled={noHarness} />
                 )}
               </>
             )}

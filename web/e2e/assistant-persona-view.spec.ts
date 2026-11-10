@@ -13,6 +13,14 @@ const picked = (page: Page) => strip(page).getByRole("button", { pressed: true }
 const pick = (page: Page, name: string | RegExp) => strip(page).getByRole("button", { name }).click();
 const switcher = (page: Page) => page.getByRole("button", { name: /^Persona for this conversation:/ });
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
+const welcomeBox = (page: Page) => page.getByRole("textbox", { name: "Message" });
+const onCarousel = (page: Page) => page.getByRole("radiogroup", { name: "Who to talk to" }).getByRole("radio", { checked: true });
+// The menu's New chat opens the welcome; the chat is made with its first message.
+async function newChat(page: Page) {
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/chat\?new/);
+  await expect(welcomeBox(page)).toBeVisible();
+}
 
 // History lives in the expanded menu.
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -39,16 +47,18 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await mock.updatePersona(ATLAS.id, { name: "Atlas Prime" });
   await expect(identity).toContainText("Atlas Prime");
 
-  // New conversation: the default persona (the sidebar shows it), switchable before the first message.
-  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
-  await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Atlas Prime");
-  expect(mock.created[1].persona_id).toBe(ATLAS.id);
-  await switcher(page).click();
-  await page.getByRole("menuitemradio", { name: /Nova/ }).click();
-  await expect(page.getByRole("heading", { name: /I’m Nova/ })).toBeVisible();
-  expect(mock.created[2].persona_id).toBe(NOVA.id);
-  await composer(page).fill("hi nova");
-  await composer(page).press("Enter");
+  // New chat opens the welcome on the sidebar's persona (the default), switchable before the first message.
+  await newChat(page);
+  await expect(onCarousel(page)).toHaveAccessibleName("Atlas Prime");
+  await page.getByRole("button", { name: "Next persona" }).click();
+  await expect(onCarousel(page)).toHaveAccessibleName("Nova");
+  await expect(page.getByRole("heading", { level: 1, name: "Nova" })).toBeVisible();
+  await welcomeBox(page).fill("hi nova");
+  await welcomeBox(page).press("Enter");
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
+  const novaChat = page.url();
+  // The welcome makes no chat until the first message.
+  expect(mock.created.map((c) => c.persona_id)).toEqual([ATLAS.id, NOVA.id]);
   await expect(page.getByTestId("assistant-identity").first()).toContainText("Nova");
   // Once a message is sent the persona is fixed.
   await expect(switcher(page)).toHaveCount(0);
@@ -64,18 +74,21 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await pick(page, /Nova/);
   await expect(history(page).getByRole("link", { name: /hi nova/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hello atlas/ })).toHaveCount(0);
-  // New conversation follows the sidebar's persona.
-  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
-  await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Nova");
-  expect(mock.created[3].persona_id).toBe(NOVA.id);
+  // New chat follows the sidebar's persona.
+  await newChat(page);
+  await expect(onCarousel(page)).toHaveAccessibleName("Nova");
   await pick(page, "All personas");
   await expect(history(page).getByRole("link", { name: /hi nova/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hello atlas/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hello atlas/ }).locator(":scope > [aria-hidden]")).toHaveCount(1);
-  // All personas falls back to the default.
-  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
-  await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Atlas Prime");
-  expect(mock.created[4].persona_id).toBe(ATLAS.id);
+  // Under All personas, New chat from the welcome falls back to the default...
+  await newChat(page);
+  await expect(onCarousel(page)).toHaveAccessibleName("Atlas Prime");
+  // ...and from a conversation, picks that conversation's persona.
+  await page.goto(novaChat);
+  await newChat(page);
+  await expect(onCarousel(page)).toHaveAccessibleName("Nova");
+  expect(mock.created).toHaveLength(2);
   expect(mock.chatPersonaFilters).toEqual(expect.arrayContaining(["", NOVA.id, "all"]));
 
   // The pick lasts for the session.
@@ -120,7 +133,11 @@ test("without personas the built-in Assistant is the default and there's no swit
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await expect(picked(page)).toHaveAccessibleName("Assistant (default)");
-  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
+  await newChat(page);
+  await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next persona" })).toHaveCount(0);
+  await welcomeBox(page).fill("hello");
+  await welcomeBox(page).press("Enter");
   await expect(composer(page)).toBeVisible();
   await expect(switcher(page)).toHaveCount(0);
   expect(mock.created[0].persona_id).toBeUndefined();
@@ -155,14 +172,13 @@ test("a new conversation opens at once, without waiting for the lists to refresh
   await page.getByRole("textbox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   await expect(page.getByTestId("assistant-identity").first()).toContainText("Atlas");
-  const first = new URL(page.url()).pathname;
 
   await page.route(/\/api\/v1\/chats\?/, async (route) => {
     await new Promise((r) => setTimeout(r, 4000));
     await route.fallback();
   });
   await page.getByRole("button", { name: "New chat", exact: true }).first().click();
-  await expect(page).not.toHaveURL(new RegExp(first), { timeout: 2500 });
+  await expect(page).toHaveURL(/\/chat\?new/, { timeout: 2500 });
 });
 
 test("the menu keeps its width whatever the titles and persona filter", async ({ page }) => {

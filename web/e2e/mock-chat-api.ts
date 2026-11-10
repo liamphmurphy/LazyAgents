@@ -940,6 +940,22 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   })();
 }
 
+/**
+ * Opens an empty conversation, as the command menu's New chat or a persona's profile do. The
+ * menu's New chat opens the welcome instead, which only makes the chat with its first message.
+ */
+export async function openEmptyChat(page: Page, body: Record<string, unknown> = {}) {
+  if (page.url().startsWith("about:")) await page.goto("/chat?new");
+  const id = await page.evaluate(async (b) => {
+    const r = await fetch("/api/v1/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
+    if (!r.ok) throw new Error(`POST /chats: ${r.status}`);
+    return ((await r.json()) as { id: string }).id;
+  }, body);
+  await page.goto(`/chat/${id}`);
+  await page.getByRole("combobox", { name: "Message" }).waitFor();
+  return id;
+}
+
 const STAGE_ORDER = ["write", "stills", "render", "encode", "save"];
 
 /**
