@@ -17,7 +17,7 @@ test("/ opens an empty chat with the most used persona instead of resuming the n
 
   await page.goto("/");
   await expect(page).toHaveURL(new RegExp(`/chat\\?new&persona=${NOVA.id}$`));
-  await expect(page.getByRole("textbox", { name: "Message" })).toHaveAttribute("placeholder", /^Message Nova…/);
+  await expect(page.getByRole("radiogroup", { name: "Who to talk to" }).getByRole("radio", { checked: true })).toHaveAccessibleName("Nova");
   expect(api.created).toHaveLength(0);
 });
 
@@ -25,5 +25,5 @@ test("with no chats yet, / opens an empty chat with the default persona", async 
   await installChatApi(page, { personas: [{ ...ATLAS, chat_count: 0 }, { ...NOVA, chat_count: 0 }] });
   await page.goto("/");
   await expect(page).toHaveURL(new RegExp(`/chat\\?new&persona=${ATLAS.id}$`));
-  await expect(page.getByRole("textbox", { name: "Message" })).toHaveAttribute("placeholder", /^Message Atlas…/);
+  await expect(page.getByRole("radiogroup", { name: "Who to talk to" }).getByRole("radio", { checked: true })).toHaveAccessibleName("Atlas");
 });

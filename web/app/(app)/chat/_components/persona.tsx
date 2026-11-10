@@ -387,7 +387,80 @@ export function PersonaSwitcher({
   );
 }
 
-/** "Hi Liam, I'm Atlas." over a large avatar, for a conversation before its first message. */
+/** A persona's portrait on a soft glow of its color: the welcome's centrepiece and an empty chat's greeting. */
+export function PersonaPortrait({ persona, size = 92 }: { persona: PersonaLook; size?: number }) {
+  const glow = Math.round(size * 1.9);
+  return (
+    <span className="relative grid flex-none place-items-center" style={{ width: size + 8, height: size + 8 }} data-testid="persona-portrait">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute rounded-full"
+        style={{ width: glow, height: glow, background: `radial-gradient(circle, color-mix(in srgb, ${persona.color} 20%, transparent) 0%, transparent 68%)` }}
+      />
+      <span className="relative rounded-full p-[3px]" style={{ boxShadow: `0 0 0 2px color-mix(in srgb, ${persona.color} 60%, transparent)` }}>
+        <PersonaAvatar persona={persona} size={size} />
+      </span>
+    </span>
+  );
+}
+
+/** The welcome's persona picker: the picked one large in the middle, up to two neighbours a side, arrows to step through. */
+export function PersonaCarousel({
+  ordered,
+  current,
+  left,
+  right,
+  onPick,
+  disabled,
+}: {
+  ordered: Persona[];
+  current: PersonaLook;
+  left: Persona[];
+  right: Persona[];
+  onPick: (id: string) => void;
+  disabled?: boolean;
+}) {
+  const index = ordered.findIndex((p) => p.id === current.id);
+  const step = (d: number) => ordered.length > 1 && onPick(ordered[(((index + d) % ordered.length) + ordered.length) % ordered.length].id);
+  const side = (p: Persona) => (
+    <button key={p.id} type="button" role="radio" aria-checked={false} aria-label={p.name} title={p.name} tabIndex={-1} disabled={disabled} onClick={() => onPick(p.id)}
+      className="rounded-full opacity-55 transition-opacity hover:opacity-100 disabled:cursor-not-allowed max-sm:hidden">
+      <PersonaAvatar persona={p} size={40} />
+    </button>
+  );
+  const arrow = (d: -1 | 1) => (
+    <button type="button" aria-label={d < 0 ? "Previous persona" : "Next persona"} disabled={disabled} onClick={() => step(d)}
+      className="grid size-8 flex-none place-items-center rounded-full text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-not-allowed">
+      <Icon name="chev" size={16} strokeWidth={1.6} className={d < 0 ? "rotate-90" : "-rotate-90"} />
+    </button>
+  );
+  const many = ordered.length > 1;
+  // A radio group: the picked persona holds focus and the arrow keys step through the rest.
+  return (
+    <div role="radiogroup" aria-label="Who to talk to" className="flex items-center justify-center gap-4">
+      {left.map(side)}
+      {many && arrow(-1)}
+      <button
+        type="button"
+        role="radio"
+        aria-checked
+        aria-label={current.name}
+        disabled={disabled}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+          if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); step(1); }
+        }}
+        className="cursor-default rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+      >
+        <PersonaPortrait persona={current} />
+      </button>
+      {many && arrow(1)}
+      {right.map(side)}
+    </div>
+  );
+}
+
+/** "Hi Liam, I'm Atlas." over the persona's portrait, for a conversation before its first message. */
 export function PersonaGreeting({
   persona,
   tone,
@@ -403,16 +476,16 @@ export function PersonaGreeting({
 }) {
   return (
     <div className="flex flex-col items-center gap-2 py-10 text-center">
-      <PersonaAvatar persona={persona} size={56} className="text-2xl" />
-      <h2 className="mt-2 text-xl font-semibold text-fg">
+      <PersonaPortrait persona={persona} size={72} />
+      <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-fg">
         {firstName ? `Hi ${firstName}, I’m ` : "I’m "}
-        {persona.id ? <span style={{ color: persona.color }}>{persona.name}</span> : "your assistant"}.
+        {persona.id ? persona.name : "your assistant"}.
       </h2>
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-sm text-fg-secondary">
         A new conversation{isDefault ? " with your default persona" : ""}
         {persona.id ? ` · ${toneLabel(tone)} tone` : ""}
       </p>
-      <p className="max-w-[520px] text-[13px] text-fg-secondary">
+      <p className="max-w-[520px] text-sm text-fg-secondary">
         {canSwitch
           ? "Pick another persona below before you send your first message."
           : "Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do."}

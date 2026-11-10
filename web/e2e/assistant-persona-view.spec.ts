@@ -22,8 +22,8 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await page.goto("/chat?project=WEB");
 
   // Welcome: the first conversation goes to the default persona.
-  await expect(page.getByRole("heading", { name: "Hi Liam, what can I help with?" })).toBeVisible();
-  await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Atlas");
+  await expect(page.getByRole("heading", { level: 1, name: "Atlas" })).toBeVisible();
+  await expect(page.getByRole("radiogroup", { name: "Who to talk to" }).getByRole("radio", { checked: true })).toHaveAccessibleName("Atlas");
   await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
   await page.getByRole("textbox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);

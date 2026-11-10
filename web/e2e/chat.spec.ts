@@ -33,9 +33,9 @@ async function send(page: Page, text: string) {
 test("create, send, switch model, reload keeps history", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
-  // First visit: no conversations yet, so the Welcome greets the person.
-  await expect(page.getByRole("heading", { name: "Hi Liam, what can I help with?" })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Suggestions" }).getByRole("button")).toHaveCount(4);
+  // First visit: the welcome leads with who you're talking to (no personas yet: the built-in Assistant).
+  await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Suggestions" }).getByRole("button")).toHaveCount(3);
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
 
   await newChat(page);
@@ -324,7 +324,7 @@ test("Start chat links pre-attach the item and drop the query param", async ({ p
 test("sending from the Welcome creates the chat, posts the message and opens it", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
-  await expect(page.getByRole("heading", { name: "Hi Liam, what can I help with?" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
   // A suggestion fills the composer; it is not sent.
   await page.getByRole("list", { name: "Suggestions" }).getByRole("button", { name: "Draft tickets from a spec" }).click();
   await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("Draft tickets from a spec");
@@ -350,7 +350,7 @@ test("Start chat ?attach= on /chat shows chips in the Welcome and sends them wit
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: earlier");
 
   await page.goto("/chat?project=WEB&attach=page:11111111-1111-4111-8111-111111111111&attach_title=Plan");
-  await expect(page.getByRole("heading", { name: /what can I help with/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
   await expect(chips(page)).toHaveCount(1);
   await expect(chips(page).first()).toContainText("Plan");
   await page.getByRole("textbox", { name: "Message" }).fill("summarise");
