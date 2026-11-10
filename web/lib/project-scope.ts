@@ -53,7 +53,10 @@ export const NAV_GROUPS: NavGroup[] = [
 /** Apps: a full page of their own with an Ask drawer, each backed by one of the person's spaces. Chat mode lists them. */
 export const APP_GROUP: NavGroup = {
   label: "Apps",
-  items: [{ href: "/apps/finance", label: "Finance", icon: "dollar" }],
+  items: [
+    { href: "/apps/docs", label: "Docs", icon: "edit" },
+    { href: "/apps/finance", label: "Finance", icon: "dollar" },
+  ],
 };
 
 export type NavMode = "chat" | "work";

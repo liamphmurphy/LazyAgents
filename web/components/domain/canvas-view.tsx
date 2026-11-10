@@ -349,7 +349,8 @@ function Rail({ inline, threads, replies, resolved, target, activeId, setActive,
 }
 
 /** One canvas: inline in a chat card (a fixed height, comments under their passages) or fullscreen (comments alongside). */
-export function CanvasView({ chatId, canvasId, live, readOnly, agent, onCollapse, onFullscreen, onExitFullscreen }: { chatId: string; canvasId: string; live: boolean; readOnly: boolean; agent: string; onCollapse?: () => void; onFullscreen?: () => void; onExitFullscreen?: () => void }) {
+/** `page` lays it out like fullscreen, for a page of its own (a document in the Docs app). */
+export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCollapse, onFullscreen, onExitFullscreen }: { chatId: string; canvasId: string; live: boolean; readOnly: boolean; agent: string; page?: boolean; onCollapse?: () => void; onFullscreen?: () => void; onExitFullscreen?: () => void }) {
   // Undefined follows the current version as the agent revises it.
   const [seq, setSeq] = useState<number>();
   const [view, setView] = useState<View>("preview");
@@ -382,7 +383,7 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, onCollapse
   // Agent edits shouldn't land under someone's cursor: canvases are read-only during a turn.
   const locked = readOnly || live;
   const canComment = isCurrent && !readOnly && view === "preview";
-  const inline = !onExitFullscreen;
+  const inline = !onExitFullscreen && !page;
   // Inline, text comments sit under their passage; anything without a place there goes below.
   const flowing = inline && c?.kind === "text" && isCurrent;
   const anchored = useMemo(() => (flowing ? open.filter((x) => !x.target_lost && x.anchor.end != null) : []), [flowing, open]);

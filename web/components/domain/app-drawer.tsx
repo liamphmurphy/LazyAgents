@@ -9,7 +9,8 @@ import { Icon, type IconName } from "@/components/ui/icon";
  * The chat drawer an app opens beside its full page: a header with the app's
  * icon and title, the conversation, and an optional footer note. Modal over a
  * dashboard; non-modal beside a document, so the page stays usable while the
- * assistant edits it.
+ * assistant edits it. Non-modal, it starts below the page's top bar so the
+ * page's own actions stay reachable (TopBar is 52px plus its border).
  */
 export function AppDrawer({ open, onOpenChange, icon, title, subtitle, actions, footer, modal = true, children }: {
   open: boolean;
@@ -29,7 +30,7 @@ export function AppDrawer({ open, onOpenChange, icon, title, subtitle, actions, 
         <Dialog.Content
           aria-describedby={undefined}
           onInteractOutside={modal ? undefined : (e) => e.preventDefault()}
-          className={cx("app-drawer fixed inset-y-0 right-0 z-50 flex w-[min(540px,100%)] flex-col border-l border-border bg-bg outline-none", modal ? "shadow-[var(--shadow-float)]" : "md:w-[440px]")}
+          className={cx("app-drawer fixed bottom-0 right-0 z-50 flex w-[min(540px,100%)] flex-col border-l border-border bg-bg outline-none", modal ? "top-0 shadow-[var(--shadow-float)]" : "top-[53px] md:w-[440px]")}
         >
           <div className="flex items-center gap-[10px] border-b border-border-subtle px-4 py-3">
             <span aria-hidden className="grid size-[26px] place-items-center rounded-lg bg-accent-soft text-accent">
