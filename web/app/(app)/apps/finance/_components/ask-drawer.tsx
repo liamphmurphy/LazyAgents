@@ -1,11 +1,11 @@
 "use client";
 
-import { Dialog } from "radix-ui";
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
 import { chatKeys } from "@/lib/api/hooks";
 import { useSpaceChats } from "@/lib/api/space-hooks";
+import { AppDrawer } from "@/components/domain/app-drawer";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/primitives";
@@ -50,49 +50,28 @@ export function useFinanceAsk(spaceId: string | undefined) {
 
 export function AskDrawer({ open, onOpenChange, ask }: { open: boolean; onOpenChange: (o: boolean) => void; ask: ReturnType<typeof useFinanceAsk> }) {
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim/60" />
-        <Dialog.Content
-          aria-describedby={undefined}
-          className="fin-drawer fixed inset-y-0 right-0 z-50 flex w-[min(540px,100%)] flex-col border-l border-border bg-bg shadow-[var(--shadow-float)] outline-none"
-        >
-          <div className="flex items-center gap-[10px] border-b border-border-subtle px-4 py-3">
-            <span aria-hidden className="grid size-[26px] place-items-center rounded-lg bg-accent-soft text-accent">
-              <Icon name="dollar" size={14} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <Dialog.Title className="text-[14px] font-semibold text-fg">Ask Finance</Dialog.Title>
-              <p className="text-[11px] text-fg-tertiary">Answers come from your imported transactions.</p>
-            </div>
-            {ask.chatId && (
-              <Button variant="secondary" onClick={ask.startFresh}>
-                New chat
-              </Button>
-            )}
-            <Dialog.Close className="grid size-[28px] place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg" aria-label="Close">
-              <Icon name="x" size={14} strokeWidth={1.6} />
-            </Dialog.Close>
-          </div>
-          {ask.loading ? (
-            <div aria-busy="true" className="flex flex-col gap-3 p-5">
-              <Skeleton className="h-5 w-2/3" />
-              <Skeleton className="h-14 w-full" />
-            </div>
-          ) : ask.chatId ? (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <Conversation key={ask.chatId} id={ask.chatId} onNew={ask.startFresh} />
-            </div>
-          ) : (
-            <Starter ask={ask} />
-          )}
-          <p className="flex items-center gap-[6px] border-t border-border-subtle px-4 py-2 text-[11px] text-fg-tertiary">
-            <Icon name="lock" size={12} />
-            The finance tools only answer here. Other chats can&rsquo;t read your transactions.
-          </p>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <AppDrawer
+      open={open}
+      onOpenChange={onOpenChange}
+      icon="dollar"
+      title="Ask Finance"
+      subtitle="Answers come from your imported transactions."
+      actions={ask.chatId && <Button variant="secondary" onClick={ask.startFresh}>New chat</Button>}
+      footer={<><Icon name="lock" size={12} />The finance tools only answer here. Other chats can&rsquo;t read your transactions.</>}
+    >
+      {ask.loading ? (
+        <div aria-busy="true" className="flex flex-col gap-3 p-5">
+          <Skeleton className="h-5 w-2/3" />
+          <Skeleton className="h-14 w-full" />
+        </div>
+      ) : ask.chatId ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Conversation key={ask.chatId} id={ask.chatId} onNew={ask.startFresh} />
+        </div>
+      ) : (
+        <Starter ask={ask} />
+      )}
+    </AppDrawer>
   );
 }
 
