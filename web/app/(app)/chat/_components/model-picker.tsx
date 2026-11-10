@@ -5,6 +5,7 @@ import type { Harness, Schemas } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
+import { composerGhost } from "./reply-tools";
 
 export type Selection = { harness: Harness; model: string };
 export type Effort = Schemas["ChatEffort"];
@@ -53,9 +54,10 @@ export function ModelPicker({
           type="button"
           disabled={disabled}
           aria-label={`Model for the next message: ${l.harness}, ${l.model}`}
-          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-md border border-border-strong bg-btn-outline px-2.5 text-[13px] text-fg-2 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          title={`${l.harness} · ${l.model}`}
+          className={composerGhost}
         >
-          <span className="truncate font-mono text-xs">{l.harness} · {l.model}</span>
+          <span className="truncate">{l.model}</span>
           <Icon name="chev" size={13} strokeWidth={1.6} className="text-fg-tertiary" />
         </button>
       </DropdownMenu.Trigger>
@@ -117,9 +119,10 @@ export function EffortPicker({
           type="button"
           disabled={disabled}
           aria-label={`Effort for the next message: ${effortLabel(value)}`}
-          className="flex h-[30px] items-center gap-1.5 rounded-md border border-border-strong bg-btn-outline px-2.5 text-[13px] text-fg-2 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          title="Reasoning effort for the next message"
+          className={composerGhost}
         >
-          <span className="text-xs">Effort · {effortLabel(value)}</span>
+          <span>{effortLabel(value)} effort</span>
           <Icon name="chev" size={13} strokeWidth={1.6} className="text-fg-tertiary" />
         </button>
       </DropdownMenu.Trigger>

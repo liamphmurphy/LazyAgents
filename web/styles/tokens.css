@@ -18,6 +18,7 @@
   --text-heading: 600 14px/1.45 var(--font-sans);  /* card headings */
   --text-body:    400 13px/1.45 var(--font-sans);  /* default UI text */
   --text-reading: 400 14px/1.65 var(--font-sans);  /* ticket descriptions, long-form */
+  --text-chat:    400 15px/1.6 var(--font-sans);   /* chat messages */
   --text-small:   400 12px/1.45 var(--font-sans);  /* meta, table headers */
   --text-micro:   600 10px/1.2 var(--font-sans);   /* doc-type tags, letter-spacing: 0.06em */
   --text-mono:    400 12px/1.45 var(--font-mono);  /* IDs, branches, models, numbers */
@@ -59,29 +60,34 @@
   /* ---------- Elevation (floating UI only) ---------- */
   --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.5);
 
+  /* ---------- Brand: the Vesper mark's dusk gradient (logo, welcome glow, portraits; never a control or a state) ---------- */
+  --brand-deep: #2B2366;
+  --brand-violet: #7864D9;
+  --brand-star: #F2A97E;
+
   /* ---------- Color: dark (default) ---------- */
-  --bg: #0B0B0D;            /* app ground */
-  --bg-sidebar: #0E0E11;
-  --bg-panel: #0D0D10;      /* right-hand detail panels */
-  --surface: #111114;       /* cards */
-  --surface-raised: #16161B;/* popovers, command bar */
-  --surface-sunken: #0F0F12;/* list group headers, nested blocks */
-  --hover: #17171B;
-  --selected: #1B1B21;
-  --border: #1F1F25;        /* card borders */
-  --border-subtle: #1C1C21; /* dividers inside cards, header rules */
-  --border-row: #16161A;    /* list row separators */
-  --border-strong: #26262C; /* buttons, chips, inputs */
-  --track: #22222A;         /* progress track */
+  --bg: #0C0B12;            /* app ground */
+  --bg-sidebar: #100F18;
+  --bg-panel: #0E0D15;      /* right-hand detail panels */
+  --surface: #15141F;       /* cards */
+  --surface-raised: #1B1A27;/* popovers, command bar */
+  --surface-sunken: #110F19;/* list group headers, nested blocks */
+  --hover: #1A1925;
+  --selected: #201E2C;
+  --border: #24222F;        /* card borders */
+  --border-subtle: #1E1C29; /* dividers inside cards, header rules */
+  --border-row: #181722;    /* list row separators */
+  --border-strong: #2E2B3B; /* buttons, chips, inputs */
+  --track: #262432;         /* progress track */
 
-  --text: #EDEDEF;
-  --text-2: #C9C9CF;        /* body copy inside content */
-  --text-secondary: #A1A1AA;
-  --text-tertiary: #8B8B94; /* minimum for small text: 4.5:1 on --bg */
-  --text-on-accent: #0B0B0D;
+  --text: #EEEDF3;
+  --text-2: #CBC9D6;        /* body copy inside content */
+  --text-secondary: #A4A1B3;
+  --text-tertiary: #8C899C; /* minimum for small text: 4.5:1 on --bg */
+  --text-on-accent: #120F24;
 
-  --accent: #8B8FFF;
-  --accent-soft: #8B8FFF26;
+  --accent: #9B8CFF;
+  --accent-soft: #9B8CFF26;
 
   /* Workflow states (glyph colors) */
   --state-backlog: #6B6B73;
@@ -98,7 +104,7 @@
   --pill-blocked-bg: #EF64611F; --pill-blocked-fg: #F48A87;
   --pill-review-bg: #4EA7FC1F;  --pill-review-fg: #7CBEFD;
   --pill-done-bg: #4CB7821F;    --pill-done-fg: #6FCF97;
-  --pill-neutral-bg: #26262C;   --pill-neutral-fg: #A1A1AA;
+  --pill-neutral-bg: #24222F;   --pill-neutral-fg: #A4A1B3;
 
   /* Agent identity hues: fg on a ~15% tint of the same hue */
   --agent-atlas: #A3A6FF;  --agent-atlas-bg: #8B8FFF26;
@@ -111,7 +117,11 @@
   --agent-echo: #B98BF5;   --agent-echo-bg: #B98BF524;
 
   /* Human avatars: neutral circles */
-  --human-avatar-bg: #2B2B33;
+  --human-avatar-bg: #2A2836;
+
+  /* Persona initials: the persona color as is on dark; mixed halfway toward --text on light so it reads (4.5:1+) */
+  --persona-ink: 100%;
+  --persona-tint: 15%;
 
   /* Artifact type tags */
   --doc-prd: #A3A6FF;    --doc-prd-bg: #8B8FFF1F;
@@ -123,48 +133,48 @@
   --doc-note: #B9B9C3;   --doc-note-bg: #B9B9C31A;   /* wiki pages (v0.3) */
 
   /* Component tokens (v0.2): values the mockups hard-coded, named so both themes work */
-  --row-hover: #131317;          /* list and card rows */
-  --border-hover: #2C2C34;       /* card border on hover */
-  --border-float: #2A2A31;       /* dialogs, selected tabs */
-  --kbd-border: #2A2A30;
-  --btn-secondary-bg: #1E1E24;
-  --btn-secondary-border: #3A3A44;
-  --btn-outline-bg: #141418;
+  --row-hover: #15141E;          /* list and card rows */
+  --border-hover: #332F42;       /* card border on hover */
+  --border-float: #2E2B3B;       /* dialogs, selected tabs */
+  --kbd-border: #2E2B3B;
+  --btn-secondary-bg: #201E2C;
+  --btn-secondary-border: #3A3650;
+  --btn-outline-bg: #15141F;
   --approve-fg: #1A1206;         /* text on --state-human buttons */
-  --segment-on: #1F1F25;
-  --command-on: #1F1F26;         /* selected command-menu item */
-  --search-bg: #121216;
-  --priority-unlit: #34343C;
-  --unassigned: #44444C;         /* dashed empty-assignee ring */
-  --scrim: rgba(5, 5, 7, 0.62);
+  --segment-on: #24222F;
+  --command-on: #24222F;         /* selected command-menu item */
+  --search-bg: #15141F;
+  --priority-unlit: #363345;
+  --unassigned: #48455A;         /* dashed empty-assignee ring */
+  --scrim: rgba(6, 5, 12, 0.62);
 
   color-scheme: dark;
 }
 
 /* ---------- Color: light ---------- */
 :root[data-theme="light"] {
-  --bg: #FFFFFF;
-  --bg-sidebar: #F7F7F8;
-  --bg-panel: #FBFBFC;
+  --bg: #FCFBFE;
+  --bg-sidebar: #F4F2F9;
+  --bg-panel: #F9F8FC;
   --surface: #FFFFFF;
   --surface-raised: #FFFFFF;
-  --surface-sunken: #F9F9FA;
-  --hover: #F2F2F4;
-  --selected: #E9E9EE;
-  --border: #E6E6EA;
-  --border-subtle: #ECECEF;
-  --border-row: #F0F0F2;
-  --border-strong: #E0E0E5;
-  --track: #ECECF0;
+  --surface-sunken: #F6F5FA;
+  --hover: #F0EEF6;
+  --selected: #ECE8F7;
+  --border: #E5E2EE;
+  --border-subtle: #ECE9F3;
+  --border-row: #F1EFF6;
+  --border-strong: #DEDAEA;
+  --track: #ECE9F3;
 
-  --text: #17171A;
-  --text-2: #3A3A42;
-  --text-secondary: #55555F;
-  --text-tertiary: #6B6B75;
+  --text: #17151F;
+  --text-2: #3A3747;
+  --text-secondary: #55526A;
+  --text-tertiary: #66637A;
   --text-on-accent: #FFFFFF;
 
-  --accent: #5558E3;
-  --accent-soft: #5558E31F;
+  --accent: #5B4BD6;
+  --accent-soft: #5B4BD61F;
 
   --state-backlog: #A8A8B0;
   --state-todo: #8A8A93;
@@ -179,7 +189,7 @@
   --pill-blocked-bg: #D9424B1A; --pill-blocked-fg: #A82A33;
   --pill-review-bg: #2F7FE01A;  --pill-review-fg: #1D5FB0;
   --pill-done-bg: #2E9E681A;    --pill-done-fg: #1E7048;
-  --pill-neutral-bg: #F0F0F2;   --pill-neutral-fg: #55555F;
+  --pill-neutral-bg: #F0EEF6;   --pill-neutral-fg: #55526A;
 
   --agent-atlas: #4547C9;  --agent-atlas-bg: #5558E31F;
   --agent-quill: #0B7A6E;  --agent-quill-bg: #0F8A7C1A;
@@ -190,7 +200,9 @@
   --agent-pike: #A44A18;   --agent-pike-bg: #B5541F17;
   --agent-echo: #6C3BB8;   --agent-echo-bg: #7A45C917;
 
-  --human-avatar-bg: #E3E3E8;
+  --human-avatar-bg: #E5E1EE;
+  --persona-ink: 50%;
+  --persona-tint: 20%;
 
   --doc-prd: #4547C9;    --doc-prd-bg: #5558E31A;
   --doc-spec: #1D5FB0;   --doc-spec-bg: #2F7FE01A;
@@ -200,9 +212,9 @@
   --doc-mockup: #0E7C75; --doc-mockup-bg: #14A8A01A;
   --doc-note: #55555F;   --doc-note-bg: #6B6B751A;
 
-  --row-hover: #F7F7F9; --border-hover: #D4D4DA; --border-float: #E0E0E5; --kbd-border: #E0E0E5;
-  --btn-secondary-bg: #FFFFFF; --btn-secondary-border: #D4D4DA; --btn-outline-bg: #FFFFFF; --approve-fg: #1A1206;
-  --segment-on: #E9E9EE; --command-on: #E9E9EE; --search-bg: #FFFFFF; --priority-unlit: #D4D4DA; --unassigned: #B8B8C0;
+  --row-hover: #F7F5FB; --border-hover: #D3CEE2; --border-float: #DEDAEA; --kbd-border: #DEDAEA;
+  --btn-secondary-bg: #FFFFFF; --btn-secondary-border: #D3CEE2; --btn-outline-bg: #FFFFFF; --approve-fg: #1A1206;
+  --segment-on: #ECE8F7; --command-on: #ECE8F7; --search-bg: #FFFFFF; --priority-unlit: #D4D4DA; --unassigned: #B8B8C0;
   --scrim: rgba(23, 23, 26, 0.32);
   --shadow-float: 0 12px 32px rgba(23, 23, 26, 0.12), 0 0 0 1px rgba(23, 23, 26, 0.04);
 
@@ -212,27 +224,28 @@
 /* Follow the OS when no explicit theme is set */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
-    --bg: #FFFFFF; --bg-sidebar: #F7F7F8; --bg-panel: #FBFBFC; --surface: #FFFFFF; --surface-raised: #FFFFFF; --surface-sunken: #F9F9FA;
-    --hover: #F2F2F4; --selected: #E9E9EE; --border: #E6E6EA; --border-subtle: #ECECEF; --border-row: #F0F0F2; --border-strong: #E0E0E5; --track: #ECECF0;
-    --text: #17171A; --text-2: #3A3A42; --text-secondary: #55555F; --text-tertiary: #6B6B75; --text-on-accent: #FFFFFF;
-    --accent: #5558E3; --accent-soft: #5558E31F;
+    --bg: #FCFBFE; --bg-sidebar: #F4F2F9; --bg-panel: #F9F8FC; --surface: #FFFFFF; --surface-raised: #FFFFFF; --surface-sunken: #F6F5FA;
+    --hover: #F0EEF6; --selected: #ECE8F7; --border: #E5E2EE; --border-subtle: #ECE9F3; --border-row: #F1EFF6; --border-strong: #DEDAEA; --track: #ECE9F3;
+    --text: #17151F; --text-2: #3A3747; --text-secondary: #55526A; --text-tertiary: #66637A; --text-on-accent: #FFFFFF;
+    --accent: #5B4BD6; --accent-soft: #5B4BD61F;
     --state-backlog: #A8A8B0; --state-todo: #8A8A93; --state-progress: #D49A0A; --state-review: #2F7FE0; --state-done: #2E9E68; --state-human: #E5832F; --state-blocked: #D9424B; --priority-urgent: #EB7A1E;
     --pill-human-bg: #F59E5B26; --pill-human-fg: #9A4A0E; --pill-blocked-bg: #D9424B1A; --pill-blocked-fg: #A82A33;
     --pill-review-bg: #2F7FE01A; --pill-review-fg: #1D5FB0; --pill-done-bg: #2E9E681A; --pill-done-fg: #1E7048;
-    --pill-neutral-bg: #F0F0F2; --pill-neutral-fg: #55555F;
+    --pill-neutral-bg: #F0EEF6; --pill-neutral-fg: #55526A;
     --agent-atlas: #4547C9; --agent-atlas-bg: #5558E31F; --agent-quill: #0B7A6E; --agent-quill-bg: #0F8A7C1A;
     --agent-sentry: #B42F48; --agent-sentry-bg: #C2364F17; --agent-juno: #1D5FB0; --agent-juno-bg: #2F7FE01A;
     --agent-nova: #8A6100; --agent-nova-bg: #D49A0A1F; --agent-relay: #277538; --agent-relay-bg: #2E85401A;
     --agent-pike: #A44A18; --agent-pike-bg: #B5541F17; --agent-echo: #6C3BB8; --agent-echo-bg: #7A45C917;
-    --human-avatar-bg: #E3E3E8;
+    --human-avatar-bg: #E5E1EE;
+    --persona-ink: 50%; --persona-tint: 20%;
     --doc-prd: #4547C9; --doc-prd-bg: #5558E31A; --doc-spec: #1D5FB0; --doc-spec-bg: #2F7FE01A; --doc-adr: #8A6100; --doc-adr-bg: #D49A0A1F;
     --doc-report: #1E7048; --doc-report-bg: #2E9E681A; --doc-design: #B42F48; --doc-design-bg: #C2364F17;
     --doc-mockup: #0E7C75; --doc-mockup-bg: #14A8A01A;
     --doc-note: #55555F; --doc-note-bg: #6B6B751A;
     --shadow-float: 0 12px 32px rgba(23, 23, 26, 0.12), 0 0 0 1px rgba(23, 23, 26, 0.04);
-    --row-hover: #F7F7F9; --border-hover: #D4D4DA; --border-float: #E0E0E5; --kbd-border: #E0E0E5;
-    --btn-secondary-bg: #FFFFFF; --btn-secondary-border: #D4D4DA; --btn-outline-bg: #FFFFFF; --approve-fg: #1A1206;
-    --segment-on: #E9E9EE; --command-on: #E9E9EE; --search-bg: #FFFFFF; --priority-unlit: #D4D4DA; --unassigned: #B8B8C0;
+    --row-hover: #F7F5FB; --border-hover: #D3CEE2; --border-float: #DEDAEA; --kbd-border: #DEDAEA;
+    --btn-secondary-bg: #FFFFFF; --btn-secondary-border: #D3CEE2; --btn-outline-bg: #FFFFFF; --approve-fg: #1A1206;
+    --segment-on: #ECE8F7; --command-on: #ECE8F7; --search-bg: #FFFFFF; --priority-unlit: #D4D4DA; --unassigned: #B8B8C0;
     --scrim: rgba(23, 23, 26, 0.32);
     color-scheme: light;
   }

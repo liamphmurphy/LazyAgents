@@ -34,7 +34,7 @@ helm-design/
 
 ## 1. Principles
 
-1. **Color means state, never decoration.** Amber always means a person needs to act (an approval or a review). Red always means blocked. The accent (indigo) is reserved for primary actions, focus and the current selection. Everything else is greyscale.
+1. **Color means state, never decoration.** Amber always means a person needs to act (an approval or a review). Red always means blocked. The accent (the mark's violet) is reserved for primary actions, focus and the current selection. Everything else is greyscale.
 2. **Agents are rounded squares, people are circles.** Every agent has a fixed identity hue. People are neutral grey circles with initials. Anyone looking at the screen should be able to tell who did the work without reading a name.
 3. **Mono for machine values.** Ticket IDs, branch names, model names, counts, durations, spend and permission scopes are set in JetBrains Mono. Prose and labels are set in Inter.
 4. **Borders over shadows.** Surfaces are separated by 1px borders a few percent brighter than the ground. Shadows appear only on floating UI (popovers, the bulk-action bar, the command menu).
@@ -50,24 +50,28 @@ Everything lives in `tokens.css`. Dark is the default. Set `data-theme="light"` 
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `--bg` | `#0B0B0D` | `#FFFFFF` | App ground |
-| `--bg-sidebar` | `#0E0E11` | `#F7F7F8` | Sidebar |
-| `--bg-panel` | `#0D0D10` | `#FBFBFC` | Right-hand detail panels |
-| `--surface` | `#111114` | `#FFFFFF` | Cards |
-| `--surface-raised` | `#16161B` | `#FFFFFF` | Popovers, floating bars |
-| `--surface-sunken` | `#0F0F12` | `#F9F9FA` | List group headers, nested blocks |
-| `--hover` / `--selected` | `#17171B` / `#1B1B21` | `#F2F2F4` / `#E9E9EE` | Interactive states |
-| `--border` | `#1F1F25` | `#E6E6EA` | Card outlines |
-| `--border-subtle` | `#1C1C21` | `#ECECEF` | Dividers inside cards, header rules |
-| `--border-row` | `#16161A` | `#F0F0F2` | Between list rows |
-| `--border-strong` | `#26262C` | `#E0E0E5` | Buttons, chips, inputs |
-| `--text` | `#EDEDEF` | `#17171A` | Primary text |
-| `--text-2` | `#C9C9CF` | `#3A3A42` | Body copy inside content |
-| `--text-secondary` | `#A1A1AA` | `#55555F` | Labels, inactive nav |
-| `--text-tertiary` | `#8B8B94` | `#6B6B75` | Meta, timestamps. This is the dimmest text allowed (passes 4.5:1). |
-| `--accent` | `#8B8FFF` | `#5558E3` | Primary buttons, focus, selection, badge |
+| `--bg` | `#0C0B12` | `#FCFBFE` | App ground |
+| `--bg-sidebar` | `#100F18` | `#F4F2F9` | Sidebar |
+| `--bg-panel` | `#0E0D15` | `#F9F8FC` | Right-hand detail panels |
+| `--surface` | `#15141F` | `#FFFFFF` | Cards |
+| `--surface-raised` | `#1B1A27` | `#FFFFFF` | Popovers, floating bars |
+| `--surface-sunken` | `#110F19` | `#F6F5FA` | List group headers, nested blocks |
+| `--hover` / `--selected` | `#1A1925` / `#201E2C` | `#F0EEF6` / `#ECE8F7` | Interactive states |
+| `--border` | `#24222F` | `#E5E2EE` | Card outlines |
+| `--border-subtle` | `#1E1C29` | `#ECE9F3` | Dividers inside cards, header rules |
+| `--border-row` | `#181722` | `#F1EFF6` | Between list rows |
+| `--border-strong` | `#2E2B3B` | `#DEDAEA` | Buttons, chips, inputs |
+| `--text` | `#EEEDF3` | `#17151F` | Primary text |
+| `--text-2` | `#CBC9D6` | `#3A3747` | Body copy inside content |
+| `--text-secondary` | `#A4A1B3` | `#55526A` | Labels, inactive nav |
+| `--text-tertiary` | `#8C899C` | `#66637A` | Meta, timestamps. This is the dimmest text allowed (passes 4.5:1 on every surface, `--selected` included). |
+| `--accent` | `#9B8CFF` | `#5B4BD6` | Primary buttons, focus, selection |
 
 The light accent is darker than the dark-theme accent so white text on it still passes contrast.
+
+### Dusk (v0.4)
+
+The palette is taken from the Vesper mark: a dusk gradient from `--brand-deep` `#2B2366` through `--brand-violet` `#7864D9` to the evening star `--brand-star` `#F2A97E`. Neutrals carry a slight violet tint instead of pure grey, and the accent is the mark's violet lightened for contrast (`#9B8CFF` on `--bg` is about 7:1; `--text-on-accent` `#120F24` on it is about 6.8:1). The brand gradient is for the logo, the welcome glow and persona portraits only. It never fills a control and never stands for a state, so the peach star can't be mistaken for amber.
 
 ### Workflow states
 
@@ -146,7 +150,8 @@ The v0.1 mockups hard-coded a few component colors. They're now tokens with ligh
 | Card heading | Inter 14, 600 | Section and card headings |
 | Body | Inter 13/1.45, 400–500 | Default UI text; row titles are 500 |
 | Reading | Inter 14/1.65 | Ticket descriptions and comments |
-| Small | Inter 12–12.5 | Meta, column headers, secondary lines |
+| Chat | Inter 15/1.6 | Chat messages: replies are read like a page |
+| Small | Inter 12–12.5 | Meta, column headers, secondary lines. Chat surfaces and the menu set nothing smaller than 12px. |
 | Mono | JetBrains Mono 11–12.5 | IDs, branches, models, numbers |
 | Metric | Inter 28, 600, −0.02em | KPI tiles |
 
@@ -177,7 +182,7 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 **Sidebar** (`--bg-sidebar`, right border `--border-subtle`, padding 12/10, 20px between groups):
 1. Workspace switcher: 22px accent square with the "H" mark, workspace name 13.5/600, chevron. On the right is a 30px outlined "new ticket" icon button.
 2. Search button: 32px tall, `--surface` fill, placeholder "Search…", `⌘K` keycap on the right (mono 11px, 1px border, radius 4).
-3. Primary nav: Dashboard, Inbox (accent count badge), Tickets, Epics, Agents (green dot plus live count), Artifacts. Items are 30px tall, radius 6, 16px stroke icons at 1.5px. The active item uses `--selected` with `--text`; inactive items use `--text-secondary`.
+3. Primary nav: Dashboard, Inbox (amber count badge: it is a person needing to act), Tickets, Epics, Agents (green dot plus live count), Artifacts. Items are 30px tall, radius 6, 16px stroke icons at 1.5px. The active item uses `--selected` with `--text`; inactive items use `--text-secondary`.
 4. Projects: a 12px/500 tertiary label with a "+" button, then project rows with a 10px rounded-square color swatch.
 5. Footer: agent-capacity card (Dashboard only), showing 8 segments with N lit in accent, then the user row (circle avatar, name, role, settings icon).
 

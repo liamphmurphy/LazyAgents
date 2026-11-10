@@ -1,37 +1,94 @@
 "use client";
 
 import { useCanvasPanel } from "@/lib/use-canvas-panel";
-import { composerFrame, composerInput, ResearchToggle, TemporaryToggle } from "./reply-tools";
+import { composerFrame, composerInput, ResearchToggle, SendButton, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useBootstrap, useChat, useChats, useStartChat } from "@/lib/api/hooks";
+import { useBootstrap, useChat, useChatSuggestions, useChats, useInbox, usePersonaDock, useStartChat } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { newestChat } from "@/lib/chat-ui";
-import { codesInRepos } from "@/lib/persona-ui";
+import { codesInRepos, toneLabel } from "@/lib/persona-ui";
+import { carouselOrder, carouselWindow, FALLBACK_STARTERS, personaTagline, pickUpCards, type PickUpTone } from "@/lib/welcome";
+import { timelineTime } from "@/lib/format";
+import { cx } from "@/lib/cx";
+import Link from "next/link";
 import { parseAttach, removeChip, toContextRefs, type Chip } from "@/lib/chat-context";
-import { Button } from "@/components/ui/button";
 import { Banner, Skeleton, TextArea } from "@/components/ui/primitives";
-import { TopBar } from "@/components/shell/topbar";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
 import { AttachButton, AttachmentChips, DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { ChipList } from "./context-chips";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
-import { PersonaAvatar, PersonaSwitcher, RepoSelect, personaLook, useOpenPersonaManager } from "./persona";
+import { PersonaCarousel, RepoSelect, personaLook, useOpenPersonaManager } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
-const SUGGESTIONS = [
-  "What did my agents finish this week?",
-  "What’s blocking my open epics?",
-  "Draft tickets from a spec",
-  "Search the web for the latest on a topic",
-];
+/** The welcome's conversation starters: the personalised ones from /chat-suggestions, else a few general ones. Picking one fills the box. */
+function Starters({ onPick, disabled, color }: { onPick: (prompt: string) => void; disabled: boolean; color: string }) {
+  const written = useChatSuggestions().data?.suggestions ?? [];
+  const starters = written.length ? written.slice(0, 3).map((s) => ({ title: s.title, prompt: s.prompt })) : FALLBACK_STARTERS.map((t) => ({ title: t, prompt: t }));
+  return (
+    <ul aria-label="Suggestions" className="flex flex-wrap justify-center gap-2.5">
+      {starters.map((s) => (
+        <li key={s.title}>
+          <button
+            type="button"
+            disabled={disabled}
+            title={s.prompt}
+            onClick={() => onPick(s.prompt)}
+            className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-surface px-3.5 text-[13px] text-fg-2 hover:bg-hover hover:text-fg disabled:opacity-50"
+          >
+            <svg aria-hidden width="11" height="11" viewBox="0 0 12 12" style={{ color }} className="flex-none">
+              <path d="M6 .5c.4 2.9 1.2 3.7 4.1 4.1-2.9.4-3.7 1.2-4.1 4.1C5.6 5.8 4.8 5 1.9 4.6 4.8 4.2 5.6 3.4 6 .5Z" fill="currentColor" />
+            </svg>
+            {s.title}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
-/** A first-time conversation (mockup frame 2): greeting, suggestions, and a composer that starts the chat. */
+const PICK_UP_PILL: Record<PickUpTone, string> = {
+  human: "bg-pill-human-bg text-pill-human-fg",
+  persona: "",
+  neutral: "bg-pill-neutral-bg text-pill-neutral-fg",
+};
+
+/** "Pick up where you left off": what needs you, unread replies, then your latest chats. Nothing until there's something. */
+function PickUp() {
+  const inbox = useInbox();
+  const dock = usePersonaDock();
+  const chats = useChats(false, "all");
+  const cards = pickUpCards(inbox.data ?? [], dock.data?.personas ?? [], chats.data?.chats ?? [], (iso) => timelineTime(iso));
+  if (!cards.length) return null;
+  return (
+    <section aria-label="Pick up where you left off" className="flex w-full flex-col gap-3">
+      <h2 className="text-xs font-semibold uppercase tracking-[0.04em] text-fg-tertiary">Pick up where you left off</h2>
+      <ul className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+        {cards.map((c) => (
+          <li key={c.key} className="min-w-0">
+            <Link href={c.href} className="flex h-full flex-col items-start gap-2 rounded-xl border border-border bg-surface p-3.5 text-left hover:border-border-hover hover:bg-hover">
+              <span
+                className={cx("rounded-full px-2.5 py-0.5 text-xs font-semibold", PICK_UP_PILL[c.tone])}
+                style={c.tone === "persona" && c.color ? { color: c.color, background: `color-mix(in srgb, ${c.color} 15%, transparent)` } : undefined}
+              >
+                {c.label}
+              </span>
+              <span className="line-clamp-2 text-[13.5px] font-medium text-fg">{c.title}</span>
+              <span className="truncate text-xs text-fg-tertiary">{c.meta}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** A first conversation (the persona-led welcome): pick who to talk to, write, or pick up where you left off. */
 function Welcome({ disabled }: { disabled: boolean }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -42,9 +99,12 @@ function Welcome({ disabled }: { disabled: boolean }) {
   const [picked, setPicked] = useState<string>();
   const linked = search.get("persona");
   const linkedKnown = personas.data?.personas.some((p) => p.id === linked) ? linked! : undefined;
-  const personaId = picked ?? linkedKnown ?? personas.data?.default_persona_id;
+  const defaultId = personas.data?.default_persona_id;
+  const personaId = picked ?? linkedKnown ?? defaultId;
   const fullPersona = personas.data?.personas.find((p) => p.id === personaId);
   const persona = personaLook(fullPersona);
+  const ordered = carouselOrder(personas.data?.personas ?? [], defaultId);
+  const around = carouselWindow(ordered, ordered.findIndex((p) => p.id === personaId));
   // A coding persona works in one of its repos: the first unless another is picked.
   const [repoPicked, setRepoPicked] = useState<string>();
   const repos = fullPersona?.repos ?? [];
@@ -75,94 +135,83 @@ function Welcome({ disabled }: { disabled: boolean }) {
     );
   }
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto" {...drop.props}>
       <DropOverlay over={drop.over} />
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-8 text-center">
-        <PersonaAvatar persona={persona} size={48} />
-        <h1 className="text-xl font-semibold text-fg">{name ? `Hi ${name}, what can I help with?` : "What can I help with?"}</h1>
-        <p className="max-w-[520px] text-[13px] text-fg-secondary">
-          I can read your runs, tickets, epics, wiki and files, search the web, and create tickets for you. I remember what matters and tell you when I do.
-        </p>
-        <ul aria-label="Suggestions" className="mt-2 grid w-full max-w-[520px] grid-cols-2 gap-2 max-sm:grid-cols-1">
-          {SUGGESTIONS.map((s) => (
-            <li key={s}>
-              <button
-                type="button"
-                disabled={locked}
-                onClick={() => {
-                  setText(s);
-                  area.current?.focus();
-                }}
-                className="h-full w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-left text-[13px] text-fg hover:bg-hover disabled:opacity-50"
-              >
-                {s}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[11.5px] text-fg-tertiary">Your memory is private to you and separate from the team wiki.</p>
-      </div>
-      <form
-        className="mx-auto flex w-full max-w-[860px] flex-col gap-2 px-6 pb-5"
-        onPaste={files.onPaste}
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        {start.isError && (
-          <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(start.error)}</p>
-        )}
-        {fullPersona?.capabilities.code && !repos.length && (
-          <p className="text-[12.5px] text-fg-secondary" data-testid="no-repos-hint">
-            {fullPersona.name} can write code but has no repository yet.{" "}
-            <button type="button" className="text-accent hover:underline" onClick={managePersonas}>
-              Edit the persona to add one
-            </button>
-          </p>
-        )}
-        {repo && emails.length > 1 && (
-          <CommitEmailPicker emails={emails} name={boot.data?.me.name ?? ""} repo={repo} value={commitEmail} onPick={setCommitEmail} disabled={locked} required />
-        )}
-        <AttachmentChips attachments={files} />
-        <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
-        <div className={composerFrame}>
-        <TextArea
-          ref={area}
-          aria-label="Message"
-          className={composerInput}
-          rows={3}
-          value={text}
-          disabled={locked}
-          placeholder={`Message ${persona.id ? persona.name : "your assistant"}… Enter sends, Shift+Enter adds a line.`}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              submit();
-            }
+      <div className="mx-auto flex w-full max-w-[768px] flex-1 flex-col items-center justify-center px-6 py-10">
+        <PersonaCarousel ordered={ordered} current={persona} left={around.left} right={around.right} onPick={setPicked} disabled={locked} />
+        <h1 className="mt-5 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg">{persona.name}</h1>
+        <p className="mt-2 text-center text-[14px] text-fg-secondary">{personaTagline(fullPersona, toneLabel, !!fullPersona && fullPersona.id === defaultId)}</p>
+        <form
+          className="mt-7 flex w-full flex-col gap-2"
+          onPaste={files.onPaste}
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
           }}
-        />
-        <div className="flex items-end gap-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <PersonaSwitcher value={personaId} onChange={setPicked} disabled={locked} />
-            {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
-            <AttachButton onFiles={files.add} disabled={locked} compact />
-            <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
-            <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
+        >
+          {start.isError && (
+            <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(start.error)}</p>
+          )}
+          {fullPersona?.capabilities.code && !repos.length && (
+            <p className="text-[12.5px] text-fg-secondary" data-testid="no-repos-hint">
+              {fullPersona.name} can write code but has no repository yet.{" "}
+              <button type="button" className="text-accent hover:underline" onClick={managePersonas}>
+                Edit the persona to add one
+              </button>
+            </p>
+          )}
+          {repo && emails.length > 1 && (
+            <CommitEmailPicker emails={emails} name={boot.data?.me.name ?? ""} repo={repo} value={commitEmail} onPick={setCommitEmail} disabled={locked} required />
+          )}
+          <AttachmentChips attachments={files} />
+          <ChipList chips={chips} onRemove={(k) => setChips((cs) => removeChip(cs, k))} disabled={locked} />
+          <div className={composerFrame}>
+            <TextArea
+              ref={area}
+              aria-label="Message"
+              className={composerInput}
+              rows={2}
+              value={text}
+              disabled={locked}
+              placeholder={name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+            />
+            <div className="flex items-end gap-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <AttachButton onFiles={files.add} disabled={locked} compact />
+                {repo && <RepoSelect repos={repos} value={repo} onChange={setRepoPicked} disabled={locked} />}
+                <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
+                <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
+              </div>
+              <SendButton
+                label={start.isPending ? "Starting…" : research ? "Plan it" : "Send"}
+                disabled={locked || files.pending || !text.trim() || askCommitEmail}
+                title={askCommitEmail ? "Pick which email commits use first" : undefined}
+              />
+            </div>
           </div>
-          <Button
-            className="flex-none"
-            type="submit"
-            variant="primary"
-            disabled={locked || files.pending || !text.trim() || askCommitEmail}
-            title={askCommitEmail ? "Pick which email commits use first" : undefined}
-          >
-            {start.isPending ? "Starting…" : research ? "Plan it" : "Send"}
-          </Button>
+        </form>
+        <div className="mt-5">
+          <Starters
+            disabled={locked}
+            color={persona.color}
+            onPick={(prompt) => {
+              setText(prompt);
+              area.current?.focus();
+            }}
+          />
         </div>
+        <div className="mt-12 w-full">
+          <PickUp />
         </div>
-      </form>
+      </div>
+      <p className="pb-4 text-center text-xs text-fg-tertiary">Your memory is private to you and separate from the team wiki.</p>
     </div>
   );
 }
@@ -200,7 +249,6 @@ export function ChatScreen({ id }: { id?: string }) {
   const resolving = !id && !fresh && (!chats.data || !!newest);
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar crumbs={[{ label: "Assistant" }]} />
       <div className="relative flex min-h-0 flex-1 max-md:flex-col">
           <div className="flex min-w-0 flex-1 flex-col">
             {(noHarness || conversation.error) && (

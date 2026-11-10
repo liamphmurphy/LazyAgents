@@ -215,6 +215,26 @@ export function newestChat<T extends { last_message_at?: string | null; updated_
   return chats?.reduce<T | undefined>((a, c) => (!a || t(c) > t(a) ? c : a), undefined);
 }
 
+export type DayGroup<T> = { label: "Today" | "Yesterday" | "Earlier"; chats: T[] };
+
+/** The history list's sections, by the local day of each chat's last activity; keeps the input order inside each. */
+export function groupByDay<T extends { last_message_at?: string | null; created_at: string }>(chats: readonly T[], now = Date.now()): DayGroup<T>[] {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const startToday = today.getTime();
+  const startYesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).getTime();
+  const groups: DayGroup<T>[] = [
+    { label: "Today", chats: [] },
+    { label: "Yesterday", chats: [] },
+    { label: "Earlier", chats: [] },
+  ];
+  for (const c of chats) {
+    const t = Date.parse(c.last_message_at ?? c.created_at);
+    groups[t >= startToday ? 0 : t >= startYesterday ? 1 : 2].chats.push(c);
+  }
+  return groups.filter((g) => g.chats.length > 0);
+}
+
 // ---- the chat tab's status line: what the persona is doing, at a glance ----
 
 /** The kind of work under way, which picks the status card's animated scene. */

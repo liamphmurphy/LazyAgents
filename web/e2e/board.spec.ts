@@ -42,7 +42,8 @@ test("epic filter shows points, criteria and blockers, and assignee/canceled fil
   const api = await installBoardApi(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/board?project=WEB");
-  await screen(page).getByLabel("Epic", { exact: true }).selectOption("epic-1");
+  await screen(page).getByRole("button", { name: "Epic: All epics" }).click();
+  await page.getByRole("menuitemradio", { name: "Kanban board" }).click();
   const summary = screen(page).getByRole("region", { name: "Epic summary" });
   await expect(summary).toContainText("Kanban board");
   await expect(summary).toContainText("5 / 10 pts done");
@@ -53,11 +54,14 @@ test("epic filter shows points, criteria and blockers, and assignee/canceled fil
   await expect(summary.getByRole("button", { name: "Mark epic done" })).toBeDisabled();
   await expect(card(page, "WEB-4")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("board.png"), fullPage: true });
-  await screen(page).getByLabel("Assignee", { exact: true }).selectOption("builder");
+  await screen(page).getByRole("button", { name: "Assignee: All assignees" }).click();
+  await page.getByRole("menuitemradio", { name: "@builder" }).click();
   await expect(card(page, "WEB-2")).toHaveCount(0);
   await expect(card(page)).toBeVisible();
-  await screen(page).getByLabel("Assignee", { exact: true }).selectOption("");
-  await screen(page).getByLabel("Show canceled").check();
+  await screen(page).getByRole("button", { name: "Assignee: @builder" }).click();
+  await page.getByRole("menuitemradio", { name: "All assignees" }).click();
+  await screen(page).getByRole("switch", { name: "Show canceled" }).click();
+  await expect(screen(page).getByRole("switch", { name: "Show canceled" })).toBeChecked();
   await expect(column(page, "canceled").getByRole("article", { name: "Ticket WEB-6" })).toBeVisible();
   const url = new URL(api.boardRequests.at(-1)!);
   expect(url.searchParams.get("epic")).toBe("epic-1");

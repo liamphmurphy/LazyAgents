@@ -106,7 +106,7 @@ test("/workflow lists published workflows, confirms, then the gate appears above
   const state = { wf: workflow(), posts: [] as { url: string; body: unknown }[], runs: [] as unknown[] };
   await serveWorkflows(page, state);
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   const box = page.getByRole("combobox", { name: "Message" });
   await expect(box).toBeFocused();
   await box.pressSequentially("/workflow ");

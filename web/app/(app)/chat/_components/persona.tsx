@@ -11,6 +11,7 @@ import { DOCK_STATE_LABEL, dockEntries, type DockState } from "@/lib/persona-doc
 import { STRIP_PERSONAS, repoShortName, splitPersonaStrip } from "@/lib/persona-ui";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
+import { composerPill } from "./reply-tools";
 
 // Assistant personas in the Assistant view only (ADR: Assistant personas). Ticket,
 // epic and run views keep their agent identity and never render these.
@@ -59,26 +60,39 @@ export function CapabilityBadges({ capabilities, className }: { capabilities?: S
   );
 }
 
-/** Which of the persona's repositories a new conversation works in. */
+/** Which of the persona's repositories a new conversation works in: a pill that opens upwards, like the persona's. */
 export function RepoSelect({ repos, value, onChange, disabled }: { repos: string[]; value: string; onChange: (url: string) => void; disabled?: boolean }) {
   return (
-    <label className="inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-raised px-2.5 text-xs text-fg-secondary">
-      <Icon name="branch" size={13} className="flex-none" />
-      <select
-        aria-label="Repository for this conversation"
-        value={value}
-        disabled={disabled}
-        title={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="min-w-0 max-w-[220px] cursor-pointer truncate bg-transparent font-mono text-xs text-fg outline-none disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {repos.map((r) => (
-          <option key={r} value={r}>
-            {repoShortName(r)}
-          </option>
-        ))}
-      </select>
-    </label>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label={`Repository for this conversation: ${repoShortName(value)}`}
+          title={value}
+          className={composerPill()}
+        >
+          <Icon name="branch" size={13} className="flex-none" />
+          <span className="min-w-0 max-w-[220px] truncate font-mono text-xs text-fg">{repoShortName(value)}</span>
+          <Icon name="chev" size={12} strokeWidth={1.6} className="flex-none text-fg-tertiary" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" side="top" sideOffset={6} className={cx(floatPanel, "w-[300px]")}>
+          <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">Repository for this conversation</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
+            {repos.map((r) => (
+              <DropdownMenu.RadioItem key={r} value={r} title={r} className={item}>
+                <Icon name="branch" size={13} className="flex-none text-fg-tertiary" />
+                <span className="min-w-0 truncate font-mono text-xs">{repoShortName(r)}</span>
+                <span className="ml-auto" />
+                <Check on={r === value} />
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 
@@ -102,8 +116,9 @@ export function PersonaAvatar({ persona, size = 20, className }: { persona: Pers
       style={{
         ...style,
         fontSize: Math.round(size * 0.5),
-        color: persona.color,
-        background: `color-mix(in srgb, ${persona.color} 15%, transparent)`,
+        // Light themes mix the color toward the text color (--persona-ink) so the initial stays readable.
+        color: `color-mix(in srgb, ${persona.color} var(--persona-ink), var(--text))`,
+        background: `color-mix(in srgb, ${persona.color} var(--persona-tint), var(--bg))`,
       }}
     >
       {persona.name.trim().slice(0, 1).toUpperCase() || "A"}
@@ -258,9 +273,10 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
   return (
     <div className="flex flex-col gap-1">
       <div role="group" aria-label="Show conversations for" className={cx("flex items-center py-0.5", overflow.length > 0 || shown.length === STRIP_PERSONAS - 1 ? "justify-between" : "gap-1.5")}>
-        <PersonaAvatarButton label="All personas" on={value === "all"} disabled={filter.loading} onClick={() => filter.set("all")}>
-          <span className="grid size-[26px] place-items-center rounded-full border border-border-strong bg-surface text-fg-secondary"><Icon name="users" size={14} /></span>
-        </PersonaAvatarButton>
+        <button type="button" aria-label="All personas" aria-pressed={value === "all"} title="All personas" disabled={filter.loading} onClick={() => filter.set("all")}
+          className={cx("h-7 flex-none rounded-full px-3 text-xs font-semibold disabled:opacity-60", value === "all" ? "bg-selected text-fg outline-2 outline-accent" : "bg-surface text-fg-secondary hover:text-fg")}>
+          All
+        </button>
         <PersonaAvatarButton label={`${defaultLook.name} (default)`} on={value === "default"} state={defaultId ? activity.get(defaultId) : undefined} disabled={filter.loading} onClick={() => filter.set("default")}>
           <PersonaAvatar persona={defaultLook} size={26} />
         </PersonaAvatarButton>
@@ -336,10 +352,10 @@ export function PersonaSwitcher({
           type="button"
           disabled={disabled}
           aria-label={`Persona for this conversation: ${current.name}`}
-          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-accent bg-surface-raised px-2.5 text-xs hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-full bg-selected pl-1.5 pr-2.5 text-[12.5px] font-medium text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           <PersonaAvatar persona={current} size={18} />
-          <PersonaName persona={current} className="truncate" />
+          <span className="truncate">{current.name}</span>
           <Icon name="chev" size={12} strokeWidth={1.6} className="rotate-180 text-fg-tertiary" />
         </button>
       </DropdownMenu.Trigger>
@@ -373,7 +389,80 @@ export function PersonaSwitcher({
   );
 }
 
-/** "Hi Liam, I'm Atlas." over a large avatar, for a conversation before its first message. */
+/** A persona's portrait on a soft glow of its color: the welcome's centrepiece and an empty chat's greeting. */
+export function PersonaPortrait({ persona, size = 92 }: { persona: PersonaLook; size?: number }) {
+  const glow = Math.round(size * 1.9);
+  return (
+    <span className="relative grid flex-none place-items-center" style={{ width: size + 8, height: size + 8 }} data-testid="persona-portrait">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute rounded-full"
+        style={{ width: glow, height: glow, background: `radial-gradient(circle, color-mix(in srgb, ${persona.color} 20%, transparent) 0%, transparent 68%)` }}
+      />
+      <span className="relative rounded-full p-[3px]" style={{ boxShadow: `0 0 0 2px color-mix(in srgb, ${persona.color} 60%, transparent)` }}>
+        <PersonaAvatar persona={persona} size={size} />
+      </span>
+    </span>
+  );
+}
+
+/** The welcome's persona picker: the picked one large in the middle, up to two neighbours a side, arrows to step through. */
+export function PersonaCarousel({
+  ordered,
+  current,
+  left,
+  right,
+  onPick,
+  disabled,
+}: {
+  ordered: Persona[];
+  current: PersonaLook;
+  left: Persona[];
+  right: Persona[];
+  onPick: (id: string) => void;
+  disabled?: boolean;
+}) {
+  const index = ordered.findIndex((p) => p.id === current.id);
+  const step = (d: number) => ordered.length > 1 && onPick(ordered[(((index + d) % ordered.length) + ordered.length) % ordered.length].id);
+  const side = (p: Persona) => (
+    <button key={p.id} type="button" role="radio" aria-checked={false} aria-label={p.name} title={p.name} tabIndex={-1} disabled={disabled} onClick={() => onPick(p.id)}
+      className="rounded-full opacity-55 transition-opacity hover:opacity-100 disabled:cursor-not-allowed max-sm:hidden">
+      <PersonaAvatar persona={p} size={40} />
+    </button>
+  );
+  const arrow = (d: -1 | 1) => (
+    <button type="button" aria-label={d < 0 ? "Previous persona" : "Next persona"} disabled={disabled} onClick={() => step(d)}
+      className="grid size-8 flex-none place-items-center rounded-full text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-not-allowed">
+      <Icon name="chev" size={16} strokeWidth={1.6} className={d < 0 ? "rotate-90" : "-rotate-90"} />
+    </button>
+  );
+  const many = ordered.length > 1;
+  // A radio group: the picked persona holds focus and the arrow keys step through the rest.
+  return (
+    <div role="radiogroup" aria-label="Who to talk to" className="flex items-center justify-center gap-4">
+      {left.map(side)}
+      {many && arrow(-1)}
+      <button
+        type="button"
+        role="radio"
+        aria-checked
+        aria-label={current.name}
+        disabled={disabled}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+          if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); step(1); }
+        }}
+        className="cursor-default rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+      >
+        <PersonaPortrait persona={current} />
+      </button>
+      {many && arrow(1)}
+      {right.map(side)}
+    </div>
+  );
+}
+
+/** "Hi Liam, I'm Atlas." over the persona's portrait, for a conversation before its first message. */
 export function PersonaGreeting({
   persona,
   tone,
@@ -389,16 +478,16 @@ export function PersonaGreeting({
 }) {
   return (
     <div className="flex flex-col items-center gap-2 py-10 text-center">
-      <PersonaAvatar persona={persona} size={56} className="text-2xl" />
-      <h2 className="mt-2 text-xl font-semibold text-fg">
+      <PersonaPortrait persona={persona} size={72} />
+      <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-fg">
         {firstName ? `Hi ${firstName}, I’m ` : "I’m "}
-        {persona.id ? <span style={{ color: persona.color }}>{persona.name}</span> : "your assistant"}.
+        {persona.id ? persona.name : "your assistant"}.
       </h2>
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-sm text-fg-secondary">
         A new conversation{isDefault ? " with your default persona" : ""}
         {persona.id ? ` · ${toneLabel(tone)} tone` : ""}
       </p>
-      <p className="max-w-[520px] text-[13px] text-fg-secondary">
+      <p className="max-w-[520px] text-sm text-fg-secondary">
         {canSwitch
           ? "Pick another persona below before you send your first message."
           : "Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do."}

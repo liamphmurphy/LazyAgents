@@ -53,11 +53,13 @@ function NestedChats({ spaceId, chatId, total }: { spaceId: string; chatId?: str
 }
 
 /** Chat mode's Spaces section (mockups 1 and 2): every space, with the open chat's space showing its newest chats. */
-export function SidebarSpaces({ viewed }: { viewed: string | null }) {
+/** The menu's spaces. hideWhenEmpty: nothing until there is one (the menu offers "New space" elsewhere). */
+export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null; hideWhenEmpty?: boolean }) {
   const spaces = useSpaces();
   const open = useOpenSpace(viewed);
   const [creating, setCreating] = useState(false);
   const list = spaces.data?.spaces ?? [];
+  if (hideWhenEmpty && !spaces.isError && list.length === 0) return null;
   return (
     <section aria-label="Spaces" className="flex flex-col gap-px">
       <div className="flex items-center pb-[4px] pl-[8px] pr-[4px]">

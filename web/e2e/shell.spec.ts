@@ -25,7 +25,8 @@ test("switching projects from the board rescopes the board and project nav, and 
   for (const group of ["Personal", "Project", "Workspace"]) await expect(nav(page).getByRole("group", { name: group })).toBeVisible();
   await expect(nav(page).getByRole("group", { name: "Project" }).getByRole("link")).toHaveText(["Board", "Tickets", "Epics", "Plans", "Artifacts"]);
   await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link")).toHaveText(["Inbox", "Dashboard"]);
-  await expect(page.getByRole("radio", { name: "Work" })).toBeChecked();
+  // Work mode: the way back to chats is at the bottom of the menu.
+  await expect(page.getByRole("link", { name: "Chats & personas" })).toBeVisible();
   await expect(nav(page).locator('[aria-current="page"]')).toHaveText("Board");
 
   await switcher(page).click();
@@ -64,27 +65,37 @@ test("switching projects from the board rescopes the board and project nav, and 
   expect(api.unhandled).toEqual([]);
 });
 
-test("the Chat/Work toggle swaps the menu and goes to each mode's page", async ({ page }) => {
+test("the menu's mode links swap the menu and go to each mode's page", async ({ page }) => {
   await installBoardApi(page);
   await page.route("**/api/v1/chats?*", (route) => route.fulfill({ json: { chats: [] } }));
   await page.route("**/api/v1/personas", (route) => route.fulfill({ json: { personas: [] } }));
   await page.goto("/runs");
   await expect(nav(page).getByRole("group", { name: "Workspace" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New conversation" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New chat" })).toHaveCount(0);
 
-  await page.getByRole("radio", { name: "Chat" }).click();
+  await page.getByRole("link", { name: "Chats & personas" }).click();
   await expect(page).toHaveURL(/\/chat/);
-  await expect(page.getByRole("radio", { name: "Chat" })).toBeChecked();
-  await expect(nav(page).getByRole("group", { name: "Personal" }).getByRole("link", { name: "Customization" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Projects & tickets" })).toBeVisible();
+  // Chat mode: Needs you, the history, then Apps; Customization is the gear by your name.
+  await expect(nav(page).getByRole("group", { name: "Needs you" }).getByRole("link")).toHaveText(["Inbox", /^Runs/]);
+  await expect(nav(page).getByRole("group", { name: "Apps" }).getByRole("link")).toHaveText(["Docs", "Finance", "Library"]);
+  await expect(nav(page).getByRole("link", { name: "Customization" })).toBeVisible();
   await expect(nav(page).getByRole("group", { name: "Project" })).toHaveCount(0);
+  // More opens in place: the personal pages that aren't apps, and New space.
+  await expect(nav(page).getByRole("link", { name: "Workflows" })).toHaveCount(0);
+  await nav(page).getByRole("button", { name: "More" }).click();
+  await expect(nav(page).getByRole("link", { name: "Workflows" })).toBeVisible();
+  await expect(nav(page).getByRole("link", { name: /^Scheduled/ })).toBeVisible();
+  await expect(nav(page).getByRole("link", { name: "Learn" })).toBeVisible();
+  await expect(nav(page).getByRole("button", { name: "New space" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New conversation" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New chat" })).toBeVisible();
 
   // A pinned page keeps the mode; Work returns to the last Work page.
   await nav(page).getByRole("link", { name: /^Inbox/ }).click();
   await expect(page).toHaveURL(/\/inbox/);
-  await expect(page.getByRole("radio", { name: "Chat" })).toBeChecked();
-  await page.getByRole("radio", { name: "Work" }).click();
+  await expect(page.getByRole("link", { name: "Projects & tickets" })).toBeVisible();
+  await page.getByRole("link", { name: "Projects & tickets" }).click();
   await expect(page).toHaveURL(/\/runs$/);
   await expect(nav(page).getByRole("group", { name: "Project" })).toBeVisible();
 });

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows } from "./chat-ui.ts";
+import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay } from "./chat-ui.ts";
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
@@ -489,4 +489,22 @@ test("turnTrace groups calls, intents and thinking by step, with bookkeeping and
   assert.deepEqual(trace[1].intents, ["It lives in the poller."]);
   assert.deepEqual(trace[2].thinking, ["Say what changed."]);
   assert.deepEqual(turnTrace([]), []);
+});
+
+test("history groups chats by the local day of their last activity", () => {
+  const now = new Date(2026, 10, 10, 15, 0).getTime();
+  const at = (d, h) => new Date(2026, 10, d, h, 0).toISOString();
+  const chats = [
+    { id: "a", created_at: at(10, 1), last_message_at: at(10, 14) },
+    { id: "b", created_at: at(8, 1), last_message_at: at(9, 23) },
+    { id: "c", created_at: at(10, 0) },
+    { id: "d", created_at: at(1, 1), last_message_at: at(9, 0) },
+    { id: "e", created_at: at(2, 1), last_message_at: at(8, 23) },
+  ];
+  assert.deepEqual(groupByDay(chats, now).map((g) => [g.label, g.chats.map((c) => c.id)]), [
+    ["Today", ["a", "c"]],
+    ["Yesterday", ["b", "d"]],
+    ["Earlier", ["e"]],
+  ]);
+  assert.deepEqual(groupByDay([], now), [], "no empty sections");
 });

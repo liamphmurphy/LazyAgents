@@ -42,6 +42,10 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
 
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-violet: var(--brand-violet);
+  --color-brand-star: var(--brand-star);
+
   --color-state-backlog: var(--state-backlog);
   --color-state-todo: var(--state-todo);
   --color-state-progress: var(--state-progress);
@@ -117,6 +121,7 @@
 @utility type-heading { font: var(--text-heading); }
 @utility type-body    { font: var(--text-body); }
 @utility type-reading { font: var(--text-reading); }
+@utility type-chat    { font: var(--text-chat); }
 @utility type-small   { font: var(--text-small); }
 @utility type-micro   { font: var(--text-micro); letter-spacing: 0.06em; text-transform: uppercase; }
 @utility type-mono    { font: var(--text-mono); }

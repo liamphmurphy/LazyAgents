@@ -112,7 +112,7 @@ test("the profile is only under Customization, not in the menu or Settings", asy
   await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
   await page.goto("/chat?project=WEB");
   const menu = page.getByRole("complementary", { name: "Main menu" });
-  await expect(menu.getByRole("button", { name: "New conversation" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "New chat" })).toBeVisible();
   await expect(menu.getByRole("link", { name: /Liam/ })).toHaveCount(0);
   await menu.getByRole("link", { name: "Customization", exact: true }).click();
   await page.getByRole("button", { name: /^You/ }).click();

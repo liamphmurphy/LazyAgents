@@ -26,9 +26,47 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
 
 /** The composer's frame: the message box and its options share one border, which takes the focus ring. */
 export const composerFrame =
-  "flex flex-col gap-2 rounded-xl border border-border-strong bg-surface p-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30";
+  "flex flex-col gap-2.5 rounded-[18px] border border-border-strong bg-surface p-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30";
 /** The message box inside the frame: the frame draws the border and focus, so the box doesn't. */
-export const composerInput = "!border-0 !bg-transparent !px-1.5 !py-1 focus-visible:!outline-none";
+export const composerInput = "!border-0 !bg-transparent !px-2 !py-1 !text-[15px] focus-visible:!outline-none";
+/** A round 30px icon button in the composer's option row (add context, attach). */
+export const composerIconButton =
+  "grid size-[30px] flex-none place-items-center rounded-full border border-border-strong text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
+/** A pill in the option row; `on` marks a toggle that's set. */
+export const composerPill = (on = false) =>
+  cx(
+    "inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium disabled:cursor-not-allowed disabled:opacity-50",
+    on ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:bg-hover hover:text-fg",
+  );
+/** Model and effort: plain text in the option row, since they rarely change. */
+export const composerGhost =
+  "flex h-[30px] max-w-full items-center gap-1 rounded-full px-2 text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
+
+/** The round send button. Its name says what pressing it does: Send, Plan it or Interrupt. */
+export function SendButton({ label, disabled, title }: { label: string; disabled?: boolean; title?: string }) {
+  return (
+    <button
+      type="submit"
+      aria-label={label}
+      title={title ?? label}
+      disabled={disabled}
+      className="grid size-[34px] flex-none place-items-center rounded-full bg-accent text-on-accent hover:brightness-110 disabled:cursor-not-allowed disabled:bg-border-strong disabled:text-fg-tertiary"
+    >
+      <svg aria-hidden viewBox="0 0 16 16" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" />
+      </svg>
+    </button>
+  );
+}
+
+/** What the message box understands, under it rather than in its placeholder. */
+export function ComposerHints({ commands = true }: { commands?: boolean }) {
+  return (
+    <p className="text-center text-xs text-fg-tertiary" data-testid="composer-hints">
+      {commands ? "/ commands  ·  @ personas  ·  [[ context  ·  " : ""}Shift+Enter for a new line
+    </p>
+  );
+}
 
 /** On for one message: asks for a research plan to approve instead of an answer. */
 export function ResearchToggle({ on, onChange, disabled }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
@@ -39,7 +77,7 @@ export function ResearchToggle({ on, onChange, disabled }: { on: boolean; onChan
       disabled={disabled}
       title="Plan a multi-source research report instead of answering right away"
       onClick={() => onChange(!on)}
-      className={cx("inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium disabled:opacity-50", on ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:text-fg")}
+      className={composerPill(on)}
     >
       <Icon name="search" size={13} />
       Research
@@ -56,7 +94,7 @@ export function TemporaryToggle({ on, onChange, disabled }: { on: boolean; onCha
       disabled={disabled}
       title="Temporary chat: no memory, no past chats, and it's deleted after a day without messages"
       onClick={() => onChange(!on)}
-      className={cx("inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium disabled:opacity-50", on ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:text-fg")}
+      className={composerPill(on)}
     >
       <Icon name="clock" size={13} />
       Temporary

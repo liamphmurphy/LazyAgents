@@ -22,8 +22,8 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await page.goto("/chat?project=WEB");
 
   // Welcome: the first conversation goes to the default persona.
-  await expect(page.getByRole("heading", { name: "Hi Liam, what can I help with?" })).toBeVisible();
-  await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Atlas");
+  await expect(page.getByRole("heading", { level: 1, name: "Atlas" })).toBeVisible();
+  await expect(page.getByRole("radiogroup", { name: "Who to talk to" }).getByRole("radio", { checked: true })).toHaveAccessibleName("Atlas");
   await page.getByRole("textbox", { name: "Message" }).fill("hello atlas");
   await page.getByRole("textbox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
@@ -40,7 +40,7 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await expect(identity).toContainText("Atlas Prime");
 
   // New conversation: the default persona (the sidebar shows it), switchable before the first message.
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Atlas Prime");
   expect(mock.created[1].persona_id).toBe(ATLAS.id);
   await switcher(page).click();
@@ -65,7 +65,7 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await expect(history(page).getByRole("link", { name: /hi nova/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hello atlas/ })).toHaveCount(0);
   // New conversation follows the sidebar's persona.
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Nova");
   expect(mock.created[3].persona_id).toBe(NOVA.id);
   await pick(page, "All personas");
@@ -73,7 +73,7 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await expect(history(page).getByRole("link", { name: /hello atlas/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hello atlas/ }).locator(":scope > [aria-hidden]")).toHaveCount(1);
   // All personas falls back to the default.
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(switcher(page)).toHaveAccessibleName("Persona for this conversation: Atlas Prime");
   expect(mock.created[4].persona_id).toBe(ATLAS.id);
   expect(mock.chatPersonaFilters).toEqual(expect.arrayContaining(["", NOVA.id, "all"]));
@@ -120,7 +120,7 @@ test("without personas the built-in Assistant is the default and there's no swit
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await expect(picked(page)).toHaveAccessibleName("Assistant (default)");
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(composer(page)).toBeVisible();
   await expect(switcher(page)).toHaveCount(0);
   expect(mock.created[0].persona_id).toBeUndefined();
@@ -161,7 +161,7 @@ test("a new conversation opens at once, without waiting for the lists to refresh
     await new Promise((r) => setTimeout(r, 4000));
     await route.fallback();
   });
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page).not.toHaveURL(new RegExp(first), { timeout: 2500 });
 });
 

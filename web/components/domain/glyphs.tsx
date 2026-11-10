@@ -70,7 +70,7 @@ export function PriorityGlyph({ priority, label = true }: { priority: Priority; 
     return (
       <span
         {...aria}
-        className="grid size-4 flex-none place-items-center rounded-xs bg-priority-urgent text-[11px] font-bold leading-none text-[#0B0B0D]"
+        className="grid size-4 flex-none place-items-center rounded-xs bg-priority-urgent text-[11px] font-bold leading-none text-approve-fg"
       >
         !
       </span>

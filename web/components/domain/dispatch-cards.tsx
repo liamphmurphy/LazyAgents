@@ -134,6 +134,24 @@ export function ChatTicketRunTray({ chatId, scene }: { chatId: string; scene?: S
   );
 }
 
+/** The chat header's run status: how many of this chat's ticket runs are going, opening the run (or all runs). */
+export function ChatRunsPill({ chatId }: { chatId: string }) {
+  const runs = useChatTicketRuns(chatId);
+  const live = (runs.data?.runs ?? []).filter((r) => !runEnded(r.state));
+  if (live.length === 0) return null;
+  const label = `${live.length} ${live.length === 1 ? "run" : "runs"} active`;
+  return (
+    <Link
+      href={live.length === 1 ? `/runs/${live[0].run_id}` : "/runs"}
+      data-testid="chat-runs-pill"
+      className="flex h-6 flex-none items-center gap-1.5 rounded-full bg-pill-done-bg px-2.5 text-xs font-medium text-pill-done-fg hover:brightness-110"
+    >
+      <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-state-done motion-reduce:animate-none" />
+      {label}
+    </Link>
+  );
+}
+
 /** The Start card: what a run of this ticket would get, and nothing starts until Start. */
 function StartCard({ ticketKey, chatId, messageId, onDismiss }: { ticketKey: string; chatId: string; messageId?: string; onDismiss: () => void }) {
   const preview = useDispatchPreview(ticketKey);

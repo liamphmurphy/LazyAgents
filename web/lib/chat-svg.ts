@@ -33,12 +33,12 @@ export function svgTitle(source: string): string | undefined {
 export type VizPalette = { surface: string; panel: string; ink: string; muted: string; line: string; grid: string; series: readonly string[] };
 
 export const VIZ_LIGHT: VizPalette = {
-  surface: "#FFFFFF", panel: "#F3F3F6", ink: "#17171A", muted: "#55555F", line: "#B9B9C3", grid: "#ECECEF",
+  surface: "#FFFFFF", panel: "#F3F1F8", ink: "#17151F", muted: "#55526A", line: "#B9B6C6", grid: "#ECE9F3",
   series: ["#2A78D6", "#EB6834", "#1BAF7A", "#EDA100", "#E87BA4", "#008300", "#6250D6", "#E34948"],
 };
 
 export const VIZ_DARK: VizPalette = {
-  surface: "#111114", panel: "#1C1C22", ink: "#EDEDEF", muted: "#A1A1AA", line: "#4A4A55", grid: "#24242B",
+  surface: "#15141F", panel: "#1F1D2C", ink: "#EEEDF3", muted: "#A4A1B3", line: "#4A4658", grid: "#26242F",
   series: ["#3987E5", "#D95926", "#199E70", "#C98500", "#D55181", "#008300", "#9085E9", "#E66767"],
 };
 

@@ -19,7 +19,7 @@ async function showActivity(page: Page) {
 
 async function openChat(page: Page) {
   await page.goto("/chat?project=WEB");
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(composer(page)).toBeVisible();
 }
 

@@ -82,6 +82,10 @@ test("a dispatch card starts the run as you, then the tray follows it", async ({
   state.runs = [run({ message_id: messageId, activity: { tool: "Bash", command: "go test ./internal/payouts" } })];
   await expect(tray).toContainText("Running", { timeout: 10000 });
   await expect(tray).toContainText("Step 2 of 4 · Fix Round()");
+  // The header says a run is going and opens it.
+  const pill = page.getByTestId("chat-runs-pill");
+  await expect(pill).toHaveText("1 run active");
+  await expect(pill).toHaveAttribute("href", `/runs/${RUN}`);
   // What it's doing, in the chat's words: never the command itself.
   await expect(page.getByTestId("ticket-run-doing")).toHaveText("Running tests");
   await expect(tray).not.toContainText("go test");

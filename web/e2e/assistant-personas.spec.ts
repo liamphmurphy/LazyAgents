@@ -59,6 +59,8 @@ test("with no personas the built-in Assistant is the default; New persona create
 });
 
 test("color: the wheel's hex input validates #rrggbb, Apply sets it, and a low-contrast color warns", async ({ page }) => {
+  // The warning is about the theme in use: #5b3fa8 is too dark on the dark ground and fine on the light one.
+  await page.emulateMedia({ colorScheme: "dark" });
   const mock = await installChatApi(page, { personas: team() });
   await openPanel(page);
   await select(page, "Nova");
@@ -134,7 +136,14 @@ test("avatar: client checks and the server's 415 show inline; initials stay on t
   await expect(rows(page).filter({ hasText: "Sage" }).locator("img")).toHaveCount(1);
   // The others have no image: their initial on the persona color.
   await expect(rows(page).filter({ hasText: "Nova" }).locator("img")).toHaveCount(0);
-  await expect(rows(page).filter({ hasText: "Nova" }).getByText("N", { exact: true })).toHaveCSS("color", "rgb(244, 114, 182)");
+  // On dark the initial is the persona color itself; on light it's mixed halfway toward the text color so it reads.
+  const initial = rows(page).filter({ hasText: "Nova" }).getByText("N", { exact: true });
+  // (color-mix reports #f472b6 as color(srgb 0.957 0.447 0.714).)
+  const novaPink = /^color\(srgb 0\.956\d* 0\.447\d* 0\.713\d*\)$/;
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(initial).toHaveCSS("color", novaPink);
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(initial).not.toHaveCSS("color", novaPink);
   expect(mock.unhandled).toEqual([]);
 });
 
@@ -255,7 +264,8 @@ test("a coding persona's new chat shows its repo and work branch in the header",
     personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: true }, repos })],
   });
   await page.goto("/chat?project=WEB");
-  await page.getByLabel("Repository for this conversation").selectOption(repos[1]);
+  await page.getByRole("button", { name: /^Repository for this conversation/ }).click();
+  await page.getByRole("menuitemradio", { name: "acme/api" }).click();
   await page.getByLabel("Message").fill("fix the build");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[^/]+/);

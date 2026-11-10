@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useRef, useState, type FormEvent } from "react";
+import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useChat, useChats, useChatSearch, useCreateChat, useDeleteChat, useUpdateChat } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
-import { chatTitle, newestChat } from "@/lib/chat-ui";
+import { chatTitle, groupByDay, newestChat } from "@/lib/chat-ui";
 import { shortAgo } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import { isActive } from "@/lib/project-scope";
@@ -38,23 +38,26 @@ export function useNewConversation(id?: string) {
   return { start, disabled: noHarness || create.isPending, error: create.isError ? errorText(create.error) : undefined };
 }
 
-/** New conversation: on the rail under the menu toggle, otherwise a small + beside the picked persona's name. Its error floats beside it, since the menu has no room to reflow. */
+/** New chat: an icon on the rail, the menu's first button otherwise. Its error floats beside it, since the menu has no room to reflow. */
 export function NewConversationButton({ id, rail }: { id?: string; rail?: boolean }) {
   const conversation = useNewConversation(id);
   return (
-    <div className="relative flex-none">
+    <div className={cx("relative", rail ? "flex-none" : "min-w-0 flex-1")}>
       <button
         type="button"
-        aria-label="New conversation"
-        title="New conversation"
+        aria-label={rail ? "New chat" : undefined}
+        title="New chat"
         disabled={conversation.disabled}
         onClick={conversation.start}
         className={cx(
-          "grid place-items-center rounded-md border hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50",
-          rail ? "size-[30px] border-border-strong bg-btn-outline text-fg-2" : "size-6 border-accent bg-selected text-accent",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          rail
+            ? "grid size-[30px] place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover"
+            : "flex h-[34px] w-full items-center gap-2 rounded-[9px] border border-accent/35 bg-accent-soft px-3 text-[13.5px] font-semibold text-accent hover:brightness-110",
         )}
       >
-        <Icon name="plus" size={rail ? 15 : 14} strokeWidth={1.6} />
+        <Icon name="plus" size={15} strokeWidth={1.7} />
+        {!rail && "New chat"}
       </button>
       {conversation.error && (
         <p role="alert" className={cx("absolute z-40 w-56 rounded-md border border-border-float bg-surface-raised p-2 text-xs text-pill-blocked-fg shadow-lg", rail ? "left-full top-0 ml-2" : "right-0 top-full mt-1")}>
@@ -292,8 +295,11 @@ function ChatSearchResults({ query, onPick }: { query: string; onPick: () => voi
   );
 }
 
-/** The conversation history in Chat mode's menu: persona strip, then Active or Archived (kept in ?view= on the chat page). */
-export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null }) {
+/**
+ * The conversation history in Chat mode's menu: persona strip, then whatever the menu puts
+ * under it (afterFilter: "Needs you"), then Active by day or Archived (kept in ?view= on the chat page).
+ */
+export function ChatHistory({ id, viewed, afterFilter }: { id?: string; viewed: string | null; afterFilter?: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -328,9 +334,9 @@ export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null
   return (
     <aside aria-label="Chat history" className="flex min-h-0 flex-1 flex-col gap-1.5 max-[799px]:max-h-64">
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
-      <div className="flex items-center gap-0.5 pl-2">
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-secondary">{view === "archived" ? `${heading} · Archived` : heading}</span>
-        <NewConversationButton id={id} />
+      {afterFilter}
+      <div className="mt-2 flex items-center gap-0.5 pl-2">
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-tertiary">{view === "archived" ? `${heading} · Archived` : heading}</span>
         <IconButton icon="search" size={24} label="Find in chats" aria-pressed={finding} onClick={() => (finding ? stopFinding() : setFinding(true))} />
         <IconButton icon="folder" size={24} label="Archived conversations" aria-pressed={view === "archived"} onClick={() => setView(view === "archived" ? "active" : "archived")} />
       </div>
@@ -370,17 +376,18 @@ export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null
             <p className="px-2 py-3 text-xs text-fg-tertiary">Archived conversations are read-only. Restore one to continue it.</p>
           </>
         ) : (
-          <ul className="flex flex-col gap-px">
-            {list.map((c) => (
-              <ChatRow
-                key={c.id}
-                chat={c}
-                active={c.id === id}
-                all={all}
-                onLeave={() => leave(c.id)}
-              />
+          <div className="flex flex-col gap-3">
+            {groupByDay(list).map((g) => (
+              <section key={g.label} aria-label={g.label} className="flex flex-col gap-px">
+                <h3 className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</h3>
+                <ul className="flex flex-col gap-px">
+                  {g.chats.map((c) => (
+                    <ChatRow key={c.id} chat={c} active={c.id === id} all={all} onLeave={() => leave(c.id)} />
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
       </nav>
     </aside>

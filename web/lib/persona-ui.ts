@@ -20,9 +20,9 @@ export const AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 export const AVATAR_ACCEPT = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
 export const AVATAR_HINT = "PNG, JPG or WebP · up to 1 MB · shown as a circle.";
 /** The built-in Assistant's look when a chat has no persona. */
-export const BUILTIN_COLOR = "#8b8fff";
+export const BUILTIN_COLOR = "#9b8cff";
 /** The dark theme's app ground (tokens.css --bg); the chat background names are read on. */
-export const CHAT_BG = "#0b0b0d";
+export const CHAT_BG = "#0c0b12";
 export const MIN_CONTRAST = 4.5;
 
 export const TONES: { value: Tone; label: string; hint: string; sample: string[] }[] = [
@@ -47,6 +47,13 @@ export function parseHex(input: string): string | null {
   const s = input.trim();
   const v = s.startsWith("#") ? s : `#${s}`;
   return isHexColor(v) ? v.toLowerCase() : null;
+}
+
+/** A CSS custom property's color as #rrggbb. The CSS minifier shortens #ffffff to #fff, so both forms count. */
+export function cssHex(value: string): string | null {
+  const s = value.trim();
+  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(s);
+  return parseHex(short ? `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}` : s);
 }
 
 export function hexToRgb(hex: string): [number, number, number] {

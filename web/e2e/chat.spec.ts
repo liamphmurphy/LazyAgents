@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { catalog, installChatApi, persona } from "./mock-chat-api";
+import { AGENTS, catalog, installChatApi, persona } from "./mock-chat-api";
 
 // History lives in the expanded menu.
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -12,7 +12,7 @@ const chips = (page: Page) => page.getByTestId("context-chip");
 
 // Starts a conversation from the Welcome (or the conversation header).
 async function newChat(page: Page) {
-  await page.getByRole("button", { name: "New conversation", exact: true }).first().click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   // The route swap finishes once the composer of the new chat is there.
   await expect(composer(page)).toBeVisible();
 }
@@ -33,9 +33,9 @@ async function send(page: Page, text: string) {
 test("create, send, switch model, reload keeps history", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
-  // First visit: no conversations yet, so the Welcome greets the person.
-  await expect(page.getByRole("heading", { name: "Hi Liam, what can I help with?" })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Suggestions" }).getByRole("button")).toHaveCount(4);
+  // First visit: the welcome leads with who you're talking to (no personas yet: the built-in Assistant).
+  await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Suggestions" }).getByRole("button")).toHaveCount(3);
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
 
   await newChat(page);
@@ -324,7 +324,7 @@ test("Start chat links pre-attach the item and drop the query param", async ({ p
 test("sending from the Welcome creates the chat, posts the message and opens it", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
-  await expect(page.getByRole("heading", { name: "Hi Liam, what can I help with?" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
   // A suggestion fills the composer; it is not sent.
   await page.getByRole("list", { name: "Suggestions" }).getByRole("button", { name: "Draft tickets from a spec" }).click();
   await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("Draft tickets from a spec");
@@ -350,7 +350,7 @@ test("Start chat ?attach= on /chat shows chips in the Welcome and sends them wit
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: earlier");
 
   await page.goto("/chat?project=WEB&attach=page:11111111-1111-4111-8111-111111111111&attach_title=Plan");
-  await expect(page.getByRole("heading", { name: /what can I help with/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
   await expect(chips(page)).toHaveCount(1);
   await expect(chips(page).first()).toContainText("Plan");
   await page.getByRole("textbox", { name: "Message" }).fill("summarise");
@@ -482,7 +482,7 @@ test("with no harness available, chat says why before anything is sent", async (
   await composer(page).press("Enter");
   expect(mock.posted).toEqual([]);
   // New conversation is refused up front, naming the missing secrets.
-  await expect(page.getByRole("button", { name: "New conversation", exact: true }).first()).toBeDisabled();
+  await expect(page.getByRole("button", { name: "New chat", exact: true }).first()).toBeDisabled();
   await expect(page.locator('p[role="status"]').filter({ hasText: "No harness is available: add harness:anthropic or harness:openai." })).toBeVisible();
   // The shell banner names the same secrets on every screen.
   await expect(page.getByRole("status", { name: /Agents can’t run/ })).toBeVisible();
@@ -513,7 +513,9 @@ test("a new chat has no agent picker and names no agent", async ({ page }) => {
   await newChat(page);
   expect(mock.created.at(-1)).toEqual({});
   await expect(page.getByTestId("chat-agent")).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByText("Assistant", { exact: true })).toBeVisible();
+  // The conversation header is the page's only header: no "Assistant" breadcrumb bar above it.
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   expect(mock.unhandled).toEqual([]);
 });
 
@@ -760,6 +762,21 @@ test("each reply shows its tokens and cost on hover or focus", async ({ page }) 
 
   await reply.getByTestId("model-tag").hover();
   await expect(tooltip).toContainText("Cost$0.042");
+});
+
+test("the history groups conversations by the day they were last active", async ({ page }) => {
+  const mock = await installChatApi(page);
+  const at = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+  const chat = (n: number, title: string, when: string) =>
+    ({
+      id: `d0000000-0000-4000-8000-00000000000${n}`, title, agent_id: AGENTS[0].id, harness: "claude-code", model: "opus-5.5", state: "idle",
+      archived: false, revision: 1, message_count: 2, created_at: when, updated_at: when, last_message_at: when,
+    }) as (typeof mock.chats)[number];
+  mock.chats.push(chat(1, "Fresh one", at(0)), chat(2, "Old one", at(5)));
+  await page.goto("/chat?new");
+  await expect(historyNav(page).getByRole("region", { name: "Today" }).getByRole("link")).toHaveText([/Fresh one/]);
+  await expect(historyNav(page).getByRole("region", { name: "Earlier" }).getByRole("link")).toHaveText([/Old one/]);
+  await expect(historyNav(page).getByRole("region", { name: "Yesterday" })).toHaveCount(0);
 });
 
 test("a reply shows the effort Vesper picked for it, and why", async ({ page }) => {

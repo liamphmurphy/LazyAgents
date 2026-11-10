@@ -138,6 +138,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const memoryPatches: Array<Record<string, unknown>> = [];
   const memoryImports: Array<Record<string, unknown>> = [];
   const wikiPages: Array<{ path: string; body_md: string; project_key?: string }> = [];
+  // The welcome's "Pick up where you left off" reads these; specs push into them.
+  const inbox: Record<string, unknown>[] = [];
+  const dock: Record<string, unknown>[] = [];
   // Assistant personas (ADR: Assistant personas): private to the caller, at most one default.
   const personas: MockPersona[] = [...(opts.personas ?? [])];
   // Personas the chat's personas proposed (several personas in one chat).
@@ -437,7 +440,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     }
     if (/^\/chats\/[^/]+\/research$/.test(path) && method === "GET") return json({ jobs: [] });
     if (/^\/chats\/[^/]+\/runs$/.test(path) && method === "GET") return json({ runs: [] });
-    if (path === "/persona-dock") return json({ personas: [], harnesses: [] });
+    if (path === "/persona-dock") return json({ personas: dock, harnesses: [] });
+    if (path === "/inbox" && method === "GET") return json({ items: inbox });
     if (path === "/workflows" && method === "GET") return json({ workflows: [] });
     if (path === "/connectors" && method === "GET") return json({ connectors });
     if (path === "/connectors/probe" && method === "POST") return json({ reachable: true, needs_auth: false, tools: 2 });
@@ -932,7 +936,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
+    return { inbox, dock, apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
   })();
 }
 
