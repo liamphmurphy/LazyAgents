@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { Playground } from "@/lib/api/playground-hooks";
 import { cx } from "@/lib/cx";
 import { curlFor, exampleFor, filterOps, parseOpenAPI, requestPath, validate, type ApiDoc, type Operation } from "@/lib/openapi";
-import { appendLogs, isErrorLine, linesDuring, logSources, normalizePath, type LogLine } from "@/lib/playground";
+import { appendLogs, inferredIsStale, isErrorLine, linesForRequest, logSources, mapApiPrompt, normalizePath, parseSpecSource, type LogLine, type SpecSource } from "@/lib/playground";
+import { sendToComposer } from "@/lib/playground-report";
 import { Button, IconButton } from "@/components/ui/button";
 
 // The Playground's tabs. Everything here talks to the playground's own origin
@@ -183,22 +184,46 @@ function pretty(body: string, contentType: string) {
 }
 
 /** The app's API from its OpenAPI document: pick an operation, send it, read the answer. */
-export function ApiTab({ pg, origin, logs, wide, onOpenLogs }: { pg: Playground; origin: string; logs: LogLine[]; wide: boolean; onOpenLogs: () => void }) {
+type SpecAnswer =
+  | { found: true; doc: unknown; source: SpecSource }
+  | { found: false; message: string; checked: string[] };
+
+export function ApiTab({ chatId, pg, origin, logs, wide, onOpenLogs }: { chatId: string; pg: Playground; origin: string; logs: LogLine[]; wide: boolean; onOpenLogs: () => void }) {
+  // Always asked: the gateway prefers the document the running app serves,
+  // which the playground's spec may not name.
   const spec = useQuery({
-    queryKey: ["playground-openapi", origin, pg.openapi, pg.started_at ?? ""],
-    enabled: !!pg.openapi,
+    queryKey: ["playground-openapi", origin, pg.openapi, pg.openapi_commit, pg.started_at ?? ""],
     retry: false,
-    queryFn: async () => {
+    queryFn: async (): Promise<SpecAnswer> => {
       const res = await fetch(`${origin}/__vesper/openapi`, { credentials: "include", cache: "no-store" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error((data as { message?: string } | null)?.message ?? `The playground answered ${res.status}.`);
-      return data as unknown;
+      const data = (await res.json().catch(() => null)) as { message?: string; checked?: unknown } | null;
+      if (res.status === 404 && Array.isArray(data?.checked)) {
+        return { found: false, message: data.message ?? "", checked: data.checked.filter((c): c is string => typeof c === "string") };
+      }
+      if (!res.ok) throw new Error(data?.message ?? `The playground answered ${res.status}.`);
+      const source = parseSpecSource(res.headers.get("X-Vesper-Spec-Source"));
+      return { found: true, doc: data, source: source.kind === "unknown" && pg.openapi ? { kind: "file", path: pg.openapi } : source };
     },
   });
+  const source = spec.data?.found ? spec.data.source : null;
+  const inferred = source?.kind === "inferred" ? source : null;
+  // Where the workspace is now, to tell whether an inferred document still matches it.
+  const head = useQuery({
+    queryKey: ["playground-meta", origin],
+    enabled: !!inferred,
+    retry: false,
+    queryFn: async () => (await (await fetch(`${origin}/__vesper/meta`, { credentials: "include", cache: "no-store" })).json()) as { commit?: string },
+  });
+  const stale = !!inferred && inferredIsStale(inferred.commit, head.data?.commit ?? "");
+  const [asked, setAsked] = useState<string>();
+  const askToMap = () => {
+    const sent = sendToComposer(chatId, { text: mapApiPrompt({ stale, existing: inferred?.path ?? null }) });
+    setAsked(sent ? "Added to your message: send it and the persona maps the API." : "Open the chat to ask the persona.");
+  };
   const parsed = useMemo<{ api?: ApiDoc; error?: string }>(() => {
-    if (!spec.data) return {};
+    if (!spec.data?.found) return {};
     try {
-      return { api: parseOpenAPI(spec.data) };
+      return { api: parseOpenAPI(spec.data.doc) };
     } catch (e) {
       return { error: errorText(e) };
     }
@@ -207,70 +232,95 @@ export function ApiTab({ pg, origin, logs, wide, onOpenLogs }: { pg: Playground;
   const [selected, setSelected] = useState<string>();
   const [history, setHistory] = useState<Sent[]>([]);
 
-  if (!pg.openapi) {
+  if (spec.isPending) return <Empty title="Reading the OpenAPI document…">{pg.openapi}</Empty>;
+  if (spec.data && !spec.data.found) {
     return (
-      <Empty title="No OpenAPI document">
-        This playground wasn’t given one. Ask the agent to start it again with <code className="font-mono">openapi</code> set to the document’s path, such as <code className="font-mono">api/openapi.yaml</code>.
+      <Empty title="No API document found">
+        <span className="block">The app doesn’t serve one at {spec.data.checked.map((c, i) => <span key={c}>{i ? ", " : ""}<code className="font-mono">{c}</code></span>)}, and the playground names none.</span>
+        <span className="mt-3 block">The persona can read the routes and handlers and map the API, marked as inferred.</span>
+        <Button variant="primary" className="mt-3" onClick={askToMap}>Map this API</Button>
+        {asked && <span role="status" className="mt-2 block text-[11px] text-fg-tertiary">{asked}</span>}
       </Empty>
     );
   }
-  if (spec.isPending) return <Empty title="Reading the OpenAPI document…">{pg.openapi}</Empty>;
-  if (spec.isError || parsed.error) return <Empty title={`Couldn’t read ${pg.openapi}`}>{parsed.error ?? errorText(spec.error)}</Empty>;
+  const name = source && source.kind !== "unknown" ? source.path : pg.openapi || "the OpenAPI document";
+  if (spec.isError || parsed.error) return <Empty title={`Couldn’t read ${name}`}>{parsed.error ?? errorText(spec.error)}</Empty>;
   const api = parsed.api!;
   const groups = filterOps(api, filter);
   const op = api.groups.flatMap((g) => g.ops).find((o) => o.key === selected);
 
   return (
-    <div className={cx("flex min-h-0 flex-1", !wide && "max-md:flex-col")}>
-      <nav aria-label="Operations" className={cx("flex flex-none flex-col border-r border-border-subtle bg-bg-sidebar", wide ? "w-72" : "w-48")}>
-        <div className="flex items-center gap-2 border-b border-border-subtle p-2">
-          <input aria-label="Filter operations" placeholder={`Filter ${api.count} operations`} value={filter} onChange={(e) => setFilter(e.target.value)} className="min-w-0 flex-1 rounded-md border border-border-strong bg-surface-sunken px-2 py-1 text-xs text-fg focus:border-accent focus:outline-none" />
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto py-1">
-          {groups.map((g) => (
-            <details key={g.tag} open={!!filter || g.ops.some((o) => o.key === selected)} className="px-1">
-              <summary className="cursor-pointer select-none px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
-                {g.tag} <span className="font-normal">{g.ops.length}</span>
-              </summary>
-              {g.ops.map((o) => (
-                <button key={o.key} type="button" aria-current={o.key === selected} onClick={() => setSelected(o.key)} className={cx("flex w-full items-baseline gap-2 rounded px-2 py-1 text-left font-mono text-[11.5px]", o.key === selected ? "bg-accent-soft text-fg" : "text-fg-2 hover:bg-hover")}>
-                  <span className={cx("w-9 flex-none font-bold", methodTone[o.method])}>{o.method === "DELETE" ? "DEL" : o.method}</span>
-                  <span className="min-w-0 truncate">{o.path}</span>
-                </button>
-              ))}
-            </details>
-          ))}
-          {history.length > 0 && (
-            <details className="px-1">
-              <summary className="cursor-pointer select-none px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">History <span className="font-normal">{history.length}</span></summary>
-              {history.map((h, i) => (
-                <button key={i} type="button" onClick={() => setSelected(h.op.key)} className="flex w-full items-baseline gap-2 rounded px-2 py-1 text-left font-mono text-[11.5px] text-fg-2 hover:bg-hover">
-                  <span className={cx("w-9 flex-none font-bold", h.status >= 400 ? "text-pill-blocked-fg" : "text-pill-done-fg")}>{h.status || "ERR"}</span>
-                  <span className="min-w-0 truncate">{h.op.method} {h.op.path}</span>
-                </button>
-              ))}
-            </details>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {source && source.kind !== "unknown" && (
+        <div data-testid="playground-spec-source" className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 py-1.5 text-[11.5px] text-fg-secondary">
+          {inferred ? (
+            <>
+              <span className="rounded-full bg-pill-review-bg px-2 py-0.5 text-[10.5px] font-semibold text-pill-review-fg">Inferred</span>
+              <span>
+                Read from the code{inferred.commit ? <> at <code className="font-mono">{inferred.commit.slice(0, 7)}</code></> : ""}; it may be incomplete.
+              </span>
+              {stale && <span role="status" className="font-semibold text-pill-blocked-fg">The code has changed since.</span>}
+              <Button variant="secondary" className="ml-auto" onClick={askToMap}>Re-infer</Button>
+            </>
+          ) : source.kind === "served" ? (
+            <span>Served by the app at <code className="font-mono">{source.path}</code></span>
+          ) : (
+            <span>From <code className="font-mono">{source.path}</code></span>
           )}
+          {asked && <span role="status" className="basis-full text-fg-tertiary">{asked}</span>}
         </div>
-      </nav>
-      {op ? (
-        <OperationView
-          key={op.key}
-          spec={spec.data}
-          base={api.base}
-          op={op}
-          origin={origin}
-          logs={logs}
-          wide={wide}
-          onOpenLogs={onOpenLogs}
-          onSent={(s) => setHistory((h) => [s, ...h].slice(0, 30))}
-          last={history.find((h) => h.op.key === op.key)}
-        />
-      ) : (
-        <Empty title={api.title || "API"}>
-          {api.count} operations under <code className="font-mono">{api.base || "/"}</code>, from <code className="font-mono">{pg.openapi}</code>. Pick one to try it.
-        </Empty>
       )}
+      <div className={cx("flex min-h-0 flex-1", !wide && "max-md:flex-col")}>
+        <nav aria-label="Operations" className={cx("flex flex-none flex-col border-r border-border-subtle bg-bg-sidebar", wide ? "w-72" : "w-48")}>
+          <div className="flex items-center gap-2 border-b border-border-subtle p-2">
+            <input aria-label="Filter operations" placeholder={`Filter ${api.count} operations`} value={filter} onChange={(e) => setFilter(e.target.value)} className="min-w-0 flex-1 rounded-md border border-border-strong bg-surface-sunken px-2 py-1 text-xs text-fg focus:border-accent focus:outline-none" />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto py-1">
+            {groups.map((g) => (
+              <details key={g.tag} open={!!filter || g.ops.some((o) => o.key === selected)} className="px-1">
+                <summary className="cursor-pointer select-none px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                  {g.tag} <span className="font-normal">{g.ops.length}</span>
+                </summary>
+                {g.ops.map((o) => (
+                  <button key={o.key} type="button" aria-current={o.key === selected} onClick={() => setSelected(o.key)} className={cx("flex w-full items-baseline gap-2 rounded px-2 py-1 text-left font-mono text-[11.5px]", o.key === selected ? "bg-accent-soft text-fg" : "text-fg-2 hover:bg-hover")}>
+                    <span className={cx("w-9 flex-none font-bold", methodTone[o.method])}>{o.method === "DELETE" ? "DEL" : o.method}</span>
+                    <span className="min-w-0 truncate">{o.path}</span>
+                  </button>
+                ))}
+              </details>
+            ))}
+            {history.length > 0 && (
+              <details className="px-1">
+                <summary className="cursor-pointer select-none px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">History <span className="font-normal">{history.length}</span></summary>
+                {history.map((h, i) => (
+                  <button key={i} type="button" onClick={() => setSelected(h.op.key)} className="flex w-full items-baseline gap-2 rounded px-2 py-1 text-left font-mono text-[11.5px] text-fg-2 hover:bg-hover">
+                    <span className={cx("w-9 flex-none font-bold", h.status >= 400 ? "text-pill-blocked-fg" : "text-pill-done-fg")}>{h.status || "ERR"}</span>
+                    <span className="min-w-0 truncate">{h.op.method} {h.op.path}</span>
+                  </button>
+                ))}
+              </details>
+            )}
+          </div>
+        </nav>
+        {op ? (
+          <OperationView
+            key={op.key}
+            spec={spec.data?.found ? spec.data.doc : null}
+            base={api.base}
+            op={op}
+            origin={origin}
+            logs={logs}
+            wide={wide}
+            onOpenLogs={onOpenLogs}
+            onSent={(s) => setHistory((h) => [s, ...h].slice(0, 30))}
+            last={history.find((h) => h.op.key === op.key)}
+          />
+        ) : (
+          <Empty title={api.title || "API"}>
+            {api.count} operations under <code className="font-mono">{api.base || "/"}</code>, from <code className="font-mono">{name}</code>. Pick one to try it.
+          </Empty>
+        )}
+      </div>
     </div>
   );
 }
@@ -322,7 +372,8 @@ function OperationView({ spec, base, op, origin, logs, wide, onOpenLogs, onSent,
   const tabButton = (t: typeof tab, label: string) => (
     <button type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cx("border-b-2 pb-1", tab === t ? "border-accent text-fg" : "border-transparent text-fg-secondary hover:text-fg")}>{label}</button>
   );
-  const related = last ? linesDuring(logs, last.sentAt, last.doneAt) : [];
+  const requestId = last?.headers.find(([k]) => k.toLowerCase() === "x-request-id")?.[1] ?? "";
+  const { by: matchedBy, lines: related } = last ? linesForRequest(logs, requestId, last.sentAt, last.doneAt) : { by: "time" as const, lines: [] };
   return (
     <div className={cx("flex min-h-0 min-w-0 flex-1 overflow-y-auto", wide ? "gap-4 p-4" : "flex-col gap-3 p-3")}>
       <section aria-label="Request" className="flex min-w-0 flex-1 flex-col gap-3">
@@ -334,6 +385,7 @@ function OperationView({ spec, base, op, origin, logs, wide, onOpenLogs, onSent,
         {/* Plain text: the document is the agent's to write. */}
         {op.description && <p className="whitespace-pre-line text-xs text-fg-secondary">{op.description.trim()}</p>}
         {op.operationId && <p className="text-[11px] text-fg-tertiary">{op.operationId} · {op.tag}</p>}
+        {op.source && <HandlerSource source={op.source} />}
         <p className="rounded-md border border-pill-done-fg/30 bg-pill-done-bg px-2.5 py-1.5 text-xs text-fg-2">Sends with the cookies of your Preview session, as the app’s own page would.</p>
         <div role="tablist" className="flex gap-4 text-xs">
           {tabButton("params", `Params${op.params.length ? ` ${op.params.length}` : ""}`)}
@@ -408,12 +460,28 @@ function OperationView({ spec, base, op, origin, logs, wide, onOpenLogs, onSent,
                   </div>
                 ))
               )}
-              <p className="mt-1 font-sans text-[10.5px] text-fg-tertiary">Matched by time, not by request: lines from other requests at the same moment show too.</p>
+              <p className="mt-1 font-sans text-[10.5px] text-fg-tertiary">
+                {matchedBy === "id" ? <>Lines naming its request id, <code className="font-mono">{requestId}</code>.</> : "Matched by time: the app’s logs don’t show the request’s id, so lines from other requests at the same moment show too."}
+              </p>
             </div>
           </>
         )}
       </section>
     </div>
+  );
+}
+
+/** An inferred operation's handler, "file:line", to copy into an editor or a question. */
+function HandlerSource({ source }: { source: NonNullable<Operation["source"]> }) {
+  const [copied, setCopied] = useState(false);
+  const ref = source.line ? `${source.file}:${source.line}` : source.file;
+  return (
+    <p className="flex items-center gap-2 text-[11px] text-fg-tertiary">
+      Handler <code data-testid="playground-handler" className="min-w-0 truncate font-mono text-fg-2">{ref}</code>
+      <button type="button" className="text-accent hover:underline" onClick={() => { void navigator.clipboard.writeText(ref); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </p>
   );
 }
 

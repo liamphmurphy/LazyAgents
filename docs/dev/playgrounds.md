@@ -74,12 +74,14 @@ when it ends, and nothing a turn starts is reachable from the browser.
 - A playground stops after `RUNNER_PLAYGROUND_IDLE_S` without a request, when
   its chat's segment ends and the workspace is removed, and when the runner
   restarts (startup cleanup removes its containers; rows are marked stopped).
-- Processes don't see tools the agent installed with Nix during the chat
-  (they live in the run's home profile). Declare them in setup.
-- "Logs around this request" matches by time, not by request: the app's logs
-  carry no id the gateway could set.
-- The Preview tab can't drive the frame's history (cross-origin), so there's
-  no back or forward, only a path to load and reload.
+- Processes see Nix packages through a profile in the workspace (the spec's,
+  else the test environment's), not the run's home profile: a tool the agent
+  installed ad hoc during the chat needs declaring.
+- "Logs around this request" is exact only for apps that log the gateway's
+  `X-Request-Id`; for others it falls back to time, and says so.
+- The frame's history is driven through the probe (back, forward, the address
+  bar following navigation), so a page whose CSP blocks the probe gets none of
+  it, and Send to chat reports its page as unknown.
 - The local runner has no playgrounds; it shares the host.
 
 ## Send to chat
@@ -103,9 +105,32 @@ API).
   sent whole when it doesn't match this tab's viewport. Declining sends the
   report alone, and the report says why there's no screenshot.
 
+## API map
+
+The API tab asks the gateway for a document every time and shows where it came
+from (`X-Vesper-Spec-Source`, exposed to Vesper's origin): served by the app
+on a well-known path, the declared file, or one the persona inferred from the
+code.
+
+- An inferred document is badged as such, with the commit it was read from.
+  When `/__vesper/meta` reports a different checkout, the tab says the code
+  has changed. **Re-infer** puts the ask in the composer rather than sending
+  it, so the person decides when the persona spends a turn on it.
+- Each inferred operation shows its handler (`x-source`, `file:line`) as text
+  to copy. It isn't a link: a playground doesn't know its repository's web
+  URL.
+- With no document anywhere, the tab lists the paths the gateway checked and
+  offers **Map this API**, the same ask.
+
+## Starting without an agent
+
+A chat with no playground on a repository with a saved spec (`saved_spec`)
+shows **Start playground** in its header, which starts the spec as it last ran
+in this chat's workspace. A chat that has never run a turn has no workspace,
+and the start says so.
+
 ## Follow-ups
 
-- An OpenAPI document for apps without one, inferred from the code by the
-  persona, labelled as inferred, cached per commit.
-- The agent driving the playground (Playwright against the same app).
-- Starting a playground from a repository's saved spec without an agent turn.
+- AGENTS.md's Vesper recipe can drop the runner-inside-the-API workaround for
+  a background `runner` process once the deployed Vesper has background
+  processes (#215).

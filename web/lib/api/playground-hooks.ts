@@ -11,23 +11,35 @@ export type PlaygroundAction = "start" | "reset" | "stop";
 // event is missed.
 const BUSY_MS = 2000;
 
+type State = Schemas["ChatPlaygroundState"];
+
 const busy = (p: Playground | null | undefined) => !!p && (p.state === "starting" || !!p.action);
 
-/** A chat's playground, or null when it has none. */
-export function useChatPlayground(chatId?: string) {
+function useChatPlaygroundState<T>(chatId: string | undefined, select: (s: State) => T) {
   return useQuery({
     enabled: !!chatId,
     queryKey: ["playgrounds", chatId ?? ""],
-    queryFn: async () => (await unwrap(api.GET("/chats/{id}/playground", { params: { path: { id: chatId! } } }))).playground ?? null,
-    refetchInterval: (q) => (busy(q.state.data) ? BUSY_MS : false),
+    queryFn: () => unwrap(api.GET("/chats/{id}/playground", { params: { path: { id: chatId! } } })),
+    select,
+    refetchInterval: (q) => (busy(q.state.data?.playground) ? BUSY_MS : false),
   });
 }
 
-/** Start an ended playground again, reset its data, or stop it. */
+/** A chat's playground, or null when it has none. */
+export function useChatPlayground(chatId?: string) {
+  return useChatPlaygroundState(chatId, (s) => s.playground ?? null);
+}
+
+/** Whether a chat with no playground can start one from its repository's saved spec, without an agent. */
+export function useCanStartSavedPlayground(chatId?: string) {
+  return useChatPlaygroundState(chatId, (s) => !s.playground && s.saved_spec).data ?? false;
+}
+
+/** Start an ended playground again (or a chat's first, from the saved spec), reset its data, or stop it. */
 export function usePlaygroundAction(chatId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (action: PlaygroundAction) => unwrap(api.POST("/chats/{id}/playground/{action}", { params: { path: { id: chatId, action } } })),
-    onSuccess: (pg) => qc.setQueryData(["playgrounds", chatId], pg),
+    onSuccess: (pg) => qc.setQueryData<State>(["playgrounds", chatId], (old) => ({ saved_spec: old?.saved_spec ?? false, playground: pg })),
   });
 }

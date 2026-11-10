@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyProbe, emptyProbe, logsFor, MAX_PROBE_ENTRIES, onComposerFiles, playgroundReport, reportNames, sendToComposer } from "./playground-report.ts";
+import { applyProbe, emptyProbe, logsFor, MAX_PROBE_ENTRIES, onComposerDrop, playgroundReport, reportNames, sendToComposer } from "./playground-report.ts";
 
 const probe = (...msgs) => msgs.reduce((s, m, i) => applyProbe(s, m, 1_000 * (i + 1)), emptyProbe());
 
@@ -64,14 +64,14 @@ test("attachment names are stamped and pass the attachment rules", () => {
   assert.deepEqual(reportNames(Date.parse("2026-11-10T22:01:02Z")), { report: "playground-20261110-220102.md", screenshot: "playground-20261110-220102.png" });
 });
 
-test("files reach the composer of the same chat only, and a send with none listening says so", () => {
+test("drops reach the composer of the same chat only, and a send with none listening says so", () => {
   const got = [];
-  const off = onComposerFiles("chat-a", (f) => got.push(f));
-  assert.equal(sendToComposer("chat-b", ["x"]), false);
-  assert.equal(sendToComposer("chat-a", ["y"]), true);
+  const off = onComposerDrop("chat-a", (d) => got.push(d));
+  assert.equal(sendToComposer("chat-b", { text: "x" }), false);
+  assert.equal(sendToComposer("chat-a", { files: ["y"] }), true);
   off();
-  assert.equal(sendToComposer("chat-a", ["z"]), false);
-  assert.deepEqual(got, [["y"]]);
+  assert.equal(sendToComposer("chat-a", { text: "z" }), false);
+  assert.deepEqual(got, [{ files: ["y"] }]);
 });
 
 test("a whole-tab capture is cropped to the frame, scaled to the video's pixels", async () => {

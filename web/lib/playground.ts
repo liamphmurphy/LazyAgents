@@ -79,3 +79,47 @@ export function idleRule(seconds: number | null | undefined): string {
   const min = Math.round(seconds / 60);
   return min >= 60 && min % 60 === 0 ? `stops after ${min / 60} h idle` : `stops after ${Math.max(1, min)} min idle`;
 }
+
+/** Which document the API tab got, from the gateway's X-Vesper-Spec-Source. */
+export type SpecSource =
+  | { kind: "served"; path: string } // the running app serves it
+  | { kind: "file"; path: string } // declared in the workspace
+  | { kind: "inferred"; path: string; commit: string } // the persona wrote it from the code
+  | { kind: "unknown" };
+
+export function parseSpecSource(header: string | null): SpecSource {
+  const i = header?.indexOf(":") ?? -1;
+  if (!header || i < 0) return { kind: "unknown" };
+  const kind = header.slice(0, i);
+  const rest = header.slice(i + 1);
+  if (!rest) return { kind: "unknown" };
+  if (kind === "served" || kind === "file") return { kind, path: rest };
+  if (kind === "inferred") {
+    const at = rest.lastIndexOf("@");
+    return at > 0 ? { kind, path: rest.slice(0, at), commit: rest.slice(at + 1) } : { kind, path: rest, commit: "" };
+  }
+  return { kind: "unknown" };
+}
+
+/** Whether the checkout moved past the commit an inferred document was read from (hashes may be short). */
+export function inferredIsStale(readFrom: string, head: string): boolean {
+  if (!readFrom || !head) return false;
+  return !(head.startsWith(readFrom) || readFrom.startsWith(head));
+}
+
+/**
+ * A request's log lines: those naming its id (the gateway's X-Request-Id) when
+ * the app logs it, which is exact; else those written while it ran.
+ */
+export function linesForRequest(lines: LogLine[], id: string, sentAt: number, doneAt: number): { by: "id" | "time"; lines: LogLine[] } {
+  const byId = id ? lines.filter((l) => l.text.includes(id)) : [];
+  return byId.length ? { by: "id", lines: byId } : { by: "time", lines: linesDuring(lines, sentAt, doneAt) };
+}
+
+/** What the API tab asks the persona when there's no document, or the inferred one is out of date. */
+export function mapApiPrompt({ stale, existing }: { stale: boolean; existing: string | null }): string {
+  if (existing) {
+    return `The code changed since you mapped the playground's API${stale ? "" : ", or I want it checked again"}. Read the routes and handlers again and update ${existing}: every route, with an x-source of file:line on each operation, then call set_playground_openapi with it, inferred, and the commit you read.`;
+  }
+  return "The playground's app has no OpenAPI document. Read its routes and handlers and infer an OpenAPI document for the API tab: every route, with an x-source of file:line on each operation, then call set_playground_openapi with it, inferred, and the commit you read.";
+}

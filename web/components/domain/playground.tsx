@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useChatPlayground, usePlaygroundAction, type Playground } from "@/lib/api/playground-hooks";
+import { useCanStartSavedPlayground, useChatPlayground, usePlaygroundAction, type Playground } from "@/lib/api/playground-hooks";
 import { cx } from "@/lib/cx";
 import { CaptureError, captureElement } from "@/lib/frame-capture";
 import { ago, idleRule, isErrorLine, parsePlaygroundFence, playgroundOrigin, type LogLine } from "@/lib/playground";
@@ -83,7 +83,7 @@ function SendToChat({ chatId, origin, branch, probe, logs, frame, onSent }: {
     const report = playgroundReport({ origin, probe, logs, branch, at, noScreenshot });
     files.unshift(new File([report], names.report, { type: "text/markdown" }));
     setBusy(false);
-    if (!sendToComposer(chatId, files)) {
+    if (!sendToComposer(chatId, { files })) {
       setProblem("Open the chat to attach it.");
       return;
     }
@@ -167,7 +167,7 @@ function PlaygroundView({ chatId, pg, full }: { chatId: string; pg: Playground; 
       {act.isError && <p role="alert" className="border-b border-border-row px-4 py-1 text-xs text-pill-blocked-fg">{errorText(act.error)}</p>}
       {running && origin ? (
         panel.tab === "api" ? (
-          <ApiTab pg={pg} origin={origin} logs={logs.lines} wide={full} onOpenLogs={() => panel.setTab("logs")} />
+          <ApiTab chatId={chatId} pg={pg} origin={origin} logs={logs.lines} wide={full} onOpenLogs={() => panel.setTab("logs")} />
         ) : panel.tab === "logs" ? (
           <LogsTab logs={logs} />
         ) : (
@@ -264,6 +264,26 @@ export function PlaygroundFullscreen({ chatId }: { chatId: string }) {
 export function PlaygroundButton({ chatId }: { chatId: string }) {
   const panel = usePlaygroundPanel();
   const pg = useChatPlayground(chatId).data;
+  const canStart = useCanStartSavedPlayground(chatId);
+  const act = usePlaygroundAction(chatId);
+  if (!pg && canStart) {
+    // The repository's playground ran in another chat: start it here without asking an agent.
+    return (
+      <>
+        {act.isError && <span role="alert" className="max-w-56 truncate text-xs text-pill-blocked-fg" title={errorText(act.error)}>{errorText(act.error)}</span>}
+        <button
+          type="button"
+          disabled={act.isPending}
+          title="Start this repository’s playground, as it last ran"
+          onClick={() => act.mutate("start", { onSuccess: panel.show })}
+          className="inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-[13px] text-fg transition-colors hover:bg-hover disabled:opacity-60"
+        >
+          <Icon name="play" size={12} className="text-fg-secondary" />
+          {act.isPending ? "Starting…" : "Start playground"}
+        </button>
+      </>
+    );
+  }
   if (!pg) return null;
   const live = pg.state === "running" || pg.state === "starting";
   return (
