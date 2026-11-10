@@ -107,6 +107,25 @@ func (s *Store) Get(ctx context.Context, bucket, key string) (Object, error) {
 	return o, nil
 }
 
+// GetRange opens bytes start through end (inclusive) of a blob. The caller
+// closes Body.
+func (s *Store) GetRange(ctx context.Context, bucket, key string, start, end int64) (Object, error) {
+	rng := fmt.Sprintf("bytes=%d-%d", start, end)
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: &bucket, Key: &key, Range: &rng})
+	if err != nil {
+		var nsk *types.NoSuchKey
+		if errors.As(err, &nsk) {
+			return Object{}, ErrNotFound
+		}
+		return Object{}, fmt.Errorf("blob: get %s/%s %s: %w", bucket, key, rng, err)
+	}
+	o := Object{Body: out.Body, ContentType: aws.ToString(out.ContentType)}
+	if out.ContentLength != nil {
+		o.ContentLength = *out.ContentLength
+	}
+	return o, nil
+}
+
 // Delete removes a blob; a missing key is not an error.
 func (s *Store) Delete(ctx context.Context, bucket, key string) error {
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &bucket, Key: &key})

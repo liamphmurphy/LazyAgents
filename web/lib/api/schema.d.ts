@@ -2063,6 +2063,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/{itemId}/poster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A video's poster image
+         * @description 404 unless it is yours and has one.
+         */
+        get: operations["getLibraryItemPoster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}": {
         parameters: {
             query?: never;
@@ -2380,6 +2402,78 @@ export interface paths {
         put?: never;
         /** Ask the module's tutor about a lesson */
         post: operations["postCourseTutorMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/videos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The chat's videos, oldest first
+         * @description Videos a coding chat renders with code during its turn. Each follows
+         *     its stages (write, stills, render, encode, save) as the agent and its
+         *     renderer report them; a finished one is also kept in the Library.
+         */
+        get: operations["listChatVideos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/videos/{videoId}/frames/{kind}/{idx}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                videoId: string;
+                kind: components["schemas"]["ChatVideoFrameKind"];
+                idx: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * One picture of a video in progress
+         * @description A still, a filmstrip cell, the latest rendered frame or the poster. The URL's v changes with the picture, so it can be cached.
+         */
+        get: operations["getChatVideoFrame"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/videos/{videoId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                videoId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A finished video, for playing or downloading
+         * @description Supports a single byte Range, so players can seek.
+         */
+        get: operations["getChatVideoContent"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6149,8 +6243,97 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description write: the renderer is being written; stills: checking a few stills; render: rendering every frame; encode: encoding the file; save: storing it
+         * @enum {string}
+         */
+        ChatVideoStage: "write" | "stills" | "render" | "encode" | "save";
+        /**
+         * @description still: a frame the agent checked (idx is its frame number); strip: a filmstrip cell (idx 0–29); preview: the latest rendered frame; poster: the video's poster
+         * @enum {string}
+         */
+        ChatVideoFrameKind: "still" | "strip" | "preview" | "poster";
+        ChatVideoFrame: {
+            kind: components["schemas"]["ChatVideoFrameKind"];
+            idx: number;
+            /**
+             * Format: int64
+             * @description Changes whenever the picture does; pass it as v
+             */
+            version: number;
+        };
+        ChatVideoCheck: {
+            label: string;
+            /** @description Absent while still being checked */
+            passed?: boolean;
+        };
+        ChatVideoOutput: {
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** @description The video track's codec, e.g. H.264; empty if unknown */
+            codec: string;
+            duration_ms?: number;
+        };
+        ChatVideo: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            width: number;
+            height: number;
+            fps: number;
+            /** @description The planned length */
+            duration_ms: number;
+            stage: components["schemas"]["ChatVideoStage"];
+            /** @enum {string} */
+            state: "running" | "done" | "failed";
+            /**
+             * @description Why a failed video failed: stopped when the person stopped the reply
+             * @enum {string}
+             */
+            failure_kind?: "error" | "stopped";
+            error?: string;
+            /** @description The failing command's output */
+            error_log?: string;
+            /** @description The renderer, relative to the chat's workspace; empty until named */
+            script_path: string;
+            script_lines: number;
+            /** @description The renderer's last few non-empty lines */
+            script_tail: string;
+            checks: components["schemas"]["ChatVideoCheck"][];
+            frames_done: number;
+            frames_total: number;
+            /** @description What the renderer said of its stage, e.g. the encoder settings */
+            stage_note: string;
+            /** Format: date-time */
+            render_started_at?: string;
+            /** Format: uuid */
+            run_id?: string;
+            /**
+             * Format: uuid
+             * @description The reply it belongs to, once that reply is stored; absent while the turn runs
+             */
+            message_id?: string;
+            /**
+             * Format: uuid
+             * @description Its copy in the Library, while that exists
+             */
+            library_item_id?: string;
+            output?: components["schemas"]["ChatVideoOutput"];
+            frames: components["schemas"]["ChatVideoFrame"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        ChatVideos: {
+            videos: components["schemas"]["ChatVideo"][];
+        };
         /** @enum {string} */
-        LibraryItemKind: "image" | "diagram" | "link" | "document";
+        LibraryItemKind: "image" | "diagram" | "link" | "document" | "video";
         LibraryItem: {
             /** Format: uuid */
             id: string;
@@ -6198,6 +6381,14 @@ export interface components {
             link_status?: components["schemas"]["LibraryLinkStatus"];
             /** @description For a link: a saved summary, as markdown */
             summary?: string;
+            /** @description For a video: its length */
+            duration_ms?: number;
+            /** @description For a video: frame width in pixels */
+            width?: number;
+            /** @description For a video: frame height in pixels */
+            height?: number;
+            /** @description For a video: a poster image is served at /library/{itemId}/poster */
+            has_poster?: boolean;
             /** Format: date-time */
             created_at: string;
         };
@@ -10350,7 +10541,10 @@ export interface operations {
                 /** @description Serve as an attachment instead of inline */
                 download?: boolean;
             };
-            header?: never;
+            header?: {
+                /** @description One byte range, e.g. bytes=0-1023, so a video can seek */
+                Range?: string;
+            };
             path: {
                 itemId: string;
             };
@@ -10365,6 +10559,40 @@ export interface operations {
                 };
                 content: {
                     "application/octet-stream": string;
+                };
+            };
+            /** @description The requested range of the file */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            416: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryItemPoster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
                 };
             };
             404: components["responses"]["Error"];
@@ -10945,6 +11173,101 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatVideos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chat's videos with their frames */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatVideos"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatVideoFrame: {
+        parameters: {
+            query?: {
+                /** @description The frame's version */
+                v?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                videoId: string;
+                kind: components["schemas"]["ChatVideoFrameKind"];
+                idx: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatVideoContent: {
+        parameters: {
+            query?: {
+                /** @description Serve as an attachment instead of inline */
+                download?: boolean;
+            };
+            header?: {
+                /** @description One byte range, e.g. bytes=0-1023 */
+                Range?: string;
+            };
+            path: {
+                id: components["parameters"]["ChatId"];
+                videoId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The video */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                };
+            };
+            /** @description The requested range of the video */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            416: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

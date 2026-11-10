@@ -35,6 +35,11 @@ func toLibraryItem(l store.ListLibraryItemsRow) api.LibraryItem {
 		status := api.LibraryLinkStatus(l.LinkStatus)
 		out.LinkStatus = &status
 	}
+	if l.Kind == "video" {
+		out.DurationMs, out.Width, out.Height = intp(l.DurationMs), intp(l.Width), intp(l.Height)
+		hasPoster := l.PosterKey != nil
+		out.HasPoster = &hasPoster
+	}
 	source := api.LibraryItemSource(l.Source)
 	out.Source = &source
 	// A persona reference whose persona was deleted stands for nobody.
@@ -77,13 +82,21 @@ func (s *Server) GetLibraryItemContent(ctx context.Context, req api.GetLibraryIt
 	} else if err != nil {
 		return nil, err
 	}
+	download := req.Params.Download != nil && *req.Params.Download
+	if l.Kind == "video" {
+		// Players seek with byte ranges.
+		resp, err := s.serveRanged(ctx, l.BlobKey, l.ContentType, l.SizeBytes, l.Filename, !download, req.Params.Range)
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
+	}
 	o, err := s.Blobs.Get(ctx, s.ArtifactBucket, l.BlobKey)
 	if errors.Is(err, blob.ErrNotFound) {
 		return nil, apperr.ErrNotFound
 	} else if err != nil {
 		return nil, err
 	}
-	download := req.Params.Download != nil && *req.Params.Download
 	return contentResponse{body: o.Body, closer: o.Body, contentType: l.ContentType, length: l.SizeBytes, filename: l.Filename, inline: !download}, nil
 }
 
@@ -279,4 +292,12 @@ func (s *Server) setLibraryReference(ctx context.Context, ws, user, item uuid.UU
 		_, err = q.SetLibraryReference(ctx, store.SetLibraryReferenceParams{ID: item, WorkspaceID: ws, UserID: user, Role: role, PersonaID: persona})
 		return err
 	})
+}
+
+func intp(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
 }
