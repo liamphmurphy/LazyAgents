@@ -3432,6 +3432,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/canvases/{canvasId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * One of the signed-in person's canvases, with the chat it lives in
+         * @description For opening a canvas outside its chat, such as a document in the Docs app. 404 for anyone else's.
+         */
+        get: operations["getMyCanvas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/docs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a document in the Docs app
+         * @description Makes a text canvas whose first version is the title as a heading, in a
+         *     new chat in the person's Docs space (made the first time). That space
+         *     keeps the chat out of the chat list and the Spaces menu; the document
+         *     page opens the chat in its drawer.
+         */
+        post: operations["createDoc"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -13382,6 +13427,59 @@ export interface operations {
                     };
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMyCanvas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The canvas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Empty starts an untitled document */
+                    title?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The document */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

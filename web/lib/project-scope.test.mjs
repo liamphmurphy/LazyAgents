@@ -94,7 +94,7 @@ test("each page belongs to a mode, and pinned pages keep the last one", () => {
 
 test("Work pins Inbox and Dashboard above Project and Workspace; Chat has Personal without Dashboard, then Apps", () => {
   const labels = (m) => navGroupsFor(m).map((g) => [g.label, g.items.map((i) => i.label)]);
-  assert.deepEqual(labels("chat"), [["Personal", ["Inbox", "Library", "Workflows", "Scheduled", "Learn", "Customization"]], ["Apps", ["Finance"]]]);
+  assert.deepEqual(labels("chat"), [["Personal", ["Inbox", "Library", "Workflows", "Scheduled", "Learn", "Customization"]], ["Apps", ["Docs", "Finance"]]]);
   assert.deepEqual(labels("work")[0], ["Personal", ["Inbox", "Dashboard"]]);
   assert.deepEqual(labels("work").slice(1).map(([l]) => l), ["Project", "Workspace"]);
 });

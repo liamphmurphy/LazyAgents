@@ -43,6 +43,7 @@ tags:
   - name: library
   - name: spaces
   - name: finance
+  - name: docs
 paths:
   /agents/{handle}/runs:
     get:
@@ -4126,6 +4127,49 @@ paths:
                 required: [canvases]
                 properties:
                   canvases: { type: array, items: { $ref: "#/components/schemas/MyCanvas" } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /canvases/{canvasId}:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getMyCanvas
+      summary: One of the signed-in person's canvases, with the chat it lives in
+      description: For opening a canvas outside its chat, such as a document in the Docs app. 404 for anyone else's.
+      tags: [spaces]
+      responses:
+        "200":
+          description: The canvas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyCanvas" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /docs:
+    post:
+      operationId: createDoc
+      summary: Start a document in the Docs app
+      description: |
+        Makes a text canvas whose first version is the title as a heading, in a
+        new chat in the person's Docs space (made the first time). That space
+        keeps the chat out of the chat list and the Spaces menu; the document
+        page opens the chat in its drawer.
+      tags: [docs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 200, description: "Empty starts an untitled document" }
+      responses:
+        "201":
+          description: The document
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyCanvas" }
+        "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   /chats/{id}/cancel:

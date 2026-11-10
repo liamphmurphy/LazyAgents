@@ -1,0 +1,57 @@
+package httpapi
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+)
+
+// A document started in the Docs app is a text canvas in its own chat, kept
+// out of the chat list and the Spaces menu, and found again by its id.
+func TestCreateDoc(t *testing.T) {
+	e := newChatEnv(t)
+
+	doc := e.want("POST", "/docs", map[string]any{"title": "  Trip   plan "}, http.StatusCreated)
+	id, chat := doc["id"].(string), doc["chat_id"].(string)
+	if doc["title"] != "Trip plan" || doc["kind"] != "text" || doc["chat_title"] != "Trip plan" {
+		t.Fatalf("created %v", doc)
+	}
+	cv := e.want("GET", "/chats/"+chat+"/canvases/"+id, nil, http.StatusOK)
+	if cv["body"] != "# Trip plan\n" || cv["seq"].(float64) != 1 {
+		t.Fatalf("first version %v", cv)
+	}
+	if got := e.want("GET", "/canvases/"+id, nil, http.StatusOK); got["chat_id"] != chat || got["title"] != "Trip plan" {
+		t.Fatalf("by id %v", got)
+	}
+	e.want("GET", "/canvases/"+uuid.NewString(), nil, http.StatusNotFound)
+
+	untitled := e.want("POST", "/docs", map[string]any{}, http.StatusCreated)
+	if untitled["title"] != "Untitled document" {
+		t.Fatalf("untitled %v", untitled)
+	}
+	e.invalid("POST", "/docs", map[string]any{"title": strings.Repeat("x", 201)}, "title", "200")
+
+	// Both documents' chats share one Docs space, which stays out of the menu.
+	if a, b := e.want("GET", "/chats/"+chat, nil, http.StatusOK)["space"], e.want("GET", "/chats/"+untitled["chat_id"].(string), nil, http.StatusOK)["space"]; a == nil || a.(map[string]any)["id"] != b.(map[string]any)["id"] {
+		t.Fatalf("spaces %v %v", a, b)
+	}
+	if spaces := e.want("GET", "/chat-spaces", nil, http.StatusOK)["spaces"].([]any); len(spaces) != 0 {
+		t.Fatalf("Spaces list %v", spaces)
+	}
+	for _, c := range e.want("GET", "/chats", nil, http.StatusOK)["chats"].([]any) {
+		if c.(map[string]any)["id"] == chat {
+			t.Fatal("a document's chat is in the chat list")
+		}
+	}
+	listed := 0
+	for _, c := range e.want("GET", "/canvases", nil, http.StatusOK)["canvases"].([]any) {
+		if m := c.(map[string]any); m["id"] == id || m["id"] == untitled["id"] {
+			listed++
+		}
+	}
+	if listed != 2 {
+		t.Fatalf("listed %d of 2 documents", listed)
+	}
+}

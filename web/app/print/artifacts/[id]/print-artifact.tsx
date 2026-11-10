@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef } from "react";
 import { useArtifact, useArtifactVersionBody } from "@/lib/api/hooks";
 import { absoluteTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -10,47 +10,7 @@ import { Banner, Skeleton } from "@/components/ui/primitives";
 import { artifactTitle } from "@/components/domain/artifacts";
 import { Markdown } from "@/components/domain/markdown";
 import { PrintMode } from "@/components/domain/print-mode";
-
-/** Longest wait for diagrams, fonts and images before printing anyway. */
-const READY_TIMEOUT_MS = 15_000;
-
-function subscribeTheme(onChange: () => void) {
-  const attr = new MutationObserver(onChange);
-  attr.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  return () => attr.disconnect();
-}
-
-/**
- * Paper is white: print in the light theme whatever the app uses, and put it back after.
- * True once it applies, so visuals that read the theme once (Mermaid) draw light.
- */
-function useLightTheme() {
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    const prev = root.getAttribute("data-theme");
-    root.setAttribute("data-theme", "light");
-    return () => {
-      if (prev) root.setAttribute("data-theme", prev);
-      else root.removeAttribute("data-theme");
-    };
-  }, []);
-  return useSyncExternalStore(subscribeTheme, () => document.documentElement.getAttribute("data-theme") === "light", () => false);
-}
-
-/** Resolves once Mermaid has drawn, fonts have loaded and every image has decoded. */
-async function settled(root: HTMLElement) {
-  const deadline = Date.now() + READY_TIMEOUT_MS;
-  const frame = () => new Promise((r) => requestAnimationFrame(r));
-  while (Date.now() < deadline && root.querySelector('[data-testid="mermaid-loading"]')) {
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  await document.fonts.ready;
-  await Promise.all(
-    Array.from(root.querySelectorAll("img")).map((img) => img.decode().catch(() => undefined)),
-  );
-  await frame();
-  await frame();
-}
+import { settled, useLightTheme } from "@/lib/print-ready";
 
 export function PrintArtifact({ id }: { id: string }) {
   const themed = useLightTheme();

@@ -93,6 +93,12 @@ WHERE c.workspace_id = @workspace_id AND c.created_by = @user_id AND NOT c.hidde
 ORDER BY cv.updated_at DESC, cv.id DESC
 LIMIT 100;
 
+-- name: GetMyCanvas :one
+-- One of the person's canvases, with the chat it lives in.
+SELECT cv.id, cv.kind, cv.title, cv.updated_at, c.id AS chat_id, c.title AS chat_title
+FROM chat_canvases cv JOIN chat_sessions c ON c.id = cv.session_id
+WHERE cv.id = @id AND c.workspace_id = @workspace_id AND c.created_by = @user_id AND NOT c.hidden;
+
 -- name: GetUserCanvas :one
 -- One of the person's canvases with its current text.
 SELECT cv.id, cv.kind, cv.title, v.body
