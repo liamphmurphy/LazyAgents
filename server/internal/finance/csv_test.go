@@ -48,6 +48,50 @@ func TestDetectCSVLayouts(t *testing.T) {
 	}
 }
 
+func TestMonthNameHyphenDates(t *testing.T) {
+	const format = "MMM-DD-YYYY"
+	for _, tc := range []struct{ input, want string }{
+		{"Nov-03-2026", "2026-11-03"},
+		{"Nov-3-2026", "2026-11-03"},
+		{"Feb-29-2024", "2024-02-29"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			data := []byte("Date,Description,Amount\n" + tc.input + ",COFFEE,-4.50\n")
+			m, ok := DetectCSV(data)
+			if !ok || m.DateFormat != format {
+				t.Fatalf("detection: %+v, %v", m, ok)
+			}
+			p, err := ParseCSVWith(data, m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(p.Txns) != 1 || !p.Txns[0].PostedOn.Equal(date(tc.want)) || p.Txns[0].AmountCents != -450 {
+				t.Fatalf("parsed: %+v", p.Txns)
+			}
+		})
+	}
+	// Unknown headers still prefill the mapping with the date format.
+	data := []byte("When,Details,Value\nNov-03-2026,COFFEE,-4.50\n")
+	m := GuessCSV(data)
+	if m.DateFormat != format {
+		t.Fatalf("guess: %+v", m)
+	}
+	if _, err := ParseCSVWith(data, m); err != nil {
+		t.Fatalf("guessed mapping: %v", err)
+	}
+	if !strings.Contains(strings.Join(DateFormatNames(), ","), format) {
+		t.Error("date picker must offer the format")
+	}
+	if !strings.Contains(MappingPrompt(Pending{}, "checking"), format) {
+		t.Error("assistant must be told about the format")
+	}
+	for _, invalid := range []string{"Feb-29-2026", "Nov-31-2026", "Bog-03-2026"} {
+		if _, ok := parseDate(invalid, format); ok {
+			t.Errorf("accepted invalid date %q", invalid)
+		}
+	}
+}
+
 // A layout detection doesn't know: the guess prefills the mapping step, and
 // a correct mapping (what the assistant proposes) reads it.
 func TestUnknownLayoutGuessAndMapping(t *testing.T) {
