@@ -519,7 +519,13 @@ func (p *turnProxy) sandbox(body map[string]any, ownVolume, ownNetwork func(stri
 	if nc := asMap(body["NetworkingConfig"]); nc != nil {
 		endpoints := map[string]any{}
 		for name, cfg := range asMap(nc["EndpointsConfig"]) {
-			if name != p.network && !ownNetwork(name) {
+			switch {
+			case name == "" || name == "default" || name == "bridge":
+				// The docker CLI keys its endpoint by the NetworkMode it sent,
+				// "default" for a plain docker run: that's the turn's network.
+				name = network
+			case name == network || name == p.network || ownNetwork(name):
+			default:
 				return nil, refuse("NetworkingConfig", fmt.Sprintf("network %q wasn't created by this turn", name))
 			}
 			endpoints[name] = cfg
