@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
@@ -66,7 +67,9 @@ type Docker struct {
 	// NixVolume is the Nix store every turn shares through the runner's
 	// nix-daemon (RUNNER_NIX_VOLUME); "" leaves turns without Nix.
 	NixVolume string
-	client    *http.Client
+	// nixUnhealthy is set when CheckNixDaemon found the daemon unresponsive.
+	nixUnhealthy atomic.Bool
+	client       *http.Client
 }
 
 const (

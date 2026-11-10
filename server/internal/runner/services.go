@@ -63,7 +63,7 @@ func (r *Runner) startDockerProxy(ctx context.Context, c runCtx, turn store.RunT
 	if !ok {
 		return nil, func() {}
 	}
-	td, err := pb.StartDockerProxy(ctx, c.run.ID.String(), fmt.Sprintf("%s-%d", c.run.ID, turn.Seq))
+	td, err := pb.StartDockerProxy(ctx, c.run.ID.String(), wsID(c.run), fmt.Sprintf("%s-%d", c.run.ID, turn.Seq))
 	if errors.Is(err, errProxyOff) {
 		return nil, func() {}
 	}
