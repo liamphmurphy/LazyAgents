@@ -1028,7 +1028,9 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   }}
                 />
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              {/* The options wrap within their own column so Stop and Send never drop to a line of their own. */}
+              <div className="flex items-end gap-2">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
                 {fresh && c.persona && c.repo_url && (full?.repos.length ?? 0) > 1 && codesInRepos(full) && (
                   <RepoSelect repos={full!.repos} value={c.repo_url} onChange={(r) => switchPersona(c.persona!.id, r)} disabled={locked || create.isPending} />
@@ -1044,7 +1046,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   onChange={(e) => setPickedEffort(e ?? "default")}
                   disabled={locked || running}
                 />
-                <span className="flex-1" />
+                </div>
+                <div className="flex flex-none items-center gap-2">
                 {running && (
                   <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
                     {stopping ? "Stopping…" : "Stop"}
@@ -1064,6 +1067,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 >
                   {running ? "Interrupt" : research ? "Plan it" : "Send"}
                 </Button>
+                </div>
               </div>
             </form>
             </>
