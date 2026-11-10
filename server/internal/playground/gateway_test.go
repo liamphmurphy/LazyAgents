@@ -42,12 +42,12 @@ func (f *fakeBackend) Logs(_ context.Context, _ uuid.UUID, tail int, _ bool, emi
 
 // seen is what an upstream process was sent.
 type seen struct {
-	host, cookie, origin, path string
+	host, cookie, origin, site, path string
 }
 
 func upstream(t *testing.T, name string, got chan<- seen, header http.Header) string {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got <- seen{host: r.Host, cookie: r.Header.Get("Cookie"), origin: r.Header.Get("Origin"), path: r.URL.Path}
+		got <- seen{host: r.Host, cookie: r.Header.Get("Cookie"), origin: r.Header.Get("Origin"), site: r.Header.Get("Sec-Fetch-Site"), path: r.URL.Path}
 		for k, vs := range header {
 			for _, v := range vs {
 				w.Header().Add(k, v)
@@ -160,12 +160,13 @@ func TestGatewayLetsOnlyVesperReadAcrossOrigins(t *testing.T) {
 	rec := request(h, http.MethodPut, "/api/v1/runner/test-environments", func(r *http.Request) {
 		signedIn(r)
 		r.Header.Set("Origin", vesperOrigin)
+		r.Header.Set("Sec-Fetch-Site", "same-site")
 	})
 	if rec.Header().Get("Access-Control-Allow-Origin") != vesperOrigin || !strings.Contains(rec.Header().Get("Access-Control-Expose-Headers"), "X-Total") {
 		t.Errorf("Vesper's request: CORS %v", rec.Header())
 	}
-	if s := <-got; s.origin != "http://localhost:8091" {
-		t.Errorf("app saw Origin %q, want its own, as from its own page", s.origin)
+	if s := <-got; s.origin != "http://localhost:8091" || s.site != "same-origin" {
+		t.Errorf("app saw Origin %q, Sec-Fetch-Site %q: want its own origin, as from its own page", s.origin, s.site)
 	}
 
 	other := request(h, http.MethodGet, "/api/v1/runs", func(r *http.Request) {

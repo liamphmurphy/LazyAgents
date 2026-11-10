@@ -231,13 +231,15 @@ func (g *Gateway) proxy(addr string) *httputil.ReverseProxy {
 			// URLs and redirects it builds point back through the gateway.
 			pr.Out.Host = pr.In.Host
 			// A request from the API tab reaches the app as one from its own
-			// page would, so an Origin check in the app lets it through.
+			// page would, so the app's Origin and fetch-metadata checks (such
+			// as Vesper's own) let it through.
 			if info, _ := pr.In.Context().Value(routeKey{}).(routeInfo); info.vesper {
 				scheme := "http"
 				if pr.In.TLS != nil {
 					scheme = "https"
 				}
 				pr.Out.Header.Set("Origin", scheme+"://"+pr.In.Host)
+				pr.Out.Header.Set("Sec-Fetch-Site", "same-origin")
 			}
 		},
 		// Stream server-sent events and dev-server output as they come.
