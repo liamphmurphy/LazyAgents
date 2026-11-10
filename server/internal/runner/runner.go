@@ -236,8 +236,12 @@ func (r *Runner) heartbeat(ctx context.Context) {
 	r.mu.Lock()
 	n := r.active
 	r.mu.Unlock()
+	hostDir := ""
+	if hf, ok := r.Backend.(HostFolders); ok {
+		hostDir = hf.HostWorkspacesDir()
+	}
 	if err := r.q().Heartbeat(ctx, store.HeartbeatParams{ID: r.Cfg.ID, Backend: r.Backend.Name(),
-		MaxConcurrent: int32(r.Cfg.MaxConcurrent), Running: int32(n), Version: r.Cfg.Version}); err != nil && ctx.Err() == nil {
+		MaxConcurrent: int32(r.Cfg.MaxConcurrent), Running: int32(n), Version: r.Cfg.Version, HostWorkspacesDir: hostDir}); err != nil && ctx.Err() == nil {
 		r.Log.Warn("heartbeat", "err", err)
 	}
 }
@@ -486,6 +490,28 @@ func (r *Runner) advanceResearch(ctx context.Context) {
 	if err := runs.AdvanceResearchJobs(ctx, r.Pool); err != nil && ctx.Err() == nil {
 		r.Log.Warn("advance research", "err", err)
 	}
+}
+
+// ensureWorkspace creates a run's workspace: in a folder on the person's
+// machine when they turned host folders on and this runner has a folder
+// configured, otherwise as the backend always has.
+func (r *Runner) ensureWorkspace(ctx context.Context, run store.Run) error {
+	hf, ok := r.Backend.(HostFolders)
+	if !ok || hf.HostWorkspacesDir() == "" {
+		return r.Backend.EnsureWorkspace(ctx, run.ID.String())
+	}
+	on, err := r.q().HostFolderWorkspaces(ctx, run.WorkspaceID)
+	if err != nil {
+		return err
+	}
+	if !on {
+		return r.Backend.EnsureWorkspace(ctx, run.ID.String())
+	}
+	folder, err := hf.EnsureHostWorkspace(ctx, run.ID.String())
+	if err != nil || folder == "" {
+		return err
+	}
+	return r.q().SetRunWorkspaceHostPath(ctx, store.SetRunWorkspaceHostPathParams{ID: run.ID, WorkspaceHostPath: &folder})
 }
 
 // cleanup discards a run's workspace once its work is safe. A failed checkpoint
@@ -772,7 +798,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		}
 		return
 	}
-	if err := r.Backend.EnsureWorkspace(ctx, run.ID.String()); err != nil {
+	if err := r.ensureWorkspace(ctx, run); err != nil {
 		fail("Couldn't create the workspace: " + err.Error())
 		return
 	}

@@ -25,3 +25,14 @@ func TestModelPriceConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestHostWorkspacesMustBeAbsolute(t *testing.T) {
+	t.Setenv("RUNNER_HOST_WORKSPACES_DIR", "workspaces")
+	if _, err := Load(); err == nil {
+		t.Fatal("relative RUNNER_HOST_WORKSPACES_DIR accepted")
+	}
+	t.Setenv("RUNNER_HOST_WORKSPACES_DIR", "/Users/me/vesper/workspaces")
+	if c, err := Load(); err != nil || c.Runner.HostWorkspaces != "/Users/me/vesper/workspaces" {
+		t.Fatalf("absolute path: %q %v", c.Runner.HostWorkspaces, err)
+	}
+}

@@ -25,13 +25,23 @@ import (
 
 func (s *Server) runnerStatus(ctx context.Context) (api.RunnerStatus, error) {
 	out := api.RunnerStatus{Runners: []api.RunnerInfo{}}
+	_, _, ws := me(ctx)
+	on, err := s.Q.HostFolderWorkspaces(ctx, ws)
+	if err != nil {
+		return out, err
+	}
+	out.HostFolderWorkspaces = on
 	rs, err := s.Q.LiveRunners(ctx)
 	if err != nil {
 		return out, err
 	}
 	for _, r := range rs {
-		out.Runners = append(out.Runners, api.RunnerInfo{Id: r.ID, Backend: api.RunnerInfoBackend(r.Backend), MaxConcurrent: int(r.MaxConcurrent),
-			Running: int(r.Running), Version: &r.Version, HeartbeatAt: r.HeartbeatAt})
+		info := api.RunnerInfo{Id: r.ID, Backend: api.RunnerInfoBackend(r.Backend), MaxConcurrent: int(r.MaxConcurrent),
+			Running: int(r.Running), Version: &r.Version, HeartbeatAt: r.HeartbeatAt}
+		if r.HostWorkspacesDir != "" {
+			info.HostWorkspacesDir = &r.HostWorkspacesDir
+		}
+		out.Runners = append(out.Runners, info)
 		out.Slots += int(r.MaxConcurrent)
 		out.Busy += int(r.Running)
 	}
@@ -49,6 +59,15 @@ func (s *Server) runnerStatus(ctx context.Context) (api.RunnerStatus, error) {
 func (s *Server) GetRunnerStatus(ctx context.Context, _ api.GetRunnerStatusRequestObject) (api.GetRunnerStatusResponseObject, error) {
 	st, err := s.runnerStatus(ctx)
 	return api.GetRunnerStatus200JSONResponse(st), err
+}
+
+func (s *Server) UpdateRunnerSettings(ctx context.Context, req api.UpdateRunnerSettingsRequestObject) (api.UpdateRunnerSettingsResponseObject, error) {
+	_, _, ws := me(ctx)
+	if err := s.Q.SetHostFolderWorkspaces(ctx, store.SetHostFolderWorkspacesParams{ID: ws, HostFolderWorkspaces: req.Body.HostFolderWorkspaces}); err != nil {
+		return nil, err
+	}
+	st, err := s.runnerStatus(ctx)
+	return api.UpdateRunnerSettings200JSONResponse(st), err
 }
 
 func (s *Server) GetDispatchPreview(ctx context.Context, req api.GetDispatchPreviewRequestObject) (api.GetDispatchPreviewResponseObject, error) {

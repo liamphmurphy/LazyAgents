@@ -268,3 +268,24 @@ test("a coding persona's new chat shows its repo and work branch in the header",
   expect(mock.created[0]).toMatchObject({ persona_id: mock.personas[0].id, repo_url: repos[1] });
   expect(mock.unhandled).toEqual([]);
 });
+
+test("a chat whose checkout is a host folder shows the folder with a copy button", async ({ page }) => {
+  const mock = await installChatApi(page, {
+    personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: true }, repos: ["https://github.com/acme/app"] })],
+  });
+  await page.goto("/chat?project=WEB");
+  await page.getByLabel("Message").fill("fix the build");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page).toHaveURL(/\/chat\/[^/]+/);
+  await expect(page.getByTestId("repo-chip").first()).toBeVisible();
+  // A volume checkout has nothing to open.
+  await expect(page.getByTestId("workspace-folder")).toHaveCount(0);
+  const path = "/Users/me/vesper/workspaces/0199aaaa-run";
+  mock.chats[0].workspace_path = path;
+  await page.reload();
+  const chip = page.getByTestId("workspace-folder").first();
+  await expect(chip).toContainText(path);
+  await expect(chip).toHaveAttribute("title", `Checkout on this machine:\n${path}`);
+  await expect(chip.getByRole("button", { name: "Copy folder path" })).toBeVisible();
+  expect(mock.unhandled).toEqual([]);
+});

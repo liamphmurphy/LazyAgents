@@ -35,6 +35,8 @@ type fakeEngine struct {
 	oom       bool
 	// listFilters is the filters query of the last container list.
 	listFilters string
+	// volumes are the named volumes that exist.
+	volumes map[string]bool
 }
 
 func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -106,6 +108,31 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(b.Bytes())
 	case r.Method == "DELETE" && p == "/containers/c1":
 		w.WriteHeader(204)
+	case p == "/volumes/create":
+		var body struct{ Name string }
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		if f.volumes == nil {
+			f.volumes = map[string]bool{}
+		}
+		f.volumes[body.Name] = true
+		f.mu.Unlock()
+		w.WriteHeader(201)
+	case strings.HasPrefix(p, "/volumes/"):
+		name := strings.TrimPrefix(p, "/volumes/")
+		f.mu.Lock()
+		exists := f.volumes[name]
+		if r.Method == "DELETE" {
+			delete(f.volumes, name)
+		}
+		f.mu.Unlock()
+		if !exists {
+			http.NotFound(w, r)
+		} else if r.Method == "DELETE" {
+			w.WriteHeader(204)
+		} else {
+			_, _ = io.WriteString(w, `{}`)
+		}
 	default:
 		http.NotFound(w, r)
 	}

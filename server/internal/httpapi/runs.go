@@ -118,6 +118,9 @@ func (s *Server) toRun(ctx context.Context, r store.Run) (api.Run, error) {
 		out.HoldUntil, out.HoldResetKnown, out.HoldAttempts = r.HoldUntil, &r.HoldResetKnown, &attempts
 	}
 	out.CheckpointBranch, out.CheckpointError = r.CheckpointBranch, r.CheckpointError
+	if r.WorkspaceVolume != nil { // the checkout still exists
+		out.WorkspacePath = r.WorkspaceHostPath
+	}
 	if r.DispatchedByUserID != nil {
 		if u, err := s.Q.GetUser(ctx, store.GetUserParams{ID: *r.DispatchedByUserID, WorkspaceID: r.WorkspaceID}); err == nil {
 			out.DispatchedBy = toUserRef(u)

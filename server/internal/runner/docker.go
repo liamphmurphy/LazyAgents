@@ -9,11 +9,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -25,8 +28,9 @@ import (
 const maxCodexAuth = 16 << 10
 
 // Docker runs each process as a container from the agent image, with the
-// run's named volume at /workspace (§6.5). It talks to the Engine API over
-// the socket directly, so the runner image needs no docker CLI.
+// run's checkout at /workspace (§6.5): its named volume, or a host folder. It
+// talks to the Engine API over the socket directly, so the runner image needs
+// no docker CLI.
 //
 // Mounting the socket gives the runner root-equivalent access to the host.
 // v1 targets a single laptop, where that's documented and accepted.
@@ -48,7 +52,13 @@ type Docker struct {
 	// SaveCodexAuth stores a ChatGPT login a turn refreshed. scope is what
 	// SecretEnv put in CodexAuthScopeEnv.
 	SaveCodexAuth func(ctx context.Context, scope, auth string) error
-	client        *http.Client
+	// HostWorkspaces is where checkouts go when they live in a folder on the
+	// person's machine (RUNNER_HOST_WORKSPACES_DIR); "" turns that off. The
+	// runner must see it at the same absolute path as the Docker daemon: it
+	// creates and removes the run folders itself, then hands the path to
+	// Docker as a bind source.
+	HostWorkspaces string
+	client         *http.Client
 }
 
 const (
@@ -153,8 +163,14 @@ func (d *Docker) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (d *Docker) EnsureWorkspace(ctx context.Context, runID string) error {
-	for _, name := range []string{volumeName(runID), homeVolumeName(runID)} {
+// A run's checkout is either its named volume or, when it was created with
+// EnsureHostWorkspace, a folder under HostWorkspaces. Which one is fixed when
+// the workspace is first created: switching later would hand the next turn an
+// empty checkout. The home directory is always a volume; it holds harness
+// sessions and logins, nothing a person needs to open.
+
+func (d *Docker) createVolumes(ctx context.Context, runID string, names ...string) error {
+	for _, name := range names {
 		_, err := d.do(ctx, "POST", "/volumes/create", jsonBody(map[string]any{
 			"Name": name, "Labels": d.labels(runID),
 		}), "application/json", nil)
@@ -165,7 +181,80 @@ func (d *Docker) EnsureWorkspace(ctx context.Context, runID string) error {
 	return nil
 }
 
-func (d *Docker) HasWorkspace(ctx context.Context, runID string) (bool, error) {
+func (d *Docker) EnsureWorkspace(ctx context.Context, runID string) error {
+	folder, err := d.hostFolder(runID)
+	if err != nil {
+		return err
+	}
+	if folder != "" {
+		return d.createVolumes(ctx, runID, homeVolumeName(runID))
+	}
+	return d.createVolumes(ctx, runID, volumeName(runID), homeVolumeName(runID))
+}
+
+// HostWorkspacesDir implements HostFolders.
+func (d *Docker) HostWorkspacesDir() string { return d.HostWorkspaces }
+
+// EnsureHostWorkspace implements HostFolders.
+func (d *Docker) EnsureHostWorkspace(ctx context.Context, runID string) (string, error) {
+	folder, err := d.hostFolderPath(runID)
+	if err != nil {
+		return "", err
+	}
+	hasVolume, err := d.hasVolume(ctx, runID)
+	if err != nil {
+		return "", err
+	}
+	if hasVolume { // created before host folders were turned on: it stays
+		return "", d.EnsureWorkspace(ctx, runID)
+	}
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		return "", fmt.Errorf("create workspace folder: %w", err)
+	}
+	// Turns run as the image's node user (uid 1000). A runner that isn't root
+	// can't chown; Docker Desktop and OrbStack map bind-mount ownership to the
+	// container user anyway, and elsewhere setup fails with a clear
+	// permission error on its first write.
+	if err := os.Chown(folder, 1000, 1000); err != nil && !errors.Is(err, fs.ErrPermission) {
+		return "", fmt.Errorf("hand the workspace folder to the agent user: %w", err)
+	}
+	if err := d.createVolumes(ctx, runID, homeVolumeName(runID)); err != nil {
+		return "", err
+	}
+	return folder, nil
+}
+
+// hostFolderPath is where the run's folder goes under HostWorkspaces.
+func (d *Docker) hostFolderPath(runID string) (string, error) {
+	if d.HostWorkspaces == "" {
+		return "", errors.New("runner: RUNNER_HOST_WORKSPACES_DIR is not set")
+	}
+	// The ID becomes one path element that RemoveWorkspace deletes, so it
+	// must never be empty or reach outside its own folder.
+	if runID == "" || runID == "." || runID == ".." || strings.ContainsAny(runID, `/\`) {
+		return "", fmt.Errorf("runner: bad workspace id %q", runID)
+	}
+	return filepath.Join(d.HostWorkspaces, runID), nil
+}
+
+// hostFolder is the run's checkout folder when it has one, else "".
+func (d *Docker) hostFolder(runID string) (string, error) {
+	if d.HostWorkspaces == "" {
+		return "", nil
+	}
+	folder, err := d.hostFolderPath(runID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(folder); errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	return folder, nil
+}
+
+func (d *Docker) hasVolume(ctx context.Context, runID string) (bool, error) {
 	res, err := d.do(ctx, "GET", "/volumes/"+volumeName(runID), nil, "", nil)
 	if isStatus(err, 404) {
 		return false, nil
@@ -177,6 +266,14 @@ func (d *Docker) HasWorkspace(ctx context.Context, runID string) (bool, error) {
 	return true, nil
 }
 
+func (d *Docker) HasWorkspace(ctx context.Context, runID string) (bool, error) {
+	folder, err := d.hostFolder(runID)
+	if err != nil || folder != "" {
+		return folder != "", err
+	}
+	return d.hasVolume(ctx, runID)
+}
+
 func (d *Docker) RemoveWorkspace(ctx context.Context, runID string) error {
 	for _, name := range []string{volumeName(runID), homeVolumeName(runID)} {
 		_, err := d.do(ctx, "DELETE", "/volumes/"+name+"?force=1", nil, "", nil)
@@ -184,7 +281,23 @@ func (d *Docker) RemoveWorkspace(ctx context.Context, runID string) error {
 			return err
 		}
 	}
-	return nil
+	folder, err := d.hostFolder(runID)
+	if err != nil || folder == "" {
+		return err
+	}
+	return os.RemoveAll(folder)
+}
+
+// workspaceMount is the run's checkout as a container mount.
+func (d *Docker) workspaceMount(runID string) (map[string]any, error) {
+	folder, err := d.hostFolder(runID)
+	if err != nil {
+		return nil, err
+	}
+	if folder != "" {
+		return map[string]any{"Type": "bind", "Source": folder, "Target": workspacePath}, nil
+	}
+	return map[string]any{"Type": "volume", "Source": volumeName(runID), "Target": workspacePath}, nil
 }
 
 // Cleanup removes turn containers left by a runner of this install that died;
@@ -292,7 +405,14 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 			spec.Env[k] = v
 		}
 	}
-	mounts := []map[string]any{{"Type": "volume", "Source": volumeName(runID), "Target": workspacePath}}
+	if _, exists := spec.Env[SSHDirEnv]; !exists {
+		spec.Env[SSHDirEnv] = path.Join(homePath, ".lazyagents", "ssh")
+	}
+	checkout, err := d.workspaceMount(runID)
+	if err != nil {
+		return nil, err
+	}
+	mounts := []map[string]any{checkout}
 	// A persistent volume is shared by all runs and deliberately has no run
 	// label, so workspace cleanup never removes downloaded dependencies.
 	mounts = append(mounts, map[string]any{"Type": "volume", "Source": homeVolumeName(runID), "Target": homePath})

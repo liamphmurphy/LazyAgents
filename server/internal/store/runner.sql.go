@@ -71,7 +71,7 @@ WHERE id = (
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
-RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error
+RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path
 `
 
 // The runner (docs/dev/plan.md §6.4–6.6): queue, turns, heartbeats, PR sync.
@@ -122,6 +122,7 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, runnerID *string) (Run, er
 		&i.CheckpointBranch,
 		&i.CheckpointAt,
 		&i.CheckpointError,
+		&i.WorkspaceHostPath,
 	)
 	return i, err
 }
@@ -275,18 +276,20 @@ func (q *Queries) HasPendingTurn(ctx context.Context, runID uuid.UUID) (bool, er
 }
 
 const heartbeat = `-- name: Heartbeat :exec
-INSERT INTO runners (id, backend, max_concurrent, running, version)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO runners (id, backend, max_concurrent, running, version, host_workspaces_dir)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO UPDATE SET backend = EXCLUDED.backend, max_concurrent = EXCLUDED.max_concurrent,
-  running = EXCLUDED.running, version = EXCLUDED.version, heartbeat_at = now()
+  running = EXCLUDED.running, version = EXCLUDED.version, host_workspaces_dir = EXCLUDED.host_workspaces_dir,
+  heartbeat_at = now()
 `
 
 type HeartbeatParams struct {
-	ID            string
-	Backend       string
-	MaxConcurrent int32
-	Running       int32
-	Version       string
+	ID                string
+	Backend           string
+	MaxConcurrent     int32
+	Running           int32
+	Version           string
+	HostWorkspacesDir string
 }
 
 func (q *Queries) Heartbeat(ctx context.Context, arg HeartbeatParams) error {
@@ -296,6 +299,7 @@ func (q *Queries) Heartbeat(ctx context.Context, arg HeartbeatParams) error {
 		arg.MaxConcurrent,
 		arg.Running,
 		arg.Version,
+		arg.HostWorkspacesDir,
 	)
 	return err
 }
@@ -304,7 +308,7 @@ const holdRun = `-- name: HoldRun :one
 UPDATE runs SET state = 'waiting_for_quota', wait_reason = NULL, hold_until = $1,
   hold_reset_known = $2, hold_attempts = hold_attempts + 1,
   hold_started_at = coalesce(hold_started_at, now())
-WHERE id = $3 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error
+WHERE id = $3 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path
 `
 
 type HoldRunParams struct {
@@ -359,8 +363,20 @@ func (q *Queries) HoldRun(ctx context.Context, arg HoldRunParams) (Run, error) {
 		&i.CheckpointBranch,
 		&i.CheckpointAt,
 		&i.CheckpointError,
+		&i.WorkspaceHostPath,
 	)
 	return i, err
+}
+
+const hostFolderWorkspaces = `-- name: HostFolderWorkspaces :one
+SELECT host_folder_workspaces FROM workspaces WHERE id = $1
+`
+
+func (q *Queries) HostFolderWorkspaces(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hostFolderWorkspaces, id)
+	var host_folder_workspaces bool
+	err := row.Scan(&host_folder_workspaces)
+	return host_folder_workspaces, err
 }
 
 const idleChatRuns = `-- name: IdleChatRuns :many
@@ -419,7 +435,7 @@ func (q *Queries) LatestTicketCheckpoint(ctx context.Context, arg LatestTicketCh
 }
 
 const liveRunners = `-- name: LiveRunners :many
-SELECT id, backend, max_concurrent, running, version, started_at, heartbeat_at FROM runners WHERE heartbeat_at > now() - interval '45 seconds' ORDER BY started_at
+SELECT id, backend, max_concurrent, running, version, started_at, heartbeat_at, host_workspaces_dir FROM runners WHERE heartbeat_at > now() - interval '45 seconds' ORDER BY started_at
 `
 
 func (q *Queries) LiveRunners(ctx context.Context) ([]Runner, error) {
@@ -439,6 +455,7 @@ func (q *Queries) LiveRunners(ctx context.Context) ([]Runner, error) {
 			&i.Version,
 			&i.StartedAt,
 			&i.HeartbeatAt,
+			&i.HostWorkspacesDir,
 		); err != nil {
 			return nil, err
 		}
@@ -463,7 +480,7 @@ func (q *Queries) LiveWorkRunsCount(ctx context.Context) (int32, error) {
 }
 
 const lockRunNoWait = `-- name: LockRunNoWait :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error FROM runs WHERE id = $1
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path FROM runs WHERE id = $1
 `
 
 // Plain read used by the runner (it locks inside its own transactions).
@@ -511,6 +528,7 @@ func (q *Queries) LockRunNoWait(ctx context.Context, id uuid.UUID) (Run, error) 
 		&i.CheckpointBranch,
 		&i.CheckpointAt,
 		&i.CheckpointError,
+		&i.WorkspaceHostPath,
 	)
 	return i, err
 }
@@ -578,6 +596,37 @@ func (q *Queries) RunActiveSeconds(ctx context.Context, runID uuid.UUID) (RunAct
 	var i RunActiveSecondsRow
 	err := row.Scan(&i.Turns, &i.Seconds)
 	return i, err
+}
+
+const runWorkspaceHostPaths = `-- name: RunWorkspaceHostPaths :many
+SELECT id, workspace_host_path::text AS path FROM runs
+WHERE id = ANY($1::uuid[]) AND workspace_host_path IS NOT NULL AND workspace_volume IS NOT NULL
+`
+
+type RunWorkspaceHostPathsRow struct {
+	ID   uuid.UUID
+	Path string
+}
+
+// Host folders of runs that still have their workspace.
+func (q *Queries) RunWorkspaceHostPaths(ctx context.Context, ids []uuid.UUID) ([]RunWorkspaceHostPathsRow, error) {
+	rows, err := q.db.Query(ctx, runWorkspaceHostPaths, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RunWorkspaceHostPathsRow{}
+	for rows.Next() {
+		var i RunWorkspaceHostPathsRow
+		if err := rows.Scan(&i.ID, &i.Path); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const runnerEnvironments = `-- name: RunnerEnvironments :many
@@ -721,6 +770,20 @@ func (q *Queries) SecretsForRun(ctx context.Context, arg SecretsForRunParams) ([
 	return items, nil
 }
 
+const setHostFolderWorkspaces = `-- name: SetHostFolderWorkspaces :exec
+UPDATE workspaces SET host_folder_workspaces = $2, updated_at = now() WHERE id = $1
+`
+
+type SetHostFolderWorkspacesParams struct {
+	ID                   uuid.UUID
+	HostFolderWorkspaces bool
+}
+
+func (q *Queries) SetHostFolderWorkspaces(ctx context.Context, arg SetHostFolderWorkspacesParams) error {
+	_, err := q.db.Exec(ctx, setHostFolderWorkspaces, arg.ID, arg.HostFolderWorkspaces)
+	return err
+}
+
 const setIdleTurns = `-- name: SetIdleTurns :exec
 UPDATE runs SET idle_turns = $2 WHERE id = $1
 `
@@ -817,6 +880,20 @@ type SetRunWorkspaceParams struct {
 
 func (q *Queries) SetRunWorkspace(ctx context.Context, arg SetRunWorkspaceParams) error {
 	_, err := q.db.Exec(ctx, setRunWorkspace, arg.ID, arg.WorkspaceVolume)
+	return err
+}
+
+const setRunWorkspaceHostPath = `-- name: SetRunWorkspaceHostPath :exec
+UPDATE runs SET workspace_host_path = $2 WHERE id = $1
+`
+
+type SetRunWorkspaceHostPathParams struct {
+	ID                uuid.UUID
+	WorkspaceHostPath *string
+}
+
+func (q *Queries) SetRunWorkspaceHostPath(ctx context.Context, arg SetRunWorkspaceHostPathParams) error {
+	_, err := q.db.Exec(ctx, setRunWorkspaceHostPath, arg.ID, arg.WorkspaceHostPath)
 	return err
 }
 

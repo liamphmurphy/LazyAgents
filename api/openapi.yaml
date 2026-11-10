@@ -1249,6 +1249,31 @@ paths:
               schema: { $ref: "#/components/schemas/RunnerStatus" }
         default: { $ref: "#/components/responses/Error" }
 
+  /runner/settings:
+    put:
+      operationId: updateRunnerSettings
+      summary: Turn host-folder workspaces on or off
+      description: |
+        With host_folder_workspaces on, a run started afterwards keeps its
+        checkout in a folder on the person's machine (under the runner's
+        RUNNER_HOST_WORKSPACES_DIR) instead of a Docker volume, so they can
+        open it in their own editor. Runs that already have a workspace keep
+        it where it is. The folder itself is runner configuration and can't
+        be set here. Has no effect on a runner without that folder configured.
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunnerSettings" }
+      responses:
+        "200":
+          description: Status with the new setting
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunnerStatus" }
+        default: { $ref: "#/components/responses/Error" }
+
   /runner/environment:
     get:
       operationId: getRunnerEnvironment
@@ -5545,6 +5570,7 @@ components:
         hold_attempts: { type: integer, description: "Consecutive times this run has been held at a provider limit" }
         checkpoint_branch: { type: string, description: "Branch holding the run's unpushed work, pushed before its workspace was given up" }
         checkpoint_error: { type: string, description: "Why the last checkpoint push failed; the workspace is kept until one succeeds" }
+        workspace_path: { type: string, description: "The folder on the person's machine holding the run's checkout, while it exists; absent for a checkout in a Docker volume" }
         session_id: { type: string, description: The harness session turns resume }
         dispatched_by: { $ref: "#/components/schemas/UserRef" }
         wait_reason: { type: string, enum: [approval, human_reply, pause, delegation, mockup_review], description: "delegation: waiting for a sub agent the run delegated to; mockup_review: waiting for a person to review a UI mockup" }
@@ -5869,10 +5895,17 @@ components:
         running: { type: integer }
         version: { type: string }
         heartbeat_at: { type: string, format: date-time }
+        host_workspaces_dir: { type: string, description: "Where this runner keeps host-folder workspaces (RUNNER_HOST_WORKSPACES_DIR); absent when it has none" }
+    RunnerSettings:
+      type: object
+      required: [host_folder_workspaces]
+      properties:
+        host_folder_workspaces: { type: boolean }
     RunnerStatus:
       type: object
-      required: [online, runners, slots, busy, live, queued]
+      required: [online, runners, slots, busy, live, queued, host_folder_workspaces]
       properties:
+        host_folder_workspaces: { type: boolean, description: "New runs keep their checkout in a host folder when their runner has host_workspaces_dir" }
         online: { type: boolean }
         runners: { type: array, items: { $ref: "#/components/schemas/RunnerInfo" } }
         slots: { type: integer }
@@ -6358,6 +6391,7 @@ components:
         state: { $ref: "#/components/schemas/ChatState" }
         error: { type: string, description: Why the last turn failed, when state is failed }
         current_run_id: { type: string, format: uuid, description: The run serving the current harness segment; its events show live activity }
+        workspace_path: { type: string, description: "The folder on the person's machine holding the current run's checkout, while it exists; absent for a checkout in a Docker volume" }
         persona: { $ref: "#/components/schemas/PersonaSummary" }
         participants:
           type: array
