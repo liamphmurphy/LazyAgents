@@ -256,14 +256,19 @@ container is Codex's sandbox there, because Docker blocks the namespaces its own
 sandbox needs, so read-only Codex turns rely on the policy hook. A stray write
 only reaches that run's disposable volumes.
 
-Agent containers can still reach your API and the internet.
+Agent containers can still reach your API and the internet, but not the
+stack's Postgres or SeaweedFS: turns run on an `agents` network that has only
+the API on it (`lazyagents_agents` for `make up`). Under `make start` the dev
+stack publishes Postgres and SeaweedFS on the host's loopback, which Docker
+Desktop and OrbStack may let containers reach through `host.docker.internal`, so
+there the separate network keeps them off the compose names only.
 
 The runner itself runs as the `runner` service of `docker-compose.dev.yml`
 (`--profile runner`), from your checkout's source. Every `make start` or
 `make runner` replaces it, so a runner from an earlier session can't keep
 claiming runs with stale code, and stopping `make start` stops it. Its turn
-containers share that compose network and reach the API on the host as
-`host.docker.internal`. Each install labels its containers with `RUNNER_STACK`
+containers join the dev stack's `agents` network and reach the API on the host
+as `host.docker.internal`. Each install labels its containers with `RUNNER_STACK`
 (`lazyagents-dev` here, `lazyagents` for `make up`), so two installs on one
 Docker daemon never clean up each other's turns.
 
