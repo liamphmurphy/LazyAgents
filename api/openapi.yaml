@@ -3211,6 +3211,50 @@ paths:
         "416": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chats/{id}/playground:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: getChatPlayground
+      summary: The chat's playground, if an agent started one
+      description: |
+        A playground is the app a coding chat is building, run from the chat's
+        workspace with fresh services next to it. A runner serves it on a port
+        of its own on Vesper's host; the browser builds its address from that
+        port, and the runner admits only a browser signed in to Vesper.
+      tags: [chats]
+      responses:
+        "200":
+          description: The playground, or null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatPlaygroundState" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/playground/{action}:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: action, in: path, required: true, schema: { type: string, enum: [start, reset, stop] } }
+    post:
+      operationId: chatPlaygroundAction
+      summary: Start an ended playground again, reset its data, or stop it
+      description: |
+        start runs its last spec again in the chat's current workspace (refused
+        once that workspace was cleaned up). reset starts every service empty
+        and runs setup again; the code is untouched. The runner carries each
+        out shortly after; the playground's action shows it pending until then.
+      tags: [chats]
+      responses:
+        "200":
+          description: The playground
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Playground" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /chats/{id}/canvases:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -5539,6 +5583,57 @@ components:
         note: { type: string }
         author_type: { type: string, enum: [user, agent], x-enum-varnames: [CanvasAuthorUser, CanvasAuthorAgent] }
         created_at: { type: string, format: date-time }
+    ChatPlaygroundState:
+      type: object
+      required: [playground]
+      properties:
+        playground:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/Playground" }]
+    Playground:
+      type: object
+      required: [id, chat_id, state, step, branch, error_log, stop_reason, processes, services, routes, openapi, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        state: { type: string, enum: [starting, running, stopped, failed] }
+        step: { type: string, description: "What it's doing while it starts or resets, e.g. Running setup" }
+        action: { type: string, enum: [reset, restart, stop], nullable: true, description: Asked for and not yet carried out }
+        port: { type: integer, format: int32, nullable: true, description: "Where the runner serves it on Vesper's host, while it's starting or running" }
+        branch: { type: string, description: The branch checked out when it started }
+        error: { type: string, nullable: true }
+        error_log: { type: string, description: The end of the failing setup's or process's output }
+        stop_reason: { type: string }
+        idle_ttl_seconds: { type: integer, format: int32, nullable: true, description: It stops after this long unused }
+        started_at: { type: string, format: date-time, nullable: true }
+        data_reset_at: { type: string, format: date-time, nullable: true }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time }
+        processes:
+          type: array
+          items:
+            type: object
+            required: [name, port]
+            properties:
+              name: { type: string }
+              port: { type: integer, format: int32 }
+        services:
+          type: array
+          items:
+            type: object
+            required: [name, image]
+            properties:
+              name: { type: string }
+              image: { type: string }
+        routes:
+          type: array
+          items:
+            type: object
+            required: [path, process]
+            properties:
+              path: { type: string }
+              process: { type: string }
+        openapi: { type: string, description: "The app's OpenAPI document in the workspace; the gateway serves it as JSON at /__vesper/openapi. Empty when it has none." }
     ChatCanvas:
       allOf:
         - { $ref: "#/components/schemas/ChatCanvasSummary" }

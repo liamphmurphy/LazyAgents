@@ -2560,6 +2560,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/playground": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The chat's playground, if an agent started one
+         * @description A playground is the app a coding chat is building, run from the chat's
+         *     workspace with fresh services next to it. A runner serves it on a port
+         *     of its own on Vesper's host; the browser builds its address from that
+         *     port, and the runner admits only a browser signed in to Vesper.
+         */
+        get: operations["getChatPlayground"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/playground/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                action: "start" | "reset" | "stop";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an ended playground again, reset its data, or stop it
+         * @description start runs its last spec again in the chat's current workspace (refused
+         *     once that workspace was cleaned up). reset starts every service empty
+         *     and runs setup again; the code is untouched. The runner carries each
+         *     out shortly after; the playground's action shows it pending until then.
+         */
+        post: operations["chatPlaygroundAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/canvases": {
         parameters: {
             query?: never;
@@ -4814,6 +4865,63 @@ export interface components {
             author_type: "user" | "agent";
             /** Format: date-time */
             created_at: string;
+        };
+        ChatPlaygroundState: {
+            playground: components["schemas"]["Playground"] | null;
+        };
+        Playground: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @enum {string} */
+            state: "starting" | "running" | "stopped" | "failed";
+            /** @description What it's doing while it starts or resets, e.g. Running setup */
+            step: string;
+            /**
+             * @description Asked for and not yet carried out
+             * @enum {string|null}
+             */
+            action?: "reset" | "restart" | "stop" | null;
+            /**
+             * Format: int32
+             * @description Where the runner serves it on Vesper's host, while it's starting or running
+             */
+            port?: number | null;
+            /** @description The branch checked out when it started */
+            branch: string;
+            error?: string | null;
+            /** @description The end of the failing setup's or process's output */
+            error_log: string;
+            stop_reason: string;
+            /**
+             * Format: int32
+             * @description It stops after this long unused
+             */
+            idle_ttl_seconds?: number | null;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            data_reset_at?: string | null;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            /** Format: date-time */
+            updated_at: string;
+            processes: {
+                name: string;
+                /** Format: int32 */
+                port: number;
+            }[];
+            services: {
+                name: string;
+                image: string;
+            }[];
+            routes: {
+                path: string;
+                process: string;
+            }[];
+            /** @description The app's OpenAPI document in the workspace; the gateway serves it as JSON at /__vesper/openapi. Empty when it has none. */
+            openapi: string;
         };
         ChatCanvas: components["schemas"]["ChatCanvasSummary"] & {
             /**
@@ -12162,6 +12270,56 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             416: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatPlayground: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The playground, or null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatPlaygroundState"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    chatPlaygroundAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                action: "start" | "reset" | "stop";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The playground */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Playground"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
