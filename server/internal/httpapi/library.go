@@ -102,6 +102,9 @@ func (s *Server) DeleteLibraryItem(ctx context.Context, req api.DeleteLibraryIte
 	if d.Orphaned && d.BlobKey != "" {
 		_ = s.Blobs.Delete(context.WithoutCancel(ctx), s.ArtifactBucket, d.BlobKey)
 	}
+	if d.PosterKey != nil {
+		_ = s.Blobs.Delete(context.WithoutCancel(ctx), s.ArtifactBucket, *d.PosterKey)
+	}
 	return api.DeleteLibraryItem204Response{}, nil
 }
 
