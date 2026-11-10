@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -41,6 +42,10 @@ const (
 	imageFailModeration = "moderation"
 	imageFailError      = "error"
 )
+
+// imageOutboxUnreadable is the reason when the runner can't list the outbox,
+// so it can't tell whether the step made anything.
+const imageOutboxUnreadable = "couldn't read the workspace outbox"
 
 // maxImageReasonRunes bounds a failure reason shown to the person and the assistant.
 const maxImageReasonRunes = 300
@@ -212,7 +217,11 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	env["LAZYAGENTS_RUN_ID"] = c.run.ID.String()
 	env["LAZYAGENTS_TICKET"] = c.ticket.Key
 
-	before := r.outboxNames(ctx, c)
+	before, err := r.outboxNames(ctx, c)
+	if err != nil {
+		r.Log.Warn("read image outbox", "run", c.run.ID, "job", job.ID, "err", err)
+		return finish(imageOutboxUnreadable)
+	}
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
 		Name: fmt.Sprintf("lazyagents-image-%s-%d-%s", c.run.ID, turn.Seq, job.ID.String()[:8]),
 		Argv: append(append([]string{}, TurnWrapper...), inv.Argv...), Env: env, Dir: dir, Files: files,
@@ -255,7 +264,12 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	}
 	failed := waitErr != nil || code != 0 || res.IsError
 	if !failed {
-		for _, n := range r.outboxNames(ctx, c) {
+		after, err := r.outboxNames(ctx, c)
+		if err != nil {
+			r.Log.Warn("read image outbox", "run", c.run.ID, "job", job.ID, "err", err)
+			return finish(imageOutboxUnreadable)
+		}
+		for _, n := range after {
 			if !slices.Contains(before, n) {
 				produced = append(produced, n)
 			}
@@ -270,25 +284,34 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 			}
 			return record(imageFailModeration, clipReason("rejected by moderation: "+detail))
 		}
+		// What Codex said is the only trace of why a clean exit left nothing
+		// behind (a copy the policy hook denied, an image saved elsewhere).
+		said := clipReason(redact(cmp.Or(res.Error, res.Final), sensitive))
+		r.Log.Warn("image step made no image", "run", c.run.ID, "job", job.ID, "exit", code, "wait_err", waitErr, "is_error", res.IsError, "said", said)
 		if failed {
 			return finish("Codex couldn't finish the image")
+		}
+		// The reason is followed by a period wherever it is shown.
+		if said = strings.TrimRight(said, ". "); said != "" {
+			return finish(clipReason("no image was produced; Codex said: " + said))
 		}
 		return finish("no image was produced")
 	}
 	return finish("")
 }
 
-// outboxNames lists the files in the chat run's outbox.
-func (r *Runner) outboxNames(ctx context.Context, c runCtx) []string {
+// outboxNames lists the files in the chat run's outbox. Its error is the
+// caller's to report: an unreadable outbox must not pass for an empty one.
+func (r *Runner) outboxNames(ctx context.Context, c runCtx) ([]string, error) {
 	files, _, err := r.Backend.ReadOutbox(ctx, wsID(c.run))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	names := make([]string, len(files))
 	for i, f := range files {
 		names[i] = f.Name
 	}
-	return names
+	return names, nil
 }
 
 // imageFollowupPrompt is an image_followup turn's input message: Vesper's,

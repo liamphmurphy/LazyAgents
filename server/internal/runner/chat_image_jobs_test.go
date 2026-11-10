@@ -3,6 +3,7 @@ package runner_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
+	"github.com/liamphmurphy/vesper/server/internal/runner"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -186,7 +188,9 @@ const fakeRefusal = "I can't create that image: the request was blocked by the s
 func TestChatImageJobFailures(t *testing.T) {
 	for _, tc := range []struct{ step, kind, reason, system, label string }{
 		{"fail", "error", "Codex couldn't finish the image", "Couldn't create the image: Codex couldn't finish the image.", "Failed (error)"},
-		{"empty", "error", "no image was produced", "Couldn't create the image: no image was produced.", "Failed (error)"},
+		// A clean exit with nothing made passes on what Codex said, the only
+		// clue to why (a denied copy, an image saved elsewhere).
+		{"empty", "error", "no image was produced; Codex said: Image step done", "Couldn't create the image: no image was produced; Codex said: Image step done.", "Failed (error)"},
 		{"moderation", "moderation", "rejected by moderation: " + fakeRefusal, "The image request was rejected by moderation: " + fakeRefusal, "Failed (refused by moderation)"},
 	} {
 		t.Run(tc.step, func(t *testing.T) {
@@ -208,6 +212,30 @@ func TestChatImageJobFailures(t *testing.T) {
 				t.Fatalf("atts %v job %+v run %+v", atts, job, run)
 			}
 		})
+	}
+}
+
+// unreadableOutbox is a backend whose outbox can't be listed, like a Docker
+// helper container that fails to start.
+type unreadableOutbox struct{ runner.Backend }
+
+func (unreadableOutbox) ReadOutbox(context.Context, string) ([]runner.OutboxFile, []string, error) {
+	return nil, nil, errors.New("outbox container failed")
+}
+
+// An outbox the runner can't read is reported as such, not as a step that
+// made nothing: the image may well be sitting there.
+func TestChatImageJobUnreadableOutbox(t *testing.T) {
+	e := setup(t)
+	e.runner.Backend = unreadableOutbox{e.runner.Backend}
+	chat, _ := e.imageChat(t, "ok", "image: a fox")
+	job := e.imageJob(e.chatRun(chat.ID).ID)
+	if job.State != "failed" || job.Error == nil || *job.Error != "couldn't read the workspace outbox" || job.FailureKind == nil || *job.FailureKind != "error" {
+		t.Fatalf("job %+v", job)
+	}
+	msgs := e.chatMsgs(chat.ID)
+	if last := msgs[len(msgs)-1]; last.Role != "assistant" || !strings.Contains(last.BodyMd, "Failed (error): couldn't read the workspace outbox. No image exists") {
+		t.Fatalf("messages %+v", msgs)
 	}
 }
 
