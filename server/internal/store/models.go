@@ -321,6 +321,7 @@ type ChatSpace struct {
 	SpaceMemory  bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	App          *string
 }
 
 type ChatSpaceSource struct {
@@ -512,6 +513,60 @@ type EpicCriterion struct {
 	CheckedAt     *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+type FinanceAccount struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	UserID       uuid.UUID
+	Name         string
+	Kind         string
+	Mask         string
+	OfxAccountID *string
+	CreatedAt    time.Time
+}
+
+type FinanceBalance struct {
+	AccountID    uuid.UUID
+	AsOf         time.Time
+	BalanceCents int64
+}
+
+type FinanceImport struct {
+	ID          uuid.UUID
+	AccountID   uuid.UUID
+	Filename    string
+	Format      string
+	Parsed      int32
+	Inserted    int32
+	Duplicates  int32
+	Transfers   int32
+	Categorized int32
+	CreatedAt   time.Time
+}
+
+type FinanceRule struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Pattern     string
+	Category    string
+	CreatedAt   time.Time
+}
+
+type FinanceTransaction struct {
+	ID             uuid.UUID
+	AccountID      uuid.UUID
+	ImportID       *uuid.UUID
+	PostedOn       time.Time
+	AmountCents    int64
+	Description    string
+	Merchant       string
+	Category       *string
+	CategorySource *string
+	TransferID     *uuid.UUID
+	DedupeKey      string
+	CreatedAt      time.Time
 }
 
 type HarnessModelListing struct {
