@@ -1421,12 +1421,13 @@ export function exportMemories() {
 export function useStartChat() {
   const done = useChatInvalidate();
   return useMutation({
-    mutationFn: async (v: { project?: string; persona_id?: string; repo_url?: string; commit_email?: string; message: Schemas["NewChatMessage"] }) => {
+    mutationFn: async (v: { project?: string; persona_id?: string; temporary?: boolean; repo_url?: string; commit_email?: string; message: Schemas["NewChatMessage"] }) => {
       const chat = await unwrap(
         api.POST("/chats", {
           body: {
             project: v.project,
             ...(v.persona_id ? { persona_id: v.persona_id } : {}),
+            ...(v.temporary ? { temporary: true } : {}),
             ...(v.repo_url ? { repo_url: v.repo_url } : {}),
             ...(v.commit_email ? { commit_email: v.commit_email } : {}),
           },

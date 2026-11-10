@@ -347,6 +347,18 @@ test("sending from the Welcome creates the chat, posts the message and opens it"
   expect(mock.unhandled).toEqual([]);
 });
 
+test("Temporary on the Welcome makes the chat temporary", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat?new");
+  await page.getByRole("button", { name: "Temporary", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Temporary", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("textbox", { name: "Message" }).fill("off the record");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
+  expect(mock.created).toEqual([{ temporary: true }]);
+  expect(mock.unhandled).toEqual([]);
+});
+
 test("Start chat ?attach= on /chat shows chips in the Welcome and sends them with the first message", async ({ page }) => {
   const mock = await installChatApi(page);
   // An existing conversation doesn't hide the Welcome when context was brought along.
