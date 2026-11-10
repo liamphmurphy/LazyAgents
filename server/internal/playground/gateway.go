@@ -408,6 +408,9 @@ const servedSpecTTL = 30 * time.Second
 // (the repository's or an inferred one), read on each request so the API
 // tab follows the agent's edits. X-Vesper-Spec-Source says which.
 func (g *Gateway) openAPI(w http.ResponseWriter, r *http.Request, p *Live) {
+	// The API tab reads it from Vesper's page, across origins, which hides
+	// any header not listed here.
+	w.Header().Set("Access-Control-Expose-Headers", "X-Vesper-Spec-Source")
 	if path, doc := g.servedDocument(r.Context(), p); doc != nil {
 		w.Header().Set("X-Vesper-Spec-Source", "served:"+path)
 		w.Header().Set("Content-Type", "application/json")

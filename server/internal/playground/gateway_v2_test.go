@@ -170,3 +170,14 @@ func TestGatewayReportsTheCheckedOutCommit(t *testing.T) {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// The API tab reads which document it got from Vesper's page, another
+// origin: the header has to be exposed to it, or the browser hides it.
+func TestGatewayExposesTheSpecSourceToVesper(t *testing.T) {
+	backend := &fakeBackend{files: map[string]string{"api/openapi.yaml": "openapi: 3.0.3\npaths: {}\n"}}
+	h, _, _ := newAppGateway(t, nil, backend, OpenAPIRef{Path: "api/openapi.yaml"})
+	rec := request(h, http.MethodGet, "/__vesper/openapi", func(r *http.Request) { signedIn(r); r.Header.Set("Origin", vesperOrigin) })
+	if rec.Header().Get("Access-Control-Allow-Origin") != vesperOrigin || !strings.Contains(rec.Header().Get("Access-Control-Expose-Headers"), "X-Vesper-Spec-Source") {
+		t.Fatalf("CORS headers %v", rec.Header())
+	}
+}
