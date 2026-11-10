@@ -516,7 +516,7 @@ export function ReviewScreen({ id }: { id: string }) {
     return (
       <div className={cx(shell, "items-center justify-center p-6")}>
         {missing ? (
-          <EmptyState icon="artifacts" title="This mockup doesn't exist" actions={<ButtonLink href="/artifacts" variant="outline">All artifacts</ButtonLink>}>
+          <EmptyState icon="artifacts" title="This mockup doesn't exist" actions={<ButtonLink href="/library?source=projects" variant="outline">Library</ButtonLink>}>
             It may have been removed, or the link is wrong.
           </EmptyState>
         ) : (

@@ -33,7 +33,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/tickets", label: "Tickets", icon: "tickets" },
       { href: "/plans", label: "Plans", icon: "edit" },
-      { href: "/artifacts", label: "Artifacts", icon: "artifacts" },
     ],
   },
   {
@@ -92,7 +91,6 @@ export function modeHref(mode: NavMode, project: string | null | undefined, last
 export const PROJECT_ROUTES: Record<string, ProjectMode> = {
   "/plans": "required",
   "/tickets": "optional",
-  "/artifacts": "optional",
 };
 
 /** Pages under a project route where switching only updates the remembered project (a draft would be lost). */
@@ -129,8 +127,8 @@ export function switchHref(pathname: string, search: URLSearchParams, key: strin
   return qs ? `${base}?${qs}` : base;
 }
 
-/** Params that pick how a page shows its project (Tickets' ?layout=, Runs' ?tab=), not what it shows. */
-const VIEW_PARAMS = ["project", "layout", "tab"];
+/** Params that pick how a page shows its project (Tickets' ?layout=, Runs' ?tab=, Library's ?source=), not what it shows. */
+const VIEW_PARAMS = ["project", "layout", "tab", "source"];
 
 /**
  * Where a page's own project picker goes: a project route switches as the

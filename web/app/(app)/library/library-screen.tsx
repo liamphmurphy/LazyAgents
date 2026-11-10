@@ -28,6 +28,8 @@ import { Content, TopBar } from "@/components/shell/topbar";
 import { Tabs } from "@/components/ui/controls";
 import { Fridge } from "./fridge";
 import { Links } from "./links";
+import { ProjectDocs } from "./_components/project-docs";
+import { LibrarySourceSwitch } from "./_components/source-switch";
 
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
 function Source({ item }: { item: LibraryItem }) {
@@ -348,7 +350,12 @@ function Items({ kind, openItem }: { kind: LibraryItemKind; openItem?: string | 
 
 const KINDS: Record<string, LibraryItemKind> = { images: "image", videos: "video", diagrams: "diagram", documents: "document" };
 
+/** ?source=projects: what agents wrote on tickets; otherwise your keepsakes. */
 export function LibraryScreen() {
+  return useSearchParams().get("source") === "projects" ? <ProjectDocs /> : <Keepsakes />;
+}
+
+function Keepsakes() {
   // A chat's "Open in Library" lands on the item: ?tab=videos&item=<id>.
   const params = useSearchParams();
   const [tab, setTab] = useState(() => params.get("tab") ?? "images");
@@ -365,6 +372,9 @@ export function LibraryScreen() {
                 Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos they render, are saved here automatically and stay after their chat is deleted.
                 Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
               </p>
+              <div className="pt-2">
+                <LibrarySourceSwitch source="yours" />
+              </div>
             </div>
             <UploadButton />
           </div>

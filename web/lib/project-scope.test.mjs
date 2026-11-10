@@ -12,7 +12,7 @@ test("nav is three groups with unique hrefs", () => {
   const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
   assert.equal(new Set(hrefs).size, hrefs.length);
   assert.deepEqual(NAV_GROUPS[0].items.map((i) => i.label), ["Inbox", "Dashboard", "Library", "Workflows", "Scheduled", "Learn", "Customization"]);
-  assert.deepEqual(NAV_GROUPS[1].items.map((i) => i.label), ["Tickets", "Plans", "Artifacts"]);
+  assert.deepEqual(NAV_GROUPS[1].items.map((i) => i.label), ["Tickets", "Plans"]);
 });
 
 test("isActive matches the section, Dashboard only on /", () => {
@@ -88,6 +88,7 @@ test("cross-project links on optional routes show All projects, bare routes the 
   // Picking a layout isn't a filter: /epics and /board redirect here without a project.
   assert.equal(hasFilters(q("layout=epics")), false);
   assert.equal(hasFilters(q("tab=costs")), false);
+  assert.equal(hasFilters(q("source=projects")), false);
   assert.equal(currentProject("/tickets", q("layout=epics"), "WEB", projects), web);
   // The board always needs one project.
   assert.equal(currentProject("/tickets", q("layout=board&epic=e1"), "WEB", projects), web);
