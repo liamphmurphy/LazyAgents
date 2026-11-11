@@ -375,14 +375,15 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
 
 ## 8. Representative acceptance deck
 
-`docs/slides/fixtures/acceptance-deck.json` plus `fixtures/landscape.png`. Six slides (the PoC evidence below covers the first five), used unchanged by the editor tests, presentation tests, PDF tests and PPTX tests in every later ticket:
+`docs/slides/fixtures/acceptance-deck.json` plus `fixtures/landscape.png`. Seven slides (the PoC evidence below covers the first five; the toolbar-controls and text-styles slides came with later tickets), used unchanged by the editor tests, presentation tests, PDF tests and PPTX tests in every later ticket:
 
 1. **Title:** surface background, bold heading-slot title aligned to the bottom, subtitle with mixed colour and italic runs, accent rule shape, speaker notes.
 2. **Title + body:** disc bullets at levels 0 and 1, bold, italic, underline and literal-colour runs, a bullet long enough to wrap three lines, a numbered paragraph.
 3. **Image right:** a 3:2 PNG cropped (`l=0.3`) and covered into a near-square frame, alt text, a serif italic paragraph with space before.
 4. **Shapes:** rounded rect with centred bold white text, ellipse with stroke, a rectangle rotated 8° with text, an arrow line, and an over-full text box (the overflow case).
-5. **Text styles:** a justified paragraph at 1.5 line spacing with strikethrough, hex and theme-colour highlight runs, and a double-spaced box that overflows only because of its line spacing. Line spacing exports as exact points (`a:spcPts`), not `a:spcPct`, since PowerPoint's 100% is the font's own line gap rather than the layout's 1.2.
-6. **Section:** dark background token, centred title, a mono run.
+5. **Section:** dark background token, centred title, a mono run.
+6. **Toolbar controls:** custom hex background, fill, outline and text colours; a rounded rect with radius 96 and a 20 px outline; a 2 px outline; a diagonal line with both arrowheads and a 1 px line with a start arrowhead; bullets at levels 0, 1, 2 and 4 in typed sizes (21, 15.5, 13 and 9 pt).
+7. **Text styles:** a justified paragraph at 1.5 line spacing with strikethrough, hex and theme-colour highlight runs, and a double-spaced box that overflows only because of its line spacing. Line spacing exports as exact points (`a:spcPts`), not `a:spcPct`, since PowerPoint's 100% is the font's own line gap rather than the layout's 1.2.
 
 ## 9. Consequences
 

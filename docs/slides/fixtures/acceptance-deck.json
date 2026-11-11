@@ -68,6 +68,35 @@
       ]
     },
     {
+      "id": "s_section",
+      "layout": "section",
+      "background": { "color": "heading" },
+      "elements": [
+        { "id": "e_x1", "type": "text", "placeholder": "title", "frame": { "x": 160, "y": 380, "w": 1600, "h": 320 }, "valign": "middle",
+          "paragraphs": [ { "align": "center", "runs": [ { "text": "Questions?", "size": 128, "bold": true, "color": "#FFFFFF" } ] },
+                          { "align": "center", "runs": [ { "text": "mono: deck.schema = 1", "size": 40, "font": "mono", "color": "accent2" } ] } ] }
+      ]
+    },
+    {
+      "id": "s_controls",
+      "layout": "blank",
+      "background": { "color": "#FFF7ED" },
+      "elements": [
+        { "id": "e_c1", "type": "shape", "shape": "roundRect", "frame": { "x": 120, "y": 120, "w": 600, "h": 360 }, "fill": "#0F766E", "stroke": "#134E4A", "strokeWidth": 20, "radius": 96,
+          "text": { "valign": "middle", "paragraphs": [ { "align": "center", "runs": [ { "text": "Custom fill, 20 px outline, radius 96", "size": 42, "bold": true, "color": "#F0FDFA" } ] } ] } },
+        { "id": "e_c2", "type": "shape", "shape": "ellipse", "frame": { "x": 820, "y": 120, "w": 360, "h": 360 }, "stroke": "#9333EA", "strokeWidth": 2 },
+        { "id": "e_c3", "type": "line", "frame": { "x": 1280, "y": 160, "w": 520, "h": 280 }, "stroke": "#DB2777", "strokeWidth": 14, "startArrow": true, "endArrow": true },
+        { "id": "e_c4", "type": "line", "frame": { "x": 1280, "y": 470, "w": 520, "h": 0 }, "stroke": "accent", "strokeWidth": 1, "startArrow": true },
+        { "id": "e_c5", "type": "text", "frame": { "x": 120, "y": 560, "w": 1680, "h": 440 },
+          "paragraphs": [
+            { "bullet": "disc", "level": 0, "runs": [ { "text": "Level 0 at a typed 21 pt", "size": 42, "color": "#7C2D12" } ] },
+            { "bullet": "disc", "level": 1, "runs": [ { "text": "Level 1 at 15.5 pt", "size": 31, "color": "#9A3412" } ] },
+            { "bullet": "number", "level": 2, "runs": [ { "text": "Level 2, numbered, 13 pt", "size": 26 } ] },
+            { "bullet": "disc", "level": 4, "runs": [ { "text": "Level 4, the deepest, at 9 pt", "size": 18, "italic": true, "color": "muted" } ] }
+          ] }
+      ]
+    },
+    {
       "id": "s_text",
       "layout": "title-body",
       "elements": [
@@ -77,16 +106,6 @@
           "paragraphs": [ { "align": "justify", "lineSpacing": 1.5, "runs": [ { "text": "Justified text at one and a half line spacing spreads its words to both edges of the box, except on the last line of the paragraph, which stays left-aligned. ", "size": 40 }, { "text": "Struck out", "size": 40, "strike": true }, { "text": " and ", "size": 40 }, { "text": "highlighted", "size": 40, "highlight": "#FDE68A" }, { "text": " runs, and a ", "size": 40 }, { "text": "theme highlight", "size": 40, "highlight": "surface", "underline": true, "strike": true }, { "text": ", survive export.", "size": 40 } ] } ] },
         { "id": "e_y3", "type": "text", "frame": { "x": 1200, "y": 280, "w": 600, "h": 260 },
           "paragraphs": [ { "lineSpacing": 2, "runs": [ { "text": "Double spacing: these three lines fit in the box only at single spacing.", "size": 40, "color": "muted" } ] } ] }
-      ]
-    },
-    {
-      "id": "s_section",
-      "layout": "section",
-      "background": { "color": "heading" },
-      "elements": [
-        { "id": "e_x1", "type": "text", "placeholder": "title", "frame": { "x": 160, "y": 380, "w": 1600, "h": 320 }, "valign": "middle",
-          "paragraphs": [ { "align": "center", "runs": [ { "text": "Questions?", "size": 128, "bold": true, "color": "#FFFFFF" } ] },
-                          { "align": "center", "runs": [ { "text": "mono: deck.schema = 1", "size": 40, "font": "mono", "color": "accent2" } ] } ] }
       ]
     }
   ]
