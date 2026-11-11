@@ -8,7 +8,7 @@
  */
 import type PptxGenJS from "pptxgenjs";
 import { FAMILY, OFFICE, SLOTS, STYLES, fontUrl, measure } from "./fonts";
-import { BULLET_INDENT, INSET, LINE, imageSource, layoutSlide } from "./layout";
+import { BULLET_INDENT, INSET, STRIKE, imageSource, layoutSlide, lineHeight } from "./layout";
 import { resolveColor, slotOf, textOf, type Deck, type Paragraph, type TextBox } from "./schema";
 
 const K = 0.5; // slide units → points
@@ -102,6 +102,9 @@ export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, pr
           pdf.discardPath();
           pdf.addImage(data, a.mime === "image/png" ? "PNG" : "JPEG", (o.x - o.src.x * s) * K, (o.y - o.src.y * s) * K, a.w * s * K, a.h * s * K, o.asset);
         }
+      } else if (o.op === "highlight") {
+        pdf.setFillColor(o.fill);
+        pdf.rect(o.x * K, o.y * K, o.w * K, o.h * K, "F");
       } else if (o.op === "text") {
         pdf.setFont(FAMILY[o.slot], o.style);
         pdf.setFontSize(o.size * K);
@@ -112,6 +115,12 @@ export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, pr
           pdf.setLineWidth(o.size * 0.06 * K);
           const u = (o.y + o.size * 0.12) * K;
           pdf.line(o.x * K, u, (o.x + o.w) * K, u);
+        }
+        if (o.strike) {
+          pdf.setDrawColor(o.color);
+          pdf.setLineWidth(o.size * 0.06 * K);
+          const s = (o.y - o.size * STRIKE) * K;
+          pdf.line(o.x * K, s, (o.x + o.w) * K, s);
         }
       }
       pdf.restoreGraphicsState();
@@ -129,9 +138,8 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
   const strip = (c: string) => c.replace("#", "");
   const color = (c?: string, fb: "text" | "background" = "text") => strip(resolveColor(deck.theme, c, fb));
   const runs = (box: TextBox) =>
-    box.paragraphs.flatMap((p: Paragraph) => {
-      const maxSize = Math.max(...p.runs.map((r) => r.size));
-      return p.runs.map((r, i) => ({
+    box.paragraphs.flatMap((p: Paragraph) =>
+      p.runs.map((r, i) => ({
         text: r.text,
         options: {
           fontFace: OFFICE[slotOf(deck.theme, r.font)],
@@ -139,17 +147,21 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
           bold: !!r.bold,
           italic: !!r.italic,
           underline: r.underline ? { style: "sng" as const } : undefined,
+          strike: r.strike ? ("sngStrike" as const) : undefined,
+          highlight: r.highlight ? color(r.highlight) : undefined,
           color: color(r.color),
           // Paragraph properties ride on every run of the paragraph.
           align: p.align ?? "left",
-          lineSpacing: maxSize * LINE * K,
+          // Exact points (a:spcPts), not a percentage: PowerPoint's 100% is the font's own
+          // line gap, not the layout's LINE, so a percentage would wrap and overflow differently.
+          lineSpacing: lineHeight(p) * K,
           paraSpaceBefore: (p.spaceBefore ?? 0) * K,
           bullet: p.bullet ? (p.bullet === "number" ? { type: "number" as const, indent: BULLET_INDENT * K } : { indent: BULLET_INDENT * K }) : false,
           indentLevel: p.bullet ? (p.level ?? 0) : 0,
           breakLine: i === p.runs.length - 1,
         },
-      }));
-    });
+      })),
+    );
   for (const s of deck.slides) {
     const slide = pptx.addSlide();
     slide.background = { color: color(s.background?.color, "background") };

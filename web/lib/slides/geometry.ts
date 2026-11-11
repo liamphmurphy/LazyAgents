@@ -8,7 +8,7 @@
  *
  * Self-contained (type-only imports) so node's test runner can load it.
  */
-import type { Frame, ShapeKind } from "./schema";
+import type { Frame, ShapeKind } from "./schema.ts";
 
 /** One path segment, in slide units. Arcs are already cubic Béziers. */
 export type Seg = ["M", number, number] | ["L", number, number] | ["C", number, number, number, number, number, number] | ["Z"];
