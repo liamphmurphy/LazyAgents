@@ -59,7 +59,7 @@ export function describeChanges(a: Draft, b: Draft): string {
 }
 
 const MODEL_SUGGESTIONS: Record<Harness, string[]> = {
-  "claude-code": ["opus-5.5", "sonnet-5.5", "haiku-5.5", "fable-5.1"],
+  "claude-code": ["opus-5.5", "sonnet-5.5", "haiku-5.5", "fable-5.2", "fable-5.1"],
   codex: ["gpt-5-codex", "gpt-5"],
 };
 

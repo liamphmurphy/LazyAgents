@@ -57,8 +57,8 @@ ENV NIX_REMOTE=daemon
 ENV PATH="/home/node/.nix-profile/bin:${PATH}:/nix/var/nix/profiles/default/bin"
 
 # Versions the adapters were checked against (server/internal/harness).
-ARG CLAUDE_CODE_VERSION=2.1.316
-ARG CODEX_VERSION=0.167.0
+ARG CLAUDE_CODE_VERSION=2.1.322
+ARG CODEX_VERSION=0.167.1
 RUN npm install -g --no-fund --no-audit \
       @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @openai/codex@${CODEX_VERSION} \
  && npm cache clean --force

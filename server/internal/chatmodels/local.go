@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
@@ -99,6 +100,7 @@ func ListOverStdio(name string, input io.Writer, output io.Reader) ([]Model, err
 					Models []struct {
 						Value          string   `json:"value"`
 						Label          string   `json:"displayName"`
+						Description    string   `json:"description"`
 						SupportsEffort bool     `json:"supportsEffort"`
 						Efforts        []string `json:"supportedEffortLevels"`
 					} `json:"models"`
@@ -122,7 +124,7 @@ func ListOverStdio(name string, input io.Writer, output io.Reader) ([]Model, err
 					if m.SupportsEffort {
 						efforts = knownEfforts(m.Efforts)
 					}
-					out = append(out, Model{ID: m.Value, Label: m.Label, Default: m.Value == "default", Efforts: efforts})
+					out = append(out, Model{ID: m.Value, Label: versionedLabel(m.Label, m.Description), Default: m.Value == "default", Efforts: efforts})
 				}
 			}
 			return normalizeLocalModels(out), nil
@@ -190,6 +192,20 @@ func ListOverStdio(name string, input io.Writer, output io.Reader) ([]Model, err
 		}
 	}
 	return nil, fmt.Errorf("local harness ended before returning models")
+}
+
+// versionedLabel names a Claude Code alias by the model it resolves to.
+// The CLI labels its aliases without a version ("Fable") and leads the
+// description with it ("Fable 5.2 · Most capable…"), and which version an
+// alias means changes with the CLI release. A description that doesn't start
+// with "<label> <version>" leaves the label as it is.
+func versionedLabel(label, description string) string {
+	name, _, _ := strings.Cut(description, " · ")
+	version, ok := strings.CutPrefix(name, label+" ")
+	if label == "" || !ok || version == "" || strings.Trim(version, "0123456789.") != "" {
+		return label
+	}
+	return name
 }
 
 func normalizeLocalModels(models []Model) []Model {
