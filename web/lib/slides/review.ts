@@ -11,10 +11,11 @@ import { slideTitle, textOf, type Deck, type Element, type Slide } from "./schem
  * server normalises what it stores, so comparing raw JSON would see changes
  * that aren't there.
  */
-const COLOR_KEYS = new Set(["color", "fill", "stroke"]);
+const COLOR_KEYS = new Set(["color", "fill", "stroke", "stops"]);
+const OPACITY_KEYS = new Set(["fillOpacity", "strokeOpacity", "opacity"]);
 
 function canon(v: unknown, colour = false): unknown {
-  if (Array.isArray(v)) return v.map((x) => canon(x));
+  if (Array.isArray(v)) return v.map((x) => canon(x, colour));
   if (typeof v === "number") return Math.round(v * 100) / 100;
   // Only colour fields are upper-cased: run text that looks like "#abcdef" is content.
   if (typeof v === "string") return colour && /^#[0-9a-f]{6}$/i.test(v) ? v.toUpperCase() : v;
@@ -26,6 +27,12 @@ function canon(v: unknown, colour = false): unknown {
       if (x === undefined || x === null || x === false || x === "") continue;
       if (k === "align" && x === "left") continue;
       if ((k === "level" || k === "spaceBefore" || k === "rotation" || k === "strokeWidth" || k === "radius") && x === 0) continue;
+      if (OPACITY_KEYS.has(k) && x === 1) continue;
+      if (k === "dash" && x === "solid") continue;
+      if (k === "angle" && x === 360) {
+        out[k] = 0;
+        continue;
+      }
       if (k === "crop" && x && typeof x === "object" && Object.values(x).every((n) => n === 0)) continue;
       out[k] = canon(x, COLOR_KEYS.has(k) || (k !== "text" && colourMap(o)));
     }

@@ -68,6 +68,24 @@
       ]
     },
     {
+      "id": "s_styles",
+      "layout": "blank",
+      "notes": "LAZYAGENTS-118: transparency, dashes and two-stop linear gradients, including a gradient background.",
+      "background": { "color": { "type": "linear", "angle": 90, "stops": ["background", "surface"] } },
+      "elements": [
+        { "id": "e_g1", "type": "shape", "shape": "roundRect", "frame": { "x": 120, "y": 140, "w": 760, "h": 400 }, "radius": 40,
+          "fill": { "type": "linear", "angle": 45, "stops": ["accent", "accent2"] }, "stroke": "heading", "strokeWidth": 8, "strokeOpacity": 0.6, "dash": "dash",
+          "text": { "valign": "middle", "paragraphs": [ { "align": "center", "runs": [ { "text": "Gradient fill, dashed outline", "size": 48, "bold": true, "color": "#FFFFFF" } ] } ] } },
+        { "id": "e_g2", "type": "shape", "shape": "ellipse", "frame": { "x": 1000, "y": 140, "w": 400, "h": 400 }, "fill": "accent", "fillOpacity": 0.5, "stroke": "accent", "strokeWidth": 6, "dash": "dot" },
+        { "id": "e_g3", "type": "shape", "shape": "rect", "frame": { "x": 1200, "y": 300, "w": 600, "h": 300 }, "fill": { "type": "linear", "angle": 0, "stops": ["#1B998B", "accent"] }, "fillOpacity": 0.75, "rotation": -6 },
+        { "id": "e_g4", "type": "line", "frame": { "x": 120, "y": 680, "w": 1680, "h": 0 }, "stroke": "heading", "strokeWidth": 8, "strokeOpacity": 0.5, "dash": "longDash", "endArrow": true },
+        { "id": "e_g5", "type": "line", "frame": { "x": 120, "y": 760, "w": 1680, "h": 0 }, "stroke": "muted", "strokeWidth": 6, "dash": "dashDot" },
+        { "id": "e_g6", "type": "image", "asset": "a_landscape", "frame": { "x": 120, "y": 820, "w": 360, "h": 220 }, "opacity": 0.4 },
+        { "id": "e_g7", "type": "text", "frame": { "x": 520, "y": 840, "w": 1280, "h": 180 },
+          "paragraphs": [ { "runs": [ { "text": "The picture behind is at 40% opacity; the ellipse fill at 50%; the tilted rectangle is a 75% gradient over it.", "size": 40, "color": "text" } ] } ] }
+      ]
+    },
+    {
       "id": "s_section",
       "layout": "section",
       "background": { "color": "heading" },

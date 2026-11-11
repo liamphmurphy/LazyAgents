@@ -83,9 +83,13 @@ type Element struct {
 	Paragraphs  []Paragraph `json:"paragraphs,omitempty"`
 	VAlign      string      `json:"valign,omitempty"`
 	Shape       string      `json:"shape,omitempty"`
-	Fill        string      `json:"fill,omitempty"`
+	Fill        *Paint      `json:"fill,omitempty"`
+	FillOpacity *float64    `json:"fillOpacity,omitempty"`
 	Stroke      string      `json:"stroke,omitempty"`
 	StrokeWidth float64     `json:"strokeWidth,omitempty"`
+	// StrokeOpacity and Dash apply to a shape's outline and to a line.
+	StrokeOpacity *float64 `json:"strokeOpacity,omitempty"`
+	Dash          string   `json:"dash,omitempty"`
 	Radius      float64     `json:"radius,omitempty"`
 	Text        *TextBox    `json:"text,omitempty"`
 	EndArrow    bool        `json:"endArrow,omitempty"`
@@ -93,10 +97,14 @@ type Element struct {
 	Asset       string      `json:"asset,omitempty"`
 	Crop        *Crop       `json:"crop,omitempty"`
 	Alt         string      `json:"alt,omitempty"`
+	// Opacity is an image's; shapes and lines use FillOpacity and StrokeOpacity.
+	Opacity *float64 `json:"opacity,omitempty"`
 }
 
+// Background is a slide's own fill: a colour or a gradient, under "color"
+// for v1 decks' sake.
 type Background struct {
-	Color string `json:"color"`
+	Color Paint `json:"color"`
 }
 
 type Slide struct {
@@ -138,6 +146,7 @@ var (
 	ThemeColors = []string{"background", "text", "heading", "accent", "accent2", "muted", "surface"}
 	Slots       = []string{"sans", "serif", "mono"}
 	Layouts     = []string{"title", "title-body", "two-column", "image-right", "section", "blank"}
+	Dashes      = []string{"solid", "dash", "dot", "dashDot", "longDash"}
 	hexColor    = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 	slideID     = regexp.MustCompile(`^s_[a-z0-9_]{1,40}$`)
 	elementID   = regexp.MustCompile(`^e_[a-z0-9_]{1,40}$`)
@@ -188,6 +197,47 @@ func checkColor(theme Theme, c, where string, required bool) error {
 		return nil
 	}
 	return invalid("%s: colour %q is neither #RRGGBB nor a theme colour (%s)", where, c, strings.Join(ThemeColors, ", "))
+}
+
+// checkPaint checks a fill: a colour, or a linear gradient whose two stops
+// are colours.
+func checkPaint(theme Theme, p *Paint, where string, required bool) error {
+	if p.Gradient == nil {
+		return checkColor(theme, p.Color, where, required)
+	}
+	g := p.Gradient
+	if g.Type != "linear" {
+		return invalid("%s: gradient type must be linear", where)
+	}
+	if err := checkNumber(&g.Angle, 0, 360, where+" gradient angle"); err != nil {
+		return err
+	}
+	if g.Angle == 360 {
+		g.Angle = 0
+	}
+	if len(g.Stops) != 2 {
+		return invalid("%s: a gradient has exactly two stops", where)
+	}
+	for i, c := range g.Stops {
+		if err := checkColor(theme, c, fmt.Sprintf("%s gradient stop %d", where, i+1), true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkOpacity checks an opacity from 0 to 1; fully opaque is left out.
+func checkOpacity(v **float64, where string) error {
+	if *v == nil {
+		return nil
+	}
+	if err := checkNumber(*v, 0, 1, where); err != nil {
+		return err
+	}
+	if **v == 1 {
+		*v = nil
+	}
+	return nil
 }
 
 func checkNumber(v *float64, lo, hi float64, where string) error {
@@ -277,6 +327,24 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 	if err := checkNumber(&e.Radius, 0, 1000, where+" radius"); err != nil {
 		return err
 	}
+	for _, o := range []struct {
+		v **float64
+		n string
+	}{{&e.FillOpacity, "fillOpacity"}, {&e.StrokeOpacity, "strokeOpacity"}, {&e.Opacity, "opacity"}} {
+		if err := checkOpacity(o.v, where+" "+o.n); err != nil {
+			return err
+		}
+	}
+	if !in(e.Dash, Dashes...) && e.Dash != "" {
+		return invalid("%s: dash must be one of %s", where, strings.Join(Dashes, ", "))
+	}
+	if e.Dash == "solid" {
+		e.Dash = ""
+	}
+	if e.Fill != nil && e.Fill.Gradient == nil && e.Fill.Color == "" {
+		e.Fill = nil
+	}
+	stroked := e.StrokeOpacity != nil || e.Dash != ""
 	notFor := func(cond bool, field string) error {
 		if cond {
 			return invalid("%s: a %s element has no %s", where, e.Type, field)
@@ -294,7 +362,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		if !in(e.VAlign, "", "top", "middle", "bottom") {
 			return invalid("%s: valign must be top, middle or bottom", where)
 		}
-		for _, c := range []error{notFor(e.Shape != "" || e.Fill != "" || e.Stroke != "", "shape, fill or stroke"), notFor(e.Text != nil, "text (use paragraphs)"), notFor(e.Asset != "" || e.Crop != nil, "asset or crop")} {
+		for _, c := range []error{notFor(e.Shape != "" || e.Fill != nil || e.Stroke != "" || e.FillOpacity != nil || stroked || e.Opacity != nil, "shape, fill, stroke, opacity or dash"), notFor(e.Text != nil, "text (use paragraphs)"), notFor(e.Asset != "" || e.Crop != nil, "asset or crop")} {
 			if c != nil {
 				return c
 			}
@@ -307,11 +375,13 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		if err := notFor(len(e.Paragraphs) > 0, "paragraphs (put them in text)"); err != nil {
 			return err
 		}
-		if err := notFor(e.Asset != "" || e.Crop != nil || e.VAlign != "" || e.EndArrow || e.StartArrow || e.Alt != "", "asset, crop, valign (put it in text), arrows or alt"); err != nil {
+		if err := notFor(e.Asset != "" || e.Crop != nil || e.VAlign != "" || e.EndArrow || e.StartArrow || e.Alt != "" || e.Opacity != nil, "asset, crop, valign (put it in text), arrows, alt or opacity (use fillOpacity and strokeOpacity)"); err != nil {
 			return err
 		}
-		if err := checkColor(d.Theme, e.Fill, where+" fill", false); err != nil {
-			return err
+		if e.Fill != nil {
+			if err := checkPaint(d.Theme, e.Fill, where+" fill", false); err != nil {
+				return err
+			}
 		}
 		if err := checkColor(d.Theme, e.Stroke, where+" stroke", false); err != nil {
 			return err
@@ -330,7 +400,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		if e.StrokeWidth <= 0 {
 			return invalid("%s: a line needs a strokeWidth", where)
 		}
-		return notFor(e.Fill != "" || e.Text != nil || len(e.Paragraphs) > 0 || e.Asset != "" || e.Crop != nil || e.Shape != "" || e.Radius != 0 || e.VAlign != "" || e.Alt != "", "fill, text, asset, crop, shape, radius, valign or alt")
+		return notFor(e.Fill != nil || e.FillOpacity != nil || e.Opacity != nil || e.Text != nil || len(e.Paragraphs) > 0 || e.Asset != "" || e.Crop != nil || e.Shape != "" || e.Radius != 0 || e.VAlign != "" || e.Alt != "", "fill, fillOpacity, opacity, text, asset, crop, shape, radius, valign or alt")
 	case "image":
 		if _, ok := d.Assets[e.Asset]; !ok {
 			return invalid("%s: asset %q isn't in the deck's assets", where, e.Asset)
@@ -355,7 +425,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		if utf8.RuneCountInString(e.Alt) > 500 {
 			return invalid("%s: alt text is at most 500 characters", where)
 		}
-		return notFor(e.Fill != "" || e.Stroke != "" || e.StrokeWidth != 0 || e.Text != nil || len(e.Paragraphs) > 0 || e.Shape != "" || e.Radius != 0 || e.VAlign != "" || e.EndArrow || e.StartArrow, "fill, stroke, text, shape, radius, valign or arrows")
+		return notFor(e.Fill != nil || e.Stroke != "" || e.FillOpacity != nil || stroked || e.StrokeWidth != 0 || e.Text != nil || len(e.Paragraphs) > 0 || e.Shape != "" || e.Radius != 0 || e.VAlign != "" || e.EndArrow || e.StartArrow, "fill, stroke, fillOpacity, strokeOpacity, dash, text, shape, radius, valign or arrows")
 	default:
 		return invalid("%s: type must be text, shape, line or image", where)
 	}
@@ -452,7 +522,7 @@ func (d *Deck) Validate() error {
 			return invalid("%s: layout must be one of %s", where, strings.Join(Layouts, ", "))
 		}
 		if s.Background != nil {
-			if err := checkColor(d.Theme, s.Background.Color, where+" background", true); err != nil {
+			if err := checkPaint(d.Theme, &s.Background.Color, where+" background", true); err != nil {
 				return err
 			}
 		}

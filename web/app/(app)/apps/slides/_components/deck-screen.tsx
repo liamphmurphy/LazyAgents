@@ -23,6 +23,7 @@ import { ExportMenu } from "./export-menu";
 import { SlideCanvas } from "./slide-canvas";
 import type { TextEditorHandle } from "./text-editor";
 import { Thumbnails } from "./thumbnails";
+import type { StylePatch } from "./style-menus";
 import { Toolbar, type TextFormat, type ToolbarActions } from "./toolbar";
 
 type SaveState = "saved" | "unsaved" | "saving" | "conflict" | "error";
@@ -62,6 +63,18 @@ function formatElement(e: Element, f: TextFormat): Element {
   if (f.kind === "align") paragraphs = paragraphs.map((p) => ({ ...p, align: f.align === "left" ? undefined : f.align }));
   if (f.kind === "bullet") paragraphs = paragraphs.map((p) => (f.bullet ? { ...p, bullet: f.bullet, level: p.level ?? 0 } : { ...p, bullet: undefined, level: undefined }));
   return withText(e, paragraphs);
+}
+
+/** Sets the style fields that apply to an element's type; undefined clears one. */
+function withStyle(e: Element, patch: StylePatch): Element {
+  const allowed: (keyof StylePatch)[] = e.type === "shape" ? ["fill", "fillOpacity", "strokeOpacity", "dash"] : e.type === "line" ? ["strokeOpacity", "dash"] : e.type === "image" ? ["opacity"] : [];
+  const next: Record<string, unknown> = { ...e };
+  for (const k of allowed) {
+    if (!(k in patch)) continue;
+    if (patch[k] === undefined) delete next[k];
+    else next[k] = patch[k];
+  }
+  return next as Element;
 }
 
 function withText(e: Element, paragraphs: Paragraph[]): Element {
@@ -394,7 +407,7 @@ export function DeckScreen({ id }: { id: string }) {
     insertLine: () => addElement({ id: newId("e"), type: "line", frame: { x: 560, y: 540, w: 800, h: 0 }, stroke: "text", strokeWidth: 6 }),
     setLayout: (l) => slide && update(mapSlide(slide.id, (s) => relayout(s, l))),
     setTheme: (k) => update((d) => ({ ...d, theme: structuredClone(THEMES[k]) })),
-    setBackground: (col) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined }))),
+    setBackground: (col, key) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined })), key && `${slide.id}:${key}`),
     format: (f) => {
       if (!selectedEl) return;
       if (editing && editorRef.current) {
@@ -407,7 +420,8 @@ export function DeckScreen({ id }: { id: string }) {
       }
       update(mapElement(selectedEl.id, (e) => formatElement(e, f)));
     },
-    setFill: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, fill: col } : e))),
+    setFill: (col, key) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, fill: col } : e)), key && `${selected}:${key}`),
+    setStyle: (patch, key) => selected && update(mapElement(selected, (e) => withStyle(e, patch)), key && `${selected}:${key}`),
     setStroke: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e))),
     remove: removeSelected,
   };
@@ -586,7 +600,7 @@ export function DeckScreen({ id }: { id: string }) {
               readOnly={readOnly}
             />
             <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken">
-              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} selected={selectedEl} editing={!!editing} disabled={readOnly} a={tools} />
+              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} slide={slide} selected={selectedEl} editing={!!editing} disabled={readOnly} a={tools} />
               <input ref={fileInput} type="file" accept="image/*" className="hidden" aria-label="Add an image to the slide" data-testid="slide-image-input" onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = "";

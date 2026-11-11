@@ -1,10 +1,10 @@
 "use client";
 
 import { DropdownMenu } from "radix-ui";
-import type { ReactNode } from "react";
 import { cx } from "@/lib/cx";
-import { LAYOUTS, THEME_COLORS, THEMES, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type Slot, type Theme, type ThemeKey } from "@/lib/slides/schema";
-import { floatPanel } from "@/components/domain/pickers";
+import { LAYOUTS, THEMES, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type Slide, type Slot, type Theme, type ThemeKey } from "@/lib/slides/schema";
+import { Menu, Swatches, chip, item, keep, on } from "./menu";
+import { BackgroundMenu, FillMenu, ImageOpacityMenu, LineMenu, OutlineMenu, type StyleActions } from "./style-menus";
 
 export type TextFormat =
   | { kind: "mark"; mark: "bold" | "italic" | "underline" }
@@ -14,7 +14,7 @@ export type TextFormat =
   | { kind: "align"; align: NonNullable<Paragraph["align"]> }
   | { kind: "bullet"; bullet: Paragraph["bullet"] | undefined };
 
-export type ToolbarActions = {
+export type ToolbarActions = StyleActions & {
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -25,62 +25,19 @@ export type ToolbarActions = {
   insertLine: () => void;
   setLayout: (l: Layout) => void;
   setTheme: (t: ThemeKey) => void;
-  setBackground: (c: ColorRef | undefined) => void;
   format: (f: TextFormat) => void;
-  setFill: (c: ColorRef | undefined) => void;
-  setStroke: (c: ColorRef | undefined) => void;
   remove: () => void;
 };
 
-const chip = "inline-flex h-7 items-center gap-1 rounded-md border border-border-strong px-2 text-[12.5px] text-fg-2 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 data-[state=open]:bg-hover";
-const on = "border-accent bg-selected text-fg";
-const item = "flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover";
 const sep = <span aria-hidden className="mx-1 h-5 w-px bg-border-strong" />;
 const SIZES = [24, 32, 40, 44, 48, 56, 64, 72, 80, 96, 112, 128, 160];
-
-/** Keeps focus where it is (the text being edited) when a button is pressed. */
-const keep = (e: React.MouseEvent) => e.preventDefault();
-
-function Menu({ label, trigger, children, disabled }: { label: string; trigger: ReactNode; children: ReactNode; disabled?: boolean }) {
-  return (
-    <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild disabled={disabled}>
-        <button type="button" aria-label={label} className={chip} onMouseDown={keep}>
-          {trigger}
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "z-50 max-h-[60vh] min-w-40 overflow-y-auto")} onCloseAutoFocus={(e) => e.preventDefault()}>
-          {children}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-function Swatches({ theme, onPick, none }: { theme: Theme; onPick: (c: ColorRef | undefined) => void; none?: string }) {
-  return (
-    <>
-      {none && (
-        <DropdownMenu.Item className={item} onSelect={() => onPick(undefined)}>
-          <span className="size-4 rounded-sm border border-dashed border-border-strong" /> {none}
-        </DropdownMenu.Item>
-      )}
-      {THEME_COLORS.map((c) => (
-        <DropdownMenu.Item key={c} className={item} onSelect={() => onPick(c)}>
-          <span className="size-4 rounded-sm border border-border-strong" style={{ background: resolveColor(theme, c) }} /> {c === "accent2" ? "Accent 2" : c[0].toUpperCase() + c.slice(1)}
-        </DropdownMenu.Item>
-      ))}
-    </>
-  );
-}
 
 /**
  * The editor's toolbar (mockup 2/6). Undo/redo, insert and layout are always
  * there; text controls show for text, fill and stroke for shapes, theme and
  * background when nothing is selected.
  */
-export function Toolbar({ theme, themeKey, layout, selected, editing, disabled, a }: { theme: Theme; themeKey?: string; layout: Layout; selected?: Element; editing: boolean; disabled: boolean; a: ToolbarActions }) {
+export function Toolbar({ theme, themeKey, layout, slide, selected, editing, disabled, a }: { theme: Theme; themeKey?: string; layout: Layout; slide?: Slide; selected?: Element; editing: boolean; disabled: boolean; a: ToolbarActions }) {
   const box = selected && textOf(selected);
   const run = box?.paragraphs[0]?.runs[0];
   const para = box?.paragraphs[0];
@@ -151,19 +108,12 @@ export function Toolbar({ theme, themeKey, layout, selected, editing, disabled, 
       ) : null}
       {selected?.type === "shape" && (
         <>
-          <Menu label="Fill" trigger={<><span className="size-3 rounded-sm border border-border-strong" style={{ background: selected.fill ? resolveColor(theme, selected.fill) : "transparent" }} />Fill ▾</>}>
-            <Swatches theme={theme} onPick={a.setFill} none="No fill" />
-          </Menu>
-          <Menu label="Outline" trigger={<>Outline ▾</>}>
-            <Swatches theme={theme} onPick={a.setStroke} none="No outline" />
-          </Menu>
+          <FillMenu theme={theme} el={selected} a={a} />
+          <OutlineMenu theme={theme} el={selected} a={a} />
         </>
       )}
-      {selected?.type === "line" && (
-        <Menu label="Line colour" trigger={<>Colour ▾</>}>
-          <Swatches theme={theme} onPick={(c) => c && a.setStroke(c)} />
-        </Menu>
-      )}
+      {selected?.type === "line" && <LineMenu theme={theme} el={selected} a={a} />}
+      {selected?.type === "image" && <ImageOpacityMenu el={selected} a={a} />}
       {!selected && (
         <>
           <Menu label="Deck theme" trigger={<>Theme: {theme.name} ▾</>}>
@@ -174,9 +124,7 @@ export function Toolbar({ theme, themeKey, layout, selected, editing, disabled, 
               </DropdownMenu.Item>
             ))}
           </Menu>
-          <Menu label="Slide background" trigger={<>Background ▾</>}>
-            <Swatches theme={theme} onPick={a.setBackground} none="Theme background" />
-          </Menu>
+          {slide && <BackgroundMenu theme={theme} slide={slide} a={a} />}
         </>
       )}
       {selected && !editing && (
