@@ -54,8 +54,9 @@ export function setStoredFlag(store: Store, key: string) {
 
 const reviewedKey = (ws: string) => `la:setup:${ws}:agents-reviewed`;
 const dismissedKey = (ws: string) => `la:setup:${ws}:dismissed`;
+export const setupIntroKey = (ws: string) => `la:setup:${ws}:intro-done`;
 
-/** Opening the Agents page ticks "Review the default agents". */
+/** Opening the Agents page ticks the agent review step. */
 export function useMarkAgentsReviewed() {
   const ws = useBootstrap().data?.workspace.id;
   useEffect(() => {

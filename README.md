@@ -142,9 +142,11 @@ docker compose up --build
 Sign a browser in by opening the one-time link the API prints on first boot
 (`docker compose logs api`), or a fresh one from `make signin`. The browser
 stays signed in for a year. Then open **[localhost:8080](http://localhost:8080)**.
-The first boot creates a demo workspace so you can explore before connecting an agent, and a setup checklist
-walks you through what is still missing. To start with an empty workspace, set
-`SEED=false` and `LOCAL_USER_NAME` in `.env` before first boot.
+The first boot creates an empty workspace and an Assistant with all persona
+permissions enabled. After sign-in, setup asks you to replace the placeholder
+name and primary email, then shows the connection checklist. You can also set
+`LOCAL_USER_NAME` and `LOCAL_USER_EMAIL` in `.env` before first boot. The demo
+dataset is available only by opting in with `SEED=true`.
 
 Developing Vesper or running it from a checkout? `make start` does everything in
 one command: it creates `.env`, builds the hardened agent image, signs in to your
