@@ -143,7 +143,7 @@ type Deck struct {
 var (
 	ThemeColors = []string{"background", "text", "heading", "accent", "accent2", "muted", "surface"}
 	Slots       = []string{"sans", "serif", "mono"}
-	Layouts     = []string{"title", "title-body", "two-column", "image-right", "section", "blank"}
+	Layouts     = []string{"title", "title-body", "two-column", "image-right", "section", "blank", "quote", "big-number", "three-column", "comparison", "image-full", "image-left", "agenda", "closing"}
 	// Shapes are PowerPoint prstGeom names, so PPTX export passes them through;
 	// web/lib/slides/geometry.ts draws the same set.
 	Shapes = []string{
@@ -294,7 +294,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 	if err := checkNumber(&e.Rotation, -360, 360, where+" rotation"); err != nil {
 		return err
 	}
-	if !in(e.Placeholder, "", "title", "subtitle", "body", "body2", "image") {
+	if !in(e.Placeholder, "", "title", "subtitle", "body", "body2", "body3", "label", "label2", "image") {
 		return invalid("%s: unknown placeholder %q", where, e.Placeholder)
 	}
 	if err := checkNumber(&e.StrokeWidth, 0, maxStrokeWidth, where+" strokeWidth"); err != nil {

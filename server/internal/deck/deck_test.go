@@ -3,6 +3,7 @@ package deck
 import (
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -35,7 +36,7 @@ func TestNormalizeAcceptanceDeck(t *testing.T) {
 		t.Fatalf("normalize isn't idempotent: %v", err)
 	}
 	d, _ := Parse(body)
-	if len(d.Slides) != 8 || d.Slides[2].Elements[2].Crop.L != 0.3 {
+	if len(d.Slides) != 16 || d.Slides[2].Elements[2].Crop.L != 0.3 {
 		t.Fatalf("lost content: %+v", d.Slides[2].Elements[2])
 	}
 }
@@ -74,7 +75,7 @@ func TestApplyOps(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := Parse(out)
-	if len(d.Slides) != 9 || d.Slides[0].ID != "s_section" || d.Slides[3].Layout != "title-body" || len(d.Slides[3].Elements) != 2 {
+	if len(d.Slides) != 17 || d.Slides[0].ID != "s_section" || d.Slides[3].Layout != "title-body" || len(d.Slides[3].Elements) != 2 {
 		t.Fatalf("unexpected slides: %+v", d.Slides)
 	}
 	if d.Slides[1].Elements[0].Paragraphs[0].Runs[0].Text != "Q4 review" || d.Theme.Name != "Dark" {
@@ -173,6 +174,85 @@ func TestTextStyleFields(t *testing.T) {
 		if _, err := Normalize(bad); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+func TestNewLayoutsAndRolesValidate(t *testing.T) {
+	body, _ := Normalize(fixture(t))
+	for _, l := range []string{"quote", "big-number", "three-column", "comparison", "image-full", "image-left", "agenda", "closing"} {
+		out, err := Apply(body, []Op{{Op: "insert_slide", Value: map[string]any{"layout": l}}})
+		if err != nil {
+			t.Fatalf("%s: %v", l, err)
+		}
+		d, _ := Parse(out)
+		s := d.Slides[0]
+		if s.Layout != l || len(s.Elements) == 0 {
+			t.Fatalf("%s: got %+v", l, s)
+		}
+	}
+	for _, role := range []string{"body3", "label", "label2"} {
+		if _, err := Normalize(strings.Replace(body, `"placeholder":"subtitle"`, `"placeholder":"`+role+`"`, 1)); err != nil {
+			t.Errorf("%s refused: %v", role, err)
+		}
+	}
+	for name, bad := range map[string]string{
+		"unknown layout": strings.Replace(body, `"layout":"quote"`, `"layout":"pull-quote"`, 1),
+		"unknown role":   strings.Replace(body, `"placeholder":"label2"`, `"placeholder":"label3"`, 1),
+	} {
+		if bad == body {
+			t.Fatalf("%s: mutation didn't apply", name)
+		}
+		if _, err := Normalize(bad); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestRelayoutToNewLayouts(t *testing.T) {
+	roles := func(s Slide) map[string]Frame {
+		m := map[string]Frame{}
+		for _, e := range s.Elements {
+			m[e.Placeholder+":"+e.Type] = e.Frame
+		}
+		return m
+	}
+	body, _ := Normalize(fixture(t))
+	// Two columns → three: both bodies keep their text and move; body3 is added.
+	out, err := Apply(body, []Op{{Op: "set_slide", ID: "s_three", Value: map[string]any{"layout": "two-column"}}, {Op: "set_slide", ID: "s_three", Value: map[string]any{"layout": "three-column"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := Parse(out)
+	s := d.Slides[9]
+	if len(s.Elements) != 4 || s.Elements[1].Paragraphs[0].Runs[0].Text != "Plan" || s.Elements[1].Frame != (Frame{120, 280, 520, 700}) {
+		t.Fatalf("three-column relayout: %+v", roles(s))
+	}
+	// A filled image moves with its role; an empty image slot is dropped
+	// when the new layout has none.
+	out, err = Apply(body, []Op{
+		{Op: "set_slide", ID: "s_imageleft", Value: map[string]any{"layout": "image-right"}},
+		{Op: "insert_slide", Value: map[string]any{"layout": "image-left"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ = Parse(out)
+	moved := d.Slides[slices.IndexFunc(d.Slides, func(s Slide) bool { return s.ID == "s_imageleft" })]
+	if f := roles(moved)["image:image"]; f != (Frame{1000, 120, 800, 840}) {
+		t.Fatalf("filled image didn't move: %+v", roles(moved))
+	}
+	last := d.Slides[0]
+	if _, ok := roles(last)["image:text"]; !ok {
+		t.Fatalf("image-left has no image slot: %+v", roles(last))
+	}
+	out, err = Apply(out, []Op{{Op: "set_slide", ID: last.ID, Value: map[string]any{"layout": "agenda"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ = Parse(out)
+	r := roles(d.Slides[0])
+	if _, ok := r["image:text"]; ok || len(r) != 2 {
+		t.Fatalf("empty image slot kept on agenda: %+v", r)
 	}
 }
 

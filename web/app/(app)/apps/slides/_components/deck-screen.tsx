@@ -9,12 +9,13 @@ import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import { uploadDeckAsset, useDeckRef } from "@/lib/api/slides-hooks";
 import { cx } from "@/lib/cx";
 import { reviewBase } from "@/lib/doc-review";
+import { align, distribute, duplicate, reorder, unionBox, type AlignOp, type ZOrder } from "@/lib/slides/arrange";
 import { pushRecent, shiftLevel, toggleArrow, withRadius, withStrokeWidth } from "@/lib/slides/edit";
 import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
 import { mergeDecks, same } from "@/lib/slides/review";
-import { THEMES, encodeDeck, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { H, THEMES, W, encodeDeck, isImageSlot, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Layout, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { applyStyle } from "@/lib/slides/styles";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
@@ -51,13 +52,16 @@ async function prepareImage(file: File): Promise<Blob> {
 
 const mapRuns = (paragraphs: Paragraph[], fn: (r: Paragraph["runs"][number]) => Paragraph["runs"][number]) => paragraphs.map((p) => ({ ...p, runs: p.runs.map(fn) }));
 
-/** Applies a text format to every run (or paragraph) of an element's text. */
-function formatElement(e: Element, f: TextFormat): Element {
+/**
+ * Applies a text format to every run (or paragraph) of an element's text. A
+ * mark is set to `markOn`, or toggled from the first run's when it's unset.
+ */
+function formatElement(e: Element, f: TextFormat, markOn?: boolean): Element {
   const box = textOf(e);
   if (!box) return e;
   const first = box.paragraphs[0]?.runs[0];
   let paragraphs = box.paragraphs;
-  if (f.kind === "mark") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, [f.mark]: !first?.[f.mark] || undefined }));
+  if (f.kind === "mark") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, [f.mark]: (markOn ?? !first?.[f.mark]) || undefined }));
   if (f.kind === "size") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, size: f.size }));
   if (f.kind === "font") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, font: f.font }));
   if (f.kind === "color") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, color: f.color }));
@@ -316,11 +320,14 @@ export function DeckScreen({ id }: { id: string }) {
   const [slideId, setSlideId] = useState<string>();
   // Back from presenting (or a link) at ?slide=N opens that slide.
   const startAt = Number(search.get("slide") ?? 0);
-  const [selected, setSelected] = useState<string>();
+  const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string>();
   const editorRef = useRef<TextEditorHandle | null>(null);
   const slide = deck?.slides.find((s) => s.id === slideId) ?? deck?.slides[Math.max(0, Math.min(deck.slides.length - 1, startAt - 1))];
-  const selectedEl = slide?.elements.find((e) => e.id === selected);
+  // The selection in stacking order; ids no longer on the slide (after an undo) drop out.
+  const selection = useMemo(() => slide?.elements.filter((e) => selected.includes(e.id)) ?? [], [slide, selected]);
+  const selectedEl = selection.length === 1 ? selection[0] : undefined;
+  const selIds = new Set(selection.map((e) => e.id));
   const readOnly = live || archived || reviewing || !!conflict;
   // For async work (uploads) that finishes after later renders.
   const readOnlyRef = useRef(readOnly);
@@ -370,25 +377,76 @@ export function DeckScreen({ id }: { id: string }) {
     syncHist();
   };
   const mapSlide = (sid: string, fn: (s: Slide) => Slide) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => (s.id === sid ? fn(s) : s)) });
-  const mapElement = (eid: string, fn: (e: Element) => Element) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: s.elements.map((e) => (e.id === eid ? fn(e) : e)) })) });
+  const mapElement = (eid: string, fn: (e: Element) => Element) => mapElements(new Set([eid]), fn);
+  const mapElements = (ids: ReadonlySet<string>, fn: (e: Element) => Element) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: s.elements.map((e) => (ids.has(e.id) ? fn(e) : e)) })) });
   const addElement = (e: Element, edit = false) => {
     if (!slide) return;
     update(mapSlide(slide.id, (s) => ({ ...s, elements: [...s.elements, e] })));
-    setSelected(e.id);
+    setSelected([e.id]);
     if (edit) setEditing(e.id);
   };
   const removeSelected = () => {
-    if (!slide || !selected) return;
-    update(mapSlide(slide.id, (s) => ({ ...s, elements: s.elements.filter((e) => e.id !== selected) })));
-    setSelected(undefined);
+    if (!slide || !selIds.size) return;
+    update(mapSlide(slide.id, (s) => ({ ...s, elements: s.elements.filter((e) => !selIds.has(e.id)) })));
+    setSelected([]);
   };
 
+  // ---- Arranging the selection: each is one undo step.
+  const arrange = {
+    order: (op: ZOrder) => {
+      if (!slide || !selIds.size) return;
+      // reorder returns the same array when nothing moves, which update skips.
+      update((d) => {
+        const s = d.slides.find((x) => x.id === slide.id);
+        const elements = s && reorder(s.elements, selIds, op);
+        return !s || elements === s.elements ? d : mapSlide(slide.id, (x) => ({ ...x, elements: elements! }))(d);
+      });
+    },
+    duplicate: () => {
+      if (!slide || !selIds.size) return;
+      const r = duplicate(slide.elements, selIds, () => newId("e"));
+      update(mapSlide(slide.id, (s) => ({ ...s, elements: r.elements })));
+      setSelected(r.ids);
+    },
+    /** To the selection's box, or to the slide when one element is selected. */
+    align: (op: AlignOp) => {
+      if (!selection.length) return;
+      const to = selection.length === 1 ? { l: 0, t: 0, r: W, b: H } : unionBox(selection.map((e) => e.frame))!;
+      setFrames(align(Object.fromEntries(selection.map((e) => [e.id, e.frame])), op, to));
+    },
+    distribute: (axis: "x" | "y") => {
+      if (selection.length >= 3) setFrames(distribute(Object.fromEntries(selection.map((e) => [e.id, e.frame])), axis));
+    },
+  };
+  /** Changes each selected element as one undo step; none when nothing actually changes. */
+  const editSelection = (fn: (e: Element) => Element) => {
+    if (!selection.length) return;
+    const changed = new Map(selection.map((e) => [e.id, fn(e)] as const).filter(([, n], i) => JSON.stringify(n) !== JSON.stringify(selection[i])));
+    if (changed.size) update(mapElements(new Set(changed.keys()), (e) => changed.get(e.id) ?? e));
+  };
+  /** Sets several frames at once, leaving the deck untouched (no undo step) when nothing moves. */
+  const setFrames = (frames: Record<string, { x: number; y: number; w: number; h: number }>, key?: string) =>
+    update((d) => {
+      const moved = (e: Element) => frames[e.id] && JSON.stringify(frames[e.id]) !== JSON.stringify(e.frame);
+      if (!slide?.elements.some(moved)) return d;
+      return mapElements(new Set(Object.keys(frames)), (e) => ({ ...e, frame: frames[e.id] }))(d);
+    }, key);
+
   const fileInput = useRef<HTMLInputElement>(null);
+  // The image placeholder the next picked file fills, if any.
+  const fillTarget = useRef<string | undefined>(undefined);
+  const fillImage = (eid: string) => {
+    if (readOnly) return;
+    fillTarget.current = eid;
+    fileInput.current?.click();
+  };
   const [notice, setNotice] = useState<string>();
   const [uploading, setUploading] = useState(false);
   const onImage = async (file: File) => {
     // The slide it was added on, even if the person moves on while it uploads.
     const target = slide?.id;
+    const slot = fillTarget.current;
+    fillTarget.current = undefined;
     if (!target) return;
     setNotice(undefined);
     setUploading(true);
@@ -401,8 +459,16 @@ export function DeckScreen({ id }: { id: string }) {
       const el: Element = { id: newId("e"), type: "image", asset: a.id, frame: { x: Math.round((1920 - w) / 2), y: Math.round((1080 - h) / 2), w, h }, alt: file.name.replace(/\.[a-z0-9]+$/i, "") };
       // Read now, not from when the upload started.
       if (readOnlyRef.current) throw new Error("the deck became read-only while uploading; add it again once you can edit");
-      update((d) => mapSlide(target, (s) => ({ ...s, elements: [...s.elements, el] }))({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
-      if (slideIdRef.current === target) setSelected(el.id);
+      // Filling a placeholder: the image takes its frame and role (the
+      // renderers centre-crop it to cover) and its place in paint order.
+      const place = (els: Element[]) => {
+        const i = slot ? els.findIndex((x) => x.id === slot && isImageSlot(x)) : -1;
+        if (i < 0) return [...els, el];
+        Object.assign(el, { frame: els[i].frame, placeholder: "image" });
+        return els.map((x, k) => (k === i ? el : x));
+      };
+      update((d) => mapSlide(target, (s) => ({ ...s, elements: place(s.elements) }))({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
+      if (slideIdRef.current === target) setSelected([el.id]);
     } catch (e) {
       setNotice(`Couldn't add ${file.name}: ${errorText(e)}`);
     } finally {
@@ -418,14 +484,17 @@ export function DeckScreen({ id }: { id: string }) {
     insertText: () => addElement({ id: newId("e"), type: "text", frame: { x: 560, y: 440, w: 800, h: 200 }, paragraphs: [{ runs: [{ text: "", size: 44, font: "body", color: "text" }] }] }, true),
     insertShape: (shape) =>
       addElement({ id: newId("e"), type: "shape", shape, frame: { x: 760, y: 390, w: 400, h: 300 }, fill: "accent", radius: shape === "roundRect" ? 32 : undefined, text: { valign: "middle", paragraphs: [{ align: "center", runs: [{ text: "", size: 40, color: "background", font: "body" }] }] } }),
-    insertImage: () => fileInput.current?.click(),
+    insertImage: () => {
+      fillTarget.current = undefined;
+      fileInput.current?.click();
+    },
     insertLine: () => addElement({ id: newId("e"), type: "line", frame: { x: 560, y: 540, w: 800, h: 0 }, stroke: "text", strokeWidth: 6 }),
     setLayout: (l) => slide && update(mapSlide(slide.id, (s) => relayout(s, l))),
     setTheme: (k) => update((d) => ({ ...d, theme: structuredClone(THEMES[k]) })),
     setBackground: (col) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined }))),
     format: (f) => {
-      if (!selectedEl) return;
-      if (editing && editorRef.current) {
+      if (!selection.length) return;
+      if (editing && editorRef.current && selectedEl) {
         if (f.kind === "mark") return editorRef.current.format(f.mark);
         if (f.kind === "color") return editorRef.current.color(f.color);
         if (f.kind === "highlight") return editorRef.current.highlight(f.highlight);
@@ -435,22 +504,32 @@ export function DeckScreen({ id }: { id: string }) {
         update(mapElement(selectedEl.id, (e) => formatElement(withText(e, paragraphs), f)));
         return;
       }
-      if (formatElement(selectedEl, f) === selectedEl) return; // nothing to change: no undo step
-      update(mapElement(selectedEl.id, (e) => formatElement(e, f)));
+      // A mark goes on everywhere unless every selected text already has it.
+      const texts = selection.flatMap((e) => textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs);
+      const markOn = f.kind === "mark" ? !texts.every((r) => r[f.mark]) : undefined;
+      if (selection.every((e) => formatElement(e, f, markOn) === e)) return; // nothing to change: no undo step
+      update(mapElements(selIds, (e) => formatElement(e, f, markOn)));
     },
-    setFill: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, fill: col } : e))),
-    setStroke: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e))),
+    setFill: (col) => editSelection((e) => (e.type === "shape" ? { ...e, fill: col } : e)),
+    setStroke: (col) => editSelection((e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e)),
     // One update, so the whole selection restyles as one undo step.
-    applyStyle: (sid) => {
-      const ids = new Set(selected ? [selected] : []);
-      if (ids.size) update((d) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: s.elements.map((e) => (ids.has(e.id) ? applyStyle(e, sid) : e)) })) }));
+    applyStyle: (sid) => editSelection((e) => applyStyle(e, sid)),
+    setStrokeWidth: (w) => editSelection((e) => withStrokeWidth(e, w)),
+    setRadius: (r) => editSelection((e) => withRadius(e, r)),
+    // Mixed lines all get the arrowhead (or, when every one has it, all lose it).
+    toggleArrow: (end) => {
+      const k = end === "start" ? "startArrow" : "endArrow";
+      const lines = selection.filter((e) => e.type === "line");
+      const on = !lines.every((e) => e[k]);
+      editSelection((e) => (e.type === "line" && !!e[k] !== on ? toggleArrow(e, end) : e));
     },
-    setStrokeWidth: (w) => selected && update(mapElement(selected, (e) => withStrokeWidth(e, w))),
-    setRadius: (r) => selected && update(mapElement(selected, (e) => withRadius(e, r))),
-    toggleArrow: (end) => selected && update(mapElement(selected, (e) => toggleArrow(e, end))),
     recentColors,
     rememberColor,
     remove: removeSelected,
+    order: arrange.order,
+    duplicate: arrange.duplicate,
+    align: arrange.align,
+    distribute: arrange.distribute,
   };
 
   const present = async (from?: number) => {
@@ -480,42 +559,57 @@ export function DeckScreen({ id }: { id: string }) {
     return () => window.removeEventListener("keydown", onKey);
   });
   const onCanvasKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!selectedEl || editing || readOnly) {
-      if (e.key === "Escape") setSelected(undefined);
+    const t = e.target as HTMLElement;
+    if (editing || t.isContentEditable || t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === "a" && slide) {
+      e.preventDefault();
+      setSelected(slide.elements.map((x) => x.id));
       return;
     }
-    const step = e.shiftKey ? 40 : 8;
+    if (e.key === "Escape") {
+      setSelected([]);
+      return;
+    }
+    if (!selection.length || readOnly) return;
+    const step = e.shiftKey ? 10 : 1;
     const nudge = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
-    if (nudge) {
+    // e.code, not e.key: with ⌥ held, ] and [ type other characters on a Mac.
+    const bracket = e.code === "BracketRight" ? "up" : e.code === "BracketLeft" ? "down" : undefined;
+    if (nudge && !mod) {
       e.preventDefault();
-      update(mapElement(selectedEl.id, (x) => ({ ...x, frame: { ...x.frame, x: x.frame.x + nudge[0], y: x.frame.y + nudge[1] } })), `nudge:${selectedEl.id}`);
+      setFrames(Object.fromEntries(selection.map((x) => [x.id, { ...x.frame, x: x.frame.x + nudge[0], y: x.frame.y + nudge[1] }])), `nudge:${[...selIds].join(",")}`);
     } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       removeSelected();
-    } else if (e.key === "Enter" && textOf(selectedEl)) {
+    } else if (e.key === "Enter" && selectedEl && isImageSlot(selectedEl)) {
+      e.preventDefault();
+      fillImage(selectedEl.id);
+    } else if (e.key === "Enter" && selectedEl && textOf(selectedEl)) {
       e.preventDefault();
       setEditing(selectedEl.id);
-    } else if (e.key === "Escape") setSelected(undefined);
-    else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "x" && textOf(selectedEl)) {
+    } else if (mod && e.shiftKey && e.key.toLowerCase() === "x" && selection.some((x) => textOf(x))) {
       e.preventDefault();
       tools.format({ kind: "mark", mark: "strike" });
-    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+    } else if (mod && e.key.toLowerCase() === "d") {
       e.preventDefault();
-      const copy = { ...structuredClone(selectedEl), id: newId("e"), frame: { ...selectedEl.frame, x: selectedEl.frame.x + 40, y: selectedEl.frame.y + 40 }, placeholder: undefined };
-      addElement(copy);
+      arrange.duplicate();
+    } else if (mod && bracket) {
+      e.preventDefault();
+      arrange.order(bracket === "up" ? (e.altKey ? "front" : "forward") : e.altKey ? "back" : "backward");
     }
   };
 
   // ---- Slides.
-  const addSlide = () => {
+  const addSlide = (layout?: Layout) => {
     if (!slide) return;
-    const s = newSlide(slide.layout === "title" ? "title-body" : slide.layout);
+    const s = newSlide(layout ?? (slide.layout === "title" ? "title-body" : slide.layout));
     update((d) => {
       const i = d.slides.findIndex((x) => x.id === slide.id);
       return { ...d, slides: [...d.slides.slice(0, i + 1), s, ...d.slides.slice(i + 1)] };
     });
     setSlideId(s.id);
-    setSelected(undefined);
+    setSelected([]);
   };
   const duplicateSlide = (sid: string) => {
     const src = deckRef.current?.slides.find((s) => s.id === sid);
@@ -614,14 +708,15 @@ export function DeckScreen({ id }: { id: string }) {
               current={slide.id}
               onSelect={(sid) => {
                 setSlideId(sid);
-                setSelected(undefined);
+                setSelected([]);
                 setEditing(undefined);
                 if (reviewing) document.querySelector(`[data-change-slide="${sid}"]`)?.scrollIntoView({ block: "nearest" });
               }}
               onMove={moveSlide}
               onDuplicate={duplicateSlide}
               onRemove={removeSlide}
-              onAdd={addSlide}
+              onAdd={() => addSlide()}
+              onAddLayout={addSlide}
               assetUrl={assetUrl}
               fontsReady={fonts}
               overflowing={overflowingSlides}
@@ -630,7 +725,7 @@ export function DeckScreen({ id }: { id: string }) {
               readOnly={readOnly}
             />
             <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken">
-              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} selected={selectedEl} editing={!!editing} disabled={readOnly} a={tools} />
+              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} selection={selection} editing={!!editing} disabled={readOnly} a={tools} />
               <input ref={fileInput} type="file" accept="image/*" className="hidden" aria-label="Add an image to the slide" data-testid="slide-image-input" onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = "";
@@ -710,7 +805,8 @@ export function DeckScreen({ id }: { id: string }) {
                       onSelect={setSelected}
                       editing={editing}
                       onEdit={setEditing}
-                      onFrame={(eid, frame: Frame, rotation) => update(mapElement(eid, (e) => ({ ...e, frame, rotation })))}
+                      onFillImage={fillImage}
+                      onFrames={(live) => update(mapElements(new Set(Object.keys(live)), (e) => ({ ...e, ...live[e.id] })))}
                       onText={(eid, paragraphs) => update(mapElement(eid, (e) => withText(e, paragraphs)))}
                       readOnly={readOnly}
                       editorRef={editorRef}

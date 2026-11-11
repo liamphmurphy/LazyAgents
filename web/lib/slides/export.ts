@@ -9,7 +9,7 @@
 import type PptxGenJS from "pptxgenjs";
 import { FAMILY, OFFICE, SLOTS, STYLES, fontUrl, measure } from "./fonts";
 import { BULLET_INDENT, INSET, STRIKE, imageSource, layoutSlide, lineHeight } from "./layout";
-import { resolveColor, slotOf, textOf, type Deck, type Paragraph, type TextBox } from "./schema";
+import { isImageSlot, resolveColor, slotOf, textOf, type Deck, type Paragraph, type TextBox } from "./schema";
 
 const K = 0.5; // slide units → points
 const IN = (u: number) => u / 144; // slide units → inches (1920 units = 13.333 in)
@@ -168,6 +168,8 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
     if (s.hidden) slide.hidden = true;
     if (s.notes) slide.addNotes(s.notes);
     for (const e of s.elements) {
+      // An unfilled image placeholder draws nothing; don't leave an empty box in the file.
+      if (isImageSlot(e)) continue;
       const f = { x: IN(e.frame.x), y: IN(e.frame.y), w: IN(e.frame.w), h: IN(e.frame.h), rotate: e.rotation ?? 0, objectName: e.id };
       const textOpts = (box: TextBox) => ({ margin: INSET * K, valign: box.valign ?? "top", fit: "none" as const, wrap: true });
       if (e.type === "text") slide.addText(runs(e), { ...f, ...textOpts(e) });
