@@ -72,9 +72,26 @@ const LABELS: Record<ChatStatusKind, string> = {
   memory: "Memory",
   "memory-save": "Making a note",
   "chat-history": "Searching past chats",
+  "repo-search": "Finding a repository",
+  "repo-attach": "Checking out a repository",
+  "video-render": "Rendering a video",
+  finance: "Reading your finances",
+  "finance-sort": "Sorting transactions",
+  persona: "Sketching a persona",
+  schedule: "Scheduling a task",
+  learning: "Building a learning module",
+  research: "Writing up research",
+  space: "Setting up a space",
+  "saved-links": "Checking saved links",
+  chart: "Drawing a chart",
+  diagram: "Drawing a diagram",
+  app: "Building an app",
+  choices: "Laying out options",
 };
 
 export const sceneLabel = (kind: ChatStatusKind) => LABELS[kind];
+
+const LEARNING_PATH = "M18 44C34 44 34 16 52 16S70 44 88 44S104 16 114 16";
 
 const CODE_LINES = "M20 10H72 M30 19H112 M30 28H88 M20 37H60 M20 46H108";
 
@@ -99,6 +116,17 @@ function canvasScene(pin?: boolean) {
     </>
   );
 }
+
+/** A check on a done-coloured badge centred at (x, y). */
+const badgeCheck = (x: number, y: number) => (
+  <path d={`M${x - 2.4} ${y}l1.7 1.7 3.2-3.4`} fill="none" stroke="var(--surface)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+);
+
+/** A four-point sparkle centred at (x, y), s from centre to tip. */
+const sparkle = (x: number, y: number, s: number) =>
+  `M${x} ${y - s}l${s * 0.25} ${s * 0.75}l${s * 0.75} ${s * 0.25}l${-s * 0.75} ${s * 0.25}l${-s * 0.25} ${s * 0.75}l${-s * 0.25} ${-s * 0.75}l${-s * 0.75} ${-s * 0.25}l${s * 0.75} ${-s * 0.25}z`;
+
+const vars = (v: Record<string, string | number>) => v as CSSProperties;
 
 /** Kinds split off a broader one keep its scene: the step rail's glyph is what tells them apart. */
 type SplitKind = "searching-code" | "web-page" | "image-view" | "memory-save";
@@ -414,6 +442,278 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
       <g className="scene-history-lens">
         <circle cx="46" cy="10.5" r="7" fill="var(--surface)" fillOpacity="0.4" stroke="var(--accent)" strokeWidth="2" />
         <path className="scene-line-accent" d="M51 15.5l5 5" />
+      </g>
+    </>
+  ),
+  // A lens reads down the repositories; the second matches and gets a check.
+  "repo-search": (
+    <>
+      {[6, 22, 38].map((y) => (
+        <rect key={y} className="scene-paper" x="20" y={y} width="84" height="12" rx="2.5" />
+      ))}
+      <rect className="scene-accent scene-story scene-rs-hit" opacity="0.3" x="20" y="22" width="84" height="12" rx="2.5" />
+      <path className="scene-line-accent" strokeWidth="1.3" strokeLinejoin="round" d="M27 8.5h5v7h-5z M27 24.5h5v7h-5z M27 40.5h5v7h-5z" />
+      <path className="scene-line" strokeWidth="1.5" d="M38 12H86 M38 28H74 M38 44H80" />
+      <g className="scene-story scene-rs-check">
+        <circle className="scene-done" cx="114" cy="28" r="5.5" />
+        {badgeCheck(114, 28)}
+      </g>
+      <g className="scene-story scene-rs-lens">
+        <circle cx="80" cy="12" r="6" fill="var(--surface)" fillOpacity="0.4" stroke="var(--accent)" strokeWidth="2" />
+        <path className="scene-line-accent" d="M84.4 16.4l4.4 4.4" />
+      </g>
+    </>
+  ),
+  // Files travel from the repository into the workspace folder, which fills, then a check.
+  "repo-attach": (
+    <>
+      <rect className="scene-paper" x="14" y="12" width="30" height="32" rx="3" />
+      <rect x="22" y="19" width="14" height="17" rx="1.5" fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+      <path className="scene-line-accent" strokeWidth="1.5" d="M25.5 19v17" />
+      <path className="scene-line" strokeWidth="1.5" strokeDasharray="2 3" opacity="0.5" d="M48 28H80" />
+      {[0, 0.35, 0.7].map((wait) => (
+        <rect key={wait} className="scene-accent scene-story scene-ra-chip" opacity="0" style={delay(wait)} x="46" y="24" width="6" height="8" rx="1.2" />
+      ))}
+      <path className="scene-paper" strokeLinejoin="round" d="M84 14h11l3 4h20v30H84z" />
+      {["M90 27H112", "M90 34H106", "M90 41H110"].map((d, i) => (
+        <path key={d} className={`scene-line scene-story scene-ra-f${i}`} strokeWidth="1.5" d={d} />
+      ))}
+      <g className="scene-story scene-ra-badge">
+        <circle className="scene-done" cx="118" cy="16" r="5.5" />
+        {badgeCheck(118, 16)}
+      </g>
+    </>
+  ),
+  // The filmstrip's frames render one by one with the progress bar, then a play badge.
+  "video-render": (
+    <>
+      <rect className="scene-paper" x="16" y="3" width="100" height="36" rx="3" />
+      {Array.from({ length: 12 }, (_, i) => (
+        <g key={i} fill="var(--border-strong)">
+          <rect x={20 + i * 8} y="5" width="4" height="2.5" rx="0.6" />
+          <rect x={20 + i * 8} y="34.5" width="4" height="2.5" rx="0.6" />
+        </g>
+      ))}
+      {[0.9, 0.6, 0.8, 0.5, 0.7, 0.95].map((o, i) => (
+        <g key={i}>
+          <rect className="scene-empty" x={21 + i * 15.5} y="10" width="13.5" height="22" rx="1.5" />
+          <rect className={`scene-accent scene-story scene-vr-c${i}`} opacity={o} style={vars({ "--o": o })} x={21 + i * 15.5} y="10" width="13.5" height="22" rx="1.5" />
+        </g>
+      ))}
+      <path className="scene-line" opacity="0.3" d="M16 48H116" />
+      <path className="scene-line-accent scene-story scene-vr-bar" d="M16 48H116" />
+      <g className="scene-story scene-vr-badge">
+        <circle className="scene-done" cx="66" cy="21" r="8.5" />
+        <path d="M63.5 16.5v9l7-4.5z" fill="var(--surface)" />
+      </g>
+    </>
+  ),
+  // Bars rise, a trend line draws over them, and a coin lands.
+  finance: (
+    <>
+      <path className="scene-line" d="M22 49H102" />
+      {[16, 26, 20, 34].map((h, i) => (
+        <rect key={i} className={`scene-accent scene-story scene-fin-b${i}`} opacity={[0.45, 0.6, 0.75, 1][i]} x={28 + i * 18} y={48 - h} width="12" height={h} rx="2" />
+      ))}
+      <path className="scene-line-done scene-dash scene-story scene-fin-line" pathLength={1} strokeLinejoin="round" d="M34 28L52 18L70 24L88 10" />
+      <g className="scene-story scene-fin-coin">
+        <circle className="scene-warm" cx="112" cy="14" r="8" />
+        <text x="112" y="17.5" textAnchor="middle" fontSize="10" fontWeight="700" fontFamily="system-ui" fill="var(--surface)">
+          $
+        </text>
+      </g>
+    </>
+  ),
+  // Each transaction hops from its row into its category's bucket.
+  "finance-sort": (
+    <>
+      {[8, 22, 36].map((y) => (
+        <g key={y}>
+          <rect className="scene-paper" x="12" y={y} width="46" height="10" rx="2" />
+          <path className="scene-line" strokeWidth="1.5" d={`M16 ${y + 5}H30`} />
+        </g>
+      ))}
+      {(
+        [
+          ["var(--accent)", 72],
+          ["var(--state-done)", 92],
+          ["var(--state-progress)", 112],
+        ] as const
+      ).map(([stroke, x]) => (
+        <path key={x} d={`M${x} 32v16h16V32`} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      ))}
+      {(
+        [
+          ["var(--accent)", 10, 33, 31],
+          ["var(--state-done)", 24, 53, 17],
+          ["var(--state-progress)", 38, 73, 3],
+        ] as const
+      ).map(([fill, y, tx, ty], i) => (
+        <rect key={y} className="scene-story scene-fs-chip" fill={fill} style={{ ...vars({ "--tx": `${tx}px`, "--ty": `${ty}px` }), ...delay(i * 0.6) }} x="40" y={y} width="14" height="6" rx="1.5" />
+      ))}
+    </>
+  ),
+  // A portrait is drawn in, then sparkles.
+  persona: (
+    <>
+      <rect className="scene-paper" x="44" y="4" width="44" height="48" rx="6" />
+      <path className="scene-line-accent scene-dash scene-story scene-pe-head" pathLength={1} d="M66 13a8 8 0 1 1-.01 0" />
+      <path className="scene-line-accent scene-dash scene-story scene-pe-body" pathLength={1} d="M52 47c0-9 6-14 14-14s14 5 14 14" />
+      <path className="scene-warm scene-story scene-pe-s0" d={sparkle(100, 14, 6)} />
+      <path className="scene-warm scene-story scene-pe-s1" d={sparkle(32, 40, 4.5)} />
+    </>
+  ),
+  // The clock's hand sweeps while the same weekday lights up week after week.
+  schedule: (
+    <>
+      <circle className="scene-paper" cx="38" cy="28" r="19" />
+      <path className="scene-line" strokeWidth="1.5" d="M38 12v3 M38 41v3 M22 28h3 M51 28h3" />
+      <path className="scene-line" d="M38 28l-6 4" />
+      <path className="scene-line-accent scene-sch-hand" d="M38 28V16" />
+      <circle className="scene-accent" cx="38" cy="28" r="2" />
+      <rect className="scene-paper" x="68" y="8" width="50" height="42" rx="3" />
+      <rect className="scene-accent" x="68" y="8" width="50" height="8" rx="3" />
+      <rect className="scene-accent" x="68" y="12" width="50" height="4" />
+      {[25, 34, 43].map((y) =>
+        [77, 88, 99, 110].map((x) => <circle key={`${x}-${y}`} className="scene-muted" opacity="0.45" cx={x} cy={y} r="2.4" />),
+      )}
+      {[25, 34, 43].map((y, i) => (
+        <circle key={y} className={`scene-accent scene-story scene-sch-d${i}`} cx="88" cy={y} r="3.4" />
+      ))}
+    </>
+  ),
+  // The path draws and each lesson is checked off on the way to the flag.
+  learning: (
+    <>
+      <path className="scene-line" opacity="0.35" d={LEARNING_PATH} />
+      <path className="scene-line-done scene-dash scene-story scene-lm-path" pathLength={1} d={LEARNING_PATH} />
+      {[
+        [18, 44],
+        [52, 16],
+        [88, 44],
+      ].map(([x, y], i) => (
+        <g key={x} className={`scene-story scene-lm-n${i}`}>
+          <circle className="scene-done" cx={x} cy={y} r="5.5" />
+          {badgeCheck(x, y)}
+        </g>
+      ))}
+      <g className="scene-story scene-lm-n3">
+        <path className="scene-line-accent" strokeWidth="1.5" d="M114 24V5" />
+        <path className="scene-warm" d="M114 5.5h11l-3 3.5 3 3.5h-11z" />
+      </g>
+    </>
+  ),
+  // The report types itself while each source links to its citation.
+  research: (
+    <>
+      <rect className="scene-paper" x="18" y="4" width="62" height="48" rx="3" />
+      {["M26 14H70", "M26 23H64", "M26 32H72", "M26 41H54"].map((d, i) => (
+        <path key={d} className={`${i ? "scene-line" : "scene-line-accent"} scene-story scene-rt-${i}`} d={d} />
+      ))}
+      {[8, 23, 38].map((y) => (
+        <g key={y}>
+          <rect className="scene-paper" x="92" y={y} width="28" height="10" rx="2" />
+          <path className="scene-line" strokeWidth="1.5" d={`M97 ${y + 5}H113`} />
+        </g>
+      ))}
+      {[
+        [73, 12],
+        [67, 21],
+        [75, 30],
+      ].map(([x, y], i) => (
+        <g key={x}>
+          <path className={`scene-line-accent scene-dash scene-story scene-rl-${i}`} strokeWidth="1.2" strokeOpacity="0.6" pathLength={1} d={`M91 ${13 + 15 * i}L${x + 3} ${y}`} />
+          <circle className={`scene-accent scene-story scene-rsup-${i}`} cx={x} cy={y} r="2" />
+        </g>
+      ))}
+    </>
+  ),
+  // The space's outline draws, its tab appears, and things drop in.
+  space: (
+    <>
+      <path className="scene-line-accent scene-dash scene-story scene-sp-o" pathLength={1} strokeLinejoin="round" d="M30 12H102V50H30Z" />
+      <rect className="scene-accent scene-story scene-sp-tab" x="30" y="4" width="26" height="8" rx="2" />
+      {[40, 59, 78].map((x, i) => (
+        <g key={x} className={`scene-story scene-sp-i${i}`}>
+          <rect className="scene-paper" x={x} y="26" width="14" height="16" rx="2" />
+          <path className="scene-line" strokeWidth="1.5" d={`M${x + 4} 31H${x + 10}`} />
+        </g>
+      ))}
+    </>
+  ),
+  // A bookmark ribbon drops onto the stack of saved pages.
+  "saved-links": (
+    <>
+      <rect className="scene-paper" x="52" y="14" width="50" height="36" rx="3" />
+      <rect className="scene-paper" x="46" y="10" width="50" height="36" rx="3" />
+      <rect className="scene-paper" x="40" y="6" width="50" height="36" rx="3" />
+      <rect className="scene-accent" opacity="0.3" x="44" y="10" width="16" height="12" rx="1.5" />
+      <path className="scene-line" strokeWidth="1.5" d="M64 13H76 M64 19H72" />
+      <path className="scene-line" strokeWidth="1.5" opacity="0.6" d="M44 29H82 M44 35H70" />
+      <path className="scene-warm scene-story scene-sl-r" d="M78 6V20l4-3 4 3V6z" />
+    </>
+  ),
+  // The line draws across the axes and each point pops as it's reached.
+  chart: (
+    <>
+      <path className="scene-line" strokeWidth="1" opacity="0.3" d="M26 18H114 M26 28H114 M26 38H114" />
+      <path className="scene-line" strokeWidth="1.5" strokeLinejoin="round" d="M26 6V48H114" />
+      <path className="scene-line-accent scene-dash scene-story scene-ch-l" pathLength={1} strokeLinejoin="round" d="M32 40L50 30L68 34L86 20L106 12" />
+      {[
+        [32, 40],
+        [50, 30],
+        [68, 34],
+        [86, 20],
+        [106, 12],
+      ].map(([x, y], i) => (
+        <circle key={x} className={`scene-accent scene-story scene-ch-p${i}`} cx={x} cy={y} r="2.8" />
+      ))}
+    </>
+  ),
+  // A sequence diagram's messages draw back and forth between two lifelines.
+  diagram: (
+    <>
+      <rect className="scene-paper" x="16" y="3" width="32" height="10" rx="2" />
+      <rect className="scene-paper" x="84" y="3" width="32" height="10" rx="2" />
+      <path className="scene-line" strokeWidth="1.5" d="M24 8H40 M92 8H108" />
+      <path className="scene-line" strokeWidth="1.2" strokeDasharray="2 3" opacity="0.6" d="M32 14V53 M100 14V53" />
+      {["M34 22H96", "M98 33H36", "M34 44H96"].map((d, i) => (
+        <path key={d} className={`scene-line-accent scene-dash scene-story scene-sq-m${i}`} strokeWidth="1.6" pathLength={1} d={d} />
+      ))}
+      {["M92.5 19l3.5 3-3.5 3", "M39.5 30l-3.5 3 3.5 3", "M92.5 41l3.5 3-3.5 3"].map((d, i) => (
+        <path key={d} className={`scene-line-accent scene-story scene-sq-h${i}`} strokeWidth="1.6" strokeLinejoin="round" d={d} />
+      ))}
+    </>
+  ),
+  // A slider moves and the shape it controls grows and shrinks with it.
+  app: (
+    <>
+      <rect className="scene-paper" x="26" y="4" width="80" height="48" rx="4" />
+      <path className="scene-line" strokeWidth="1" opacity="0.5" d="M26 13H106" />
+      {[31, 35, 39].map((cx) => (
+        <circle key={cx} className="scene-muted" cx={cx} cy="8.5" r="1.3" />
+      ))}
+      <circle cx="66" cy="27" r="9" fill="none" stroke="var(--border-strong)" strokeWidth="1.5" strokeDasharray="2 2" />
+      <circle className="scene-accent scene-box scene-ap-grow" opacity="0.75" cx="66" cy="27" r="9" />
+      <path className="scene-line" strokeWidth="1.5" opacity="0.4" d="M38 44H94" />
+      <path className="scene-line-accent scene-box scene-ap-fill" strokeWidth="1.5" d="M38 44H94" />
+      <circle className="scene-box scene-ap-knob" cx="46" cy="44" r="3.5" fill="var(--surface)" stroke="var(--accent)" strokeWidth="2" />
+    </>
+  ),
+  // The highlight hops between the options, a pointer clicks the second, and it's picked.
+  choices: (
+    <>
+      {[5, 22, 39].map((y) => (
+        <rect key={y} className="scene-paper" x="30" y={y} width="72" height="12" rx="6" />
+      ))}
+      <rect className="scene-accent scene-story scene-cho-hl" fillOpacity="0.22" x="30" y="22" width="72" height="12" rx="6" />
+      {[11, 28, 45].map((cy) => (
+        <circle key={cy} className="scene-empty" cx="38" cy={cy} r="3" />
+      ))}
+      <path className="scene-line" strokeWidth="1.5" d="M46 11H86 M46 28H92 M46 45H80" />
+      <circle className="scene-accent scene-story scene-cho-dot" cx="38" cy="28" r="1.8" />
+      <g className="scene-story scene-cho-cur">
+        <path fill="var(--text)" d="M94 30v9l2.6-2.4 3.6-.2z" />
       </g>
     </>
   ),
