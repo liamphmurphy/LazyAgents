@@ -23,7 +23,7 @@ import {
   useSetChatCommitEmail,
   useStartAside,
 } from "@/lib/api/hooks";
-import { asidesInWindow, commandSendMode, cycleSendMode, SEND_MODE_HINT, sendModeAction, sendModePlaceholder, type SendMode } from "@/lib/send-mode";
+import { asidesInWindow, commandSendMode, cycleSendMode, SEND_MODE_ENTER, SEND_MODE_HINT, sendModeAction, sendModePlaceholder, type SendMode } from "@/lib/send-mode";
 import { SEND_TONE, SendModeSwitch } from "./send-modes";
 import { FollowupTray } from "./followups";
 import { LiveAsides, ReplyAsides } from "./asides";
@@ -946,7 +946,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               onCycle={running ? (back) => setSendMode((m) => cycleSendMode(m, back)) : undefined}
               hints={
                 running
-                  ? `Enter ${sendModeAction(sendMode).toLowerCase()}s  ·  Tab switches mode  ·  /aside  ·  /queue  ·  Shift+Enter for a new line`
+                  ? `Enter ${SEND_MODE_ENTER[sendMode]}  ·  Tab switches mode  ·  /aside  ·  /queue  ·  Shift+Enter for a new line`
                   : undefined
               }
               commands={{ plain: plainCommands, options: commandOptions,

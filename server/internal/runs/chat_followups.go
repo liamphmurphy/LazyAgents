@@ -65,15 +65,12 @@ func (s *Service) QueueChatFollowup(ctx context.Context, ws, user, id uuid.UUID,
 // ListChatFollowups is the chat's queue, oldest (next to send) first.
 func (s *Service) ListChatFollowups(ctx context.Context, ws, user, id uuid.UUID) ([]store.ChatFollowup, error) {
 	var out []store.ChatFollowup
-	err := s.tx(ctx, func(q *store.Queries) error {
-		chat, err := lockChat(ctx, q, ws, user, id)
-		if err != nil {
-			return err
-		}
-		out, err = q.ListChatFollowups(ctx, chat.ID)
-		return err
-	})
-	return out, err
+	q := store.New(s.Pool)
+	chat, err := readOwnChat(ctx, q, ws, user, id)
+	if err != nil {
+		return out, err
+	}
+	return q.ListChatFollowups(ctx, chat.ID)
 }
 
 // DeleteChatFollowup removes a queued follow-up before it is sent.
@@ -94,6 +91,16 @@ func (s *Service) DeleteChatFollowup(ctx context.Context, ws, user, id, followup
 		_, err = q.BumpChatRevision(ctx, chat.ID)
 		return err
 	})
+}
+
+// readOwnChat reads the caller's chat without locking it: a list needn't wait
+// for a turn that holds the lock.
+func readOwnChat(ctx context.Context, q *store.Queries, ws, user, id uuid.UUID) (store.ChatSession, error) {
+	chat, err := q.GetChatSession(ctx, store.GetChatSessionParams{ID: id, WorkspaceID: ws})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && chat.CreatedBy != user) {
+		return chat, apperr.ErrNotFound
+	}
+	return chat, err
 }
 
 // SendNextFollowup runs in the runner's transaction once a turn has ended

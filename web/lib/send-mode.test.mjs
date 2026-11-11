@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { asideCount, asidesInWindow, commandSendMode, cycleSendMode, SEND_MODES, sendModeAction, sendModePlaceholder } from "./send-mode.ts";
+import { SEND_MODE_ENTER, asideCount, asidesInWindow, commandSendMode, cycleSendMode, SEND_MODES, sendModeAction, sendModePlaceholder } from "./send-mode.ts";
 
 test("follow-up is the default, so Enter never interrupts unless asked to", () => {
   assert.equal(SEND_MODES[0], "followup");
@@ -41,4 +41,9 @@ test("asides belong to the turn they were asked in", () => {
 test("asideCount", () => {
   assert.equal(asideCount(1), "1 aside");
   assert.equal(asideCount(3), "3 asides");
+});
+
+test("the hint says what Enter does in every mode", () => {
+  assert.deepEqual(Object.keys(SEND_MODE_ENTER).sort(), [...SEND_MODES].sort());
+  assert.equal(`Enter ${SEND_MODE_ENTER.aside}`, "Enter asks it on the side");
 });

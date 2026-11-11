@@ -131,15 +131,12 @@ func countRunning(asides []store.ChatSession) int {
 // ListChatAsides is the chat's asides, oldest first.
 func (s *Service) ListChatAsides(ctx context.Context, ws, user, id uuid.UUID) ([]store.ChatSession, error) {
 	var out []store.ChatSession
-	err := s.tx(ctx, func(q *store.Queries) error {
-		chat, err := lockChat(ctx, q, ws, user, id)
-		if err != nil {
-			return err
-		}
-		out, err = q.ListChatAsides(ctx, &chat.ID)
-		return err
-	})
-	return out, err
+	q := store.New(s.Pool)
+	chat, err := readOwnChat(ctx, q, ws, user, id)
+	if err != nil {
+		return out, err
+	}
+	return q.ListChatAsides(ctx, &chat.ID)
 }
 
 // EndAside runs in the runner's transaction once an aside's turn has ended
@@ -196,8 +193,9 @@ func asidePreamble(ctx context.Context, q *store.Queries, parent store.ChatSessi
 	if err != nil {
 		return "", err
 	}
-	const lead = "(Vesper: you are answering an aside. The main conversation you are working in comes first, for context.)\n\n"
-	return lead + renderHandoff(hist, int(total), asideHistoryChars, hc, snapshot+asideFooter, ""), nil
+	// The handoff's lead would say other models answered; here it's the same persona, still working.
+	rendered := renderHandoff(hist, int(total), asideHistoryChars, hc, snapshot+asideFooter, "")
+	return strings.Replace(rendered, handoffLead, "You are answering an aside in the conversation below, the one you are working on right now.", 1), nil
 }
 
 // liveTurnSnapshot describes the running reply on run so far, oldest first.

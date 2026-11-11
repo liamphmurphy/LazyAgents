@@ -28,6 +28,9 @@ export function sendModeAction(mode: SendMode): string {
   return mode === "followup" ? "Queue" : mode === "aside" ? "Ask aside" : "Interrupt";
 }
 
+/** What Enter does in each mode, for the hint under the box. */
+export const SEND_MODE_ENTER: Record<SendMode, string> = { followup: "queues it", aside: "asks it on the side", interrupt: "interrupts" };
+
 export function sendModePlaceholder(mode: SendMode, name: string): string {
   switch (mode) {
     case "followup":

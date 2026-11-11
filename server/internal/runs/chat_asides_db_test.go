@@ -68,6 +68,9 @@ func TestChatAside(t *testing.T) {
 			t.Errorf("aside prompt lacks %q:\n%s", want, prompt)
 		}
 	}
+	if strings.Contains(prompt, "different harness or model") {
+		t.Error("an aside was told other models answered the conversation")
+	}
 	if strings.Contains(prompt, "set_chat_title") {
 		t.Error("an aside was asked to title itself")
 	}
