@@ -294,11 +294,11 @@ test("repository discovery saves repositories and organizations shared by all pe
   await page.goto("/settings#repositories");
   const section = page.locator("#repositories");
   await expect(section).toContainText("Access comes from your GitHub credential");
-  await section.getByLabel("Repository, account or organization", { exact: true }).fill("acme/app");
+  await section.getByLabel("GitHub repository", { exact: true }).fill("acme/app");
   await section.getByRole("button", { name: "Save source" }).click();
   await expect(section.getByRole("button", { name: "Remove acme/app", exact: true })).toBeVisible();
   await section.getByLabel("Repository source type").selectOption("organization");
-  await section.getByLabel("Repository, account or organization", { exact: true }).fill("acme");
+  await section.getByLabel("GitHub username or organization", { exact: true }).fill("acme");
   await section.getByRole("button", { name: "Save source" }).click();
   await expect(section.getByRole("button", { name: "Remove acme", exact: true })).toBeVisible();
   await section.getByRole("button", { name: "Refresh owner repositories" }).click();
@@ -309,18 +309,18 @@ test("repository discovery saves repositories and organizations shared by all pe
 });
 
 
-test("repository discovery accepts a personal-account wildcard in the repository field", async ({ page }) => {
+test("repository discovery saves all repositories under a plain username", async ({ page }) => {
   const mock = await installSettingsApi(page);
   await page.goto("/settings#repositories");
   const section = page.locator("#repositories");
-  await expect(section.getByRole("option", { name: "Account or organization", exact: true })).toHaveCount(1);
-  await section.getByLabel("Repository, account or organization", { exact: true }).fill("https://github.com/liamphmurphy/*");
+  await section.getByLabel("Repository source type").selectOption({ label: "All repos under a username or organization" });
+  await section.getByLabel("GitHub username or organization", { exact: true }).fill("liamphmurphy");
   await section.getByRole("button", { name: "Save source" }).click();
-  await expect(section.getByText("liamphmurphy/*", { exact: true })).toBeVisible();
+  await expect(section.getByText("liamphmurphy", { exact: true })).toBeVisible();
   await expect(section.getByText("All repositories", { exact: true })).toBeVisible();
   await section.getByRole("button", { name: "Refresh owner repositories" }).click();
   await expect(section.getByRole("button", { name: "Refresh owner repositories" })).toBeEnabled();
   await section.getByRole("button", { name: "Remove liamphmurphy", exact: true }).click();
-  await expect(section.getByText("liamphmurphy/*", { exact: true })).toHaveCount(0);
+  await expect(section.getByText("liamphmurphy", { exact: true })).toHaveCount(0);
   expect(mock.api.unhandled).toEqual([]);
 });

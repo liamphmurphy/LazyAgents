@@ -6,10 +6,11 @@ remain the authority on which repositories can be read or pushed.
 
 Settings → **Repositories & GitHub owners** manages a shared discovery
 catalogue for the signed-in person. Save a repository as `owner/name` or a
-GitHub URL, or save an account or organization as `owner/*` or
-`https://github.com/owner/*`. This owner wildcard includes every repository
-visible to the credential under that owner, including private personal
-repositories. Public user listings are combined with the authenticated
+GitHub URL. To include every repository owned by an account or organization,
+choose **All repos under a username or organization** and enter the name,
+such as `liamphmurphy`. This includes every repository visible to the
+credential under that owner, including private personal repositories.
+The API also accepts `owner/*` and `https://github.com/owner/*` as shortcuts. Public user listings are combined with the authenticated
 repository listing so private repositories are not silently omitted. Only
 the complete owner wildcard is supported, not partial names such as
 `owner/app*`. Owner lists are paginated and
