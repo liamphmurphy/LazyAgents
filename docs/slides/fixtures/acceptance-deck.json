@@ -76,6 +76,25 @@
           "paragraphs": [ { "align": "center", "runs": [ { "text": "Questions?", "size": 128, "bold": true, "color": "#FFFFFF" } ] },
                           { "align": "center", "runs": [ { "text": "mono: deck.schema = 1", "size": 40, "font": "mono", "color": "accent2" } ] } ] }
       ]
+    },
+    {
+      "id": "s_controls",
+      "layout": "blank",
+      "background": { "color": "#FFF7ED" },
+      "elements": [
+        { "id": "e_c1", "type": "shape", "shape": "roundRect", "frame": { "x": 120, "y": 120, "w": 600, "h": 360 }, "fill": "#0F766E", "stroke": "#134E4A", "strokeWidth": 20, "radius": 96,
+          "text": { "valign": "middle", "paragraphs": [ { "align": "center", "runs": [ { "text": "Custom fill, 20 px outline, radius 96", "size": 42, "bold": true, "color": "#F0FDFA" } ] } ] } },
+        { "id": "e_c2", "type": "shape", "shape": "ellipse", "frame": { "x": 820, "y": 120, "w": 360, "h": 360 }, "stroke": "#9333EA", "strokeWidth": 2 },
+        { "id": "e_c3", "type": "line", "frame": { "x": 1280, "y": 160, "w": 520, "h": 280 }, "stroke": "#DB2777", "strokeWidth": 14, "startArrow": true, "endArrow": true },
+        { "id": "e_c4", "type": "line", "frame": { "x": 1280, "y": 470, "w": 520, "h": 0 }, "stroke": "accent", "strokeWidth": 1, "startArrow": true },
+        { "id": "e_c5", "type": "text", "frame": { "x": 120, "y": 560, "w": 1680, "h": 440 },
+          "paragraphs": [
+            { "bullet": "disc", "level": 0, "runs": [ { "text": "Level 0 at a typed 21 pt", "size": 42, "color": "#7C2D12" } ] },
+            { "bullet": "disc", "level": 1, "runs": [ { "text": "Level 1 at 15.5 pt", "size": 31, "color": "#9A3412" } ] },
+            { "bullet": "number", "level": 2, "runs": [ { "text": "Level 2, numbered, 13 pt", "size": 26 } ] },
+            { "bullet": "disc", "level": 4, "runs": [ { "text": "Level 4, the deepest, at 9 pt", "size": 18, "italic": true, "color": "muted" } ] }
+          ] }
+      ]
     }
   ]
 }
