@@ -143,8 +143,9 @@ Sign a browser in by opening the one-time link the API prints on first boot
 (`docker compose logs api`), or a fresh one from `make signin`. The browser
 stays signed in for a year. Then open **[localhost:8080](http://localhost:8080)**.
 The first boot creates an empty workspace and an Assistant with all persona
-permissions enabled. After sign-in, setup asks you to replace the placeholder
-name and primary email, then shows the connection checklist. You can also set
+permissions enabled. After sign-in, the Assistant's Welcome Wizard asks for
+your name and what you do, connects Claude Code or Codex, and drafts your first
+persona. Settings → Run setup again starts it over. You can also set
 `LOCAL_USER_NAME` and `LOCAL_USER_EMAIL` in `.env` before first boot. The demo
 dataset is available only by opting in with `SEED=true`.
 
