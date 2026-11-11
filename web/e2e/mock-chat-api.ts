@@ -625,6 +625,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     }
 
     if (path === "/planning-sessions" && method === "GET") return json({ sessions: [], has_more: false });
+    if (path === "/repositories/presets" && method === "GET") return json({ owners: [{ login: "liamphmurphy", organization: false }, { login: "acme", organization: true }] });
     if (path === "/repositories/sources") {
       if (method === "GET") return json(repositorySources);
       const b = body() as { kind: "repository" | "organization"; name: string };

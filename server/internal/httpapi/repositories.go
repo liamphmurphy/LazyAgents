@@ -60,3 +60,18 @@ func derefString(p *string) string {
 	}
 	return ""
 }
+
+func (s *Server) GetRepositoryPresets(ctx context.Context, _ api.GetRepositoryPresetsRequestObject) (api.GetRepositoryPresetsResponseObject, error) {
+	presets, err := s.Runs.Repositories().Presets(ctx, repositoryOwner(ctx))
+	if err != nil {
+		return nil, err
+	}
+	out := api.RepositoryPresets{Owners: []api.RepositoryOwnerPreset{}}
+	for _, owner := range presets.Owners {
+		out.Owners = append(out.Owners, api.RepositoryOwnerPreset{Login: owner.Login, Organization: owner.Organization})
+	}
+	if presets.Warning != "" {
+		out.Warning = &presets.Warning
+	}
+	return api.GetRepositoryPresets200JSONResponse(out), nil
+}

@@ -5,8 +5,16 @@ repository list no longer authorizes or revokes access: GitHub credentials
 remain the authority on which repositories can be read or pushed.
 
 Settings → **Repositories & GitHub owners** manages a shared discovery
-catalogue for the signed-in person. Save a repository as `owner/name` or a
-GitHub URL. To include every repository owned by an account or organization,
+catalogue for the signed-in person. It offers the account connected through
+the GitHub token and its visible organizations as one-click presets. Choosing
+a preset saves all repositories under that owner; discovery alone saves
+nothing. Organizations are collected from authenticated memberships and
+organization owners in accessible repositories, including with fine-grained
+tokens. Partial discovery leaves the account and manual entry available.
+
+Expand **Enter a repository or owner manually** for other owners, individual
+repositories, and GitHub URLs. Save a repository as `owner/name` or a GitHub
+URL. To include every repository owned by an account or organization,
 choose **All repos under a username or organization** and enter the name,
 such as `liamphmurphy`. This includes every repository visible to the
 credential under that owner, including private personal repositories.

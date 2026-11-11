@@ -31,3 +31,8 @@ export function useSetChatRepository(id: string) {
     },
   });
 }
+
+/** Presets are discovered from the connected GitHub account; choosing one saves it. */
+export function useRepositoryPresets() {
+  return useQuery({ queryKey: ["repository-presets"], queryFn: () => unwrap(api.GET("/repositories/presets")), staleTime: 60_000, retry: false });
+}
