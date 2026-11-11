@@ -6316,7 +6316,7 @@ export interface components {
         RunnerInfo: {
             id: string;
             /** @enum {string} */
-            backend: "docker" | "local";
+            backend: "docker" | "fake";
             max_concurrent: number;
             running: number;
             version?: string;
