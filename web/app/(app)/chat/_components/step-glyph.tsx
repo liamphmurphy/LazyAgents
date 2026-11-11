@@ -240,6 +240,124 @@ const GLYPHS: Record<ChatStatusKind, ReactNode> = {
       </g>
     </>
   ),
+  "repo-search": (
+    <>
+      <rect className="glyph-s" x="2" y="1.5" width="8" height="11" rx="1" />
+      <path className="glyph-s" d="M4.2 1.5v11" />
+      <g className="glyph-a glyph-sweep">
+        <circle className="glyph-s glyph-knock" cx="10.5" cy="10" r="2.6" />
+        <path className="glyph-s" d="M12.4 11.9l2 2" />
+      </g>
+    </>
+  ),
+  "repo-attach": (
+    <>
+      <path className="glyph-s" d="M1.5 4.5h4l1.5 1.5h7.5v8h-13z" />
+      <rect className="glyph-a glyph-dock" x="6" y="8" width="4" height="4" rx=".8" fill="currentColor" />
+    </>
+  ),
+  "video-render": (
+    <>
+      <rect className="glyph-s" x="1.5" y="3" width="13" height="10" rx="1.2" />
+      {[3.3, 6.7, 10.1].map((x, i) => (
+        <rect key={x} className="glyph-a glyph-tile" style={delay(i * 0.35)} x={x} y="5.2" width="2.6" height="5.6" rx=".5" fill="currentColor" />
+      ))}
+    </>
+  ),
+  finance: (
+    <>
+      <path className="glyph-s" d="M1.5 14h13" />
+      {[
+        [2.5, 8.5, 5],
+        [6.7, 4.5, 9],
+        [10.9, 6.5, 7],
+      ].map(([x, y, h], i) => (
+        <rect key={x} className="glyph-a glyph-bar" style={delay(i * 0.3)} x={x} y={y} width="2.6" height={h} rx=".5" fill="currentColor" />
+      ))}
+    </>
+  ),
+  "finance-sort": (
+    <>
+      <path className="glyph-s" d="M1.5 3h6M1.5 6.5h4" />
+      <path className="glyph-s" d="M9 8.5v5.5h5.5V8.5" />
+      <rect className="glyph-a glyph-sort" x="10.25" y="10.5" width="3" height="2.4" rx=".5" fill="currentColor" />
+    </>
+  ),
+  persona: (
+    <>
+      <circle className="glyph-s" cx="7" cy="5.5" r="2.7" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M2 14.5c0-3 2.2-5 5-5s5 2 5 5" />
+      <path className="glyph-a glyph-blink glyph-live" fill="currentColor" d="M13.5 1l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z" />
+    </>
+  ),
+  schedule: (
+    <>
+      <circle className="glyph-s" cx="8" cy="8" r="6.2" />
+      <path className="glyph-s" d="M8 8l2.6 1.6" />
+      <path className="glyph-s glyph-a glyph-hand" d="M8 8V3.6" />
+    </>
+  ),
+  learning: (
+    <>
+      <path className="glyph-s" d="M1 6L8 3l7 3-7 3z" />
+      <path className="glyph-s" d="M4.3 7.6v3.2c0 1 1.7 2 3.7 2s3.7-1 3.7-2V7.6" />
+      <path className="glyph-s glyph-a glyph-swing" d="M14 6.5v4" />
+    </>
+  ),
+  research: (
+    <>
+      <path className="glyph-s" d="M3 1.5h6.5l3 3v10H3z" />
+      <path className="glyph-s" d="M5.2 7.5h5" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M5.2 10.5h3.6" />
+      <circle className="glyph-a glyph-blink glyph-live" cx="10.6" cy="9.6" r=".9" fill="currentColor" />
+    </>
+  ),
+  space: (
+    <>
+      <rect className="glyph-s" x="1.5" y="4" width="13" height="10" rx="1.5" strokeDasharray="2.2 1.6" />
+      <path className="glyph-s" d="M1.5 4V2.5h4.5l1 1.5" />
+      {[4, 8.8].map((x, i) => (
+        <rect key={x} className="glyph-a glyph-fill" style={delay(i * 0.3)} x={x} y="7.5" width="3.2" height="4" rx=".5" fill="currentColor" />
+      ))}
+    </>
+  ),
+  "saved-links": (
+    <>
+      <path className="glyph-s" d="M6.6 9.4L5 11a2.3 2.3 0 0 1-3.2-3.2l1.6-1.6a2.3 2.3 0 0 1 3.2 0" />
+      <path className="glyph-s" d="M9.4 6.6L11 5a2.3 2.3 0 0 1 3.2 3.2l-1.6 1.6a2.3 2.3 0 0 1-3.2 0" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M6.2 9.8l3.6-3.6" />
+    </>
+  ),
+  chart: (
+    <>
+      <path className="glyph-s" d="M2 1.5v12.5h12.5" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M4.5 11l3-3.5 2.5 2 4-5" />
+    </>
+  ),
+  diagram: (
+    <>
+      <path className="glyph-s" opacity=".45" d="M3.5 1.5v13M12.5 1.5v13" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M4.5 5H11.5" />
+      <path className="glyph-s glyph-a glyph-draw" style={delay(0.6)} pathLength={1} d="M11.5 10.5H4.5" />
+    </>
+  ),
+  app: (
+    <>
+      <rect className="glyph-s" x="1.5" y="2" width="13" height="12" rx="1.5" />
+      <path className="glyph-s" d="M1.5 5h13" />
+      <path className="glyph-s" opacity=".4" d="M4 10.5h8" />
+      <circle className="glyph-a glyph-slide" cx="5" cy="10.5" r="1.6" fill="currentColor" />
+    </>
+  ),
+  choices: (
+    <>
+      {[3.5, 8, 12.5].map((cy) => (
+        <circle key={cy} className="glyph-s" cx="3.5" cy={cy} r="1.7" />
+      ))}
+      <path className="glyph-s" strokeWidth="1.1" d="M7 3.5h7M7 8h5.5M7 12.5h6.5" />
+      <circle className="glyph-a glyph-choose" cx="3.5" cy="8" r=".9" fill="currentColor" />
+    </>
+  ),
 };
 
 const FAILED = (

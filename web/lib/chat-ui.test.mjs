@@ -1,4 +1,5 @@
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay, catalogModelLabel, readableModelId } from "./chat-ui.ts";
 
@@ -145,6 +146,34 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "some.other_tool", input: {} }, "connector"],
     [{ tool: "", input: undefined }, "thinking"],
     [bash("python3 scripts/migrate.py"), "terminal"],
+    [{ tool: "mcp__lazyagents__get_epic", input: {} }, "ticket-lookup"],
+    [{ tool: "update_epic", input: {} }, "tickets"],
+    [{ tool: "update_ticket_blockers", input: {} }, "tickets"],
+    [{ tool: "reply_to_run", input: { text: "secret" } }, "runs"],
+    [{ tool: "mcp__lazyagents__propose_connector", input: {} }, "connector"],
+    [{ tool: "propose_secret", input: {} }, "secret"],
+    [{ tool: "set_playground_openapi", input: {} }, "playground"],
+    [{ tool: "mcp__lazyagents__search_repositories", input: { query: "secret" } }, "repo-search"],
+    [{ tool: "use_repository", input: {} }, "repo-attach"],
+    [{ tool: "start_video", input: {} }, "video-render"],
+    [{ tool: "update_video", input: {} }, "video-render"],
+    [{ tool: "finish_video", input: {} }, "video-render"],
+    [{ tool: "fail_video", input: {} }, "video-render"],
+    [{ tool: "finance_summary", input: {} }, "finance"],
+    [{ tool: "finance_query", input: {} }, "finance"],
+    [{ tool: "finance_recurring", input: {} }, "finance"],
+    [{ tool: "finance_categorize", input: {} }, "finance-sort"],
+    [{ tool: "finance_map_csv", input: {} }, "finance-sort"],
+    [{ tool: "propose_persona", input: {} }, "persona"],
+    [{ tool: "create_scheduled_task", input: {} }, "schedule"],
+    [{ tool: "create_learning_module", input: {} }, "learning"],
+    [{ tool: "submit_research_report", input: {} }, "research"],
+    [{ tool: "create_space", input: {} }, "space"],
+    [{ tool: "list_saved_links", input: {} }, "saved-links"],
+    [{ tool: "reply_block", input: { kind: "chart" } }, "chart"],
+    [{ tool: "reply_block", input: { kind: "mermaid" } }, "diagram"],
+    [{ tool: "reply_block", input: { kind: "app" } }, "app"],
+    [{ tool: "reply_block", input: { kind: "choices" } }, "choices"],
   ];
   for (const [call, want] of cases) assert.equal(chatStatusOf(call).kind, want, call.tool);
 });
@@ -274,7 +303,7 @@ test("rich reply blocks join the calls in order and become steps", () => {
   ];
   const calls = chatCalls(events, "2026-11-06T10:00:30Z");
   assert.deepEqual(calls.map((c) => c.tool), ["Read", "reply_block"]);
-  assert.deepEqual(chatStatus(calls), { kind: "canvas", phrase: "building an interactive app" });
+  assert.deepEqual(chatStatus(calls), { kind: "app", phrase: "building an interactive app" });
   assert.deepEqual(chatSteps(calls).steps.map((s) => [s.title, s.state]), [["Reading the code", "done"], ["Building an interactive app", "active"]]);
   assert.equal(chatCalls(events, "2026-11-06T10:02:00Z").length, 0);
   const plan = { key: 0, tool: "TodoWrite", done: true, input: { todos: [{ content: "One", status: "completed" }] } };
@@ -528,4 +557,18 @@ test("a chat's model shows the catalog's label, even when it is the definition's
   assert.equal(catalogModelLabel([], "opus-5.5"), "Opus 5.5", "unknown: made readable");
   assert.equal(readableModelId("gpt-5-codex"), "GPT-5 Codex");
   assert.equal(readableModelId("claude-haiku-5-5"), "Haiku 5.5");
+});
+
+test("every chat tool the server offers has a scene of its own", () => {
+  // The server refuses chat tools missing from chatTools; nothing here forced the UI to keep
+  // up, so new tools silently showed the idle dots. Read the list from the source of truth.
+  const source = readFileSync(new URL("../../server/internal/agentapi/chat.go", import.meta.url), "utf8");
+  const list = /var chatTools = \[\]string\{([^}]*)\}/.exec(source)?.[1];
+  assert.ok(list, "chatTools not found in chat.go");
+  const tools = [...list.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+  assert.ok(tools.length > 40, `parsed only ${tools.length} chat tools`);
+  // Bookkeeping that isn't work the person would want pictured.
+  const idle = new Set(["whoami", "set_chat_title"]);
+  const unpictured = tools.filter((tool) => !idle.has(tool) && chatStatusOf({ tool: `mcp__lazyagents__${tool}`, input: {} }).kind === "thinking");
+  assert.deepEqual(unpictured, []);
 });

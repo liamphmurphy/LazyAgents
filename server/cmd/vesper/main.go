@@ -2,7 +2,7 @@
 //
 //	vesper serve        run migrations, ensure buckets, serve HTTP (default)
 //	vesper migrate      run migrations and exit
-//	vesper runner       execute dispatched runs (docker or local backend)
+//	vesper runner       execute dispatched runs in hardened containers
 //	vesper healthcheck  exit 0 if the local API reports healthy (for container probes)
 //	vesper sign-in-link print a one-time link that signs a browser in (-code: just the code)
 package main
@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/google/uuid"
@@ -182,9 +183,9 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Log:            log,
 		Usage:          &usage.Service{Q: q, Log: log},
 	}
-	// The local backend runs the host's CLIs with their own logins, so the API
-	// can ask them for usage. In Docker the CLIs and logins live in agent
-	// containers, so the API queues checks for a runner to answer.
+	// In Docker the CLIs and logins live in agent containers, so the API
+	// queues usage checks for a runner to answer. The fake backend's stand-in
+	// harnesses (config requires RUNNER_*_BIN) answer the API directly.
 	if cfg.Runner.Backend == "docker" {
 		srv.Usage.Queued = true
 	} else {
@@ -228,10 +229,27 @@ func signInLink(cfg config.Config, code string) string {
 	return cfg.WebURL + httpapi.SignInPath + "?code=" + code
 }
 
-// logFirstSignInLink prints a sign-in link while no browser is signed in, so
-// a fresh install can be opened straight from the API's output. The link is
-// one-time and short-lived; `vesper sign-in-link` makes more.
+// logFirstSignInLink tells a fresh install's owner where to start: an
+// unclaimed install is set up in the browser, and a claimed one that has no
+// password and no signed-in browser can only be opened with a sign-in link.
+// The link is one-time and short-lived; `vesper sign-in-link` makes more.
 func logFirstSignInLink(ctx context.Context, q *store.Queries, cfg config.Config, log *slog.Logger) error {
+	if cfg.NoSignIn {
+		return nil
+	}
+	u, err := q.GetLocalUser(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if u.ClaimedAt == nil {
+		log.Info("Vesper isn't set up yet: open it in a browser to choose your username and password", "url", cfg.WebURL)
+		return nil
+	}
+	if u.PasswordSetAt != nil {
+		return nil
+	}
 	n, err := q.CountBrowserSessions(ctx)
 	if err != nil || n > 0 {
 		return err
@@ -340,16 +358,9 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		}
 		cancel()
 		backend = d
-	case "local":
-		log.Warn("RUNNER_BACKEND=local runs harnesses on this machine with no isolation, using its own CLI logins")
-		bins := map[string]string{}
-		if rc.ClaudeBin != "" {
-			bins["claude"] = rc.ClaudeBin
-		}
-		if rc.CodexBin != "" {
-			bins["codex"] = rc.CodexBin
-		}
-		backend = &runner.Local{Dir: rc.DataDir, Bins: bins}
+	case "fake":
+		log.Warn("RUNNER_BACKEND=fake runs stand-in harnesses on this machine with no isolation; it's only for tests and playgrounds")
+		backend = &runner.Fake{Dir: rc.DataDir, Bins: map[string]string{"claude": rc.ClaudeBin, "codex": rc.CodexBin}}
 	}
 	host, _ := os.Hostname()
 	blobs := blob.New(cfg.S3)

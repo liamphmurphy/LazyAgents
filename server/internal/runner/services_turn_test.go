@@ -17,10 +17,10 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/testenv"
 )
 
-// svcBackend is the local backend plus fake services, recording what the
+// svcBackend is the fake backend plus fake services, recording what the
 // turn was given.
 type svcBackend struct {
-	*runner.Local
+	*runner.Fake
 	fail     error
 	mu       sync.Mutex
 	started  []string
@@ -45,7 +45,7 @@ func (b *svcBackend) Start(ctx context.Context, runID string, spec runner.ExecSp
 		b.turnEnv, b.turnNets = spec.Env, spec.Networks
 		b.mu.Unlock()
 	}
-	return b.Local.Start(ctx, runID, spec)
+	return b.Fake.Start(ctx, runID, spec)
 }
 
 func withServices(e env, key string) {
@@ -61,7 +61,7 @@ func withServices(e env, key string) {
 // network, and they are stopped when it ends.
 func TestTurnRunsWithItsServices(t *testing.T) {
 	e := setup(t)
-	b := &svcBackend{Local: e.runner.Backend.(*runner.Local)}
+	b := &svcBackend{Fake: e.runner.Backend.(*runner.Fake)}
 	e.runner.Backend = b
 	e.dispatch("PAY-214")
 	withServices(e, "PAY-214")
@@ -82,7 +82,7 @@ func TestTurnRunsWithItsServices(t *testing.T) {
 // A service that can't start fails the run, saying which and why.
 func TestTurnFailsWhenItsServicesDont(t *testing.T) {
 	e := setup(t)
-	b := &svcBackend{Local: e.runner.Backend.(*runner.Local), fail: errors.New("service postgres: exited with code 1")}
+	b := &svcBackend{Fake: e.runner.Backend.(*runner.Fake), fail: errors.New("service postgres: exited with code 1")}
 	e.runner.Backend = b
 	e.dispatch("PAY-214")
 	withServices(e, "PAY-214")
@@ -92,8 +92,8 @@ func TestTurnFailsWhenItsServicesDont(t *testing.T) {
 	}
 }
 
-// The local runner can't start services: the turn runs anyway and says so.
-func TestLocalRunnerSkipsServices(t *testing.T) {
+// The fake runner can't start services: the turn runs anyway and says so.
+func TestFakeRunnerSkipsServices(t *testing.T) {
 	e := setup(t)
 	e.dispatch("PAY-214")
 	withServices(e, "PAY-214")
@@ -147,7 +147,7 @@ func TestTestEnvironmentIsInferredUsedAndLearned(t *testing.T) {
 	if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url = $1, default_branch = 'main'", repo); err != nil {
 		t.Fatal(err)
 	}
-	b := &learnBackend{svcBackend: &svcBackend{Local: e.runner.Backend.(*runner.Local)},
+	b := &learnBackend{svcBackend: &svcBackend{Fake: e.runner.Backend.(*runner.Fake)},
 		manifest: []byte(`{"version":2,"elements":[{"attrPath":"legacyPackages.x86_64-linux.protobuf","originalUrl":"flake:nixpkgs"}]}`)}
 	e.runner.Backend = b
 	e.dispatch("PAY-214")

@@ -13,7 +13,7 @@ import (
 // left running by a runner that stopped heartbeating, but not a live one's.
 func TestRecoverReclaimsDeadRunnersTurns(t *testing.T) {
 	e := setup(t)
-	if _, err := e.pool.Exec(e.ctx, `INSERT INTO runners (id, backend, max_concurrent, running, version) VALUES ('other-live', 'local', 1, 1, 'test')`); err != nil {
+	if _, err := e.pool.Exec(e.ctx, `INSERT INTO runners (id, backend, max_concurrent, running, version) VALUES ('other-live', 'fake', 1, 1, 'test')`); err != nil {
 		t.Fatal(err)
 	}
 	n := 0
@@ -56,7 +56,7 @@ func TestRecoverReclaimsDeadRunnersTurns(t *testing.T) {
 // get a resume turn; a live runner's run between turns is left alone.
 func TestRecoverResumesStrandedRuns(t *testing.T) {
 	e := setup(t)
-	if _, err := e.pool.Exec(e.ctx, `INSERT INTO runners (id, backend, max_concurrent, running, version) VALUES ('other-live', 'local', 1, 1, 'test')`); err != nil {
+	if _, err := e.pool.Exec(e.ctx, `INSERT INTO runners (id, backend, max_concurrent, running, version) VALUES ('other-live', 'fake', 1, 1, 'test')`); err != nil {
 		t.Fatal(err)
 	}
 	n := 0

@@ -66,7 +66,7 @@ var wantVideoPaths = []string{"poster.jpg", "preview.jpg", "progress.json", "ren
 // The host reader takes only the files a renderer reports through, never a
 // link, hidden or oversized file, and skips what it already copied.
 func TestLocalReadVideoFiles(t *testing.T) {
-	l := &Local{Dir: t.TempDir()}
+	l := &Fake{Dir: t.TempDir()}
 	ws := l.WorkspaceDir("run")
 	videoFixture(t, ws)
 	req := VideoFilesRequest{Dir: testVideoDir, Script: "render.py", Known: map[string]string{}}

@@ -83,14 +83,14 @@ github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAA
 
 // SSHDirEnv overrides where sshSetup keeps the key and known_hosts. The
 // Docker backend points it at the run's home volume, so a key never lands in
-// a checkout that may be a folder on the person's machine; the local backend
-// leaves it unset, since its $HOME is the person's own.
+// a checkout that may be a folder on the person's machine; the fake backend
+// leaves it unset.
 const SSHDirEnv = "LAZYAGENTS_SSH_DIR"
 
 // sshSetup writes the pinned known_hosts (and the key when injected) under
 // $LAZYAGENTS_SSH_DIR, or .lazyagents/ssh, which stays out of git, and points
-// git at them. Without an injected key ssh falls back to the machine's own
-// keys or agent, so a local runner keeps working with the user's login.
+// git at them. Without an injected key ssh falls back to its default keys or
+// agent.
 var sshSetup = `sshdir="${` + SSHDirEnv + `:-$PWD/.lazyagents/ssh}"
 mkdir -p "$sshdir"
 chmod 700 "$sshdir"
@@ -142,8 +142,8 @@ const checkpointRecovered = "→ recovered checkpoint"
 func SetupScriptWithCheckpoint(repoURL, baseBranch, epicBranch, checkpoint, branch, authorName, authorEmail string, setup []string) string {
 	var b strings.Builder
 	b.WriteString("set -eu\n")
-	// Everything is repo-local: on the local backend this is the user's own
-	// machine, and their global git config must not change.
+	// Everything is repo-local: on the fake backend this is the host, whose
+	// global git config must not change.
 	b.WriteString(`helper='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'` + "\n")
 	b.WriteString(sshSetup)
 	b.WriteString("if [ ! -d .git ]; then\n")
@@ -153,7 +153,7 @@ func SetupScriptWithCheckpoint(repoURL, baseBranch, epicBranch, checkpoint, bran
 		if baseBranch != "" {
 			cloneBranch = "--branch " + shellQuote(baseBranch) + " -- "
 		}
-		// .lazyagents/ may already exist (ssh setup on the local backend, context
+		// .lazyagents/ may already exist (ssh setup on the fake backend, context
 		// files), so clone beside it and move .git in.
 		const dest = ".lazyagents/clone"
 		q := shellQuote(repoURL)

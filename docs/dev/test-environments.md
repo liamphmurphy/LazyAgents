@@ -75,7 +75,7 @@ with nothing added to the repository, while damage stays inside containers.
   turn) until the run removes them itself; nothing sweeps them yet.
 - A recipe never drops a package on its own: one turn not using a tool isn't
   evidence the tests don't need it. Forget resets it.
-- The local runner gets none of this; it shares the host.
+- The fake backend (tests, playgrounds) gets none of this; it shares the host.
 
 ## Open questions
 

@@ -8,6 +8,8 @@ package store
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const countBrowserSessions = `-- name: CountBrowserSessions :one
@@ -85,6 +87,52 @@ func (q *Queries) RedeemBrowserSignInCode(ctx context.Context, codeHash []byte) 
 	var code_hash []byte
 	err := row.Scan(&code_hash)
 	return code_hash, err
+}
+
+const setOwnerPassword = `-- name: SetOwnerPassword :one
+UPDATE users
+SET login = $1, password_hash = $2, password_set_at = now(), claimed_at = coalesce(claimed_at, now())
+WHERE id = $3 AND password_set_at IS NULL AND (claimed_at IS NULL OR $4::bool)
+RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at
+`
+
+type SetOwnerPasswordParams struct {
+	Login        *string
+	PasswordHash string
+	ID           uuid.UUID
+	SignedIn     bool
+}
+
+// Sets the owner's login and password. Unclaimed, anyone may (first-run
+// setup); claimed but passwordless, only a signed-in browser may. Once a
+// password is set this matches nothing: changing it is a separate path.
+func (q *Queries) SetOwnerPassword(ctx context.Context, arg SetOwnerPasswordParams) (User, error) {
+	row := q.db.QueryRow(ctx, setOwnerPassword,
+		arg.Login,
+		arg.PasswordHash,
+		arg.ID,
+		arg.SignedIn,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Email,
+		&i.Initials,
+		&i.RoleTitle,
+		&i.AvatarColor,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AvatarKey,
+		&i.AvatarContentType,
+		&i.ExtraEmails,
+		&i.Login,
+		&i.PasswordSetAt,
+		&i.ClaimedAt,
+	)
+	return i, err
 }
 
 const touchBrowserSession = `-- name: TouchBrowserSession :exec

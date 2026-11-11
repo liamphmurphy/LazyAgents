@@ -167,8 +167,7 @@ start() {
   make --no-print-directory web &
   make --no-print-directory runner &
   echo "vesper: running at http://localhost:${WEB_PORT:-3000}. Ctrl-C stops it all."
-  echo "vesper: to sign a browser in, open (once, within 15 minutes; make signin prints another):"
-  echo "  $(cd server && WEB_URL=http://localhost:${WEB_PORT:-3000} go run ./cmd/vesper sign-in-link)"
+  echo "vesper: open it and sign in, or choose a username and password on first run. Locked out? make signin prints a one-time link."
   wait
 }
 

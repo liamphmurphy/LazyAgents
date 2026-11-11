@@ -50,18 +50,21 @@ func Converse(harness string, in io.Writer, out io.Reader) (Snapshot, error) {
 	return converseCodex(in, out, time.Now)
 }
 
-// Probe reads a harness's allowance through its CLI's control protocol, with
-// the same binary overrides and login as the local runner. It never sends a
-// prompt, starts inference, or reads or exports credentials.
+// Probe reads a harness's allowance through the fake backend's stand-in
+// binary (RUNNER_CLAUDE_BIN, RUNNER_CODEX_BIN), over the CLI's control
+// protocol. Without one it refuses: the API never runs a real CLI on the
+// host. It never sends a prompt, starts inference, or reads credentials.
 func Probe(ctx context.Context, harness string) (Snapshot, error) {
 	argv, err := Argv(harness)
 	if err != nil {
 		return Snapshot{}, err
 	}
 	override := map[string]string{agentdef.HarnessClaudeCode: "RUNNER_CLAUDE_BIN", agentdef.HarnessCodex: "RUNNER_CODEX_BIN"}[harness]
-	if bin := os.Getenv(override); bin != "" {
-		argv[0] = bin
+	bin := os.Getenv(override)
+	if bin == "" {
+		return Snapshot{}, fmt.Errorf("usage: %s is not set; only a fake harness is checked on the host", override)
 	}
+	argv[0] = bin
 	ctx, cancel := context.WithTimeout(ctx, ProbeTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)

@@ -40,7 +40,7 @@ type OutboxFile struct {
 // directories, extra or oversized files) is left alone and described in
 // skipped. The agent has finished by now, but its files are still untrusted:
 // nothing is followed out of the workspace.
-func (l *Local) ReadOutbox(_ context.Context, runID string) (files []OutboxFile, skipped []string, err error) {
+func (l *Fake) ReadOutbox(_ context.Context, runID string) (files []OutboxFile, skipped []string, err error) {
 	root, err := os.OpenRoot(l.WorkspaceDir(runID))
 	if err != nil {
 		return nil, nil, err
@@ -92,7 +92,7 @@ func (l *Local) ReadOutbox(_ context.Context, runID string) (files []OutboxFile,
 }
 
 // RemoveOutbox deletes the named files from the outbox (those just harvested).
-func (l *Local) RemoveOutbox(_ context.Context, runID string, names []string) error {
+func (l *Fake) RemoveOutbox(_ context.Context, runID string, names []string) error {
 	root, err := os.OpenRoot(l.WorkspaceDir(runID))
 	if err != nil {
 		return err

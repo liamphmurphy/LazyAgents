@@ -84,7 +84,7 @@ for hooks in ([],[own,{"enabled":True,"trustStatus":"untrusted"}],[own,{"enabled
 	}
 }
 
-// The local backend defaults to a relative data directory. The hook executes
+// The fake backend defaults to a relative data directory. The hook executes
 // after the child has changed into that workspace, so resolve it before launch.
 func TestPolicyHookWithRelativeWorkspace(t *testing.T) {
 	var calls atomic.Int32
