@@ -25,7 +25,15 @@ export type TextElement = Common & { type: "text" } & TextBox;
 export type ShapeElement = Common & { type: "shape"; shape: "rect" | "roundRect" | "ellipse"; fill?: ColorRef; stroke?: ColorRef; strokeWidth?: number; radius?: number; text?: TextBox };
 export type LineElement = Common & { type: "line"; stroke: ColorRef; strokeWidth: number; endArrow?: boolean; startArrow?: boolean };
 export type ImageElement = Common & { type: "image"; asset: string; crop?: Crop; alt?: string };
-export type Element = TextElement | ShapeElement | LineElement | ImageElement;
+/** An element that isn't a group: what a group can hold. */
+export type LeafElement = TextElement | ShapeElement | LineElement | ImageElement;
+/**
+ * Two or more elements that move and resize together. Children are in slide
+ * coordinates and stacking order; the frame is their box (the server derives
+ * it). Groups don't nest, rotate or hold placeholders.
+ */
+export type GroupElement = Common & { type: "group"; elements: LeafElement[] };
+export type Element = LeafElement | GroupElement;
 
 export type Layout = "title" | "title-body" | "two-column" | "image-right" | "section" | "blank";
 export type Slide = { id: string; layout: Layout; background?: { color: ColorRef }; notes?: string; hidden?: boolean; elements: Element[] };
@@ -123,6 +131,7 @@ export function textOf(e: Element): TextBox | undefined {
 /** Every run's text in a slide, for accessible labels and change summaries. */
 export function slideText(s: Slide): string {
   return s.elements
+    .flatMap((e) => (e.type === "group" ? e.elements : [e]))
     .map((e) => (e.type === "image" ? e.alt ?? "" : (textOf(e)?.paragraphs ?? []).map((p) => p.runs.map((r) => r.text).join("")).join(" ")))
     .filter(Boolean)
     .join(" · ");
@@ -130,7 +139,8 @@ export function slideText(s: Slide): string {
 
 /** A slide's title: its title placeholder's text, else its first text. */
 export function slideTitle(s: Slide): string {
-  const t = s.elements.find((e) => e.placeholder === "title") ?? s.elements.find((e) => textOf(e));
+  const all = s.elements.flatMap((e) => (e.type === "group" ? e.elements : [e]));
+  const t = all.find((e) => e.placeholder === "title") ?? all.find((e) => textOf(e));
   const words = t ? (textOf(t)?.paragraphs ?? []).map((p) => p.runs.map((r) => r.text).join("")).join(" ").trim() : "";
   return words || "Untitled slide";
 }

@@ -4,7 +4,7 @@
  * and the PDF export both draw it, and the PPTX export reuses the constants,
  * so all of them break lines in the same places.
  */
-import { type Deck, type Element, type Paragraph, type Run, type Slide, type Slot, type TextBox, type Theme, resolveColor, slotOf, textOf } from "./schema.ts";
+import { type Deck, type Element, type LeafElement, type Paragraph, type Run, type Slide, type Slot, type TextBox, type Theme, resolveColor, slotOf, textOf } from "./schema.ts";
 
 export const INSET = 16; // text inset on every side, in slide units (8 pt)
 export const LINE = 1.2; // line height as a multiple of the paragraph's largest run, times its lineSpacing
@@ -41,7 +41,8 @@ export type Op =
   | HighlightOp
   | TextOp;
 
-export type Laid = { ops: Op[]; overflow: Set<string> };
+/** Ops of a group's children carry the group's id, so renderers can keep them together. */
+export type Laid = { ops: (Op & { g?: string })[]; overflow: Set<string> };
 
 type Piece = { run: Run; slot: Slot; text: string; x: number; w: number };
 type Line = { y: number; lh: number; maxSize: number; left: number; pieces: Piece[]; align: NonNullable<Paragraph["align"]>; last: boolean; bullet?: { glyph: string; x: number; run: Run; slot: Slot } };
@@ -163,9 +164,9 @@ export function imageSource(e: Extract<Element, { type: "image" }>, a: { w: numb
 /** Everything a slide draws, in paint order, in slide units. */
 export function layoutSlide(deck: Deck, slide: Slide, measure: Measure): Laid {
   const { theme } = deck;
-  const ops: Op[] = [{ op: "rect", x: 0, y: 0, w: deck.size.w, h: deck.size.h, r: 0, fill: resolveColor(theme, slide.background?.color, "background"), sw: 0 }];
+  const ops: Laid["ops"] = [{ op: "rect", x: 0, y: 0, w: deck.size.w, h: deck.size.h, r: 0, fill: resolveColor(theme, slide.background?.color, "background"), sw: 0 }];
   const overflow = new Set<string>();
-  for (const e of slide.elements) {
+  const lay = (e: LeafElement, g?: string) => {
     const f = e.frame;
     const rot = e.rotation ? { deg: e.rotation, cx: f.x + f.w / 2, cy: f.y + f.h / 2 } : undefined;
     const group: Op[] = [];
@@ -186,7 +187,11 @@ export function layoutSlide(deck: Deck, slide: Slide, measure: Measure): Laid {
       if (t.overflow) overflow.add(e.id);
       group.push(...t.ops);
     }
-    ops.push(...group.map((o) => (rot ? { ...o, rot } : o)));
+    ops.push(...group.map((o) => (rot || g ? { ...o, ...(rot && { rot }), ...(g && { g }) } : o)));
+  };
+  for (const e of slide.elements) {
+    if (e.type === "group") for (const c of e.elements) lay(c, e.id);
+    else lay(e);
   }
   return { ops, overflow };
 }

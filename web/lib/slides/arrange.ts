@@ -48,12 +48,15 @@ export function reorder(elements: Element[], ids: ReadonlySet<string>, op: ZOrde
 /**
  * Copies of the ids' elements with fresh ids, offset by `offset`, placed
  * above the topmost original in the originals' order. Copies drop their
- * layout placeholder role: a slide has one title.
+ * layout placeholder role: a slide has one title. A group's children are
+ * copied with it.
  */
 export function duplicate(elements: Element[], ids: ReadonlySet<string>, newId: () => string, offset = 40): { elements: Element[]; ids: string[] } {
   const src = elements.filter((e) => ids.has(e.id));
   if (!src.length) return { elements, ids: [] };
-  const copies = src.map((e) => ({ ...structuredClone(e), id: newId(), frame: { ...e.frame, x: e.frame.x + offset, y: e.frame.y + offset }, placeholder: undefined }) as Element);
+  const moved = <T extends Element>(e: T): T => ({ ...structuredClone(e), id: newId(), frame: { ...e.frame, x: e.frame.x + offset, y: e.frame.y + offset }, placeholder: undefined });
+  // A group's copy gets fresh ids for its children too: ids are unique across the slide.
+  const copies = src.map((e) => (e.type === "group" ? { ...moved(e), elements: e.elements.map(moved) } : moved(e)));
   const top = elements.reduce((at, e, i) => (ids.has(e.id) ? i : at), -1);
   return { elements: [...elements.slice(0, top + 1), ...copies, ...elements.slice(top + 1)], ids: copies.map((c) => c.id) };
 }

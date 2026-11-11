@@ -8,7 +8,9 @@
  */
 import { FAMILY, OFFICE, SLOTS, STYLES, fontUrl, measure } from "./fonts";
 import { BULLET_INDENT, INSET, STRIKE, imageSource, layoutSlide, lineHeight } from "./layout";
-import { resolveColor, slotOf, textOf, type Deck, type Paragraph, type TextBox } from "./schema";
+import { flatten } from "./group";
+import { wrapGroups, type PptxGroup } from "./pptx-groups";
+import { resolveColor, slotOf, textOf, type Deck, type LeafElement, type Paragraph, type TextBox } from "./schema";
 
 const K = 0.5; // slide units → points
 const IN = (u: number) => u / 144; // slide units → inches (1920 units = 13.333 in)
@@ -27,7 +29,7 @@ function base64(b: Uint8Array): string {
 
 /** Every image the shown slides use, fetched once. */
 async function images(deck: Deck, assetUrl: (id: string) => string) {
-  const used = new Set(deck.slides.filter((s) => !s.hidden).flatMap((s) => s.elements.flatMap((e) => (e.type === "image" && deck.assets[e.asset] ? [e.asset] : []))));
+  const used = new Set(deck.slides.filter((s) => !s.hidden).flatMap((s) => flatten(s.elements).flatMap((e) => (e.type === "image" && deck.assets[e.asset] ? [e.asset] : []))));
   const out = new Map<string, Uint8Array>();
   await Promise.all([...used].map(async (id) => out.set(id, await bytes(assetUrl(id)))));
   return out;
@@ -38,7 +40,7 @@ export type Progress = (done: number, total: number) => void;
 /** One 960 × 540 pt page per shown slide, text real and fonts embedded. */
 export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, progress?: Progress, signal?: AbortSignal): Promise<Blob> {
   const [{ jsPDF }, imgs] = await Promise.all([import("jspdf"), images(deck, assetUrl)]);
-  const usedSlots = new Set(deck.slides.flatMap((s) => s.elements.flatMap((e) => (textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs.map((r) => slotOf(deck.theme, r.font))))));
+  const usedSlots = new Set(deck.slides.flatMap((s) => flatten(s.elements).flatMap((e) => (textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs.map((r) => slotOf(deck.theme, r.font))))));
   const pdf = new jsPDF({ unit: "pt", format: [deck.size.w * K, deck.size.h * K], orientation: "landscape", compress: true });
   await Promise.all(
     SLOTS.filter((s) => usedSlots.has(s)).flatMap((slot) =>
@@ -160,7 +162,9 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
     slide.background = { color: color(s.background?.color, "background") };
     if (s.hidden) slide.hidden = true;
     if (s.notes) slide.addNotes(s.notes);
-    for (const e of s.elements) {
+    // A group's children are written in place and wrapped in a p:grpSp afterwards.
+    const leaves: LeafElement[] = s.elements.flatMap((e) => (e.type === "group" ? e.elements : [e]));
+    for (const e of leaves) {
       const f = { x: IN(e.frame.x), y: IN(e.frame.y), w: IN(e.frame.w), h: IN(e.frame.h), rotate: e.rotation ?? 0, objectName: e.id };
       const textOpts = (box: TextBox) => ({ margin: INSET * K, valign: box.valign ?? "top", fit: "none" as const, wrap: true });
       if (e.type === "text") slide.addText(runs(e), { ...f, ...textOpts(e) });
@@ -184,5 +188,16 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
       }
     }
   }
-  return (await pptx.write({ outputType: "blob" })) as Blob;
+  const groups = deck.slides.map((s): PptxGroup[] => s.elements.flatMap((e) => (e.type === "group" ? [{ id: e.id, frame: e.frame, children: e.elements.map((c) => c.id) }] : [])));
+  if (!groups.some((g) => g.length)) return (await pptx.write({ outputType: "blob" })) as Blob;
+  const [{ default: JSZip }, buf] = await Promise.all([import("jszip"), pptx.write({ outputType: "arraybuffer" }) as Promise<ArrayBuffer>]);
+  const zip = await JSZip.loadAsync(buf);
+  await Promise.all(
+    groups.map(async (g, i) => {
+      const name = `ppt/slides/slide${i + 1}.xml`;
+      const xml = g.length && (await zip.file(name)?.async("string"));
+      if (xml) zip.file(name, wrapGroups(xml, g));
+    }),
+  );
+  return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", compression: "DEFLATE" });
 }
