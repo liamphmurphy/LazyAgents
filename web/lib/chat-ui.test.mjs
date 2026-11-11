@@ -145,6 +145,13 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "some.other_tool", input: {} }, "connector"],
     [{ tool: "", input: undefined }, "thinking"],
     [bash("python3 scripts/migrate.py"), "terminal"],
+    [{ tool: "mcp__lazyagents__get_epic", input: {} }, "ticket-lookup"],
+    [{ tool: "update_epic", input: {} }, "tickets"],
+    [{ tool: "update_ticket_blockers", input: {} }, "tickets"],
+    [{ tool: "reply_to_run", input: { text: "secret" } }, "runs"],
+    [{ tool: "mcp__lazyagents__propose_connector", input: {} }, "connector"],
+    [{ tool: "propose_secret", input: {} }, "secret"],
+    [{ tool: "set_playground_openapi", input: {} }, "playground"],
   ];
   for (const [call, want] of cases) assert.equal(chatStatusOf(call).kind, want, call.tool);
 });

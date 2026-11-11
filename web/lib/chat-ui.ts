@@ -348,15 +348,22 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "get_ticket":
     case "list_epics":
       return status("ticket-lookup", "checking tickets");
+    case "get_epic":
+      return status("ticket-lookup", "checking an epic");
     case "create_ticket":
     case "create_epic":
       return status("tickets", "drafting a ticket");
     case "update_ticket":
     case "comment_ticket":
+    case "update_ticket_blockers":
       return status("tickets", "updating a ticket");
+    case "update_epic":
+      return status("tickets", "updating an epic");
     case "list_runs":
     case "get_run":
       return status("runs", "checking on runs");
+    case "reply_to_run":
+      return status("runs", "replying to a run");
     case "search_memory":
     case "read_memory":
       return status("memory", "recalling what it knows about you");
@@ -408,6 +415,12 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("playground", "checking on the playground");
     case "stop_playground":
       return status("playground", "stopping the playground");
+    case "set_playground_openapi":
+      return status("playground", "mapping the playground's API");
+    case "propose_connector":
+      return status("connector", "suggesting a connector");
+    case "propose_secret":
+      return status("secret", "asking for a secret");
     case "list_workflows":
     case "read_workflow":
       return status("workflow", "looking over a workflow");
