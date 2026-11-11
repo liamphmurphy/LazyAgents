@@ -52,7 +52,7 @@ type Op struct {
 	ID       string            `json:"id,omitempty" jsonschema:"Deck: the slide or element id the op acts on"`
 	After    string            `json:"after,omitempty" jsonschema:"Deck insert_slide, move_slide, insert_element: the id to place it after; omit to put a slide first or an element on top"`
 	Slide    string            `json:"slide,omitempty" jsonschema:"Deck insert_element: the slide id to add the element to"`
-	Value    map[string]any    `json:"value,omitempty" jsonschema:"Deck: the slide (insert_slide), element (insert_element), fields to set (set_slide, set_element, set_theme) or {preset: light|dark|paper|contrast} for set_theme. Omit ids on new things; the server assigns them"`
+	Value    map[string]any    `json:"value,omitempty" jsonschema:"Deck: the slide (insert_slide), element (insert_element), fields to set (set_slide, set_element, set_theme) or {preset: name} for set_theme, naming a built-in theme (light, dark, paper, contrast, dusk, ocean, forest, sunset, mono, blueprint) or one the person saved. set_element also takes {style: filled-accent|filled-accent2|outline-accent|subtle|emphasis|ghost} to apply a theme-colour style preset to a shape or line. Omit ids on new things; the server assigns them"`
 }
 
 func normalize(kind, body string) (string, error) {

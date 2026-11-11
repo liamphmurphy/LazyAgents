@@ -2,7 +2,8 @@
  * Reviewing a persona's changes to a deck, and merging concurrent edits.
  * Both work per slide, keyed by stable ids (ADR §3.6–3.7).
  */
-import { slideTitle, textOf, type Deck, type Element, type Slide } from "./schema";
+import { flatten } from "./group.ts";
+import { slideTitle, textOf, type Deck, type Element, type GroupElement, type Slide } from "./schema.ts";
 
 /**
  * A value in the server's canonical form for comparing: keys sorted, unset
@@ -11,10 +12,11 @@ import { slideTitle, textOf, type Deck, type Element, type Slide } from "./schem
  * server normalises what it stores, so comparing raw JSON would see changes
  * that aren't there.
  */
-const COLOR_KEYS = new Set(["color", "fill", "stroke"]);
+const COLOR_KEYS = new Set(["color", "fill", "stroke", "highlight", "stops"]);
+const OPACITY_KEYS = new Set(["fillOpacity", "strokeOpacity", "opacity"]);
 
 function canon(v: unknown, colour = false): unknown {
-  if (Array.isArray(v)) return v.map((x) => canon(x));
+  if (Array.isArray(v)) return v.map((x) => canon(x, colour));
   if (typeof v === "number") return Math.round(v * 100) / 100;
   // Only colour fields are upper-cased: run text that looks like "#abcdef" is content.
   if (typeof v === "string") return colour && /^#[0-9a-f]{6}$/i.test(v) ? v.toUpperCase() : v;
@@ -26,6 +28,13 @@ function canon(v: unknown, colour = false): unknown {
       if (x === undefined || x === null || x === false || x === "") continue;
       if (k === "align" && x === "left") continue;
       if ((k === "level" || k === "spaceBefore" || k === "rotation" || k === "strokeWidth" || k === "radius") && x === 0) continue;
+      if (OPACITY_KEYS.has(k) && x === 1) continue;
+      if (k === "dash" && x === "solid") continue;
+      if (k === "angle" && x === 360) {
+        out[k] = 0;
+        continue;
+      }
+      if (k === "lineSpacing" && (x === 0 || x === 1)) continue;
       if (k === "crop" && x && typeof x === "object" && Object.values(x).every((n) => n === 0)) continue;
       out[k] = canon(x, COLOR_KEYS.has(k) || (k !== "text" && colourMap(o)));
     }
@@ -60,9 +69,13 @@ export type Decision = "accept" | "reject";
 
 const quote = (s: string) => (s.length > 60 ? `“${s.slice(0, 60)}…”` : `“${s}”`);
 const plain = (e: Element) => (textOf(e)?.paragraphs ?? []).map((p) => p.runs.map((r) => r.text).join("")).join(" / ");
-const kindName = (e: Element) => (e.type === "text" ? (e.placeholder ? `${e.placeholder} text` : "text box") : e.type === "shape" ? "shape" : e.type);
+const kindName = (e: Element) => (e.type === "text" ? (e.placeholder ? `${e.placeholder} text` : "text box") : e.type);
 
-/** What changed inside one slide, in words, with the elements to outline. */
+/** A group as compared on its own: its members' ids (their content is compared separately); its frame follows them. */
+const shell = (g: GroupElement) => ({ id: g.id, type: g.type, elements: g.elements.map((c) => c.id) });
+const leaves = (s: Slide) => s.elements.flatMap((e) => (e.type === "group" ? e.elements : [e]));
+
+/** What changed inside one slide, in words, with the elements to outline. Elements inside groups are compared one by one. */
 function slideDiff(a: Slide, b: Slide) {
   const details: string[] = [];
   const marksBefore: Record<string, Mark> = {};
@@ -71,26 +84,49 @@ function slideDiff(a: Slide, b: Slide) {
   if (!same(a.background, b.background)) details.push("Background colour changed");
   if ((a.notes ?? "") !== (b.notes ?? "")) details.push("Speaker notes changed");
   if (!!a.hidden !== !!b.hidden) details.push(b.hidden ? "Hidden in the presentation" : "Shown in the presentation");
-  const before = new Map(a.elements.map((e) => [e.id, e]));
-  const after = new Map(b.elements.map((e) => [e.id, e]));
-  for (const e of b.elements) {
+  const before = new Map(flatten(a.elements).map((e) => [e.id, e]));
+  const after = new Map(flatten(b.elements).map((e) => [e.id, e]));
+  const inGroup = (s: Slide) => new Map(s.elements.flatMap((g) => (g.type === "group" ? g.elements.map((c) => [c.id, g.id] as const) : [])));
+  const groupA = inGroup(a), groupB = inGroup(b);
+  for (const e of after.values()) {
     const old = before.get(e.id);
+    if (e.type === "group") {
+      const n = e.elements.length;
+      if (!old) {
+        const regrouped = e.elements.filter((c) => before.has(c.id)).length;
+        details.push(regrouped === n ? `Grouped ${n} elements` : `Added a group of ${n} elements`);
+        marksAfter[e.id] = "added";
+      } else if (old.type === "group" && !same(shell(old), shell(e))) {
+        marksBefore[e.id] = "changed";
+        marksAfter[e.id] = "changed";
+        details.push(`Changed which elements are in a group (now ${n})`);
+      }
+      continue;
+    }
+    const where = groupB.has(e.id) ? " in a group" : "";
     if (!old) {
-      details.push(`Added ${kindName(e)}${plain(e) ? ` ${quote(plain(e))}` : ""}`);
+      details.push(`Added ${kindName(e)}${where}${plain(e) ? ` ${quote(plain(e))}` : ""}`);
       marksAfter[e.id] = "added";
     } else if (!same(old, e)) {
       marksBefore[e.id] = "changed";
       marksAfter[e.id] = "changed";
-      if (plain(old) !== plain(e)) details.push(`${kindName(e)[0].toUpperCase()}${kindName(e).slice(1)}: ${quote(plain(old))} → ${quote(plain(e))}`);
-      else if (!same(old.frame, e.frame) || old.rotation !== e.rotation) details.push(`Moved or resized ${kindName(e)}`);
-      else details.push(`Restyled ${kindName(e)}`);
+      const k = `${kindName(e)}${where}`;
+      if (plain(old) !== plain(e)) details.push(`${k[0].toUpperCase()}${k.slice(1)}: ${quote(plain(old))} → ${quote(plain(e))}`);
+      else if (!same(old.frame, e.frame) || old.rotation !== e.rotation) details.push(`Moved or resized ${k}`);
+      else details.push(`Restyled ${k}`);
     }
   }
-  for (const e of a.elements)
+  for (const e of before.values())
     if (!after.has(e.id)) {
-      details.push(`Removed ${kindName(e)}${plain(e) ? ` ${quote(plain(e))}` : ""}`);
+      if (e.type === "group") {
+        const freed = e.elements.filter((c) => after.has(c.id)).length;
+        details.push(freed === e.elements.length ? `Ungrouped ${freed} elements` : `Removed a group of ${e.elements.length} elements`);
+      } else details.push(`Removed ${kindName(e)}${groupA.has(e.id) ? " from a group" : ""}${plain(e) ? ` ${quote(plain(e))}` : ""}`);
       marksBefore[e.id] = "removed";
     }
+  // Stacking order is the elements' order: say so when the kept ones were reordered.
+  const kept = (s: Slide, other: Map<string, Element>) => leaves(s).filter((e) => other.has(e.id)).map((e) => e.id).join();
+  if (kept(a, after) !== kept(b, before)) details.push("Changed the stacking order of elements");
   return { details, marksBefore, marksAfter };
 }
 

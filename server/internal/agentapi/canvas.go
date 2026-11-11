@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -11,6 +13,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/canvas"
+	"github.com/liamphmurphy/vesper/server/internal/deck"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -87,6 +90,11 @@ func canvasPatch(ctx context.Context, d Deps, c agents.Caller, in CanvasPatchIn)
 	}
 	if cv.Kind == canvas.KindSVG {
 		if err := requireSVG(ctx, d, c, s); err != nil {
+			return nil, err
+		}
+	}
+	if cv.Kind == canvas.KindDeck {
+		if err := resolveSavedThemes(ctx, d, s.ChatID, in.Ops); err != nil {
 			return nil, err
 		}
 	}
@@ -205,4 +213,45 @@ func canvasThreads(ctx context.Context, d Deps, id uuid.UUID) ([]map[string]any,
 		out = append(out, map[string]any{"comment_id": r.ID, "parent_id": r.ParentID, "from": r.AuthorType, "body": r.Body, "status": r.Status, "anchor": json.RawMessage(r.Anchor), "target_lost": r.TargetLost})
 	}
 	return out, nil
+}
+
+// resolveSavedThemes turns set_theme {preset: name} ops naming one of the chat
+// owner's saved themes (not a built-in one) into the theme itself, so the deck
+// gets its own copy.
+func resolveSavedThemes(ctx context.Context, d Deps, chat uuid.UUID, ops []canvas.Op) error {
+	var saved []store.DeckTheme
+	loaded := false
+	for i, op := range ops {
+		name, ok := op.Value["preset"].(string)
+		if op.Op != "set_theme" || !ok || len(op.Value) != 1 {
+			continue
+		}
+		if _, builtin := deck.Themes[strings.ToLower(strings.TrimSpace(name))]; builtin {
+			continue
+		}
+		if !loaded {
+			var err error
+			if saved, err = d.Q.ChatOwnerDeckThemes(ctx, chat); err != nil {
+				return err
+			}
+			loaded = true
+		}
+		names := slices.Clone(deck.ThemeOrder)
+		found := false
+		for _, t := range saved {
+			names = append(names, t.Name)
+			if !found && strings.EqualFold(strings.TrimSpace(t.Name), strings.TrimSpace(name)) {
+				th, err := deck.SavedTheme(t.Name, t.Fonts, t.Colors)
+				if err != nil {
+					return err
+				}
+				ops[i].Value = map[string]any{"name": th.Name, "fonts": th.Fonts, "colors": th.Colors}
+				found = true
+			}
+		}
+		if !found {
+			return apperr.Invalid("body", "op %d: no theme named %q; use one of: %s", i+1, name, strings.Join(names, ", "))
+		}
+	}
+	return nil
 }

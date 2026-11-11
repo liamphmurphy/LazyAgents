@@ -1,0 +1,240 @@
+{
+  "slides": [
+    {
+      "n": 1,
+      "id": "s_title",
+      "editor_vs_pdf": {
+        "mean": 0.5,
+        "over64": 0.0031
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 1.81,
+        "over64": 0.0097
+      }
+    },
+    {
+      "n": 2,
+      "id": "s_bullets",
+      "editor_vs_pdf": {
+        "mean": 2.27,
+        "over64": 0.0142
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 8.12,
+        "over64": 0.0441
+      }
+    },
+    {
+      "n": 3,
+      "id": "s_image",
+      "editor_vs_pdf": {
+        "mean": 1.31,
+        "over64": 0.008
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 4.52,
+        "over64": 0.024
+      }
+    },
+    {
+      "n": 4,
+      "id": "s_shapes",
+      "editor_vs_pdf": {
+        "mean": 1.09,
+        "over64": 0.0064
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 2.25,
+        "over64": 0.0121
+      }
+    },
+    {
+      "n": 5,
+      "id": "s_section",
+      "editor_vs_pdf": {
+        "mean": 0.3,
+        "over64": 0.002
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 2.02,
+        "over64": 0.0099
+      }
+    },
+    {
+      "n": 6,
+      "id": "s_controls",
+      "editor_vs_pdf": {
+        "mean": 0.74,
+        "over64": 0.0041
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 1.3,
+        "over64": 0.0072
+      }
+    },
+    {
+      "n": 7,
+      "id": "s_text",
+      "editor_vs_pdf": {
+        "mean": 1.99,
+        "over64": 0.0127
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 7.98,
+        "over64": 0.0427
+      }
+    },
+    {
+      "n": 8,
+      "id": "s_quote",
+      "editor_vs_pdf": {
+        "mean": 0.69,
+        "over64": 0.0043
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 2.65,
+        "over64": 0.0135
+      }
+    },
+    {
+      "n": 9,
+      "id": "s_number",
+      "editor_vs_pdf": {
+        "mean": 0.2,
+        "over64": 0.0011
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 2.33,
+        "over64": 0.0161
+      }
+    },
+    {
+      "n": 10,
+      "id": "s_three",
+      "editor_vs_pdf": {
+        "mean": 0.53,
+        "over64": 0.003
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 2.2,
+        "over64": 0.0113
+      }
+    },
+    {
+      "n": 11,
+      "id": "s_compare",
+      "editor_vs_pdf": {
+        "mean": 0.74,
+        "over64": 0.0044
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 2.52,
+        "over64": 0.0133
+      }
+    },
+    {
+      "n": 12,
+      "id": "s_fullimage",
+      "editor_vs_pdf": {
+        "mean": 0.46,
+        "over64": 0.0025
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 1.65,
+        "over64": 0.0102
+      }
+    },
+    {
+      "n": 13,
+      "id": "s_imageleft",
+      "editor_vs_pdf": {
+        "mean": 0.46,
+        "over64": 0.0027
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 1.33,
+        "over64": 0.007
+      }
+    },
+    {
+      "n": 14,
+      "id": "s_agenda",
+      "editor_vs_pdf": {
+        "mean": 0.42,
+        "over64": 0.0025
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 1.5,
+        "over64": 0.0078
+      }
+    },
+    {
+      "n": 15,
+      "id": "s_closing",
+      "editor_vs_pdf": {
+        "mean": 0.44,
+        "over64": 0.0028
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 1.42,
+        "over64": 0.0076
+      }
+    },
+    {
+      "n": 16,
+      "id": "s_preset_shapes",
+      "editor_vs_pdf": {
+        "mean": 0.73,
+        "over64": 0.0022
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 2.26,
+        "over64": 0.0117
+      }
+    },
+    {
+      "n": 17,
+      "id": "s_styles",
+      "editor_vs_pdf": {
+        "mean": 1.36,
+        "over64": 0.0065
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 2.54,
+        "over64": 0.0132
+      }
+    },
+    {
+      "n": 18,
+      "id": "s_group",
+      "editor_vs_pdf": {
+        "mean": 0.53,
+        "over64": 0.003
+      },
+      "pdf_vs_libreoffice": {
+        "mean": 1.58,
+        "over64": 0.0081
+      }
+    }
+  ],
+  "libreoffice": "LibreOffice 7.4.7.2 40(Build:2)",
+  "lo_convert_pdf": {
+    "exit": 0,
+    "pages": 18
+  },
+  "lo_roundtrip": {
+    "exit": 0,
+    "reopen_exit": 0,
+    "pages": 18
+  },
+  "app_pdf_pages": 18,
+  "pptx_counts": {
+    "elements": 83,
+    "groups": 2,
+    "presets": 19,
+    "gradients": 3,
+    "transparent": 3,
+    "dashed": 5
+  },
+  "failures": []
+}

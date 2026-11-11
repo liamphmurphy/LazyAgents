@@ -6,14 +6,19 @@ import { ApiError, api, unwrap } from "@/lib/api/client";
 import { useCanvasActions, useChatCanvas } from "@/lib/api/canvas-hooks";
 import { useMarkDocReviewed } from "@/lib/api/docs-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
-import { uploadDeckAsset, useDeckRef } from "@/lib/api/slides-hooks";
+import { uploadDeckAsset, useCreateSlideTheme, useDeckRef, useDeleteSlideTheme, useSlideThemes, useUpdateSlideTheme } from "@/lib/api/slides-hooks";
 import { cx } from "@/lib/cx";
 import { reviewBase } from "@/lib/doc-review";
+import { align, distribute, duplicate, reorder, unionBox, type AlignOp, type ZOrder } from "@/lib/slides/arrange";
+import { pushRecent, shiftLevel, toggleArrow, withRadius, withStrokeWidth } from "@/lib/slides/edit";
 import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
 import { mergeDecks, same } from "@/lib/slides/review";
-import { THEMES, encodeDeck, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { outlinePrompt } from "@/lib/slides/outline";
+import { H, THEMES, W, encodeDeck, isImageSlot, type Theme, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Layout, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { applyStyle } from "@/lib/slides/styles";
+import { fit, flatten, groupElements, isGroup, mapDeep, removeDeep, scopeElements, ungroupElements, withFrame } from "@/lib/slides/group";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
@@ -22,7 +27,9 @@ import { DeckReview } from "./deck-review";
 import { ExportMenu } from "./export-menu";
 import { SlideCanvas } from "./slide-canvas";
 import type { TextEditorHandle } from "./text-editor";
+import { ThemeEditor, type ThemeEditTarget } from "./theme-editor";
 import { Thumbnails } from "./thumbnails";
+import type { StylePatch } from "./style-menus";
 import { Toolbar, type TextFormat, type ToolbarActions } from "./toolbar";
 
 type SaveState = "saved" | "unsaved" | "saving" | "conflict" | "error";
@@ -49,19 +56,37 @@ async function prepareImage(file: File): Promise<Blob> {
 
 const mapRuns = (paragraphs: Paragraph[], fn: (r: Paragraph["runs"][number]) => Paragraph["runs"][number]) => paragraphs.map((p) => ({ ...p, runs: p.runs.map(fn) }));
 
-/** Applies a text format to every run (or paragraph) of an element's text. */
-function formatElement(e: Element, f: TextFormat): Element {
+/**
+ * Applies a text format to every run (or paragraph) of an element's text. A
+ * mark is set to `markOn`, or toggled from the first run's when it's unset.
+ */
+function formatElement(e: Element, f: TextFormat, markOn?: boolean): Element {
   const box = textOf(e);
   if (!box) return e;
   const first = box.paragraphs[0]?.runs[0];
   let paragraphs = box.paragraphs;
-  if (f.kind === "mark") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, [f.mark]: !first?.[f.mark] || undefined }));
+  if (f.kind === "mark") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, [f.mark]: (markOn ?? !first?.[f.mark]) || undefined }));
   if (f.kind === "size") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, size: f.size }));
   if (f.kind === "font") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, font: f.font }));
   if (f.kind === "color") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, color: f.color }));
+  if (f.kind === "highlight") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, highlight: f.highlight }));
+  if (f.kind === "lineSpacing") paragraphs = paragraphs.map((p) => ({ ...p, lineSpacing: f.lineSpacing === 1 ? undefined : f.lineSpacing }));
   if (f.kind === "align") paragraphs = paragraphs.map((p) => ({ ...p, align: f.align === "left" ? undefined : f.align }));
   if (f.kind === "bullet") paragraphs = paragraphs.map((p) => (f.bullet ? { ...p, bullet: f.bullet, level: p.level ?? 0 } : { ...p, bullet: undefined, level: undefined }));
-  return withText(e, paragraphs);
+  if (f.kind === "indent") paragraphs = shiftLevel(paragraphs, f.delta);
+  return paragraphs === box.paragraphs ? e : withText(e, paragraphs);
+}
+
+/** Sets the style fields that apply to an element's type; undefined clears one. */
+function withStyle(e: Element, patch: StylePatch): Element {
+  const allowed: (keyof StylePatch)[] = e.type === "shape" ? ["fill", "fillOpacity", "strokeOpacity", "dash"] : e.type === "line" ? ["strokeOpacity", "dash"] : e.type === "image" ? ["opacity"] : [];
+  const next: Record<string, unknown> = { ...e };
+  for (const k of allowed) {
+    if (!(k in patch)) continue;
+    if (patch[k] === undefined) delete next[k];
+    else next[k] = patch[k];
+  }
+  return next as Element;
 }
 
 function withText(e: Element, paragraphs: Paragraph[]): Element {
@@ -95,6 +120,29 @@ export function DeckScreen({ id }: { id: string }) {
   const send = useSendChatMessage(chatId);
   const assetUrl = useCallback((a: string) => assetHref(id, a), [id]);
   const [chatOpen, setChatOpen] = useState(true);
+  // Custom colours used in this deck, newest first: editor state, kept per deck in this browser.
+  const recentKey = `slides.recentColors.${id}`;
+  const [recentColors, setRecentColors] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(recentKey) ?? "[]");
+      // Reading browser storage once the page is in the browser.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (Array.isArray(v)) setRecentColors(v.filter((c) => typeof c === "string").reduceRight<string[]>((r, c) => pushRecent(r, c), []));
+    } catch {
+      // Unreadable storage only loses the recent colours.
+    }
+  }, [recentKey]);
+  const rememberColor = (c: string) =>
+    setRecentColors((r) => {
+      const next = pushRecent(r, c);
+      try {
+        localStorage.setItem(recentKey, JSON.stringify(next));
+      } catch {
+        // Storage full or blocked: the colours stay for this visit.
+      }
+      return next;
+    });
 
   // ---- The working copy, what was last saved, and history.
   const [deck, setDeckState] = useState<Deck | null>(null);
@@ -288,11 +336,20 @@ export function DeckScreen({ id }: { id: string }) {
   const [slideId, setSlideId] = useState<string>();
   // Back from presenting (or a link) at ?slide=N opens that slide.
   const startAt = Number(search.get("slide") ?? 0);
-  const [selected, setSelected] = useState<string>();
+  const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string>();
+  /** The group whose elements are being edited (entered by double-clicking it), if any. */
+  const [entered, setScope] = useState<string>();
   const editorRef = useRef<TextEditorHandle | null>(null);
   const slide = deck?.slides.find((s) => s.id === slideId) ?? deck?.slides[Math.max(0, Math.min(deck.slides.length - 1, startAt - 1))];
-  const selectedEl = slide?.elements.find((e) => e.id === selected);
+  // The selection in stacking order; ids no longer on the slide (after an undo) drop out.
+  // Out of a group once it's gone (ungrouped, undone, another slide).
+  const scope = entered && slide?.elements.some((e) => e.id === entered && isGroup(e)) ? entered : undefined;
+  // Inside an entered group, the selection is among its elements.
+  const scoped = useMemo(() => (slide ? scopeElements(slide.elements, scope) : []), [slide, scope]);
+  const selection = useMemo(() => scoped.filter((e) => selected.includes(e.id)), [scoped, selected]);
+  const selectedEl = selection.length === 1 ? selection[0] : undefined;
+  const selIds = new Set(selection.map((e) => e.id));
   const readOnly = live || archived || reviewing || !!conflict;
   // For async work (uploads) that finishes after later renders.
   const readOnlyRef = useRef(readOnly);
@@ -342,25 +399,120 @@ export function DeckScreen({ id }: { id: string }) {
     syncHist();
   };
   const mapSlide = (sid: string, fn: (s: Slide) => Slide) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => (s.id === sid ? fn(s) : s)) });
-  const mapElement = (eid: string, fn: (e: Element) => Element) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: s.elements.map((e) => (e.id === eid ? fn(e) : e)) })) });
+  const mapElement = (eid: string, fn: (e: Element) => Element) => mapElements(new Set([eid]), fn);
+  /** fn on the elements with the ids, inside groups too (their boxes refit). */
+  const mapElements = (ids: ReadonlySet<string>, fn: (e: Element) => Element) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: mapDeep(s.elements, ids, fn) })) });
+  /** fn on the list the selection lives in: the slide's elements, or the entered group's. */
+  const mapScope = (s: Slide, fn: (els: Element[]) => Element[]): Slide => {
+    const g = scope ? s.elements.find((e) => e.id === scope) : undefined;
+    if (!g || !isGroup(g)) return { ...s, elements: fn(s.elements) };
+    const kids = fn(g.elements);
+    return kids === g.elements ? s : { ...s, elements: s.elements.map((e) => (e === g ? fit({ ...g, elements: kids as typeof g.elements }) : e)) };
+  };
+  /** A change to every selected element; a selected group's elements take it instead. */
+  const deep = (fn: (e: Element) => Element) => (e: Element): Element => {
+    if (!isGroup(e)) return fn(e);
+    const kids = e.elements.map((c) => fn(c) as typeof c);
+    return kids.every((c, i) => c === e.elements[i]) ? e : fit({ ...e, elements: kids });
+  };
   const addElement = (e: Element, edit = false) => {
     if (!slide) return;
+    setScope(undefined);
     update(mapSlide(slide.id, (s) => ({ ...s, elements: [...s.elements, e] })));
-    setSelected(e.id);
+    setSelected([e.id]);
     if (edit) setEditing(e.id);
   };
   const removeSelected = () => {
-    if (!slide || !selected) return;
-    update(mapSlide(slide.id, (s) => ({ ...s, elements: s.elements.filter((e) => e.id !== selected) })));
-    setSelected(undefined);
+    if (!slide || !selIds.size) return;
+    update(mapSlide(slide.id, (s) => ({ ...s, elements: removeDeep(s.elements, selIds) })));
+    setSelected([]);
   };
 
+  // ---- Arranging the selection: each is one undo step.
+  const arrange = {
+    order: (op: ZOrder) => {
+      if (!slide || !selIds.size) return;
+      // reorder returns the same array when nothing moves, which update skips.
+      update((d) => {
+        const s = d.slides.find((x) => x.id === slide.id);
+        if (!s) return d;
+        const next = mapScope(s, (els) => reorder(els, selIds, op));
+        return next === s || next.elements === s.elements ? d : mapSlide(slide.id, () => next)(d);
+      });
+    },
+    duplicate: () => {
+      if (!slide || !selIds.size) return;
+      let ids: string[] = [];
+      update(mapSlide(slide.id, (s) => mapScope(s, (els) => {
+        const r = duplicate(els, selIds, () => newId("e"));
+        ids = r.ids;
+        return r.elements;
+      })));
+      setSelected(ids);
+    },
+    /** The selected elements as one group, at the topmost one's place. */
+    group: () => {
+      if (!slide || scope || selection.length < 2) return;
+      const r = groupElements(slide.elements, selIds, () => newId("e"));
+      if (!r) return;
+      update(mapSlide(slide.id, (s) => ({ ...s, elements: r.elements })));
+      setSelected([r.id]);
+    },
+    /** The selected groups back into their elements, which stay selected. */
+    ungroup: () => {
+      if (!slide || scope || !selection.some(isGroup)) return;
+      const r = ungroupElements(slide.elements, selIds);
+      update(mapSlide(slide.id, (s) => ({ ...s, elements: r.elements })));
+      setSelected([...selection.filter((e) => !isGroup(e)).map((e) => e.id), ...r.ids]);
+    },
+    /** To the selection's box, or to the slide when one element is selected. */
+    align: (op: AlignOp) => {
+      if (!selection.length) return;
+      const to = selection.length === 1 ? { l: 0, t: 0, r: W, b: H } : unionBox(selection.map((e) => e.frame))!;
+      setFrames(align(Object.fromEntries(selection.map((e) => [e.id, e.frame])), op, to));
+    },
+    distribute: (axis: "x" | "y") => {
+      if (selection.length >= 3) setFrames(distribute(Object.fromEntries(selection.map((e) => [e.id, e.frame])), axis));
+    },
+  };
+  /** Changes each selected element as one undo step; none when nothing actually changes. */
+  /** key coalesces repeated edits (a slider's drag) into one undo step. */
+  const editSelection = (fn: (e: Element) => Element, key?: string) => {
+    if (!selection.length) return;
+    const changed = new Map(selection.map((e) => [e.id, deep(fn)(e)] as const).filter(([, n], i) => JSON.stringify(n) !== JSON.stringify(selection[i])));
+    if (changed.size) update(mapElements(new Set(changed.keys()), (e) => changed.get(e.id) ?? e), key && `${selection.map((e) => e.id).join(",")}:${key}`);
+  };
+  /** Sets several frames at once, leaving the deck untouched (no undo step) when nothing moves. */
+  const setFrames = (frames: Record<string, { x: number; y: number; w: number; h: number }>, key?: string) =>
+    update((d) => {
+      const moved = (e: Element) => frames[e.id] && JSON.stringify(frames[e.id]) !== JSON.stringify(e.frame);
+      if (!flatten(slide?.elements ?? []).some(moved)) return d;
+      return mapElements(new Set(Object.keys(frames)), (e) => withFrame(e, frames[e.id]))(d);
+    }, key);
+
   const fileInput = useRef<HTMLInputElement>(null);
+  // The image placeholder the next picked file fills, if any.
+  const fillTarget = useRef<string | undefined>(undefined);
+  const fillImage = (eid: string) => {
+    if (readOnly) return;
+    fillTarget.current = eid;
+    fileInput.current?.click();
+  };
   const [notice, setNotice] = useState<string>();
+  // ---- Themes: the person's saved ones, and the editor.
+  const savedThemes = useSlideThemes().data;
+  const createTheme = useCreateSlideTheme();
+  const updateTheme = useUpdateSlideTheme();
+  const deleteTheme = useDeleteSlideTheme();
+  const [themeEdit, setThemeEdit] = useState<{ start: Theme; target: ThemeEditTarget } | null>(null);
+  const [themeError, setThemeError] = useState<string>();
+  const themeBody = (t: Theme) => ({ name: t.name, fonts: t.fonts, colors: t.colors });
   const [uploading, setUploading] = useState(false);
   const onImage = async (file: File) => {
     // The slide it was added on, even if the person moves on while it uploads.
     const target = slide?.id;
+    const slot = fillTarget.current;
+    fillTarget.current = undefined;
     if (!target) return;
     setNotice(undefined);
     setUploading(true);
@@ -373,8 +525,16 @@ export function DeckScreen({ id }: { id: string }) {
       const el: Element = { id: newId("e"), type: "image", asset: a.id, frame: { x: Math.round((1920 - w) / 2), y: Math.round((1080 - h) / 2), w, h }, alt: file.name.replace(/\.[a-z0-9]+$/i, "") };
       // Read now, not from when the upload started.
       if (readOnlyRef.current) throw new Error("the deck became read-only while uploading; add it again once you can edit");
-      update((d) => mapSlide(target, (s) => ({ ...s, elements: [...s.elements, el] }))({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
-      if (slideIdRef.current === target) setSelected(el.id);
+      // Filling a placeholder: the image takes its frame and role (the
+      // renderers centre-crop it to cover) and its place in paint order.
+      const place = (els: Element[]) => {
+        const i = slot ? els.findIndex((x) => x.id === slot && isImageSlot(x)) : -1;
+        if (i < 0) return [...els, el];
+        Object.assign(el, { frame: els[i].frame, placeholder: "image" });
+        return els.map((x, k) => (k === i ? el : x));
+      };
+      update((d) => mapSlide(target, (s) => ({ ...s, elements: place(s.elements) }))({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
+      if (slideIdRef.current === target) setSelected([el.id]);
     } catch (e) {
       setNotice(`Couldn't add ${file.name}: ${errorText(e)}`);
     } finally {
@@ -390,26 +550,68 @@ export function DeckScreen({ id }: { id: string }) {
     insertText: () => addElement({ id: newId("e"), type: "text", frame: { x: 560, y: 440, w: 800, h: 200 }, paragraphs: [{ runs: [{ text: "", size: 44, font: "body", color: "text" }] }] }, true),
     insertShape: (shape) =>
       addElement({ id: newId("e"), type: "shape", shape, frame: { x: 760, y: 390, w: 400, h: 300 }, fill: "accent", radius: shape === "roundRect" ? 32 : undefined, text: { valign: "middle", paragraphs: [{ align: "center", runs: [{ text: "", size: 40, color: "background", font: "body" }] }] } }),
-    insertImage: () => fileInput.current?.click(),
+    insertImage: () => {
+      fillTarget.current = undefined;
+      fileInput.current?.click();
+    },
     insertLine: () => addElement({ id: newId("e"), type: "line", frame: { x: 560, y: 540, w: 800, h: 0 }, stroke: "text", strokeWidth: 6 }),
     setLayout: (l) => slide && update(mapSlide(slide.id, (s) => relayout(s, l))),
-    setTheme: (k) => update((d) => ({ ...d, theme: structuredClone(THEMES[k]) })),
-    setBackground: (col) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined }))),
+    setTheme: (t) => update((d) => ({ ...d, theme: { name: t.name, fonts: { ...t.fonts }, colors: { ...t.colors } } })),
+    savedThemes: savedThemes ?? [],
+    customiseTheme: (savedId) => {
+      const saved = savedId ? savedThemes?.find((t) => t.id === savedId) : undefined;
+      if (savedId && !saved) return;
+      setThemeError(undefined);
+      setThemeEdit(saved ? { start: themeBody(saved), target: { kind: "saved", id: saved.id } } : deck ? { start: deck.theme, target: { kind: "deck" } } : null);
+    },
+    deleteSavedTheme: (tid) => {
+      const t = savedThemes?.find((x) => x.id === tid);
+      if (!t || !window.confirm(`Delete the theme “${t.name}”? Decks using it keep their copy.`)) return;
+      deleteTheme.mutate(tid, { onError: (e) => setNotice(`Couldn't delete ${t.name}: ${errorText(e)}`) });
+    },
+    setBackground: (col, key) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined })), key && `${slide.id}:${key}`),
     format: (f) => {
-      if (!selectedEl) return;
-      if (editing && editorRef.current) {
+      if (!selection.length) return;
+      if (editing && editorRef.current && selectedEl) {
         if (f.kind === "mark") return editorRef.current.format(f.mark);
         if (f.kind === "color") return editorRef.current.color(f.color);
+        if (f.kind === "highlight") return editorRef.current.highlight(f.highlight);
+        if (f.kind === "indent") return editorRef.current.indent(f.delta);
         const paragraphs = editorRef.current.read();
         setEditing(undefined);
         update(mapElement(selectedEl.id, (e) => formatElement(withText(e, paragraphs), f)));
         return;
       }
-      update(mapElement(selectedEl.id, (e) => formatElement(e, f)));
+      // A mark goes on everywhere unless every selected text already has it.
+      const texts = selection.flatMap((e) => (isGroup(e) ? e.elements : [e])).flatMap((e) => textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs);
+      const markOn = f.kind === "mark" ? !texts.every((r) => r[f.mark]) : undefined;
+      const fmt = deep((e) => formatElement(e, f, markOn));
+      if (selection.every((e) => fmt(e) === e)) return; // nothing to change: no undo step
+      update(mapElements(selIds, fmt));
     },
-    setFill: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, fill: col } : e))),
-    setStroke: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e))),
+    setFill: (col, key) => editSelection((e) => (e.type === "shape" ? { ...e, fill: col } : e), key),
+    setStyle: (patch, key) => editSelection((e) => withStyle(e, patch), key),
+    setStroke: (col) => editSelection((e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e)),
+    // One update, so the whole selection restyles as one undo step.
+    applyStyle: (sid) => editSelection((e) => applyStyle(e, sid)),
+    setStrokeWidth: (w) => editSelection((e) => withStrokeWidth(e, w)),
+    setRadius: (r) => editSelection((e) => withRadius(e, r)),
+    // Mixed lines all get the arrowhead (or, when every one has it, all lose it).
+    toggleArrow: (end) => {
+      const k = end === "start" ? "startArrow" : "endArrow";
+      const lines = selection.flatMap((e) => (isGroup(e) ? e.elements : [e])).filter((e) => e.type === "line");
+      const on = !lines.every((e) => e[k]);
+      editSelection((e) => (e.type === "line" && !!e[k] !== on ? toggleArrow(e, end) : e));
+    },
+    recentColors,
+    rememberColor,
     remove: removeSelected,
+    order: arrange.order,
+    duplicate: arrange.duplicate,
+    align: arrange.align,
+    distribute: arrange.distribute,
+    group: !scope && selection.length > 1 ? arrange.group : undefined,
+    ungroup: !scope && selection.some(isGroup) ? arrange.ungroup : undefined,
   };
 
   const present = async (from?: number) => {
@@ -439,44 +641,69 @@ export function DeckScreen({ id }: { id: string }) {
     return () => window.removeEventListener("keydown", onKey);
   });
   const onCanvasKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!selectedEl || editing || readOnly) {
-      if (e.key === "Escape") setSelected(undefined);
+    const t = e.target as HTMLElement;
+    if (editing || t.isContentEditable || t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === "a" && slide) {
+      e.preventDefault();
+      setSelected(scoped.map((x) => x.id));
       return;
     }
-    const step = e.shiftKey ? 40 : 8;
+    if (e.key === "Escape") {
+      // Out of an entered group first, with the group selected.
+      setSelected(scope ? [scope] : []);
+      setScope(undefined);
+      return;
+    }
+    if (!selection.length || readOnly) return;
+    const step = e.shiftKey ? 10 : 1;
     const nudge = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
-    if (nudge) {
+    // e.code, not e.key: with ⌥ held, ] and [ type other characters on a Mac.
+    const bracket = e.code === "BracketRight" ? "up" : e.code === "BracketLeft" ? "down" : undefined;
+    if (nudge && !mod) {
       e.preventDefault();
-      update(mapElement(selectedEl.id, (x) => ({ ...x, frame: { ...x.frame, x: x.frame.x + nudge[0], y: x.frame.y + nudge[1] } })), `nudge:${selectedEl.id}`);
+      setFrames(Object.fromEntries(selection.map((x) => [x.id, { ...x.frame, x: x.frame.x + nudge[0], y: x.frame.y + nudge[1] }])), `nudge:${[...selIds].join(",")}`);
     } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       removeSelected();
-    } else if (e.key === "Enter" && textOf(selectedEl)) {
+    } else if (e.key === "Enter" && selectedEl && isImageSlot(selectedEl)) {
+      e.preventDefault();
+      fillImage(selectedEl.id);
+    } else if (e.key === "Enter" && selectedEl && textOf(selectedEl)) {
       e.preventDefault();
       setEditing(selectedEl.id);
-    } else if (e.key === "Escape") setSelected(undefined);
-    else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+    } else if (mod && e.shiftKey && e.key.toLowerCase() === "x" && selection.some((x) => textOf(x))) {
       e.preventDefault();
-      const copy = { ...structuredClone(selectedEl), id: newId("e"), frame: { ...selectedEl.frame, x: selectedEl.frame.x + 40, y: selectedEl.frame.y + 40 }, placeholder: undefined };
-      addElement(copy);
+      tools.format({ kind: "mark", mark: "strike" });
+    } else if (mod && e.key.toLowerCase() === "g") {
+      e.preventDefault();
+      if (e.shiftKey) arrange.ungroup();
+      else arrange.group();
+    } else if (mod && e.key.toLowerCase() === "d") {
+      e.preventDefault();
+      arrange.duplicate();
+    } else if (mod && bracket) {
+      e.preventDefault();
+      arrange.order(bracket === "up" ? (e.altKey ? "front" : "forward") : e.altKey ? "back" : "backward");
     }
   };
 
   // ---- Slides.
-  const addSlide = () => {
+  const addSlide = (layout?: Layout) => {
     if (!slide) return;
-    const s = newSlide(slide.layout === "title" ? "title-body" : slide.layout);
+    const s = newSlide(layout ?? (slide.layout === "title" ? "title-body" : slide.layout));
     update((d) => {
       const i = d.slides.findIndex((x) => x.id === slide.id);
       return { ...d, slides: [...d.slides.slice(0, i + 1), s, ...d.slides.slice(i + 1)] };
     });
     setSlideId(s.id);
-    setSelected(undefined);
+    setSelected([]);
   };
   const duplicateSlide = (sid: string) => {
     const src = deckRef.current?.slides.find((s) => s.id === sid);
     if (!src) return;
-    const copy: Slide = { ...structuredClone(src), id: newId("s"), elements: src.elements.map((e) => ({ ...structuredClone(e), id: newId("e") })) };
+    const fresh = <T extends Element>(e: T): T => ({ ...structuredClone(e), id: newId("e") });
+    const copy: Slide = { ...structuredClone(src), id: newId("s"), elements: src.elements.map((e) => (isGroup(e) ? { ...fresh(e), elements: e.elements.map(fresh) } : fresh(e))) };
     update((d) => {
       const i = d.slides.findIndex((x) => x.id === sid);
       return { ...d, slides: [...d.slides.slice(0, i + 1), copy, ...d.slides.slice(i + 1)] };
@@ -497,19 +724,22 @@ export function DeckScreen({ id }: { id: string }) {
       return { ...d, slides: [...rest.slice(0, to), s, ...rest.slice(to)] };
     });
 
-  // A deck started from a description asks the persona to draft it, once.
+  // A deck started from a description or an outline asks the persona to draft it, once.
   const brief = search.get("brief");
+  const outline = search.get("outline");
   const briefSent = useRef(false);
   useEffect(() => {
-    if (!brief || !chatId || briefSent.current) return;
+    const ask = brief ? `Draft this deck: ${brief}` : outline ? outlinePrompt(outline) : "";
+    if (!ask || !chatId || briefSent.current) return;
     briefSent.current = true;
     router.replace(`/apps/slides/${id}`);
-    void send.mutateAsync({ body: `Draft this deck: ${brief}` }).catch((e) => setNotice(`Couldn't ask ${persona} to draft the deck: ${errorText(e)}`));
-  }, [brief, chatId, id, persona, router, send]);
+    void send.mutateAsync({ body: ask }).catch((e) => setNotice(`Couldn't ask ${persona} to draft the deck: ${errorText(e)}`));
+  }, [brief, outline, chatId, id, persona, router, send]);
 
   const title = ref.data?.title ?? c?.title ?? "Deck";
   const loadError = ref.error ?? head.error;
-  const themeKey = deck ? Object.entries(THEMES).find(([, t]) => t.name === deck.theme.name)?.[0] : undefined;
+  // The built-in theme the deck uses, if its copy is unchanged.
+  const themeKey = deck ? Object.entries(THEMES).find(([, t]) => t.name === deck.theme.name && same(t.colors, deck.theme.colors) && same(t.fonts, deck.theme.fonts))?.[0] : undefined;
 
   return (
     <div className="flex h-dvh flex-col">
@@ -570,14 +800,15 @@ export function DeckScreen({ id }: { id: string }) {
               current={slide.id}
               onSelect={(sid) => {
                 setSlideId(sid);
-                setSelected(undefined);
+                setSelected([]);
                 setEditing(undefined);
                 if (reviewing) document.querySelector(`[data-change-slide="${sid}"]`)?.scrollIntoView({ block: "nearest" });
               }}
               onMove={moveSlide}
               onDuplicate={duplicateSlide}
               onRemove={removeSlide}
-              onAdd={addSlide}
+              onAdd={() => addSlide()}
+              onAddLayout={addSlide}
               assetUrl={assetUrl}
               fontsReady={fonts}
               overflowing={overflowingSlides}
@@ -586,7 +817,7 @@ export function DeckScreen({ id }: { id: string }) {
               readOnly={readOnly}
             />
             <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken">
-              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} selected={selectedEl} editing={!!editing} disabled={readOnly} a={tools} />
+              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} slide={slide} selection={selection} editing={!!editing} disabled={readOnly} a={tools} />
               <input ref={fileInput} type="file" accept="image/*" className="hidden" aria-label="Add an image to the slide" data-testid="slide-image-input" onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = "";
@@ -664,9 +895,12 @@ export function DeckScreen({ id }: { id: string }) {
                       fontsReady={fonts}
                       selected={selected}
                       onSelect={setSelected}
+                      scope={scope}
+                      onScope={setScope}
                       editing={editing}
                       onEdit={setEditing}
-                      onFrame={(eid, frame: Frame, rotation) => update(mapElement(eid, (e) => ({ ...e, frame, rotation })))}
+                      onFillImage={fillImage}
+                      onFrames={(live) => update(mapElements(new Set(Object.keys(live)), (e) => (isGroup(e) ? withFrame(e, live[e.id].frame) : { ...e, ...live[e.id] })))}
                       onText={(eid, paragraphs) => update(mapElement(eid, (e) => withText(e, paragraphs)))}
                       readOnly={readOnly}
                       editorRef={editorRef}
@@ -701,6 +935,37 @@ export function DeckScreen({ id }: { id: string }) {
             </main>
           </div>
         </div>
+      )}
+      {themeEdit && deck && slide && (
+        <ThemeEditor
+          start={themeEdit.start}
+          target={themeEdit.target}
+          deck={deck}
+          slide={slide}
+          assetUrl={assetUrl}
+          fontsReady={fonts}
+          busy={createTheme.isPending || updateTheme.isPending}
+          error={themeError}
+          onClose={() => setThemeEdit(null)}
+          onApply={(t) => {
+            tools.setTheme(t);
+            setThemeEdit(null);
+          }}
+          onSave={(t) =>
+            createTheme.mutate(themeBody(t), {
+              onSuccess: (s) => {
+                tools.setTheme(s);
+                setThemeEdit(null);
+              },
+              onError: (e) => setThemeError(errorText(e)),
+            })
+          }
+          onUpdate={(t) => {
+            const target = themeEdit.target;
+            if (target.kind !== "saved") return;
+            updateTheme.mutate({ id: target.id, ...themeBody(t) }, { onSuccess: () => setThemeEdit(null), onError: (e) => setThemeError(errorText(e)) });
+          }}
+        />
       )}
     </div>
   );
