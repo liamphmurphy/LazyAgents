@@ -1,10 +1,20 @@
 /** A ```dispatch fence: the persona offering to start a ticket's run. */
 export const isDispatchFence = (info: string | undefined) => (info ?? "").trim().split(/\s+/)[0]?.toLowerCase() === "dispatch";
 
-/** The ticket key a ```dispatch fence names, or null while it's incomplete or isn't one. */
-export function parseDispatch(code: string): string | null {
-  const key = (code.trim().split("\n")[0] ?? "").trim().toUpperCase();
-  return /^[A-Z][A-Z0-9]{1,9}-\d+$/.test(key) ? key : null;
+/** The most tickets one ```dispatch card offers; more would be a planning job, not a card. */
+export const MAX_DISPATCH_KEYS = 20;
+
+/**
+ * The ticket keys a ```dispatch fence names, one per line, in order and once each.
+ * Lines that aren't a key (a half-streamed "PAY-") are skipped; [] when there are none.
+ */
+export function parseDispatchKeys(code: string): string[] {
+  const keys: string[] = [];
+  for (const line of code.split("\n")) {
+    const key = line.trim().toUpperCase();
+    if (/^[A-Z][A-Z0-9]{1,9}-\d+$/.test(key) && !keys.includes(key)) keys.push(key);
+  }
+  return keys.slice(0, MAX_DISPATCH_KEYS);
 }
 
 /** Run states after which nothing more happens. */

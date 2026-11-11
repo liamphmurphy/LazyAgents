@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { Dialog } from "radix-ui";
+import { useQueries } from "@tanstack/react-query";
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Schemas } from "@/lib/api/client";
-import { useChatTicketRuns, useControlRunById, useDecideApproval, useDispatchPreview, useStartChatTicketRun, useTicket } from "@/lib/api/hooks";
-import { parseDispatch, planLine, runEnded } from "@/lib/chat-dispatch";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { keys as queryKeys, useChatTicketRuns, useControlRunById, useDecideApproval, useDispatchPreview, useStartChatTicketRun, useTicket } from "@/lib/api/hooks";
+import { parseDispatchKeys, planLine, runEnded } from "@/lib/chat-dispatch";
 import { chatStatusOf, type ChatStatusKind } from "@/lib/chat-ui";
 import { minutesLabel } from "@/lib/chat-research";
 import { cx } from "@/lib/cx";
 import { repoShortName } from "@/lib/persona-ui";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button, IconButton, buttonClass } from "@/components/ui/button";
 import { usePulse } from "@/components/ui/motion";
 import { AgentAvatar } from "./avatars";
 import { CodeFence } from "./code-fence";
@@ -268,18 +270,25 @@ function StartCard({ ticketKey, chatId, messageId, onDismiss }: { ticketKey: str
   );
 }
 
-/** ```dispatch: a persona's offer to start a ticket's run. Once started it points at the run. */
+/** ```dispatch: a persona's offer to start one ticket's run, or several. Once started it points at the run. */
 export function DispatchFence({ code, info }: { code: string; info?: string }) {
-  const ticketKey = useMemo(() => parseDispatch(code), [code]);
+  const ticketKeys = useMemo(() => parseDispatchKeys(code), [code]);
   const messageId = useContext(SvgFenceMessage);
   const actions = useContext(RecommendActions);
   const chatId = actions?.chatId;
-  const runs = useChatTicketRuns(ticketKey ? chatId : undefined);
+  const runs = useChatTicketRuns(ticketKeys.length ? chatId : undefined);
   const [dismissed, setDismissed] = useState(false);
   // Outside a chat (a saved page) or while it's still streaming, it's just text.
-  if (!ticketKey || !chatId) return <CodeFence code={code} info={info} />;
-  if (runs.isPending) return <div aria-label={`Loading ${ticketKey}`} className={cx(CARD, "h-44 animate-pulse")} />;
-  const run = runs.data?.runs.find((r) => r.message_id === messageId);
+  if (!ticketKeys.length || !chatId) return <CodeFence code={code} info={info} />;
+  if (runs.isPending) return <div aria-label={`Loading ${ticketKeys.join(", ")}`} className={cx(CARD, "h-44 animate-pulse")} />;
+  // A reply starts at most one run per ticket it offers.
+  const fromCard = (runs.data?.runs ?? []).filter((r) => r.message_id === messageId && ticketKeys.includes(r.ticket));
+  if (dismissed) return <p data-testid="dispatch-dismissed" className="text-xs text-fg-tertiary">Not started.</p>;
+  if (ticketKeys.length > 1) {
+    return <MultiStartCard ticketKeys={ticketKeys} chatId={chatId} messageId={messageId} started={fromCard} onDismiss={() => setDismissed(true)} />;
+  }
+  const ticketKey = ticketKeys[0];
+  const run = fromCard[0];
   if (run) {
     // Hand the pull request to this chat's persona, as a message from the person.
     const review = run.pr_url && messageId && actions && !actions.disabled ? () => actions.ask(messageId, `Review the pull request for ${run.ticket}: ${run.pr_url}`) : undefined;
@@ -289,6 +298,201 @@ export function DispatchFence({ code, info }: { code: string; info?: string }) {
       </p>
     );
   }
-  if (dismissed) return <p data-testid="dispatch-dismissed" className="text-xs text-fg-tertiary">Not started.</p>;
   return <StartCard ticketKey={ticketKey} chatId={chatId} messageId={messageId} onDismiss={() => setDismissed(true)} />;
+}
+
+type Preview = Schemas["DispatchPreview"];
+
+/** One ticket a multi-ticket card offers: what Start would do for it, or the run it started. */
+type Offer = { key: string; title?: string; preview?: Preview; error?: string; run?: TicketRun };
+
+const startable = (o: Offer) => !o.run && !!o.preview && o.preview.blockers.length === 0;
+
+/** Why a ticket can't start, that it will wait, or that it's ready: one short line. */
+function OfferStatus({ o }: { o: Offer }) {
+  if (o.run) return <RunPill run={o.run} />;
+  if (o.error) return <span className="text-xs text-pill-blocked-fg">{o.error}</span>;
+  if (!o.preview) return <span className="h-3 w-20 animate-pulse rounded bg-surface-sunken" />;
+  if (o.preview.blockers.length) return <span className="text-xs text-pill-blocked-fg">{o.preview.blockers.join(" ")}</span>;
+  if (o.preview.queued_behind.length) return <span className="text-xs text-pill-human-fg">Waits for {o.preview.queued_behind.map((b) => b.replace(/^Blocked by (\S+).*$/, "$1")).join(", ")}</span>;
+  return <span className="text-xs text-fg-tertiary">Ready</span>;
+}
+
+/** Every ticket a card offers, with its preview and title, loaded together. */
+function useOffers(ticketKeys: string[], started: TicketRun[]): Offer[] {
+  const previews = useQueries({
+    queries: ticketKeys.map((key) => ({
+      queryKey: ["tickets", "dispatch", key] as const,
+      queryFn: () => unwrap(api.GET("/tickets/{key}/dispatch", { params: { path: { key } } })),
+      staleTime: 5_000,
+    })),
+  });
+  const tickets = useQueries({
+    queries: ticketKeys.map((key) => ({
+      queryKey: queryKeys.ticket(key),
+      queryFn: () => unwrap(api.GET("/tickets/{key}", { params: { path: { key } } })),
+    })),
+  });
+  return ticketKeys.map((key, i) => ({
+    key,
+    title: tickets[i]?.data?.title,
+    preview: previews[i]?.data,
+    error: previews[i]?.isError ? previews[i].error?.message || `Couldn’t load ${key}.` : undefined,
+    run: started.find((r) => r.ticket === key),
+  }));
+}
+
+/**
+ * A card offering several tickets: one line each, and Start all opens a dialog
+ * to confirm which. Each start is its own dispatch, run as the person.
+ */
+function MultiStartCard({ ticketKeys, chatId, messageId, started, onDismiss }: { ticketKeys: string[]; chatId: string; messageId?: string; started: TicketRun[]; onDismiss: () => void }) {
+  const offers = useOffers(ticketKeys, started);
+  const [open, setOpen] = useState(false);
+  const ready = offers.filter(startable);
+  const begun = offers.filter((o) => o.run).length;
+  const loading = offers.some((o) => !o.run && !o.preview && !o.error);
+  return (
+    <div data-testid="dispatch-card" className={CARD}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h4 className="text-[14px] font-semibold text-fg">Start runs for {ticketKeys.length} tickets?</h4>
+        {begun > 0 && <span className="flex-none text-xs text-fg-tertiary">{begun} of {ticketKeys.length} started</span>}
+      </div>
+      <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle">
+        {offers.map((o) => (
+          <li key={o.key} data-testid="dispatch-offer" className="flex min-w-0 items-center gap-2.5 px-3 py-2 text-[13px]">
+            <Link href={`/tickets/${o.key}`} className="flex-none font-mono text-xs text-fg-tertiary hover:underline">{o.key}</Link>
+            <span className="min-w-0 flex-1 truncate text-fg">{o.title ?? ""}</span>
+            <span className="flex max-w-[45%] flex-none justify-end truncate"><OfferStatus o={o} /></span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2">
+        {ready.length > 0 ? (
+          <>
+            <Button variant="primary" disabled={!messageId || loading} onClick={() => setOpen(true)}>
+              {loading ? "Loading…" : `Start all (${ready.length})…`}
+            </Button>
+            <Button variant="ghost" onClick={onDismiss}>Not now</Button>
+          </>
+        ) : begun > 0 ? (
+          <p className="text-[12.5px] text-fg-tertiary">Follow them above the message box.</p>
+        ) : !loading && <p className="text-[12.5px] text-fg-tertiary">None of these can start yet.</p>}
+      </div>
+      {open && messageId && <StartAllDialog chatId={chatId} messageId={messageId} offers={offers} onOpenChange={setOpen} />}
+    </div>
+  );
+}
+
+type StartResult = "started" | { error: string };
+
+/** Confirm which of a card's tickets to start, then start them one by one, saying how each went. */
+function StartAllDialog({ chatId, messageId, offers, onOpenChange }: { chatId: string; messageId: string; offers: Offer[]; onOpenChange: (o: boolean) => void }) {
+  const start = useStartChatTicketRun(chatId);
+  const [picked, setPicked] = useState(() => new Set(offers.filter(startable).map((o) => o.key)));
+  const [results, setResults] = useState<Record<string, StartResult>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const runner = offers.find((o) => o.preview)?.preview;
+  const chosen = offers.filter((o) => picked.has(o.key) && startable(o) && results[o.key] !== "started");
+  const failed = Object.values(results).some((r) => r !== "started");
+
+  async function startChosen() {
+    let ok = true;
+    // One at a time: each start locks the chat, and a refusal names its own ticket.
+    for (const o of chosen) {
+      setBusy(o.key);
+      try {
+        await start.mutateAsync({ ticket: o.key, message_id: messageId });
+        setResults((r) => ({ ...r, [o.key]: "started" }));
+      } catch (e) {
+        ok = false;
+        setResults((r) => ({ ...r, [o.key]: { error: e instanceof Error && e.message ? e.message : "Couldn’t start the run." } }));
+      }
+    }
+    setBusy(null);
+    if (ok) onOpenChange(false);
+  }
+
+  const toggle = (key: string, on: boolean) => setPicked((p) => {
+    const next = new Set(p);
+    if (on) next.add(key);
+    else next.delete(key);
+    return next;
+  });
+
+  return (
+    <Dialog.Root open onOpenChange={(o) => !busy && onOpenChange(o)}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
+        <Dialog.Content
+          data-testid="start-all-dialog"
+          aria-describedby="start-all-desc"
+          className="motion-dialog fixed left-1/2 top-[6vh] z-50 flex max-h-[88vh] w-[min(640px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
+        >
+          <div className="flex items-start gap-3 border-b border-border-subtle px-[18px] py-3.5">
+            <div className="flex flex-1 flex-col">
+              <Dialog.Title className="type-heading">Start {chosen.length} {chosen.length === 1 ? "run" : "runs"}</Dialog.Title>
+              <p id="start-all-desc" className="text-[12.5px] text-fg-secondary">
+                Each ticket starts with its assigned agent, dispatched by you. A ticket with unfinished blockers queues until they&apos;re Done.
+              </p>
+            </div>
+            <Dialog.Close asChild>
+              <IconButton icon="x" label="Close" disabled={!!busy} />
+            </Dialog.Close>
+          </div>
+          <ul className="flex flex-col divide-y divide-border-subtle overflow-y-auto px-[18px] py-2">
+            {offers.map((o) => {
+              const can = startable(o) && results[o.key] !== "started";
+              const result = results[o.key];
+              return (
+                <li key={o.key} className="flex items-start gap-3 py-2.5 text-[13px]">
+                  <input
+                    type="checkbox"
+                    aria-label={`Start ${o.key}`}
+                    className="mt-0.5 size-4 flex-none accent-[var(--color-accent)]"
+                    checked={can && picked.has(o.key)}
+                    disabled={!can || !!busy}
+                    onChange={(e) => toggle(o.key, e.target.checked)}
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      <span className="flex-none font-mono text-xs text-fg-tertiary">{o.key}</span>
+                      <span className="truncate font-medium text-fg">{o.title ?? ""}</span>
+                    </span>
+                    {o.preview && !o.run && (
+                      <span className="text-xs text-fg-secondary">
+                        @{o.preview.agent.handle || "nobody"} · {o.preview.resolved.harness} · {o.preview.resolved.model}
+                      </span>
+                    )}
+                    {result && result !== "started" ? (
+                      <span role="alert" className="text-xs text-pill-blocked-fg">{result.error}</span>
+                    ) : (
+                      <span className="text-xs"><OfferStatus o={o} /></span>
+                    )}
+                  </div>
+                  <span className="flex-none pt-0.5 text-xs text-fg-tertiary">
+                    {busy === o.key ? "Starting…" : result === "started" ? "Started" : ""}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          {runner && (
+            <div className="border-t border-border-subtle px-[18px] py-2.5 text-[12.5px]">
+              <StartsLine p={runner} />
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
+            <span className="mr-auto text-xs text-fg-tertiary">{failed ? "Some didn’t start: see why above." : "Logged on each ticket as dispatched by you"}</span>
+            <Dialog.Close asChild>
+              <Button variant="ghost" disabled={!!busy}>{failed ? "Close" : "Cancel"}</Button>
+            </Dialog.Close>
+            <Button variant="approve" disabled={!chosen.length || !!busy} onClick={startChosen}>
+              {busy ? "Starting…" : `Start ${chosen.length} ${chosen.length === 1 ? "run" : "runs"}`}
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
 }

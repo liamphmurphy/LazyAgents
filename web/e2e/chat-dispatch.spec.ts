@@ -153,3 +153,68 @@ test("a run already going when the chat opens doesn't replay the hand-off", asyn
   await page.waitForTimeout(600);
   await expect(page.getByTestId("ticket-run-handoff")).toHaveCount(0);
 });
+
+test("one card offers several tickets, and Start all confirms which to start", async ({ page }) => {
+  // WEB-4 waits for WEB-3; WEB-5 has no agent, so dispatch would refuse it.
+  const titles: Record<string, string> = { "WEB-3": "Fix payouts", "WEB-4": "Payout report", "WEB-5": "Nobody's yet" };
+  const offers: Record<string, Record<string, unknown>> = {
+    "WEB-3": preview(),
+    "WEB-4": { ...preview(), ticket_key: "WEB-4", queued_behind: ["Blocked by WEB-3 — Fix payouts (todo); it must be Done"] },
+    "WEB-5": { ...preview(["WEB-5 has no agent assigned."]), ticket_key: "WEB-5" },
+  };
+  const state: { runs: Record<string, unknown>[]; starts: { ticket: string; message_id: string }[] } = { runs: [], starts: [] };
+  await installChatApi(page, { replyDelayMs: 10 });
+  await page.route(/\/api\/v1\/tickets\/(WEB-\d+)\/dispatch$/, (route: Route) => route.fulfill({ json: offers[route.request().url().match(/(WEB-\d+)\/dispatch$/)![1]] }));
+  await page.route(/\/api\/v1\/tickets\/(WEB-\d+)$/, (route: Route) => {
+    const key = route.request().url().match(/(WEB-\d+)$/)![1];
+    return route.fulfill({ json: { key, title: titles[key], status: "todo" } });
+  });
+  await page.route(/\/api\/v1\/chats\/[^/]+\/runs$/, (route: Route) => {
+    const req = route.request();
+    if (req.method() === "POST") {
+      const body = req.postDataJSON();
+      state.starts.push(body);
+      const started = run({ run_id: crypto.randomUUID(), ticket: body.ticket, ticket_title: titles[body.ticket], state: "queued", steps_total: 0, steps_done: 0, current_step: undefined, message_id: body.message_id });
+      state.runs = [...state.runs, started];
+      return route.fulfill({ status: 201, json: started });
+    }
+    return route.fulfill({ json: { runs: state.runs } });
+  });
+  await page.goto("/chat");
+  const box = page.getByRole("combobox", { name: "Message" });
+  await box.fill("dispatch all: the payouts epic");
+  await box.press("Enter");
+
+  const card = page.getByTestId("dispatch-card");
+  await expect(card).toContainText("Start runs for 3 tickets?");
+  const rows = card.getByTestId("dispatch-offer");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText("Fix payouts");
+  await expect(rows.nth(0)).toContainText("Ready");
+  await expect(rows.nth(1)).toContainText("Waits for WEB-3");
+  await expect(rows.nth(2)).toContainText("no agent assigned");
+
+  // Start all only offers what dispatch would accept, and nothing starts until you confirm.
+  await card.getByRole("button", { name: "Start all (2)…" }).click();
+  const dialog = page.getByTestId("start-all-dialog");
+  await expect(dialog.getByRole("heading")).toHaveText("Start 2 runs");
+  await expect(dialog.getByRole("checkbox", { name: "Start WEB-5" })).toBeDisabled();
+  expect(state.starts).toHaveLength(0);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: "/tmp/chat-dispatch-start-all.png" });
+
+  // Leave one out, then start the rest.
+  await dialog.getByRole("checkbox", { name: "Start WEB-4" }).uncheck();
+  await dialog.getByRole("button", { name: "Start 1 run" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.starts.map((s) => s.ticket)).toEqual(["WEB-3"]);
+  await expect(rows.nth(0)).toContainText("Queued", { timeout: 10000 });
+  await expect(card).toContainText("1 of 3 started");
+
+  // The card still offers what's left, and each start comes from the same reply.
+  await card.getByRole("button", { name: "Start all (1)…" }).click();
+  await page.getByTestId("start-all-dialog").getByRole("button", { name: "Start 1 run" }).click();
+  await expect.poll(() => state.starts.map((s) => s.ticket)).toEqual(["WEB-3", "WEB-4"]);
+  expect(new Set(state.starts.map((s) => s.message_id)).size).toBe(1);
+  await expect(card).toContainText("2 of 3 started", { timeout: 10000 });
+});

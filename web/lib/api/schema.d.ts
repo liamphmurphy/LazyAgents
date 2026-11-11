@@ -1966,6 +1966,8 @@ export interface paths {
          *     presses Start here. Runs the same checks as dispatching from the
          *     ticket (an assigned main agent, no live run, no hard blockers) and
          *     records the person as the dispatcher. The chat then follows the run.
+         *     A card may offer several tickets; each starts at most once from it
+         *     (409 for a second start of the same ticket from the same reply).
          */
         post: operations["startChatTicketRun"];
         delete?: never;

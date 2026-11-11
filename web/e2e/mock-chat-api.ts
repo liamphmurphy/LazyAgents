@@ -278,6 +278,12 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       void emit(c);
       return;
     }
+    // "dispatch all:" offers WEB-3, WEB-4 and WEB-5 in one card.
+    if (prompt.startsWith("dispatch all:")) {
+      add(c, "assistant", "Filed the epic's tickets.\n\n```dispatch\nWEB-3\nWEB-4\nWEB-5\n```", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      void emit(c);
+      return;
+    }
     // "dispatch:" offers to start WEB-3's run.
     if (prompt.startsWith("dispatch:")) {
       add(c, "assistant", "Filed WEB-3 and assigned it to @pike.\n\n```dispatch\nWEB-3\n```", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
