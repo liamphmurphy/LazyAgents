@@ -29,6 +29,7 @@ import { SlideCanvas } from "./slide-canvas";
 import type { TextEditorHandle } from "./text-editor";
 import { ThemeEditor, type ThemeEditTarget } from "./theme-editor";
 import { Thumbnails } from "./thumbnails";
+import type { StylePatch } from "./style-menus";
 import { Toolbar, type TextFormat, type ToolbarActions } from "./toolbar";
 
 type SaveState = "saved" | "unsaved" | "saving" | "conflict" | "error";
@@ -74,6 +75,18 @@ function formatElement(e: Element, f: TextFormat, markOn?: boolean): Element {
   if (f.kind === "bullet") paragraphs = paragraphs.map((p) => (f.bullet ? { ...p, bullet: f.bullet, level: p.level ?? 0 } : { ...p, bullet: undefined, level: undefined }));
   if (f.kind === "indent") paragraphs = shiftLevel(paragraphs, f.delta);
   return paragraphs === box.paragraphs ? e : withText(e, paragraphs);
+}
+
+/** Sets the style fields that apply to an element's type; undefined clears one. */
+function withStyle(e: Element, patch: StylePatch): Element {
+  const allowed: (keyof StylePatch)[] = e.type === "shape" ? ["fill", "fillOpacity", "strokeOpacity", "dash"] : e.type === "line" ? ["strokeOpacity", "dash"] : e.type === "image" ? ["opacity"] : [];
+  const next: Record<string, unknown> = { ...e };
+  for (const k of allowed) {
+    if (!(k in patch)) continue;
+    if (patch[k] === undefined) delete next[k];
+    else next[k] = patch[k];
+  }
+  return next as Element;
 }
 
 function withText(e: Element, paragraphs: Paragraph[]): Element {
@@ -463,10 +476,11 @@ export function DeckScreen({ id }: { id: string }) {
     },
   };
   /** Changes each selected element as one undo step; none when nothing actually changes. */
-  const editSelection = (fn: (e: Element) => Element) => {
+  /** key coalesces repeated edits (a slider's drag) into one undo step. */
+  const editSelection = (fn: (e: Element) => Element, key?: string) => {
     if (!selection.length) return;
     const changed = new Map(selection.map((e) => [e.id, deep(fn)(e)] as const).filter(([, n], i) => JSON.stringify(n) !== JSON.stringify(selection[i])));
-    if (changed.size) update(mapElements(new Set(changed.keys()), (e) => changed.get(e.id) ?? e));
+    if (changed.size) update(mapElements(new Set(changed.keys()), (e) => changed.get(e.id) ?? e), key && `${selection.map((e) => e.id).join(",")}:${key}`);
   };
   /** Sets several frames at once, leaving the deck untouched (no undo step) when nothing moves. */
   const setFrames = (frames: Record<string, { x: number; y: number; w: number; h: number }>, key?: string) =>
@@ -555,7 +569,7 @@ export function DeckScreen({ id }: { id: string }) {
       if (!t || !window.confirm(`Delete the theme “${t.name}”? Decks using it keep their copy.`)) return;
       deleteTheme.mutate(tid, { onError: (e) => setNotice(`Couldn't delete ${t.name}: ${errorText(e)}`) });
     },
-    setBackground: (col) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined }))),
+    setBackground: (col, key) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined })), key && `${slide.id}:${key}`),
     format: (f) => {
       if (!selection.length) return;
       if (editing && editorRef.current && selectedEl) {
@@ -575,7 +589,8 @@ export function DeckScreen({ id }: { id: string }) {
       if (selection.every((e) => fmt(e) === e)) return; // nothing to change: no undo step
       update(mapElements(selIds, fmt));
     },
-    setFill: (col) => editSelection((e) => (e.type === "shape" ? { ...e, fill: col } : e)),
+    setFill: (col, key) => editSelection((e) => (e.type === "shape" ? { ...e, fill: col } : e), key),
+    setStyle: (patch, key) => editSelection((e) => withStyle(e, patch), key),
     setStroke: (col) => editSelection((e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e)),
     // One update, so the whole selection restyles as one undo step.
     applyStyle: (sid) => editSelection((e) => applyStyle(e, sid)),
@@ -802,7 +817,7 @@ export function DeckScreen({ id }: { id: string }) {
               readOnly={readOnly}
             />
             <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken">
-              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} selection={selection} editing={!!editing} disabled={readOnly} a={tools} />
+              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} slide={slide} selection={selection} editing={!!editing} disabled={readOnly} a={tools} />
               <input ref={fileInput} type="file" accept="image/*" className="hidden" aria-label="Add an image to the slide" data-testid="slide-image-input" onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = "";

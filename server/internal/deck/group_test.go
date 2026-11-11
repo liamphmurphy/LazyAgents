@@ -38,24 +38,24 @@ func TestGroupRules(t *testing.T) {
 	good := fixture(t)
 	for name, mut := range map[string]func(string) string{
 		"one child": func(s string) string {
-			return strings.Replace(s, `{"fill":"accent","frame":{"h":240,"w":240,"x":120,"y":300},"id":"e_g2","shape":"ellipse","type":"shape"},`, ``, 1)
+			return strings.Replace(s, `{"fill":"accent","frame":{"h":240,"w":240,"x":120,"y":300},"id":"e_gp2","shape":"ellipse","type":"shape"},`, ``, 1)
 		},
 		"nested group": func(s string) string {
-			return strings.Replace(s, `"id":"e_g2","shape":"ellipse","type":"shape"`, `"id":"e_g2","type":"group","elements":[{"id":"e_n1","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2},{"id":"e_n2","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2}]`, 1)
+			return strings.Replace(s, `"id":"e_gp2","shape":"ellipse","type":"shape"`, `"id":"e_gp2","type":"group","elements":[{"id":"e_n1","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2},{"id":"e_n2","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2}]`, 1)
 		},
-		"child id reused at top level":     func(s string) string { return strings.Replace(s, `"id":"e_g3"`, `"id":"e_g0"`, 1) },
-		"child id reused in another group": func(s string) string { return strings.Replace(s, `"id":"e_g5"`, `"id":"e_g2"`, 1) },
-		"group id reused by a child":       func(s string) string { return strings.Replace(s, `"id":"e_g2"`, `"id":"e_g1"`, 1) },
-		"rotated group":                    func(s string) string { return strings.Replace(s, `"id":"e_g1",`, `"id":"e_g1","rotation":10,`, 1) },
-		"styled group":                     func(s string) string { return strings.Replace(s, `"id":"e_g1",`, `"id":"e_g1","fill":"accent",`, 1) },
+		"child id reused at top level":     func(s string) string { return strings.Replace(s, `"id":"e_gp3"`, `"id":"e_gp0"`, 1) },
+		"child id reused in another group": func(s string) string { return strings.Replace(s, `"id":"e_gp5"`, `"id":"e_gp2"`, 1) },
+		"group id reused by a child":       func(s string) string { return strings.Replace(s, `"id":"e_gp2"`, `"id":"e_gp1"`, 1) },
+		"rotated group":                    func(s string) string { return strings.Replace(s, `"id":"e_gp1",`, `"id":"e_gp1","rotation":10,`, 1) },
+		"styled group":                     func(s string) string { return strings.Replace(s, `"id":"e_gp1",`, `"id":"e_gp1","fill":"accent",`, 1) },
 		"placeholder child": func(s string) string {
-			return strings.Replace(s, `"id":"e_g3",`, `"id":"e_g3","placeholder":"body",`, 1)
+			return strings.Replace(s, `"id":"e_gp3",`, `"id":"e_gp3","placeholder":"body",`, 1)
 		},
 		"bad child": func(s string) string {
-			return strings.Replace(s, `"id":"e_g2","shape":"ellipse"`, `"id":"e_g2","shape":"star"`, 1)
+			return strings.Replace(s, `"id":"e_gp2","shape":"ellipse"`, `"id":"e_gp2","shape":"star"`, 1)
 		},
 		"elements on a shape": func(s string) string {
-			return strings.Replace(s, `"id":"e_g8",`, `"id":"e_g8","elements":[{"id":"e_n1","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2}],`, 1)
+			return strings.Replace(s, `"id":"e_gp8",`, `"id":"e_gp8","elements":[{"id":"e_n1","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2}],`, 1)
 		},
 	} {
 		bad := mut(good)
@@ -91,18 +91,18 @@ func TestGroupOps(t *testing.T) {
 	body, _ := Normalize(fixture(t))
 	out, err := Apply(body, []Op{
 		// A child is found by id wherever it is.
-		{Op: "set_element", ID: "e_g3", Value: map[string]any{"paragraphs": []any{map[string]any{"runs": []any{map[string]any{"text": "Renamed", "size": 56}}}}}},
+		{Op: "set_element", ID: "e_gp3", Value: map[string]any{"paragraphs": []any{map[string]any{"runs": []any{map[string]any{"text": "Renamed", "size": 56}}}}}},
 		// Inserting after a child puts the new element in that group.
-		{Op: "insert_element", Slide: "s_group", After: "e_g5", Value: map[string]any{"id": "e_g9", "type": "line", "frame": map[string]any{"x": 1000, "y": 900, "w": 900, "h": 0}, "stroke": "text", "strokeWidth": 2}},
+		{Op: "insert_element", Slide: "s_group", After: "e_gp5", Value: map[string]any{"id": "e_gp9", "type": "line", "frame": map[string]any{"x": 1000, "y": 900, "w": 900, "h": 0}, "stroke": "text", "strokeWidth": 2}},
 		// Setting a group's frame scales its children.
-		{Op: "set_element", ID: "e_g1", Value: map[string]any{"frame": map[string]any{"x": 120, "y": 300, "w": 380, "h": 120}}},
+		{Op: "set_element", ID: "e_gp1", Value: map[string]any{"frame": map[string]any{"x": 120, "y": 300, "w": 380, "h": 120}}},
 		// A new group from scratch, children's ids assigned.
 		{Op: "insert_element", Slide: "s_shapes", Value: map[string]any{"type": "group", "elements": []any{
 			map[string]any{"type": "line", "frame": map[string]any{"x": 0, "y": 0, "w": 100, "h": 0}, "stroke": "text", "strokeWidth": 2},
 			map[string]any{"type": "line", "frame": map[string]any{"x": 0, "y": 50, "w": 100, "h": 0}, "stroke": "text", "strokeWidth": 2},
 		}}},
 		// A style on a group styles its shapes and lines.
-		{Op: "set_element", ID: "e_g4", Value: map[string]any{"style": "emphasis"}},
+		{Op: "set_element", ID: "e_gp4", Value: map[string]any{"style": "emphasis"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -117,10 +117,10 @@ func TestGroupOps(t *testing.T) {
 		t.Fatalf("children not scaled: %+v", g1)
 	}
 	g4 := s.Elements[2]
-	if len(g4.Elements) != 4 || g4.Elements[1].ID != "e_g9" || g4.Frame.W != 900 || g4.Frame.H != 600 {
+	if len(g4.Elements) != 4 || g4.Elements[1].ID != "e_gp9" || g4.Frame.W != 900 || g4.Frame.H != 600 {
 		t.Fatalf("insert into group: %+v", g4)
 	}
-	if g4.Elements[0].Fill != "heading" || g4.Elements[2].Stroke != "heading" {
+	if f := g4.Elements[0].Fill; f == nil || f.Color != "heading" || g4.Elements[2].Stroke != "heading" {
 		t.Fatalf("style not applied to the group's shapes: %+v", g4.Elements)
 	}
 	shapes := d.Slides[d.slideIndex("s_shapes")].Elements
@@ -129,19 +129,19 @@ func TestGroupOps(t *testing.T) {
 	}
 
 	// Removing a group's child; a group left with one element dissolves into it.
-	out, err = Apply(out, []Op{{Op: "remove_element", ID: "e_g9"}, {Op: "remove_element", ID: "e_g2"}})
+	out, err = Apply(out, []Op{{Op: "remove_element", ID: "e_gp9"}, {Op: "remove_element", ID: "e_gp2"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	d, _ = Parse(out)
 	s = groupSlide(t, d)
-	if s.Elements[1].ID != "e_g3" || s.Elements[1].Type != "text" || len(s.Elements[2].Elements) != 3 {
+	if s.Elements[1].ID != "e_gp3" || s.Elements[1].Type != "text" || len(s.Elements[2].Elements) != 3 {
 		t.Fatalf("remove from group: %+v", s.Elements)
 	}
 	// A group can't be rotated or given a child that's a group.
 	for _, op := range []Op{
-		{Op: "set_element", ID: "e_g4", Value: map[string]any{"rotation": 15}},
-		{Op: "set_element", ID: "e_g4", Value: map[string]any{"type": "shape"}},
+		{Op: "set_element", ID: "e_gp4", Value: map[string]any{"rotation": 15}},
+		{Op: "set_element", ID: "e_gp4", Value: map[string]any{"type": "shape"}},
 	} {
 		if _, err := Apply(out, []Op{op}); err == nil {
 			t.Errorf("%+v: accepted", op)

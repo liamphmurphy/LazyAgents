@@ -36,7 +36,7 @@ func TestNormalizeAcceptanceDeck(t *testing.T) {
 		t.Fatalf("normalize isn't idempotent: %v", err)
 	}
 	d, _ := Parse(body)
-	if len(d.Slides) != 17 || d.Slides[2].Elements[2].Crop.L != 0.3 {
+	if len(d.Slides) != 18 || d.Slides[2].Elements[2].Crop.L != 0.3 {
 		t.Fatalf("lost content: %+v", d.Slides[2].Elements[2])
 	}
 }
@@ -75,7 +75,7 @@ func TestApplyOps(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := Parse(out)
-	if len(d.Slides) != 18 || d.Slides[0].ID != "s_section" || d.Slides[3].Layout != "title-body" || len(d.Slides[3].Elements) != 2 {
+	if len(d.Slides) != 19 || d.Slides[0].ID != "s_section" || d.Slides[3].Layout != "title-body" || len(d.Slides[3].Elements) != 2 {
 		t.Fatalf("unexpected slides: %+v", d.Slides)
 	}
 	if d.Slides[1].Elements[0].Paragraphs[0].Runs[0].Text != "Q4 review" || d.Theme.Name != "Dark" {
@@ -293,6 +293,93 @@ func TestShapeEnum(t *testing.T) {
 	for _, bad := range []string{"star", "Triangle", "rightarrow", "cloud", ""} {
 		if _, err := Apply(body, []Op{shape(bad)}); err == nil || !strings.Contains(err.Error(), "shape must be one of") {
 			t.Errorf("%q: accepted or wrong error: %v", bad, err)
+		}
+	}
+}
+
+// styled is a one-slide deck whose single element (or background) is el.
+func styled(t *testing.T, background, el string) string {
+	t.Helper()
+	d := New("", "light")
+	d.Assets = map[string]Asset{"a_pic": {Mime: "image/png", W: 10, H: 10}}
+	body, err := d.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	_ = json.Unmarshal([]byte(body), &m)
+	s := map[string]any{"id": "s_x", "layout": "blank", "elements": []any{}}
+	if background != "" {
+		var bg any
+		if err := json.Unmarshal([]byte(background), &bg); err != nil {
+			t.Fatal(err)
+		}
+		s["background"] = bg
+	}
+	if el != "" {
+		var e any
+		if err := json.Unmarshal([]byte(el), &e); err != nil {
+			t.Fatal(err)
+		}
+		s["elements"] = []any{e}
+	}
+	m["slides"] = []any{s}
+	out, _ := json.Marshal(m)
+	return string(out)
+}
+
+const frame = `"frame":{"x":0,"y":0,"w":100,"h":100}`
+
+func TestStyleFieldsNormalize(t *testing.T) {
+	for name, c := range map[string]struct{ bg, el, want string }{
+		"v1 string fill stays a string": {"", `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,"fill":"accent"}`, `"fill":"accent"`},
+		"gradient fill": {"", `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,"fill":{"type":"linear","angle":45.004,"stops":["accent","#00ff00"]},"fillOpacity":0.5}`,
+			`"fill":{"type":"linear","angle":45,"stops":["accent","#00ff00"]},"fillOpacity":0.5`},
+		"angle 360 is 0":       {"", `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,"fill":{"type":"linear","angle":360,"stops":["accent","muted"]}}`, `"angle":0,`},
+		"opaque is left out":   {"", `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,"fill":"accent","fillOpacity":1,"stroke":"text","strokeWidth":4,"strokeOpacity":1,"dash":"solid"}`, `"fill":"accent","stroke":"text","strokeWidth":4}`},
+		"transparent is kept":  {"", `{"id":"e_a","type":"shape","shape":"ellipse",` + frame + `,"fill":"accent","fillOpacity":0}`, `"fillOpacity":0`},
+		"dashed line":          {"", `{"id":"e_a","type":"line",` + frame + `,"stroke":"text","strokeWidth":4,"strokeOpacity":0.25,"dash":"dashDot"}`, `"strokeOpacity":0.25,"dash":"dashDot"`},
+		"image opacity":        {"", `{"id":"e_a","type":"image",` + frame + `,"asset":"a_pic","opacity":0.4}`, `"opacity":0.4`},
+		"gradient background":  {`{"color":{"type":"linear","angle":90,"stops":["background","surface"]}}`, "", `"background":{"color":{"type":"linear","angle":90,"stops":["background","surface"]}}`},
+		"v1 colour background": {`{"color":"surface"}`, "", `"background":{"color":"surface"}`},
+	} {
+		out, err := Normalize(styled(t, c.bg, c.el))
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%s: want %s in %s", name, c.want, out)
+		}
+		if again, err := Normalize(out); err != nil || again != out {
+			t.Errorf("%s: not idempotent: %v", name, err)
+		}
+	}
+}
+
+func TestStyleFieldsRefused(t *testing.T) {
+	shape := func(extra string) string {
+		return `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,` + extra + `}`
+	}
+	for name, c := range map[string]struct{ bg, el string }{
+		"opacity above 1":        {"", shape(`"fillOpacity":1.5`)},
+		"negative opacity":       {"", shape(`"strokeOpacity":-0.1`)},
+		"unknown dash":           {"", shape(`"dash":"wavy"`)},
+		"radial gradient":        {"", shape(`"fill":{"type":"radial","angle":0,"stops":["accent","muted"]}`)},
+		"three stops":            {"", shape(`"fill":{"type":"linear","angle":0,"stops":["accent","muted","text"]}`)},
+		"one stop":               {"", shape(`"fill":{"type":"linear","angle":0,"stops":["accent"]}`)},
+		"bad stop colour":        {"", shape(`"fill":{"type":"linear","angle":0,"stops":["accent","blue"]}`)},
+		"angle out of range":     {"", shape(`"fill":{"type":"linear","angle":400,"stops":["accent","muted"]}`)},
+		"unknown gradient field": {"", shape(`"fill":{"type":"linear","angle":0,"stops":["accent","muted"],"spread":1}`)},
+		"fill is a number":       {"", shape(`"fill":3`)},
+		"opacity on a shape":     {"", shape(`"opacity":0.5`)},
+		"fillOpacity on a line":  {"", `{"id":"e_a","type":"line",` + frame + `,"stroke":"text","strokeWidth":4,"fillOpacity":0.5}`},
+		"dash on an image":       {"", `{"id":"e_a","type":"image",` + frame + `,"asset":"a_pic","dash":"dot"}`},
+		"opacity on text":        {"", `{"id":"e_a","type":"text",` + frame + `,"paragraphs":[{"runs":[{"text":"x","size":40}]}],"fillOpacity":0.5}`},
+		"bad background stop":    {`{"color":{"type":"linear","angle":0,"stops":["#12345","muted"]}}`, ""},
+	} {
+		if _, err := Normalize(styled(t, c.bg, c.el)); err == nil {
+			t.Errorf("%s: accepted", name)
 		}
 	}
 }

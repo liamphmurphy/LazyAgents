@@ -6,8 +6,8 @@ import (
 
 func TestApplyStyleMapsPresetsToProperties(t *testing.T) {
 	type want struct {
-		fill, stroke, text string
-		width              float64
+		fill, stroke, text, dash string
+		width                    float64
 	}
 	cases := map[string]want{
 		"filled-accent":  {fill: "accent", text: "background"},
@@ -15,26 +15,31 @@ func TestApplyStyleMapsPresetsToProperties(t *testing.T) {
 		"outline-accent": {stroke: "accent", width: 6, text: "accent"},
 		"subtle":         {fill: "surface", stroke: "muted", width: 3, text: "text"},
 		"emphasis":       {fill: "heading", text: "background"},
-		"ghost":          {stroke: "muted", width: 3, text: "muted"},
+		"ghost":          {stroke: "muted", width: 3, text: "muted", dash: "dash"},
 	}
 	if len(cases) != len(StyleIDs) || len(Styles) != len(StyleIDs) {
 		t.Fatalf("every style needs a case: %d cases, %d ids, %d styles", len(cases), len(StyleIDs), len(Styles))
 	}
 	for id, w := range cases {
-		e := Element{Type: "shape", Fill: "#123456", Stroke: "#654321", StrokeWidth: 9, Text: &TextBox{Paragraphs: []Paragraph{{Runs: []Run{{Text: "a", Color: "#FFFFFF"}, {Text: "b"}}}}}}
+		half := 0.5
+		e := Element{Type: "shape", Fill: &Paint{Gradient: &Gradient{Type: "linear", Stops: []string{"accent", "muted"}}}, FillOpacity: &half, StrokeOpacity: &half, Dash: "dot", Stroke: "#654321", StrokeWidth: 9, Text: &TextBox{Paragraphs: []Paragraph{{Runs: []Run{{Text: "a", Color: "#FFFFFF"}, {Text: "b"}}}}}}
 		if err := ApplyStyle(&e, id); err != nil {
 			t.Fatal(err)
 		}
-		if e.Fill != w.fill || e.Stroke != w.stroke || e.StrokeWidth != w.width {
-			t.Errorf("%s: fill %q stroke %q width %v, want %+v", id, e.Fill, e.Stroke, e.StrokeWidth, w)
+		fill := ""
+		if e.Fill != nil {
+			fill = e.Fill.Color
+		}
+		if fill != w.fill || (e.Fill != nil && e.Fill.Gradient != nil) || e.Stroke != w.stroke || e.StrokeWidth != w.width || e.Dash != w.dash || e.FillOpacity != nil || e.StrokeOpacity != nil {
+			t.Errorf("%s: %+v, want %+v", id, e, w)
 		}
 		for _, r := range e.Text.Paragraphs[0].Runs {
 			if r.Color != w.text {
 				t.Errorf("%s: run colour %q, want %q", id, r.Color, w.text)
 			}
 		}
-		l := Element{Type: "line", Stroke: "#000000", StrokeWidth: 1}
-		if err := ApplyStyle(&l, id); err != nil || l.Stroke != Styles[id].LineStroke || l.StrokeWidth <= 0 {
+		l := Element{Type: "line", Stroke: "#000000", StrokeWidth: 1, Dash: "dot", StrokeOpacity: &half}
+		if err := ApplyStyle(&l, id); err != nil || l.Stroke != Styles[id].LineStroke || l.StrokeWidth <= 0 || l.Dash != w.dash || l.StrokeOpacity != nil {
 			t.Errorf("%s on a line: %+v %v", id, l, err)
 		}
 	}
@@ -75,11 +80,11 @@ func TestSetElementStyleOp(t *testing.T) {
 	d, _ := Parse(out)
 	i, j, _ := d.findElement("e_s1")
 	s1 := d.Slides[i].Elements[j]
-	if s1.Fill != "" || s1.Stroke != "accent" || s1.StrokeWidth != 6 || s1.Text.Paragraphs[0].Runs[0].Color != "accent" {
+	if s1.Fill != nil || s1.Stroke != "accent" || s1.StrokeWidth != 6 || s1.Text.Paragraphs[0].Runs[0].Color != "accent" {
 		t.Fatalf("outline-accent not applied: %+v", s1)
 	}
 	i, j, _ = d.findElement("e_s2")
-	if s2 := d.Slides[i].Elements[j]; s2.Stroke != "muted" || s2.Fill != "" || s2.Radius != 20 {
+	if s2 := d.Slides[i].Elements[j]; s2.Stroke != "muted" || s2.Fill != nil || s2.Dash != "dash" || s2.Radius != 20 {
 		t.Fatalf("ghost with radius not applied: %+v", s2)
 	}
 	i, j, _ = d.findElement("e_s4")

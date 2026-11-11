@@ -84,30 +84,30 @@ test("a group's children lay out like loose elements, tagged with the group", ()
   const slide = deck.slides.find((s) => s.id === "s_group");
   const measure = (t, _s, _st, size) => t.length * size * 0.5;
   const grouped = layoutSlide(deck, slide, measure);
-  const loose = layoutSlide(deck, { ...slide, elements: ungroupElements(slide.elements, new Set(["e_g1", "e_g4"])).elements }, measure);
+  const loose = layoutSlide(deck, { ...slide, elements: ungroupElements(slide.elements, new Set(["e_gp1", "e_gp4"])).elements }, measure);
   assert.deepEqual(grouped.ops.map((o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== "g"))), loose.ops);
-  assert.deepEqual([...new Set(grouped.ops.map((o) => o.g).filter(Boolean))], ["e_g1", "e_g4"]);
-  assert.ok(grouped.ops.filter((o) => o.el === "e_g7").every((o) => o.rot?.deg === 6 && o.g === "e_g4"));
+  assert.deepEqual([...new Set(grouped.ops.map((o) => o.g).filter(Boolean))], ["e_gp1", "e_gp4"]);
+  assert.ok(grouped.ops.filter((o) => o.el === "e_gp7").every((o) => o.rot?.deg === 6 && o.g === "e_gp4"));
 });
 
 test("the review diff names edits inside a group and outlines the child", () => {
   const base = fixture();
   const head = structuredClone(base);
   const slide = head.slides.find((s) => s.id === "s_group");
-  const g = slide.elements.find((e) => e.id === "e_g4");
+  const g = slide.elements.find((e) => e.id === "e_gp4");
   g.elements[0].text.paragraphs[0].runs[0].text = "Plan it";
   g.elements[2].fill = "accent";
   g.elements.splice(1, 1);
   const [c] = deckChanges(base, head);
   assert.equal(c.slideId, "s_group");
   assert.deepEqual(c.details, ["Changed which elements are in a group (now 2)", "Shape in a group: “Plan” → “Plan it”", "Restyled shape in a group", "Removed line from a group"]);
-  assert.deepEqual(c.marksAfter, { e_g4: "changed", e_g5: "changed", e_g7: "changed" });
-  assert.equal(c.marksBefore.e_g6, "removed");
+  assert.deepEqual(c.marksAfter, { e_gp4: "changed", e_gp5: "changed", e_gp7: "changed" });
+  assert.equal(c.marksBefore.e_gp6, "removed");
 
   // Grouping and ungrouping read as such, not as everything added or removed.
   const grouped = structuredClone(base);
   const s2 = grouped.slides.find((s) => s.id === "s_group");
-  s2.elements = ungroupElements(s2.elements, new Set(["e_g1"])).elements;
+  s2.elements = ungroupElements(s2.elements, new Set(["e_gp1"])).elements;
   assert.deepEqual(deckChanges(base, grouped)[0].details, ["Ungrouped 2 elements"]);
   assert.deepEqual(deckChanges(grouped, base)[0].details, ["Grouped 2 elements"]);
 });
@@ -122,7 +122,9 @@ test("PPTX: a group's shapes are wrapped in one p:grpSp at the group's place", (
   assert.ok(out.indexOf("</p:grpSp>") > out.indexOf('name="e_c"') && out.indexOf("</p:grpSp>") < out.indexOf('name="e_d"'));
   assert.match(out, /<p:cNvPr id="6" name="e_g"\/>/);
   assert.match(out, new RegExp(`<a:off x="914400" y="0"/><a:ext cx="${288 * EMU}" cy="457200"/><a:chOff x="914400" y="0"/><a:chExt cx="${288 * EMU}" cy="457200"/>`));
-  // Unchanged when there are no groups, or a group's shapes aren't all there.
+  // A child that drew nothing (a missing image) doesn't ungroup the rest.
+  assert.ok(wrapGroups(xml, [{ id: "e_g", frame: { x: 0, y: 0, w: 1, h: 1 }, children: ["e_a", "e_b", "e_zz"] }]).includes("<p:grpSp>"));
+  // Unchanged when there are no groups, or fewer than two of a group's shapes are there.
   assert.equal(wrapGroups(xml, []), xml);
   assert.equal(wrapGroups(xml, [{ id: "e_g", frame: { x: 0, y: 0, w: 1, h: 1 }, children: ["e_b", "e_zz"] }]), xml);
 });

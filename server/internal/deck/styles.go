@@ -7,7 +7,8 @@ import (
 
 // A Style is a named bundle of theme colour tokens applied to a shape or a
 // line. Styles are applied, not referenced: the element keeps the resulting
-// fill, stroke, strokeWidth and run colours, so it recolours with the theme
+// fill, stroke, strokeWidth, dash and run colours (and loses any opacity),
+// so it recolours with the theme
 // because the values are theme names. web/lib/slides/styles.ts has the same
 // table; keep the two in step.
 type Style struct {
@@ -18,6 +19,7 @@ type Style struct {
 	Text        string  // shapes: every run's colour
 	LineWidth   float64 // lines: stroke width
 	LineStroke  string  // lines: stroke colour
+	Dash        string  // the outline's or line's dash; empty is solid
 }
 
 // StyleIDs is the gallery order.
@@ -30,8 +32,7 @@ var Styles = map[string]Style{
 	"outline-accent": {Label: "Outline accent", Stroke: "accent", StrokeWidth: 6, Text: "accent", LineStroke: "accent", LineWidth: 5},
 	"subtle":         {Label: "Subtle", Fill: "surface", Stroke: "muted", StrokeWidth: 3, Text: "text", LineStroke: "muted", LineWidth: 4},
 	"emphasis":       {Label: "Emphasis", Fill: "heading", Text: "background", LineStroke: "heading", LineWidth: 10},
-	// Ghost would use a dashed outline; ships solid until dashes land.
-	"ghost": {Label: "Ghost", Stroke: "muted", StrokeWidth: 3, Text: "muted", LineStroke: "muted", LineWidth: 3},
+	"ghost":          {Label: "Ghost", Stroke: "muted", StrokeWidth: 3, Text: "muted", LineStroke: "muted", LineWidth: 3, Dash: "dash"},
 }
 
 // ApplyStyle sets a preset's properties on a shape or line.
@@ -42,7 +43,11 @@ func ApplyStyle(e *Element, id string) error {
 	}
 	switch e.Type {
 	case "shape":
-		e.Fill, e.Stroke, e.StrokeWidth = s.Fill, s.Stroke, 0
+		e.Fill, e.Stroke, e.StrokeWidth, e.Dash = nil, s.Stroke, 0, s.Dash
+		if s.Fill != "" {
+			e.Fill = &Paint{Color: s.Fill}
+		}
+		e.FillOpacity, e.StrokeOpacity = nil, nil
 		if s.Stroke != "" {
 			e.StrokeWidth = s.StrokeWidth
 		}
@@ -54,7 +59,7 @@ func ApplyStyle(e *Element, id string) error {
 			}
 		}
 	case "line":
-		e.Stroke, e.StrokeWidth = s.LineStroke, s.LineWidth
+		e.Stroke, e.StrokeWidth, e.Dash, e.StrokeOpacity = s.LineStroke, s.LineWidth, s.Dash, nil
 	case "group":
 		// A group's shapes and lines take the style; its text and images stay as they are.
 		styled := false

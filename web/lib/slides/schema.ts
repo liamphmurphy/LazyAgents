@@ -12,6 +12,14 @@ export type ThemeColor = "background" | "text" | "heading" | "accent" | "accent2
 /** A theme colour name or a literal #RRGGBB. */
 export type ColorRef = ThemeColor | string;
 
+/** A two-stop linear gradient; angle is degrees clockwise from left-to-right (90 runs top to bottom). */
+export type Gradient = { type: "linear"; angle: number; stops: [ColorRef, ColorRef] };
+/** A shape's fill or a slide's background: a colour or a gradient. */
+export type Fill = ColorRef | Gradient;
+export type Dash = "solid" | "dash" | "dot" | "dashDot" | "longDash";
+/** A fill with its colours resolved to #RRGGBB. */
+export type Paint = string | { angle: number; stops: [string, string] };
+
 export type Run = { text: string; size: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: ColorRef; highlight?: ColorRef; font?: FontRef };
 /** lineSpacing multiplies the default line height (0.8–3; unset is 1). */
 export type Paragraph = { runs: Run[]; align?: "left" | "center" | "right" | "justify"; bullet?: "disc" | "number"; level?: number; spaceBefore?: number; lineSpacing?: number };
@@ -29,9 +37,9 @@ export type ShapeKind =
   | "rightArrow" | "leftArrow" | "upArrow" | "downArrow" | "chevron" | "homePlate"
   | "wedgeRectCallout" | "wedgeRoundRectCallout"
   | "star5" | "plus" | "donut" | "heart";
-export type ShapeElement = Common & { type: "shape"; shape: ShapeKind; fill?: ColorRef; stroke?: ColorRef; strokeWidth?: number; radius?: number; text?: TextBox };
-export type LineElement = Common & { type: "line"; stroke: ColorRef; strokeWidth: number; endArrow?: boolean; startArrow?: boolean };
-export type ImageElement = Common & { type: "image"; asset: string; crop?: Crop; alt?: string };
+export type ShapeElement = Common & { type: "shape"; shape: ShapeKind; fill?: Fill; fillOpacity?: number; stroke?: ColorRef; strokeWidth?: number; strokeOpacity?: number; dash?: Dash; radius?: number; text?: TextBox };
+export type LineElement = Common & { type: "line"; stroke: ColorRef; strokeWidth: number; strokeOpacity?: number; dash?: Dash; endArrow?: boolean; startArrow?: boolean };
+export type ImageElement = Common & { type: "image"; asset: string; crop?: Crop; alt?: string; opacity?: number };
 /** An element that isn't a group: what a group can hold. */
 export type LeafElement = TextElement | ShapeElement | LineElement | ImageElement;
 /**
@@ -43,7 +51,7 @@ export type GroupElement = Common & { type: "group"; elements: LeafElement[] };
 export type Element = LeafElement | GroupElement;
 
 export type Layout = "title" | "title-body" | "two-column" | "image-right" | "section" | "blank" | "quote" | "big-number" | "three-column" | "comparison" | "image-full" | "image-left" | "agenda" | "closing";
-export type Slide = { id: string; layout: Layout; background?: { color: ColorRef }; notes?: string; hidden?: boolean; elements: Element[] };
+export type Slide = { id: string; layout: Layout; background?: { color: Fill }; notes?: string; hidden?: boolean; elements: Element[] };
 export type Theme = { name: string; fonts: { heading: Slot; body: Slot }; colors: Record<ThemeColor, string> };
 export type Asset = { mime: "image/png" | "image/jpeg"; w: number; h: number; alt?: string };
 export type Deck = { schema: 1; size: { w: number; h: number }; theme: Theme; assets: Record<string, Asset>; slides: Slide[] };
@@ -95,6 +103,42 @@ export function resolveColor(theme: Theme, c: ColorRef | undefined, fallback: Th
   const v = c ?? fallback;
   return v.startsWith("#") ? v.toUpperCase() : (theme.colors[v as ThemeColor] ?? theme.colors[fallback]);
 }
+
+export const isGradient = (f: Fill | undefined): f is Gradient => typeof f === "object" && f !== null;
+
+/** A fill resolved against the theme. */
+export function resolvePaint(theme: Theme, f: Fill | undefined, fallback: ThemeColor = "text"): Paint {
+  if (!isGradient(f)) return resolveColor(theme, f, fallback);
+  return { angle: f.angle, stops: [resolveColor(theme, f.stops[0], fallback), resolveColor(theme, f.stops[1], fallback)] };
+}
+
+/** A CSS background for a fill (toolbar swatches). */
+export function paintCss(p: Paint): string {
+  return typeof p === "string" ? p : `linear-gradient(${p.angle + 90}deg, ${p.stops[0]}, ${p.stops[1]})`;
+}
+
+/**
+ * Where a gradient at angle runs across a box: from the edge or corner it
+ * starts at to the opposite one, like CSS and PowerPoint (unscaled), so both
+ * end colours reach the box's extremes.
+ */
+export function gradientLine(angle: number, x: number, y: number, w: number, h: number) {
+  const a = (angle * Math.PI) / 180, dx = Math.cos(a), dy = Math.sin(a);
+  const half = (Math.abs(w * dx) + Math.abs(h * dy)) / 2, cx = x + w / 2, cy = y + h / 2;
+  return { x1: cx - dx * half, y1: cy - dy * half, x2: cx + dx * half, y2: cy + dy * half };
+}
+
+/** Dash styles: the pattern is in multiples of the stroke width (PowerPoint's dash, sysDot, dashDot and lgDash). */
+export const DASHES: { id: Dash; label: string; pattern: number[]; pptx: "solid" | "dash" | "sysDot" | "dashDot" | "lgDash" }[] = [
+  { id: "solid", label: "Solid", pattern: [], pptx: "solid" },
+  { id: "dash", label: "Dash", pattern: [4, 3], pptx: "dash" },
+  { id: "dot", label: "Dot", pattern: [1, 1], pptx: "sysDot" },
+  { id: "dashDot", label: "Dash-dot", pattern: [4, 3, 1, 3], pptx: "dashDot" },
+  { id: "longDash", label: "Long dash", pattern: [8, 3], pptx: "lgDash" },
+];
+
+/** A dash style as lengths in slide units for a stroke width; empty for solid. */
+export const dashArray = (d: Dash | undefined, sw: number): number[] => (DASHES.find((x) => x.id === d)?.pattern ?? []).map((n) => n * sw);
 
 /** The slot a run's font resolves to. */
 export const slotOf = (theme: Theme, f: FontRef | undefined): Slot => (f === undefined || f === "body" ? theme.fonts.body : f === "heading" ? theme.fonts.heading : f);

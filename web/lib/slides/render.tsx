@@ -5,7 +5,7 @@ import { FAMILY, loadSlideFonts, measure, resetMeasureCache } from "./fonts";
 import { svgPath } from "./geometry";
 import { layoutSlide, type Laid, type Op } from "./layout";
 import { findDeep } from "./group";
-import { H, W, slideText, type Deck, type Slide } from "./schema";
+import { H, W, gradientLine, slideText, type Deck, type Paint, type Slide } from "./schema";
 
 /** True once the slide fonts have loaded; layout before that would measure a fallback font. */
 export function useSlideFonts(): boolean {
@@ -37,15 +37,44 @@ function rotate(o: Op) {
   return o.rot ? `rotate(${o.rot.deg} ${o.rot.cx} ${o.rot.cy})` : undefined;
 }
 
+/** A fill's SVG paint, with the gradient it needs (in the shape's own, unrotated space). */
+function paint(p: Paint | undefined, id: string, box: { x: number; y: number; w: number; h: number }) {
+  if (!p) return { fill: "none" };
+  if (typeof p === "string") return { fill: p };
+  const g = gradientLine(p.angle, box.x, box.y, box.w, box.h);
+  return {
+    fill: `url(#${id})`,
+    def: (
+      <linearGradient id={id} gradientUnits="userSpaceOnUse" {...g}>
+        <stop offset="0" stopColor={p.stops[0]} />
+        <stop offset="1" stopColor={p.stops[1]} />
+      </linearGradient>
+    ),
+  };
+}
+
+const strokeProps = (o: { stroke?: string; sw: number; so?: number; dash?: number[] }) =>
+  o.stroke ? { stroke: o.stroke, strokeWidth: o.sw, strokeOpacity: o.so, strokeDasharray: o.dash?.length ? o.dash.join(" ") : undefined } : {};
+
 function draw(o: Op, i: number, deck: Deck, assetUrl: (id: string) => string, uid: string) {
   const t = rotate(o);
   switch (o.op) {
     case "rect":
-      return <rect key={i} x={o.x} y={o.y} width={o.w} height={o.h} rx={o.r} fill={o.fill ?? "none"} stroke={o.stroke} strokeWidth={o.stroke ? o.sw : undefined} transform={t} />;
     case "ellipse":
-      return <ellipse key={i} cx={o.x + o.w / 2} cy={o.y + o.h / 2} rx={o.w / 2} ry={o.h / 2} fill={o.fill ?? "none"} stroke={o.stroke} strokeWidth={o.stroke ? o.sw : undefined} transform={t} />;
-    case "path":
-      return <path key={i} d={svgPath(o.segs)} fill={o.fill ?? "none"} stroke={o.stroke} strokeWidth={o.stroke ? o.sw : undefined} strokeLinejoin="miter" transform={t} />;
+    case "path": {
+      const p = paint(o.fill, `${uid}-grad-${i}`, o.op === "path" ? o.box : o);
+      const props = { fill: p.fill, fillOpacity: o.fo, ...strokeProps(o), transform: t };
+      const shape =
+        o.op === "rect" ? <rect x={o.x} y={o.y} width={o.w} height={o.h} rx={o.r} {...props} /> : o.op === "ellipse" ? <ellipse cx={o.x + o.w / 2} cy={o.y + o.h / 2} rx={o.w / 2} ry={o.h / 2} {...props} /> : <path d={svgPath(o.segs)} strokeLinejoin="miter" {...props} />;
+      return p.def ? (
+        <g key={i}>
+          <defs>{p.def}</defs>
+          {shape}
+        </g>
+      ) : (
+        <g key={i}>{shape}</g>
+      );
+    }
     case "line": {
       const id = `${uid}-arrow-${i}`;
       return (
@@ -53,11 +82,11 @@ function draw(o: Op, i: number, deck: Deck, assetUrl: (id: string) => string, ui
           {(o.endArrow || o.startArrow) && (
             <defs>
               <marker id={id} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
-                <path d="M0,0 L10,5 L0,10 z" fill={o.stroke} />
+                <path d="M0,0 L10,5 L0,10 z" fill={o.stroke} fillOpacity={o.so} />
               </marker>
             </defs>
           )}
-          <line x1={o.x1} y1={o.y1} x2={o.x2} y2={o.y2} stroke={o.stroke} strokeWidth={o.sw} markerEnd={o.endArrow ? `url(#${id})` : undefined} markerStart={o.startArrow ? `url(#${id})` : undefined} />
+          <line x1={o.x1} y1={o.y1} x2={o.x2} y2={o.y2} stroke={o.stroke} strokeWidth={o.sw} strokeOpacity={o.so} strokeDasharray={o.dash?.length ? o.dash.join(" ") : undefined} markerEnd={o.endArrow ? `url(#${id})` : undefined} markerStart={o.startArrow ? `url(#${id})` : undefined} />
         </g>
       );
     }
@@ -70,7 +99,7 @@ function draw(o: Op, i: number, deck: Deck, assetUrl: (id: string) => string, ui
           <clipPath id={clip}>
             <rect x={o.x} y={o.y} width={o.w} height={o.h} />
           </clipPath>
-          <image clipPath={`url(#${clip})`} href={assetUrl(o.asset)} x={o.x - o.src.x * s} y={o.y - o.src.y * s} width={a.w * s} height={a.h * s} preserveAspectRatio="none">
+          <image clipPath={`url(#${clip})`} href={assetUrl(o.asset)} x={o.x - o.src.x * s} y={o.y - o.src.y * s} width={a.w * s} height={a.h * s} opacity={o.opacity} preserveAspectRatio="none">
             {o.alt && <title>{o.alt}</title>}
           </image>
         </g>

@@ -16,7 +16,7 @@ export type PptxGroup = { id: string; frame: Frame; children: string[] };
 const OBJECT = /<p:(sp|pic|cxnSp|graphicFrame)\b[^>]*>[\s\S]*?<\/p:\1>/g;
 const nameOf = (obj: string) => /<p:cNvPr\b[^>]*\bname="([^"]*)"/.exec(obj)?.[1];
 
-/** A slide's XML with each group's children wrapped in a p:grpSp; groups whose children aren't all found are left as loose shapes. */
+/** A slide's XML with each group's children wrapped in a p:grpSp; a group with fewer than two shapes in the file is left as is. */
 export function wrapGroups(xml: string, groups: PptxGroup[]): string {
   if (!groups.length) return xml;
   const objs = [...xml.matchAll(OBJECT)].map((m) => ({ start: m.index!, end: m.index! + m[0].length, name: nameOf(m[0]) }));
@@ -25,7 +25,8 @@ export function wrapGroups(xml: string, groups: PptxGroup[]): string {
   const cuts: { start: number; end: number; open: string }[] = [];
   for (const g of groups) {
     const mine = objs.filter((o) => o.name && g.children.includes(o.name));
-    if (mine.length !== g.children.length || !mine.length) continue;
+    // Children that drew nothing (an empty image slot, a missing image) aren't in the file.
+    if (mine.length < 2) continue;
     const e = (v: number) => Math.round(v * EMU);
     const off = `x="${e(g.frame.x)}" y="${e(g.frame.y)}"`, ext = `cx="${e(g.frame.w)}" cy="${e(g.frame.h)}"`;
     const open =
