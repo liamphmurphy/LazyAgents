@@ -35,7 +35,7 @@ const (
 // Service saves readings and keeps them fresh.
 type Service struct {
 	Q *store.Queries
-	// Probe checks a harness through its CLI, as on the local backend.
+	// Probe checks a harness through its CLI, as on the fake backend.
 	Probe func(ctx context.Context, harness string) (Snapshot, error)
 	// Queued asks a runner instead (harness_usage_checks), as on the Docker
 	// backend, where the CLIs and their logins live in run containers. With

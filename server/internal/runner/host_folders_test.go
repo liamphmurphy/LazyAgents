@@ -11,7 +11,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// hostFolderLocal is the local backend posing as one with host folders, so
+// hostFolderLocal is the fake backend posing as one with host folders, so
 // the runner's choice can be watched without Docker.
 type hostFolderLocal struct {
 	*runner.Fake

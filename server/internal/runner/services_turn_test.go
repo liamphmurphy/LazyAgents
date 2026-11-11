@@ -17,7 +17,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/testenv"
 )
 
-// svcBackend is the local backend plus fake services, recording what the
+// svcBackend is the fake backend plus fake services, recording what the
 // turn was given.
 type svcBackend struct {
 	*runner.Fake
@@ -92,8 +92,8 @@ func TestTurnFailsWhenItsServicesDont(t *testing.T) {
 	}
 }
 
-// The local runner can't start services: the turn runs anyway and says so.
-func TestLocalRunnerSkipsServices(t *testing.T) {
+// The fake runner can't start services: the turn runs anyway and says so.
+func TestFakeRunnerSkipsServices(t *testing.T) {
 	e := setup(t)
 	e.dispatch("PAY-214")
 	withServices(e, "PAY-214")

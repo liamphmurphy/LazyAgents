@@ -50,7 +50,7 @@ type env struct {
 func setup(t *testing.T) env { return setupWith(t, nil) }
 
 // backendFor builds a backend given the fake harness binary path and the
-// test server's URL; nil means the local backend.
+// test server's URL; nil means the fake backend.
 type backendFor func(t *testing.T, dir, bin, url string) (runner.Backend, string)
 
 func setupWith(t *testing.T, mk backendFor) env {
@@ -124,7 +124,7 @@ func setupWith(t *testing.T, mk backendFor) env {
 		}
 	}
 	t.Setenv("PATH", safe)
-	var backend runner.Backend = &runner.Fake{Dir: filepath.Join(dir, "work"), Bins: map[string]string{"claude": bin, "codex": bin}, OnlyBins: true}
+	var backend runner.Backend = &runner.Fake{Dir: filepath.Join(dir, "work"), Bins: map[string]string{"claude": bin, "codex": bin}}
 	mcpURL := ts.URL + "/mcp"
 	if mk != nil {
 		backend, mcpURL = mk(t, dir, bin, ts.URL)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real-stack e2e: Go API + runner (RUNNER_BACKEND=local) +
+# Real-stack e2e: Go API + runner (RUNNER_BACKEND=fake) +
 # Postgres + SeaweedFS (S3) + Next, with the deterministic fake-harness binary
 # standing in for `claude` and `codex`. See README.md.
 #
@@ -100,7 +100,7 @@ stack_env() {
     API_ADDR="127.0.0.1:$API_PORT" DATABASE_URL="$DATABASE_URL" \
     S3_ENDPOINT="$S3_ENDPOINT" SEED=false PR_SYNC_INTERVAL_S=0 \
     SECRETS_KEY="$SECRETS_KEY" PUBLIC_URL="$WEB_URL" \
-    RUNNER_BACKEND=local RUNNER_DATA_DIR="$TMP/runs" RUNNER_MCP_URL="$API_URL/mcp" \
+    RUNNER_BACKEND=fake RUNNER_DATA_DIR="$TMP/runs" RUNNER_MCP_URL="$API_URL/mcp" \
     RUNNER_CLAUDE_BIN="$TMP/bin/claude" RUNNER_CODEX_BIN="$TMP/bin/codex" \
     FAKE_HARNESS_MODE=chat-read "$@"
 }

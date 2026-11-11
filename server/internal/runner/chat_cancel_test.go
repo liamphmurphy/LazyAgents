@@ -269,7 +269,7 @@ func TestRecoverCancelledChatFromDeadRunner(t *testing.T) {
 				t.Fatal(err)
 			}
 			if live {
-				if err := e.q.Heartbeat(e.ctx, store.HeartbeatParams{ID: "previous-runner", Backend: "local", MaxConcurrent: 1, Version: "test"}); err != nil {
+				if err := e.q.Heartbeat(e.ctx, store.HeartbeatParams{ID: "previous-runner", Backend: "fake", MaxConcurrent: 1, Version: "test"}); err != nil {
 					t.Fatal(err)
 				}
 			}

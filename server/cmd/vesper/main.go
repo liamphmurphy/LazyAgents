@@ -2,7 +2,7 @@
 //
 //	vesper serve        run migrations, ensure buckets, serve HTTP (default)
 //	vesper migrate      run migrations and exit
-//	vesper runner       execute dispatched runs (docker or local backend)
+//	vesper runner       execute dispatched runs in hardened containers
 //	vesper healthcheck  exit 0 if the local API reports healthy (for container probes)
 //	vesper sign-in-link print a one-time link that signs a browser in (-code: just the code)
 package main
@@ -183,9 +183,9 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		Log:            log,
 		Usage:          &usage.Service{Q: q, Log: log},
 	}
-	// The local backend runs the host's CLIs with their own logins, so the API
-	// can ask them for usage. In Docker the CLIs and logins live in agent
-	// containers, so the API queues checks for a runner to answer.
+	// In Docker the CLIs and logins live in agent containers, so the API
+	// queues usage checks for a runner to answer. The fake backend's stand-in
+	// harnesses (config requires RUNNER_*_BIN) answer the API directly.
 	if cfg.Runner.Backend == "docker" {
 		srv.Usage.Queued = true
 	} else {
@@ -358,16 +358,9 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		}
 		cancel()
 		backend = d
-	case "local":
-		log.Warn("RUNNER_BACKEND=local runs harnesses on this machine with no isolation, using its own CLI logins")
-		bins := map[string]string{}
-		if rc.ClaudeBin != "" {
-			bins["claude"] = rc.ClaudeBin
-		}
-		if rc.CodexBin != "" {
-			bins["codex"] = rc.CodexBin
-		}
-		backend = &runner.Fake{Dir: rc.DataDir, Bins: bins}
+	case "fake":
+		log.Warn("RUNNER_BACKEND=fake runs stand-in harnesses on this machine with no isolation; it's only for tests and playgrounds")
+		backend = &runner.Fake{Dir: rc.DataDir, Bins: map[string]string{"claude": rc.ClaudeBin, "codex": rc.CodexBin}}
 	}
 	host, _ := os.Hostname()
 	blobs := blob.New(cfg.S3)

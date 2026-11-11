@@ -11,7 +11,7 @@ import (
 )
 
 // ServiceBackend starts the services a run's spec declares (agentdef.Service)
-// next to one turn. The local backend has no isolation to offer and doesn't
+// next to one turn. The fake backend has no isolation to offer and doesn't
 // implement it.
 type ServiceBackend interface {
 	// StartServices starts services on a new network named for key and waits
@@ -34,8 +34,7 @@ func (r *Runner) startServices(ctx context.Context, c runCtx, turn store.RunTurn
 	}
 	sb, ok := r.Backend.(ServiceBackend)
 	if !ok {
-		// The local runner shares the host; its runs use the host's services
-		// (TEST_DATABASE_URL from `make local-runner`) instead.
+		// The fake runner shares the host and has no services to start.
 		r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "services_skipped", "services": names,
 			"reason": "the " + r.Backend.Name() + " runner can't start services"})
 		return nil, func() {}, ""
