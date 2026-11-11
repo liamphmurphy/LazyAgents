@@ -70,3 +70,46 @@ func TestPlainSeedCreatesLocalUser(t *testing.T) {
 		t.Fatalf("me = %+v", body.Me)
 	}
 }
+
+func TestFreshBootHasOnlyTheOwnerAndFullyEnabledAssistant(t *testing.T) {
+	s, h := newServer(t)
+	ctx := context.Background()
+	if _, err := seed.Run(ctx, s.Pool, seed.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	var boot struct {
+		Users, Agents, Projects, Epics, Labels []json.RawMessage
+	}
+	rec := get(h, "/api/v1/bootstrap")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bootstrap: %d %s", rec.Code, rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &boot); err != nil {
+		t.Fatal(err)
+	}
+	if len(boot.Users) != 1 || len(boot.Agents)+len(boot.Projects)+len(boot.Epics)+len(boot.Labels) != 0 {
+		t.Fatalf("fresh boot contains demo data: %s", rec.Body)
+	}
+	me, err := s.Q.GetLocalUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.Q.DefaultPersona(ctx, store.DefaultPersonaParams{WorkspaceID: me.WorkspaceID, UserID: me.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Name != "Assistant" || !p.CanCode || !p.CanGenerateImages || !p.CanCreatePersonas || !p.CanCreateSvgs || !p.CanCreateWorkflows || !p.CanCreateConnectors {
+		t.Fatalf("initial Assistant permissions: %+v", p)
+	}
+	// Restarting must preserve permission choices on an existing Assistant.
+	if _, err := s.Pool.Exec(ctx, "UPDATE personas SET can_code=false WHERE id=$1", p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := seed.Run(ctx, s.Pool, seed.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	p, err = s.Q.DefaultPersona(ctx, store.DefaultPersonaParams{WorkspaceID: me.WorkspaceID, UserID: me.ID})
+	if err != nil || p.CanCode {
+		t.Fatalf("restart changed permissions: %+v %v", p, err)
+	}
+}

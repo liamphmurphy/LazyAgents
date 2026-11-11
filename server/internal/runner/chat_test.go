@@ -60,6 +60,7 @@ func TestChatTurnsResumeWithoutTools(t *testing.T) {
 	for _, name := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex} {
 		t.Run(name, func(t *testing.T) {
 			e := setup(t)
+			reader := e.persona("Read only", false, false)
 			t.Setenv("FAKE_HARNESS_MODE", "chat")
 			if err := (&agents.Service{Pool: e.pool}).SetOverride(e.ctx, e.ws, e.me.ID, e.assistant().Handle, "PAY", agentdef.Override{Harness: name, Setup: []string{"exit 79"}, Budget: agentdef.Budget{MaxTurns: 1, MaxRuntime: "3s"}}); err != nil {
 				t.Fatal(err)
@@ -67,7 +68,10 @@ func TestChatTurnsResumeWithoutTools(t *testing.T) {
 			if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url='https://invalid.example/must-not-clone.git' WHERE key='PAY'"); err != nil {
 				t.Fatal(err)
 			}
-			chat := e.startChat("First question")
+			chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "Test chat", PersonaID: &reader.ID, Message: &runs.ChatMessageInput{Body: "First question"}})
+			if err != nil {
+				t.Fatal(err)
+			}
 			e.until("first chat reply", func() bool { return e.chat(chat.ID).State == "idle" })
 			first := e.chatRun(chat.ID)
 			if first.State != "waiting" || deref(first.WaitReason) != "human_reply" || first.HarnessSessionID == nil || first.Purpose != "chat" || first.TicketID != nil {
