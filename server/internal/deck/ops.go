@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 )
 
 // Op is one persona edit to a deck, keyed by stable ids.
@@ -96,8 +97,8 @@ func (d *Deck) apply(op Op) error {
 	case "set_theme":
 		var t Theme
 		if name, ok := op.Value["preset"].(string); ok && len(op.Value) == 1 {
-			if _, known := Themes[name]; !known {
-				return fmt.Errorf("unknown preset %q", name)
+			if _, known := Themes[strings.ToLower(name)]; !known {
+				return fmt.Errorf("unknown theme %q; built-in themes: %s", name, strings.Join(ThemeOrder, ", "))
 			}
 			t = ThemeNamed(name)
 		} else if err := merge(d.Theme, op.Value, &t); err != nil {
