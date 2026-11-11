@@ -102,7 +102,7 @@ func TestLeaseLossStopsProcessBeforeReclaim(t *testing.T) {
 	if _, err := r.Pool.Exec(context.Background(), "UPDATE run_turns SET execution_expires_at=$2 WHERE id=$1", turn.ID, expires); err != nil {
 		t.Fatal(err)
 	}
-	b := &Local{Dir: t.TempDir()}
+	b := &Fake{Dir: t.TempDir()}
 	if err := b.EnsureWorkspace(context.Background(), turn.RunID.String()); err != nil {
 		t.Fatal(err)
 	}

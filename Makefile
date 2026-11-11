@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 COMPOSE_DEV := docker compose -f docker-compose.dev.yml
 
-.PHONY: help up down start setup signin login claude-login codex-login github-login stop-dev dev dev-infra api web web-deps runner stop-host-runners local-dev local-runner gen gen-check test lint build reset
+.PHONY: help up down start setup signin login claude-login codex-login github-login stop-dev dev dev-infra api web web-deps runner stop-host-runners gen gen-check test lint build reset
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -18,8 +18,6 @@ dev-infra: ## Start postgres + seaweedfs only
 
 API_PORT ?= 8000
 WEB_PORT ?= 3000
-# Agents run in hardened containers. `make local-dev` and `make local-runner` are the no-isolation fallback.
-RUNNER_BACKEND ?= docker
 # Host-folder workspaces (docs/guide.md, "Open a run's code"): set in the environment or .env.
 VESPER_WORKSPACES_DIR ?= $(shell sed -n 's/^VESPER_WORKSPACES_DIR=//p' .env 2>/dev/null)
 export VESPER_WORKSPACES_DIR
@@ -31,8 +29,6 @@ export SECRETS_KEY
 # Processes the runner runs at once; delegated runs and resumed turns share these slots.
 RUNNER_MAX_CONCURRENT ?= 8
 export RUNNER_MAX_CONCURRENT API_PORT
-# Local runs inherit this, so agents' DB tests use the dev Postgres (each test makes its own database) instead of starting one.
-TEST_DATABASE_URL ?= postgres://lazyagents:lazyagents@127.0.0.1:5432/postgres?sslmode=disable
 
 start: ## One command for everything: set up, sign in if needed, run the app and hardened runner → http://localhost:3000
 	@API_PORT=$(API_PORT) scripts/vesper-setup.sh start
@@ -72,29 +68,18 @@ dev: dev-infra stop-dev ## Infra in Docker, API (hot reload) + Next dev on the h
 	  wait
 
 api: ## Run the API (hot reload if air is installed: go install github.com/air-verse/air@latest)
-	cd server && export RUNNER_BACKEND=$(RUNNER_BACKEND) PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000} WEB_URL=$${WEB_URL:-http://localhost:$(WEB_PORT)}; \
+	cd server && export PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000} WEB_URL=$${WEB_URL:-http://localhost:$(WEB_PORT)}; \
 	  if command -v air >/dev/null; then air; else go run ./cmd/vesper serve; fi
 
-ifeq ($(RUNNER_BACKEND),docker)
 runner: stop-host-runners ## Run dispatched tickets in hardened containers; replaces any runner already running
 	$(RUNNER_COMPOSE) up -d --force-recreate runner
 	@trap '$(RUNNER_COMPOSE) stop runner >/dev/null 2>&1' EXIT; $(RUNNER_COMPOSE) logs -f --no-log-prefix runner
-else
-runner: ## Run dispatched tickets on this machine (no isolation)
-	cd server && RUNNER_BACKEND=local RUNNER_MAX_CONCURRENT=$(RUNNER_MAX_CONCURRENT) TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go run ./cmd/vesper runner
-endif
 
 stop-host-runners: ## Stop runners an older `make start` left on the host: they claim runs with stale code
 	@for pid in $$(pgrep -f 'vesper runner$$' 2>/dev/null); do \
 	  echo "stopping host runner $$pid — $$(ps -o command= -p $$pid)"; \
 	  kill $$pid 2>/dev/null; \
 	done; true
-
-local-dev: ## Legacy: `make dev` for the no-isolation local runner
-	@$(MAKE) --no-print-directory RUNNER_BACKEND=local dev
-
-local-runner: ## Legacy: run agents directly on this machine with its claude/codex logins, no isolation
-	@$(MAKE) --no-print-directory RUNNER_BACKEND=local runner
 
 WEB_DEPS := web/node_modules/.package-lock.json
 

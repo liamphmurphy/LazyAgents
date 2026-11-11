@@ -1,6 +1,6 @@
 # Real-stack browser e2e
 
-Browser → Next → **real Go API** → **real runner** (`RUNNER_BACKEND=local`) →
+Browser → Next → **real Go API** → **real runner** (`RUNNER_BACKEND=fake`) →
 **real Postgres**. Unlike `web/e2e/*.spec.ts`, nothing is mocked: the specs
 contain no `page.route` and the chat REST/SSE traffic is the real thing.
 

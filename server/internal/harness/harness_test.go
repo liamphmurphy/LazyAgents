@@ -680,7 +680,7 @@ func TestAgentsMDEpicReview(t *testing.T) {
 }
 
 // The host's user settings (e.g. a user-level "agent" with its own tool list)
-// must not reach a run on the local runner, where HOME is the person's own.
+// must not reach a run on the fake runner, where HOME is the host's.
 func TestClaudeSkipsUserSettings(t *testing.T) {
 	ws := Workspace{MCPURL: "http://localhost/mcp", Token: "fake", TokenEnv: "LA_TOKEN"}
 	inv, err := (ClaudeCode{}).Invocation(ws, Turn{Spec: spec("repo:read", "allowed"), Prompt: "hi"})

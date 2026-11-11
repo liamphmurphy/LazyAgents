@@ -75,10 +75,6 @@ Keep the running dependency list in Git:
 - Shared tools: [`deploy/agent-base/Dockerfile`](../deploy/agent-base/Dockerfile)
   installs the toolchains and pinned harness CLIs, Go, sqlc, and Chromium system
   libraries once per image build. Rebuild with `docker compose build agent-base`.
-- Local runners use host tools. Install missing tools with
-  `brew bundle --file=deploy/agent-base/Brewfile` (or your existing package
-  manager). Put Node 24, Go 1.26+, sqlc 1.31+, and the harness CLIs on the runner's
-  PATH. The Brewfile does not replace your CLI logins.
 - Project libraries: add `.lazyagents-deps.json` to the repository root. The
   manifest lists tool requirements and directories; exact library versions stay
   in `go.mod`/`go.sum` and `package-lock.json`. This repository includes an example:
@@ -103,9 +99,7 @@ existing setup behavior. Agent/project setup commands run after dependency setup
 Changes take effect after updating the API/runner binaries; repository manifests
 must be on the branch that new runs clone. Existing workspaces are not rewritten.
 
-All local runs share download/browser caches under `$RUNNER_DATA_DIR/cache`
-(default `server/.lazyagents/runs/cache` when launched with `make local-runner`). Docker
-runs share the named volume `lazyagents-dependency-cache` at `/cache`; workspace
+Docker runs share the named volume `lazyagents-dependency-cache` at `/cache`; workspace
 cleanup preserves it. Each checkout owns its own `node_modules` and writable Go
 build cache under `.lazyagents/cache/go-build`. Codex grants cache writes to
 execution/repository writers; scoper keeps read-only tool permissions. Shared
@@ -176,10 +170,8 @@ home directory (harness sessions, the SSH key) stays in a volume.
 Select a project, open **Chat** in the sidebar, and choose **New chat**. Select
 a harness/model, type a message, and send with Enter (Shift+Enter adds a newline).
 Chats appear in the history panel so you can return to the conversation later.
-Keep a runner online. Docker mode requires `harness:anthropic` for Claude Code
-and `harness:openai` for Codex in **Settings → Connections & secrets**. Local
-mode uses the runner account’s host CLI logins; no application provider keys are
-needed. The API must use the same `RUNNER_BACKEND` mode as the runners.
+Keep a runner online. It requires `harness:anthropic` for Claude Code and
+`harness:openai` for Codex in **Settings → Connections & secrets**.
 Unavailable models are disabled in the picker.
 
 Change the picker before sending to use a different model or harness for the
@@ -319,8 +311,7 @@ make test
 make help    # everything else
 ```
 
-`make api`, `make dev` and `make runner` default to `RUNNER_BACKEND=docker`.
-The API inherits this setting through hot reload too. Each turn runs in a
+Agents only run in Docker (`RUNNER_BACKEND=docker`, the default). Each turn runs in a
 container with no capabilities, `no-new-privileges`, memory and process limits
 (`RUNNER_MEMORY_MB`, `RUNNER_PIDS_LIMIT`), and no mounts from your machine. The
 container is Codex's sandbox there, because Docker blocks the namespaces its own
@@ -412,8 +403,8 @@ into a run at dispatch, so an agent can't change them:
 
 The turn starts once every healthcheck passes (or, without one, once the
 container runs), within two minutes; a service that fails to start fails the
-run with its last log lines. The local runner skips services, the Docker proxy
-and Nix, and says so.
+run with its last log lines. The fake backend (below) skips services, the
+Docker proxy and Nix, and says so.
 
 Database-backed Go tests skip without `TEST_DATABASE_URL` when you run them,
 but fail inside a Vesper run (`LAZYAGENTS_RUN_ID`) or on CI, so "tests pass"
@@ -446,22 +437,21 @@ never passes through the browser. A sign-in gives up after 15 minutes, and
 starting another for the same provider replaces it. To replace a key that's
 already set, use **Replace** or the `make` targets above.
 
-Switching backends keeps your chats. A chat whose session is on the other
-backend continues in a new session with its recent messages (the last 40, up to
+Upgrading from the removed `local` backend keeps your chats. A chat whose
+session was there continues on Docker in a new session with its recent messages (the last 40, up to
 24,000 characters in total), and says so in the chat. Its old workspace stays
 with the backend that made it. Before any chat workspace is removed, unpushed
 work goes to a `vesper-checkpoint/chat/<run>` branch. If that push fails the
 workspace is kept, and files with nowhere to push stay on disk.
 
-`make local-dev` and `make local-runner` are the legacy fallback: no isolation,
-and they use this machine's CLIs and logins, ignoring stored plan logins. Direct
-`vesper serve` / `runner` commands and the full Docker stack also default
-to Docker. Set `RUNNER_BACKEND=local` explicitly for direct local commands.
+`RUNNER_BACKEND=fake` is for tests and disposable instances only (the e2e
+stack, playgrounds): turns run on the host with no isolation, every harness is
+a stand-in binary (`server/cmd/fake-harness`), and the runner and API refuse to
+start unless `RUNNER_CLAUDE_BIN` and `RUNNER_CODEX_BIN` both name one. It needs
+no provider keys, and shares download caches under `$RUNNER_DATA_DIR/cache`.
+Set the same `RUNNER_BACKEND` on the API and its runners.
 
-The API catalog uses its own configured backend; it does not discover runner
-capabilities. Mixed local/Docker pools have no backend-aware chat routing, so
-catalog availability cannot guarantee which runner claims a turn. Use a
-coordinated, consistent pool for chat verification. See the
+See the
 [runtime refresh procedure](dev/verification/LAZYAGENTS-14-runtime-evidence.md#coordinated-refresh-procedure)
 before replacing existing runners with active work. `make dev` replaces API/web
 listeners; use it only during a coordinated maintenance window.
@@ -504,7 +494,7 @@ minutes by default), when its chat's workspace is cleaned up, and when the
 runner restarts. Its processes run in the turn's sandbox from the chat's
 workspace, so they reload on the agent's edits if the app watches for changes,
 but they don't get the agent's credentials, home directory or tools it
-installed with Nix during the chat. The local runner has no playgrounds.
+installed with Nix during the chat. The fake backend has no playgrounds.
 [docs/dev/playgrounds.md](dev/playgrounds.md) has the design and its
 trade-offs.
 
@@ -538,8 +528,7 @@ editor, or set `fallbacks` in the definition API:
 ```
 
 Each target requires a harness and model; optional `harness_options` apply only
-to that target. Configure credentials for every harness (local runners may use
-CLI logins). Targets are tried once, in order, only for provider quota/rate-limit
+to that target. Configure credentials for every harness. Targets are tried once, in order, only for provider quota/rate-limit
 errors. Other errors still fail the run. The same checkout, plan and accumulated
 usage are retained; the next harness starts a fresh session with the original
 task, recent inputs and last assistant message. Full conversation state is not
@@ -564,8 +553,7 @@ It also checks that the hook is loaded and refuses to run if another
 active hook is unreviewed. Only then does it use Codex's automation hook-trust
 flag. It does not disable the sandbox or shell approval policy. Like the CLI's
 own tool rules, hooks provide best-effort enforcement, not isolation from a
-malicious program; Docker remains the isolation boundary. Local runners inherit
-the host's environment and logins. `python3` is required by both adapters and is
+malicious program; Docker remains the isolation boundary. `python3` is required by both adapters and is
 included in the runner image.
 
 Repository-authorized Codex turns use a workspace permission profile that also

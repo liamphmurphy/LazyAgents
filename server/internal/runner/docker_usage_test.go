@@ -87,7 +87,7 @@ func TestDockerProbeUsageHungCLIStillCleansUp(t *testing.T) {
 
 // fakeProber stands in for the Docker backend's usage checks.
 type fakeProber struct {
-	*Local
+	*Fake
 	snap  usage.Snapshot
 	err   error
 	mu    sync.Mutex
@@ -123,7 +123,7 @@ func (e listingEnv) check(t *testing.T, harness string) (store.ProviderUsage, st
 func newUsageEnv(t *testing.T, p *fakeProber) listingEnv {
 	t.Helper()
 	e := newListingEnv(t, &fakeLister{})
-	p.Local = e.f.Local
+	p.Fake = e.f.Fake
 	e.r.Backend = p
 	return e
 }

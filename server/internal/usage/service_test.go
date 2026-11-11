@@ -188,6 +188,6 @@ func TestLocalRefreshIgnoresTheQueue(t *testing.T) {
 	}
 	runner := "r1"
 	if _, err := e.q.ClaimUsageCheck(e.ctx, &runner); err == nil {
-		t.Fatal("the local backend queued a check")
+		t.Fatal("the fake backend queued a check")
 	}
 }

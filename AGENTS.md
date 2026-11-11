@@ -28,7 +28,7 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
       "command": "(until curl -sf http://localhost:8000/api/v1/health >/dev/null; do sleep 1; done; exec /workspace/.lazyagents/pgbin/vesper runner) & exec /workspace/.lazyagents/pgbin/vesper serve",
       "env": { "DATABASE_URL": "postgres://lazyagents:lazyagents@postgres:5432/lazyagents?sslmode=disable",
                "S3_ENDPOINT": "http://s3:8333", "API_ADDR": "0.0.0.0:8000", "VESPER_NO_SIGNIN": "1",
-               "RUNNER_BACKEND": "local", "RUNNER_MCP_URL": "http://localhost:8000/mcp", "RUNNER_DATA_DIR": "/tmp/runs",
+               "RUNNER_BACKEND": "fake", "RUNNER_MCP_URL": "http://localhost:8000/mcp", "RUNNER_DATA_DIR": "/tmp/runs",
                "RUNNER_CLAUDE_BIN": "/workspace/.lazyagents/pgbin/claude", "RUNNER_CODEX_BIN": "/workspace/.lazyagents/pgbin/codex",
                "FAKE_HARNESS_MODE": "chat-read" } },
     { "name": "web", "dir": "web", "port": 3000, "command": "npm run dev -- -H 0.0.0.0 -p 3000",
@@ -52,7 +52,7 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
   it anywhere but a disposable local instance.
 - Leave `SECRETS_KEY` unset: secrets are then off, which a throwaway instance
   doesn't need.
-- The inner Vesper has a runner (`vesper runner`, local backend), started in
+- The inner Vesper has a runner (`vesper runner`, fake backend), started in
   the api container once the API is healthy: a process needs a port, and the
   runner listens on none. Its `claude` and `codex` are the repository's
   `fake-harness`, so chats get canned replies through the real MCP path and

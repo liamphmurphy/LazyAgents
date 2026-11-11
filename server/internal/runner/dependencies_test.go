@@ -104,7 +104,7 @@ func TestDependencySetup(t *testing.T) {
 }
 
 func TestLocalDependencyCachesSharedButBuildsSeparate(t *testing.T) {
-	l := &Local{Dir: t.TempDir()}
+	l := &Fake{Dir: t.TempDir()}
 	for _, id := range []string{"one", "two"} {
 		if err := l.EnsureWorkspace(context.Background(), id); err != nil {
 			t.Fatal(err)

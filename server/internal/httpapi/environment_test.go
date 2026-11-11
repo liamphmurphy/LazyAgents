@@ -42,7 +42,7 @@ func TestRunnerEnvironmentSnapshots(t *testing.T) {
 		if _, err = pool.Exec(ctx, "UPDATE runs SET runner_id='previous-runner' WHERE id=$1", r.ID); err != nil {
 			t.Fatal(err)
 		}
-		payload, _ := json.Marshal(map[string]any{"state": "environment_snapshot", "runner_id": "runner-one", "backend": "local", "report": map[string]any{"status": status, "manifest": ".lazyagents-deps.json", "tools": []map[string]any{{"name": "go", "available": true, "version": "go1.26.0"}}}})
+		payload, _ := json.Marshal(map[string]any{"state": "environment_snapshot", "runner_id": "runner-one", "backend": "fake", "report": map[string]any{"status": status, "manifest": ".lazyagents-deps.json", "tools": []map[string]any{{"name": "go", "available": true, "version": "go1.26.0"}}}})
 		if err = q.AddRunEvent(ctx, store.AddRunEventParams{RunID: r.ID, Type: "lifecycle", Payload: payload}); err != nil {
 			t.Fatal(err)
 		}
@@ -57,7 +57,7 @@ func TestRunnerEnvironmentSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := makeRun(otherWorkspace, "ready")
-	if err = q.Heartbeat(ctx, store.HeartbeatParams{ID: "runner-one", Backend: "local", MaxConcurrent: 2}); err != nil {
+	if err = q.Heartbeat(ctx, store.HeartbeatParams{ID: "runner-one", Backend: "fake", MaxConcurrent: 2}); err != nil {
 		t.Fatal(err)
 	}
 	h := (&Server{AnonymousAPI: true, Pool: pool, Q: q}).Handler()
