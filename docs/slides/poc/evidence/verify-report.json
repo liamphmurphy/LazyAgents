@@ -1,0 +1,199 @@
+{
+  "pdf": {
+    "pages": 5,
+    "first_words": [
+      "Quarterly review Slides acceptance deck \u00b7",
+      "What changed this quarter \u2022 Revenue",
+      "Images are cropped, not squashed The",
+      "Editable text in a shape Rotated",
+      "Questions? mono: deck.schema = 1"
+    ],
+    "images_on_page": [
+      0,
+      0,
+      1,
+      0,
+      0
+    ],
+    "fonts": [
+      "Liberation Mono (embedded)",
+      "Liberation Sans (embedded)",
+      "Liberation Serif (embedded)"
+    ]
+  },
+  "pptx": {
+    "slide_size_in": [
+      13.333,
+      7.5
+    ],
+    "slides": [
+      {
+        "id": "s_title",
+        "shapes": [
+          {
+            "name": "e_t1",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "Quarterly review",
+            "fonts": [
+              "Arial"
+            ]
+          },
+          {
+            "name": "e_t2",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "Slides acceptance deck \u00b7 v1 schema",
+            "fonts": [
+              "Arial"
+            ]
+          },
+          {
+            "name": "e_t3",
+            "kind": "AUTO_SHAPE",
+            "editable_text": false
+          }
+        ]
+      },
+      {
+        "id": "s_bullets",
+        "shapes": [
+          {
+            "name": "e_b1",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "What changed this quarter",
+            "fonts": [
+              "Arial"
+            ]
+          },
+          {
+            "name": "e_b2",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "Revenue grew 18% against a plan of 12%, driven by the self-s",
+            "fonts": [
+              "Arial"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s_image",
+        "shapes": [
+          {
+            "name": "e_i1",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "Images are cropped, not squashed",
+            "fonts": [
+              "Arial"
+            ]
+          },
+          {
+            "name": "e_i2",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "The photo is 3:2; its frame is nearly square. A crop rectang",
+            "fonts": [
+              "Arial",
+              "Times New Roman"
+            ]
+          },
+          {
+            "name": "e_i3",
+            "kind": "PICTURE",
+            "editable_text": false,
+            "crop": {
+              "left": 0.3325,
+              "top": 0.0,
+              "right": 0.0325,
+              "bottom": 0.0
+            }
+          }
+        ]
+      },
+      {
+        "id": "s_shapes",
+        "shapes": [
+          {
+            "name": "e_s1",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "Editable text in a shape",
+            "fonts": [
+              "Arial"
+            ]
+          },
+          {
+            "name": "e_s2",
+            "kind": "AUTO_SHAPE",
+            "editable_text": false
+          },
+          {
+            "name": "e_s3",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "Rotated 8\u00b0",
+            "fonts": [
+              "Arial"
+            ]
+          },
+          {
+            "name": "e_s4",
+            "kind": "AUTO_SHAPE",
+            "editable_text": false
+          },
+          {
+            "name": "e_s5",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "This box is too small for the amount of text that has been t",
+            "fonts": [
+              "Arial"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s_section",
+        "shapes": [
+          {
+            "name": "e_x1",
+            "kind": "AUTO_SHAPE",
+            "editable_text": true,
+            "text": "Questions?\nmono: deck.schema = 1",
+            "fonts": [
+              "Arial",
+              "Courier New"
+            ]
+          }
+        ]
+      }
+    ],
+    "slide2_line_spacing_pts": [
+      "2400",
+      "2880",
+      "4800"
+    ],
+    "slide2_paragraphs": [
+      "<a:pPr algn=\"l\" indent=\"0\" marL=\"0\"> What changed this qu",
+      "<a:pPr algn=\"l\" marL=\"381000\" indent=\"-381000\"> Revenue grew ",
+      "<a:pPr algn=\"l\" lvl=\"1\" marL=\"762000\" indent=\"-381000\"> Churn held steady; ",
+      "<a:pPr algn=\"l\" marL=\"381000\" indent=\"-381000\"> This is a deliberate",
+      "<a:pPr algn=\"l\" marL=\"381000\" indent=\"-381000\"> Underlined"
+    ],
+    "autofit": false,
+    "notes_parts": [
+      "ppt/notesSlides/notesSlide1.xml",
+      "ppt/notesSlides/notesSlide2.xml",
+      "ppt/notesSlides/notesSlide3.xml",
+      "ppt/notesSlides/notesSlide4.xml",
+      "ppt/notesSlides/notesSlide5.xml"
+    ]
+  },
+  "failures": [],
+  "layout_warnings": [
+    "s_shapes/e_s5: text overflows its box by 104 units"
+  ]
+}

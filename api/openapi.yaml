@@ -44,6 +44,8 @@ tags:
   - name: spaces
   - name: finance
   - name: docs
+  - name: slides
+    description: Slide decks in the Slides app
 paths:
   /agents/{handle}/runs:
     get:
@@ -4260,6 +4262,149 @@ paths:
               schema: { $ref: "#/components/schemas/MyCanvas" }
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
+  /slides:
+    get:
+      operationId: listDecks
+      summary: The signed-in person's slide decks, most recently changed first
+      tags: [slides]
+      responses:
+        "200":
+          description: Up to 200 decks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [decks]
+                properties:
+                  decks: { type: array, items: { $ref: "#/components/schemas/DeckSummary" } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createDeck
+      summary: Start a deck in the Slides app
+      description: |
+        Makes a deck canvas with one title slide (the title, unless it is
+        empty) in a new chat in the person's Slides space. theme is a built-in
+        theme: light (default), dark, paper or contrast.
+      tags: [slides]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 200, description: "Empty starts an untitled deck" }
+                theme: { type: string, enum: [light, dark, paper, contrast] }
+      responses:
+        "201":
+          description: The deck
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyCanvas" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /slides/{canvasId}:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: renameDeck
+      summary: Rename a deck (and its chat)
+      tags: [slides]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: The deck
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyCanvas" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteDeck
+      summary: Delete a deck with its chat, versions and images
+      description: 404 for anyone else's deck or a canvas that isn't a deck.
+      tags: [slides]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /slides/{canvasId}/duplicate:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: duplicateDeck
+      summary: Copy a deck's current version and images into a new deck
+      tags: [slides]
+      responses:
+        "201":
+          description: The copy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyCanvas" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /slides/{canvasId}/assets:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: uploadDeckAsset
+      summary: Add an image to a deck
+      description: |
+        PNG or JPEG (sniffed by the server), at most 10 MB and 8192 pixels on
+        a side. Returns the asset to put in the deck's assets map; uploading
+        doesn't change the deck. Counts toward the 1 GB Library quota.
+      tags: [slides]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: The stored image
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeckAsset" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /slides/{canvasId}/assets/{assetId}:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: assetId, in: path, required: true, schema: { type: string, pattern: "^a_[a-z0-9_]{1,40}$" } }
+    get:
+      operationId: getDeckAsset
+      summary: One of a deck's images (owner only)
+      tags: [slides]
+      responses:
+        "200":
+          description: The image
+          headers:
+            X-Content-Type-Options: { schema: { type: string, enum: [nosniff] } }
+            Cache-Control: { schema: { type: string } }
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /docs:
     post:
       operationId: createDoc
@@ -5336,12 +5481,30 @@ components:
         url: { type: string, maxLength: 2000 }
         item_id: { type: string, format: uuid }
         canvas_id: { type: string, format: uuid }
+    DeckSummary:
+      type: object
+      required: [id, title, chat_id, updated_at, slide_count, cover]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        chat_id: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+        slide_count: { type: integer }
+        cover: { type: string, description: "The deck JSON cut down to its first slide, for the list's thumbnail" }
+    DeckAsset:
+      type: object
+      required: [id, mime, w, h]
+      properties:
+        id: { type: string }
+        mime: { type: string, enum: [image/png, image/jpeg] }
+        w: { type: integer }
+        h: { type: integer }
     MyCanvas:
       type: object
       required: [id, kind, title, chat_id, chat_title, updated_at]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [text, svg], x-enum-varnames: [MyCanvasText, MyCanvasSvg] }
+        kind: { type: string, enum: [text, svg, deck], x-enum-varnames: [MyCanvasText, MyCanvasSvg, MyCanvasDeck] }
         title: { type: string }
         chat_id: { type: string, format: uuid }
         chat_title: { type: string }
@@ -5589,7 +5752,7 @@ components:
       required: [id, kind, title, seq, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [text, svg], x-enum-varnames: [CanvasKindText, CanvasKindSvg] }
+        kind: { type: string, enum: [text, svg, deck], x-enum-varnames: [CanvasKindText, CanvasKindSvg, CanvasKindDeck] }
         title: { type: string }
         seq: { type: integer, format: int32, description: The current version number }
         created_at: { type: string, format: date-time }

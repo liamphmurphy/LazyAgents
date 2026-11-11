@@ -193,9 +193,15 @@ type avatarResponse struct {
 	body        io.ReadCloser
 	contentType string
 	length      int64
+	cache       string // Cache-Control; a day when empty
 }
 
 func (r avatarResponse) VisitGetPersonaAvatarResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
+// VisitGetDeckAssetResponse serves a deck image with the same headers.
+func (r avatarResponse) VisitGetDeckAssetResponse(w http.ResponseWriter) error {
 	return r.write(w)
 }
 
@@ -211,7 +217,11 @@ func (r avatarResponse) write(w http.ResponseWriter) error {
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	h.Set("Content-Disposition", "inline")
-	h.Set("Cache-Control", "private, max-age=86400")
+	cache := r.cache
+	if cache == "" {
+		cache = "private, max-age=86400"
+	}
+	h.Set("Cache-Control", cache)
 	if r.length > 0 {
 		h.Set("Content-Length", fmt.Sprint(r.length))
 	}

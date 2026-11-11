@@ -46,10 +46,10 @@ export function CanvasFence({ code, info }: { code: string; info?: string }) {
       onClick={open}
       className="flex w-[360px] max-w-full items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-border-strong hover:bg-hover"
     >
-      <Icon name={canvas?.kind === "svg" ? "library" : "edit"} size={16} className="flex-none text-fg-tertiary" />
+      <Icon name={canvas?.kind === "svg" ? "library" : canvas?.kind === "deck" ? "slides" : "edit"} size={16} className="flex-none text-fg-tertiary" />
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-[13.5px] font-semibold text-fg">{canvas?.title ?? "Canvas"}</span>
-        <span className="text-xs text-fg-secondary">{canvas ? `${canvas.kind === "svg" ? "SVG mockup" : "Document"} · v${canvas.seq}` : "Loading…"}</span>
+        <span className="text-xs text-fg-secondary">{canvas ? `${canvas.kind === "svg" ? "SVG mockup" : canvas.kind === "deck" ? "Slide deck" : "Document"} · v${canvas.seq}` : "Loading…"}</span>
       </span>
     </button>
   );
