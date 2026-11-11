@@ -68,6 +68,18 @@
       ]
     },
     {
+      "id": "s_text",
+      "layout": "title-body",
+      "elements": [
+        { "id": "e_y1", "type": "text", "placeholder": "title", "frame": { "x": 120, "y": 80, "w": 1680, "h": 160 }, "valign": "middle",
+          "paragraphs": [ { "runs": [ { "text": "Text styles", "size": 80, "bold": true, "font": "heading", "color": "heading" } ] } ] },
+        { "id": "e_y2", "type": "text", "placeholder": "body", "frame": { "x": 120, "y": 280, "w": 1000, "h": 520 },
+          "paragraphs": [ { "align": "justify", "lineSpacing": 1.5, "runs": [ { "text": "Justified text at one and a half line spacing spreads its words to both edges of the box, except on the last line of the paragraph, which stays left-aligned. ", "size": 40 }, { "text": "Struck out", "size": 40, "strike": true }, { "text": " and ", "size": 40 }, { "text": "highlighted", "size": 40, "highlight": "#FDE68A" }, { "text": " runs, and a ", "size": 40 }, { "text": "theme highlight", "size": 40, "highlight": "surface", "underline": true, "strike": true }, { "text": ", survive export.", "size": 40 } ] } ] },
+        { "id": "e_y3", "type": "text", "frame": { "x": 1200, "y": 280, "w": 600, "h": 260 },
+          "paragraphs": [ { "lineSpacing": 2, "runs": [ { "text": "Double spacing: these three lines fit in the box only at single spacing.", "size": 40, "color": "muted" } ] } ] }
+      ]
+    },
+    {
       "id": "s_section",
       "layout": "section",
       "background": { "color": "heading" },

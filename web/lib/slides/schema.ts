@@ -12,8 +12,9 @@ export type ThemeColor = "background" | "text" | "heading" | "accent" | "accent2
 /** A theme colour name or a literal #RRGGBB. */
 export type ColorRef = ThemeColor | string;
 
-export type Run = { text: string; size: number; bold?: boolean; italic?: boolean; underline?: boolean; color?: ColorRef; font?: FontRef };
-export type Paragraph = { runs: Run[]; align?: "left" | "center" | "right"; bullet?: "disc" | "number"; level?: number; spaceBefore?: number };
+export type Run = { text: string; size: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: ColorRef; highlight?: ColorRef; font?: FontRef };
+/** lineSpacing multiplies the default line height (0.8–3; unset is 1). */
+export type Paragraph = { runs: Run[]; align?: "left" | "center" | "right" | "justify"; bullet?: "disc" | "number"; level?: number; spaceBefore?: number; lineSpacing?: number };
 export type TextBox = { paragraphs: Paragraph[]; valign?: "top" | "middle" | "bottom" };
 export type Frame = { x: number; y: number; w: number; h: number };
 export type Crop = { l: number; t: number; r: number; b: number };
