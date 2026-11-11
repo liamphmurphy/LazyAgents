@@ -358,6 +358,7 @@ type ChatTicketRun struct {
 	CreatedAt  time.Time
 	Reported   string
 	ReportedAt *time.Time
+	TicketID   *uuid.UUID
 }
 
 type ChatVideoFrame struct {

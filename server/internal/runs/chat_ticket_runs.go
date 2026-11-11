@@ -54,11 +54,6 @@ func (s *Service) StartChatTicketRun(ctx context.Context, ws, user, chatID uuid.
 			if msg.Role != "assistant" || !dispatchFenceRe.MatchString(msg.BodyMd) || !strings.Contains(strings.ToUpper(msg.BodyMd), key) {
 				return apperr.Invalid("message_id", "that reply doesn't offer to start %s", key)
 			}
-			if _, err := q.ChatTicketRunForMessage(ctx, in.MessageID); err == nil {
-				return apperr.Conflict("this card already started a run")
-			} else if !errors.Is(err, pgx.ErrNoRows) {
-				return err
-			}
 		}
 		if err := tracker.LockTicketProjects(ctx, q, ws, []string{key}); err != nil {
 			if errors.Is(err, tracker.ErrNotFound) {
@@ -66,10 +61,22 @@ func (s *Service) StartChatTicketRun(ctx context.Context, ws, user, chatID uuid.
 			}
 			return err
 		}
+		// A card may offer several tickets; each starts at most once from it.
+		if in.MessageID != nil {
+			t, err := tracker.Get(ctx, q, ws, key)
+			if err != nil {
+				return err
+			}
+			if _, err := q.ChatTicketRunForMessageTicket(ctx, store.ChatTicketRunForMessageTicketParams{MessageID: in.MessageID, TicketID: &t.ID}); err == nil {
+				return apperr.Conflict("this card already started %s", key)
+			} else if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		}
 		if run, err = dispatchTicket(ctx, q, ws, user, key, "ticket"); err != nil {
 			return err
 		}
-		return q.AddChatTicketRun(ctx, store.AddChatTicketRunParams{ChatID: chat.ID, RunID: run.ID, MessageID: in.MessageID})
+		return q.AddChatTicketRun(ctx, store.AddChatTicketRunParams{ChatID: chat.ID, RunID: run.ID, MessageID: in.MessageID, TicketID: run.TicketID})
 	})
 	return run, err
 }

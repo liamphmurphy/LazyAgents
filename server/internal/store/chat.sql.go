@@ -28,17 +28,23 @@ func (q *Queries) AddChatParticipant(ctx context.Context, arg AddChatParticipant
 }
 
 const addChatTicketRun = `-- name: AddChatTicketRun :exec
-INSERT INTO chat_ticket_runs (chat_id, run_id, message_id) VALUES ($1, $2, $3)
+INSERT INTO chat_ticket_runs (chat_id, run_id, message_id, ticket_id) VALUES ($1, $2, $3, $4)
 `
 
 type AddChatTicketRunParams struct {
 	ChatID    uuid.UUID
 	RunID     uuid.UUID
 	MessageID *uuid.UUID
+	TicketID  *uuid.UUID
 }
 
 func (q *Queries) AddChatTicketRun(ctx context.Context, arg AddChatTicketRunParams) error {
-	_, err := q.db.Exec(ctx, addChatTicketRun, arg.ChatID, arg.RunID, arg.MessageID)
+	_, err := q.db.Exec(ctx, addChatTicketRun,
+		arg.ChatID,
+		arg.RunID,
+		arg.MessageID,
+		arg.TicketID,
+	)
 	return err
 }
 
@@ -636,12 +642,18 @@ func (q *Queries) ChatSessionForRun(ctx context.Context, currentRunID *uuid.UUID
 	return i, err
 }
 
-const chatTicketRunForMessage = `-- name: ChatTicketRunForMessage :one
-SELECT chat_id, run_id, message_id, created_at, reported, reported_at FROM chat_ticket_runs WHERE message_id = $1
+const chatTicketRunForMessageTicket = `-- name: ChatTicketRunForMessageTicket :one
+SELECT chat_id, run_id, message_id, created_at, reported, reported_at, ticket_id FROM chat_ticket_runs WHERE message_id = $1 AND ticket_id = $2
 `
 
-func (q *Queries) ChatTicketRunForMessage(ctx context.Context, messageID *uuid.UUID) (ChatTicketRun, error) {
-	row := q.db.QueryRow(ctx, chatTicketRunForMessage, messageID)
+type ChatTicketRunForMessageTicketParams struct {
+	MessageID *uuid.UUID
+	TicketID  *uuid.UUID
+}
+
+// The run a reply's dispatch card already started for this ticket.
+func (q *Queries) ChatTicketRunForMessageTicket(ctx context.Context, arg ChatTicketRunForMessageTicketParams) (ChatTicketRun, error) {
+	row := q.db.QueryRow(ctx, chatTicketRunForMessageTicket, arg.MessageID, arg.TicketID)
 	var i ChatTicketRun
 	err := row.Scan(
 		&i.ChatID,
@@ -650,6 +662,7 @@ func (q *Queries) ChatTicketRunForMessage(ctx context.Context, messageID *uuid.U
 		&i.CreatedAt,
 		&i.Reported,
 		&i.ReportedAt,
+		&i.TicketID,
 	)
 	return i, err
 }
@@ -1951,7 +1964,7 @@ func (q *Queries) LockChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSe
 }
 
 const lockChatTicketRun = `-- name: LockChatTicketRun :one
-SELECT chat_id, run_id, message_id, created_at, reported, reported_at FROM chat_ticket_runs WHERE chat_id = $1 AND run_id = $2 FOR UPDATE
+SELECT chat_id, run_id, message_id, created_at, reported, reported_at, ticket_id FROM chat_ticket_runs WHERE chat_id = $1 AND run_id = $2 FOR UPDATE
 `
 
 type LockChatTicketRunParams struct {
@@ -1969,6 +1982,7 @@ func (q *Queries) LockChatTicketRun(ctx context.Context, arg LockChatTicketRunPa
 		&i.CreatedAt,
 		&i.Reported,
 		&i.ReportedAt,
+		&i.TicketID,
 	)
 	return i, err
 }
