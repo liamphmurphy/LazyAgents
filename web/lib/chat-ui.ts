@@ -269,7 +269,22 @@ export type ChatStatusKind =
   | "workflow"
   | "memory"
   | "memory-save"
-  | "chat-history";
+  | "chat-history"
+  | "repo-search"
+  | "repo-attach"
+  | "video-render"
+  | "finance"
+  | "finance-sort"
+  | "persona"
+  | "schedule"
+  | "learning"
+  | "research"
+  | "space"
+  | "saved-links"
+  | "chart"
+  | "diagram"
+  | "app"
+  | "choices";
 export type ChatStatusInfo = { kind: ChatStatusKind; phrase: string };
 
 const status = (kind: ChatStatusKind, phrase: string): ChatStatusInfo => ({ kind, phrase });
@@ -311,12 +326,12 @@ function githubToolStatus(tool: string): ChatStatusInfo | undefined {
 /** A rich block being written into the reply, reported by the harness: no tool runs, but it can take a while. */
 const REPLY_BLOCK = "reply_block";
 const REPLY_BLOCK_STATUS: Record<string, ChatStatusInfo> = {
-  app: status("canvas", "building an interactive app"),
+  app: status("app", "building an interactive app"),
   "svg-image": status("image", "drawing an image"),
   "svg-steps": status("image", "drawing a step-through"),
-  chart: status("canvas", "drawing a chart"),
-  mermaid: status("canvas", "drawing a diagram"),
-  choices: status("canvas", "laying out your options"),
+  chart: status("chart", "drawing a chart"),
+  mermaid: status("diagram", "drawing a diagram"),
+  choices: status("choices", "laying out your options"),
   "workflow-run": status("workflow", "lining up a workflow"),
   recommend: status("web", "picking something for you to look at"),
 };
@@ -386,17 +401,39 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "webfetch":
       return status("web-page", "reading a page");
     case "list_saved_links":
-      return status("web", "checking your saved links");
+      return status("saved-links", "checking your saved links");
     case "propose_persona":
-      return status("memory", "sketching a new persona");
+      return status("persona", "sketching a new persona");
     case "create_space":
-      return status("thinking", "setting up a space");
+      return status("space", "setting up a space");
     case "create_scheduled_task":
-      return status("workflow", "scheduling a task");
+      return status("schedule", "scheduling a task");
     case "create_learning_module":
-      return status("wiki", "starting a learning module");
+      return status("learning", "starting a learning module");
     case "submit_research_report":
-      return status("wiki", "writing up its research");
+      return status("research", "writing up its research");
+    case "search_repositories":
+      return status("repo-search", "looking for a repository");
+    case "use_repository":
+      return status("repo-attach", "checking out a repository");
+    case "start_video":
+      return status("video-render", "setting up a video");
+    case "update_video":
+      return status("video-render", "rendering a video");
+    case "finish_video":
+      return status("video-render", "finishing the video");
+    case "fail_video":
+      return status("video-render", "reporting a failed render");
+    case "finance_summary":
+      return status("finance", "summing up your finances");
+    case "finance_query":
+      return status("finance", "looking through your transactions");
+    case "finance_recurring":
+      return status("finance", "finding recurring charges");
+    case "finance_categorize":
+      return status("finance-sort", "sorting your transactions");
+    case "finance_map_csv":
+      return status("finance-sort", "reading your bank export");
     case "get_video_transcript":
       return status("video", "watching a video");
     case "canvas_list":
