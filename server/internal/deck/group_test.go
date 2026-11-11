@@ -43,14 +43,20 @@ func TestGroupRules(t *testing.T) {
 		"nested group": func(s string) string {
 			return strings.Replace(s, `"id":"e_g2","shape":"ellipse","type":"shape"`, `"id":"e_g2","type":"group","elements":[{"id":"e_n1","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2},{"id":"e_n2","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2}]`, 1)
 		},
-		"child id reused at top level": func(s string) string { return strings.Replace(s, `"id":"e_g3"`, `"id":"e_g0"`, 1) },
+		"child id reused at top level":     func(s string) string { return strings.Replace(s, `"id":"e_g3"`, `"id":"e_g0"`, 1) },
 		"child id reused in another group": func(s string) string { return strings.Replace(s, `"id":"e_g5"`, `"id":"e_g2"`, 1) },
 		"group id reused by a child":       func(s string) string { return strings.Replace(s, `"id":"e_g2"`, `"id":"e_g1"`, 1) },
 		"rotated group":                    func(s string) string { return strings.Replace(s, `"id":"e_g1",`, `"id":"e_g1","rotation":10,`, 1) },
 		"styled group":                     func(s string) string { return strings.Replace(s, `"id":"e_g1",`, `"id":"e_g1","fill":"accent",`, 1) },
-		"placeholder child":                func(s string) string { return strings.Replace(s, `"id":"e_g3",`, `"id":"e_g3","placeholder":"body",`, 1) },
-		"bad child":                        func(s string) string { return strings.Replace(s, `"id":"e_g2","shape":"ellipse"`, `"id":"e_g2","shape":"star"`, 1) },
-		"elements on a shape":              func(s string) string { return strings.Replace(s, `"id":"e_g8",`, `"id":"e_g8","elements":[{"id":"e_n1","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2}],`, 1) },
+		"placeholder child": func(s string) string {
+			return strings.Replace(s, `"id":"e_g3",`, `"id":"e_g3","placeholder":"body",`, 1)
+		},
+		"bad child": func(s string) string {
+			return strings.Replace(s, `"id":"e_g2","shape":"ellipse"`, `"id":"e_g2","shape":"star"`, 1)
+		},
+		"elements on a shape": func(s string) string {
+			return strings.Replace(s, `"id":"e_g8",`, `"id":"e_g8","elements":[{"id":"e_n1","type":"line","frame":{"x":0,"y":0,"w":10,"h":0},"stroke":"text","strokeWidth":2}],`, 1)
+		},
 	} {
 		bad := mut(good)
 		if bad == good {
@@ -141,4 +147,27 @@ func TestGroupOps(t *testing.T) {
 			t.Errorf("%+v: accepted", op)
 		}
 	}
+}
+
+func TestInsertSlideWithGroupAssignsChildIDs(t *testing.T) {
+	body, _ := Normalize(fixture(t))
+	line := func(y float64) map[string]any {
+		return map[string]any{"type": "line", "frame": map[string]any{"x": 0, "y": y, "w": 100, "h": 0}, "stroke": "text", "strokeWidth": 2}
+	}
+	out, err := Apply(body, []Op{{Op: "insert_slide", Value: map[string]any{"id": "s_new", "layout": "blank", "elements": []any{
+		map[string]any{"type": "group", "elements": []any{line(0), line(50)}},
+	}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := Parse(out)
+	for _, s := range d.Slides {
+		if s.ID == "s_new" {
+			if g := s.Elements[0]; !g.IsGroup() || g.Elements[0].ID == "" || g.Elements[1].ID == "" || g.Elements[0].ID == g.Elements[1].ID {
+				t.Fatalf("children ids not assigned: %+v", g)
+			}
+			return
+		}
+	}
+	t.Fatal("slide not inserted")
 }

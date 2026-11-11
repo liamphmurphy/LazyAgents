@@ -18,7 +18,7 @@ import { mergeDecks, same } from "@/lib/slides/review";
 import { outlinePrompt } from "@/lib/slides/outline";
 import { H, THEMES, W, encodeDeck, isImageSlot, type Theme, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Layout, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { applyStyle } from "@/lib/slides/styles";
-import { fit, groupElements, isGroup, mapDeep, removeDeep, scopeElements, ungroupElements, withFrame } from "@/lib/slides/group";
+import { fit, flatten, groupElements, isGroup, mapDeep, removeDeep, scopeElements, ungroupElements, withFrame } from "@/lib/slides/group";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
@@ -472,7 +472,7 @@ export function DeckScreen({ id }: { id: string }) {
   const setFrames = (frames: Record<string, { x: number; y: number; w: number; h: number }>, key?: string) =>
     update((d) => {
       const moved = (e: Element) => frames[e.id] && JSON.stringify(frames[e.id]) !== JSON.stringify(e.frame);
-      if (!slide?.elements.some(moved)) return d;
+      if (!flatten(slide?.elements ?? []).some(moved)) return d;
       return mapElements(new Set(Object.keys(frames)), (e) => withFrame(e, frames[e.id]))(d);
     }, key);
 

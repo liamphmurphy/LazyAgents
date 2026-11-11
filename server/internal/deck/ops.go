@@ -143,6 +143,11 @@ func (d *Deck) apply(op Op) error {
 			if s.Elements[k].ID == "" {
 				s.Elements[k].ID = NewID("e")
 			}
+			for c := range s.Elements[k].Elements {
+				if s.Elements[k].Elements[c].ID == "" {
+					s.Elements[k].Elements[c].ID = NewID("e")
+				}
+			}
 		}
 		d.Slides = insertAt(d.Slides, after, s)
 	case "set_slide":
