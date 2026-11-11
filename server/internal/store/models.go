@@ -506,6 +506,17 @@ type DeckBlobSweep struct {
 	QueuedAt time.Time
 }
 
+type DeckTheme struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Name        string
+	Fonts       json.RawMessage
+	Colors      json.RawMessage
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type Epic struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID

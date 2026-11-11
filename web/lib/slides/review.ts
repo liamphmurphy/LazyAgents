@@ -11,7 +11,7 @@ import { slideTitle, textOf, type Deck, type Element, type Slide } from "./schem
  * server normalises what it stores, so comparing raw JSON would see changes
  * that aren't there.
  */
-const COLOR_KEYS = new Set(["color", "fill", "stroke", "stops"]);
+const COLOR_KEYS = new Set(["color", "fill", "stroke", "highlight", "stops"]);
 const OPACITY_KEYS = new Set(["fillOpacity", "strokeOpacity", "opacity"]);
 
 function canon(v: unknown, colour = false): unknown {
@@ -33,6 +33,7 @@ function canon(v: unknown, colour = false): unknown {
         out[k] = 0;
         continue;
       }
+      if (k === "lineSpacing" && (x === 0 || x === 1)) continue;
       if (k === "crop" && x && typeof x === "object" && Object.values(x).every((n) => n === 0)) continue;
       out[k] = canon(x, COLOR_KEYS.has(k) || (k !== "text" && colourMap(o)));
     }
@@ -98,6 +99,9 @@ function slideDiff(a: Slide, b: Slide) {
       details.push(`Removed ${kindName(e)}${plain(e) ? ` ${quote(plain(e))}` : ""}`);
       marksBefore[e.id] = "removed";
     }
+  // Stacking order is the elements' order: say so when the kept ones were reordered.
+  const kept = (s: Slide, other: Map<string, Element>) => s.elements.filter((e) => other.has(e.id)).map((e) => e.id).join();
+  if (kept(a, after) !== kept(b, before)) details.push("Changed the stacking order of elements");
   return { details, marksBefore, marksAfter };
 }
 

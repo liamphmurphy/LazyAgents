@@ -68,6 +68,218 @@
       ]
     },
     {
+      "id": "s_section",
+      "layout": "section",
+      "background": { "color": "heading" },
+      "elements": [
+        { "id": "e_x1", "type": "text", "placeholder": "title", "frame": { "x": 160, "y": 380, "w": 1600, "h": 320 }, "valign": "middle",
+          "paragraphs": [ { "align": "center", "runs": [ { "text": "Questions?", "size": 128, "bold": true, "color": "#FFFFFF" } ] },
+                          { "align": "center", "runs": [ { "text": "mono: deck.schema = 1", "size": 40, "font": "mono", "color": "accent2" } ] } ] }
+      ]
+    },
+    {
+      "id": "s_controls",
+      "layout": "blank",
+      "background": { "color": "#FFF7ED" },
+      "elements": [
+        { "id": "e_c1", "type": "shape", "shape": "roundRect", "frame": { "x": 120, "y": 120, "w": 600, "h": 360 }, "fill": "#0F766E", "stroke": "#134E4A", "strokeWidth": 20, "radius": 96,
+          "text": { "valign": "middle", "paragraphs": [ { "align": "center", "runs": [ { "text": "Custom fill, 20 px outline, radius 96", "size": 42, "bold": true, "color": "#F0FDFA" } ] } ] } },
+        { "id": "e_c2", "type": "shape", "shape": "ellipse", "frame": { "x": 820, "y": 120, "w": 360, "h": 360 }, "stroke": "#9333EA", "strokeWidth": 2 },
+        { "id": "e_c3", "type": "line", "frame": { "x": 1280, "y": 160, "w": 520, "h": 280 }, "stroke": "#DB2777", "strokeWidth": 14, "startArrow": true, "endArrow": true },
+        { "id": "e_c4", "type": "line", "frame": { "x": 1280, "y": 470, "w": 520, "h": 0 }, "stroke": "accent", "strokeWidth": 1, "startArrow": true },
+        { "id": "e_c5", "type": "text", "frame": { "x": 120, "y": 560, "w": 1680, "h": 440 },
+          "paragraphs": [
+            { "bullet": "disc", "level": 0, "runs": [ { "text": "Level 0 at a typed 21 pt", "size": 42, "color": "#7C2D12" } ] },
+            { "bullet": "disc", "level": 1, "runs": [ { "text": "Level 1 at 15.5 pt", "size": 31, "color": "#9A3412" } ] },
+            { "bullet": "number", "level": 2, "runs": [ { "text": "Level 2, numbered, 13 pt", "size": 26 } ] },
+            { "bullet": "disc", "level": 4, "runs": [ { "text": "Level 4, the deepest, at 9 pt", "size": 18, "italic": true, "color": "muted" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_text",
+      "layout": "title-body",
+      "elements": [
+        { "id": "e_y1", "type": "text", "placeholder": "title", "frame": { "x": 120, "y": 80, "w": 1680, "h": 160 }, "valign": "middle",
+          "paragraphs": [ { "runs": [ { "text": "Text styles", "size": 80, "bold": true, "font": "heading", "color": "heading" } ] } ] },
+        { "id": "e_y2", "type": "text", "placeholder": "body", "frame": { "x": 120, "y": 280, "w": 1000, "h": 520 },
+          "paragraphs": [ { "align": "justify", "lineSpacing": 1.5, "runs": [ { "text": "Justified text at one and a half line spacing spreads its words to both edges of the box, except on the last line of the paragraph, which stays left-aligned. ", "size": 40 }, { "text": "Struck out", "size": 40, "strike": true }, { "text": " and ", "size": 40 }, { "text": "highlighted", "size": 40, "highlight": "#FDE68A" }, { "text": " runs, and a ", "size": 40 }, { "text": "theme highlight", "size": 40, "highlight": "surface", "underline": true, "strike": true }, { "text": ", survive export.", "size": 40 } ] } ] },
+        { "id": "e_y3", "type": "text", "frame": { "x": 1200, "y": 280, "w": 600, "h": 260 },
+          "paragraphs": [ { "lineSpacing": 2, "runs": [ { "text": "Double spacing: these three lines fit in the box only at single spacing.", "size": 40, "color": "muted" } ] } ] }
+      ]
+    },
+    {
+      "id": "s_quote",
+      "layout": "quote",
+      "elements": [
+        { "id": "e_q1", "type": "text", "placeholder": "body", "frame": { "x": 200, "y": 220, "w": 1520, "h": 480 }, "valign": "bottom",
+          "paragraphs": [
+            { "runs": [ { "text": "Simple things should be simple; complex things should be possible.", "size": 72, "italic": true, "font": "heading", "color": "heading" } ] }
+          ] },
+        { "id": "e_q2", "type": "text", "placeholder": "subtitle", "frame": { "x": 200, "y": 740, "w": 1520, "h": 100 }, "valign": "top",
+          "paragraphs": [
+            { "runs": [ { "text": "— Alan Kay", "size": 44, "font": "body", "color": "muted" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_number",
+      "layout": "big-number",
+      "elements": [
+        { "id": "e_n1", "type": "text", "placeholder": "title", "frame": { "x": 160, "y": 220, "w": 1600, "h": 420 }, "valign": "bottom",
+          "paragraphs": [
+            { "align": "center", "runs": [ { "text": "42%", "size": 280, "bold": true, "font": "heading", "color": "accent" } ] }
+          ] },
+        { "id": "e_n2", "type": "text", "placeholder": "subtitle", "frame": { "x": 160, "y": 680, "w": 1600, "h": 160 }, "valign": "top",
+          "paragraphs": [
+            { "align": "center", "runs": [ { "text": "fewer support tickets after launch", "size": 56, "font": "body", "color": "muted" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_three",
+      "layout": "three-column",
+      "elements": [
+        { "id": "e_3a", "type": "text", "placeholder": "title", "frame": { "x": 120, "y": 80, "w": 1680, "h": 160 }, "valign": "middle",
+          "paragraphs": [
+            { "runs": [ { "text": "Three ways to ship", "size": 80, "bold": true, "font": "heading", "color": "heading" } ] }
+          ] },
+        { "id": "e_3b", "type": "text", "placeholder": "body", "frame": { "x": 120, "y": 280, "w": 520, "h": 700 }, "valign": "top",
+          "paragraphs": [
+            { "bullet": "disc", "runs": [ { "text": "Plan", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Small PRs", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Review", "size": 44, "font": "body", "color": "text" } ] }
+          ] },
+        { "id": "e_3c", "type": "text", "placeholder": "body2", "frame": { "x": 700, "y": 280, "w": 520, "h": 700 }, "valign": "top",
+          "paragraphs": [
+            { "bullet": "disc", "runs": [ { "text": "Build", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Feature flags", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Tests", "size": 44, "font": "body", "color": "text" } ] }
+          ] },
+        { "id": "e_3d", "type": "text", "placeholder": "body3", "frame": { "x": 1280, "y": 280, "w": 520, "h": 700 }, "valign": "top",
+          "paragraphs": [
+            { "bullet": "disc", "runs": [ { "text": "Ship", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Stage first", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Monitor", "size": 44, "font": "body", "color": "text" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_compare",
+      "layout": "comparison",
+      "elements": [
+        { "id": "e_m1", "type": "text", "placeholder": "title", "frame": { "x": 120, "y": 80, "w": 1680, "h": 160 }, "valign": "middle",
+          "paragraphs": [
+            { "runs": [ { "text": "Before and after", "size": 80, "bold": true, "font": "heading", "color": "heading" } ] }
+          ] },
+        { "id": "e_m2", "type": "text", "placeholder": "label", "frame": { "x": 120, "y": 280, "w": 810, "h": 90 }, "valign": "middle",
+          "paragraphs": [
+            { "runs": [ { "text": "Before", "size": 52, "bold": true, "font": "heading", "color": "accent" } ] }
+          ] },
+        { "id": "e_m3", "type": "text", "placeholder": "label2", "frame": { "x": 990, "y": 280, "w": 810, "h": 90 }, "valign": "middle",
+          "paragraphs": [
+            { "runs": [ { "text": "After", "size": 52, "bold": true, "font": "heading", "color": "accent" } ] }
+          ] },
+        { "id": "e_m4", "type": "text", "placeholder": "body", "frame": { "x": 120, "y": 390, "w": 810, "h": 590 }, "valign": "top",
+          "paragraphs": [
+            { "bullet": "disc", "runs": [ { "text": "Manual deploys", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Weekly releases", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Hand-run tests", "size": 44, "font": "body", "color": "text" } ] }
+          ] },
+        { "id": "e_m5", "type": "text", "placeholder": "body2", "frame": { "x": 990, "y": 390, "w": 810, "h": 590 }, "valign": "top",
+          "paragraphs": [
+            { "bullet": "disc", "runs": [ { "text": "One-click deploys", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "Daily releases", "size": 44, "font": "body", "color": "text" } ] },
+            { "bullet": "disc", "runs": [ { "text": "CI on every PR", "size": 44, "font": "body", "color": "text" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_fullimage",
+      "layout": "image-full",
+      "elements": [
+        { "id": "e_f1", "type": "image", "placeholder": "image", "asset": "a_landscape", "frame": { "x": 0, "y": 0, "w": 1920, "h": 1080 } },
+        { "id": "e_f2", "type": "text", "placeholder": "title", "frame": { "x": 120, "y": 780, "w": 1680, "h": 200 }, "valign": "bottom",
+          "paragraphs": [
+            { "runs": [ { "text": "Field trip, spring 2026", "size": 96, "bold": true, "font": "heading", "color": "#FFFFFF" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_imageleft",
+      "layout": "image-left",
+      "elements": [
+        { "id": "e_l1", "type": "image", "placeholder": "image", "asset": "a_landscape", "frame": { "x": 120, "y": 120, "w": 800, "h": 840 } },
+        { "id": "e_l2", "type": "text", "placeholder": "title", "frame": { "x": 1000, "y": 120, "w": 800, "h": 300 }, "valign": "top",
+          "paragraphs": [
+            { "runs": [ { "text": "The new office", "size": 72, "bold": true, "font": "heading", "color": "heading" } ] }
+          ] },
+        { "id": "e_l3", "type": "text", "placeholder": "body", "frame": { "x": 1000, "y": 460, "w": 800, "h": 480 }, "valign": "top",
+          "paragraphs": [
+            { "runs": [ { "text": "Opens in March with room for forty people.", "size": 40, "font": "body", "color": "text" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_agenda",
+      "layout": "agenda",
+      "elements": [
+        { "id": "e_a1", "type": "text", "placeholder": "title", "frame": { "x": 120, "y": 80, "w": 1680, "h": 160 }, "valign": "middle",
+          "paragraphs": [
+            { "runs": [ { "text": "Agenda", "size": 80, "bold": true, "font": "heading", "color": "heading" } ] }
+          ] },
+        { "id": "e_a2", "type": "text", "placeholder": "body", "frame": { "x": 120, "y": 280, "w": 1680, "h": 700 }, "valign": "top",
+          "paragraphs": [
+            { "bullet": "number", "runs": [ { "text": "Where we are", "size": 52, "font": "body", "color": "text" } ] },
+            { "bullet": "number", "runs": [ { "text": "What we learned", "size": 52, "font": "body", "color": "text" } ] },
+            { "bullet": "number", "runs": [ { "text": "What's next", "size": 52, "font": "body", "color": "text" } ] },
+            { "bullet": "number", "runs": [ { "text": "Questions", "size": 52, "font": "body", "color": "text" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_closing",
+      "layout": "closing",
+      "elements": [
+        { "id": "e_z1", "type": "text", "placeholder": "title", "frame": { "x": 160, "y": 300, "w": 1600, "h": 280 }, "valign": "bottom",
+          "paragraphs": [
+            { "align": "center", "runs": [ { "text": "Thank you", "size": 128, "bold": true, "font": "heading", "color": "heading" } ] }
+          ] },
+        { "id": "e_z2", "type": "text", "placeholder": "subtitle", "frame": { "x": 160, "y": 620, "w": 1600, "h": 140 }, "valign": "top",
+          "paragraphs": [
+            { "align": "center", "runs": [ { "text": "ada@example.com · vesper.dev", "size": 44, "font": "body", "color": "muted" } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_preset_shapes",
+      "layout": "blank",
+      "elements": [
+        {"id": "e_ps_title", "type": "text", "frame": {"x": 80, "y": 20, "w": 1760, "h": 100}, "paragraphs": [{"runs": [{"text": "Preset shapes", "size": 64, "bold": true, "font": "heading", "color": "heading"}]}], "valign": "middle"},
+        {"id": "e_ps_rect", "type": "shape", "shape": "rect", "frame": {"x": 80, "y": 150, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "rect", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_roundrect", "type": "shape", "shape": "roundRect", "frame": {"x": 340, "y": 150, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "roundRect", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}, "radius": 32},
+        {"id": "e_ps_ellipse", "type": "shape", "shape": "ellipse", "frame": {"x": 600, "y": 150, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "ellipse", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_triangle", "type": "shape", "shape": "triangle", "frame": {"x": 860, "y": 150, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "triangle", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_rttriangle", "type": "shape", "shape": "rtTriangle", "frame": {"x": 1120, "y": 150, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "rtTriangl", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_diamond", "type": "shape", "shape": "diamond", "frame": {"x": 1380, "y": 150, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "diamond", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_pentagon", "type": "shape", "shape": "pentagon", "frame": {"x": 1640, "y": 150, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "pentagon", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_hexagon", "type": "shape", "shape": "hexagon", "frame": {"x": 80, "y": 440, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "hexagon", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_octagon", "type": "shape", "shape": "octagon", "frame": {"x": 340, "y": 440, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "octagon", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_rightarrow", "type": "shape", "shape": "rightArrow", "frame": {"x": 600, "y": 440, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "rightArro", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_leftarrow", "type": "shape", "shape": "leftArrow", "frame": {"x": 860, "y": 440, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "leftArrow", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_uparrow", "type": "shape", "shape": "upArrow", "frame": {"x": 1120, "y": 440, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "upArrow", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_downarrow", "type": "shape", "shape": "downArrow", "frame": {"x": 1380, "y": 440, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "downArrow", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_chevron", "type": "shape", "shape": "chevron", "frame": {"x": 1640, "y": 440, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "chevron", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}, "rotation": 15},
+        {"id": "e_ps_homeplate", "type": "shape", "shape": "homePlate", "frame": {"x": 80, "y": 730, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "homePlate", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_wedgerectcallout", "type": "shape", "shape": "wedgeRectCallout", "frame": {"x": 340, "y": 730, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "wedgeRect", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_wedgeroundrectcallout", "type": "shape", "shape": "wedgeRoundRectCallout", "frame": {"x": 600, "y": 730, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "wedgeRoun", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_star5", "type": "shape", "shape": "star5", "frame": {"x": 860, "y": 730, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "star5", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}, "rotation": 15},
+        {"id": "e_ps_plus", "type": "shape", "shape": "plus", "frame": {"x": 1120, "y": 730, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "plus", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_donut", "type": "shape", "shape": "donut", "frame": {"x": 1380, "y": 730, "w": 220, "h": 200}, "fill": "accent2", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "donut", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}},
+        {"id": "e_ps_heart", "type": "shape", "shape": "heart", "frame": {"x": 1640, "y": 730, "w": 220, "h": 200}, "fill": "accent", "stroke": "heading", "strokeWidth": 4, "text": {"valign": "middle", "paragraphs": [{"align": "center", "runs": [{"text": "heart", "size": 28, "bold": true, "color": "#FFFFFF"}]}]}}
+      ]
+    },
+    {
       "id": "s_styles",
       "layout": "blank",
       "notes": "LAZYAGENTS-118: transparency, dashes and two-stop linear gradients, including a gradient background.",
@@ -83,16 +295,6 @@
         { "id": "e_g6", "type": "image", "asset": "a_landscape", "frame": { "x": 120, "y": 820, "w": 360, "h": 220 }, "opacity": 0.4 },
         { "id": "e_g7", "type": "text", "frame": { "x": 520, "y": 840, "w": 1280, "h": 180 },
           "paragraphs": [ { "runs": [ { "text": "The picture behind is at 40% opacity; the ellipse fill at 50%; the tilted rectangle is a 75% gradient over it.", "size": 40, "color": "text" } ] } ] }
-      ]
-    },
-    {
-      "id": "s_section",
-      "layout": "section",
-      "background": { "color": "heading" },
-      "elements": [
-        { "id": "e_x1", "type": "text", "placeholder": "title", "frame": { "x": 160, "y": 380, "w": 1600, "h": 320 }, "valign": "middle",
-          "paragraphs": [ { "align": "center", "runs": [ { "text": "Questions?", "size": 128, "bold": true, "color": "#FFFFFF" } ] },
-                          { "align": "center", "runs": [ { "text": "mono: deck.schema = 1", "size": 40, "font": "mono", "color": "accent2" } ] } ] }
       ]
     }
   ]

@@ -6,10 +6,11 @@
  * fonts embedded; the PPTX maps elements to native, editable PowerPoint
  * objects using the same layout constants.
  */
+import type PptxGenJS from "pptxgenjs";
 import { FAMILY, OFFICE, SLOTS, STYLES, fontUrl, measure } from "./fonts";
-import { BULLET_INDENT, INSET, LINE, imageSource, layoutSlide } from "./layout";
+import { BULLET_INDENT, INSET, STRIKE, imageSource, layoutSlide, lineHeight } from "./layout";
 import { gradFill, replaceFills } from "./pptx-fills";
-import { DASHES, gradientLine, isGradient, resolveColor, resolvePaint, slotOf, textOf, type Deck, type Dash, type Fill, type Paint, type Paragraph, type TextBox } from "./schema";
+import { DASHES, gradientLine, isGradient, isImageSlot, resolveColor, resolvePaint, slotOf, textOf, type Deck, type Dash, type Fill, type Paint, type Paragraph, type TextBox } from "./schema";
 
 const K = 0.5; // slide units → points
 const IN = (u: number) => u / 144; // slide units → inches (1920 units = 13.333 in)
@@ -78,11 +79,17 @@ export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, pr
         const r = (o.rot.deg * Math.PI) / 180, cx = o.rot.cx * K, cy = deck.size.h * K - o.rot.cy * K, c = Math.cos(r), s = Math.sin(r);
         pdf.setCurrentTransformationMatrix(pdf.Matrix(c, -s, s, c, cx - c * cx - s * cy, cy + s * cx - c * cy));
       }
-      if (o.op === "rect" || o.op === "ellipse") {
+      if (o.op === "rect" || o.op === "ellipse" || o.op === "path") {
         const solid = typeof o.fill === "string" ? o.fill : undefined;
         const stroked = !!(o.stroke && o.sw);
         const draw = (style: "F" | "S" | "FD" | null) => {
-          if (o.op === "ellipse") pdf.ellipse((o.x + o.w / 2) * K, (o.y + o.h / 2) * K, (o.w / 2) * K, (o.h / 2) * K, style);
+          if (o.op === "path") {
+            // jsPDF's path takes absolute m/l/c/h operators in page units and paints nothing itself.
+            pdf.path(o.segs.map((g) => (g[0] === "Z" ? { op: "h", c: [] } : { op: g[0].toLowerCase(), c: g.slice(1).map((v) => (v as number) * K) })));
+            if (style === "FD") pdf.fillStroke();
+            else if (style === "F") pdf.fill();
+            else if (style === "S") pdf.stroke();
+          } else if (o.op === "ellipse") pdf.ellipse((o.x + o.w / 2) * K, (o.y + o.h / 2) * K, (o.w / 2) * K, (o.h / 2) * K, style);
           else if (o.r) pdf.roundedRect(o.x * K, o.y * K, o.w * K, o.h * K, o.r * K, o.r * K, style);
           else pdf.rect(o.x * K, o.y * K, o.w * K, o.h * K, style);
         };
@@ -94,7 +101,7 @@ export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, pr
           pdf.setLineDashPattern((o.dash ?? []).map((n) => n * K), 0);
         }
         if (o.fill && typeof o.fill !== "string") {
-          shade(o.fill, o, () => draw(null));
+          shade(o.fill, o.op === "path" ? o.box : o, () => draw(null));
           if (stroked) draw("S");
         } else {
           const style = solid && stroked ? "FD" : solid ? "F" : stroked ? "S" : null;
@@ -128,6 +135,9 @@ export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, pr
           pdf.discardPath();
           pdf.addImage(data, a.mime === "image/png" ? "PNG" : "JPEG", (o.x - o.src.x * s) * K, (o.y - o.src.y * s) * K, a.w * s * K, a.h * s * K, o.asset);
         }
+      } else if (o.op === "highlight") {
+        pdf.setFillColor(o.fill);
+        pdf.rect(o.x * K, o.y * K, o.w * K, o.h * K, "F");
       } else if (o.op === "text") {
         pdf.setFont(FAMILY[o.slot], o.style);
         pdf.setFontSize(o.size * K);
@@ -138,6 +148,12 @@ export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, pr
           pdf.setLineWidth(o.size * 0.06 * K);
           const u = (o.y + o.size * 0.12) * K;
           pdf.line(o.x * K, u, (o.x + o.w) * K, u);
+        }
+        if (o.strike) {
+          pdf.setDrawColor(o.color);
+          pdf.setLineWidth(o.size * 0.06 * K);
+          const s = (o.y - o.size * STRIKE) * K;
+          pdf.line(o.x * K, s, (o.x + o.w) * K, s);
         }
       }
       pdf.restoreGraphicsState();
@@ -166,9 +182,8 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
     return { color: color(f.stops[0]), transparency: transparency(o) };
   };
   const runs = (box: TextBox) =>
-    box.paragraphs.flatMap((p: Paragraph) => {
-      const maxSize = Math.max(...p.runs.map((r) => r.size));
-      return p.runs.map((r, i) => ({
+    box.paragraphs.flatMap((p: Paragraph) =>
+      p.runs.map((r, i) => ({
         text: r.text,
         options: {
           fontFace: OFFICE[slotOf(deck.theme, r.font)],
@@ -176,17 +191,21 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
           bold: !!r.bold,
           italic: !!r.italic,
           underline: r.underline ? { style: "sng" as const } : undefined,
+          strike: r.strike ? ("sngStrike" as const) : undefined,
+          highlight: r.highlight ? color(r.highlight) : undefined,
           color: color(r.color),
           // Paragraph properties ride on every run of the paragraph.
           align: p.align ?? "left",
-          lineSpacing: maxSize * LINE * K,
+          // Exact points (a:spcPts), not a percentage: PowerPoint's 100% is the font's own
+          // line gap, not the layout's LINE, so a percentage would wrap and overflow differently.
+          lineSpacing: lineHeight(p) * K,
           paraSpaceBefore: (p.spaceBefore ?? 0) * K,
           bullet: p.bullet ? (p.bullet === "number" ? { type: "number" as const, indent: BULLET_INDENT * K } : { indent: BULLET_INDENT * K }) : false,
           indentLevel: p.bullet ? (p.level ?? 0) : 0,
           breakLine: i === p.runs.length - 1,
         },
-      }));
-    });
+      })),
+    );
   for (const [n, s] of deck.slides.entries()) {
     const slide = pptx.addSlide();
     const bg = s.background?.color;
@@ -194,11 +213,14 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
     if (s.hidden) slide.hidden = true;
     if (s.notes) slide.addNotes(s.notes);
     for (const e of s.elements) {
+      // An unfilled image placeholder draws nothing; don't leave an empty box in the file.
+      if (isImageSlot(e)) continue;
       const f = { x: IN(e.frame.x), y: IN(e.frame.y), w: IN(e.frame.w), h: IN(e.frame.h), rotate: e.rotation ?? 0, objectName: e.id };
       const textOpts = (box: TextBox) => ({ margin: INSET * K, valign: box.valign ?? "top", fit: "none" as const, wrap: true });
       if (e.type === "text") slide.addText(runs(e), { ...f, ...textOpts(e) });
       else if (e.type === "shape") {
-        const shape = { rect: pptx.ShapeType.rect, roundRect: pptx.ShapeType.roundRect, ellipse: pptx.ShapeType.ellipse }[e.shape];
+        // Our shape names are prstGeom names, so the shape stays native and editable.
+        const shape = e.shape as PptxGenJS.SHAPE_NAME;
         const style = {
           fill: e.fill ? fill(e.fill, n + 1, e.id, e.fillOpacity) : { type: "none" as const },
           line: e.stroke && e.strokeWidth ? { color: color(e.stroke), width: e.strokeWidth * K, transparency: transparency(e.strokeOpacity), dashType: dashType(e.dash) } : { type: "none" as const },

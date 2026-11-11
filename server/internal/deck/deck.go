@@ -33,6 +33,8 @@ const (
 	minFontSize    = 8
 	maxFontSize    = 400
 	maxStrokeWidth = 100
+	minLineSpacing = 0.8
+	maxLineSpacing = 3
 )
 
 type Frame struct {
@@ -48,7 +50,9 @@ type Run struct {
 	Bold      bool    `json:"bold,omitempty"`
 	Italic    bool    `json:"italic,omitempty"`
 	Underline bool    `json:"underline,omitempty"`
+	Strike    bool    `json:"strike,omitempty"`
 	Color     string  `json:"color,omitempty"`
+	Highlight string  `json:"highlight,omitempty"`
 	Font      string  `json:"font,omitempty"`
 }
 
@@ -58,6 +62,8 @@ type Paragraph struct {
 	Bullet      string  `json:"bullet,omitempty"`
 	Level       int     `json:"level,omitempty"`
 	SpaceBefore float64 `json:"spaceBefore,omitempty"`
+	// LineSpacing multiplies the default line height (1.2 × the largest run); 0 means 1.
+	LineSpacing float64 `json:"lineSpacing,omitempty"`
 }
 
 type TextBox struct {
@@ -90,13 +96,13 @@ type Element struct {
 	// StrokeOpacity and Dash apply to a shape's outline and to a line.
 	StrokeOpacity *float64 `json:"strokeOpacity,omitempty"`
 	Dash          string   `json:"dash,omitempty"`
-	Radius      float64     `json:"radius,omitempty"`
-	Text        *TextBox    `json:"text,omitempty"`
-	EndArrow    bool        `json:"endArrow,omitempty"`
-	StartArrow  bool        `json:"startArrow,omitempty"`
-	Asset       string      `json:"asset,omitempty"`
-	Crop        *Crop       `json:"crop,omitempty"`
-	Alt         string      `json:"alt,omitempty"`
+	Radius        float64  `json:"radius,omitempty"`
+	Text          *TextBox `json:"text,omitempty"`
+	EndArrow      bool     `json:"endArrow,omitempty"`
+	StartArrow    bool     `json:"startArrow,omitempty"`
+	Asset         string   `json:"asset,omitempty"`
+	Crop          *Crop    `json:"crop,omitempty"`
+	Alt           string   `json:"alt,omitempty"`
 	// Opacity is an image's; shapes and lines use FillOpacity and StrokeOpacity.
 	Opacity *float64 `json:"opacity,omitempty"`
 }
@@ -145,12 +151,21 @@ type Deck struct {
 var (
 	ThemeColors = []string{"background", "text", "heading", "accent", "accent2", "muted", "surface"}
 	Slots       = []string{"sans", "serif", "mono"}
-	Layouts     = []string{"title", "title-body", "two-column", "image-right", "section", "blank"}
-	Dashes      = []string{"solid", "dash", "dot", "dashDot", "longDash"}
-	hexColor    = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
-	slideID     = regexp.MustCompile(`^s_[a-z0-9_]{1,40}$`)
-	elementID   = regexp.MustCompile(`^e_[a-z0-9_]{1,40}$`)
-	AssetID     = regexp.MustCompile(`^a_[a-z0-9_]{1,40}$`)
+	Layouts     = []string{"title", "title-body", "two-column", "image-right", "section", "blank", "quote", "big-number", "three-column", "comparison", "image-full", "image-left", "agenda", "closing"}
+	// Shapes are PowerPoint prstGeom names, so PPTX export passes them through;
+	// web/lib/slides/geometry.ts draws the same set.
+	Shapes = []string{
+		"rect", "roundRect", "ellipse",
+		"triangle", "rtTriangle", "diamond", "pentagon", "hexagon", "octagon",
+		"rightArrow", "leftArrow", "upArrow", "downArrow", "chevron", "homePlate",
+		"wedgeRectCallout", "wedgeRoundRectCallout",
+		"star5", "plus", "donut", "heart",
+	}
+	Dashes    = []string{"solid", "dash", "dot", "dashDot", "longDash"}
+	hexColor  = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+	slideID   = regexp.MustCompile(`^s_[a-z0-9_]{1,40}$`)
+	elementID = regexp.MustCompile(`^e_[a-z0-9_]{1,40}$`)
+	AssetID   = regexp.MustCompile(`^a_[a-z0-9_]{1,40}$`)
 )
 
 func in(v string, set ...string) bool {
@@ -259,8 +274,8 @@ func normalizeParagraphs(theme Theme, ps []Paragraph, where string) error {
 	for i := range ps {
 		p := &ps[i]
 		w := fmt.Sprintf("%s paragraph %d", where, i+1)
-		if !in(p.Align, "", "left", "center", "right") {
-			return invalid("%s: align must be left, center or right", w)
+		if !in(p.Align, "", "left", "center", "right", "justify") {
+			return invalid("%s: align must be left, center, right or justify", w)
 		}
 		if p.Align == "left" {
 			p.Align = ""
@@ -273,6 +288,14 @@ func normalizeParagraphs(theme Theme, ps []Paragraph, where string) error {
 		}
 		if err := checkNumber(&p.SpaceBefore, 0, 400, w+" spaceBefore"); err != nil {
 			return err
+		}
+		if p.LineSpacing != 0 {
+			if err := checkNumber(&p.LineSpacing, minLineSpacing, maxLineSpacing, w+" lineSpacing"); err != nil {
+				return err
+			}
+			if p.LineSpacing == 1 {
+				p.LineSpacing = 0
+			}
 		}
 		if len(p.Runs) == 0 {
 			return invalid("%s: give at least one run (an empty paragraph is one run with empty text)", w)
@@ -288,6 +311,9 @@ func normalizeParagraphs(theme Theme, ps []Paragraph, where string) error {
 				return err
 			}
 			if err := checkColor(theme, r.Color, rw, false); err != nil {
+				return err
+			}
+			if err := checkColor(theme, r.Highlight, rw+" highlight", false); err != nil {
 				return err
 			}
 			if !in(r.Font, "", "heading", "body", "sans", "serif", "mono") {
@@ -318,7 +344,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 	if err := checkNumber(&e.Rotation, -360, 360, where+" rotation"); err != nil {
 		return err
 	}
-	if !in(e.Placeholder, "", "title", "subtitle", "body", "body2", "image") {
+	if !in(e.Placeholder, "", "title", "subtitle", "body", "body2", "body3", "label", "label2", "image") {
 		return invalid("%s: unknown placeholder %q", where, e.Placeholder)
 	}
 	if err := checkNumber(&e.StrokeWidth, 0, maxStrokeWidth, where+" strokeWidth"); err != nil {
@@ -369,8 +395,8 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		}
 		return normalizeParagraphs(d.Theme, e.Paragraphs, where)
 	case "shape":
-		if !in(e.Shape, "rect", "roundRect", "ellipse") {
-			return invalid("%s: shape must be rect, roundRect or ellipse", where)
+		if !in(e.Shape, Shapes...) {
+			return invalid("%s: shape must be one of %s", where, strings.Join(Shapes, ", "))
 		}
 		if err := notFor(len(e.Paragraphs) > 0, "paragraphs (put them in text)"); err != nil {
 			return err
@@ -458,15 +484,8 @@ func Normalize(body string) (string, error) {
 	return d.Encode()
 }
 
-// Validate checks the whole deck and normalises it in place.
-func (d *Deck) Validate() error {
-	if d.Schema != Schema {
-		return invalid("schema must be %d (got %d)", Schema, d.Schema)
-	}
-	if d.Size != (Size{Width, Height}) {
-		return invalid("size must be %dx%d", Width, Height)
-	}
-	t := &d.Theme
+// Validate checks a theme's name, font slots and colours, upper-casing the colours.
+func (t *Theme) Validate() error {
 	if n := utf8.RuneCountInString(t.Name); n > 60 {
 		return invalid("theme name is at most 60 characters")
 	}
@@ -486,6 +505,20 @@ func (d *Deck) Validate() error {
 	}
 	if len(t.Colors) != len(ThemeColors) {
 		return invalid("theme.colors has exactly %s", strings.Join(ThemeColors, ", "))
+	}
+	return nil
+}
+
+// Validate checks the whole deck and normalises it in place.
+func (d *Deck) Validate() error {
+	if d.Schema != Schema {
+		return invalid("schema must be %d (got %d)", Schema, d.Schema)
+	}
+	if d.Size != (Size{Width, Height}) {
+		return invalid("size must be %dx%d", Width, Height)
+	}
+	if err := d.Theme.Validate(); err != nil {
+		return err
 	}
 	if d.Assets == nil {
 		d.Assets = map[string]Asset{}

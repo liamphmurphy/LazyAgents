@@ -44,3 +44,19 @@ test("replaceFills swaps only the named shape's fill and the background's", () =
   assert.ok(out.includes('<a:prstGeom prst="rect"/><G2/><a:ln><a:solidFill><a:srgbClr val="FFFFFF"/>'), "e_2's fill, not its outline, is replaced");
   assert.throws(() => replaceFills(xml, [{ el: "e_9", xml: "<G/>" }]));
 });
+
+test("a style preset sets its dash and drops opacity, so the shape looks like its tile", async () => {
+  const { applyStyle, styleOf } = await import("./slides/styles.ts");
+  const shape = { id: "e_a", type: "shape", shape: "rect", frame: { x: 0, y: 0, w: 10, h: 10 }, fill: { type: "linear", angle: 0, stops: ["accent", "muted"] }, fillOpacity: 0.5, stroke: "text", strokeWidth: 2, strokeOpacity: 0.5, dash: "dot" };
+  const ghost = applyStyle(shape, "ghost");
+  assert.equal(ghost.dash, "dash");
+  assert.equal(ghost.fill, undefined);
+  assert.ok(!("fillOpacity" in ghost) && !("strokeOpacity" in ghost));
+  assert.equal(styleOf(ghost), "ghost");
+  const subtle = applyStyle(shape, "subtle");
+  assert.ok(!("dash" in subtle));
+  assert.equal(styleOf(subtle), "subtle");
+  assert.equal(styleOf({ ...subtle, fillOpacity: 0.5 }), undefined, "a translucent shape no longer matches a preset");
+  const line = applyStyle({ id: "e_l", type: "line", frame: { x: 0, y: 0, w: 10, h: 0 }, stroke: "text", strokeWidth: 2, dash: "dot", strokeOpacity: 0.3 }, "filled-accent");
+  assert.ok(!("dash" in line) && !("strokeOpacity" in line));
+});
