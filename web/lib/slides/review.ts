@@ -92,6 +92,9 @@ function slideDiff(a: Slide, b: Slide) {
       details.push(`Removed ${kindName(e)}${plain(e) ? ` ${quote(plain(e))}` : ""}`);
       marksBefore[e.id] = "removed";
     }
+  // Stacking order is the elements' order: say so when the kept ones were reordered.
+  const kept = (s: Slide, other: Map<string, Element>) => s.elements.filter((e) => other.has(e.id)).map((e) => e.id).join();
+  if (kept(a, after) !== kept(b, before)) details.push("Changed the stacking order of elements");
   return { details, marksBefore, marksAfter };
 }
 
