@@ -454,7 +454,15 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			return err
 		}
 		// A stopped reply may have been interrupted by a new message.
-		return runs.ResumeInterruptedChat(ctx, q, chat.ID, run.ID, &turn.StartedAt, 0)
+		if err := runs.ResumeInterruptedChat(ctx, q, chat.ID, run.ID, &turn.StartedAt, 0); err != nil {
+			return err
+		}
+		// Only a turn that ended with a reply sends the next queued follow-up;
+		// after a stop or a failure the queue waits for the person.
+		if !replied {
+			return nil
+		}
+		return runs.SendNextFollowup(ctx, q, chat.ID, 0)
 	})
 	if err != nil {
 		r.Log.Error("finish chat turn", "run", c.run.ID, "err", err)
