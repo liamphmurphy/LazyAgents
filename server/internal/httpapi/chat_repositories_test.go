@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"github.com/google/uuid"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/playground"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"net/http"
 	"testing"
@@ -117,4 +119,54 @@ func TestRepositoryToolUsesFrozenAndCurrentCodingPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	call(409)
+}
+
+func TestRepositoryPlaygroundUsesSelectedCheckoutAndEnvironment(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := t.Context()
+	p := e.want("POST", "/personas", map[string]any{"name": "Playground coder", "capabilities": map[string]any{"code": true, "images": false}}, 201)
+	personaID := uuid.MustParse(p["id"].(string))
+	chat, err := e.runs.StartChat(ctx, e.me.WorkspaceID, e.me.ID, runs.ChatInput{PersonaID: &personaID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, repo := range []string{"acme/alpha", "acme/beta", "acme/alpha"} {
+		chat, err = e.runs.SetChatRepository(ctx, e.me.WorkspaceID, e.me.ID, chat.ID, repo, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = e.q.PutTestEnvironment(ctx, store.PutTestEnvironmentParams{WorkspaceID: e.me.WorkspaceID, Repo: "github.com/acme/beta", Recipe: json.RawMessage(`{"services":[{"name":"beta-db","image":"postgres:17-alpine"}],"nix_packages":[]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.runs.PostChatMessage(ctx, e.me.WorkspaceID, e.me.ID, chat.ID, runs.ChatMessageInput{Body: "preview beta"}); err != nil {
+		t.Fatal(err)
+	}
+	chat, err = e.q.GetChatSession(ctx, store.GetChatSessionParams{ID: chat.ID, WorkspaceID: e.me.WorkspaceID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.q.SetRunState(ctx, store.SetRunStateParams{ID: *chat.CurrentRunID, State: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	pg, err := e.runs.StartChatPlayground(ctx, e.me.WorkspaceID, *chat.CurrentRunID, playground.Spec{Repository: "acme/beta", Setup: []string{"npm ci"}, OpenAPI: "api/openapi.yaml", Processes: []playground.Process{{Name: "web", Command: "npm run dev", Dir: "web", Port: 3000}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec playground.Spec
+	if err = json.Unmarshal(pg.Spec, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Directory != ".lazyagents/repos/acme/beta" || spec.Processes[0].Dir != "web" || spec.OpenAPI != "api/openapi.yaml" || len(spec.Services) != 1 || spec.Services[0].Name != "beta-db" {
+		t.Fatalf("wrong checkout or environment: %+v", spec)
+	}
+	// A saved spec binds to another chat's checkout path without rewriting commands.
+	other, err := e.runs.StartChat(ctx, e.me.WorkspaceID, e.me.ID, runs.ChatInput{PersonaID: &personaID, RepoURL: "acme/beta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, found, err := e.runs.SavedPlaygroundSpec(ctx, other)
+	if err != nil || !found || saved.Directory != "." || saved.Processes[0].Dir != "web" {
+		t.Fatalf("saved spec: %+v found=%v err=%v", saved, found, err)
+	}
 }

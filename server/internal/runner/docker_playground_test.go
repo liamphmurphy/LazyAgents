@@ -121,6 +121,7 @@ func TestStartPlaygroundSandboxesEveryContainerAndReportsAProcessThatDies(t *tes
 	f.exitCode[web] = 1
 	f.logs[web] = "2026-11-10T17:42:04.000000000Z Error: Cannot find module 'next'\n"
 	spec := playground.Spec{
+		Directory: ".lazyagents/repos/acme/app",
 		Services:  []agentdef.Service{{Name: "postgres", Image: "postgres:17-alpine"}},
 		Setup:     []string{"npm ci"},
 		Processes: []playground.Process{{Name: "web", Command: "npm run dev", Dir: "web", Port: 3000}},
@@ -143,6 +144,9 @@ func TestStartPlaygroundSandboxesEveryContainerAndReportsAProcessThatDies(t *tes
 	}
 	for _, name := range []string{playgroundContainer(id, "setup"), web} {
 		body := f.created[name]
+		if !strings.Contains(fmt.Sprint(body["Cmd"]), ".lazyagents/repos/acme/app") {
+			t.Errorf("process escaped selected checkout: %v", body["Cmd"])
+		}
 		host := body["HostConfig"].(map[string]any)
 		if host["NetworkMode"] != network || host["ExtraHosts"] != nil || fmt.Sprint(host["CapDrop"]) != "[ALL]" {
 			t.Errorf("%s host config %v", name, host)
@@ -160,7 +164,7 @@ func TestStartPlaygroundSandboxesEveryContainerAndReportsAProcessThatDies(t *tes
 	// A login shell would read /etc/profile, which resets PATH and loses Go.
 	// It starts at the root: Docker would create a missing WorkingDir as root.
 	cmd := f.created[web]["Cmd"].([]any)
-	if len(cmd) != 3 || cmd[0] != "bash" || cmd[1] != "-c" || cmd[2] != processScript("web", "npm run dev") {
+	if len(cmd) != 3 || cmd[0] != "bash" || cmd[1] != "-c" || cmd[2] != processScript(".lazyagents/repos/acme/app/web", "npm run dev") {
 		t.Errorf("web runs %v, want bash -c with its process script", cmd)
 	}
 	if wd := f.created[web]["WorkingDir"]; wd != workspacePath {

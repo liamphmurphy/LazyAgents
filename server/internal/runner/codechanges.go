@@ -18,15 +18,15 @@ const (
 // CodeChange is one file a coding chat turn changed. Its JSON is the
 // contract's ChatCodeChange, stored on the assistant message as is.
 type CodeChange struct {
- Repository string `json:"repository,omitempty"`
-	Path      string  `json:"path"`
-	OldPath   *string `json:"old_path,omitempty"`
-	Status    string  `json:"status"` // added | modified | deleted | renamed
-	Additions int     `json:"additions"`
-	Deletions int     `json:"deletions"`
-	Binary    bool    `json:"binary"`
-	Patch     *string `json:"patch,omitempty"`
-	Truncated bool    `json:"truncated"`
+	Repository string  `json:"repository,omitempty"`
+	Path       string  `json:"path"`
+	OldPath    *string `json:"old_path,omitempty"`
+	Status     string  `json:"status"` // added | modified | deleted | renamed
+	Additions  int     `json:"additions"`
+	Deletions  int     `json:"deletions"`
+	Binary     bool    `json:"binary"`
+	Patch      *string `json:"patch,omitempty"`
+	Truncated  bool    `json:"truncated"`
 }
 
 // numstatEntry is one record of `git diff --numstat -z`.
