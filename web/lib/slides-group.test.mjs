@@ -85,7 +85,7 @@ test("a group's children lay out like loose elements, tagged with the group", ()
   const measure = (t, _s, _st, size) => t.length * size * 0.5;
   const grouped = layoutSlide(deck, slide, measure);
   const loose = layoutSlide(deck, { ...slide, elements: ungroupElements(slide.elements, new Set(["e_g1", "e_g4"])).elements }, measure);
-  assert.deepEqual(grouped.ops.map(({ g, ...o }) => o), loose.ops);
+  assert.deepEqual(grouped.ops.map((o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== "g"))), loose.ops);
   assert.deepEqual([...new Set(grouped.ops.map((o) => o.g).filter(Boolean))], ["e_g1", "e_g4"]);
   assert.ok(grouped.ops.filter((o) => o.el === "e_g7").every((o) => o.rot?.deg === 6 && o.g === "e_g4"));
 });

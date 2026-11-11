@@ -48,6 +48,10 @@ export type ToolbarActions = {
   duplicate: () => void;
   align: (op: AlignOp) => void;
   distribute: (axis: "x" | "y") => void;
+  /** Groups the selection (⌘G); undefined when it can't be grouped. */
+  group?: () => void;
+  /** Ungroups the selected groups (⇧⌘G); undefined when none is selected. */
+  ungroup?: () => void;
 };
 
 /** The one value every item has, or MIXED when they differ. */
@@ -285,7 +289,9 @@ const spacingField = { item: "Custom spacing…", parse: (raw: string) => {
  */
 export function Toolbar({ theme, themeKey, layout, selection, editing, disabled, a }: { theme: Theme; themeKey?: string; layout: Layout; selection: Element[]; editing: boolean; disabled: boolean; a: ToolbarActions }) {
   const selected = selection[0];
-  const boxes = selection.flatMap((e) => textOf(e) ?? []);
+  // A group's style controls act on its elements.
+  const members = selection.flatMap((e) => (e.type === "group" ? e.elements : [e]));
+  const boxes = members.flatMap((e) => textOf(e) ?? []);
   const box = boxes[0];
   const run = box?.paragraphs[0]?.runs[0];
   const runs = boxes.flatMap((b) => b.paragraphs.flatMap((p) => p.runs));
@@ -297,8 +303,8 @@ export function Toolbar({ theme, themeKey, layout, selection, editing, disabled,
   const highlight = common(runs.map((r) => r.highlight));
   const alignment = common(paras.map((p) => p.align ?? "left"));
   const spacing = common(paras.map((p) => p.lineSpacing ?? 1));
-  const shapes = selection.filter((e) => e.type === "shape");
-  const lines = selection.filter((e) => e.type === "line");
+  const shapes = members.filter((e) => e.type === "shape");
+  const lines = members.filter((e) => e.type === "line");
   const shape = shapes[0], line = lines[0];
   const fill = common(shapes.map((e) => e.fill));
   const outlineWidth = common(shapes.map((e) => (e.stroke ? e.strokeWidth : undefined)));
@@ -441,6 +447,14 @@ export function Toolbar({ theme, themeKey, layout, selection, editing, disabled,
             <DropdownMenu.Item className={item} onSelect={a.duplicate}>
               Duplicate
               <span className="ml-auto pl-4 font-mono text-[11px] text-fg-tertiary">⌘D</span>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className={cx(item, "data-[disabled]:opacity-40")} disabled={!a.group} onSelect={() => a.group?.()}>
+              Group
+              <span className="ml-auto pl-4 font-mono text-[11px] text-fg-tertiary">⌘G</span>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className={cx(item, "data-[disabled]:opacity-40")} disabled={!a.ungroup} onSelect={() => a.ungroup?.()}>
+              Ungroup
+              <span className="ml-auto pl-4 font-mono text-[11px] text-fg-tertiary">⇧⌘G</span>
             </DropdownMenu.Item>
             <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
             <DropdownMenu.Label className="px-2.5 py-1 text-[11px] text-fg-tertiary">{multi ? "Align to selection" : "Align to slide"}</DropdownMenu.Label>

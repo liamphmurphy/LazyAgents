@@ -17,6 +17,7 @@ import { assetHref, useSlideFonts } from "@/lib/slides/render";
 import { mergeDecks, same } from "@/lib/slides/review";
 import { H, THEMES, W, encodeDeck, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { applyStyle } from "@/lib/slides/styles";
+import { fit, groupElements, isGroup, mapDeep, removeDeep, scopeElements, ungroupElements, withFrame } from "@/lib/slides/group";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
@@ -322,10 +323,16 @@ export function DeckScreen({ id }: { id: string }) {
   const startAt = Number(search.get("slide") ?? 0);
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string>();
+  /** The group whose elements are being edited (entered by double-clicking it), if any. */
+  const [entered, setScope] = useState<string>();
   const editorRef = useRef<TextEditorHandle | null>(null);
   const slide = deck?.slides.find((s) => s.id === slideId) ?? deck?.slides[Math.max(0, Math.min(deck.slides.length - 1, startAt - 1))];
   // The selection in stacking order; ids no longer on the slide (after an undo) drop out.
-  const selection = useMemo(() => slide?.elements.filter((e) => selected.includes(e.id)) ?? [], [slide, selected]);
+  // Out of a group once it's gone (ungrouped, undone, another slide).
+  const scope = entered && slide?.elements.some((e) => e.id === entered && isGroup(e)) ? entered : undefined;
+  // Inside an entered group, the selection is among its elements.
+  const scoped = useMemo(() => (slide ? scopeElements(slide.elements, scope) : []), [slide, scope]);
+  const selection = useMemo(() => scoped.filter((e) => selected.includes(e.id)), [scoped, selected]);
   const selectedEl = selection.length === 1 ? selection[0] : undefined;
   const selIds = new Set(selection.map((e) => e.id));
   const readOnly = live || archived || reviewing || !!conflict;
@@ -378,16 +385,31 @@ export function DeckScreen({ id }: { id: string }) {
   };
   const mapSlide = (sid: string, fn: (s: Slide) => Slide) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => (s.id === sid ? fn(s) : s)) });
   const mapElement = (eid: string, fn: (e: Element) => Element) => mapElements(new Set([eid]), fn);
-  const mapElements = (ids: ReadonlySet<string>, fn: (e: Element) => Element) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: s.elements.map((e) => (ids.has(e.id) ? fn(e) : e)) })) });
+  /** fn on the elements with the ids, inside groups too (their boxes refit). */
+  const mapElements = (ids: ReadonlySet<string>, fn: (e: Element) => Element) => (d: Deck) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: mapDeep(s.elements, ids, fn) })) });
+  /** fn on the list the selection lives in: the slide's elements, or the entered group's. */
+  const mapScope = (s: Slide, fn: (els: Element[]) => Element[]): Slide => {
+    const g = scope ? s.elements.find((e) => e.id === scope) : undefined;
+    if (!g || !isGroup(g)) return { ...s, elements: fn(s.elements) };
+    const kids = fn(g.elements);
+    return kids === g.elements ? s : { ...s, elements: s.elements.map((e) => (e === g ? fit({ ...g, elements: kids as typeof g.elements }) : e)) };
+  };
+  /** A change to every selected element; a selected group's elements take it instead. */
+  const deep = (fn: (e: Element) => Element) => (e: Element): Element => {
+    if (!isGroup(e)) return fn(e);
+    const kids = e.elements.map((c) => fn(c) as typeof c);
+    return kids.every((c, i) => c === e.elements[i]) ? e : fit({ ...e, elements: kids });
+  };
   const addElement = (e: Element, edit = false) => {
     if (!slide) return;
+    setScope(undefined);
     update(mapSlide(slide.id, (s) => ({ ...s, elements: [...s.elements, e] })));
     setSelected([e.id]);
     if (edit) setEditing(e.id);
   };
   const removeSelected = () => {
     if (!slide || !selIds.size) return;
-    update(mapSlide(slide.id, (s) => ({ ...s, elements: s.elements.filter((e) => !selIds.has(e.id)) })));
+    update(mapSlide(slide.id, (s) => ({ ...s, elements: removeDeep(s.elements, selIds) })));
     setSelected([]);
   };
 
@@ -398,15 +420,35 @@ export function DeckScreen({ id }: { id: string }) {
       // reorder returns the same array when nothing moves, which update skips.
       update((d) => {
         const s = d.slides.find((x) => x.id === slide.id);
-        const elements = s && reorder(s.elements, selIds, op);
-        return !s || elements === s.elements ? d : mapSlide(slide.id, (x) => ({ ...x, elements: elements! }))(d);
+        if (!s) return d;
+        const next = mapScope(s, (els) => reorder(els, selIds, op));
+        return next === s || next.elements === s.elements ? d : mapSlide(slide.id, () => next)(d);
       });
     },
     duplicate: () => {
       if (!slide || !selIds.size) return;
-      const r = duplicate(slide.elements, selIds, () => newId("e"));
+      let ids: string[] = [];
+      update(mapSlide(slide.id, (s) => mapScope(s, (els) => {
+        const r = duplicate(els, selIds, () => newId("e"));
+        ids = r.ids;
+        return r.elements;
+      })));
+      setSelected(ids);
+    },
+    /** The selected elements as one group, at the topmost one's place. */
+    group: () => {
+      if (!slide || scope || selection.length < 2) return;
+      const r = groupElements(slide.elements, selIds, () => newId("e"));
+      if (!r) return;
       update(mapSlide(slide.id, (s) => ({ ...s, elements: r.elements })));
-      setSelected(r.ids);
+      setSelected([r.id]);
+    },
+    /** The selected groups back into their elements, which stay selected. */
+    ungroup: () => {
+      if (!slide || scope || !selection.some(isGroup)) return;
+      const r = ungroupElements(slide.elements, selIds);
+      update(mapSlide(slide.id, (s) => ({ ...s, elements: r.elements })));
+      setSelected([...selection.filter((e) => !isGroup(e)).map((e) => e.id), ...r.ids]);
     },
     /** To the selection's box, or to the slide when one element is selected. */
     align: (op: AlignOp) => {
@@ -421,7 +463,7 @@ export function DeckScreen({ id }: { id: string }) {
   /** Changes each selected element as one undo step; none when nothing actually changes. */
   const editSelection = (fn: (e: Element) => Element) => {
     if (!selection.length) return;
-    const changed = new Map(selection.map((e) => [e.id, fn(e)] as const).filter(([, n], i) => JSON.stringify(n) !== JSON.stringify(selection[i])));
+    const changed = new Map(selection.map((e) => [e.id, deep(fn)(e)] as const).filter(([, n], i) => JSON.stringify(n) !== JSON.stringify(selection[i])));
     if (changed.size) update(mapElements(new Set(changed.keys()), (e) => changed.get(e.id) ?? e));
   };
   /** Sets several frames at once, leaving the deck untouched (no undo step) when nothing moves. */
@@ -429,7 +471,7 @@ export function DeckScreen({ id }: { id: string }) {
     update((d) => {
       const moved = (e: Element) => frames[e.id] && JSON.stringify(frames[e.id]) !== JSON.stringify(e.frame);
       if (!slide?.elements.some(moved)) return d;
-      return mapElements(new Set(Object.keys(frames)), (e) => ({ ...e, frame: frames[e.id] }))(d);
+      return mapElements(new Set(Object.keys(frames)), (e) => withFrame(e, frames[e.id]))(d);
     }, key);
 
   const fileInput = useRef<HTMLInputElement>(null);
@@ -485,10 +527,11 @@ export function DeckScreen({ id }: { id: string }) {
         return;
       }
       // A mark goes on everywhere unless every selected text already has it.
-      const texts = selection.flatMap((e) => textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs);
+      const texts = selection.flatMap((e) => (isGroup(e) ? e.elements : [e])).flatMap((e) => textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs);
       const markOn = f.kind === "mark" ? !texts.every((r) => r[f.mark]) : undefined;
-      if (selection.every((e) => formatElement(e, f, markOn) === e)) return; // nothing to change: no undo step
-      update(mapElements(selIds, (e) => formatElement(e, f, markOn)));
+      const fmt = deep((e) => formatElement(e, f, markOn));
+      if (selection.every((e) => fmt(e) === e)) return; // nothing to change: no undo step
+      update(mapElements(selIds, fmt));
     },
     setFill: (col) => editSelection((e) => (e.type === "shape" ? { ...e, fill: col } : e)),
     setStroke: (col) => editSelection((e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e)),
@@ -499,7 +542,7 @@ export function DeckScreen({ id }: { id: string }) {
     // Mixed lines all get the arrowhead (or, when every one has it, all lose it).
     toggleArrow: (end) => {
       const k = end === "start" ? "startArrow" : "endArrow";
-      const lines = selection.filter((e) => e.type === "line");
+      const lines = selection.flatMap((e) => (isGroup(e) ? e.elements : [e])).filter((e) => e.type === "line");
       const on = !lines.every((e) => e[k]);
       editSelection((e) => (e.type === "line" && !!e[k] !== on ? toggleArrow(e, end) : e));
     },
@@ -510,6 +553,8 @@ export function DeckScreen({ id }: { id: string }) {
     duplicate: arrange.duplicate,
     align: arrange.align,
     distribute: arrange.distribute,
+    group: !scope && selection.length > 1 ? arrange.group : undefined,
+    ungroup: !scope && selection.some(isGroup) ? arrange.ungroup : undefined,
   };
 
   const present = async (from?: number) => {
@@ -544,11 +589,13 @@ export function DeckScreen({ id }: { id: string }) {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === "a" && slide) {
       e.preventDefault();
-      setSelected(slide.elements.map((x) => x.id));
+      setSelected(scoped.map((x) => x.id));
       return;
     }
     if (e.key === "Escape") {
-      setSelected([]);
+      // Out of an entered group first, with the group selected.
+      setSelected(scope ? [scope] : []);
+      setScope(undefined);
       return;
     }
     if (!selection.length || readOnly) return;
@@ -568,6 +615,10 @@ export function DeckScreen({ id }: { id: string }) {
     } else if (mod && e.shiftKey && e.key.toLowerCase() === "x" && selection.some((x) => textOf(x))) {
       e.preventDefault();
       tools.format({ kind: "mark", mark: "strike" });
+    } else if (mod && e.key.toLowerCase() === "g") {
+      e.preventDefault();
+      if (e.shiftKey) arrange.ungroup();
+      else arrange.group();
     } else if (mod && e.key.toLowerCase() === "d") {
       e.preventDefault();
       arrange.duplicate();
@@ -591,7 +642,8 @@ export function DeckScreen({ id }: { id: string }) {
   const duplicateSlide = (sid: string) => {
     const src = deckRef.current?.slides.find((s) => s.id === sid);
     if (!src) return;
-    const copy: Slide = { ...structuredClone(src), id: newId("s"), elements: src.elements.map((e) => ({ ...structuredClone(e), id: newId("e") })) };
+    const fresh = <T extends Element>(e: T): T => ({ ...structuredClone(e), id: newId("e") });
+    const copy: Slide = { ...structuredClone(src), id: newId("s"), elements: src.elements.map((e) => (isGroup(e) ? { ...fresh(e), elements: e.elements.map(fresh) } : fresh(e))) };
     update((d) => {
       const i = d.slides.findIndex((x) => x.id === sid);
       return { ...d, slides: [...d.slides.slice(0, i + 1), copy, ...d.slides.slice(i + 1)] };
@@ -779,9 +831,11 @@ export function DeckScreen({ id }: { id: string }) {
                       fontsReady={fonts}
                       selected={selected}
                       onSelect={setSelected}
+                      scope={scope}
+                      onScope={setScope}
                       editing={editing}
                       onEdit={setEditing}
-                      onFrames={(live) => update(mapElements(new Set(Object.keys(live)), (e) => ({ ...e, ...live[e.id] })))}
+                      onFrames={(live) => update(mapElements(new Set(Object.keys(live)), (e) => (isGroup(e) ? withFrame(e, live[e.id].frame) : { ...e, ...live[e.id] })))}
                       onText={(eid, paragraphs) => update(mapElement(eid, (e) => withText(e, paragraphs)))}
                       readOnly={readOnly}
                       editorRef={editorRef}

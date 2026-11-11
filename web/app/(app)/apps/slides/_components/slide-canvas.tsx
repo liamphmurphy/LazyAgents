@@ -5,6 +5,7 @@ import { cx } from "@/lib/cx";
 import { SlideSvg } from "@/lib/slides/render";
 import { H, W, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { boxOf, contains, frameOf, guidesFor, scaleFrame, snapAxis, snapMove, snapTargets, unionBox, type Box, type SnapTargets } from "@/lib/slides/arrange";
+import { findDeep, isGroup, mapDeep, scopeElements, withFrame } from "@/lib/slides/group";
 import { TextEditor, type TextEditorHandle } from "./text-editor";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rotate" | "move";
@@ -51,7 +52,7 @@ const handlePos = (h: Handle) => ({
   cursor: { nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize", n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize" }[h as "n"],
 });
 
-const kindLabel = (e: Element) => (e.type === "text" ? `Text${e.placeholder ? ` · ${e.placeholder}` : ""}` : e.type === "shape" ? `Shape · ${e.shape}` : e.type === "line" ? "Line" : "Image");
+const kindLabel = (e: Element) => (e.type === "text" ? `Text${e.placeholder ? ` · ${e.placeholder}` : ""}` : e.type === "shape" ? `Shape · ${e.shape}` : e.type === "line" ? "Line" : e.type === "group" ? `Group · ${e.elements.length}` : "Image");
 
 
 /** Live frames while a drag is in progress, by element id. */
@@ -81,14 +82,22 @@ const pct = (b: Box) => ({ left: `${(b.l / W) * 100}%`, top: `${(b.t / H) * 100}
  * selects what the marquee wholly covers. Moving and resizing act on the whole
  * selection and snap to the slide's edges and centre lines and to the other
  * elements (hold ⌘/Ctrl to place freely).
+ *
+ * A group is one element here: clicking selects it, resizing scales its
+ * elements. Double-clicking it enters it (`scope`), selecting the element
+ * under the pointer; inside, the selection is among its elements until a
+ * click lands outside it or Escape leaves.
  */
-export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSelect, editing, onEdit, onFrames, onText, readOnly, editorRef, overflow }: {
+export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSelect, scope, onScope, editing, onEdit, onFrames, onText, readOnly, editorRef, overflow }: {
   deck: Deck;
   slide: Slide;
   assetUrl: (id: string) => string;
   fontsReady: boolean;
   selected: string[];
   onSelect: (ids: string[]) => void;
+  /** The entered group, whose elements are selectable one by one. */
+  scope?: string;
+  onScope: (id?: string) => void;
   editing?: string;
   onEdit: (id?: string) => void;
   /** One change (one undo step) to several elements' frames. */
@@ -111,12 +120,16 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
     return () => ro.disconnect();
   }, []);
   // A drag in progress is drawn from its live frames, then committed once.
-  const shown: Slide = drag ? { ...slide, elements: slide.elements.map((e) => (drag[e.id] ? { ...e, ...drag[e.id] } : e)) } : slide;
+  // A group dragged by its frame scales its elements with it.
+  const shown: Slide = drag ? { ...slide, elements: mapDeep(slide.elements, new Set(Object.keys(drag)), (e) => (isGroup(e) ? withFrame(e, drag[e.id].frame) : { ...e, ...drag[e.id] })) } : slide;
   const chosen = new Set(selected);
-  const sels = shown.elements.filter((e) => chosen.has(e.id));
+  // What can be selected: the slide's elements, or the entered group's.
+  const items = scopeElements(shown.elements, scope);
+  const entered = scope ? shown.elements.find((e) => e.id === scope) : undefined;
+  const sels = items.filter((e) => chosen.has(e.id));
   const sel = sels.length === 1 ? sels[0] : undefined;
   const group = sels.length > 1 ? unionBox(sels.map((e) => e.frame)) : undefined;
-  const ed = shown.elements.find((e) => e.id === editing);
+  const ed = editing ? findDeep(shown.elements, editing)?.el : undefined;
 
   /** Slide units under a pointer event. */
   const at = (ev: { clientX: number; clientY: number }) => {
@@ -156,15 +169,22 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
       onSelect(chosen.has(el.id) ? selected.filter((id) => id !== el.id) : [...selected, el.id]);
       return;
     }
+    // Pressing an element outside the entered group leaves the group.
+    const base = scopeElements(slide.elements, scope);
+    const leaving = !!(scope && el && !base.some((x) => x.id === el.id));
+    const pool = leaving ? slide.elements : base;
+    if (leaving) onScope(undefined);
     // Pressing an unselected element selects it alone; a selected one drags the whole selection.
-    const ids = el && !chosen.has(el.id) ? [el.id] : selected;
-    if (el && !chosen.has(el.id)) onSelect(ids);
-    const els = slide.elements.filter((x) => ids.includes(x.id));
+    const ids = el && (leaving || !chosen.has(el.id)) ? [el.id] : selected;
+    if (el && (leaving || !chosen.has(el.id))) onSelect(ids);
+    const els = pool.filter((x) => ids.includes(x.id));
     if (!els.length) return;
     const one = els.length === 1 ? els[0] : undefined;
     const f0 = one ? one.frame : frameOf(unionBox(els.map((x) => x.frame))!);
     const r0 = one?.rotation ?? 0;
-    const targets = snapTargets(W, H, slide.elements.filter((x) => !ids.includes(x.id)).map((x) => x.frame));
+    // Snap to everything else on the slide: the other elements in the scope and, inside a group, those outside it.
+    const others = [...pool.filter((x) => !ids.includes(x.id)), ...(scope && !leaving ? slide.elements.filter((x) => x.id !== scope) : [])];
+    const targets = snapTargets(W, H, others.map((x) => x.frame));
     const threshold = SNAP_PX / scale;
     const rect = box.current!.getBoundingClientRect();
     let last: Live = {};
@@ -238,6 +258,7 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
     if (editing || e.button !== 0) return;
     box.current?.focus({ preventScroll: true });
     const add = e.shiftKey || e.metaKey || e.ctrlKey;
+    const base = scopeElements(slide.elements, scope);
     const p0 = at(e);
     let m: Box | null = null;
     follow(
@@ -250,25 +271,30 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
       (moved) => {
         setMarquee(null);
         if (!moved || !m) {
-          if (!add) onSelect([]);
+          // A click on empty canvas leaves an entered group.
+          if (!add) {
+            onSelect([]);
+            onScope(undefined);
+          }
           return;
         }
-        const hit = slide.elements.filter((x) => contains(m!, boxOf(x.frame))).map((x) => x.id);
+        const hit = base.filter((x) => contains(m!, boxOf(x.frame))).map((x) => x.id);
         onSelect(add ? [...selected, ...hit.filter((id) => !chosen.has(id))] : hit);
       },
     );
   };
 
   useEffect(() => {
-    if (editing && !slide.elements.some((e) => e.id === editing)) onEdit(undefined);
+    if (editing && !findDeep(slide.elements, editing)) onEdit(undefined);
   }, [editing, slide, onEdit]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Tab" && slide.elements.length) {
+    const base = scopeElements(slide.elements, scope);
+    if (e.key === "Tab" && base.length) {
       e.preventDefault();
-      const i = slide.elements.findIndex((x) => x.id === selected[selected.length - 1]);
-      const n = slide.elements.length;
-      onSelect([slide.elements[(i + (e.shiftKey ? -1 : 1) + n + (i < 0 && e.shiftKey ? 1 : 0)) % n].id]);
+      const i = base.findIndex((x) => x.id === selected[selected.length - 1]);
+      const n = base.length;
+      onSelect([base[(i + (e.shiftKey ? -1 : 1) + n + (i < 0 && e.shiftKey ? 1 : 0)) % n].id]);
     }
   };
 
@@ -282,9 +308,10 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
       onPointerDown={startMarquee}
       className="relative aspect-video w-full select-none overflow-hidden rounded-[4px] border border-border bg-[#fff] shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
-      <span role="status" className="sr-only">{sels.length > 1 ? `${sels.length} elements selected` : sel ? `${kindLabel(sel)} selected` : ""}</span>
+      <span role="status" className="sr-only">{sels.length > 1 ? `${sels.length} elements selected` : sel ? `${kindLabel(sel)} selected${scope ? " in a group" : ""}` : ""}</span>
       <SlideSvg deck={deck} slide={shown} assetUrl={assetUrl} fontsReady={fontsReady} className="absolute inset-0 h-full w-full" showOverflow hideTextOf={editing} />
-      {shown.elements.map((el) => {
+      {/* Hit boxes: the slide's elements, and on top the entered group's. */}
+      {[...shown.elements.filter((x) => x.id !== scope), ...(entered && isGroup(entered) ? entered.elements : [])].map((el) => {
         const f = el.frame;
         const isLine = el.type === "line";
         // Lines are thin: give them a fatter hit box.
@@ -304,10 +331,25 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
               transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
             }}
             onPointerDown={(e) => start(e, el, "move")}
-            onDoubleClick={() => !readOnly && textOf(el) && onEdit(el.id)}
+            data-group={isGroup(el) || undefined}
+            onDoubleClick={(e) => {
+              if (readOnly) return;
+              if (!isGroup(el)) {
+                if (textOf(el)) onEdit(el.id);
+                return;
+              }
+              // Into the group, selecting its topmost element under the pointer.
+              const p = at(e);
+              const hit = [...el.elements].reverse().find((c) => contains(boxOf(c.frame), { l: p.x, t: p.y, r: p.x, b: p.y }));
+              onScope(el.id);
+              onSelect(hit ? [hit.id] : []);
+            }}
           />
         );
       })}
+      {entered && (
+        <div aria-hidden data-testid="slide-entered-group" className="pointer-events-none absolute z-10 outline-dashed outline-1 outline-fg-tertiary" style={pct(boxOf(entered.frame))} />
+      )}
       {/* Outlines of a multiple selection, each on its own rotation, inside the group's box. */}
       {group &&
         sels.map((el) => (
@@ -349,11 +391,12 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
                 key={h}
                 aria-hidden
                 className="pointer-events-auto absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border-[1.5px] border-accent bg-[#fff]"
+                data-handle={h}
                 style={handlePos(h)}
                 onPointerDown={(e) => start(e, sel, h)}
               />
             ))}
-          {!readOnly && sel.type !== "line" && (
+          {!readOnly && sel.type !== "line" && sel.type !== "group" && (
             <>
               <span className="absolute left-1/2 top-0 h-4 w-px -translate-y-full bg-accent" />
               <span
