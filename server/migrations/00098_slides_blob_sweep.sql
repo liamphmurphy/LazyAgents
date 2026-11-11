@@ -1,11 +1,11 @@
 -- +goose Up
 -- Slides image cleanup (ADR: Slides deck model and export, §10). Deck images
 -- are content-addressed blobs that a deck and its copies share. Deleting a
--- deck, its chat or the Slides space cascades the deck_assets rows, so a
--- trigger queues each released blob key here and the runner's sweep deletes
--- the blob once no deck_assets row uses the key any more.
+-- deck or its chat (or a failed upload removing its row) deletes deck_assets
+-- rows, so a trigger queues each released blob key here and the runner's
+-- sweep deletes the blob once no deck_assets row uses the key any more.
 CREATE TABLE deck_blob_sweep (
-  blob_key  text PRIMARY KEY CHECK (blob_key LIKE 'slides/%'),
+  blob_key  text PRIMARY KEY,
   queued_at timestamptz NOT NULL DEFAULT now()
 );
 

@@ -197,6 +197,9 @@ func (s *Service) AddAsset(ctx context.Context, p store.CreateDeckAssetParams) (
 // may delete it.
 const BlobSweepDelay = time.Hour
 
+// blobSweepKeyTimeout bounds checking and deleting one blob.
+const blobSweepKeyTimeout = 30 * time.Second
+
 // BlobDeleter deletes blobs (blob.Store).
 type BlobDeleter interface {
 	Delete(ctx context.Context, bucket, key string) error
@@ -204,7 +207,7 @@ type BlobDeleter interface {
 
 // SweepBlobs deletes up to limit image blobs released before cutoff that no
 // deck uses any more, and returns how many it deleted. Deleting a deck, its
-// chat or the Slides space queues its blobs (a trigger on deck_assets); a
+// chat (or a failed upload) queues its blobs (a trigger on deck_assets); a
 // blob a copy or another deck still uses is dequeued and kept. A blob whose
 // delete fails stays queued, at the back, for a later sweep.
 func SweepBlobs(ctx context.Context, pool *pgxpool.Pool, blobs BlobDeleter, bucket string, cutoff time.Time, limit int32) (int, error) {
@@ -219,7 +222,11 @@ func SweepBlobs(ctx context.Context, pool *pgxpool.Pool, blobs BlobDeleter, buck
 			break
 		}
 		gone := false
-		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		// Bounded, so a hung store can't hold the key's lock (and uploads of
+		// that image) or the runner's sweep indefinitely.
+		kctx, cancel := context.WithTimeout(ctx, blobSweepKeyTimeout)
+		err := pgx.BeginFunc(kctx, pool, func(tx pgx.Tx) error {
+			ctx := kctx
 			q := store.New(tx)
 			if err := q.LockDeckBlob(ctx, key); err != nil {
 				return err
@@ -238,6 +245,7 @@ func SweepBlobs(ctx context.Context, pool *pgxpool.Pool, blobs BlobDeleter, buck
 			gone = true
 			return nil
 		})
+		cancel()
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}

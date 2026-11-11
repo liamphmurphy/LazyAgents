@@ -193,8 +193,9 @@ func (s *Server) UploadDeckAsset(ctx context.Context, req api.UploadDeckAssetReq
 	}
 	if err := s.Blobs.Put(ctx, s.ArtifactBucket, a.Key, bytes.NewReader(a.Bytes), int64(len(a.Bytes)), a.Mime); err != nil {
 		// Removing the row queues the key, so the sweep deletes anything
-		// partly written once no deck uses it.
-		_ = s.Q.DeleteDeckAsset(ctx, store.DeleteDeckAssetParams{CanvasID: cv.ID, ID: row.ID})
+		// partly written once no deck uses it. A cancelled request must
+		// still remove it.
+		_ = s.Q.DeleteDeckAsset(context.WithoutCancel(ctx), store.DeleteDeckAssetParams{CanvasID: cv.ID, ID: row.ID})
 		return nil, err
 	}
 	return api.UploadDeckAsset201JSONResponse{Id: row.ID, Mime: api.DeckAssetMime(row.Mime), W: int(row.Width), H: int(row.Height)}, nil
