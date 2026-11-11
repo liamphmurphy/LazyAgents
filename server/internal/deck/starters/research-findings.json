@@ -23,11 +23,11 @@
  "assets": {},
  "slides": [
   {
-   "id": "s_dndrec_1",
+   "id": "s_research_1",
    "layout": "title",
    "elements": [
     {
-     "id": "e_dndrec_1",
+     "id": "e_research_1",
      "type": "text",
      "placeholder": "title",
      "frame": {
@@ -41,7 +41,7 @@
       {
        "runs": [
         {
-         "text": "Session 12: The Sunken Archive",
+         "text": "Research findings",
          "size": 96,
          "bold": true,
          "font": "heading",
@@ -52,7 +52,7 @@
      ]
     },
     {
-     "id": "e_dndrec_2",
+     "id": "e_research_2",
      "type": "text",
      "placeholder": "subtitle",
      "frame": {
@@ -66,7 +66,7 @@
       {
        "runs": [
         {
-         "text": "Previously, on our campaign…",
+         "text": "Service booking study • illustrative example",
          "size": 44,
          "font": "body",
          "color": "muted"
@@ -78,11 +78,11 @@
    ]
   },
   {
-   "id": "s_dndrec_2",
+   "id": "s_research_2",
    "layout": "title-body",
    "elements": [
     {
-     "id": "e_dndrec_3",
+     "id": "e_research_3",
      "type": "text",
      "placeholder": "title",
      "frame": {
@@ -96,7 +96,7 @@
       {
        "runs": [
         {
-         "text": "Where we left off",
+         "text": "Question and method",
          "size": 80,
          "bold": true,
          "font": "heading",
@@ -107,7 +107,7 @@
      ]
     },
     {
-     "id": "e_dndrec_4",
+     "id": "e_research_4",
      "type": "text",
      "placeholder": "body",
      "frame": {
@@ -121,7 +121,7 @@
       {
        "runs": [
         {
-         "text": "The party escaped Port Vella with the stolen map",
+         "text": "Question: where do people get stuck when booking a service?",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -133,7 +133,7 @@
       {
        "runs": [
         {
-         "text": "Captain Imra demanded half of any treasure",
+         "text": "Method: observe 12 people completing a booking task",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -145,7 +145,7 @@
       {
        "runs": [
         {
-         "text": "A storm drove the ship onto the drowned reef",
+         "text": "Scope: one prototype; findings need wider validation",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -159,11 +159,11 @@
    ]
   },
   {
-   "id": "s_dndrec_3",
+   "id": "s_research_3",
    "layout": "three-column",
    "elements": [
     {
-     "id": "e_dndrec_5",
+     "id": "e_research_5",
      "type": "text",
      "placeholder": "title",
      "frame": {
@@ -177,7 +177,7 @@
       {
        "runs": [
         {
-         "text": "The party",
+         "text": "Key findings",
          "size": 80,
          "bold": true,
          "font": "heading",
@@ -188,7 +188,7 @@
      ]
     },
     {
-     "id": "e_dndrec_6",
+     "id": "e_research_6",
      "type": "shape",
      "shape": "roundRect",
      "frame": {
@@ -204,7 +204,7 @@
        {
         "runs": [
          {
-          "text": "Thessa",
+          "text": "Clarity",
           "size": 44,
           "bold": true,
           "font": "body",
@@ -217,7 +217,7 @@
      }
     },
     {
-     "id": "e_dndrec_7",
+     "id": "e_research_7",
      "type": "shape",
      "shape": "roundRect",
      "frame": {
@@ -233,7 +233,7 @@
        {
         "runs": [
          {
-          "text": "Brom",
+          "text": "Confidence",
           "size": 44,
           "bold": true,
           "font": "body",
@@ -246,7 +246,7 @@
      }
     },
     {
-     "id": "e_dndrec_8",
+     "id": "e_research_8",
      "type": "shape",
      "shape": "roundRect",
      "frame": {
@@ -264,7 +264,7 @@
        {
         "runs": [
          {
-          "text": "Wick",
+          "text": "Control",
           "size": 44,
           "bold": true,
           "font": "body",
@@ -277,7 +277,7 @@
      }
     },
     {
-     "id": "e_dndrec_9",
+     "id": "e_research_9",
      "type": "text",
      "placeholder": "body",
      "frame": {
@@ -291,7 +291,7 @@
       {
        "runs": [
         {
-         "text": "Half-elf ranger",
+         "text": "Labels caused hesitation",
          "size": 40,
          "font": "body",
          "color": "text"
@@ -303,7 +303,7 @@
       {
        "runs": [
         {
-         "text": "Owes the Thieves' Guild a favour",
+         "text": "Use everyday language",
          "size": 40,
          "font": "body",
          "color": "text"
@@ -315,7 +315,7 @@
      ]
     },
     {
-     "id": "e_dndrec_10",
+     "id": "e_research_10",
      "type": "text",
      "placeholder": "body2",
      "frame": {
@@ -329,7 +329,7 @@
       {
        "runs": [
         {
-         "text": "Dwarf cleric",
+         "text": "Fees appeared too late",
          "size": 40,
          "font": "body",
          "color": "text"
@@ -341,7 +341,7 @@
       {
        "runs": [
         {
-         "text": "Still won't explain the cursed ring",
+         "text": "Show the total up front",
          "size": 40,
          "font": "body",
          "color": "text"
@@ -353,7 +353,7 @@
      ]
     },
     {
-     "id": "e_dndrec_11",
+     "id": "e_research_11",
      "type": "text",
      "placeholder": "body3",
      "frame": {
@@ -367,7 +367,7 @@
       {
        "runs": [
         {
-         "text": "Gnome wizard",
+         "text": "Editing meant starting over",
          "size": 40,
          "font": "body",
          "color": "text"
@@ -379,7 +379,7 @@
       {
        "runs": [
         {
-         "text": "Has read too many forbidden books",
+         "text": "Let people change one detail",
          "size": 40,
          "font": "body",
          "color": "text"
@@ -393,11 +393,11 @@
    ]
   },
   {
-   "id": "s_dndrec_4",
+   "id": "s_research_4",
    "layout": "quote",
    "elements": [
     {
-     "id": "e_dndrec_12",
+     "id": "e_research_12",
      "type": "text",
      "placeholder": "body",
      "frame": {
@@ -411,7 +411,7 @@
       {
        "runs": [
         {
-         "text": "“I cast fireball. Underwater. What do you mean, no?”",
+         "text": "“I want to know the full cost before I choose a time.”",
          "size": 72,
          "italic": true,
          "font": "heading",
@@ -422,7 +422,7 @@
      ]
     },
     {
-     "id": "e_dndrec_13",
+     "id": "e_research_13",
      "type": "text",
      "placeholder": "subtitle",
      "frame": {
@@ -436,7 +436,7 @@
       {
        "runs": [
         {
-         "text": "Wick, moments before the bubble spell",
+         "text": "Example participant quote • illustrative, not collected data",
          "size": 44,
          "font": "body",
          "color": "muted"
@@ -446,7 +446,7 @@
      ]
     },
     {
-     "id": "e_dndrec_14",
+     "id": "e_research_14",
      "type": "line",
      "frame": {
       "x": 200,
@@ -460,11 +460,11 @@
    ]
   },
   {
-   "id": "s_dndrec_5",
+   "id": "s_research_5",
    "layout": "two-column",
    "elements": [
     {
-     "id": "e_dndrec_15",
+     "id": "e_research_15",
      "type": "text",
      "placeholder": "title",
      "frame": {
@@ -478,7 +478,7 @@
       {
        "runs": [
         {
-         "text": "Loot and losses",
+         "text": "Evidence and limitations",
          "size": 80,
          "bold": true,
          "font": "heading",
@@ -489,7 +489,7 @@
      ]
     },
     {
-     "id": "e_dndrec_16",
+     "id": "e_research_16",
      "type": "text",
      "placeholder": "body",
      "frame": {
@@ -503,7 +503,7 @@
       {
        "runs": [
         {
-         "text": "+ Tide-glass lantern (sees through illusions)",
+         "text": "Observed hesitation at the service selection step",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -515,7 +515,7 @@
       {
        "runs": [
         {
-         "text": "+ 340 gold in old Vellan crowns",
+         "text": "Participants looked for a total before continuing",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -527,7 +527,7 @@
       {
        "runs": [
         {
-         "text": "+ Half of a key, carved from coral",
+         "text": "Edits required repeating earlier steps",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -539,7 +539,7 @@
      ]
     },
     {
-     "id": "e_dndrec_17",
+     "id": "e_research_17",
      "type": "text",
      "placeholder": "body2",
      "frame": {
@@ -553,7 +553,7 @@
       {
        "runs": [
         {
-         "text": "− Brom's mule, Turnip (we will remember)",
+         "text": "Small sample from a single audience",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -565,7 +565,7 @@
       {
        "runs": [
         {
-         "text": "− One rope, cut by a sahuagin",
+         "text": "Prototype tasks may differ from real bookings",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -577,7 +577,7 @@
       {
        "runs": [
         {
-         "text": "− Thessa's patience with Wick",
+         "text": "No measurement of long-term outcomes",
          "size": 44,
          "font": "body",
          "color": "text"
@@ -591,11 +591,11 @@
    ]
   },
   {
-   "id": "s_dndrec_6",
+   "id": "s_research_6",
    "layout": "big-number",
    "elements": [
     {
-     "id": "e_dndrec_18",
+     "id": "e_research_18",
      "type": "text",
      "placeholder": "title",
      "frame": {
@@ -609,7 +609,7 @@
       {
        "runs": [
         {
-         "text": "3",
+         "text": "12",
          "size": 280,
          "bold": true,
          "font": "heading",
@@ -621,7 +621,7 @@
      ]
     },
     {
-     "id": "e_dndrec_19",
+     "id": "e_research_19",
      "type": "text",
      "placeholder": "subtitle",
      "frame": {
@@ -635,7 +635,7 @@
       {
        "runs": [
         {
-         "text": "natural 20s rolled this session, all by Brom",
+         "text": "participants • illustrative sample",
          "size": 56,
          "font": "body",
          "color": "muted"
@@ -648,11 +648,11 @@
    ]
   },
   {
-   "id": "s_dndrec_7",
+   "id": "s_research_7",
    "layout": "closing",
    "elements": [
     {
-     "id": "e_dndrec_20",
+     "id": "e_research_20",
      "type": "text",
      "placeholder": "title",
      "frame": {
@@ -666,7 +666,7 @@
       {
        "runs": [
         {
-         "text": "Next time…",
+         "text": "Recommendations",
          "size": 128,
          "bold": true,
          "font": "heading",
@@ -678,7 +678,7 @@
      ]
     },
     {
-     "id": "e_dndrec_21",
+     "id": "e_research_21",
      "type": "text",
      "placeholder": "subtitle",
      "frame": {
@@ -692,7 +692,7 @@
       {
        "runs": [
         {
-         "text": "The archive door opens only to those who carry both halves of the key.",
+         "text": "Simplify labels, show total costs early, and test an easier edit flow.",
          "size": 44,
          "font": "body",
          "color": "muted"

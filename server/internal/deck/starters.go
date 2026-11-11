@@ -25,7 +25,7 @@ var Starters = []Starter{
 	{Key: "pitch", Name: "Pitch", Description: "Problem, solution, traction and the ask"},
 	{Key: "retro", Name: "Retro", Description: "What went well, what didn't, action items"},
 	{Key: "teaching", Name: "Teaching / lesson", Description: "Objectives, explanation and a quick check"},
-	{Key: "dnd-recap", Name: "D&D session recap", Description: "Previously on, the party, loot and next time"},
+	{Key: "research-findings", Name: "Research findings", Description: "Question, method, evidence and recommendations"},
 }
 
 // StarterNamed is a starter's catalogue entry.

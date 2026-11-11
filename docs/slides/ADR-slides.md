@@ -377,7 +377,7 @@ v1 rows come from the first Slides epic; rows marked ² came with the second ("s
 | ² Multi-select, z-order, duplicate, align and distribute, snap guides | ✓ | n/a | n/a | n/a (the result exports) |
 | Images PNG/JPEG, crop + cover, alt text | ✓ | ✓ | ✓ | ✓ (`srcRect`, `descr`; frame size fixed in LAZYAGENTS-124) |
 | Speaker notes | ✓ (notes pane) | — (no presenter view) | — | ✓ |
-| ² Starter decks (project update, pitch, retro, teaching, D&D session recap) | ✓ | ✓ | ✓ | ✓ |
+| ² Starter decks (project update, pitch, retro, teaching, research findings) | ✓ | ✓ | ✓ | ✓ |
 | ² Persona drafts slides from an outline, as per-slide suggestions to review | ✓ | n/a | n/a | n/a |
 | Emoji / CJK | ⚠ warned | ⚠ | ⚠ missing glyphs | ⚠ font substitution |
 
