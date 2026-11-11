@@ -147,3 +147,31 @@ export function parseDeck(body: string): Deck {
 
 /** The deck as the server stores it (keys in the server's order isn't required: it normalises). */
 export const encodeDeck = (d: Deck): string => JSON.stringify(d);
+
+/** The built-in themes in the order the theme menu lists them (deck.ThemeOrder). */
+export const THEME_ORDER: ThemeKey[] = ["light", "dark", "paper", "contrast", "dusk", "ocean", "forest", "sunset", "mono", "blueprint"];
+
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** The WCAG contrast ratio of two #RRGGBB colours, 1 to 21 (deck.Contrast). */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** Text colours on backgrounds below WCAG AA (4.5:1) in a theme. */
+export function contrastIssues(theme: Theme): { fg: ThemeColor; bg: ThemeColor; ratio: number }[] {
+  const out: { fg: ThemeColor; bg: ThemeColor; ratio: number }[] = [];
+  for (const fg of ["text", "heading", "muted"] as const)
+    for (const bg of ["background", "surface"] as const) {
+      const ratio = contrastRatio(theme.colors[fg], theme.colors[bg]);
+      if (ratio < 4.5) out.push({ fg, bg, ratio });
+    }
+  return out;
+}

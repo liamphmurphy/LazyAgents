@@ -3,10 +3,11 @@
 import { DropdownMenu } from "radix-ui";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
-import { LAYOUTS, THEME_COLORS, THEMES, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type Slot, type Theme, type ThemeKey } from "@/lib/slides/schema";
+import { LAYOUTS, THEME_COLORS, THEMES, THEME_ORDER, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type Slot, type Theme } from "@/lib/slides/schema";
 import { floatPanel } from "@/components/domain/pickers";
 import { STYLES, styleOf, type StyleId } from "@/lib/slides/styles";
 import { LIMITS, parseFontSize, parseHex, parseInRange } from "@/lib/slides/edit";
+import { FAMILY } from "@/lib/slides/fonts";
 
 export type TextFormat =
   | { kind: "mark"; mark: "bold" | "italic" | "underline" | "strike" }
@@ -29,7 +30,13 @@ export type ToolbarActions = {
   insertImage: () => void;
   insertLine: () => void;
   setLayout: (l: Layout) => void;
-  setTheme: (t: ThemeKey) => void;
+  /** Puts a copy of a built-in or saved theme in the deck. */
+  setTheme: (t: Theme) => void;
+  /** The person's saved themes (My themes). */
+  savedThemes: (Theme & { id: string })[];
+  /** Opens the theme editor on the deck's theme, or on a saved theme. */
+  customiseTheme: (savedId?: string) => void;
+  deleteSavedTheme: (id: string) => void;
   setBackground: (c: ColorRef | undefined) => void;
   format: (f: TextFormat) => void;
   setFill: (c: ColorRef | undefined) => void;
@@ -168,6 +175,18 @@ function ColorMenu({ label, trigger, theme, onPick, none, recent, remember }: { 
         )}
       />
     </Menu>
+  );
+}
+
+/** A theme's chip in the theme menu: its background with its two accents. */
+function ThemeSwatch({ theme }: { theme: Theme }) {
+  const c = theme.colors;
+  return (
+    <svg aria-hidden width="34" height="19" viewBox="0 0 34 19" className="shrink-0 rounded-[3px] border border-border-strong" style={{ background: c.background }}>
+      <rect x="4" y="12" width="11" height="3" fill={c.accent} />
+      <rect x="17" y="12" width="11" height="3" fill={c.accent2} />
+      <rect x="4" y="5" width="16" height="3" fill={c.heading} />
+    </svg>
   );
 }
 
@@ -362,12 +381,33 @@ export function Toolbar({ theme, themeKey, layout, selected, editing, disabled, 
       {!selected && (
         <>
           <Menu label="Deck theme" trigger={<>Theme: {theme.name} ▾</>}>
-            {Object.entries(THEMES).map(([k, t]) => (
-              <DropdownMenu.Item key={k} className={cx(item, k === themeKey && "font-semibold")} onSelect={() => a.setTheme(k)}>
-                <span className="h-3.5 w-5 rounded-[3px] border border-border-strong" style={{ background: t.colors.background }} />
-                {t.name}
+            <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-3">Built-in</DropdownMenu.Label>
+            {THEME_ORDER.map((k) => (
+              <DropdownMenu.Item key={k} className={cx(item, k === themeKey && "font-semibold")} onSelect={() => a.setTheme(THEMES[k])}>
+                <ThemeSwatch theme={THEMES[k]} />
+                <span style={{ fontFamily: `"${FAMILY[THEMES[k].fonts.heading]}"` }}>{THEMES[k].name}</span>
+                {k === themeKey && <span aria-hidden className="ml-auto">✓</span>}
               </DropdownMenu.Item>
             ))}
+            <DropdownMenu.Separator className="my-1 h-px bg-border" />
+            <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-3">My themes</DropdownMenu.Label>
+            {a.savedThemes.length === 0 && <p className="max-w-60 px-2.5 pb-1.5 text-[12px] text-fg-3">Save a customised theme to reuse it in every deck.</p>}
+            {a.savedThemes.map((t) => {
+              const current = !themeKey && t.name === theme.name;
+              return (
+                <div key={t.id} className="flex items-center">
+                  <DropdownMenu.Item className={cx(item, "min-w-0 flex-1", current && "font-semibold")} onSelect={() => a.setTheme(t)}>
+                    <ThemeSwatch theme={t} />
+                    <span className="truncate">{t.name}</span>
+                    {current && <span aria-hidden className="ml-auto">✓</span>}
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item className={cx(item, "px-1.5 text-fg-3")} aria-label={`Edit or rename ${t.name}`} title="Edit or rename" onSelect={() => a.customiseTheme(t.id)}>✎</DropdownMenu.Item>
+                  <DropdownMenu.Item className={cx(item, "px-1.5 text-fg-3")} aria-label={`Delete ${t.name}`} title="Delete" onSelect={() => a.deleteSavedTheme(t.id)}>🗑</DropdownMenu.Item>
+                </div>
+              );
+            })}
+            <DropdownMenu.Separator className="my-1 h-px bg-border" />
+            <DropdownMenu.Item className={item} onSelect={() => a.customiseTheme()}>Customise current theme…</DropdownMenu.Item>
           </Menu>
           <ColorMenu label="Slide background" trigger={<>Background ▾</>} theme={theme} onPick={a.setBackground} none="Theme background" recent={a.recentColors} remember={a.rememberColor} />
         </>
