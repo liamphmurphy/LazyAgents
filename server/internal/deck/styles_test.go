@@ -78,16 +78,16 @@ func TestSetElementStyleOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := Parse(out)
-	i, j := d.findElement("e_s1")
+	i, j, _ := d.findElement("e_s1")
 	s1 := d.Slides[i].Elements[j]
 	if s1.Fill != nil || s1.Stroke != "accent" || s1.StrokeWidth != 6 || s1.Text.Paragraphs[0].Runs[0].Color != "accent" {
 		t.Fatalf("outline-accent not applied: %+v", s1)
 	}
-	i, j = d.findElement("e_s2")
+	i, j, _ = d.findElement("e_s2")
 	if s2 := d.Slides[i].Elements[j]; s2.Stroke != "muted" || s2.Fill != nil || s2.Dash != "dash" || s2.Radius != 20 {
 		t.Fatalf("ghost with radius not applied: %+v", s2)
 	}
-	i, j = d.findElement("e_s4")
+	i, j, _ = d.findElement("e_s4")
 	if s4 := d.Slides[i].Elements[j]; s4.Stroke != "heading" || s4.StrokeWidth != 10 {
 		t.Fatalf("emphasis line not applied: %+v", s4)
 	}

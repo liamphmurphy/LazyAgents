@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FAMILY, loadSlideFonts, measure, resetMeasureCache } from "./fonts";
 import { svgPath } from "./geometry";
 import { layoutSlide, type Laid, type Op } from "./layout";
+import { findDeep } from "./group";
 import { H, W, gradientLine, slideText, type Deck, type Paint, type Slide } from "./schema";
 
 /** True once the slide fonts have loaded; layout before that would measure a fallback font. */
@@ -127,6 +128,17 @@ function draw(o: Op, i: number, deck: Deck, assetUrl: (id: string) => string, ui
   }
 }
 
+/** Ops in paint order, cut into runs: a group's children's ops together, the rest one by one. */
+function runs(ops: Laid["ops"]) {
+  const out: { g?: string; items: { o: Op; i: number }[] }[] = [];
+  ops.forEach((o, i) => {
+    const last = out.at(-1);
+    if (o.g && last?.g === o.g) last.items.push({ o, i });
+    else out.push({ g: o.g, items: [{ o, i }] });
+  });
+  return out;
+}
+
 let seq = 0;
 
 /**
@@ -147,11 +159,14 @@ export function SlideSvg({ deck, slide, assetUrl, className, label, marks, showO
 }) {
   const laid = useLaidSlide(deck, slide, fontsReady);
   const [uid] = useState(() => `slide${++seq}`);
-  const outline = (id: string) => slide.elements.find((e) => e.id === id)?.frame;
+  const outline = (id: string) => findDeep(slide.elements, id)?.el.frame;
   return (
     // geometricPrecision: unhinted glyph advances, so text is as wide as the layout measured at any scale.
     <svg viewBox={`0 0 ${W} ${H}`} className={className} textRendering="geometricPrecision" role="img" aria-label={label ?? (slideText(slide) || "Empty slide")} preserveAspectRatio="xMidYMid meet">
-      {laid.ops.map((o, i) => (hideTextOf && (o.op === "text" || o.op === "highlight") && o.el === hideTextOf ? null : draw(o, i, deck, assetUrl, uid)))}
+      {runs(laid.ops).map(({ g, items }) => {
+        const drawn = items.map(({ o, i }) => (hideTextOf && (o.op === "text" || o.op === "highlight") && o.el === hideTextOf ? null : draw(o, i, deck, assetUrl, uid)));
+        return g ? <g key={`g-${g}`} data-group={g}>{drawn}</g> : drawn;
+      })}
       {showOverflow &&
         [...laid.overflow].map((id) => {
           const f = outline(id);

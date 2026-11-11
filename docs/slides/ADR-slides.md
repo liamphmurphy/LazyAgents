@@ -378,7 +378,7 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
 
 ## 8. Representative acceptance deck
 
-`docs/slides/fixtures/acceptance-deck.json` plus `fixtures/landscape.png`. Fifteen slides (the PoC evidence below covers the first five; the toolbar-controls, text-styles and layout slides came with later tickets), used unchanged by the editor tests, presentation tests, PDF tests and PPTX tests in every later ticket:
+`docs/slides/fixtures/acceptance-deck.json` plus `fixtures/landscape.png`. Sixteen slides (the PoC evidence below covers the first five; the toolbar-controls, text-styles, layout and groups slides came with later tickets), used unchanged by the editor tests, presentation tests, PDF tests and PPTX tests in every later ticket:
 
 1. **Title:** surface background, bold heading-slot title aligned to the bottom, subtitle with mixed colour and italic runs, accent rule shape, speaker notes.
 2. **Title + body:** disc bullets at levels 0 and 1, bold, italic, underline and literal-colour runs, a bullet long enough to wrap three lines, a numbered paragraph.
@@ -388,6 +388,7 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
 6. **Toolbar controls:** custom hex background, fill, outline and text colours; a rounded rect with radius 96 and a 20 px outline; a 2 px outline; a diagonal line with both arrowheads and a 1 px line with a start arrowhead; bullets at levels 0, 1, 2 and 4 in typed sizes (21, 15.5, 13 and 9 pt).
 7. **Text styles:** a justified paragraph at 1.5 line spacing with strikethrough, hex and theme-colour highlight runs, and a double-spaced box that overflows only because of its line spacing. Line spacing exports as exact points (`a:spcPts`), not `a:spcPct`, since PowerPoint's 100% is the font's own line gap rather than the layout's 1.2.
 8–15. **Layouts** ([[LAZYAGENTS-121]]): one slide per layout added in the second Slides epic, each placed exactly where its layout puts the placeholders: quote (italic heading-font body over a muted attribution), big number (a 280-unit accent stat over a centred caption), three columns (`body3`), comparison (`label`/`label2` headings over two bodies), full-bleed image (the landscape filling the slide under a white `#FFFFFF` title), image left, agenda (numbered body) and closing (centred title and contact line). The image layouts' images carry the `image` placeholder role. An unfilled image placeholder is a text element with that role and no text: every renderer draws it as nothing (the PPTX export skips it), the editor alone shows a "click to add image" box, and re-laying out to a layout without an image slot drops it.
+16. **Groups:** an icon-and-label group (ellipse and text) and a diagram group (a rounded rect with text, an arrow line and a rotated rect with text), next to an ungrouped shape. Groups hold their children in slide coordinates, and their frame is the children's box; they draw as SVG `<g>` and export to PowerPoint as `p:grpSp`.
 
 ## 9. Consequences
 

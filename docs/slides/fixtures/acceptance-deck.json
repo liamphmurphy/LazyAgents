@@ -297,6 +297,29 @@
         { "id": "e_g7", "type": "text", "frame": { "x": 520, "y": 840, "w": 1280, "h": 180 },
           "paragraphs": [ { "runs": [ { "text": "The picture behind is at 40% opacity; the ellipse fill at 50%; the tilted rectangle is a 75% gradient over it.", "size": 40, "color": "text" } ] } ] }
       ]
+    },
+    {
+      "id": "s_group",
+      "layout": "blank",
+      "notes": "An icon-and-label group and a diagram group with a rotated child; one shape is left ungrouped.",
+      "elements": [
+        { "id": "e_gp0", "type": "text", "frame": { "x": 120, "y": 80, "w": 1680, "h": 140 }, "valign": "middle",
+          "paragraphs": [ { "runs": [ { "text": "Grouped elements", "size": 80, "bold": true, "font": "heading", "color": "heading" } ] } ] },
+        { "id": "e_gp1", "type": "group", "frame": { "x": 120, "y": 300, "w": 760, "h": 240 }, "elements": [
+          { "id": "e_gp2", "type": "shape", "shape": "ellipse", "frame": { "x": 120, "y": 300, "w": 240, "h": 240 }, "fill": "accent" },
+          { "id": "e_gp3", "type": "text", "frame": { "x": 400, "y": 360, "w": 480, "h": 120 }, "valign": "middle",
+            "paragraphs": [ { "runs": [ { "text": "Icon and label", "size": 56, "bold": true, "color": "text" } ] } ] }
+        ] },
+        { "id": "e_gp4", "type": "group", "frame": { "x": 1000, "y": 300, "w": 800, "h": 560 }, "elements": [
+          { "id": "e_gp5", "type": "shape", "shape": "roundRect", "radius": 32, "frame": { "x": 1000, "y": 300, "w": 360, "h": 200 }, "fill": "surface", "stroke": "accent", "strokeWidth": 6,
+            "text": { "valign": "middle", "paragraphs": [ { "align": "center", "runs": [ { "text": "Plan", "size": 48, "color": "text" } ] } ] } },
+          { "id": "e_gp6", "type": "line", "frame": { "x": 1180, "y": 500, "w": 260, "h": 160 }, "stroke": "muted", "strokeWidth": 6, "endArrow": true },
+          { "id": "e_gp7", "type": "shape", "shape": "rect", "rotation": 6, "frame": { "x": 1440, "y": 660, "w": 360, "h": 200 }, "fill": "accent2",
+            "text": { "valign": "middle", "paragraphs": [ { "align": "center", "runs": [ { "text": "Ship", "size": 48, "bold": true, "color": "background" } ] } ] } }
+        ] },
+        { "id": "e_gp8", "type": "shape", "shape": "rect", "frame": { "x": 120, "y": 640, "w": 760, "h": 220 }, "fill": "surface",
+          "text": { "valign": "middle", "paragraphs": [ { "align": "center", "runs": [ { "text": "Not grouped", "size": 44, "color": "muted" } ] } ] } }
+      ]
     }
   ]
 }

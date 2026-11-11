@@ -9,8 +9,10 @@
 import type PptxGenJS from "pptxgenjs";
 import { FAMILY, OFFICE, SLOTS, STYLES, fontUrl, measure } from "./fonts";
 import { BULLET_INDENT, INSET, STRIKE, imageSource, layoutSlide, lineHeight } from "./layout";
+import { flatten } from "./group";
+import { wrapGroups, type PptxGroup } from "./pptx-groups";
 import { gradFill, replaceFills } from "./pptx-fills";
-import { DASHES, gradientLine, isGradient, isImageSlot, resolveColor, resolvePaint, slotOf, textOf, type Deck, type Dash, type Fill, type Paint, type Paragraph, type TextBox } from "./schema";
+import { DASHES, gradientLine, isGradient, isImageSlot, resolveColor, resolvePaint, slotOf, textOf, type Deck, type Dash, type Fill, type LeafElement, type Paint, type Paragraph, type TextBox } from "./schema";
 
 const K = 0.5; // slide units → points
 const IN = (u: number) => u / 144; // slide units → inches (1920 units = 13.333 in)
@@ -29,7 +31,7 @@ function base64(b: Uint8Array): string {
 
 /** Every image the shown slides use, fetched once. */
 async function images(deck: Deck, assetUrl: (id: string) => string) {
-  const used = new Set(deck.slides.filter((s) => !s.hidden).flatMap((s) => s.elements.flatMap((e) => (e.type === "image" && deck.assets[e.asset] ? [e.asset] : []))));
+  const used = new Set(deck.slides.filter((s) => !s.hidden).flatMap((s) => flatten(s.elements).flatMap((e) => (e.type === "image" && deck.assets[e.asset] ? [e.asset] : []))));
   const out = new Map<string, Uint8Array>();
   await Promise.all([...used].map(async (id) => out.set(id, await bytes(assetUrl(id)))));
   return out;
@@ -42,7 +44,7 @@ export type Progress = (done: number, total: number) => void;
 /** One 960 × 540 pt page per shown slide, text real and fonts embedded. */
 export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, progress?: Progress, signal?: AbortSignal): Promise<Blob> {
   const [{ jsPDF }, imgs] = await Promise.all([import("jspdf"), images(deck, assetUrl)]);
-  const usedSlots = new Set(deck.slides.flatMap((s) => s.elements.flatMap((e) => (textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs.map((r) => slotOf(deck.theme, r.font))))));
+  const usedSlots = new Set(deck.slides.flatMap((s) => flatten(s.elements).flatMap((e) => (textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs.map((r) => slotOf(deck.theme, r.font))))));
   const pdf = new jsPDF({ unit: "pt", format: [deck.size.w * K, deck.size.h * K], orientation: "landscape", compress: true });
   await Promise.all(
     SLOTS.filter((s) => usedSlots.has(s)).flatMap((slot) =>
@@ -212,7 +214,9 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
     slide.background = { color: isGradient(bg) ? fill(bg, n + 1, undefined).color : color(bg, "background") };
     if (s.hidden) slide.hidden = true;
     if (s.notes) slide.addNotes(s.notes);
-    for (const e of s.elements) {
+    // A group's children are written in place and wrapped in a p:grpSp afterwards.
+    const leaves: LeafElement[] = s.elements.flatMap((e) => (e.type === "group" ? e.elements : [e]));
+    for (const e of leaves) {
       // An unfilled image placeholder draws nothing; don't leave an empty box in the file.
       if (isImageSlot(e)) continue;
       const f = { x: IN(e.frame.x), y: IN(e.frame.y), w: IN(e.frame.w), h: IN(e.frame.h), rotate: e.rotation ?? 0, objectName: e.id };
@@ -239,17 +243,22 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
       }
     }
   }
+  const groups = deck.slides.map((s): PptxGroup[] => s.elements.flatMap((e) => (e.type === "group" ? [{ id: e.id, frame: e.frame, children: e.elements.map((c) => c.id) }] : [])));
   const out = (await pptx.write({ outputType: "blob" })) as Blob;
-  return gradients.length ? withGradients(out, gradients) : out;
+  return gradients.length || groups.some((g) => g.length) ? postProcess(out, gradients, groups) : out;
 }
 
-async function withGradients(pptx: Blob, gradients: { slide: number; el?: string; xml: string }[]): Promise<Blob> {
+/** Gradient fills, then group shapes, written into the slides' XML (pptxgenjs has neither). */
+async function postProcess(pptx: Blob, gradients: { slide: number; el?: string; xml: string }[], groups: PptxGroup[][]): Promise<Blob> {
   const { default: JSZip } = await import("jszip");
   const zip = await JSZip.loadAsync(pptx);
-  for (const n of new Set(gradients.map((g) => g.slide))) {
+  for (const n of new Set([...gradients.map((g) => g.slide), ...groups.flatMap((g, i) => (g.length ? [i + 1] : []))])) {
     const path = `ppt/slides/slide${n}.xml`;
-    const xml = await zip.file(path)!.async("string");
-    zip.file(path, replaceFills(xml, gradients.filter((g) => g.slide === n)));
+    let xml = await zip.file(path)!.async("string");
+    const mine = gradients.filter((g) => g.slide === n);
+    if (mine.length) xml = replaceFills(xml, mine);
+    if (groups[n - 1]?.length) xml = wrapGroups(xml, groups[n - 1]);
+    zip.file(path, xml);
   }
   return zip.generateAsync({ type: "blob", mimeType: pptx.type, compression: "DEFLATE" });
 }
