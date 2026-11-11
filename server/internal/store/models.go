@@ -487,6 +487,19 @@ type Criterion struct {
 	UpdatedAt time.Time
 }
 
+type DeckAsset struct {
+	CanvasID    uuid.UUID
+	ID          string
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	BlobKey     string
+	Mime        string
+	Width       int32
+	Height      int32
+	SizeBytes   int64
+	CreatedAt   time.Time
+}
+
 type Epic struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID
