@@ -37,7 +37,7 @@ var ThemeOrder = []string{"light", "dark", "paper", "contrast", "dusk", "ocean",
 
 // ThemeNamed is a copy of a built-in theme; light when the name is unknown.
 func ThemeNamed(name string) Theme {
-	t, ok := Themes[strings.ToLower(name)]
+	t, ok := Themes[strings.ToLower(strings.TrimSpace(name))]
 	if !ok {
 		t = Themes["light"]
 	}

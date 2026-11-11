@@ -97,7 +97,7 @@ func (d *Deck) apply(op Op) error {
 	case "set_theme":
 		var t Theme
 		if name, ok := op.Value["preset"].(string); ok && len(op.Value) == 1 {
-			if _, known := Themes[strings.ToLower(name)]; !known {
+			if _, known := Themes[strings.ToLower(strings.TrimSpace(name))]; !known {
 				return fmt.Errorf("unknown theme %q; built-in themes: %s", name, strings.Join(ThemeOrder, ", "))
 			}
 			t = ThemeNamed(name)

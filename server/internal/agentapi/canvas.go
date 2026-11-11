@@ -226,7 +226,7 @@ func resolveSavedThemes(ctx context.Context, d Deps, chat uuid.UUID, ops []canva
 		if op.Op != "set_theme" || !ok || len(op.Value) != 1 {
 			continue
 		}
-		if _, builtin := deck.Themes[strings.ToLower(name)]; builtin {
+		if _, builtin := deck.Themes[strings.ToLower(strings.TrimSpace(name))]; builtin {
 			continue
 		}
 		if !loaded {
