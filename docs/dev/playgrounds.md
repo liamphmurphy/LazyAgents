@@ -82,7 +82,7 @@ when it ends, and nothing a turn starts is reachable from the browser.
 - The frame's history is driven through the probe (back, forward, the address
   bar following navigation), so a page whose CSP blocks the probe gets none of
   it, and Send to chat reports its page as unknown.
-- The local runner has no playgrounds; it shares the host.
+- The fake backend (tests, playgrounds) has no playgrounds; it shares the host.
 
 ## Send to chat
 
