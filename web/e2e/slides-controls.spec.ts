@@ -70,7 +70,7 @@ test("any hex colour applies, is refused when malformed, and becomes a recent co
   await expect(hex).toBeFocused();
   await hex.fill("blue");
   await hex.press("Enter");
-  await expect(page.getByRole("alert")).toContainText("#RRGGBB");
+  await expect(page.getByRole("alert").filter({ hasText: "#RRGGBB" })).toBeVisible();
   await hex.fill("#c2410c");
   await hex.press("Enter");
   await expect(page.getByRole("menu")).toHaveCount(0);
@@ -108,7 +108,7 @@ test("line arrowheads toggle, undo one at a time and survive reopening", async (
   await start.click();
   await expect(end).toHaveAttribute("aria-pressed", "true");
   await expect(start).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("svg line[marker-start][marker-end]")).toHaveCount(1);
+  await expect(page.getByRole("group", { name: /Slide canvas/ }).locator("svg line[marker-start][marker-end]")).toHaveCount(1);
 
   await toolbar(page).getByRole("button", { name: "Undo" }).click();
   await expect(start).toHaveAttribute("aria-pressed", "false");

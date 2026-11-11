@@ -73,7 +73,7 @@ test("⌘G groups the selection and ⇧⌘G ungroups it without moving anything"
   expect(g.type).toBe("group");
   expect(order(g.elements)).toBe("e_a,e_b");
   expect(g.frame).toEqual({ x: 100, y: 100, w: 700, h: 400 });
-  await expect(page.getByText("Group · 2")).toBeVisible();
+  await expect(page.getByText("Group · 2", { exact: true })).toBeVisible();
 
   await page.keyboard.press("Control+Shift+g");
   await expect.poll(() => order(saved())).toBe("e_a,e_b,e_c");

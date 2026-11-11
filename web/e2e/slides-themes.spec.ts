@@ -11,7 +11,7 @@ const at = "2026-11-11T12:00:00Z";
 const deck = {
   schema: 1,
   size: { w: 1920, h: 1080 },
-  theme: { name: "Light", fonts: { heading: "sans", body: "sans" }, colors: { background: "#FFFFFF", text: "#1F2328", heading: "#111418", accent: "#3B6FE0", accent2: "#E8A33D", muted: "#6B7280", surface: "#F3F5F9" } },
+  theme: { name: "Light", fonts: { heading: "sans", body: "sans" }, colors: { background: "#FFFFFF", text: "#1F2328", heading: "#111418", accent: "#3B6FE0", accent2: "#E8A33D", muted: "#5F6673", surface: "#F3F5F9" } },
   assets: {},
   slides: [
     {
