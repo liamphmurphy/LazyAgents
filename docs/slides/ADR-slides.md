@@ -254,7 +254,7 @@ The menu item says "Downloads a PDF", not "Opens the print dialog". The button s
 
 ### 4.3 Features neither export can carry faithfully (so they're out of the v1 matrix)
 
-Justified text, letter spacing, gradients, shadows, custom shape paths, tables, charts, image filters, and text on a path.
+Letter spacing, shadows, custom shape paths, tables, charts, image filters, and text on a path.
 
 **Glyph coverage:** Liberation covers Latin, Greek and Cyrillic. Emoji and CJK are missing from Liberation, so they would fall back in the browser but render as missing glyphs in the PDF. In v1 the editor warns when text contains code points the slot font lacks. A Noto fallback face is a candidate follow-up.
 
@@ -344,26 +344,44 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
 - **MCP tool lists** change. Update the exact lists in `httpapi/mcp_profiles_test.go` and `chat_tools_test.go`.
 - **Docs regression:** Docs code paths aren't modified, except moving `reviewBase` and adding the reviewed alias. `web/e2e/docs-app.spec.ts` must stay green.
 
-## 7. Initial feature matrix (v1)
+## 7. Feature matrix
 
-✓ = supported and verified against the acceptance deck · ⚠ = supported with the noted limitation · — = not in v1
+✓ = supported and verified against the acceptance deck · ⚠ = supported with the noted limitation · — = not supported · n/a = an editing tool, nothing to output
+
+v1 rows come from the first Slides epic; rows marked ² came with the second ("shapes, styles, presets and arranging", verified in [[LAZYAGENTS-124]]: `acceptance/README.md`, LibreOffice 7.4.7.2, 0 failures).
 
 | Feature | Editor | Present | PDF | PPTX (editable) |
 |---|---|---|---|---|
 | Add, duplicate, delete, reorder slides; hidden slides | ✓ | ✓ (skips hidden) | ✓ (skips hidden) | ✓ (hidden → `show="0"`) |
 | Layouts: title, title-body, two-column, image-right, section, blank | ✓ | ✓ | ✓ | ✓ (placeholders become plain text boxes) |
-| Themes (4 built-in; font slots and colour tokens) | ✓ | ✓ | ✓ | ⚠ colours flattened |
+| ² Layouts: quote, big number, three-column, comparison, full-bleed image, image-left, agenda, closing; thumbnail picker; re-layout of existing slides | ✓ | ✓ | ✓ | ✓ (plain text boxes; an unfilled image slot isn't exported) |
+| Themes: font slots and colour tokens | ✓ | ✓ | ✓ | ⚠ colours flattened |
+| ² Ten built-in themes (all text colours ≥ 4.5:1); custom themes (7 colours, heading and body fonts) saved per person and reused across decks, with a contrast warning | ✓ | ✓ | ✓ | ⚠ colours flattened |
 | Solid slide background | ✓ | ✓ | ✓ | ✓ |
+| ² Two-stop linear gradient fill (shapes and backgrounds), any angle | ✓ | ✓ | ✓ (native axial shading) | ✓ (`a:gradFill`) |
+| ² Fill, outline and image transparency | ✓ | ✓ | ✓ | ✓ (`a:alpha`, `a:alphaModFix`) |
+| ² Dashed, dotted, dash-dot and long-dash lines and outlines | ✓ | ✓ | ✓ | ✓ (`a:prstDash`) |
 | Text box: wrap, valign, insets | ✓ | ✓ | ✓ | ⚠ line breaks can differ by a word where the Office font is missing |
 | Runs: bold, italic, underline, colour, size; sans/serif/mono | ✓ | ✓ | ✓ (embedded) | ✓ (Arial / Times New Roman / Courier New) |
+| ² Runs: strikethrough, highlight colour; any typed font size (4–200 pt) | ✓ | ✓ | ✓ | ✓ (`sngStrike`, `a:highlight`) |
 | Paragraphs: left/centre/right, disc/number bullets, 5 levels, space before | ✓ | ✓ | ✓ | ✓ |
+| ² Paragraphs: justified, line spacing 0.8–3×, indent/outdent from the toolbar | ✓ | ✓ | ✓ | ✓ (`algn="just"`; exact `a:spcPts`) |
 | Overflow | ✓ flagged | spills | spills, clipped at page | spills |
-| Shapes: rect, rounded rect, ellipse and 18 presets (shapes/README.md); fill, stroke; text inside | ✓ | ✓ | ✓ | ✓ |
-| Lines with arrowheads | ✓ | ✓ | ✓ | ✓ |
+| Shapes: rect, rounded rect, ellipse; fill, outline; text inside | ✓ | ✓ | ✓ | ✓ |
+| ² 18 preset shapes (basics, arrows, callouts, accents; `shapes/README.md`) from a grid picker, holding text in PowerPoint's text rectangle | ✓ | ✓ | ✓ | ✓ (native `prstGeom`) |
+| ² Custom colours (any hex) with recent colours in every colour menu; outline width; corner radius | ✓ | ✓ | ✓ | ✓ |
+| ² Shape style presets from theme colours, re-colouring with the theme | ✓ | ✓ | ✓ | ✓ (colours flattened at export) |
+| Lines with arrowheads (start, end or both) | ✓ | ✓ | ✓ | ✓ |
 | Rotation | ✓ | ✓ | ✓ | ✓ |
-| Images PNG/JPEG, crop + cover, alt text | ✓ | ✓ | ✓ | ✓ (`srcRect`, `descr`) |
-| Speaker notes | ✓ (notes pane) | — (no presenter view in v1) | — | ✓ |
+| ² Groups (two or more elements; not nested, not rotated) | ✓ (⌘G / ⇧⌘G; double-click to enter) | ✓ | ✓ | ✓ (`p:grpSp`) |
+| ² Multi-select, z-order, duplicate, align and distribute, snap guides | ✓ | n/a | n/a | n/a (the result exports) |
+| Images PNG/JPEG, crop + cover, alt text | ✓ | ✓ | ✓ | ✓ (`srcRect`, `descr`; frame size fixed in LAZYAGENTS-124) |
+| Speaker notes | ✓ (notes pane) | — (no presenter view) | — | ✓ |
+| ² Starter decks (project update, pitch, retro, teaching, D&D session recap) | ✓ | ✓ | ✓ | ✓ |
+| ² Persona drafts slides from an outline, as per-slide suggestions to review | ✓ | n/a | n/a | n/a |
 | Emoji / CJK | ⚠ warned | ⚠ | ⚠ missing glyphs | ⚠ font substitution |
+
+**PowerPoint itself** hasn't opened the second epic's export yet: no PowerPoint is available to agents. LibreOffice opens and round-trips it without error (`acceptance/README.md`). The manual PowerPoint check in §5 still applies.
 
 **Deferred (confirm):**
 - PPTX import;
@@ -371,10 +389,13 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
 - animations and transitions;
 - embedded audio/video;
 - presenter view with notes and timer;
-- tables, charts, gradients, shadows, custom shapes, justified text;
+- tables, charts, shadows, custom (freeform) shapes, more than two gradient stops and radial gradients;
+- nested or rotated groups;
+- adjustable preset handles (presets draw at PowerPoint's default adjust values);
+- theme colours kept as theme references in the PPTX (they're flattened to hex);
 - 4:3 and custom sizes;
 - comments on slides;
-- custom theme editor and uploaded fonts.
+- uploaded fonts.
 
 ## 8. Representative acceptance deck
 

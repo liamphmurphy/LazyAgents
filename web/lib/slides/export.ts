@@ -238,8 +238,11 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
         const a = deck.assets[e.asset], data = imgs.get(e.asset);
         if (!a || !data) continue;
         const src = imageSource(e, a);
-        // pptxgenjs measures the crop against the picture's own w × h.
-        slide.addImage({ data: `${a.mime};base64,${base64(data)}`, ...f, altText: e.alt ?? a.alt ?? "", transparency: transparency(e.opacity), sizing: { type: "crop", x: (src.x / a.w) * f.w, y: (src.y / a.h) * f.h, w: (src.w / a.w) * f.w, h: (src.h / a.h) * f.h } });
+        // pptxgenjs crops a picture of w × h to the box in sizing and makes the
+        // box the picture's size: so give it the whole image at the scale that
+        // covers the frame, and a box the frame's size at the source's offset.
+        const s = f.w / src.w;
+        slide.addImage({ data: `${a.mime};base64,${base64(data)}`, ...f, w: a.w * s, h: a.h * s, altText: e.alt ?? a.alt ?? "", transparency: transparency(e.opacity), sizing: { type: "crop", x: src.x * s, y: src.y * s, w: f.w, h: f.h } });
       }
     }
   }
