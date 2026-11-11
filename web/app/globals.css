@@ -381,6 +381,36 @@
   .handoff-agent { animation: none; }
 }
 
+/*
+ * The grouped hand-off (dispatch-cards.tsx), for runs started together: each lane draws from
+ * the persona, a packet travels it, then its agent bumps and the ticket key appears. Lanes
+ * stagger by --lane-delay; the whole overlay fades out once data-leaving is set.
+ */
+.handoff-group { animation: handoff-fade-in 0.2s ease-out both; }
+.handoff-group[data-leaving] { animation: handoff-fade-out 0.3s ease-in both; }
+.handoff-lane { stroke-dasharray: 1; animation: handoff-lane 0.5s ease-out var(--lane-delay, 0ms) both; }
+.handoff-lane-more { animation: handoff-fade-in 0.5s ease-out var(--lane-delay, 0ms) both; }
+.handoff-packet {
+  offset-rotate: 0deg;
+  animation: handoff-packet 0.7s cubic-bezier(0.5, 0, 0.2, 1) calc(var(--lane-delay, 0ms) + 0.15s) both;
+}
+.handoff-land { animation: handoff-land 0.3s ease-out calc(var(--lane-delay, 0ms) + 0.8s) both; }
+.handoff-key { animation: handoff-key 0.3s ease-out calc(var(--lane-delay, 0ms) + 0.8s) both; }
+@keyframes handoff-fade-in { from { opacity: 0; } }
+@keyframes handoff-fade-out { to { opacity: 0; } }
+@keyframes handoff-lane { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes handoff-packet {
+  0% { offset-distance: 0%; opacity: 0; }
+  15%, 85% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+@keyframes handoff-land { 0% { opacity: 0.4; transform: none; } 50% { opacity: 1; transform: scale(1.2); } 100% { opacity: 1; transform: none; } }
+@keyframes handoff-key { from { opacity: 0; transform: translateX(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+  .handoff-group, .handoff-lane, .handoff-lane-more, .handoff-land, .handoff-key { animation: none; }
+  .handoff-packet { display: none; }
+}
+
 .scene-pull { animation: scene-pull 3.6s cubic-bezier(0.2, 0.7, 0.2, 1) infinite both; }
 @keyframes scene-pull {
   0% { transform: translateX(var(--from-x)); opacity: 0; }

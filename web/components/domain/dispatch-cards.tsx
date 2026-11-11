@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Dialog } from "radix-ui";
 import { useQueries } from "@tanstack/react-query";
-import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { keys as queryKeys, useChatTicketRuns, useControlRunById, useDecideApproval, useDispatchPreview, useStartChatTicketRun, useTicket } from "@/lib/api/hooks";
 import { parseDispatchKeys, planLine, runEnded } from "@/lib/chat-dispatch";
@@ -106,14 +106,111 @@ function HandOff({ run, from }: { run: TicketRun; from?: ReactNode }) {
   );
 }
 
+/** How long the grouped hand-off takes to fade once its last run has landed. */
+const HANDOFF_LEAVE_MS = 300;
+/** Lanes in the grouped hand-off before the rest fold into "+N more". */
+const HANDOFF_MAX_LANES = 5;
+const HANDOFF_LANE_PX = 30;
+const HANDOFF_TRACK_PX = 160;
+const HANDOFF_LANE_STAGGER_MS = 60;
+
+/** The persona → agent curve for lane i of n, in the track's own pixels. */
+function laneCurve(i: number, n: number) {
+  const from = (n * HANDOFF_LANE_PX) / 2;
+  const to = i * HANDOFF_LANE_PX + HANDOFF_LANE_PX / 2;
+  const mid = HANDOFF_TRACK_PX / 2;
+  return `M0,${from} C${mid},${from} ${mid},${to} ${HANDOFF_TRACK_PX},${to}`;
+}
+
+/** The tray must be at least this tall while the grouped hand-off covers it. */
+function groupHandOffHeight(runs: number) {
+  return Math.min(runs, HANDOFF_MAX_LANES) * HANDOFF_LANE_PX + 64;
+}
+
 /**
- * Runs that start while the tray is open, for HANDOFF_MS each. Runs already live when the
+ * Several runs starting together (Start all): the persona fans the tickets out to their
+ * agents in one overlay over the tray, one lane per ticket, instead of a hand-off on every
+ * card. Past HANDOFF_MAX_LANES the last lane stands for the rest. Clicks pass through.
+ * With reduced motion it shows landed, without the travelling packets.
+ */
+function GroupHandOff({ runs, from, leaving }: { runs: TicketRun[]; from?: ReactNode; leaving: boolean }) {
+  const folded = runs.length > HANDOFF_MAX_LANES ? runs.length - (HANDOFF_MAX_LANES - 1) : 0;
+  const shown = folded ? runs.slice(0, HANDOFF_MAX_LANES - 1) : runs;
+  const lanes = shown.length + (folded ? 1 : 0);
+  const height = lanes * HANDOFF_LANE_PX;
+  const agents = new Set(runs.map((r) => r.agent)).size;
+  const delay = (i: number) => ({ "--lane-delay": `${i * HANDOFF_LANE_STAGGER_MS}ms` }) as CSSProperties;
+  return (
+    <div
+      data-testid="ticket-run-handoff-group"
+      role="status"
+      data-leaving={leaving || undefined}
+      className="handoff-group pointer-events-none absolute left-0 top-0 z-20 flex w-full max-w-[680px] flex-col gap-2 rounded-xl border border-border bg-surface p-3.5 shadow-sm"
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex-none">{from ?? <span aria-hidden className="block size-[26px] rounded-full bg-accent-soft ring-1 ring-accent" />}</span>
+        <span aria-hidden className="relative flex-none text-accent max-sm:hidden" style={{ width: HANDOFF_TRACK_PX, height }}>
+          <svg className="absolute inset-0 overflow-visible" width={HANDOFF_TRACK_PX} height={height} viewBox={`0 0 ${HANDOFF_TRACK_PX} ${height}`}>
+            {Array.from({ length: lanes }, (_, i) => {
+              const more = folded > 0 && i === lanes - 1;
+              return (
+                <path
+                  key={i}
+                  d={laneCurve(i, lanes)}
+                  pathLength={1}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeOpacity={0.6}
+                  strokeWidth={1.5}
+                  strokeDasharray={more ? "0.03 0.03" : undefined}
+                  className={more ? "handoff-lane-more" : "handoff-lane"}
+                  style={delay(i)}
+                />
+              );
+            })}
+          </svg>
+          {shown.map((r, i) => (
+            <span key={r.run_id} className="handoff-packet absolute left-0 top-0 size-2 rounded-full bg-accent shadow-sm" style={{ ...delay(i), offsetPath: `path("${laneCurve(i, lanes)}")` }} />
+          ))}
+        </span>
+        <ul className="flex min-w-0 flex-1 flex-col">
+          {shown.map((r, i) => (
+            <li key={r.run_id} data-testid="handoff-lane" className="flex min-w-0 items-center gap-2" style={{ ...delay(i), height: HANDOFF_LANE_PX }}>
+              <span className="handoff-land flex-none"><AgentAvatar name={r.agent} colorIndex={0} label={false} /></span>
+              <span className="truncate text-[13px] text-fg">@{r.agent}</span>
+              <span className="handoff-key flex-none rounded-md border border-accent bg-accent-soft px-1.5 py-px font-mono text-[10.5px] text-accent">{r.ticket}</span>
+            </li>
+          ))}
+          {folded > 0 && (
+            <li className="flex min-w-0 items-center gap-2" style={{ height: HANDOFF_LANE_PX }}>
+              <span className="flex-none rounded-full border border-accent bg-accent-soft px-2 text-[11px] text-accent">+{folded}</span>
+              <span className="truncate text-[13px] text-fg-secondary">{folded} more tickets</span>
+            </li>
+          )}
+        </ul>
+      </div>
+      <p className="truncate text-[13px] text-fg-secondary">
+        Handing <span className="font-medium text-fg">{runs.length} tickets</span> to{" "}
+        <span className="font-medium text-fg">{agents === 1 ? `@${runs[0].agent}` : `${agents} agents`}</span>
+      </p>
+    </div>
+  );
+}
+
+/** The runs a hand-off is showing for, and whether it's on its way out. */
+type HandOffBatch = { ids: string[]; leaving: boolean };
+
+/**
+ * Runs that start while the tray is open get a hand-off for HANDOFF_MS. A run that starts
+ * while one is still showing joins it and keeps it up, since Start all starts its tickets
+ * one after another and each lands in its own tray refresh. Runs already live when the
  * chat opened (a reload, coming back later) don't replay it.
  */
-function useFreshRuns(ids: string[] | undefined) {
+function useHandOffBatch(ids: string[] | undefined): HandOffBatch {
   const seen = useRef<Set<string>>(null);
+  const pending = useRef<string[]>([]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const [fresh, setFresh] = useState<string[]>([]);
+  const [batch, setBatch] = useState<HandOffBatch>({ ids: [], leaving: false });
   const key = ids?.join(",");
   useEffect(() => {
     if (key === undefined) return;
@@ -126,13 +223,21 @@ function useFreshRuns(ids: string[] | undefined) {
     const added = now.filter((id) => !known.has(id));
     if (added.length === 0) return;
     for (const id of added) known.add(id);
-    timers.current.push(
-      setTimeout(() => setFresh((f) => [...f, ...added]), 0),
-      setTimeout(() => setFresh((f) => f.filter((id) => !added.includes(id))), HANDOFF_MS),
-    );
+    // Queued rather than captured, so restarting the timers can't drop a run not yet shown.
+    pending.current.push(...added);
+    timers.current.forEach(clearTimeout);
+    timers.current = [
+      setTimeout(() => {
+        const joining = pending.current;
+        pending.current = [];
+        setBatch((b) => ({ ids: b.leaving ? joining : [...b.ids, ...joining], leaving: false }));
+      }, 0),
+      setTimeout(() => setBatch((b) => ({ ...b, leaving: true })), HANDOFF_MS - HANDOFF_LEAVE_MS),
+      setTimeout(() => setBatch({ ids: [], leaving: false }), HANDOFF_MS),
+    ];
   }, [key]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
-  return fresh;
+  return batch;
 }
 
 /** One ticket run a chat started: live in the tray, or as its card's summary once it ends. */
@@ -186,11 +291,15 @@ export function TicketRunCard({ run, scene, onReview, handoff }: { run: TicketRu
 export function ChatTicketRunTray({ chatId, scene, persona }: { chatId: string; scene?: SceneRenderer; persona?: ReactNode }) {
   const runs = useChatTicketRuns(chatId);
   const live = (runs.data?.runs ?? []).filter((r) => !runEnded(r.state));
-  const fresh = useFreshRuns(runs.data ? live.map((r) => r.run_id) : undefined);
+  const handoff = useHandOffBatch(runs.data ? live.map((r) => r.run_id) : undefined);
   if (live.length === 0) return null;
+  // In start order, leaving out any that already ended.
+  const handed = handoff.ids.flatMap((id) => live.filter((r) => r.run_id === id));
+  const grouped = handed.length > 1;
   return (
-    <div data-testid="ticket-run-tray" className="mb-2 flex flex-col gap-2">
-      {live.map((r) => <TicketRunCard key={r.run_id} run={r} scene={scene} handoff={fresh.includes(r.run_id) ? { from: persona } : undefined} />)}
+    <div data-testid="ticket-run-tray" className="relative mb-2 flex flex-col gap-2" style={grouped ? { minHeight: groupHandOffHeight(handed.length) } : undefined}>
+      {grouped && <GroupHandOff runs={handed} from={persona} leaving={handoff.leaving} />}
+      {live.map((r) => <TicketRunCard key={r.run_id} run={r} scene={scene} handoff={!grouped && handed.includes(r) ? { from: persona } : undefined} />)}
     </div>
   );
 }

@@ -154,8 +154,9 @@ test("a run already going when the chat opens doesn't replay the hand-off", asyn
   await expect(page.getByTestId("ticket-run-handoff")).toHaveCount(0);
 });
 
-test("one card offers several tickets, and Start all confirms which to start", async ({ page }) => {
-  // WEB-4 waits for WEB-3; WEB-5 has no agent, so dispatch would refuse it.
+// A card offering WEB-3, WEB-4 and WEB-5: WEB-4 waits for WEB-3; WEB-5 has no agent, so
+// dispatch would refuse it. Each start adds its run to the tray.
+async function offerSeveral(page: Page) {
   const titles: Record<string, string> = { "WEB-3": "Fix payouts", "WEB-4": "Payout report", "WEB-5": "Nobody's yet" };
   const offers: Record<string, Record<string, unknown>> = {
     "WEB-3": preview(),
@@ -185,7 +186,11 @@ test("one card offers several tickets, and Start all confirms which to start", a
   await box.fill("dispatch all: the payouts epic");
   await box.press("Enter");
 
-  const card = page.getByTestId("dispatch-card");
+  return { card: page.getByTestId("dispatch-card"), state };
+}
+
+test("one card offers several tickets, and Start all confirms which to start", async ({ page }) => {
+  const { card, state } = await offerSeveral(page);
   await expect(card).toContainText("Start runs for 3 tickets?");
   const rows = card.getByTestId("dispatch-offer");
   await expect(rows).toHaveCount(3);
@@ -217,4 +222,22 @@ test("one card offers several tickets, and Start all confirms which to start", a
   await expect.poll(() => state.starts.map((s) => s.ticket)).toEqual(["WEB-3", "WEB-4"]);
   expect(new Set(state.starts.map((s) => s.message_id)).size).toBe(1);
   await expect(card).toContainText("2 of 3 started", { timeout: 10000 });
+});
+
+test("runs started together get one grouped hand-off instead of one per card", async ({ page }) => {
+  const { card, state } = await offerSeveral(page);
+  await card.getByRole("button", { name: "Start all (2)…" }).click();
+  await page.getByTestId("start-all-dialog").getByRole("button", { name: "Start 2 runs" }).click();
+  await expect.poll(() => state.starts.map((s) => s.ticket)).toEqual(["WEB-3", "WEB-4"]);
+
+  // The two starts land in separate tray refreshes, yet join one hand-off with a lane each.
+  const group = page.getByTestId("ticket-run-handoff-group");
+  await expect(group).toContainText("Handing 2 tickets to @pike");
+  await expect(group.getByTestId("handoff-lane")).toHaveText([/@pike\s*WEB-3/, /@pike\s*WEB-4/]);
+  await expect(page.getByTestId("ticket-run-handoff")).toHaveCount(0);
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: "/tmp/chat-dispatch-handoff-group.png" });
+
+  await expect(group).toHaveCount(0, { timeout: 5000 });
+  await expect(page.getByTestId("ticket-run")).toHaveCount(2);
 });
