@@ -134,6 +134,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err := r.Recover(ctx); err != nil {
 		return err
 	}
+	r.expireModelListings(ctx)
 	r.ServePlaygrounds(ctx)
 	beat := time.NewTicker(10 * time.Second)
 	defer beat.Stop()
