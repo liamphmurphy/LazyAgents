@@ -9,7 +9,7 @@ import { cx } from "@/lib/cx";
 import { LinkEditor } from "@/components/domain/link-editor";
 import { acceptTarget, AddContext, ChipList } from "./context-chips";
 import { AttachButton, AttachmentChips, type useAttachments } from "./attachments";
-import { ComposerHints, composerFrame, composerInput, SendButton } from "./reply-tools";
+import { ComposerHints, composerFrameFor, composerInput, SendButton, type SendTone } from "./reply-tools";
 import { PersonaAvatar, PersonaName, personaLook } from "./persona";
 
 /** A / command's action; a returned string is why it couldn't run. */
@@ -22,6 +22,8 @@ export type ComposerCommands = {
   /** What a command that takes something offers, e.g. the models for /model. */
   options: (name: string) => { name: string; run: CommandRun }[];
   hasWorkflows: boolean;
+  /** The commands whose argument is text to send (/aside, /queue). */
+  free?: Record<string, (text: string) => string | void>;
 };
 
 /**
@@ -47,6 +49,8 @@ export function Composer({
   options,
   actions,
   send,
+  onCycle,
+  hints,
 }: {
   text: string;
   onText: (text: string) => void;
@@ -65,7 +69,11 @@ export function Composer({
   rows?: number;
   options?: ReactNode;
   actions?: ReactNode;
-  send: { label: string; disabled: boolean; title?: string };
+  send: { label: string; disabled: boolean; title?: string; tone?: SendTone };
+  /** Tab in a draft with no menu open: the caller switches how Send sends (back for Shift+Tab). */
+  onCycle?: (back: boolean) => void;
+  /** Replaces the usual line of hints under the box. */
+  hints?: ReactNode;
 }) {
   // The @mention being typed, and which suggestion is highlighted.
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
@@ -123,6 +131,8 @@ export function Composer({
     const command = CHAT_COMMANDS.find((x) => x.name === name);
     if (!command) return setCommandError(`Unknown command /${name}. Start with // to send it as a message.`);
     if (name === "repo" && commands.repository) return runCommand(() => commands.repository!(arg));
+    const free = command.free ? commands.free?.[name] : undefined;
+    if (free) return arg ? runCommand(() => free(arg)) : setCommandError(`Say what to send: /${name} <${command.args}>`);
     if (!command.args) return arg ? setCommandError(`/${name} doesn’t take anything after it.`) : runCommand(commands.plain[name]);
     if (name === "workflow" && !commands.hasWorkflows) return setCommandError("You have no published workflows yet. Build one under Workflows.");
     if (!arg) return setCommandError(`Say which ${command.args}: /${name} <${command.args}>`);
@@ -154,7 +164,7 @@ export function Composer({
       >
         <AttachmentChips attachments={files} />
         <ChipList chips={chips} onRemove={(k) => onChips((cs) => removeChip(cs, k))} disabled={disabled} />
-        <div className={composerFrame}>
+        <div className={composerFrameFor(send.tone)}>
           <div className="relative">
             {commandItems.length > 0 && (
               <ul
@@ -265,6 +275,12 @@ export function Composer({
                     return;
                   }
                 }
+                // Only with a draft, so Tab still leaves an empty box for the next control.
+                if (e.key === "Tab" && onCycle && text.trim() && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                  e.preventDefault();
+                  onCycle(e.shiftKey);
+                  return;
+                }
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   submitComposer();
@@ -281,12 +297,12 @@ export function Composer({
             </div>
             <div className="flex flex-none items-center gap-1">
               {actions}
-              <SendButton label={send.label} disabled={send.disabled} title={send.title} />
+              <SendButton label={send.label} disabled={send.disabled} title={send.title} tone={send.tone} />
             </div>
           </div>
         </div>
       </form>
-      <ComposerHints />
+      <ComposerHints>{hints}</ComposerHints>
     </>
   );
 }

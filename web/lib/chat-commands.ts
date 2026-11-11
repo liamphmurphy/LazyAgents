@@ -1,7 +1,8 @@
 // Pure parsing for the chat composer's / commands. They run in the client and are
 // never sent to the model; the actions live in chat/_components/conversation.tsx.
 
-export type ChatCommand = { name: string; args?: string; hint: string };
+/** free: the argument is text to send (no options to pick from). */
+export type ChatCommand = { name: string; args?: string; hint: string; free?: boolean };
 
 export const CHAT_COMMANDS: ChatCommand[] = [
   { name: "model", args: "model", hint: "Switch the model for the next message" },
@@ -12,6 +13,8 @@ export const CHAT_COMMANDS: ChatCommand[] = [
   { name: "repo", args: "repository", hint: "Select a repository in this conversation" },
   { name: "memory", hint: "Open your memory" },
   { name: "stop", hint: "Stop the current reply" },
+  { name: "aside", args: "question", free: true, hint: "Ask about the current reply without stopping it" },
+  { name: "queue", args: "message", free: true, hint: "Send this once the current reply ends" },
 ];
 
 /**
@@ -35,5 +38,5 @@ export function commandMenu(text: string): { stage: "command"; query: string } |
   const arg = text.match(/^\/([a-z][a-z0-9-]*)[ \t]+([^\n]*)$/i);
   if (!arg) return null;
   const command = CHAT_COMMANDS.find((c) => c.name === arg[1].toLowerCase());
-  return command?.args ? { stage: "arg", name: command.name, query: arg[2] } : null;
+  return command?.args && !command.free ? { stage: "arg", name: command.name, query: arg[2] } : null;
 }
