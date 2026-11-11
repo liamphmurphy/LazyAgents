@@ -25,7 +25,7 @@ func (q *Queries) CountWorkspaces(ctx context.Context) (int64, error) {
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (workspace_id, name, email, initials, role_title, avatar_color, password_hash)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails
+RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at
 `
 
 type CreateUserParams struct {
@@ -63,6 +63,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.AvatarKey,
 		&i.AvatarContentType,
 		&i.ExtraEmails,
+		&i.Login,
+		&i.PasswordSetAt,
+		&i.ClaimedAt,
 	)
 	return i, err
 }
@@ -91,7 +94,7 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 }
 
 const getLocalUser = `-- name: GetLocalUser :one
-SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails FROM users ORDER BY created_at, id LIMIT 1
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at FROM users ORDER BY created_at, id LIMIT 1
 `
 
 // The user every request acts as while there is no login: the first one created.
@@ -112,12 +115,15 @@ func (q *Queries) GetLocalUser(ctx context.Context) (User, error) {
 		&i.AvatarKey,
 		&i.AvatarContentType,
 		&i.ExtraEmails,
+		&i.Login,
+		&i.PasswordSetAt,
+		&i.ClaimedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails FROM users WHERE lower(email) = lower($1)
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at FROM users WHERE lower(email) = lower($1)
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error) {
@@ -137,12 +143,15 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error
 		&i.AvatarKey,
 		&i.AvatarContentType,
 		&i.ExtraEmails,
+		&i.Login,
+		&i.PasswordSetAt,
+		&i.ClaimedAt,
 	)
 	return i, err
 }
 
 const getUserForUpdate = `-- name: GetUserForUpdate :one
-SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails FROM users WHERE id = $1 AND workspace_id = $2 FOR UPDATE
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at FROM users WHERE id = $1 AND workspace_id = $2 FOR UPDATE
 `
 
 type GetUserForUpdateParams struct {
@@ -167,6 +176,9 @@ func (q *Queries) GetUserForUpdate(ctx context.Context, arg GetUserForUpdatePara
 		&i.AvatarKey,
 		&i.AvatarContentType,
 		&i.ExtraEmails,
+		&i.Login,
+		&i.PasswordSetAt,
+		&i.ClaimedAt,
 	)
 	return i, err
 }
@@ -190,7 +202,7 @@ func (q *Queries) GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, er
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails FROM users WHERE workspace_id = $1 ORDER BY name
+SELECT id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at FROM users WHERE workspace_id = $1 ORDER BY name
 `
 
 func (q *Queries) ListUsers(ctx context.Context, workspaceID uuid.UUID) ([]User, error) {
@@ -216,6 +228,9 @@ func (q *Queries) ListUsers(ctx context.Context, workspaceID uuid.UUID) ([]User,
 			&i.AvatarKey,
 			&i.AvatarContentType,
 			&i.ExtraEmails,
+			&i.Login,
+			&i.PasswordSetAt,
+			&i.ClaimedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -230,7 +245,7 @@ func (q *Queries) ListUsers(ctx context.Context, workspaceID uuid.UUID) ([]User,
 const setUserAvatar = `-- name: SetUserAvatar :one
 UPDATE users SET avatar_key = $3, avatar_content_type = $4, updated_at = now()
 WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails
+RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at
 `
 
 type SetUserAvatarParams struct {
@@ -263,6 +278,9 @@ func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (U
 		&i.AvatarKey,
 		&i.AvatarContentType,
 		&i.ExtraEmails,
+		&i.Login,
+		&i.PasswordSetAt,
+		&i.ClaimedAt,
 	)
 	return i, err
 }
@@ -270,7 +288,7 @@ func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (U
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users SET name = $3, initials = $4, role_title = $5, email = $6, extra_emails = $7, updated_at = now()
 WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails
+RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at
 `
 
 type UpdateUserProfileParams struct {
@@ -309,6 +327,9 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.AvatarKey,
 		&i.AvatarContentType,
 		&i.ExtraEmails,
+		&i.Login,
+		&i.PasswordSetAt,
+		&i.ClaimedAt,
 	)
 	return i, err
 }

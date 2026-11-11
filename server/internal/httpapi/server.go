@@ -63,6 +63,8 @@ type Server struct {
 	// Tests only: agent containers can reach the API, so a real server must
 	// never trust a request just because it arrived.
 	AnonymousAPI bool
+
+	logins loginLimiter
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)
@@ -98,12 +100,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+connectors.CallbackPath, s.connectorCallback)
 	mux.Handle("/api/v1/agent/", agentapi.RESTHandler(deps))
 	mux.HandleFunc("GET "+SignInPath, s.signIn)
+	mux.HandleFunc("GET "+AuthStatusPath, s.authStatus)
+	mux.HandleFunc("POST "+AuthSetupPath, s.authSetup)
+	mux.HandleFunc("POST "+AuthLoginPath, s.authLogin)
 	return requestLog(s.Log, s.signedIn(s.localUser(mux)))
 }
 
 // personFacing reports whether a path serves the person's browser, as opposed
-// to agents (bearer tokens on /mcp and /api/v1/agent/), probes, the sign-in
-// link itself and the connector OAuth callback (a cross-site redirect, so it
+// to agents (bearer tokens on /mcp and /api/v1/agent/), probes, sign-in
+// itself (the link and the password routes) and the connector OAuth callback (a cross-site redirect, so it
 // arrives without the SameSite=Strict cookie; its one-time state protects it).
 func personFacing(path string) bool {
 	switch {
@@ -111,7 +116,7 @@ func personFacing(path string) bool {
 		return true
 	case !strings.HasPrefix(path, "/api/"):
 		return false
-	case path == "/api/v1/health", path == SignInPath, path == connectors.CallbackPath, strings.HasPrefix(path, "/api/v1/agent/"):
+	case path == "/api/v1/health", path == SignInPath, path == AuthStatusPath, path == AuthSetupPath, path == AuthLoginPath, path == connectors.CallbackPath, strings.HasPrefix(path, "/api/v1/agent/"):
 		return false
 	}
 	return true

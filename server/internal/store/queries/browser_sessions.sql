@@ -20,3 +20,12 @@ UPDATE browser_sessions SET last_used_at = now() WHERE token_hash = $1;
 
 -- name: CountBrowserSessions :one
 SELECT count(*) FROM browser_sessions WHERE expires_at > now();
+
+-- name: SetOwnerPassword :one
+-- Sets the owner's login and password. Unclaimed, anyone may (first-run
+-- setup); claimed but passwordless, only a signed-in browser may. Once a
+-- password is set this matches nothing: changing it is a separate path.
+UPDATE users
+SET login = sqlc.arg(login), password_hash = sqlc.arg(password_hash), password_set_at = now(), claimed_at = coalesce(claimed_at, now())
+WHERE id = sqlc.arg(id) AND password_set_at IS NULL AND (claimed_at IS NULL OR sqlc.arg(signed_in)::bool)
+RETURNING *;
