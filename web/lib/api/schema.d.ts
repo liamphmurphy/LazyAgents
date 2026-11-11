@@ -296,6 +296,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/onboarding/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark the Welcome Wizard finished
+         * @description Idempotent; running the wizard again from Settings keeps the first completion time.
+         */
+        post: operations["completeOnboarding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users/{userId}/avatar": {
         parameters: {
             query?: never;
@@ -4233,6 +4253,13 @@ export interface components {
             avatar_url?: string;
             /** @description All of the person's addresses, primary (email) first. Only on your own profile (GET /me and bootstrap me). */
             emails?: string[];
+            /**
+             * Format: date-time
+             * @description When you finished the Welcome Wizard; absent until then. Only on your own profile.
+             */
+            onboarded_at?: string;
+            /** @description Whether chats have a harness to run on: a stored harness key (harness:anthropic or harness:openai) when runs need one, always true when they use the host's CLI logins. Only on your own profile. */
+            harness_connected?: boolean;
         };
         ProfilePatch: {
             /** @description Display name; trimmed */
@@ -8798,6 +8825,27 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Your profile without an avatar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    completeOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Your profile with onboarded_at set */
             200: {
                 headers: {
                     [name: string]: unknown;

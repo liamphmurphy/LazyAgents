@@ -384,6 +384,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         default: { $ref: "#/components/responses/Error" }
+  /me/onboarding/complete:
+    post:
+      operationId: completeOnboarding
+      summary: Mark the Welcome Wizard finished
+      description: Idempotent; running the wizard again from Settings keeps the first completion time.
+      tags: [workspace]
+      responses:
+        "200":
+          description: Your profile with onboarded_at set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        default: { $ref: "#/components/responses/Error" }
   /users/{userId}/avatar:
     parameters:
       - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -5144,6 +5157,10 @@ components:
           type: array
           items: { type: string }
           description: "All of the person's addresses, primary (email) first. Only on your own profile (GET /me and bootstrap me)."
+        onboarded_at: { type: string, format: date-time, description: "When you finished the Welcome Wizard; absent until then. Only on your own profile." }
+        harness_connected:
+          type: boolean
+          description: "Whether chats have a harness to run on: a stored harness key (harness:anthropic or harness:openai) when runs need one, always true when they use the host's CLI logins. Only on your own profile."
     ProfilePatch:
       type: object
       minProperties: 1

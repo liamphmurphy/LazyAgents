@@ -36,9 +36,13 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 		return nil, err
 	}
 
+	profile, err := s.toMe(ctx, u)
+	if err != nil {
+		return nil, err
+	}
 	out := api.GetBootstrap200JSONResponse{
 		Workspace: api.Workspace{Id: w.ID, Name: w.Name, Slug: w.Slug},
-		Me:        toMe(u),
+		Me:        profile,
 		Users:     make([]api.User, 0, len(users)),
 		Projects:  make([]api.Project, 0, len(projects)),
 		Agents:    make([]api.Agent, 0, len(agents)),

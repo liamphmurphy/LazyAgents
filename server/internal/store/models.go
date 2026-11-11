@@ -1264,6 +1264,7 @@ type User struct {
 	AvatarKey         *string
 	AvatarContentType *string
 	ExtraEmails       []string
+	OnboardedAt       *time.Time
 }
 
 type UserSecret struct {

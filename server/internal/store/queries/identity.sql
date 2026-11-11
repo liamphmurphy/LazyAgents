@@ -36,3 +36,9 @@ RETURNING *;
 
 -- name: GetUserForUpdate :one
 SELECT * FROM users WHERE id = $1 AND workspace_id = $2 FOR UPDATE;
+
+-- name: CompleteOnboarding :one
+-- Keeps the first completion time when the wizard is run again from Settings.
+UPDATE users SET onboarded_at = coalesce(onboarded_at, now())
+WHERE id = $1 AND workspace_id = $2
+RETURNING *;
