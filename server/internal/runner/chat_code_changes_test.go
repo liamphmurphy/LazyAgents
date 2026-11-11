@@ -1,13 +1,17 @@
 package runner_test
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
@@ -220,8 +224,20 @@ func TestCodingChatGitCredentials(t *testing.T) {
 		i++
 	}
 	sec := e.runner.Secrets.(*secrets.Service)
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := ssh.MarshalPrivateKey(private, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, grants := range map[string]string{"git:pat": "", "git:ssh": "", "harness:anthropic": "", "ci:token": "tests:run", "db:staging": "", "deploy:key": "repo:read"} {
-		if _, err := sec.Set(e.ctx, e.ws, e.me.ID, secrets.SetInput{Name: name, Value: "fake-secret-" + name, GrantsScope: grants}); err != nil {
+		value := "fake-secret-" + name
+		if name == "git:ssh" {
+			value = string(pem.EncodeToMemory(block))
+		}
+		if _, err := sec.Set(e.ctx, e.ws, e.me.ID, secrets.SetInput{Name: name, Value: value, GrantsScope: grants}); err != nil {
 			t.Fatal(err)
 		}
 	}

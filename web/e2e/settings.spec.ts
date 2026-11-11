@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { generateKeyPairSync } from "node:crypto";
 import { catalog, installChatApi, openEmptyChat } from "./mock-chat-api";
 
 const at = "2026-11-04T12:00:00Z";
@@ -101,6 +102,30 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
 }
 
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
+
+test("SSH private keys keep their line breaks when replaced or added as an override", async ({ page }) => {
+  const mock = await installSettingsApi(page);
+  const privateKey = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+  await page.goto("/settings#secrets");
+  await page.getByRole("button", { name: "Replace GitHub SSH key" }).click();
+  const value = page.getByLabel("New value for git:ssh");
+  await expect(value).toBeFocused();
+  await value.fill(privateKey);
+  await page.getByRole("button", { name: "Save key" }).click();
+  await expect(value).toHaveCount(0);
+  expect(mock.puts).toEqual([{ name: "git:ssh", value: privateKey }]);
+  expect(await page.content()).not.toContain(privateKey);
+
+  await page.getByRole("button", { name: "Add credential" }).click();
+  await page.locator("#secrets").getByLabel("Name", { exact: true }).fill("git:ssh");
+  await page.locator("#secrets").getByLabel("Value", { exact: true }).fill(privateKey);
+  await page.getByRole("button", { name: "Scope", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Web app", exact: true }).click();
+  await page.getByRole("button", { name: "Save credential" }).click();
+  await expect(page.locator("#secrets").getByLabel("Value", { exact: true })).toHaveCount(0);
+  expect(mock.puts[1]).toEqual({ name: "git:ssh", value: privateKey, project_key: "WEB" });
+  expect(await page.content()).not.toContain(privateKey);
+});
 
 test("provider credentials show status and unlocks, are write-only, and saving refreshes the model picker", async ({ page }) => {
   const mock = await installSettingsApi(page);

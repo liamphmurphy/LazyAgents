@@ -8,7 +8,7 @@ import { ago } from "@/lib/format";
 import { CONNECTIONS, connectionState, missingConnections, otherSecrets, savedMessage, SIGN_IN_STEPS, signInView, type Connection, type SignInProvider } from "@/lib/settings";
 import { Button, buttonClass, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { Banner, Card, Field, Skeleton, TextInput } from "@/components/ui/primitives";
+import { Banner, Card, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { MonoChip, SmallPill } from "@/components/domain/labels";
 import { floatPanel } from "@/components/domain/pickers";
 
@@ -319,9 +319,10 @@ function SecretForm({
   const [name, setName] = useState(target.name);
   const [value, setValue] = useState("");
   const [project, setProject] = useState(target.project);
-  const valueRef = useRef<HTMLInputElement>(null);
+  const valueRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const id = `secret-${target.name || "new"}`.replace(/[^a-z0-9-]/gi, "-");
+  const sshKey = name.trim().toLowerCase() === "git:ssh";
   useEffect(() => {
     (target.fixedName ? valueRef : nameRef).current?.focus();
   }, [target.fixedName]);
@@ -356,17 +357,33 @@ function SecretForm({
             </datalist>
           </Field>
         )}
-        <Field label={target.fixedName ? `New value for ${target.name}` : "Value"} htmlFor={`${id}-value`}>
-          <TextInput
+        <Field
+          label={target.fixedName ? `New value for ${target.name}` : "Value"}
+          htmlFor={`${id}-value`}
+          hint={sshKey ? "Paste the complete private key, including BEGIN/END lines. Keep its line breaks. Passphrase-protected keys are not supported." : undefined}
+        >
+          {sshKey ? <TextArea
             id={`${id}-value`}
-            ref={valueRef}
+            ref={(el) => { valueRef.current = el; }}
+            mono
+            rows={5}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            aria-describedby={`${id}-value-hint`}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+          /> : <TextInput
+            id={`${id}-value`}
+            ref={(el) => { valueRef.current = el; }}
             type="password"
             autoComplete="off"
             spellCheck={false}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Paste key. Stored encrypted, never shown again"
-          />
+          />}
         </Field>
         <Field label="Scope" htmlFor={`${id}-project`}>
           {lockedScope !== null ? (

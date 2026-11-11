@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -121,6 +122,13 @@ func (s *Service) Set(ctx context.Context, ws uuid.UUID, by uuid.UUID, in SetInp
 	if in.Value == "" || len(in.Value) > 16<<10 || !utf8.ValidString(in.Value) {
 		return store.Secret{}, apperr.Invalid("value", "must be 1 B–16 KB of text")
 	}
+	if name == "git:ssh" {
+		var err error
+		in.Value, err = normalizeSSHKey(in.Value)
+		if err != nil {
+			return store.Secret{}, err
+		}
+	}
 	grant := strings.TrimSpace(in.GrantsScope)
 	if grant == "" {
 		grant = DefaultGrants[name]
@@ -137,6 +145,21 @@ func (s *Service) Set(ctx context.Context, ws uuid.UUID, by uuid.UUID, in SetInp
 		ID: uuid.Must(uuid.NewV7()), WorkspaceID: ws, ProjectID: in.ProjectID, Name: name, GrantsScope: grants,
 		Nonce: nonce, Ciphertext: ct, CreatedByUserID: &by,
 	})
+}
+
+// normalizeSSHKey preserves the key's lines while accepting clipboard line
+// endings. Validate before storage so a bad paste fails here, not during clone.
+func normalizeSSHKey(value string) (string, error) {
+	value = strings.TrimSpace(strings.ReplaceAll(value, "\r\n", "\n")) + "\n"
+	if _, err := ssh.ParseRawPrivateKey([]byte(value)); err != nil {
+		var passphrase *ssh.PassphraseMissingError
+		if errors.As(err, &passphrase) {
+			return "", apperr.Invalid("value", "passphrase-protected SSH keys are not supported by unattended runs; use a key without a passphrase")
+		}
+		// Parser errors are deliberately not returned: the value is a secret.
+		return "", apperr.Invalid("value", "must be a complete SSH private key with its original line breaks, including BEGIN/END lines; public keys are not accepted")
+	}
+	return value, nil
 }
 
 // Replace rewrites the value of the secret Reveal would return, keeping its
