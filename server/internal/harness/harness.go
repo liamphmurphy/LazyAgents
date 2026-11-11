@@ -286,8 +286,8 @@ func ChatAgentsMDInSpace(spec agentdef.Resolved, contextFiles []string, project,
 		b.WriteString(sectionStart + "\n# Vesper chat: default project " + project + "\n\nNew tickets and epics go to " + project + " unless you pass another project key.\n\n")
 	}
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
-	b.WriteString("Use list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks to look things up in any project; list_runs, list_epics and search_knowledge take a project key to narrow. Cite sources with [[…]].\n")
-	b.WriteString("Use create_ticket and create_epic when the person asks. Return identifiers for created items. Use update_ticket and comment_ticket to change existing tickets when the person asks, or to keep a ticket you work on in this chat current. Do not call claim_ticket, complete_run or propose_tickets. ")
+	b.WriteString("Use list_runs, get_run, get_ticket, list_epics, get_epic, search_knowledge, read_page, read_artifact and get_backlinks to look things up in any project; list_runs, list_epics and search_knowledge take a project key to narrow. Cite sources with [[…]].\n")
+	b.WriteString("Use create_ticket and create_epic when the person asks. Return identifiers for created items. Use update_ticket, update_ticket_blockers, update_epic and comment_ticket to change existing tickets and epics when the person asks, or to keep a ticket you work on in this chat current. Do not call claim_ticket, complete_run or propose_tickets. ")
 	switch {
 	case allowed(spec, "repo:write"):
 		// A persona that can code (runs.ChatSpec): the instructions below say where.
@@ -363,9 +363,12 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 	epic := spec.Repository != nil && spec.Repository.EpicBranch != ""
 	review := epic && spec.Repository.EpicReview
 	if epic && !review {
-		b.WriteString("## Checks\n\nThis ticket is part of an epic. Tests run once, in the epic's final review, after its last ticket: don't run tests or the full suite, and don't pass test_command when delegating. Build and typecheck what you changed (e.g. `go build ./...` and `go vet` on the packages you touched, `npx tsc --noEmit` for TypeScript) and fix every error before you commit. Show only the end of long output (`2>&1 | tail -n 40`). Say in complete_run that tests were deferred to the epic review, and never wait for or poll GitHub PR checks.\n\n")
+		// The full suite and end-to-end tests run once, in the epic's final
+		// review; the ticket still runs the few tests over what it changed, so a
+		// break surfaces on the ticket that made it rather than at the end.
+		b.WriteString("## Checks\n\nThis ticket is part of an epic. The full suite and end-to-end (browser) tests run once, in the epic's final review, after its last ticket: don't run them here. Build and typecheck what you changed (e.g. `go build ./...` and `go vet` on the packages you touched, `npx tsc --noEmit` for TypeScript) and fix every error. Then run the narrowest tests that cover your change (the packages or test files you touched, plus any you added), without verbose flags, and fix what your change broke before you commit. If one of them fails on the epic branch without your change too, leave it and say so in complete_run. Show only the end of long output (`2>&1 | tail -n 40`). Say in complete_run which tests you ran and that the full suite runs in the epic review, and never wait for or poll GitHub PR checks. " + testServices + "\n\n")
 	} else {
-		b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. Run the full suite once before finishing; that local run is enough, so never wait for or poll GitHub PR checks. If `TEST_DATABASE_URL` is set, database tests use it: don't start your own database. If `DOCKER_HOST` is set, start what your tests need that isn't installed (a database, a queue, a cloud emulator) with `docker` or Testcontainers: containers run sandboxed (no host mounts, privileges or host network), their published ports are reachable at `$TESTCONTAINERS_HOST_OVERRIDE`, and everything is removed when the turn ends.\n\n")
+		b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. Run the full suite once before finishing; that local run is enough, so never wait for or poll GitHub PR checks. " + testServices + "\n\n")
 	}
 	if review && !delegated {
 		b.WriteString(epicReviewSection(spec.Repository))
@@ -496,7 +499,7 @@ func epicReviewSection(r *agentdef.Repository) string {
 	epic := r.EpicBranch
 	var b strings.Builder
 	b.WriteString("## Epic review\n\n")
-	fmt.Fprintf(&b, "You're the final review of the epic %q, on epic branch `%s` (base `%s`). The epic's tickets only built and typechecked, so expect integration issues: reconcile them here.\n\n", r.EpicName, epic, base)
+	fmt.Fprintf(&b, "You're the final review of the epic %q, on epic branch `%s` (base `%s`). The epic's tickets built, typechecked and ran only the tests over their own changes, so expect integration issues: reconcile them here.\n\n", r.EpicName, epic, base)
 	for _, t := range r.EpicTickets {
 		fmt.Fprintf(&b, "- %s %s — %s", t.Key, t.Title, t.Status)
 		if t.Branch != "" {
@@ -523,11 +526,14 @@ func epicReviewSection(r *agentdef.Repository) string {
 	return b.String()
 }
 
+// testServices says where tests get the services they need, for every run that tests.
+const testServices = "If `TEST_DATABASE_URL` is set, database tests use it: don't start your own database. If `DOCKER_HOST` is set, start what your tests need that isn't installed (a database, a queue, a cloud emulator) with `docker` or Testcontainers: containers run sandboxed (no host mounts, privileges or host network), their published ports are reachable at `$TESTCONTAINERS_HOST_OVERRIDE`, and everything is removed when the turn ends."
+
 // delegationSection tells a main agent it can hand work to sub agents.
 func delegationSection(spec agentdef.Resolved) string {
 	checks := "allowed_paths and test_command"
 	if r := spec.Repository; r != nil && r.EpicBranch != "" && !r.EpicReview {
-		checks = "allowed_paths, and no test_command (tests run in the epic review)"
+		checks = "allowed_paths and a test_command running only the tests over that slice (the full suite runs in the epic review)"
 	}
 	return fmt.Sprintf("Before finishing, verify every acceptance criterion against evidence and call check_criterion only when satisfied. If anything is missing, implement it yourself or delegate a substantial independent slice. Commit and push changes, record the PR with set_pr, and complete_run(status=done). Use await_human or request_approval for a person; status=todo hands back unfinished work.\n\n"+
 		"Only when delegation is justified, use list_subagents then delegate with acceptance_criteria, %s. Commit first. Each child gets a worktree; the server checks and merges successful results. Up to %d children may run in parallel on disjoint paths. End your turn after delegating. Review the returned diff, reuse passing checks, and use continue_run_id for follow-up fixes.\n\n", checks, runs.MaxParallelDelegations)

@@ -617,12 +617,14 @@ func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
 	epic := spec("repo:write", "allowed")
 	epic.Repository = &agentdef.Repository{DefaultBranch: "main", EpicBranch: "epic/pay-1234abcd", EpicName: "Ledger"}
 	md := string(AgentsMD("", epic, nil, "PAY-1"))
-	for _, want := range []string{"## Checks", "Tests run once, in the epic's final review", "Resolve conflicts and rebuild.", "builds cleanly", "no test_command"} {
+	// The full suite waits for the epic review, but the ticket tests what it
+	// changed, with the same database and Docker guidance as any run.
+	for _, want := range []string{"## Checks", "The full suite and end-to-end (browser) tests run once, in the epic's final review", "run the narrowest tests that cover your change", "fails on the epic branch without your change", "don't start your own database", "`DOCKER_HOST`", "Resolve conflicts and rebuild.", "builds cleanly", "test_command running only the tests over that slice"} {
 		if !strings.Contains(md, want) {
 			t.Fatalf("epic ticket missing %q:\n%s", want, md)
 		}
 	}
-	for _, bad := range []string{"## Tests", "Run the full suite", "rerun tests", "tests pass", "## Epic review"} {
+	for _, bad := range []string{"## Tests", "Run the full suite", "don't run tests", "no test_command", "rerun tests", "tests pass", "## Epic review"} {
 		if strings.Contains(md, bad) {
 			t.Fatalf("epic ticket must not contain %q:\n%s", bad, md)
 		}
@@ -638,10 +640,10 @@ func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
 		t.Fatal("standalone ticket must keep the Tests section")
 	}
 
-	// A sub agent of an epic ticket defers tests too; one of the review keeps them.
+	// A sub agent of an epic ticket leaves the full suite too; one of the review runs it.
 	child := string(SubagentAgentsMD("", epic, nil, "PAY-1"))
 	if !strings.Contains(child, "## Checks") || strings.Contains(child, "Run the full suite") {
-		t.Fatalf("epic ticket's sub agent must defer tests:\n%s", child)
+		t.Fatalf("epic ticket's sub agent must leave the full suite to the review:\n%s", child)
 	}
 	review := spec("repo:write", "allowed")
 	review.Repository = &agentdef.Repository{DefaultBranch: "main", EpicBranch: "epic/pay-1234abcd", EpicName: "Ledger", EpicReview: true}

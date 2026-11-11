@@ -303,7 +303,7 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 			return err
 		}
 		// The child inherits the ticket's epic context so an epic ticket's
-		// children also defer tests to the epic review.
+		// children also leave the full suite to the epic review.
 		if resolved.Repository, err = RepositoryFor(ctx, q, p, t); err != nil {
 			return err
 		}

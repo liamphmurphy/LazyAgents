@@ -422,10 +422,11 @@ LEFT JOIN personas p ON p.id = COALESCE(h.persona_id, c.persona_id)
 ORDER BY h.rank DESC, h.created_at DESC;
 
 -- name: AddChatTicketRun :exec
-INSERT INTO chat_ticket_runs (chat_id, run_id, message_id) VALUES ($1, $2, $3);
+INSERT INTO chat_ticket_runs (chat_id, run_id, message_id, ticket_id) VALUES ($1, $2, $3, $4);
 
--- name: ChatTicketRunForMessage :one
-SELECT * FROM chat_ticket_runs WHERE message_id = $1;
+-- name: ChatTicketRunForMessageTicket :one
+-- The run a reply's dispatch card already started for this ticket.
+SELECT * FROM chat_ticket_runs WHERE message_id = $1 AND ticket_id = $2;
 
 -- name: ListChatTicketRuns :many
 -- The ticket runs a chat started, oldest first, with what the tray shows.

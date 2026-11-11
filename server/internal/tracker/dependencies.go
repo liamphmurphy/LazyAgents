@@ -86,6 +86,54 @@ func (s *Service) SetDependencies(ctx context.Context, ws uuid.UUID, actor Actor
 	})
 }
 
+// EditDependencies adds and removes a ticket's blockers and returns the keys
+// it's blocked by afterwards. It needs no dependency revision: the new set is
+// computed from the current one under the same locks as SetDependencies, so it
+// can't drop a blocker someone else added meanwhile. Removing a key that isn't
+// a blocker does nothing.
+func (s *Service) EditDependencies(ctx context.Context, ws uuid.UUID, actor Actor, key string, add, remove []string) ([]string, error) {
+	if len(add) == 0 && len(remove) == 0 {
+		return nil, apperr.Invalid("add", "pass blockers to add or remove")
+	}
+	var after []string
+	err := s.tx(ctx, func(q *store.Queries) error {
+		if err := q.LockDependencyGraph(ctx, ws); err != nil {
+			return err
+		}
+		t, err := q.LockTicketByKey(ctx, store.LockTicketByKeyParams{WorkspaceID: ws, Key: strings.ToUpper(strings.TrimSpace(key))})
+		if err != nil {
+			return notFound(err)
+		}
+		cur, err := q.TicketDependencies(ctx, t.ID)
+		if err != nil {
+			return err
+		}
+		drop := map[string]bool{}
+		for _, k := range remove {
+			drop[strings.ToUpper(strings.TrimSpace(k))] = true
+		}
+		keys := []string{}
+		for _, d := range cur {
+			if !drop[d.Key] {
+				keys = append(keys, d.Key)
+			}
+		}
+		if err := SetDependenciesInTx(ctx, q, ws, actor, t, append(keys, add...)); err != nil {
+			return err
+		}
+		deps, err := q.TicketDependencies(ctx, t.ID)
+		if err != nil {
+			return err
+		}
+		after = make([]string, len(deps))
+		for i, d := range deps {
+			after[i] = d.Key
+		}
+		return nil
+	})
+	return after, err
+}
+
 // SetDependenciesInTx is also used by atomic planning acceptance. The caller
 // holds the workspace graph lock and the ticket row (new inserts own theirs).
 func SetDependenciesInTx(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor, t store.Ticket, keys []string) error {

@@ -67,6 +67,23 @@ func TestStartChatTicketRun(t *testing.T) {
 		t.Fatalf("listed = %v", listed)
 	}
 	e.want("GET", "/chats/"+uuid.NewString()+"/runs", nil, http.StatusNotFound)
+
+	// One card can offer several tickets: each starts once from it.
+	var several []string
+	for _, title := range []string{"Shapes", "Themes"} {
+		tk, err := tr.Create(ctx, ws, tracker.UserActor(e.me.ID), tracker.NewTicket{ProjectKey: "MOB", Title: title, AssigneeAgentID: &atlas.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		several = append(several, tk.Key)
+	}
+	multi := reply(3, "Both are ready.\n\n```dispatch\n"+strings.Join(several, "\n")+"\n```")
+	first := e.want("POST", path, map[string]any{"ticket": several[0], "message_id": multi}, http.StatusCreated)
+	second := e.want("POST", path, map[string]any{"ticket": several[1], "message_id": multi}, http.StatusCreated)
+	if first["message_id"] != multi || second["message_id"] != multi || first["run_id"] == second["run_id"] {
+		t.Fatalf("several from one card: %v, %v", first, second)
+	}
+	e.want("POST", path, map[string]any{"ticket": several[1], "message_id": multi}, http.StatusConflict)
 }
 
 // The tray gets what the agent is doing (the tool and, for a shell, only its

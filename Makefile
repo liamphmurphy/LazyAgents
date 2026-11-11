@@ -29,7 +29,7 @@ RUNNER_COMPOSE := $(COMPOSE_DEV) $(if $(VESPER_WORKSPACES_DIR),-f docker-compose
 SECRETS_KEY ?= $(shell sed -n 's/^SECRETS_KEY=//p' .env 2>/dev/null)
 export SECRETS_KEY
 # Processes the runner runs at once; delegated runs and resumed turns share these slots.
-RUNNER_MAX_CONCURRENT ?= 4
+RUNNER_MAX_CONCURRENT ?= 8
 export RUNNER_MAX_CONCURRENT API_PORT
 # Local runs inherit this, so agents' DB tests use the dev Postgres (each test makes its own database) instead of starting one.
 TEST_DATABASE_URL ?= postgres://lazyagents:lazyagents@127.0.0.1:5432/postgres?sslmode=disable

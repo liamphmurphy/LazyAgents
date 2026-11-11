@@ -413,6 +413,8 @@ type NewTicketIn struct {
 	RequiresMockup    bool       `json:"requires_mockup,omitempty" jsonschema:"The ticket needs a person-approved UI mockup before it can be finished"`
 	Points            *int       `json:"points,omitempty" jsonschema:"Optional story points: 1, 2, 3, 5, 8 or 13"`
 	EstimateRationale string     `json:"estimate_rationale,omitempty" jsonschema:"Why that estimate, in a sentence"`
+	Criteria          []string   `json:"criteria,omitempty" jsonschema:"Acceptance criteria, one checkable sentence each. The run ticks them as it verifies them, and can't finish with any unticked"`
+	BlockedBy         []string   `json:"blocked_by,omitempty" jsonschema:"Keys of tickets that must be Done before this one starts, e.g. [PAY-12]. A started run queues until they are"`
 }
 
 // estimate is the optional estimate on create_ticket, validated up front.
@@ -972,12 +974,19 @@ var Tools = []Tool{
 	define("list_runs", "List ticket runs in every project, newest first: live runs by default, or finished/all. Filter by project, ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One ticket run, in any project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
 	define("list_epics", "List epics, in every project unless you name one.", listChatEpics),
-	define("update_ticket", "Edit an existing ticket from this chat: title, description, status, priority, estimate, epic, agent or mockup requirement, and link the pull request for work you did here (pr_url). Pass the revision from get_ticket. Only when the person asks, or to keep a ticket you're working on in this chat current.", updateChatTicket),
+	define("update_ticket", "Edit an existing ticket from this chat: title, description, acceptance criteria, status, priority, estimate, epic, agent or mockup requirement, and link the pull request for work you did here (pr_url). Pass the revision from get_ticket. Only when the person asks, or to keep a ticket you're working on in this chat current.", updateChatTicket),
 	define("comment_ticket", "Comment on a ticket as yourself, linked back to this chat: findings, repro details, corrections. Only when the person asks, or to record what you learned working on it here.", commentChatTicket),
+	define("update_ticket_blockers", "Add or remove the tickets a ticket waits on: a started run of it queues until every blocker is Done. Returns what it's blocked by afterwards. Refused while the ticket has a live run, or when it would make a cycle.", updateTicketBlockers),
+	define("get_epic", "One epic: objective, status, mockup requirement, its numbered acceptance criteria and its tickets.", getChatEpic),
+	define("update_epic", "Change an epic when the person asks: its mockup requirement, status (open or done; done needs every criterion ticked and every ticket closed), and its acceptance criteria, numbered as in get_epic. Returns the epic afterwards.", updateChatEpic),
 	define("create_epic", "Create an epic in the chat's default project unless you pass project.", createChatEpic),
-	define("create_ticket", "Open a ticket in the backlog. From a run it's a follow-up in the run's project; from a chat it goes to the chat's default project unless you pass project.",
+	define("create_ticket", "Open a ticket in the backlog, with its acceptance criteria and any tickets it waits on (blocked_by). From a run it's a follow-up in the run's project; from a chat it goes to the chat's default project unless you pass project.",
 		func(ctx context.Context, d Deps, c agents.Caller, in NewTicketIn) (any, error) {
 			points, rationale, err := in.estimate()
+			if err != nil {
+				return nil, err
+			}
+			criteria, err := criteriaTexts(in.Criteria)
 			if err != nil {
 				return nil, err
 			}
@@ -995,7 +1004,7 @@ var Tools = []Tool{
 					return nil, err
 				}
 				nt, err := d.Tracker.Create(ctx, c.Agent.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{ProjectKey: p.Key, Title: in.Title, DescriptionMd: in.Description, Priority: in.Priority, EpicID: in.EpicID, RequiresMockup: in.RequiresMockup,
-					AssigneeAgentID: assignee, EstimatePoints: points, EstimateRationale: rationale})
+					AssigneeAgentID: assignee, EstimatePoints: points, EstimateRationale: rationale, Criteria: criteria, BlockedBy: in.BlockedBy})
 				if err != nil {
 					return nil, err
 				}
@@ -1015,7 +1024,7 @@ var Tools = []Tool{
 			nt, err := d.Tracker.Create(ctx, t.WorkspaceID, tracker.AgentActor(c.Agent.ID), tracker.NewTicket{
 				ProjectKey: p.Key, Title: in.Title, DescriptionMd: in.Description + "\n\nOpened by @" + c.Agent.Handle + " from " + t.Key + ".",
 				Priority: in.Priority, EpicID: t.EpicID, RequiresMockup: in.RequiresMockup,
-				EstimatePoints: points, EstimateRationale: rationale,
+				EstimatePoints: points, EstimateRationale: rationale, Criteria: criteria, BlockedBy: in.BlockedBy,
 			})
 			if err != nil {
 				return nil, err
